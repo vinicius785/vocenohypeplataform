@@ -38,20 +38,30 @@ export const Route = createFileRoute("/_authenticated")({
     if (profile && !profile.must_change_password && isFirstAccess) {
       throw redirect({ to: "/time" });
     }
-    // Pull all shared state before children mount so useState initializers see it.
-    await Promise.all([
-      initSharedSync(),
-      initClientesSync(),
-      initProjetosSync(),
-      initReunioesSync(),
-      initFinanceiroSync(),
-      initBancoInflusSync(),
-      initMarketingTasksSync(),
-      initCampanhaScopedSync(),
-      initProjetoScopedSync(),
-    ]);
+    // A tela de primeiro acesso não usa nenhum desses dados — sincronizá-los
+    // aqui só atrasava (às vezes bastante, com o Realtime ainda reconectando
+    // logo após o login) a navegação para essa tela, deixando-a em branco.
+    if (!isFirstAccess) {
+      // Pull all shared state before children mount so useState initializers see it.
+      await Promise.all([
+        initSharedSync(),
+        initClientesSync(),
+        initProjetosSync(),
+        initReunioesSync(),
+        initFinanceiroSync(),
+        initBancoInflusSync(),
+        initMarketingTasksSync(),
+        initCampanhaScopedSync(),
+        initProjetoScopedSync(),
+      ]);
+    }
     return { userId };
   },
+  pendingComponent: () => (
+    <div className="flex h-screen w-screen items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
+    </div>
+  ),
   component: AuthenticatedLayout,
 });
 

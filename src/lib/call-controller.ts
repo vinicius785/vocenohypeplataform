@@ -190,6 +190,38 @@ async function createPeer(peerId: string, callId: string) {
   };
   return connection;
 }
+/**
+ * O microfone pode ser derrubado sem nenhum sinal de rede — outro app (ex:
+ * WhatsApp Desktop) pode tomar acesso exclusivo do dispositivo de áudio ao
+ * ganhar foco, o que o macOS resolve simplesmente encerrando a track local
+ * (`track.onended`), sem nunca afetar `RTCPeerConnection.connectionState`.
+ * Sem isso, a ligação continuava "conectada" mas muda, parecendo ter caído.
+ * Tenta readquirir o microfone e trocar a track no sender em vez de deixar
+ * a chamada muda / parecendo derrubada.
+ */
+async function recoverLocalAudio(sender: RTCRtpSender | undefined, endedTrack: MediaStreamTrack) {
+  localStream?.removeTrack(endedTrack);
+  if (state.status === "idle") return;
+  try {
+    const selected = prefs().audioIn;
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: selected ? { deviceId: { exact: selected } } : true,
+      video: false,
+    });
+    const next = stream.getAudioTracks()[0];
+    if (!next) return;
+    next.enabled = !state.muted;
+    if (sender) await sender.replaceTrack(next);
+    else pc?.addTrack(next, localStream ?? (localStream = new MediaStream()));
+    localStream ??= new MediaStream();
+    localStream.addTrack(next);
+    next.onended = () => void recoverLocalAudio(sender, next);
+    mediaChanged();
+  } catch (err) {
+    console.warn("[call] não foi possível readquirir o microfone", err);
+    patch({ error: "O microfone foi desconectado. Verifique se outro app está usando-o." });
+  }
+}
 async function acquireAudio() {
   if (!navigator.mediaDevices?.getUserMedia)
     throw new Error("Chamadas não são suportadas neste navegador.");
@@ -202,7 +234,8 @@ async function acquireAudio() {
   localStream ??= new MediaStream();
   stream.getAudioTracks().forEach((track) => {
     localStream!.addTrack(track);
-    pc?.addTrack(track, localStream!);
+    const sender = pc?.addTrack(track, localStream!);
+    track.onended = () => void recoverLocalAudio(sender, track);
   });
   mediaChanged();
 }

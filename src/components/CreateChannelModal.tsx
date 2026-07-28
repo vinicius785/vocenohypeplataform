@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Hash, Lock, Upload, X } from "lucide-react";
 import type { ChatMember } from "@/lib/chat-store";
 
@@ -64,7 +65,11 @@ export function CreateChannelModal({
     });
   };
 
-  return (
+  // Via portal para document.body: a sidebar tem um `translate-x` (para o
+  // slide-in/out no mobile) que cria um containing block para descendentes
+  // `fixed`, o que travava esse modal dentro da coluna estreita do menu
+  // lateral em vez de cobrir a tela inteira.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-background p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
@@ -207,6 +212,7 @@ export function CreateChannelModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
