@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Plus, X, Newspaper, ImageIcon, Calendar } from "lucide-react";
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
+import { notifyBlogPublished } from "@/lib/marketing.functions";
 
 const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
   { key: "rascunho", label: "Rascunho", cls: "bg-muted text-foreground" },
@@ -41,6 +43,7 @@ export function BlogPanel({
   const [audiencePick, setAudiencePick] = useState(false);
 
   const setPosts = (next: BlogPost[]) => update({ blog: next });
+  const notifyPublished = useServerFn(notifyBlogPublished);
 
   const create = (audience: "site" | "mural") => {
     const p: BlogPost = {
@@ -59,7 +62,32 @@ export function BlogPanel({
     if (editingId === id) setEditingId(null);
   };
   const change = (id: string, patch: Partial<BlogPost>) => {
-    setPosts(posts.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    let updated: BlogPost | undefined;
+    setPosts(
+      posts.map((p) => {
+        if (p.id !== id) return p;
+        updated = { ...p, ...patch };
+        return updated;
+      }),
+    );
+    // Avisa o site externo (webhook de saída) sempre que um artigo com destino
+    // "Site" for salvo já publicado — tanto na primeira publicação quanto em
+    // edições posteriores, para o outro lado ficar sempre com a versão mais recente.
+    if (updated && updated.status === "publicado" && updated.audience !== "mural") {
+      void notifyPublished({
+        data: {
+          id: updated.id,
+          title: updated.title,
+          slug: updated.slug,
+          excerpt: updated.excerpt,
+          content: updated.content,
+          cover: updated.cover,
+          category: updated.category,
+          authorName: updated.authorName,
+          publishDate: updated.publishDate,
+        },
+      }).catch((err) => console.error("[blog] webhook de publicação falhou", err));
+    }
   };
 
   const editing = posts.find((p) => p.id === editingId) ?? null;

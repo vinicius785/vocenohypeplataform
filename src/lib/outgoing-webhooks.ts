@@ -9,6 +9,7 @@
 export const OUTGOING_WEBHOOK_EVENTS = [
   { key: "lead.created", label: "Novo lead" },
   { key: "lead.won", label: "Lead ganho" },
+  { key: "blog.published", label: "Artigo do blog publicado" },
 ] as const;
 export type OutgoingWebhookEvent = (typeof OUTGOING_WEBHOOK_EVENTS)[number]["key"];
 
