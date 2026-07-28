@@ -1,0 +1,876 @@
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5";
+  };
+  public: {
+    Tables: {
+      banco_influenciadores: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      campanha_documentos: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      campanha_influenciadores: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      campanha_tarefas: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      chat_channels: {
+        Row: {
+          allowed_member_ids: string[];
+          created_at: string;
+          id: string;
+          is_private: boolean;
+          name: string;
+          photo: string | null;
+          sort_order: number;
+          updated_at: string;
+        };
+        Insert: {
+          allowed_member_ids?: string[];
+          created_at?: string;
+          id?: string;
+          is_private?: boolean;
+          name: string;
+          photo?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Update: {
+          allowed_member_ids?: string[];
+          created_at?: string;
+          id?: string;
+          is_private?: boolean;
+          name?: string;
+          photo?: string | null;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: {
+          attachments: Json;
+          author_id: string | null;
+          author_name: string;
+          author_photo: string | null;
+          convo_id: string;
+          created_at: string;
+          edited_at: string | null;
+          id: string;
+          mentions: Json;
+          reactions: Json;
+          reply_to_id: string | null;
+          text: string;
+        };
+        Insert: {
+          attachments?: Json;
+          author_id?: string | null;
+          author_name: string;
+          author_photo?: string | null;
+          convo_id: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          mentions?: Json;
+          reactions?: Json;
+          reply_to_id?: string | null;
+          text: string;
+        };
+        Update: {
+          attachments?: Json;
+          author_id?: string | null;
+          author_name?: string;
+          author_photo?: string | null;
+          convo_id?: string;
+          created_at?: string;
+          edited_at?: string | null;
+          id?: string;
+          mentions?: Json;
+          reactions?: Json;
+          reply_to_id?: string | null;
+          text?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_reply_to_id_fkey";
+            columns: ["reply_to_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_reads: {
+        Row: {
+          convo_id: string;
+          last_read_at: string;
+          user_id: string;
+        };
+        Insert: {
+          convo_id: string;
+          last_read_at?: string;
+          user_id: string;
+        };
+        Update: {
+          convo_id?: string;
+          last_read_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      chat_status: {
+        Row: {
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      clientes: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      financeiro_lancamentos: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      influencer_approvals: {
+        Row: {
+          campanha_id: string | null;
+          campanha_nome: string | null;
+          cliente_nome: string | null;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          influencers: Json;
+          responses: Json;
+          token: string;
+          total_planejado: number | null;
+        };
+        Insert: {
+          campanha_id?: string | null;
+          campanha_nome?: string | null;
+          cliente_nome?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          influencers?: Json;
+          responses?: Json;
+          token: string;
+          total_planejado?: number | null;
+        };
+        Update: {
+          campanha_id?: string | null;
+          campanha_nome?: string | null;
+          cliente_nome?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          influencers?: Json;
+          responses?: Json;
+          token?: string;
+          total_planejado?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "influencer_approvals_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      leads: {
+        Row: {
+          activities: Json;
+          company: string | null;
+          contact: string | null;
+          created_at: string;
+          email: string | null;
+          extra: Json;
+          id: string;
+          name: string;
+          next_meeting: string | null;
+          notes: string | null;
+          phone: string | null;
+          responsible: string | null;
+          source: string | null;
+          source_form: string | null;
+          stage: string;
+          tags: Json;
+          updated_at: string;
+          value: number;
+        };
+        Insert: {
+          activities?: Json;
+          company?: string | null;
+          contact?: string | null;
+          created_at?: string;
+          email?: string | null;
+          extra?: Json;
+          id?: string;
+          name: string;
+          next_meeting?: string | null;
+          notes?: string | null;
+          phone?: string | null;
+          responsible?: string | null;
+          source?: string | null;
+          source_form?: string | null;
+          stage?: string;
+          tags?: Json;
+          updated_at?: string;
+          value?: number;
+        };
+        Update: {
+          activities?: Json;
+          company?: string | null;
+          contact?: string | null;
+          created_at?: string;
+          email?: string | null;
+          extra?: Json;
+          id?: string;
+          name?: string;
+          next_meeting?: string | null;
+          notes?: string | null;
+          phone?: string | null;
+          responsible?: string | null;
+          source?: string | null;
+          source_form?: string | null;
+          stage?: string;
+          tags?: Json;
+          updated_at?: string;
+          value?: number;
+        };
+        Relationships: [];
+      };
+      marketing_tasks: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      outgoing_webhooks: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          created_by: string | null;
+          events: Json;
+          id: string;
+          url: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          events?: Json;
+          id?: string;
+          url: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          events?: Json;
+          id?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "outgoing_webhooks_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      profiles: {
+        Row: {
+          birthday: string | null;
+          created_at: string;
+          email: string;
+          full_name: string | null;
+          id: string;
+          must_change_password: boolean;
+          permissions: Json;
+          phone: string | null;
+          photo_url: string | null;
+          role_label: string | null;
+          salary: string | null;
+          start_times: Json;
+          time_view: Json;
+          updated_at: string;
+        };
+        Insert: {
+          birthday?: string | null;
+          created_at?: string;
+          email: string;
+          full_name?: string | null;
+          id: string;
+          must_change_password?: boolean;
+          permissions?: Json;
+          phone?: string | null;
+          photo_url?: string | null;
+          role_label?: string | null;
+          salary?: string | null;
+          start_times?: Json;
+          time_view?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          birthday?: string | null;
+          created_at?: string;
+          email?: string;
+          full_name?: string | null;
+          id?: string;
+          must_change_password?: boolean;
+          permissions?: Json;
+          phone?: string | null;
+          photo_url?: string | null;
+          role_label?: string | null;
+          salary?: string | null;
+          start_times?: Json;
+          time_view?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      projeto_influenciadores: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          projeto_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          projeto_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          projeto_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      projetos: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      reunioes: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      shared_state: {
+        Row: {
+          data: Json;
+          key: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          data: Json;
+          key: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          data?: Json;
+          key?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      user_roles: {
+        Row: {
+          created_at: string;
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      vault_secret: {
+        Row: {
+          created_at: string;
+          id: boolean;
+          key_b64: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: boolean;
+          key_b64: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: boolean;
+          key_b64?: string;
+        };
+        Relationships: [];
+      };
+      vault_totp_attempts: {
+        Row: {
+          failed_count: number;
+          locked_until: string | null;
+          user_id: string;
+        };
+        Insert: {
+          failed_count?: number;
+          locked_until?: string | null;
+          user_id: string;
+        };
+        Update: {
+          failed_count?: number;
+          locked_until?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vault_totp_attempts_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      vault_totp_secrets: {
+        Row: {
+          admin_id: string;
+          created_at: string;
+          secret: string;
+        };
+        Insert: {
+          admin_id: string;
+          created_at?: string;
+          secret: string;
+        };
+        Update: {
+          admin_id?: string;
+          created_at?: string;
+          secret?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "vault_totp_secrets_admin_id_fkey";
+            columns: ["admin_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      webhook_settings: {
+        Row: {
+          key: string;
+          secret: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          secret: string;
+          updated_at?: string;
+        };
+        Update: {
+          key?: string;
+          secret?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      workspace_settings: {
+        Row: {
+          id: boolean;
+          logo: string | null;
+          nome: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          logo?: string | null;
+          nome?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          logo?: string | null;
+          nome?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
+      is_admin: { Args: { _user_id: string }; Returns: boolean };
+    };
+    Enums: {
+      app_role: "admin" | "member";
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
+};
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R;
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
+      }
+      ? R
+      : never
+    : never;
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I;
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I;
+      }
+      ? I
+      : never
+    : never;
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U;
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U;
+      }
+      ? U
+      : never
+    : never;
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never;
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never;
+
+export const Constants = {
+  public: {
+    Enums: {
+      app_role: ["admin", "member"],
+    },
+  },
+} as const;

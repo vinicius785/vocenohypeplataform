@@ -1,0 +1,1330 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  ArrowLeft,
+  Calendar,
+  CalendarClock,
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  ImageIcon,
+  Link as LinkIcon,
+  Megaphone,
+  Paperclip,
+  Share2,
+  ShieldCheck,
+  Trash2,
+  User,
+  Wallet,
+  X,
+} from "lucide-react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useClientes, clientesStore } from "@/lib/clientes-store";
+import {
+  type Campaign,
+  type PagTipo,
+  type PagamentoConfig,
+  normalizeCampaignPagGrupos,
+} from "./VincularCampanhaDialog";
+import { SectionHeader } from "./SectionHeader";
+import { TaskBoard, type Task } from "./tasks/TaskBoard";
+import {
+  InfluencerBoard,
+  BankFields,
+  parseMoney,
+  fmtBRL,
+  fmtDate,
+  normalizeInflus,
+  totalAceito,
+  type ApprovalBadge,
+  type Influ,
+  type InfluStatus,
+  type BankInfo,
+} from "@/components/influenciadores/InfluencerBoard";
+import { createApprovalLink, listApprovalsForCampanha } from "@/lib/approval.functions";
+import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
+import { useConfirm } from "@/hooks/use-confirm";
+import {
+  type CampaignDoc,
+  loadCampanhaInflus,
+  saveCampanhaInflus,
+  onCampanhaInflusChange,
+  loadCampanhaTarefas,
+  saveCampanhaTarefas,
+  onCampanhaTarefasChange,
+  loadCampanhaDocs,
+  saveCampanhaDocs,
+  onCampanhaDocsChange,
+} from "@/lib/campanha-scoped-store";
+
+export { BankFields, type BankInfo };
+
+/* ============================================================
+ * Types & constants
+ * ============================================================ */
+
+type Row = { cliente: { id: string; empresa: string; photo?: string }; campanha: Campaign };
+
+/* Task types shared via ./tasks/TaskBoard */
+/* Influenciadores types/UI shared via @/components/influenciadores/InfluencerBoard */
+/* Influs/tasks/docs persistence shared via @/lib/campanha-scoped-store */
+
+/* ============================================================
+ * Section root: list + navigate to detail
+ * ============================================================ */
+
+export function CampanhasSection() {
+  const clientes = useClientes();
+  const setClientes = clientesStore.set;
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { confirm, confirmDialog } = useConfirm();
+
+  const rows: Row[] = useMemo(
+    () =>
+      clientes.flatMap((c) =>
+        (c.campanhas ?? []).map((camp) => ({
+          cliente: { id: c.id, empresa: c.empresa, photo: c.photo },
+          campanha: camp,
+        })),
+      ),
+    [clientes],
+  );
+
+  const current = openId ? (rows.find((r) => r.campanha.id === openId) ?? null) : null;
+
+  if (current) {
+    return <CampanhaDetail row={current} onBack={() => setOpenId(null)} />;
+  }
+
+  const today = new Date();
+  const totalCampanhas = rows.length;
+  const totalInflus = rows.reduce(
+    (s, r) => s + r.campanha.linhas.reduce((a, l) => a + (l.quantidade || 0), 0),
+    0,
+  );
+  const ativas = rows.filter((r) => {
+    const p = r.campanha.prazo ? new Date(r.campanha.prazo) : null;
+    return !p || p >= today;
+  }).length;
+
+  return (
+    <div className="mx-auto w-full max-w-6xl">
+      <SectionHeader
+        title="Campanhas"
+        subtitle="Todas as campanhas vinculadas aos clientes."
+        kpis={[
+          { label: "TOTAL", value: totalCampanhas },
+          { label: "ATIVAS", value: ativas, tone: "text-emerald-600 dark:text-emerald-400" },
+          { label: "INFLUENCIADORES", value: totalInflus, tone: "text-sky-600 dark:text-sky-400" },
+        ]}
+      />
+
+      <div className="mt-8">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+            Nenhuma campanha vinculada ainda.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rows.map((r) => {
+              const planejados = r.campanha.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
+
+              return (
+                <div key={r.campanha.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(r.campanha.id)}
+                    className="flex w-full flex-col gap-4 rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-foreground/20 hover:bg-muted/30"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground">
+                        {r.cliente.photo ? (
+                          <img
+                            src={r.cliente.photo}
+                            alt={r.cliente.empresa}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Megaphone className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {r.campanha.nome}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {r.cliente.empresa}
+                        </p>
+                      </div>
+                      {r.campanha.pagClienteTipo === "Recorrente" && (
+                        <span className="shrink-0 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300">
+                          Recorrente
+                          {r.campanha.pagClienteRecorrenteDia
+                            ? ` · dia ${r.campanha.pagClienteRecorrenteDia}`
+                            : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+                      <span>
+                        {r.campanha.pagClienteTipo === "Recorrente" ? "Mensal" : "Prazo"}{" "}
+                        <span className="text-foreground">
+                          {r.campanha.pagClienteTipo === "Recorrente"
+                            ? `dia ${r.campanha.pagClienteRecorrenteDia ?? "—"}`
+                            : fmtDate(r.campanha.prazo)}
+                        </span>
+                      </span>
+                      <span>
+                        <span className="text-foreground tabular-nums">{planejados}</span> influs
+                      </span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const ok = await confirm(`Excluir a campanha "${r.campanha.nome}"?`);
+                      if (!ok) return;
+                      setClientes((prev) =>
+                        prev.map((c) =>
+                          c.id === r.cliente.id
+                            ? {
+                                ...c,
+                                campanhas: (c.campanhas ?? []).filter(
+                                  (x) => x.id !== r.campanha.id,
+                                ),
+                              }
+                            : c,
+                        ),
+                      );
+                    }}
+                    className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                    aria-label="Excluir campanha"
+                    title="Excluir campanha"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {confirmDialog}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Detail page
+ * ============================================================ */
+
+const APPROVED_SET = new Set<InfluStatus>([
+  "Aprovado",
+  "Em gravação",
+  "Aprovação de conteúdo",
+  "Conteúdo aprovado",
+  "Postado",
+  "Pago",
+]);
+const IN_APPROVAL_SET = new Set<InfluStatus>(["Enviado para aprovação", "Aprovação de conteúdo"]);
+
+/** Resumo com o valor/config de cada tipo de pagamento, pro badge não mostrar só o nome do tipo. */
+function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
+  if (t === "Valor") return cfg.valor ? fmtBRL(parseMoney(cfg.valor)) : "";
+  if (t === "Por Hora") return cfg.porHoraValor ? `${fmtBRL(parseMoney(cfg.porHoraValor))}/h` : "";
+  if (t === "Comissão")
+    return cfg.comissaoPct ? `${cfg.comissaoPct}% sobre ${cfg.comissaoSobre || "vendas"}` : "";
+  if (t === "Permuta") return cfg.permutaDescricao || "";
+  return cfg.outroValor ? fmtBRL(parseMoney(cfg.outroValor)) : (cfg.outroDescricao ?? "");
+}
+
+function CampanhaDetail({ row, onBack }: { row: Row; onBack: () => void }) {
+  const { campanha: c, cliente } = row;
+  const isRecorrente = c.pagClienteTipo === "Recorrente";
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [monthFilter, setMonthFilter] = useState<string>(defaultMonth);
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    const startStr = c.pagClienteRecorrenteInicio;
+    const start = startStr
+      ? new Date(startStr + "T00:00:00")
+      : new Date(now.getFullYear(), now.getMonth() - 12, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (cur <= end) {
+      const v = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+      const label = cur.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+      opts.push({
+        value: v,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+      });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return opts;
+  }, [c.pagClienteRecorrenteInicio]);
+  const totalInflus = c.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
+  const totalEnviar = c.linhas.reduce((s, l) => s + (l.enviar || 0), 0);
+
+  const [influs, setInflus] = useState<Influ[]>(() => normalizeInflus(loadCampanhaInflus(c.id)));
+  const persistInflus = (next: Influ[]) => {
+    setInflus(next);
+    saveCampanhaInflus(c.id, next);
+  };
+  useEffect(
+    () => onCampanhaInflusChange(() => setInflus(normalizeInflus(loadCampanhaInflus(c.id)))),
+    [c.id],
+  );
+
+  const [docs, setDocs] = useState<CampaignDoc[]>(() => loadCampanhaDocs(c.id));
+  const persistDocs = (next: CampaignDoc[]) => {
+    setDocs(next);
+    saveCampanhaDocs(c.id, next);
+  };
+  useEffect(() => onCampanhaDocsChange(() => setDocs(loadCampanhaDocs(c.id))), [c.id]);
+
+  // Approval metrics
+  const enviados = influs.filter((i) => i.status !== "Lista").length;
+  const aprovados = influs.filter((i) => APPROVED_SET.has(i.status)).length;
+  const emAprovacao = influs.filter((i) => IN_APPROVAL_SET.has(i.status)).length;
+
+  // Budget
+  const orcamento = parseMoney(c.orcamento);
+  const gasto = influs.reduce((sum, i) => sum + totalAceito(i.entregas), 0);
+  const disponivel = Math.max(0, orcamento - gasto);
+  const pctGasto = orcamento > 0 ? Math.min(100, (gasto / orcamento) * 100) : 0;
+  const overBudget = orcamento > 0 && gasto > orcamento;
+
+  // Tasks
+  const [tasks, setTasks] = useState<Task[]>(() => loadCampanhaTarefas(c.id));
+  const persistTasks = (next: Task[]) => {
+    setTasks(next);
+    saveCampanhaTarefas(c.id, next);
+  };
+  useEffect(() => onCampanhaTarefasChange(() => setTasks(loadCampanhaTarefas(c.id))), [c.id]);
+
+  // Public approval links — tie client responses back into the influencer's
+  // status (and therefore the campaign KPIs above) as soon as they come in.
+  const { approvalStatusFor, refresh: refreshApprovals } = useInfluencerApprovals(c.id);
+  useEffect(() => {
+    let changed = false;
+    const next = influs.map((i) => {
+      const badge = approvalStatusFor(i.id);
+      if (
+        badge?.status === "aprovado" &&
+        (i.status === "Lista" || i.status === "Enviado para aprovação")
+      ) {
+        changed = true;
+        return { ...i, status: "Aprovado" as InfluStatus };
+      }
+      return i;
+    });
+    if (changed) persistInflus(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvalStatusFor, influs]);
+
+  const [openPanel, setOpenPanel] = useState<
+    null | "documentos" | "calendario" | "composicao" | "direitos"
+  >(null);
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-10">
+      {/* BACK */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+      </button>
+
+      {/* HEADER — foto em destaque + nome campanha + cliente */}
+      <header className="flex items-center gap-5">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted ring-1 ring-border">
+          {cliente.photo ? (
+            <img src={cliente.photo} alt={cliente.empresa} className="h-full w-full object-cover" />
+          ) : (
+            <Megaphone className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            {cliente.empresa}
+          </p>
+          <h1 className="mt-1 truncate text-3xl font-semibold tracking-tight text-foreground">
+            {c.nome}
+          </h1>
+          <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(c.prazo)}
+            {c.prazoPag && <span className="ml-2">· Pagto. {c.prazoPag}</span>}
+            {isRecorrente && <span className="ml-2">· Recorrente</span>}
+          </p>
+        </div>
+        {isRecorrente && (
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground">Mês</label>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs capitalize focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {monthOptions.map((m) => (
+                <option key={m.value} value={m.value} className="capitalize">
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </header>
+
+      {/* BRIEFING */}
+      <section className="rounded-xl border border-border bg-background p-6">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Briefing
+        </h2>
+        <div className="mt-3">
+          {c.briefing ? (
+            <p className="whitespace-pre-wrap text-sm text-foreground">{c.briefing}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhum briefing cadastrado.</p>
+          )}
+          {c.briefingFile && (
+            <a
+              href={c.briefingFile}
+              download
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-foreground underline underline-offset-2"
+            >
+              <Paperclip className="h-3.5 w-3.5" /> Anexo
+            </a>
+          )}
+          {(c.briefingLinks?.length ?? 0) > 0 && (
+            <ul className="mt-4 space-y-1.5">
+              {c.briefingLinks!.map((url) => (
+                <li key={url}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 truncate text-xs font-medium text-foreground underline underline-offset-2"
+                  >
+                    <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* KPIs — uma linha, minimalista */}
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 md:grid-cols-6">
+        <Kpi label="Planejado" value={totalInflus.toString()} />
+        <Kpi label="Enviados" value={`${enviados}/${totalEnviar}`} />
+        <Kpi label="Em aprovação" value={emAprovacao.toString()} />
+        <Kpi label="Aprovados" value={aprovados.toString()} />
+        <Kpi label="Orçamento" value={orcamento > 0 ? fmtBRL(orcamento) : "—"} />
+        <Kpi
+          label="Gasto"
+          value={fmtBRL(gasto)}
+          tone={overBudget ? "danger" : "default"}
+          hint={
+            orcamento > 0 ? `${Math.round(pctGasto)}% · ${fmtBRL(disponivel)} livre` : undefined
+          }
+        />
+      </div>
+
+      <TaskBoard tasks={tasks} onChange={persistTasks} scope={{ kind: "campanha", id: c.id }} />
+
+      <InfluencerBoard
+        influs={influs}
+        onChange={persistInflus}
+        exportName={c.nome}
+        approvalStatusFor={approvalStatusFor}
+        pagGrupos={normalizeCampaignPagGrupos(c)}
+        headerExtra={
+          <ApprovalRequestButton
+            influs={influs}
+            campanhaId={c.id}
+            campanhaNome={c.nome}
+            clienteNome={cliente.empresa}
+            totalPlanejado={totalInflus}
+            onCreated={refreshApprovals}
+          />
+        }
+      />
+
+      <GaleriaConteudosSection influs={influs} />
+
+      {/* FUNÇÕES ADICIONAIS — informações secundárias, abertas sob demanda */}
+      <section>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Funções adicionais
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <FeatureButton
+            icon={FolderOpen}
+            label="Documentos"
+            count={docs.length}
+            onClick={() => setOpenPanel("documentos")}
+          />
+          <FeatureButton
+            icon={CalendarClock}
+            label="Calendário da campanha"
+            onClick={() => setOpenPanel("calendario")}
+          />
+          <FeatureButton
+            icon={Wallet}
+            label="Composição & pagamentos"
+            onClick={() => setOpenPanel("composicao")}
+          />
+          <FeatureButton
+            icon={ShieldCheck}
+            label="Direitos de imagem"
+            active={c.direitosImagem?.permitido}
+            onClick={() => setOpenPanel("direitos")}
+          />
+        </div>
+      </section>
+
+      <Dialog open={openPanel === "documentos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+        <DialogContent className="max-w-xl border-border bg-card">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <FolderOpen className="h-4 w-4" /> Documentos
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Anexos e links de referência da campanha.
+          </DialogDescription>
+          <DocumentosSection docs={docs} onChange={persistDocs} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openPanel === "calendario"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+        <DialogContent className="max-w-2xl border-border bg-card">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <CalendarClock className="h-4 w-4" /> Calendário da campanha
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Datas e prazos importantes da campanha.
+          </DialogDescription>
+          <CampaignCalendar campanha={c} influs={influs} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openPanel === "composicao"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Wallet className="h-4 w-4" /> Composição & pagamentos
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Composição planejada e formas de pagamento da campanha.
+          </DialogDescription>
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Composição planejada
+              </h3>
+              {c.linhas.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+                  {c.linhas.map((l) => (
+                    <span
+                      key={l.id}
+                      className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                    >
+                      {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Formas de pagamento
+              </h3>
+              {normalizeCampaignPagGrupos(c).length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {normalizeCampaignPagGrupos(c).map((grupo) => (
+                    <div key={grupo.id}>
+                      <p className="text-[11px] font-medium text-muted-foreground">{grupo.nome}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                        {grupo.tipos.map((t) => {
+                          const resumo = pagTipoResumo(t, grupo.config[t] ?? {});
+                          return (
+                            <span
+                              key={t}
+                              className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                            >
+                              <span className="font-medium">{t}</span>
+                              {resumo && <span className="text-muted-foreground"> · {resumo}</span>}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openPanel === "direitos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <ShieldCheck className="h-4 w-4" /> Direitos de imagem
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Regras de uso do conteúdo dos influenciadores nesta campanha.
+          </DialogDescription>
+          {c.direitosImagem?.permitido ? (
+            <div className="space-y-3 text-sm">
+              {c.direitosImagem.usos.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  {c.direitosImagem.usos.map((u) => (
+                    <span
+                      key={u}
+                      className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                    >
+                      {u}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-foreground">
+                Duração:{" "}
+                <span className="text-muted-foreground">
+                  {c.direitosImagem.duracaoDias
+                    ? `${c.direitosImagem.duracaoDias} dias`
+                    : "Indeterminada"}
+                </span>
+              </p>
+              {c.direitosImagem.exclusividade && (
+                <p className="text-foreground">
+                  Exclusividade:{" "}
+                  <span className="text-muted-foreground">
+                    {c.direitosImagem.exclusividadeSegmento || "Sim"}
+                  </span>
+                </p>
+              )}
+              {c.direitosImagem.observacoes && (
+                <p className="whitespace-pre-wrap text-muted-foreground">
+                  {c.direitosImagem.observacoes}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Nenhum direito de uso de imagem definido para esta campanha.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function FeatureButton({
+  icon: Icon,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  count?: number;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+      {typeof count === "number" && count > 0 && (
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+          {count}
+        </span>
+      )}
+      {active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+    </button>
+  );
+}
+
+const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+
+function toISODate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+type CalendarEvent = { label: string; tone: "inicio" | "prazo" | "postagem" | "pagamento" };
+
+/**
+ * Mini calendário mensal com os marcos da campanha: início, prazo, e a
+ * data de postagem/pagamento de cada entrega de cada influenciador.
+ */
+function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs: Influ[] }) {
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    const add = (date: string | undefined, ev: CalendarEvent) => {
+      if (!date) return;
+      const arr = map.get(date) ?? [];
+      arr.push(ev);
+      map.set(date, arr);
+    };
+    add(c.dataInicio, { label: "Início da campanha", tone: "inicio" });
+    add(c.prazo, { label: "Prazo da campanha", tone: "prazo" });
+    for (const i of influs) {
+      for (const e of i.entregas) {
+        add(e.dataPostagem, { label: `Postagem · ${i.nome} (${e.tipo})`, tone: "postagem" });
+        add(e.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
+      }
+    }
+    return map;
+  }, [c.dataInicio, c.prazo, influs]);
+
+  const initialCursor = useMemo(() => {
+    const first = c.dataInicio ?? c.prazo;
+    return first ? new Date(first + "T00:00:00") : new Date();
+  }, [c.dataInicio, c.prazo]);
+  const [cursor, setCursor] = useState(initialCursor);
+
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const startOffset = first.getDay();
+  const startDate = new Date(first);
+  startDate.setDate(first.getDate() - startOffset);
+  const cells: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    cells.push(d);
+  }
+  const today = toISODate(new Date());
+  const monthLabel = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  const toneDot: Record<CalendarEvent["tone"], string> = {
+    inicio: "bg-sky-500",
+    prazo: "bg-amber-500",
+    postagem: "bg-violet-500",
+    pagamento: "bg-emerald-500",
+  };
+
+  const sortedUpcoming = useMemo(
+    () => Array.from(eventsByDate.entries()).sort(([a], [b]) => (a < b ? -1 : 1)),
+    [eventsByDate],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Mês anterior"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <p className="text-sm font-medium capitalize text-foreground">{monthLabel}</p>
+        <button
+          type="button"
+          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Próximo mês"
+        >
+          <ArrowLeft className="h-4 w-4 rotate-180" />
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-border">
+        <div className="grid grid-cols-7 border-b border-border bg-muted/30">
+          {DIAS_LABEL.map((d) => (
+            <div
+              key={d}
+              className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {cells.map((d, idx) => {
+            const iso = toISODate(d);
+            const inMonth = d.getMonth() === cursor.getMonth();
+            const isToday = iso === today;
+            const items = eventsByDate.get(iso) ?? [];
+            return (
+              <div
+                key={idx}
+                className={`min-h-[64px] border-b border-r border-border p-1.5 text-left align-top ${
+                  inMonth ? "" : "bg-background/40 text-muted-foreground/50"
+                }`}
+              >
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${
+                    isToday ? "border border-foreground/40" : ""
+                  }`}
+                >
+                  {d.getDate()}
+                </span>
+                <div className="mt-1 space-y-0.5">
+                  {items.slice(0, 2).map((ev, i) => (
+                    <div key={i} className="flex items-center gap-1 truncate text-[10px]">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneDot[ev.tone]}`} />
+                      <span className="truncate text-muted-foreground">{ev.label}</span>
+                    </div>
+                  ))}
+                  {items.length > 2 && (
+                    <div className="text-[9px] text-muted-foreground">+{items.length - 2}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {sortedUpcoming.length > 0 ? (
+        <div className="space-y-1.5">
+          {sortedUpcoming.map(([date, events]) => (
+            <div key={date} className="flex items-start gap-3 text-sm">
+              <span className="w-20 shrink-0 tabular-nums text-muted-foreground">
+                {fmtDate(date)}
+              </span>
+              <div className="space-y-0.5">
+                {events.map((ev, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full ${toneDot[ev.tone]}`} />
+                    <span className="text-foreground">{ev.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Aprovação de influenciadores — link público para o cliente aprovar
+ * ou reprovar os influenciadores selecionados (com foto, nome e redes),
+ * exigindo motivo em caso de reprovação. O botão fica ao lado de
+ * "Baixar lista" no board de Influenciadores, e o resultado aparece
+ * como um ícone no próprio card do influenciador — sem seção própria.
+ * ============================================================ */
+
+type ApprovalResponse = { status: "aprovado" | "reprovado"; motivo?: string; respondedAt: string };
+type ApprovalRow = {
+  id: string;
+  token: string;
+  influencers: { id: string; nome: string; foto?: string }[];
+  responses: Record<string, ApprovalResponse>;
+  created_at: string;
+};
+
+/** Fetches this campaign's approval links + keeps them live via realtime, exposing a per-influencer badge lookup. */
+function useInfluencerApprovals(campanhaId: string) {
+  const listFn = useServerFn(listApprovalsForCampanha);
+  const [links, setLinks] = useState<ApprovalRow[]>([]);
+
+  const refresh = useCallback(() => {
+    void listFn({ data: { campanhaId } })
+      .then((rows) => setLinks(rows as ApprovalRow[]))
+      .catch(() => undefined);
+  }, [campanhaId, listFn]);
+
+  useEffect(() => {
+    refresh();
+    const channel = supabase
+      .channel(`rt-influencer-approvals-${campanhaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "influencer_approvals",
+          filter: `campanha_id=eq.${campanhaId}`,
+        },
+        () => refresh(),
+      )
+      .subscribe();
+    return () => void supabase.removeChannel(channel);
+  }, [campanhaId, refresh]);
+
+  const approvalStatusFor = useCallback(
+    (influId: string): ApprovalBadge | undefined => {
+      let latest: ApprovalResponse | undefined;
+      for (const link of links) {
+        const r = link.responses[influId] as ApprovalResponse | undefined;
+        if (r && (!latest || r.respondedAt > latest.respondedAt)) latest = r;
+      }
+      return latest ? { status: latest.status, motivo: latest.motivo } : undefined;
+    },
+    [links],
+  );
+
+  return { links, refresh, approvalStatusFor };
+}
+
+function ApprovalRequestButton({
+  influs,
+  campanhaId,
+  campanhaNome,
+  clienteNome,
+  totalPlanejado,
+  onCreated,
+}: {
+  influs: Influ[];
+  campanhaId: string;
+  campanhaNome: string;
+  clienteNome: string;
+  totalPlanejado: number;
+  onCreated: () => void;
+}) {
+  const createLinkFn = useServerFn(createApprovalLink);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const linkFor = (token: string) => `${window.location.origin}/aprovacao/${token}`;
+  const copyLink = (token: string) => {
+    void navigator.clipboard.writeText(linkFor(token)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const openDialog = () => {
+    setSelected(new Set());
+    setNewToken(null);
+    setError("");
+    setOpen(true);
+  };
+
+  const submit = async () => {
+    if (selected.size === 0) return;
+    setCreating(true);
+    setError("");
+    try {
+      const chosen = influs.filter((i) => selected.has(i.id));
+      const { token } = await withRetry(() =>
+        createLinkFn({
+          data: {
+            campanhaId,
+            campanhaNome,
+            clienteNome,
+            totalPlanejado,
+            influencers: chosen.map((i) => ({
+              id: i.id,
+              nome: i.nome,
+              foto: i.foto,
+              redes: i.redes.map((r) => ({ plataforma: r.plataforma, handle: r.handle })),
+              entregas: i.entregas.map((e) => ({
+                id: e.id,
+                tipo: e.tipo,
+                dataPostagem: e.dataPostagem,
+                roteiro: e.roteiro,
+                roteiroNome: e.roteiroNome,
+              })),
+            })),
+          },
+        }),
+      );
+      setNewToken(token);
+      onCreated();
+    } catch (e) {
+      setError(friendlyNetworkError(e, "Não foi possível gerar o link."));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={openDialog}
+        disabled={influs.length === 0}
+        className="ml-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Share2 className="h-3.5 w-3.5" />
+        Solicitar aprovação
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-sm font-semibold">Solicitar aprovação</h3>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {newToken ? (
+              <div className="space-y-3 px-5 py-6">
+                <p className="text-sm text-foreground">Link gerado com sucesso.</p>
+                <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+                  <span className="flex-1 truncate">{linkFor(newToken)}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyLink(newToken)}
+                    className="shrink-0 text-foreground hover:opacity-70"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="mt-2 w-full rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+                >
+                  Concluir
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Selecione quem enviar para aprovação do cliente.
+                  </p>
+                  {influs.map((i) => (
+                    <label
+                      key={i.id}
+                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(i.id)}
+                        onChange={() => toggle(i.id)}
+                        className="h-4 w-4 rounded border-input"
+                      />
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                        {i.foto ? (
+                          <img src={i.foto} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <User className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <span className="min-w-0 flex-1 truncate text-sm">
+                        {i.nome || "Sem nome"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {error && <p className="px-5 text-xs text-destructive">{error}</p>}
+                <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submit()}
+                    disabled={selected.size === 0 || creating}
+                    className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creating ? "Gerando..." : `Gerar link (${selected.size})`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ============================================================
+ * Galeria de conteúdos — entregas publicadas de todos os
+ * influenciadores da campanha, em formato de galeria com foto e
+ * nome do influenciador para facilitar o acesso.
+ * ============================================================ */
+
+function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
+  const items = influs.flatMap((i) =>
+    i.entregas
+      .filter((e) => e.status === "publicado" && (e.url || e.arquivoNome))
+      .map((e) => ({ influ: i, entrega: e })),
+  );
+
+  const isImage = (nome?: string) => !!nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+        Galeria de conteúdos
+      </h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map(({ influ, entrega }) => {
+          const showImage = entrega.arquivoNome ? isImage(entrega.arquivoNome) : false;
+          return (
+            <a
+              key={entrega.id}
+              href={entrega.url}
+              target={entrega.arquivoNome ? undefined : "_blank"}
+              rel="noreferrer"
+              download={entrega.arquivoNome}
+              className="group overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-foreground/30"
+            >
+              <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
+                {showImage && entrega.url ? (
+                  <img
+                    src={entrega.url}
+                    alt={entrega.titulo ?? entrega.tipo}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+                    <ImageIcon className="h-6 w-6" strokeWidth={1.5} />
+                    <span className="text-[11px]">{entrega.tipo}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 p-2.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                  {influ.foto ? (
+                    <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-3 w-3 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-foreground">{influ.nome}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {entrega.titulo || entrega.tipo}
+                  </p>
+                </div>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
+ * Documentos — anexos e links de referência da campanha.
+ * ============================================================ */
+
+function DocumentosSection({
+  docs,
+  onChange,
+}: {
+  docs: CampaignDoc[];
+  onChange: (next: CampaignDoc[]) => void;
+}) {
+  const [titulo, setTitulo] = useState("");
+  const [url, setUrl] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const addLink = () => {
+    const u = url.trim();
+    if (!u) return;
+    onChange([
+      ...docs,
+      {
+        id: crypto.randomUUID(),
+        tipo: "link",
+        titulo: titulo.trim() || u,
+        url: u,
+        criadoEm: new Date().toISOString(),
+      },
+    ]);
+    setTitulo("");
+    setUrl("");
+  };
+
+  const addFile = (file: File | undefined) => {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      onChange([
+        ...docs,
+        {
+          id: crypto.randomUUID(),
+          tipo: "anexo",
+          titulo: titulo.trim() || file.name,
+          url: String(r.result),
+          arquivoNome: file.name,
+          criadoEm: new Date().toISOString(),
+        },
+      ]);
+      setTitulo("");
+    };
+    r.readAsDataURL(file);
+  };
+
+  const remove = (id: string) => onChange(docs.filter((d) => d.id !== id));
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Documentos
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {docs.length} {docs.length === 1 ? "documento" : "documentos"} · anexos e links de
+          referência.
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+        <input
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder="Título (opcional)"
+          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        />
+        <div className="flex flex-wrap gap-2">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addLink()}
+            placeholder="Colar link (https://…)"
+            className="h-9 min-w-[200px] flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+          <button
+            type="button"
+            onClick={addLink}
+            disabled={!url.trim()}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <LinkIcon className="h-3.5 w-3.5" /> Adicionar link
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              addFile(e.target.files?.[0]);
+              if (fileRef.current) fileRef.current.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            <Paperclip className="h-3.5 w-3.5" /> Anexar arquivo
+          </button>
+        </div>
+      </div>
+
+      {docs.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          Nenhum documento adicionado ainda.
+        </div>
+      ) : (
+        <ul className="divide-y divide-border rounded-xl border border-border bg-background">
+          {docs.map((d) => (
+            <li key={d.id} className="flex items-center gap-3 px-4 py-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                {d.tipo === "link" ? (
+                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{d.titulo}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {d.tipo === "link" ? d.url : (d.arquivoNome ?? "Arquivo")}
+                </p>
+              </div>
+              <a
+                href={d.url}
+                target={d.tipo === "link" ? "_blank" : undefined}
+                rel="noreferrer"
+                download={d.tipo === "anexo" ? d.arquivoNome : undefined}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Abrir"
+              >
+                {d.tipo === "link" ? (
+                  <ExternalLink className="h-4 w-4" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+              </a>
+              <button
+                type="button"
+                onClick={() => remove(d.id)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
+                aria-label="Remover"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  hint,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={`mt-1.5 truncate text-lg font-semibold tabular-nums ${
+          tone === "danger" ? "text-destructive" : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}

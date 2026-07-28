@@ -1,0 +1,880 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowUpRight,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  MessageSquare,
+  Newspaper,
+  Plus,
+  Sparkles,
+  Star,
+  Target,
+  Trash2,
+  TrendingUp,
+  Wallet,
+  X,
+} from "lucide-react";
+import { loadProjetos, type BlogPost, type Task as ProjTask } from "@/lib/projetos";
+import {
+  subscribeChat,
+  getMe,
+  loadMessages,
+  loadChannels,
+  loadCampaignChannels,
+  loadProjectChannels,
+  setActive as setActiveConvo,
+} from "@/lib/chat-store";
+import { useClientes } from "@/lib/clientes-store";
+import { supabase } from "@/integrations/supabase/client";
+import { listLeads } from "@/lib/comercial.functions";
+import { DEFAULT_STAGES, formatBRL } from "@/lib/comercial";
+import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
+import type { SectionKey } from "@/components/AppShell";
+import { loadMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
+
+type DashTask = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  bucket: "hoje" | "amanha" | "semana" | "atrasada" | "outro";
+  due: string;
+  priority?: ProjTask["priority"];
+  status: ProjTask["status"];
+};
+
+type PersonalItem = { id: string; text: string; done: boolean };
+
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function getGreeting(hour: number) {
+  if (hour >= 5 && hour < 12) return "Bom dia";
+  if (hour >= 12 && hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function toISODate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function bucketFor(dueISO: string | undefined, status: ProjTask["status"]): DashTask["bucket"] {
+  if (status === "Concluído" || status === "Aprovado" || status === "Arquivado") return "outro";
+  if (!dueISO) return "outro";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueISO + "T00:00:00");
+  const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (diff < 0) return "atrasada";
+  if (diff === 0) return "hoje";
+  if (diff === 1) return "amanha";
+  if (diff <= 7) return "semana";
+  return "outro";
+}
+
+function formatDue(dueISO: string | undefined, bucket: DashTask["bucket"]): string {
+  if (!dueISO) return "";
+  const due = new Date(dueISO + "T00:00:00");
+  if (bucket === "hoje") return "Hoje";
+  if (bucket === "amanha") return "Amanhã";
+  if (bucket === "atrasada") {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = Math.round((today.getTime() - due.getTime()) / 86400000);
+    return `Atrasada ${d}d`;
+  }
+  return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
+}
+
+function loadAllTasks(): DashTask[] {
+  const projs = loadProjetos();
+  const out: DashTask[] = [];
+  for (const p of projs) {
+    for (const t of p.tasks ?? []) {
+      const b = bucketFor(t.dueDate, t.status);
+      out.push({
+        id: t.id,
+        projectId: p.id,
+        projectName: p.name,
+        title: t.title,
+        bucket: b,
+        due: formatDue(t.dueDate, b),
+        priority: t.priority,
+        status: t.status,
+      });
+    }
+  }
+  return out;
+}
+
+function loadPerfil(): { nome?: string; foto?: string } {
+  try {
+    const raw = localStorage.getItem("config:perfil");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+const PERSONAL_KEY = "inicio.personal";
+function loadPersonal(): PersonalItem[] {
+  try {
+    const raw = localStorage.getItem(PERSONAL_KEY);
+    return raw ? (JSON.parse(raw) as PersonalItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+function savePersonal(items: PersonalItem[]) {
+  try {
+    localStorage.setItem(PERSONAL_KEY, JSON.stringify(items));
+  } catch {
+    /* ignore */
+  }
+}
+
+type CardKey = "stats" | "work" | "agenda" | "comments" | "personal" | "comercial" | "financeiro";
+const CARD_DEFS: { key: CardKey; label: string }[] = [
+  { key: "stats", label: "Resumo (chips)" },
+  { key: "work", label: "Meu trabalho" },
+  { key: "agenda", label: "Agenda" },
+  { key: "comments", label: "Comentários atribuídos" },
+  { key: "personal", label: "Lista pessoal" },
+  { key: "comercial", label: "Funil comercial" },
+  { key: "financeiro", label: "Financeiro do mês" },
+];
+const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
+  stats: true,
+  work: true,
+  agenda: true,
+  comments: true,
+  personal: true,
+  comercial: true,
+  financeiro: true,
+};
+
+type TaskFilter = "hoje" | "atrasada" | "semana";
+
+export function InicioDashboard() {
+  const navigate = useNavigate();
+  const [name, setName] = useState("Você");
+  const [foto, setFoto] = useState<string | undefined>();
+  const [greeting, setGreeting] = useState("Olá");
+  const [today, setToday] = useState("");
+  const [filter, setFilter] = useState<TaskFilter>("hoje");
+  const [manageOpen, setManageOpen] = useState(false);
+  const [tasks, setTasks] = useState<DashTask[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [personal, setPersonal] = useState<PersonalItem[]>([]);
+  const [newPersonal, setNewPersonal] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
+    if (typeof window === "undefined") return DEFAULT_VISIBLE;
+    try {
+      const raw = localStorage.getItem("inicio.cards");
+      if (raw) return { ...DEFAULT_VISIBLE, ...JSON.parse(raw) };
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_VISIBLE;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("inicio.cards", JSON.stringify(visible));
+    } catch {
+      /* ignore */
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    const perfil = loadPerfil();
+    if (perfil.nome) setName(perfil.nome.split(" ")[0]);
+    setFoto(perfil.foto);
+    const now = new Date();
+    setGreeting(getGreeting(now.getHours()));
+    setToday(`${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`);
+
+    const refresh = () => {
+      setTasks(loadAllTasks());
+      setMeetings(loadMeetings());
+      setPersonal(loadPersonal());
+    };
+    refresh();
+    window.addEventListener("storage", refresh);
+    const unsubMeetings = onMeetingsChange(refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      unsubMeetings();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user || cancelled) return;
+      const { data: ok } = await supabase.rpc("is_admin", { _user_id: u.user.id });
+      if (!cancelled) setIsAdmin(Boolean(ok));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const countBy = (b: DashTask["bucket"]) => tasks.filter((t) => t.bucket === b).length;
+  const hoje = countBy("hoje");
+  const amanha = countBy("amanha");
+  const semana = countBy("semana");
+  const atrasadas = countBy("atrasada");
+
+  const filteredTasks = useMemo(() => {
+    if (filter === "hoje") return tasks.filter((t) => t.bucket === "hoje");
+    if (filter === "atrasada") return tasks.filter((t) => t.bucket === "atrasada");
+    return tasks.filter((t) => ["hoje", "amanha", "semana"].includes(t.bucket));
+  }, [filter, tasks]);
+
+  const todayISO = toISODate(new Date());
+  const todaysMeetings = useMemo(
+    () =>
+      meetings
+        .filter((m) => m.data === todayISO && m.status !== "Cancelada")
+        .sort((a, b) => a.hora.localeCompare(b.hora)),
+    [meetings, todayISO],
+  );
+
+  // Comentários atribuídos — menções a mim em qualquer conversa do chat
+  const [, forceChat] = useState(0);
+  useEffect(() => subscribeChat(() => forceChat((n) => n + 1)), []);
+  const clientesForChat = useClientes();
+  const mentionItems = useMemo(() => {
+    const me = getMe();
+    const channels = loadChannels();
+    const campaigns = loadCampaignChannels(clientesForChat);
+    const projects = loadProjectChannels();
+    const labelFor = (convoId: string): string => {
+      if (convoId.startsWith("camp:"))
+        return campaigns.find((c) => c.id === convoId)?.name ?? "Campanha";
+      if (convoId.startsWith("proj:"))
+        return projects.find((p) => p.id === convoId)?.name ?? "Projeto";
+      if (convoId.startsWith("dm:")) return "Mensagem direta";
+      return channels.find((c) => c.id === convoId)?.name ?? "Canal";
+    };
+    return loadMessages()
+      .filter(
+        (m) => m.authorId !== me.id && m.mentions?.some((x) => x.kind === "user" && x.id === me.id),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 6)
+      .map((m) => ({ ...m, convoLabel: labelFor(m.convoId) }));
+  }, [clientesForChat]);
+
+  const openMention = (convoId: string) => {
+    setActiveConvo(convoId);
+    navigate({ to: "/time", search: { section: "chat" as SectionKey } });
+  };
+
+  // Funil comercial — leads reais (tabela Supabase via server function)
+  const listLeadsFn = useServerFn(listLeads);
+  const { data: leads = [] } = useQuery({
+    queryKey: ["leads", "dashboard"],
+    queryFn: () => listLeadsFn(),
+    refetchInterval: 30000,
+  });
+  const comercialStats = useMemo(() => {
+    const abertos = leads.filter((l) => l.stage !== "ganho" && l.stage !== "perdido");
+    const novos = leads.filter((l) => l.stage === (DEFAULT_STAGES[0]?.key ?? "lead"));
+    const valorFunil = abertos.reduce((s, l) => s + (l.value || 0), 0);
+    return { abertos: abertos.length, novos: novos.length, valorFunil };
+  }, [leads]);
+
+  // Financeiro — saldo do mês corrente
+  const financeiroEntries = useFinanceiroEntries();
+  const financeiroMes = useMemo(() => {
+    const mk = monthKey(new Date());
+    let receita = 0;
+    let despesa = 0;
+    for (const e of financeiroEntries) {
+      if (!e.date.startsWith(mk)) continue;
+      if (e.kind === "receita") receita += e.amount;
+      else despesa += e.amount;
+    }
+    return { receita, despesa, saldo: receita - despesa };
+  }, [financeiroEntries]);
+
+  const addPersonal = () => {
+    const t = newPersonal.trim();
+    if (!t) return;
+    const next = [...personal, { id: `p_${Date.now()}`, text: t, done: false }];
+    setPersonal(next);
+    savePersonal(next);
+    setNewPersonal("");
+  };
+  const togglePersonal = (id: string) => {
+    const next = personal.map((p) => (p.id === id ? { ...p, done: !p.done } : p));
+    setPersonal(next);
+    savePersonal(next);
+  };
+  const removePersonal = (id: string) => {
+    const next = personal.filter((p) => p.id !== id);
+    setPersonal(next);
+    savePersonal(next);
+  };
+
+  const openTask = (t: DashTask) => {
+    navigate({ to: "/projeto/$id", params: { id: t.projectId } });
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-6 px-1">
+      {/* Header */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {foto ? (
+            <img src={foto} alt="" className="h-10 w-10 rounded-full object-cover" />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background">
+              {name.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+              {greeting}, {name}
+            </h1>
+            <p className="text-xs text-muted-foreground">{today}</p>
+          </div>
+        </div>
+        <div className="relative flex items-center gap-2">
+          <button
+            onClick={() => setManageOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Gerenciar cards
+          </button>
+          {manageOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
+              <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
+                <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Cards da tela inicial
+                </p>
+                {CARD_DEFS.filter(
+                  (c) => isAdmin || (c.key !== "comercial" && c.key !== "financeiro"),
+                ).map((c) => (
+                  <label
+                    key={c.key}
+                    className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                  >
+                    <span>{c.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={visible[c.key]}
+                      onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
+                      className="h-3.5 w-3.5 accent-foreground"
+                    />
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </header>
+
+      {/* Stat strip */}
+      {visible.stats && (
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <StatChip icon={<Clock className="h-3.5 w-3.5" />} label="Hoje" value={hoje} />
+          <StatChip icon={<Calendar className="h-3.5 w-3.5" />} label="Amanhã" value={amanha} />
+          <StatChip
+            icon={<Target className="h-3.5 w-3.5" />}
+            label="7 dias"
+            value={semana + hoje + amanha}
+          />
+          <StatChip
+            icon={<TrendingUp className="h-3.5 w-3.5" />}
+            label="Atrasadas"
+            value={atrasadas}
+            tone={atrasadas > 0 ? "danger" : "default"}
+          />
+        </div>
+      )}
+
+      <MuralNovidades />
+
+      {/* Widget grid */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* My Work */}
+        {visible.work && (
+          <Card className="lg:col-span-2">
+            <CardHeader
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              title="Meu trabalho"
+              action={
+                <div className="flex items-center gap-1">
+                  <Tab active={filter === "hoje"} onClick={() => setFilter("hoje")}>
+                    Hoje
+                  </Tab>
+                  <Tab active={filter === "atrasada"} onClick={() => setFilter("atrasada")}>
+                    Atrasadas
+                  </Tab>
+                  <Tab active={filter === "semana"} onClick={() => setFilter("semana")}>
+                    Semana
+                  </Tab>
+                </div>
+              }
+            />
+            <div className="divide-y divide-border">
+              {filteredTasks.length === 0 && (
+                <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  Nada por aqui. Bom trabalho.
+                </p>
+              )}
+              {filteredTasks.map((t) => (
+                <button
+                  key={`${t.projectId}_${t.id}`}
+                  onClick={() => openTask(t)}
+                  className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
+                >
+                  <PriorityDot priority={t.priority} bucket={t.bucket} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-foreground group-hover:underline">
+                      {t.title}
+                    </p>
+                  </div>
+                  <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+                    {t.projectName}
+                  </span>
+                  <span
+                    className={`shrink-0 text-xs tabular-nums ${
+                      t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
+                    }`}
+                  >
+                    {t.due}
+                  </span>
+                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Agenda */}
+        {visible.agenda && (
+          <Card>
+            <CardHeader
+              icon={<Calendar className="h-4 w-4" />}
+              title="Agenda"
+              action={
+                <button
+                  onClick={() =>
+                    navigate({ to: "/time", search: { section: "reunioes" as SectionKey } })
+                  }
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Ver tudo
+                </button>
+              }
+            />
+            <div className="p-3">
+              {todaysMeetings.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted-foreground">
+                  Nenhuma reunião hoje.
+                </p>
+              ) : (
+                <ol className="relative space-y-0.5">
+                  <span
+                    className="absolute bottom-1 left-[3.4rem] top-1 w-px bg-border"
+                    aria-hidden
+                  />
+                  {todaysMeetings.map((m) => (
+                    <li
+                      key={m.id}
+                      className="relative flex items-start gap-3 rounded-md px-1 py-1.5 hover:bg-muted/40"
+                    >
+                      <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                        {m.hora}
+                      </div>
+                      <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-foreground ring-2 ring-background" />
+                      <div className="min-w-0 flex-1 pb-0.5">
+                        <p className="truncate text-xs font-medium text-foreground">{m.titulo}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {m.duracao} min · {m.local || m.com}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Comments */}
+        {visible.comments && (
+          <Card className="lg:col-span-2">
+            <CardHeader
+              icon={<MessageSquare className="h-4 w-4" />}
+              title="Comentários atribuídos"
+            />
+            {mentionItems.length === 0 ? (
+              <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+                Sem menções no momento.
+              </p>
+            ) : (
+              <div className="divide-y divide-border">
+                {mentionItems.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => openMention(m.convoId)}
+                    className="group flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground">
+                        {m.authorName}{" "}
+                        <span className="font-normal text-muted-foreground">
+                          mencionou você em {m.convoLabel}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{m.text}</p>
+                    </div>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Comercial */}
+        {isAdmin && visible.comercial && (
+          <Card>
+            <CardHeader
+              icon={<Target className="h-4 w-4" />}
+              title="Funil comercial"
+              action={
+                <button
+                  onClick={() =>
+                    navigate({ to: "/time", search: { section: "comercial" as SectionKey } })
+                  }
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Ver tudo
+                </button>
+              }
+            />
+            <div className="grid grid-cols-2 divide-x divide-border">
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">Leads novos</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                  {comercialStats.novos}
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">Valor em aberto</p>
+                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
+                  {formatBRL(comercialStats.valorFunil)}
+                </p>
+              </div>
+            </div>
+            <p className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+              {comercialStats.abertos} negociação(ões) em aberto
+            </p>
+          </Card>
+        )}
+
+        {/* Financeiro */}
+        {isAdmin && visible.financeiro && (
+          <Card>
+            <CardHeader
+              icon={<Wallet className="h-4 w-4" />}
+              title="Financeiro do mês"
+              action={
+                <button
+                  onClick={() =>
+                    navigate({ to: "/time", search: { section: "financeiro" as SectionKey } })
+                  }
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Ver tudo
+                </button>
+              }
+            />
+            <div className="grid grid-cols-2 divide-x divide-border">
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">Receita</p>
+                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-emerald-600">
+                  {fmtBRL(financeiroMes.receita)}
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">Despesa</p>
+                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-destructive">
+                  {fmtBRL(financeiroMes.despesa)}
+                </p>
+              </div>
+            </div>
+            <p className="border-t border-border px-4 py-2 text-[11px] font-medium text-foreground">
+              Saldo: {fmtBRL(financeiroMes.saldo)}
+            </p>
+          </Card>
+        )}
+
+        {/* Personal */}
+        {visible.personal && (
+          <Card>
+            <CardHeader
+              icon={<Star className="h-4 w-4" />}
+              title="Lista pessoal"
+              action={
+                <span className="text-[11px] text-muted-foreground">
+                  {personal.filter((p) => !p.done).length}
+                </span>
+              }
+            />
+            <div className="space-y-1 p-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addPersonal();
+                }}
+                className="mb-2 flex items-center gap-1.5"
+              >
+                <input
+                  value={newPersonal}
+                  onChange={(e) => setNewPersonal(e.target.value)}
+                  placeholder="Adicionar item…"
+                  className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-border bg-background px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label="Adicionar"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </form>
+              {personal.length === 0 && (
+                <p className="py-4 text-center text-[11px] text-muted-foreground">Nenhum item.</p>
+              )}
+              {personal.map((p) => (
+                <div
+                  key={p.id}
+                  className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40"
+                >
+                  <input
+                    type="checkbox"
+                    checked={p.done}
+                    onChange={() => togglePersonal(p.id)}
+                    className="h-3.5 w-3.5 rounded border-border accent-foreground"
+                  />
+                  <span
+                    className={`flex-1 ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
+                  >
+                    {p.text}
+                  </span>
+                  <button
+                    onClick={() => removePersonal(p.id)}
+                    className="opacity-0 transition-opacity group-hover:opacity-100"
+                    aria-label="Remover"
+                  >
+                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`overflow-hidden rounded-lg border border-border bg-background ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function CardHeader({
+  icon,
+  title,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+      <div className="flex items-center gap-2 text-foreground">
+        <span className="text-muted-foreground">{icon}</span>
+        <h2 className="text-xs font-semibold">{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Tab({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatChip({
+  icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <span
+          className={`flex h-6 w-6 items-center justify-center rounded-md ${
+            tone === "danger"
+              ? "bg-destructive/10 text-destructive"
+              : "bg-muted text-muted-foreground"
+          }`}
+        >
+          {icon}
+        </span>
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <span
+        className={`text-lg font-semibold tabular-nums ${
+          tone === "danger" && value > 0 ? "text-destructive" : "text-foreground"
+        }`}
+      >
+        {value.toString().padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
+
+function PriorityDot({
+  priority,
+  bucket,
+}: {
+  priority?: DashTask["priority"];
+  bucket: DashTask["bucket"];
+}) {
+  const color =
+    bucket === "atrasada"
+      ? "bg-destructive"
+      : priority === "Alta" || priority === "Urgente"
+        ? "bg-orange-500"
+        : priority === "Normal"
+          ? "bg-yellow-500"
+          : "bg-muted-foreground/40";
+
+  return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
+}
+
+function MuralNovidades() {
+  const [items, setItems] = useState<Array<BlogPost & { projectName: string }>>([]);
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("inicio.mural.dismissed") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    const load = () => {
+      const projs = loadProjetos();
+      const all: Array<BlogPost & { projectName: string }> = [];
+      for (const pr of projs) {
+        for (const b of pr.blog ?? []) {
+          if (b.audience === "mural") all.push({ ...b, projectName: pr.name });
+        }
+      }
+      all.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
+      setItems(all);
+    };
+    load();
+    const h = () => load();
+    window.addEventListener("storage", h);
+    return () => window.removeEventListener("storage", h);
+  }, []);
+
+  const dismiss = (id: string) => {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try {
+      localStorage.setItem("inicio.mural.dismissed", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const visibleItems = items.filter((i) => !dismissed.includes(i.id));
+  if (visibleItems.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-background">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <Newspaper className="h-4 w-4" />
+        <h2 className="text-sm font-semibold">Mural de novidades</h2>
+        <span className="ml-auto text-[11px] text-muted-foreground">{visibleItems.length}</span>
+      </div>
+      <ul className="divide-y divide-border">
+        {visibleItems.slice(0, 5).map((p) => (
+          <li key={p.id} className="group flex gap-3 px-4 py-3">
+            {p.cover && (
+              <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded object-cover" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{p.title}</p>
+              {p.excerpt && (
+                <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{p.excerpt}</p>
+              )}
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span>{p.projectName}</span>
+                {p.publishDate && <span>· {p.publishDate}</span>}
+              </div>
+            </div>
+            <button
+              onClick={() => dismiss(p.id)}
+              className="opacity-0 transition-opacity group-hover:opacity-100"
+              aria-label="Dispensar"
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
