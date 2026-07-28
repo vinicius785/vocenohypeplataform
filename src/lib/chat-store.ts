@@ -511,15 +511,18 @@ export async function toggleReaction(id: string, emoji: string) {
   messagesCache = messagesCache.map((m) => (m.id === id ? { ...m, reactions } : m));
   emit();
 
-  const { data } = await supabase
-    .from("chat_messages")
-    .update({ reactions: reactions as unknown as never })
-    .eq("id", id)
-    .select(MESSAGE_COLUMNS)
-    .single();
-  if (data) {
-    const mapped = mapMessage(data as MessageRow);
-    messagesCache = messagesCache.map((m) => (m.id === id ? mapped : m));
+  // Reagir a uma mensagem de outra pessoa não passa pela RLS de UPDATE comum
+  // (restrita ao autor, para proteger edição de texto/anexos) — por isso usa
+  // uma RPC dedicada que só mexe na coluna `reactions`. A confirmação real
+  // chega pelo realtime (evento UPDATE), então não precisamos reconciliar o
+  // retorno aqui; só revertemos o otimista se a chamada falhar de fato.
+  const { error } = await supabase.rpc("toggle_message_reaction", {
+    p_message_id: id,
+    p_emoji: emoji,
+  });
+  if (error) {
+    console.error("[chat] falha ao reagir", error);
+    messagesCache = messagesCache.map((m) => (m.id === id ? msg : m));
     emit();
   }
 }

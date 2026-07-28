@@ -742,6 +742,10 @@ export type Database = {
         Returns: boolean;
       };
       is_admin: { Args: { _user_id: string }; Returns: boolean };
+      toggle_message_reaction: {
+        Args: { p_emoji: string; p_message_id: string };
+        Returns: Json;
+      };
     };
     Enums: {
       app_role: "admin" | "member";
