@@ -1260,11 +1260,8 @@ function MeetingSummaryDialog({
             </ul>
           </SummarySection>
 
-          {isFinished && meeting.status !== "Cancelada" && (
-            <SummarySection
-              title="Reunião finalizada"
-              icon={<CalendarClock className="h-3.5 w-3.5" />}
-            >
+          {meeting.status !== "Cancelada" && (
+            <SummarySection title="Presença" icon={<CalendarClock className="h-3.5 w-3.5" />}>
               {!editingAttendance ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
