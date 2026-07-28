@@ -54,6 +54,9 @@ import {
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
+  validateSearch: (search: Record<string, unknown>): { taskId?: string } => ({
+    taskId: typeof search.taskId === "string" ? search.taskId : undefined,
+  }),
   head: ({ params }) => ({ meta: [{ title: `Projeto · ${params.id.slice(0, 6)}` }] }),
 });
 
@@ -67,14 +70,25 @@ const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   blog: Newspaper,
 };
 
-function renderPanel(k: FeatureKey, project: Project, update: (p: Partial<Project>) => void) {
+function renderPanel(
+  k: FeatureKey,
+  project: Project,
+  update: (p: Partial<Project>) => void,
+  initialOpenTaskId?: string,
+  onInitialOpenTaskHandled?: () => void,
+) {
   const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
   if (k === "roadmap") return <RoadmapPanel project={project} update={update} />;
   if (k === "kanban")
     return isMarketingProject ? (
       <MarketingSection />
     ) : (
-      <KanbanPanel project={project} update={update} />
+      <KanbanPanel
+        project={project}
+        update={update}
+        initialOpenTaskId={initialOpenTaskId}
+        onInitialOpenTaskHandled={onInitialOpenTaskHandled}
+      />
     );
   if (k === "influenciadores") return <InfluencersPanel project={project} update={update} />;
   if (k === "documentos") return <DocsPanel project={project} update={update} />;
@@ -86,13 +100,21 @@ function renderPanel(k: FeatureKey, project: Project, update: (p: Partial<Projec
 
 function ProjetoPage() {
   const { id } = Route.useParams();
+  const { taskId } = Route.useSearch();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(() => getProjeto(id) ?? null);
   const [tab, setTab] = useState<FeatureKey | null>(null);
 
   useEffect(() => {
-    if (project && !tab) setTab(project.features[0] ?? null);
-  }, [project, tab]);
+    if (project && !tab)
+      setTab(
+        taskId && project.features.includes("kanban") ? "kanban" : (project.features[0] ?? null),
+      );
+  }, [project, tab, taskId]);
+
+  const clearTaskId = () => {
+    navigate({ to: "/projeto/$id", params: { id }, search: {}, replace: true });
+  };
 
   useEffect(() => onProjetosChange(() => setProject(getProjeto(id) ?? null)), [id]);
 
@@ -229,7 +251,7 @@ function ProjetoPage() {
                       );
                     })}
                   </div>
-                  {tab && renderPanel(tab, project, update)}
+                  {tab && renderPanel(tab, project, update, taskId, clearTaskId)}
                 </>
               ) : (
                 <div className="space-y-10">
@@ -243,7 +265,7 @@ function ProjetoPage() {
                           <Icon className="h-4 w-4 text-muted-foreground" />
                           <h2 className="text-sm font-semibold text-foreground">{meta.label}</h2>
                         </div>
-                        {renderPanel(k, project, update)}
+                        {renderPanel(k, project, update, taskId, clearTaskId)}
                       </section>
                     );
                   })}
@@ -445,9 +467,13 @@ function RoadmapPanel({
 function KanbanPanel({
   project,
   update,
+  initialOpenTaskId,
+  onInitialOpenTaskHandled,
 }: {
   project: Project;
   update: (p: Partial<Project>) => void;
+  initialOpenTaskId?: string;
+  onInitialOpenTaskHandled?: () => void;
 }) {
   return (
     <TaskBoard
@@ -466,6 +492,8 @@ function KanbanPanel({
       }}
       scope={{ kind: "projeto", id: project.id }}
       breadcrumb="Projetos"
+      initialOpenTaskId={initialOpenTaskId}
+      onInitialOpenTaskHandled={onInitialOpenTaskHandled}
     />
   );
 }

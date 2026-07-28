@@ -29,7 +29,7 @@ import {
   Trophy,
   Timer,
 } from "lucide-react";
-import { loadProjetos, onProjetosChange, loadTeamMembers } from "@/lib/projetos";
+import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
@@ -837,14 +837,16 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
     type MinimalTask = {
       title: string;
       assignee?: string;
+      assignees?: string[];
       timerRunning?: boolean;
       timerStartedAt?: string;
       subtasks?: MinimalTask[];
     };
+    const isMine = (t: MinimalTask) => getTaskAssignees(t).includes(me.name);
     const flatten = (list: MinimalTask[]): MinimalTask[] =>
       list.flatMap((t) => [t, ...flatten(t.subtasks ?? [])]);
     for (const p of loadProjetos()) {
-      const found = flatten(p.tasks ?? []).find((t) => t.timerRunning && t.assignee === me.name);
+      const found = flatten(p.tasks ?? []).find((t) => t.timerRunning && isMine(t));
       if (found) {
         return {
           title: found.title,
@@ -854,7 +856,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
       }
     }
     for (const [, tasks] of getAllCampanhaTarefas()) {
-      const found = (tasks as MinimalTask[]).find((t) => t.timerRunning && t.assignee === me.name);
+      const found = (tasks as MinimalTask[]).find((t) => t.timerRunning && isMine(t));
       if (found) {
         return {
           title: found.title,
@@ -953,6 +955,9 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const seenTasks = new Set<string>(readJSON<string[]>("notif:seenTasks", []));
   const seenTaskActivity = new Set<string>(readJSON<string[]>("notif:seenTaskActivity", []));
   const seenMeetings = new Set<string>(readJSON<string[]>("notif:seenMeetings", []));
+  const seenReuniaoReagendamento = new Set<string>(
+    readJSON<string[]>("notif:seenReuniaoReagendamento", []),
+  );
 
   const mentionItems = prefs.mencoes
     ? messages
@@ -981,7 +986,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
         if (
           t.status !== "Concluído" &&
           t.status !== "Arquivado" &&
-          (t.assignee === me.name || t.assignee === me.id) &&
+          getTaskAssignees(t).some((a) => a === me.name || a === me.id) &&
           !seenTasks.has(t.id)
         ) {
           taskItems.push({
@@ -1011,7 +1016,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   if (prefs.tarefaAtividade) {
     for (const p of projetos) {
       for (const t of p.tasks ?? []) {
-        if (t.assignee !== me.name && t.assignee !== me.id) continue;
+        if (!getTaskAssignees(t).some((a) => a === me.name || a === me.id)) continue;
         for (const a of t.activity ?? []) {
           if (seenTaskActivity.has(a.id)) continue;
           if (!a.action.startsWith("mudou status para ") && !a.action.startsWith("atribuiu a "))
@@ -1036,13 +1041,21 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const meetingItems = meetings.filter(
     (m) => m.status === "Pendente" && m.participanteIds?.includes(me.id) && !seenMeetings.has(m.id),
   );
+  const rescheduleItems = meetings.filter(
+    (m) =>
+      m.rescheduleProposal &&
+      m.rescheduleProposal.proposedBy !== me.id &&
+      (m.criadorId === me.id || m.participanteIds?.includes(me.id)) &&
+      !seenReuniaoReagendamento.has(m.id),
+  );
 
   const total =
     chatItems.reduce((s, i) => s + i.count, 0) +
     mentionItems.length +
     taskItems.length +
     taskActivityItems.length +
-    meetingItems.length;
+    meetingItems.length +
+    rescheduleItems.length;
 
   const openConvo = (id: string) => {
     setActiveConvo(id);
@@ -1070,6 +1083,14 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
     force((n) => n + 1);
   };
+  const dismissReschedule = (mid: string) => {
+    seenReuniaoReagendamento.add(mid);
+    localStorage.setItem(
+      "notif:seenReuniaoReagendamento",
+      JSON.stringify(Array.from(seenReuniaoReagendamento)),
+    );
+    force((n) => n + 1);
+  };
   const markAll = () => {
     chatItems.forEach((i) => {
       void markRead(i.convoId);
@@ -1082,6 +1103,11 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     localStorage.setItem("notif:seenTaskActivity", JSON.stringify(Array.from(seenTaskActivity)));
     meetingItems.forEach((m) => seenMeetings.add(m.id));
     localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
+    rescheduleItems.forEach((m) => seenReuniaoReagendamento.add(m.id));
+    localStorage.setItem(
+      "notif:seenReuniaoReagendamento",
+      JSON.stringify(Array.from(seenReuniaoReagendamento)),
+    );
     force((n) => n + 1);
   };
 
@@ -1259,6 +1285,41 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                             </span>
                             <p className="truncate text-[11px] text-muted-foreground">
                               Aguardando confirmação
+                            </p>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {rescheduleItems.length > 0 && (
+                <div>
+                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Reagendamentos sugeridos
+                  </p>
+                  <ul>
+                    {rescheduleItems.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          onClick={() => {
+                            dismissReschedule(m.id);
+                            onSelect("reunioes");
+                            setOpen(false);
+                          }}
+                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
+                        >
+                          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <span className="truncate text-xs font-semibold text-foreground">
+                              {m.titulo}
+                            </span>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              Novo horário sugerido
+                              {m.rescheduleProposal?.proposedByName
+                                ? ` por ${m.rescheduleProposal.proposedByName}`
+                                : ""}
                             </p>
                           </div>
                         </button>

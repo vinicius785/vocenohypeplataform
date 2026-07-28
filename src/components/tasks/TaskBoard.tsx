@@ -104,6 +104,7 @@ export type Task = {
   startDate?: string;
   estimate?: string;
   assignee?: string;
+  assignees?: string[];
   tags?: string[];
   attachments?: Attachment[];
   createdAt: string;
@@ -114,6 +115,12 @@ export type Task = {
   timerStartedAt?: string;
   timeEntries?: TimeEntry[];
 };
+
+/** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
+export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): string[] {
+  if (t.assignees?.length) return t.assignees;
+  return t.assignee ? [t.assignee] : [];
+}
 
 type Member = { name: string; initials: string; color: string; photo?: string };
 
@@ -320,7 +327,10 @@ function renderMentions(text: string, members: Member[]) {
   });
 }
 
-const fmtDate = (d: string) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
+// `new Date("2026-07-29")` (data sem hora) é interpretada como meia-noite UTC;
+// formatar em horário local (Brasil, UTC-3) mostra um dia a menos. Ancorar em
+// meio-dia local evita esse desvio de fuso horário.
+const fmtDate = (d: string) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR") : "—");
 
 export type TaskBoardScope =
   | { kind: "campanha"; id: string }
@@ -337,12 +347,16 @@ export function TaskBoard({
   scope,
   title = "Tarefas",
   breadcrumb,
+  initialOpenTaskId,
+  onInitialOpenTaskHandled,
 }: {
   tasks: Task[];
   onChange: (next: Task[]) => void;
   scope?: TaskBoardScope;
   title?: string;
   breadcrumb?: string;
+  initialOpenTaskId?: string;
+  onInitialOpenTaskHandled?: () => void;
 }) {
   const [taskDialog, setTaskDialog] = useState<{
     mode: "new" | "edit";
@@ -351,6 +365,15 @@ export function TaskBoard({
   } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const members = useTeamMembers();
+
+  useEffect(() => {
+    if (!initialOpenTaskId) return;
+    const t = tasks.find((x) => x.id === initialOpenTaskId);
+    if (t) {
+      setTaskDialog({ mode: "edit", data: t });
+      onInitialOpenTaskHandled?.();
+    }
+  }, [initialOpenTaskId, tasks, onInitialOpenTaskHandled]);
 
   const persist = (next: Task[]) => onChange(next);
 
@@ -435,21 +458,24 @@ export function TaskBoard({
                         <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                       </button>
                     </div>
-                    {(t.dueDate || t.assignee) && (
+                    {(t.dueDate || getTaskAssignees(t).length > 0) && (
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        {t.assignee && (
-                          <span className="inline-flex items-center gap-1.5 truncate">
-                            <Avatar
-                              member={
-                                members.find((m) => m.name === t.assignee) ?? {
-                                  name: t.assignee,
-                                  initials: initialsOf(t.assignee) || "?",
-                                  color: colorFor(t.assignee),
+                        {getTaskAssignees(t).length > 0 && (
+                          <span className="inline-flex items-center -space-x-1.5 truncate">
+                            {getTaskAssignees(t).map((a) => (
+                              <Avatar
+                                key={a}
+                                member={
+                                  members.find((m) => m.name === a) ?? {
+                                    name: a,
+                                    initials: initialsOf(a) || "?",
+                                    color: colorFor(a),
+                                  }
                                 }
-                              }
-                              size={16}
-                            />
-                            {t.assignee}
+                                size={16}
+                              />
+                            ))}
+                            <span className="ml-2 truncate">{getTaskAssignees(t).join(", ")}</span>
                           </span>
                         )}
                         {t.dueDate && (
@@ -541,7 +567,7 @@ export function TaskDialog({
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [assignee, setAssignee] = useState<string>("");
+  const [assignees, setAssignees] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -594,7 +620,7 @@ export function TaskDialog({
     setTimerRunning(!!initial?.timerRunning);
     setTimerStartedAt(initial?.timerStartedAt);
     setTimeEntries(initial?.timeEntries ?? []);
-    setAssignee(initial?.assignee ?? "");
+    setAssignees(initial ? getTaskAssignees(initial) : []);
     setTags(initial?.tags ?? []);
     setAttachments(initial?.attachments ?? []);
     setSubtasks(initial?.subtasks ?? []);
@@ -664,8 +690,12 @@ export function TaskDialog({
         finalTimeEntries = withTimer.timeEntries ?? finalTimeEntries;
       }
       if (initial.priority !== priority) act = pushActivity(act, `definiu prioridade ${priority}`);
-      if ((initial.assignee ?? "") !== assignee)
-        act = pushActivity(act, assignee ? `atribuiu a ${assignee}` : "removeu responsável");
+      const prevAssignees = getTaskAssignees(initial);
+      if (prevAssignees.join(",") !== assignees.join(","))
+        act = pushActivity(
+          act,
+          assignees.length ? `atribuiu a ${assignees.join(", ")}` : "removeu responsável",
+        );
       if ((initial.dueDate ?? "") !== dueDate)
         act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo");
       if ((initial.description ?? "") !== description)
@@ -680,7 +710,7 @@ export function TaskDialog({
       dueDate: dueDate || undefined,
       startDate: startDate || undefined,
       estimate: estimate || undefined,
-      assignee: assignee.trim() || undefined,
+      assignees: assignees.length ? assignees : undefined,
       tags: tags.length ? tags : undefined,
       attachments: attachments.length ? attachments : undefined,
       createdAt: initial?.createdAt ?? new Date().toISOString(),
@@ -813,7 +843,11 @@ export function TaskDialog({
       : [];
 
   const doneCount = subtasks.filter((s) => s.status === "Concluído").length;
-  const assigneeMember = members.find((m) => m.name === assignee);
+  const toggleAssignee = (name: string) => {
+    setAssignees((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name],
+    );
+  };
   const rootLabel =
     breadcrumb ??
     (scope?.kind === "projeto"
@@ -898,30 +932,59 @@ export function TaskDialog({
                 </select>
               </Field>
 
-              <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
-                <div className="flex w-full items-center gap-2">
-                  {assigneeMember ? (
-                    <Avatar member={assigneeMember} />
-                  ) : (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[9px] text-muted-foreground">
-                      <User className="h-2.5 w-2.5" />
-                    </span>
+              <Field label="Responsáveis" icon={<User className="h-3.5 w-3.5" />}>
+                <div className="flex w-full flex-col gap-1.5">
+                  {assignees.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {assignees.map((a) => {
+                        const m = members.find((mm) => mm.name === a);
+                        return (
+                          <span
+                            key={a}
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px]"
+                          >
+                            <Avatar
+                              member={
+                                m ?? { name: a, initials: initialsOf(a) || "?", color: colorFor(a) }
+                              }
+                              size={16}
+                            />
+                            {a}
+                            <button
+                              type="button"
+                              onClick={() => toggleAssignee(a)}
+                              aria-label={`Remover ${a}`}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
-                  <select
-                    value={assignee}
-                    onChange={(e) => setAssignee(e.target.value)}
-                    className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm outline-none"
-                  >
-                    <option value="">Não atribuído</option>
-                    {members.map((m) => (
-                      <option key={m.name} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
-                    {assignee && !members.some((m) => m.name === assignee) && (
-                      <option value={assignee}>{assignee}</option>
+                  <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-border p-1.5">
+                    {members.length === 0 ? (
+                      <p className="px-1 text-[11px] text-muted-foreground">
+                        Nenhum membro cadastrado.
+                      </p>
+                    ) : (
+                      members.map((m) => (
+                        <label
+                          key={m.name}
+                          className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={assignees.includes(m.name)}
+                            onChange={() => toggleAssignee(m.name)}
+                            className="h-3.5 w-3.5"
+                          />
+                          {m.name}
+                        </label>
+                      ))
                     )}
-                  </select>
+                  </div>
                 </div>
               </Field>
 

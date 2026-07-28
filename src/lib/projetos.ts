@@ -130,6 +130,7 @@ export type Task = {
   estimate?: string;
   priority?: TaskPriority;
   assignee?: string;
+  assignees?: string[];
   tags?: string[];
   attachments?: TaskAttachment[];
   createdAt?: string;
@@ -142,6 +143,12 @@ export type Task = {
   timerStartedAt?: string;
   timeEntries?: TaskTimeEntry[];
 };
+
+/** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
+export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): string[] {
+  if (t.assignees?.length) return t.assignees;
+  return t.assignee ? [t.assignee] : [];
+}
 
 export type Milestone = { id: string; title: string; date: string; done: boolean; taskId?: string };
 export type DocItem = { id: string; name: string; url: string };

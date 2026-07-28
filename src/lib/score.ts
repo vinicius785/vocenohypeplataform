@@ -1,4 +1,5 @@
 import type { Project, Task } from "./projetos";
+import { getTaskAssignees } from "./projetos";
 import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
@@ -106,26 +107,28 @@ export function computeMemberScores(
 
   for (const p of projetos) {
     for (const t of flatten(p.tasks ?? [])) {
-      if (!t.assignee) continue;
-      const member = byName.get(t.assignee);
-      if (!member) continue;
-      const stat = ensure(member);
-      stat.hoursTracked += taskHours(t);
-      if (t.status === "Concluído") {
-        const completedAt = taskCompletionDate(t);
-        if (!inRange(completedAt, range)) continue;
-        const late = !!(t.dueDate && completedAt && completedAt > t.dueDate);
-        if (late) {
-          stat.tasksLate += 1;
-          add(stat, "task_late_done");
-        } else {
-          stat.tasksOnTime += 1;
-          add(stat, "task_on_time");
+      // Cada responsável ganha a pontuação cheia (não dividida entre eles).
+      for (const name of getTaskAssignees(t)) {
+        const member = byName.get(name);
+        if (!member) continue;
+        const stat = ensure(member);
+        stat.hoursTracked += taskHours(t);
+        if (t.status === "Concluído") {
+          const completedAt = taskCompletionDate(t);
+          if (!inRange(completedAt, range)) continue;
+          const late = !!(t.dueDate && completedAt && completedAt > t.dueDate);
+          if (late) {
+            stat.tasksLate += 1;
+            add(stat, "task_late_done");
+          } else {
+            stat.tasksOnTime += 1;
+            add(stat, "task_on_time");
+          }
+        } else if (t.status !== "Arquivado" && t.dueDate && t.dueDate < today) {
+          if (!inRange(t.dueDate, range)) continue;
+          stat.tasksOverdue += 1;
+          add(stat, "task_overdue_open");
         }
-      } else if (t.status !== "Arquivado" && t.dueDate && t.dueDate < today) {
-        if (!inRange(t.dueDate, range)) continue;
-        stat.tasksOverdue += 1;
-        add(stat, "task_overdue_open");
       }
     }
   }
@@ -173,7 +176,7 @@ export function collectTaskItems(projetos: Project[]): TaskItem[] {
         title: t.title,
         projectId: p.id,
         projectName: p.name,
-        assignee: t.assignee,
+        assignee: getTaskAssignees(t)[0],
         dueDate: t.dueDate,
         status: t.status,
       });

@@ -55,6 +55,7 @@ import { useClientes } from "@/lib/clientes-store";
 import type { ChatMessage } from "@/lib/chat-store";
 
 import { loadProjetos } from "@/lib/projetos";
+import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
 
 export function ChatSection() {
@@ -411,24 +412,25 @@ export function ChatSection() {
 type MentionOption = { kind: "task" | "user"; id: string; label: string; hint?: string };
 
 function renderText(text: string, mentions: ChatMention[] | undefined) {
-  if (!mentions || mentions.length === 0) return text;
-  const parts: (string | ChatMention)[] = [text];
-  for (const m of mentions) {
-    const token = "@" + m.label;
-    for (let i = 0; i < parts.length; i++) {
-      const seg = parts[i];
-      if (typeof seg !== "string") continue;
-      const idx = seg.indexOf(token);
-      if (idx < 0) continue;
-      const before = seg.slice(0, idx);
-      const after = seg.slice(idx + token.length);
-      parts.splice(i, 1, before, m, after);
-      i += 2;
+  const parts: (string | ChatMention)[] = !mentions || mentions.length === 0 ? [text] : [text];
+  if (mentions && mentions.length > 0) {
+    for (const m of mentions) {
+      const token = "@" + m.label;
+      for (let i = 0; i < parts.length; i++) {
+        const seg = parts[i];
+        if (typeof seg !== "string") continue;
+        const idx = seg.indexOf(token);
+        if (idx < 0) continue;
+        const before = seg.slice(0, idx);
+        const after = seg.slice(idx + token.length);
+        parts.splice(i, 1, before, m, after);
+        i += 2;
+      }
     }
   }
   return parts.map((p, i) =>
     typeof p === "string" ? (
-      <span key={i}>{p}</span>
+      <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>
     ) : (
       <span
         key={i}

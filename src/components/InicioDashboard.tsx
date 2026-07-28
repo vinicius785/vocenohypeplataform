@@ -329,7 +329,7 @@ export function InicioDashboard() {
   };
 
   const openTask = (t: DashTask) => {
-    navigate({ to: "/projeto/$id", params: { id: t.projectId } });
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 
   return (

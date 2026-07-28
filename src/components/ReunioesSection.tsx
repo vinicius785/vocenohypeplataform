@@ -9,16 +9,22 @@ import {
   X,
   Trash2,
   Check,
+  Pencil,
+  CalendarClock,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useStorageSync } from "@/lib/use-storage-sync";
 import {
   type Meeting,
   type MeetingStatus,
+  type RescheduleProposal,
   loadMeetings,
   saveMeetings,
   onMeetingsChange,
+  meetingDisplayStatus,
 } from "@/lib/reunioes-store";
+import { getMe } from "@/lib/chat-store";
+import { linkifyText } from "@/lib/linkify";
 
 type TeamMember = { id: string; name: string; photo?: string };
 function loadTeam(): TeamMember[] {
@@ -129,12 +135,14 @@ function statusDot(s: MeetingStatus) {
 }
 
 export function ReunioesSection() {
+  const me = getMe();
   const [tab, setTab] = useState<"calendario" | "solicitacoes" | "disponibilidade">("calendario");
   const [meetings, setMeetings] = useState<Meeting[]>(() => loadMeetings());
   const [avail, setAvail] = useState<Availability>(() => loadAvail());
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [selected, setSelected] = useState<string>(() => toISODate(new Date()));
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
+  const [summary, setSummary] = useState<Meeting | null>(null);
 
   const persist = (next: Meeting[]) => {
     setMeetings(next);
@@ -152,14 +160,31 @@ export function ReunioesSection() {
   };
   useStorageSync(AVAIL_KEY, () => setAvail(loadAvail()));
 
+  // Só reuniões onde a pessoa é criadora ou foi convidada — o calendário
+  // deixou de mostrar tudo do workspace pra todo mundo.
+  const myMeetings = useMemo(
+    () => meetings.filter((m) => m.criadorId === me.id || m.participanteIds?.includes(me.id)),
+    [meetings, me.id],
+  );
+
+  // Reflete atualizações vindas do resumo (confirmar/recusar/sugerir/aceitar).
+  useEffect(() => {
+    if (!summary) return;
+    const fresh = meetings.find((m) => m.id === summary.id);
+    setSummary(fresh ?? null);
+  }, [meetings, summary?.id]);
+
   const today = toISODate(new Date());
-  const proximas = meetings.filter((m) => m.data >= today && m.status !== "Cancelada").length;
-  const confirmadas = meetings.filter((m) => m.data >= today && m.status === "Confirmada").length;
-  const pendentes = meetings.filter((m) => m.status === "Pendente").length;
+  const proximas = myMeetings.filter((m) => m.data >= today && m.status !== "Cancelada").length;
+  const confirmadas = myMeetings.filter(
+    (m) => m.data >= today && meetingDisplayStatus(m) === "Confirmada",
+  ).length;
+  const pendentes = myMeetings.filter((m) => meetingDisplayStatus(m) === "Pendente").length;
 
   const selectedMeetings = useMemo(
-    () => meetings.filter((m) => m.data === selected).sort((a, b) => a.hora.localeCompare(b.hora)),
-    [meetings, selected],
+    () =>
+      myMeetings.filter((m) => m.data === selected).sort((a, b) => a.hora.localeCompare(b.hora)),
+    [myMeetings, selected],
   );
 
   return (
@@ -252,7 +277,7 @@ export function ReunioesSection() {
             <MonthGrid
               cursor={cursor}
               selected={selected}
-              meetings={meetings}
+              meetings={myMeetings}
               onSelect={(iso) => setSelected(iso)}
             />
           </div>
@@ -274,16 +299,18 @@ export function ReunioesSection() {
                   <li key={m.id} className="group rounded-lg border border-border bg-card p-3">
                     <button
                       type="button"
-                      onClick={() => setDialog({ mode: "edit", data: m })}
+                      onClick={() => setSummary(m)}
                       className="w-full text-left"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusDot(m.status)}`} />
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${statusDot(meetingDisplayStatus(m))}`}
+                        />
                         <div className="text-sm font-medium tabular-nums">{m.hora}</div>
                         <span
-                          className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${statusTone(m.status)}`}
+                          className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${statusTone(meetingDisplayStatus(m))}`}
                         >
-                          {m.status}
+                          {meetingDisplayStatus(m)}
                         </span>
                       </div>
                       <div className="mt-1 truncate text-sm text-foreground">{m.titulo}</div>
@@ -303,16 +330,7 @@ export function ReunioesSection() {
       )}
 
       {tab === "solicitacoes" && (
-        <SolicitacoesTab
-          meetings={meetings}
-          onConfirm={(id) =>
-            persist(meetings.map((m) => (m.id === id ? { ...m, status: "Confirmada" } : m)))
-          }
-          onCancel={(id) =>
-            persist(meetings.map((m) => (m.id === id ? { ...m, status: "Cancelada" } : m)))
-          }
-          onDelete={(id) => persist(meetings.filter((m) => m.id !== id))}
-        />
+        <SolicitacoesTab meetings={myMeetings} onOpen={(m) => setSummary(m)} />
       )}
 
       {tab === "disponibilidade" && <DisponibilidadeTab avail={avail} onChange={persistAvail} />}
@@ -321,6 +339,7 @@ export function ReunioesSection() {
         open={!!dialog}
         initial={dialog?.data}
         defaultDate={selected}
+        me={me}
         onClose={() => setDialog(null)}
         onDelete={(id) => {
           persist(meetings.filter((m) => m.id !== id));
@@ -335,6 +354,17 @@ export function ReunioesSection() {
           setSelected(m.data);
           setDialog(null);
         }}
+      />
+
+      <MeetingSummaryDialog
+        meeting={summary}
+        me={me}
+        onClose={() => setSummary(null)}
+        onEdit={(m) => {
+          setSummary(null);
+          setDialog({ mode: "edit", data: m });
+        }}
+        onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
       />
     </div>
   );
@@ -449,7 +479,9 @@ function MonthGrid({
               <div className="mt-1 space-y-0.5">
                 {items.slice(0, 2).map((m) => (
                   <div key={m.id} className="flex items-center gap-1 truncate text-[11px]">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(m.status)}`} />
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(meetingDisplayStatus(m))}`}
+                    />
                     <span className="tabular-nums">{m.hora}</span>
                     <span className="truncate text-muted-foreground">{m.titulo}</span>
                   </div>
@@ -468,17 +500,13 @@ function MonthGrid({
 
 function SolicitacoesTab({
   meetings,
-  onConfirm,
-  onCancel,
-  onDelete,
+  onOpen,
 }: {
   meetings: Meeting[];
-  onConfirm: (id: string) => void;
-  onCancel: (id: string) => void;
-  onDelete: (id: string) => void;
+  onOpen: (m: Meeting) => void;
 }) {
   const pend = meetings
-    .filter((m) => m.status === "Pendente")
+    .filter((m) => meetingDisplayStatus(m) === "Pendente")
     .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
   return (
     <div className="mt-6">
@@ -491,34 +519,21 @@ function SolicitacoesTab({
       ) : (
         <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
           {pend.map((m) => (
-            <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{m.titulo}</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {formatBR(m.data)} · {m.hora} {m.com ? `· com ${m.com}` : ""}
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => onOpen(m)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{m.titulo}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {formatBR(m.data)} · {m.hora} {m.com ? `· com ${m.com}` : ""}
+                  </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onConfirm(m.id)}
-                className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
-              >
-                <Check className="h-3.5 w-3.5" /> Confirmar
-              </button>
-              <button
-                type="button"
-                onClick={() => onCancel(m.id)}
-                className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => onDelete(m.id)}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Excluir"
-              >
-                <Trash2 className="h-4 w-4" />
+                <span className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
+                  Ver detalhes
+                </span>
               </button>
             </li>
           ))}
@@ -736,6 +751,7 @@ function MeetingDialog({
   open,
   initial,
   defaultDate,
+  me,
   onClose,
   onSave,
   onDelete,
@@ -743,6 +759,7 @@ function MeetingDialog({
   open: boolean;
   initial?: Meeting;
   defaultDate: string;
+  me: { id: string; name: string };
   onClose: () => void;
   onSave: (m: Meeting) => void;
   onDelete: (id: string) => void;
@@ -805,6 +822,10 @@ function MeetingDialog({
       local: local.trim(),
       notas: notas.trim() || undefined,
       status: finalStatus,
+      criadorId: initial?.criadorId ?? me.id,
+      confirmedBy: initial?.confirmedBy,
+      declinedBy: initial?.declinedBy,
+      rescheduleProposal: initial?.rescheduleProposal,
     });
   };
 
@@ -1010,6 +1031,329 @@ function MeetingDialog({
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
               Salvar
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function participantBadge(kind: "confirmed" | "declined" | "pending") {
+  if (kind === "confirmed") return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  if (kind === "declined") return "bg-red-500/10 text-red-700 dark:text-red-400";
+  return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
+}
+
+function MeetingSummaryDialog({
+  meeting,
+  me,
+  onClose,
+  onEdit,
+  onChange,
+}: {
+  meeting: Meeting | null;
+  me: { id: string; name: string };
+  onClose: () => void;
+  onEdit: (m: Meeting) => void;
+  onChange: (m: Meeting) => void;
+}) {
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [proposing, setProposing] = useState(false);
+  const [propData, setPropData] = useState("");
+  const [propHora, setPropHora] = useState("");
+  const [propNote, setPropNote] = useState("");
+
+  useEffect(() => {
+    if (!meeting) return;
+    setTeam(loadTeam());
+    setProposing(false);
+    setPropData(meeting.data);
+    setPropHora(meeting.hora);
+    setPropNote("");
+  }, [meeting?.id]);
+
+  if (!meeting) return null;
+
+  const isCreator = meeting.criadorId === me.id;
+  const isParticipant = meeting.criadorId === me.id || meeting.participanteIds?.includes(me.id);
+  const confirmedBy = meeting.confirmedBy ?? [];
+  const declinedBy = meeting.declinedBy ?? [];
+  const participantIds = Array.from(
+    new Set([
+      ...(meeting.criadorId ? [meeting.criadorId] : []),
+      ...(meeting.participanteIds ?? []),
+    ]),
+  );
+  const nameFor = (id: string) =>
+    id === me.id ? `${me.name} (você)` : (team.find((t) => t.id === id)?.name ?? id);
+
+  const confirm = () => {
+    onChange({
+      ...meeting,
+      confirmedBy: Array.from(new Set([...confirmedBy, me.id])),
+      declinedBy: declinedBy.filter((id) => id !== me.id),
+    });
+  };
+  const decline = () => {
+    onChange({
+      ...meeting,
+      declinedBy: Array.from(new Set([...declinedBy, me.id])),
+      confirmedBy: confirmedBy.filter((id) => id !== me.id),
+    });
+  };
+  const sendProposal = () => {
+    if (!propData || !propHora) return;
+    const proposal: RescheduleProposal = {
+      proposedBy: me.id,
+      proposedByName: me.name,
+      data: propData,
+      hora: propHora,
+      note: propNote.trim() || undefined,
+    };
+    onChange({ ...meeting, rescheduleProposal: proposal });
+    setProposing(false);
+  };
+  const acceptProposal = () => {
+    const p = meeting.rescheduleProposal;
+    if (!p) return;
+    onChange({
+      ...meeting,
+      data: p.data,
+      hora: p.hora,
+      rescheduleProposal: undefined,
+      confirmedBy: [],
+      declinedBy: [],
+    });
+  };
+  const dismissProposal = () => {
+    onChange({ ...meeting, rescheduleProposal: undefined });
+  };
+
+  const displayStatus = meetingDisplayStatus(meeting);
+
+  return (
+    <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col">
+        <DialogTitle>{meeting.titulo}</DialogTitle>
+        <DialogDescription className="sr-only">Resumo da reunião</DialogDescription>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+          <div className="flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
+            <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusTone(displayStatus)}`}>
+              {displayStatus}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Data
+              </div>
+              <div className="mt-0.5">{formatBR(meeting.data)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Hora / Duração
+              </div>
+              <div className="mt-0.5">
+                {meeting.hora} · {meeting.duracao} min
+              </div>
+            </div>
+          </div>
+
+          {meeting.local && (
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Local / Link
+              </div>
+              <div className="mt-0.5 break-words text-sm">{linkifyText(meeting.local)}</div>
+            </div>
+          )}
+
+          {meeting.notas && (
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Notas
+              </div>
+              <div className="mt-0.5 whitespace-pre-wrap break-words text-sm">
+                {linkifyText(meeting.notas)}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Participantes
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {participantIds.length === 0 && meeting.com && (
+                <li className="text-sm text-muted-foreground">{meeting.com} (externo)</li>
+              )}
+              {participantIds.map((id) => {
+                const kind = confirmedBy.includes(id)
+                  ? "confirmed"
+                  : declinedBy.includes(id)
+                    ? "declined"
+                    : "pending";
+                const label =
+                  kind === "confirmed"
+                    ? "Confirmado"
+                    : kind === "declined"
+                      ? "Recusado"
+                      : "Pendente";
+                return (
+                  <li key={id} className="flex items-center justify-between gap-2 text-sm">
+                    <span>
+                      {nameFor(id)}
+                      {id === meeting.criadorId && (
+                        <span className="ml-1 text-[10px] text-muted-foreground">(criador)</span>
+                      )}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] ${participantBadge(kind)}`}
+                    >
+                      {label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {meeting.rescheduleProposal && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                <CalendarClock className="h-3.5 w-3.5" />
+                Novo horário sugerido
+              </div>
+              <p className="mt-1">
+                {formatBR(meeting.rescheduleProposal.data)} às {meeting.rescheduleProposal.hora}
+                {meeting.rescheduleProposal.proposedByName &&
+                  ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
+              </p>
+              {meeting.rescheduleProposal.note && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {meeting.rescheduleProposal.note}
+                </p>
+              )}
+              {isCreator && (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={acceptProposal}
+                    className="rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400"
+                  >
+                    Aceitar sugestão
+                  </button>
+                  <button
+                    type="button"
+                    onClick={dismissProposal}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted"
+                  >
+                    Descartar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {proposing && (
+            <div className="rounded-md border border-border p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Nova data</label>
+                  <input
+                    type="date"
+                    value={propData}
+                    onChange={(e) => setPropData(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Nova hora</label>
+                  <input
+                    type="time"
+                    value={propHora}
+                    onChange={(e) => setPropHora(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                value={propNote}
+                onChange={(e) => setPropNote(e.target.value)}
+                placeholder="Observação (opcional)"
+                className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={sendProposal}
+                  className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                >
+                  Enviar sugestão
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProposing(false)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            {isParticipant && meeting.status !== "Cancelada" && (
+              <>
+                <button
+                  type="button"
+                  onClick={confirm}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+                >
+                  <Check className="h-3.5 w-3.5" /> Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={decline}
+                  className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
+                >
+                  Recusar
+                </button>
+                {!proposing && (
+                  <button
+                    type="button"
+                    onClick={() => setProposing(true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
+                  >
+                    <CalendarClock className="h-3.5 w-3.5" /> Sugerir novo horário
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isCreator && (
+              <button
+                type="button"
+                onClick={() => onEdit(meeting)}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Editar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            >
+              Fechar
             </button>
           </div>
         </div>
