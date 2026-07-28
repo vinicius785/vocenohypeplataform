@@ -457,12 +457,12 @@ export function InfluenciadoresSection() {
             return (
               <div
                 key={i.id}
-                className="group relative flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40"
+                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40"
               >
                 <button
                   type="button"
                   onClick={() => setDetail(i)}
-                  className="flex flex-1 items-center gap-3 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
                   <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
                     {i.foto ? (
@@ -483,18 +483,18 @@ export function InfluenciadoresSection() {
                         .filter(Boolean)
                         .join(" · ") || "—"}
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       {i.nicho && (
-                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className="max-w-[120px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           {i.nicho}
                         </span>
                       )}
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
                         {count} {count === 1 ? "campanha" : "campanhas"}
                       </span>
                       {reliability.total > 0 && (
                         <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                             reliability.score >= 80
                               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                               : reliability.score >= 50
