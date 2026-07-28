@@ -188,30 +188,6 @@ export function ReunioesSection() {
     [myMeetings, selected],
   );
 
-  // Reuniões que já passaram do horário e cujo criador (sou eu) ainda não
-  // registrou quem participou — vira um popup, uma de cada vez, até
-  // esvaziar a fila.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const iv = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(iv);
-  }, []);
-  const pendingAttendance = useMemo(
-    () =>
-      meetings
-        .filter(
-          (m) =>
-            m.criadorId === me.id &&
-            m.status !== "Cancelada" &&
-            !m.attendanceRecorded &&
-            (m.participanteIds?.length ?? 0) > 0 &&
-            meetingEndTime(m) < now,
-        )
-        .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora)),
-    [meetings, me.id, now],
-  );
-  const attendanceMeeting = pendingAttendance[0] ?? null;
-
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div>
@@ -390,24 +366,6 @@ export function ReunioesSection() {
           setDialog({ mode: "edit", data: m });
         }}
         onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
-      />
-
-      <AttendanceDialog
-        meeting={attendanceMeeting}
-        onSubmit={(attendedBy) =>
-          persist(
-            meetings.map((x) =>
-              x.id === attendanceMeeting!.id ? { ...x, attendedBy, attendanceRecorded: true } : x,
-            ),
-          )
-        }
-        onSkip={() =>
-          persist(
-            meetings.map((x) =>
-              x.id === attendanceMeeting!.id ? { ...x, attendanceRecorded: true } : x,
-            ),
-          )
-        }
       />
     </div>
   );
@@ -1088,6 +1046,38 @@ function participantBadge(kind: "confirmed" | "declined" | "pending") {
   return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
 }
 
+function SummarySection({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-3.5">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {icon}
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: string }) {
+  if (member?.photo) {
+    return <img src={member.photo} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />;
+  }
+  const label = member?.name ?? fallback;
+  return (
+    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+      {label.trim()[0]?.toUpperCase() ?? "?"}
+    </span>
+  );
+}
+
 function MeetingSummaryDialog({
   meeting,
   me,
@@ -1106,6 +1096,9 @@ function MeetingSummaryDialog({
   const [propData, setPropData] = useState("");
   const [propHora, setPropHora] = useState("");
   const [propNote, setPropNote] = useState("");
+  const [editingAttendance, setEditingAttendance] = useState(false);
+  const [attendanceChecked, setAttendanceChecked] = useState<string[]>([]);
+  const [transcricao, setTranscricao] = useState("");
 
   useEffect(() => {
     if (!meeting) return;
@@ -1114,6 +1107,9 @@ function MeetingSummaryDialog({
     setPropData(meeting.data);
     setPropHora(meeting.hora);
     setPropNote("");
+    setEditingAttendance(false);
+    setAttendanceChecked(meeting.attendedBy ?? meeting.participanteIds ?? []);
+    setTranscricao(meeting.transcricao ?? "");
   }, [meeting?.id]);
 
   if (!meeting) return null;
@@ -1128,8 +1124,10 @@ function MeetingSummaryDialog({
       ...(meeting.participanteIds ?? []),
     ]),
   );
+  const memberFor = (id: string) => team.find((t) => t.id === id);
   const nameFor = (id: string) =>
-    id === me.id ? `${me.name} (você)` : (team.find((t) => t.id === id)?.name ?? id);
+    id === me.id ? `${me.name} (você)` : (memberFor(id)?.name ?? id);
+  const isFinished = meetingEndTime(meeting) < Date.now();
 
   const confirm = () => {
     onChange({
@@ -1172,65 +1170,61 @@ function MeetingSummaryDialog({
   const dismissProposal = () => {
     onChange({ ...meeting, rescheduleProposal: undefined });
   };
+  const toggleAttendance = (id: string) => {
+    setAttendanceChecked((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+  const saveAttendance = () => {
+    onChange({
+      ...meeting,
+      attendedBy: attendanceChecked,
+      attendanceRecorded: true,
+      transcricao: transcricao.trim() || undefined,
+    });
+    setEditingAttendance(false);
+  };
 
   const displayStatus = meetingDisplayStatus(meeting);
 
   return (
     <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col">
-        <DialogTitle>{meeting.titulo}</DialogTitle>
-        <DialogDescription className="sr-only">Resumo da reunião</DialogDescription>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-          <div className="flex items-center gap-2">
-            <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
-            <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusTone(displayStatus)}`}>
+      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
+        <div className="border-b border-border px-6 py-4">
+          <DialogTitle className="text-lg">{meeting.titulo}</DialogTitle>
+          <DialogDescription className="sr-only">Resumo da reunião</DialogDescription>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
               {displayStatus}
             </span>
+            <span>{formatBR(meeting.data)}</span>
+            <span>·</span>
+            <span>
+              {meeting.hora} · {meeting.duracao} min
+            </span>
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Data
-              </div>
-              <div className="mt-0.5">{formatBR(meeting.data)}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Hora / Duração
-              </div>
-              <div className="mt-0.5">
-                {meeting.hora} · {meeting.duracao} min
-              </div>
-            </div>
-          </div>
-
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
           {meeting.local && (
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Local / Link
-              </div>
-              <div className="mt-0.5 break-words text-sm">{linkifyText(meeting.local)}</div>
-            </div>
+            <SummarySection title="Local / Link">
+              <p className="break-words text-sm text-foreground">{linkifyText(meeting.local)}</p>
+            </SummarySection>
           )}
 
           {meeting.notas && (
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Notas
-              </div>
-              <div className="mt-0.5 whitespace-pre-wrap break-words text-sm">
+            <SummarySection title="Notas">
+              <p className="whitespace-pre-wrap break-words text-sm text-foreground">
                 {linkifyText(meeting.notas)}
-              </div>
-            </div>
+              </p>
+            </SummarySection>
           )}
 
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Participantes
-            </div>
-            <ul className="mt-1.5 space-y-1">
+          <SummarySection title="Participantes">
+            <ul className="space-y-1.5">
               {participantIds.length === 0 && meeting.com && (
                 <li className="text-sm text-muted-foreground">{meeting.com} (externo)</li>
               )}
@@ -1247,15 +1241,16 @@ function MeetingSummaryDialog({
                       ? "Recusado"
                       : "Pendente";
                 return (
-                  <li key={id} className="flex items-center justify-between gap-2 text-sm">
-                    <span>
+                  <li key={id} className="flex items-center gap-2">
+                    <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                       {nameFor(id)}
                       {id === meeting.criadorId && (
                         <span className="ml-1 text-[10px] text-muted-foreground">(criador)</span>
                       )}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] ${participantBadge(kind)}`}
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${participantBadge(kind)}`}
                     >
                       {label}
                     </span>
@@ -1263,15 +1258,111 @@ function MeetingSummaryDialog({
                 );
               })}
             </ul>
-          </div>
+          </SummarySection>
+
+          {isFinished && meeting.status !== "Cancelada" && (
+            <SummarySection
+              title="Reunião finalizada"
+              icon={<CalendarClock className="h-3.5 w-3.5" />}
+            >
+              {!editingAttendance ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    {meeting.attendanceRecorded ? (
+                      <p className="text-sm text-foreground">
+                        {(meeting.attendedBy ?? []).length} de {participantIds.length} participaram
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Quem participou ainda não foi registrado.
+                      </p>
+                    )}
+                    {isCreator && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingAttendance(true)}
+                        className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted"
+                      >
+                        {meeting.attendanceRecorded ? "Editar presença" : "Marcar presença"}
+                      </button>
+                    )}
+                  </div>
+                  {meeting.transcricao && (
+                    <div className="rounded-md border border-border bg-background p-2.5">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Transcrição
+                      </p>
+                      <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">
+                        {meeting.transcricao}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Selecione quem participou — sai da lista de pendentes e conta na pontuação.
+                  </p>
+                  <ul className="space-y-1">
+                    {(meeting.participanteIds ?? []).map((id) => {
+                      const checked = attendanceChecked.includes(id);
+                      return (
+                        <li key={id}>
+                          <button
+                            type="button"
+                            onClick={() => toggleAttendance(id)}
+                            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                              checked ? "bg-muted font-medium text-foreground" : ""
+                            }`}
+                          >
+                            <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
+                            <span className="min-w-0 flex-1 truncate">{nameFor(id)}</span>
+                            {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Transcrição (opcional)
+                    </label>
+                    <textarea
+                      value={transcricao}
+                      onChange={(e) => setTranscricao(e.target.value)}
+                      rows={4}
+                      placeholder="Cole aqui a transcrição da reunião..."
+                      className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={saveAttendance}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+                    >
+                      <Check className="h-3.5 w-3.5" /> Salvar presença
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingAttendance(false)}
+                      className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </SummarySection>
+          )}
 
           {meeting.rescheduleProposal && (
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm">
+              <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                 <CalendarClock className="h-3.5 w-3.5" />
                 Novo horário sugerido
               </div>
-              <p className="mt-1">
+              <p className="mt-1.5 text-foreground">
                 {formatBR(meeting.rescheduleProposal.data)} às {meeting.rescheduleProposal.hora}
                 {meeting.rescheduleProposal.proposedByName &&
                   ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
@@ -1282,11 +1373,11 @@ function MeetingSummaryDialog({
                 </p>
               )}
               {isCreator && (
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2.5 flex gap-2">
                   <button
                     type="button"
                     onClick={acceptProposal}
-                    className="rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400"
+                    className="rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400"
                   >
                     Aceitar sugestão
                   </button>
@@ -1303,7 +1394,7 @@ function MeetingSummaryDialog({
           )}
 
           {proposing && (
-            <div className="rounded-md border border-border p-3">
+            <SummarySection title="Sugerir novo horário">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Nova data</label>
@@ -1347,13 +1438,13 @@ function MeetingSummaryDialog({
                   Cancelar
                 </button>
               </div>
-            </div>
+            </SummarySection>
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-6 py-3.5">
           <div className="flex flex-wrap gap-2">
-            {isParticipant && meeting.status !== "Cancelada" && (
+            {isParticipant && !isFinished && meeting.status !== "Cancelada" && (
               <>
                 <button
                   type="button"
@@ -1399,79 +1490,6 @@ function MeetingSummaryDialog({
               Fechar
             </button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function AttendanceDialog({
-  meeting,
-  onSubmit,
-  onSkip,
-}: {
-  meeting: Meeting | null;
-  onSubmit: (attendedBy: string[]) => void;
-  onSkip: () => void;
-}) {
-  const [team, setTeam] = useState<TeamMember[]>([]);
-  const [checked, setChecked] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!meeting) return;
-    setTeam(loadTeam());
-    setChecked(meeting.participanteIds ?? []);
-  }, [meeting?.id]);
-
-  if (!meeting) return null;
-
-  const toggle = (id: string) => {
-    setChecked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
-  return (
-    <Dialog open={!!meeting} onOpenChange={(v) => !v && onSkip()}>
-      <DialogContent className="max-w-md">
-        <DialogTitle>Quem participou da reunião?</DialogTitle>
-        <DialogDescription className="text-xs text-muted-foreground">
-          {meeting.titulo} · {formatBR(meeting.data)} às {meeting.hora}
-        </DialogDescription>
-
-        <div className="mt-2 space-y-1">
-          {(meeting.participanteIds ?? []).map((id) => {
-            const t = team.find((m) => m.id === id);
-            return (
-              <label
-                key={id}
-                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked.includes(id)}
-                  onChange={() => toggle(id)}
-                  className="h-3.5 w-3.5"
-                />
-                {t?.name ?? id}
-              </label>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="rounded-md border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"
-          >
-            Pular
-          </button>
-          <button
-            type="button"
-            onClick={() => onSubmit(checked)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <Check className="h-3.5 w-3.5" /> Confirmar presença
-          </button>
         </div>
       </DialogContent>
     </Dialog>

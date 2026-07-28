@@ -27,7 +27,8 @@ export type Meeting = {
   declinedBy?: string[];
   rescheduleProposal?: RescheduleProposal;
   attendedBy?: string[]; // ids de quem efetivamente participou (marcado depois do horário)
-  attendanceRecorded?: boolean; // true assim que o criador confirma/pula a presença
+  attendanceRecorded?: boolean; // true assim que o criador confirma a presença
+  transcricao?: string; // colada pelo criador junto com o registro de presença
 };
 
 /** Horário em que a reunião termina (data+hora+duração), como epoch ms. */
