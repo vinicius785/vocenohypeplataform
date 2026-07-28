@@ -32,7 +32,7 @@ const VALID: SectionKey[] = [
 
 export const Route = createFileRoute("/_authenticated/time")({
   component: TimePage,
-  head: () => ({ meta: [{ title: "Time" }] }),
+  head: () => ({ meta: [{ title: "Plataforma VNH" }] }),
   validateSearch: (s: Record<string, unknown>): { section?: SectionKey } => {
     const v = s.section;
     return typeof v === "string" && (VALID as string[]).includes(v)

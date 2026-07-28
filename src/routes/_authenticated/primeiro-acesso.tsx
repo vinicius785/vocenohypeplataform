@@ -6,7 +6,7 @@ export const Route = createFileRoute("/_authenticated/primeiro-acesso")({
   component: PrimeiroAcessoPage,
   head: () => ({
     meta: [
-      { title: "Primeiro acesso · Hype" },
+      { title: "Primeiro acesso · Plataforma VNH" },
       { name: "description", content: "Configure sua conta no primeiro acesso." },
     ],
   }),

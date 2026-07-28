@@ -6,10 +6,10 @@ export const Route = createFileRoute("/")({
   component: LoginPage,
   head: () => ({
     meta: [
-      { title: "Entrar · Hype" },
-      { name: "description", content: "Acesse sua conta no workspace Hype." },
-      { property: "og:title", content: "Entrar · Hype" },
-      { property: "og:description", content: "Acesse sua conta no workspace Hype." },
+      { title: "Entrar · Plataforma VNH" },
+      { name: "description", content: "Acesse sua conta no workspace Plataforma VNH." },
+      { property: "og:title", content: "Entrar · Plataforma VNH" },
+      { property: "og:description", content: "Acesse sua conta no workspace Plataforma VNH." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
