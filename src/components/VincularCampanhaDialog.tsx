@@ -1157,8 +1157,8 @@ export function VincularCampanhaDialog({
                             </Field>
                           </div>
                           <p className="text-xs text-muted-foreground md:col-span-2">
-                            Este pagamento será lançado automaticamente como despesa na aba
-                            Financeiro.
+                            Isso é só uma orientação para o time — vira despesa real no Financeiro
+                            apenas quando aceito numa entrega do influenciador.
                           </p>
                         </div>
                       )}

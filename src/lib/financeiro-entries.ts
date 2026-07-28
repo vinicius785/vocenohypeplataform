@@ -8,7 +8,6 @@ import {
   type Entrega,
   type PagamentoEntrega,
 } from "@/components/influenciadores/InfluencerBoard";
-import { normalizeCampaignPagGrupos } from "@/components/VincularCampanhaDialog";
 
 export type Kind = "receita" | "despesa";
 export type Source = "manual" | "influenciador" | "salario" | "campanha";
@@ -241,29 +240,11 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
           });
         }
       }
-
-      for (const grupo of normalizeCampaignPagGrupos(camp)) {
-        if (!grupo.tipos.includes("Outro")) continue;
-        const outro = grupo.config.Outro;
-        const amount = parseMoney(outro?.outroValor ?? "");
-        if (amount <= 0) continue;
-        const desc = outro?.outroDescricao?.trim() || "Outro pagamento";
-        out.push({
-          id: `camp-outro:${camp.id}:${grupo.id}`,
-          date: camp.prazo || todayISO(),
-          description: `${desc} — ${camp.nome}`,
-          category: "Influenciadores",
-          amount,
-          kind: "despesa",
-          source: "influenciador",
-          clienteId: c.id,
-          clienteNome: c.empresa,
-          campanhaId: camp.id,
-          campanhaNome: camp.nome,
-          meta: `${c.empresa} · ${camp.nome}${outro?.outroCriterios ? ` · ${outro.outroCriterios}` : ""}`,
-          editable: false,
-        });
-      }
+      // Nota: o "Outro" configurado num grupo de pagamento da campanha (aqui,
+      // na criação/edição) é só uma orientação para o time sobre como pagar
+      // — não é lançado automaticamente no Financeiro. Só vira despesa real
+      // quando efetivamente aceito por entrega (loop acima, com aprovacao
+      // === "aceito"), igual aos outros tipos de pagamento.
     }
   }
 
