@@ -26,6 +26,7 @@ import {
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
+import { useConfirm } from "@/hooks/use-confirm";
 
 type TeamMember = { id: string; name: string; photo?: string };
 function loadTeam(): TeamMember[] {
@@ -366,6 +367,10 @@ export function ReunioesSection() {
           setDialog({ mode: "edit", data: m });
         }}
         onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
+        onDelete={(id) => {
+          persist(meetings.filter((m) => m.id !== id));
+          setSummary(null);
+        }}
       />
     </div>
   );
@@ -1084,13 +1089,16 @@ function MeetingSummaryDialog({
   onClose,
   onEdit,
   onChange,
+  onDelete,
 }: {
   meeting: Meeting | null;
   me: { id: string; name: string };
   onClose: () => void;
   onEdit: (m: Meeting) => void;
   onChange: (m: Meeting) => void;
+  onDelete: (id: string) => void;
 }) {
+  const { confirm: confirmDelete, confirmDialog: deleteConfirmDialog } = useConfirm();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [proposing, setProposing] = useState(false);
   const [propData, setPropData] = useState("");
@@ -1439,55 +1447,72 @@ function MeetingSummaryDialog({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-6 py-3.5">
-          <div className="flex flex-wrap gap-2">
-            {isParticipant && !isFinished && meeting.status !== "Cancelada" && (
-              <>
-                <button
-                  type="button"
-                  onClick={confirm}
-                  className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
-                >
-                  <Check className="h-3.5 w-3.5" /> Confirmar
-                </button>
-                <button
-                  type="button"
-                  onClick={decline}
-                  className="rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
-                >
-                  Recusar
-                </button>
-                {!proposing && (
-                  <button
-                    type="button"
-                    onClick={() => setProposing(true)}
-                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
-                  >
-                    <CalendarClock className="h-3.5 w-3.5" /> Sugerir novo horário
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isCreator && (
+        <div className="border-t border-border">
+          {isParticipant && !isFinished && meeting.status !== "Cancelada" && (
+            <div className="grid grid-cols-1 gap-2 border-b border-border px-6 py-3 sm:grid-cols-3">
               <button
                 type="button"
-                onClick={() => onEdit(meeting)}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                onClick={confirm}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
               >
-                <Pencil className="h-3.5 w-3.5" /> Editar
+                <Check className="h-3.5 w-3.5" /> Confirmar
               </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              Fechar
-            </button>
+              <button
+                type="button"
+                onClick={decline}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+              >
+                <X className="h-3.5 w-3.5" /> Recusar
+              </button>
+              <button
+                type="button"
+                onClick={() => setProposing((v) => !v)}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                  proposing ? "border-foreground bg-muted" : "border-border hover:bg-muted"
+                }`}
+              >
+                <CalendarClock className="h-3.5 w-3.5" /> Novo horário
+              </button>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2 px-6 py-3">
+            <div>
+              {isCreator && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await confirmDelete(
+                      `Excluir a reunião "${meeting.titulo}"? Essa ação não pode ser desfeita.`,
+                    );
+                    if (ok) onDelete(meeting.id);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {isCreator && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(meeting)}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
+        {deleteConfirmDialog}
       </DialogContent>
     </Dialog>
   );
