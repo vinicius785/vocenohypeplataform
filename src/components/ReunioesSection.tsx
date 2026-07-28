@@ -22,6 +22,7 @@ import {
   saveMeetings,
   onMeetingsChange,
   meetingDisplayStatus,
+  meetingEndTime,
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
@@ -186,6 +187,30 @@ export function ReunioesSection() {
       myMeetings.filter((m) => m.data === selected).sort((a, b) => a.hora.localeCompare(b.hora)),
     [myMeetings, selected],
   );
+
+  // Reuniões que já passaram do horário e cujo criador (sou eu) ainda não
+  // registrou quem participou — vira um popup, uma de cada vez, até
+  // esvaziar a fila.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(iv);
+  }, []);
+  const pendingAttendance = useMemo(
+    () =>
+      meetings
+        .filter(
+          (m) =>
+            m.criadorId === me.id &&
+            m.status !== "Cancelada" &&
+            !m.attendanceRecorded &&
+            (m.participanteIds?.length ?? 0) > 0 &&
+            meetingEndTime(m) < now,
+        )
+        .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora)),
+    [meetings, me.id, now],
+  );
+  const attendanceMeeting = pendingAttendance[0] ?? null;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -365,6 +390,24 @@ export function ReunioesSection() {
           setDialog({ mode: "edit", data: m });
         }}
         onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
+      />
+
+      <AttendanceDialog
+        meeting={attendanceMeeting}
+        onSubmit={(attendedBy) =>
+          persist(
+            meetings.map((x) =>
+              x.id === attendanceMeeting!.id ? { ...x, attendedBy, attendanceRecorded: true } : x,
+            ),
+          )
+        }
+        onSkip={() =>
+          persist(
+            meetings.map((x) =>
+              x.id === attendanceMeeting!.id ? { ...x, attendanceRecorded: true } : x,
+            ),
+          )
+        }
       />
     </div>
   );
@@ -1356,6 +1399,79 @@ function MeetingSummaryDialog({
               Fechar
             </button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AttendanceDialog({
+  meeting,
+  onSubmit,
+  onSkip,
+}: {
+  meeting: Meeting | null;
+  onSubmit: (attendedBy: string[]) => void;
+  onSkip: () => void;
+}) {
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [checked, setChecked] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!meeting) return;
+    setTeam(loadTeam());
+    setChecked(meeting.participanteIds ?? []);
+  }, [meeting?.id]);
+
+  if (!meeting) return null;
+
+  const toggle = (id: string) => {
+    setChecked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  return (
+    <Dialog open={!!meeting} onOpenChange={(v) => !v && onSkip()}>
+      <DialogContent className="max-w-md">
+        <DialogTitle>Quem participou da reunião?</DialogTitle>
+        <DialogDescription className="text-xs text-muted-foreground">
+          {meeting.titulo} · {formatBR(meeting.data)} às {meeting.hora}
+        </DialogDescription>
+
+        <div className="mt-2 space-y-1">
+          {(meeting.participanteIds ?? []).map((id) => {
+            const t = team.find((m) => m.id === id);
+            return (
+              <label
+                key={id}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked.includes(id)}
+                  onChange={() => toggle(id)}
+                  className="h-3.5 w-3.5"
+                />
+                {t?.name ?? id}
+              </label>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="rounded-md border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+          >
+            Pular
+          </button>
+          <button
+            type="button"
+            onClick={() => onSubmit(checked)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            <Check className="h-3.5 w-3.5" /> Confirmar presença
+          </button>
         </div>
       </DialogContent>
     </Dialog>

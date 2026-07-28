@@ -14,6 +14,7 @@ import {
   Plus,
   Trash2,
   X,
+  Check,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -568,6 +569,7 @@ export function TaskDialog({
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
+  const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -649,6 +651,7 @@ export function TaskDialog({
     setShowSubtaskInput(false);
     setMentionQuery(null);
     setEditSubtask(null);
+    setAssigneePickerOpen(false);
   }, [open, initial, defaultStatus]);
 
   const canSave = title.trim().length > 0;
@@ -933,10 +936,16 @@ export function TaskDialog({
               </Field>
 
               <Field label="Responsáveis" icon={<User className="h-3.5 w-3.5" />}>
-                <div className="flex w-full flex-col gap-1.5">
-                  {assignees.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {assignees.map((a) => {
+                <div className="relative w-full">
+                  <button
+                    type="button"
+                    onClick={() => setAssigneePickerOpen((v) => !v)}
+                    className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+                  >
+                    {assignees.length === 0 ? (
+                      <span className="text-muted-foreground">— Selecione responsáveis —</span>
+                    ) : (
+                      assignees.map((a) => {
                         const m = members.find((mm) => mm.name === a);
                         return (
                           <span
@@ -950,41 +959,45 @@ export function TaskDialog({
                               size={16}
                             />
                             {a}
-                            <button
-                              type="button"
-                              onClick={() => toggleAssignee(a)}
-                              aria-label={`Remover ${a}`}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            <X
+                              className="h-3 w-3 cursor-pointer text-muted-foreground hover:text-foreground"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleAssignee(a);
+                              }}
+                            />
                           </span>
                         );
-                      })}
+                      })
+                    )}
+                  </button>
+                  {assigneePickerOpen && (
+                    <div className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+                      {members.length === 0 ? (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          Nenhum membro cadastrado.
+                        </div>
+                      ) : (
+                        members.map((m) => {
+                          const checked = assignees.includes(m.name);
+                          return (
+                            <button
+                              key={m.name}
+                              type="button"
+                              onClick={() => toggleAssignee(m.name)}
+                              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
+                                checked ? "bg-muted font-medium text-foreground" : ""
+                              }`}
+                            >
+                              <Avatar member={m} size={20} />
+                              <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                              {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                            </button>
+                          );
+                        })
+                      )}
                     </div>
                   )}
-                  <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-border p-1.5">
-                    {members.length === 0 ? (
-                      <p className="px-1 text-[11px] text-muted-foreground">
-                        Nenhum membro cadastrado.
-                      </p>
-                    ) : (
-                      members.map((m) => (
-                        <label
-                          key={m.name}
-                          className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-muted/60"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={assignees.includes(m.name)}
-                            onChange={() => toggleAssignee(m.name)}
-                            className="h-3.5 w-3.5"
-                          />
-                          {m.name}
-                        </label>
-                      ))
-                    )}
-                  </div>
                 </div>
               </Field>
 

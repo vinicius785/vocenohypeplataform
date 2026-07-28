@@ -5,7 +5,8 @@
       "name": "vnh-dev",
       "runtimeExecutable": "/Users/vinidugar/.bun/bin/bun",
       "runtimeArgs": ["run", "dev"],
-      "port": 8080
+      "port": 8080,
+      "autoPort": true
     }
   ]
 }

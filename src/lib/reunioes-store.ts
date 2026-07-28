@@ -26,7 +26,14 @@ export type Meeting = {
   confirmedBy?: string[];
   declinedBy?: string[];
   rescheduleProposal?: RescheduleProposal;
+  attendedBy?: string[]; // ids de quem efetivamente participou (marcado depois do horário)
+  attendanceRecorded?: boolean; // true assim que o criador confirma/pula a presença
 };
+
+/** Horário em que a reunião termina (data+hora+duração), como epoch ms. */
+export function meetingEndTime(m: Meeting): number {
+  return new Date(`${m.data}T${m.hora}:00`).getTime() + m.duracao * 60_000;
+}
 
 /**
  * Status exibido derivado por pessoa: "Cancelada" só quando explicitamente

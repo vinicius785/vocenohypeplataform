@@ -922,7 +922,7 @@ function InfluCard({
             {influ.nome || "Sem nome"}
           </p>
           {influ.nicho && (
-            <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="mt-1 inline-block max-w-full truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
               {influ.nicho}
             </span>
           )}

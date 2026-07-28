@@ -27,7 +27,7 @@ export const SCORE_RULES: ScoreRule[] = [
   { key: "task_late_done", label: "Tarefa entregue atrasada", points: 5 },
   { key: "task_overdue_open", label: "Tarefa atrasada (aberta, prazo vencido)", points: -10 },
   { key: "meeting_attended", label: "Participação em reunião", points: 5 },
-  { key: "meeting_missed", label: "Reunião perdida (não confirmada)", points: -5 },
+  { key: "meeting_missed", label: "Reunião perdida (convidado, mas não participou)", points: -5 },
 ];
 
 export type DateRange = { from?: string; to?: string };
@@ -134,16 +134,19 @@ export function computeMemberScores(
   }
 
   for (const mt of meetings) {
+    // Só pontua depois que o criador confirma quem de fato participou —
+    // antes disso (call ainda não aconteceu, ou aconteceu mas ninguém
+    // registrou presença ainda) não pontua nem penaliza ninguém.
+    if (mt.status === "Cancelada" || !mt.attendanceRecorded) continue;
     for (const pid of mt.participanteIds ?? []) {
       const member = members.find((m) => m.id === pid);
       if (!member) continue;
+      if (!inRange(mt.data, range)) continue;
       const stat = ensure(member);
-      if (mt.status === "Confirmada") {
-        if (!inRange(mt.data, range)) continue;
+      if (mt.attendedBy?.includes(pid)) {
         stat.meetingsAttended += 1;
         add(stat, "meeting_attended");
-      } else if (mt.status === "Pendente" && mt.data < today) {
-        if (!inRange(mt.data, range)) continue;
+      } else {
         stat.meetingsMissed += 1;
         add(stat, "meeting_missed");
       }
