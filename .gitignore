@@ -20,6 +20,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Vercel
+.vercel
+
 # Environment variables
 .env
 .env.*
@@ -27,6 +30,7 @@ dist-ssr
 
 # Local-only Claude Code settings
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Editor directories and files
 .vscode/*
