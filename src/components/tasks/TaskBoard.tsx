@@ -15,6 +15,8 @@ import {
   Trash2,
   X,
   Check,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -573,6 +575,7 @@ export function TaskDialog({
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [subtasks, setSubtasks] = useState<Task[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskDate, setNewSubtaskDate] = useState("");
@@ -625,6 +628,7 @@ export function TaskDialog({
     setAssignees(initial ? getTaskAssignees(initial) : []);
     setTags(initial?.tags ?? []);
     setAttachments(initial?.attachments ?? []);
+    setPreviewAttachment(null);
     setSubtasks(initial?.subtasks ?? []);
     setComments(initial?.comments ?? []);
     setActivity(
@@ -788,13 +792,28 @@ export function TaskDialog({
   };
   const removeTag = (t: string) => setTags((prev) => prev.filter((x) => x !== t));
 
-  const addFiles = (files: FileList | null) => {
-    if (!files) return;
-    const items: Attachment[] = Array.from(files).map((f) => ({
-      id: crypto.randomUUID(),
-      name: f.name,
-      url: URL.createObjectURL(f),
-    }));
+  const readAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+
+  // `URL.createObjectURL` só é válido na aba/sessão que criou o anexo — ao
+  // recarregar a página (ou abrir em outro dispositivo) a URL já não existe
+  // mais, então o anexo "sumia" mesmo salvo. Persistindo como data URL
+  // (base64) direto no campo da tarefa, o arquivo sobrevive a refresh igual
+  // já acontece com foto/contrato de influenciador.
+  const addFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const items: Attachment[] = await Promise.all(
+      Array.from(files).map(async (f) => ({
+        id: crypto.randomUUID(),
+        name: f.name,
+        url: await readAsDataUrl(f),
+      })),
+    );
     setAttachments((a) => [...a, ...items]);
     setActivity((a) => pushActivity(a, `anexou ${items.length} arquivo(s)`));
   };
@@ -1269,7 +1288,7 @@ export function TaskDialog({
                 multiple
                 className="hidden"
                 onChange={(e) => {
-                  addFiles(e.target.files);
+                  void addFiles(e.target.files);
                   e.target.value = "";
                 }}
               />
@@ -1281,12 +1300,29 @@ export function TaskDialog({
                       key={a.id}
                       className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
                     >
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="flex-1 truncate">{a.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewAttachment(a)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate">{a.name}</span>
+                      </button>
+                      {a.url && (
+                        <a
+                          href={a.url}
+                          download={a.name}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Baixar ${a.name}`}
+                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeAttachment(a.id)}
-                        className="opacity-0 transition group-hover:opacity-100"
+                        className="shrink-0 opacity-0 transition group-hover:opacity-100"
                       >
                         <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                       </button>
@@ -1301,7 +1337,7 @@ export function TaskDialog({
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                addFiles(e.dataTransfer.files);
+                void addFiles(e.dataTransfer.files);
               }}
             >
               Arraste arquivos aqui ou{" "}
@@ -1487,6 +1523,85 @@ export function TaskDialog({
           }}
         />
       )}
+      <AttachmentPreviewDialog
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+      />
+    </Dialog>
+  );
+}
+
+function isImageAttachment(a: Attachment): boolean {
+  if (a.url?.startsWith("data:image/")) return true;
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(a.name);
+}
+
+function AttachmentPreviewDialog({
+  attachment,
+  onClose,
+}: {
+  attachment: Attachment | null;
+  onClose: () => void;
+}) {
+  if (!attachment) return null;
+  const isImage = isImageAttachment(attachment);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <DialogTitle className="min-w-0 truncate text-sm font-medium">
+            {attachment.name}
+          </DialogTitle>
+          <div className="flex shrink-0 items-center gap-1">
+            {attachment.url && (
+              <>
+                <a
+                  href={attachment.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Abrir em nova aba"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <a
+                  href={attachment.url}
+                  download={attachment.name}
+                  aria-label="Baixar"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+        <DialogDescription className="sr-only">Pré-visualização do anexo</DialogDescription>
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20 p-4">
+          {isImage && attachment.url ? (
+            <img
+              src={attachment.url}
+              alt={attachment.name}
+              className="max-h-full max-w-full rounded-md object-contain"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+              <FileText className="h-10 w-10" />
+              <p>Sem pré-visualização disponível para este arquivo.</p>
+              {attachment.url && (
+                <a
+                  href={attachment.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Abrir em nova aba
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }
