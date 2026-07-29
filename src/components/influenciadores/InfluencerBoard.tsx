@@ -18,13 +18,11 @@ import {
   Landmark,
   Linkedin,
   LayoutList,
-  MessageSquare,
   Package,
   Paperclip,
   Pencil,
   Plus,
   Search,
-  Send,
   Share2,
   Trash2,
   Twitter,
@@ -1242,7 +1240,7 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-lg flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
           <DialogDescription className="sr-only">
@@ -1276,226 +1274,304 @@ function InfluencerProfileDialog({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
-          {has("redes") &&
-            (influ.redes.length > 0 ? (
-              <ProfileSection icon={<Share2 className="h-3.5 w-3.5" />} title="Redes sociais">
-                <div className="flex flex-wrap gap-1.5">
-                  {influ.redes.map((r) => (
-                    <span
-                      key={r.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground"
-                    >
-                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                      {r.handle ? `@${r.handle}` : r.plataforma}
-                    </span>
-                  ))}
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
+          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
+            {has("redes") &&
+              (influ.redes.length > 0 ? (
+                <ProfileSection icon={<Share2 className="h-3.5 w-3.5" />} title="Redes sociais">
+                  <div className="flex flex-wrap gap-1.5">
+                    {influ.redes.map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground"
+                      >
+                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                        {r.handle ? `@${r.handle}` : r.plataforma}
+                      </span>
+                    ))}
+                  </div>
+                </ProfileSection>
+              ) : null)}
+
+            {has("entregas") &&
+              (influ.entregas.length > 0 ? (
+                <ProfileSection icon={<Package className="h-3.5 w-3.5" />} title="Entregas">
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {influ.entregas.map((e) => (
+                      <li key={e.id} className="px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate font-medium text-foreground">
+                            {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="tabular-nums text-muted-foreground">
+                              {e.quantidade}×
+                            </span>
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                e.status === "publicado"
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                  : e.status === "orcado"
+                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                    : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {e.status === "publicado"
+                                ? "Publicado"
+                                : e.status === "orcado"
+                                  ? "Orçado"
+                                  : "Combinado"}
+                            </span>
+                          </span>
+                        </div>
+                        {e.url && (
+                          <a
+                            href={e.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            download={e.arquivoNome}
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-foreground underline underline-offset-2"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {e.arquivoNome ?? "Ver conteúdo"}
+                          </a>
+                        )}
+                        {e.pagamento && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <Coins className="h-3 w-3" />
+                            <span>{pagamentoResumo(e.pagamento)}</span>
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
+                            >
+                              {APROVACAO_LABEL[e.pagamento.aprovacao]}
+                            </span>
+                          </div>
+                        )}
+                        {e.metrics && Object.values(e.metrics).some((v) => v) && (
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                            {e.metrics.views != null && <span>{e.metrics.views} views</span>}
+                            {e.metrics.likes != null && <span>{e.metrics.likes} curtidas</span>}
+                            {e.metrics.comments != null && (
+                              <span>{e.metrics.comments} coment.</span>
+                            )}
+                            {e.metrics.shares != null && <span>{e.metrics.shares} compart.</span>}
+                            {e.metrics.saves != null && <span>{e.metrics.saves} salvos</span>}
+                            {e.metrics.reach != null && <span>{e.metrics.reach} alcance</span>}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </ProfileSection>
+              ) : null)}
+
+            {has("entregas") && (hasMetrics || reliability.total > 0) && (
+              <ProfileSection icon={<BarChart3 className="h-3.5 w-3.5" />} title="Métricas">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-border px-3 py-3 sm:grid-cols-4">
+                  <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
+                  {metricsTotal.views > 0 && (
+                    <MetricStat
+                      label="Visualizações"
+                      value={metricsTotal.views.toLocaleString("pt-BR")}
+                    />
+                  )}
+                  {metricsTotal.reach > 0 && (
+                    <MetricStat
+                      label="Alcance"
+                      value={metricsTotal.reach.toLocaleString("pt-BR")}
+                    />
+                  )}
+                  {metricsTotal.likes > 0 && (
+                    <MetricStat
+                      label="Curtidas"
+                      value={metricsTotal.likes.toLocaleString("pt-BR")}
+                    />
+                  )}
+                  {metricsTotal.comments > 0 && (
+                    <MetricStat
+                      label="Comentários"
+                      value={metricsTotal.comments.toLocaleString("pt-BR")}
+                    />
+                  )}
+                  {metricsTotal.shares > 0 && (
+                    <MetricStat
+                      label="Compart."
+                      value={metricsTotal.shares.toLocaleString("pt-BR")}
+                    />
+                  )}
+                  {metricsTotal.saves > 0 && (
+                    <MetricStat label="Salvos" value={metricsTotal.saves.toLocaleString("pt-BR")} />
+                  )}
                 </div>
               </ProfileSection>
-            ) : null)}
+            )}
 
-          {has("entregas") &&
-            (influ.entregas.length > 0 ? (
-              <ProfileSection icon={<Package className="h-3.5 w-3.5" />} title="Entregas">
+            {anexos.length > 0 && (
+              <ProfileSection icon={<Paperclip className="h-3.5 w-3.5" />} title="Anexos">
                 <ul className="divide-y divide-border rounded-lg border border-border">
-                  {influ.entregas.map((e) => (
-                    <li key={e.id} className="px-3 py-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="min-w-0 truncate font-medium text-foreground">
-                          {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                  {anexos.map((a) => (
+                    <li
+                      key={a.key}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="block truncate font-medium text-foreground">{a.nome}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {a.tipo}
                         </span>
-                        <span className="flex shrink-0 items-center gap-2">
-                          <span className="tabular-nums text-muted-foreground">
-                            {e.quantidade}×
-                          </span>
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                              e.status === "publicado"
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                : e.status === "orcado"
-                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                  : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {e.status === "publicado"
-                              ? "Publicado"
-                              : e.status === "orcado"
-                                ? "Orçado"
-                                : "Combinado"}
-                          </span>
-                        </span>
-                      </div>
-                      {e.url && (
-                        <a
-                          href={e.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          download={e.arquivoNome}
-                          className="mt-1 inline-flex items-center gap-1 text-[11px] text-foreground underline underline-offset-2"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          {e.arquivoNome ?? "Ver conteúdo"}
-                        </a>
-                      )}
-                      {e.pagamento && (
-                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <Coins className="h-3 w-3" />
-                          <span>{pagamentoResumo(e.pagamento)}</span>
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                          >
-                            {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                          </span>
-                        </div>
-                      )}
-                      {e.metrics && Object.values(e.metrics).some((v) => v) && (
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                          {e.metrics.views != null && <span>{e.metrics.views} views</span>}
-                          {e.metrics.likes != null && <span>{e.metrics.likes} curtidas</span>}
-                          {e.metrics.comments != null && <span>{e.metrics.comments} coment.</span>}
-                          {e.metrics.shares != null && <span>{e.metrics.shares} compart.</span>}
-                          {e.metrics.saves != null && <span>{e.metrics.saves} salvos</span>}
-                          {e.metrics.reach != null && <span>{e.metrics.reach} alcance</span>}
-                        </div>
-                      )}
+                      </span>
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={a.nome}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted"
+                      >
+                        <Download className="h-3 w-3" /> Baixar
+                      </a>
                     </li>
                   ))}
                 </ul>
               </ProfileSection>
-            ) : null)}
-
-          {has("entregas") && (hasMetrics || reliability.total > 0) && (
-            <ProfileSection icon={<BarChart3 className="h-3.5 w-3.5" />} title="Métricas">
-              <div className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-border px-3 py-3 sm:grid-cols-4">
-                <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
-                {metricsTotal.views > 0 && (
-                  <MetricStat
-                    label="Visualizações"
-                    value={metricsTotal.views.toLocaleString("pt-BR")}
-                  />
-                )}
-                {metricsTotal.reach > 0 && (
-                  <MetricStat label="Alcance" value={metricsTotal.reach.toLocaleString("pt-BR")} />
-                )}
-                {metricsTotal.likes > 0 && (
-                  <MetricStat label="Curtidas" value={metricsTotal.likes.toLocaleString("pt-BR")} />
-                )}
-                {metricsTotal.comments > 0 && (
-                  <MetricStat
-                    label="Comentários"
-                    value={metricsTotal.comments.toLocaleString("pt-BR")}
-                  />
-                )}
-                {metricsTotal.shares > 0 && (
-                  <MetricStat
-                    label="Compart."
-                    value={metricsTotal.shares.toLocaleString("pt-BR")}
-                  />
-                )}
-                {metricsTotal.saves > 0 && (
-                  <MetricStat label="Salvos" value={metricsTotal.saves.toLocaleString("pt-BR")} />
-                )}
-              </div>
-            </ProfileSection>
-          )}
-
-          {anexos.length > 0 && (
-            <ProfileSection icon={<Paperclip className="h-3.5 w-3.5" />} title="Anexos">
-              <ul className="divide-y divide-border rounded-lg border border-border">
-                {anexos.map((a) => (
-                  <li
-                    key={a.key}
-                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
-                  >
-                    <span className="min-w-0 truncate">
-                      <span className="block truncate font-medium text-foreground">{a.nome}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {a.tipo}
-                      </span>
-                    </span>
-                    <a
-                      href={a.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      download={a.nome}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted"
-                    >
-                      <Download className="h-3 w-3" /> Baixar
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </ProfileSection>
-          )}
-
-          {has("pagamentos") && (
-            <ProfileSection icon={<Coins className="h-3.5 w-3.5" />} title="Pagamentos">
-              <PagamentosList entregas={influ.entregas} onSetAprovacao={onSetAprovacao} />
-            </ProfileSection>
-          )}
-
-          {has("bancario") &&
-            (hasBank ? (
-              <ProfileSection icon={<Landmark className="h-3.5 w-3.5" />} title="Dados bancários">
-                <dl className="space-y-1 rounded-lg border border-border px-3 py-2 text-xs">
-                  {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
-                  {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
-                  {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
-                  {(bank.agencia || bank.conta) && (
-                    <MetaRow
-                      label="Ag./Conta"
-                      value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
-                    />
-                  )}
-                  {bank.pixChave && (
-                    <MetaRow
-                      label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
-                      value={bank.pixChave}
-                    />
-                  )}
-                </dl>
-              </ProfileSection>
-            ) : null)}
-
-          {has("contrato") &&
-            (influ.contrato ? (
-              <ProfileSection icon={<FileText className="h-3.5 w-3.5" />} title="Contrato">
-                <a
-                  href={influ.contrato}
-                  download
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
-                </a>
-              </ProfileSection>
-            ) : null)}
-
-          {!has("redes") &&
-            !has("entregas") &&
-            !has("pagamentos") &&
-            !has("bancario") &&
-            !has("contrato") &&
-            anexos.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Nenhuma informação adicional configurada para este influenciador.
-              </p>
             )}
 
-          <ProfileSection icon={<MessageSquare className="h-3.5 w-3.5" />} title="Atividade">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && commentText.trim()) {
+            {has("pagamentos") && (
+              <ProfileSection icon={<Coins className="h-3.5 w-3.5" />} title="Pagamentos">
+                <PagamentosList entregas={influ.entregas} onSetAprovacao={onSetAprovacao} />
+              </ProfileSection>
+            )}
+
+            {has("bancario") &&
+              (hasBank ? (
+                <ProfileSection icon={<Landmark className="h-3.5 w-3.5" />} title="Dados bancários">
+                  <dl className="space-y-1 rounded-lg border border-border px-3 py-2 text-xs">
+                    {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
+                    {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
+                    {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
+                    {(bank.agencia || bank.conta) && (
+                      <MetaRow
+                        label="Ag./Conta"
+                        value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
+                      />
+                    )}
+                    {bank.pixChave && (
+                      <MetaRow
+                        label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
+                        value={bank.pixChave}
+                      />
+                    )}
+                  </dl>
+                </ProfileSection>
+              ) : null)}
+
+            {has("contrato") &&
+              (influ.contrato ? (
+                <ProfileSection icon={<FileText className="h-3.5 w-3.5" />} title="Contrato">
+                  <a
+                    href={influ.contrato}
+                    download
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
+                  </a>
+                </ProfileSection>
+              ) : null)}
+
+            {!has("redes") &&
+              !has("entregas") &&
+              !has("pagamentos") &&
+              !has("bancario") &&
+              !has("contrato") &&
+              anexos.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma informação adicional configurada para este influenciador.
+                </p>
+              )}
+          </div>
+
+          <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+              <p className="text-sm font-semibold">Atividade</p>
+              <span className="text-[10px] text-muted-foreground">
+                {(influ.activity?.length ?? 0) + (influ.comments?.length ?? 0)}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {(influ.comments?.length ?? 0) + (influ.activity?.length ?? 0) === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Nenhuma atividade ou comentário ainda.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {[
+                    ...(influ.activity ?? []).map((a) => ({ kind: "activity" as const, item: a })),
+                    ...(influ.comments ?? []).map((c) => ({ kind: "comment" as const, item: c })),
+                  ]
+                    .sort(
+                      (a, b) =>
+                        new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
+                    )
+                    .map((e) => (
+                      <div key={e.item.id} className="flex items-start gap-2">
+                        <span
+                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
+                        >
+                          {e.item.initials}
+                        </span>
+                        {e.kind === "activity" ? (
+                          <div className="flex-1 text-xs leading-relaxed">
+                            <span className="font-medium text-foreground">{e.item.author}</span>{" "}
+                            <span className="text-muted-foreground">{e.item.action}</span>
+                            <div className="text-[10px] text-muted-foreground/70">
+                              {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                            <div className="mb-0.5 flex items-baseline gap-1.5">
+                              <span className="text-xs font-medium">{e.item.author}</span>
+                              <span className="text-[10px] text-muted-foreground/70">
+                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                              {e.item.text}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-border bg-background p-3">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    if (commentText.trim()) {
                       onComment(commentText);
                       setCommentText("");
                     }
-                  }}
-                  placeholder="Adicionar comentário..."
-                  className="h-8 flex-1 rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-                />
+                  }
+                }}
+                rows={2}
+                placeholder="Escreva um comentário..."
+                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+              />
+              <div className="mt-1 flex justify-end">
                 <button
                   type="button"
                   onClick={() => {
@@ -1504,60 +1580,13 @@ function InfluencerProfileDialog({
                     setCommentText("");
                   }}
                   disabled={!commentText.trim()}
-                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-foreground px-2.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-40"
+                  className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  Comentar
                 </button>
               </div>
-
-              {influ.comments?.length || influ.activity?.length ? (
-                <ul className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border p-2.5">
-                  {[
-                    ...(influ.comments ?? []).map((c) => ({ ...c, _type: "comment" as const })),
-                    ...(influ.activity ?? []).map((a) => ({
-                      ...a,
-                      _type: "activity" as const,
-                      text: a.action,
-                    })),
-                  ]
-                    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-                    .map((item) => (
-                      <li key={item.id} className="flex items-start gap-2 text-xs">
-                        <span
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${item.color}`}
-                        >
-                          {item.initials}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          {item._type === "comment" ? (
-                            <p className="whitespace-pre-wrap break-words text-foreground">
-                              <span className="font-medium">{item.author}</span> {item.text}
-                            </p>
-                          ) : (
-                            <p className="text-muted-foreground">
-                              <span className="font-medium text-foreground">{item.author}</span>{" "}
-                              {item.text}
-                            </p>
-                          )}
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">
-                            {new Date(item.createdAt).toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  Nenhuma atividade ou comentário ainda.
-                </p>
-              )}
             </div>
-          </ProfileSection>
+          </div>
         </div>
 
         <DialogFooter className="flex-row items-center justify-between border-t border-border bg-muted/30 px-6 py-3 sm:justify-between">
