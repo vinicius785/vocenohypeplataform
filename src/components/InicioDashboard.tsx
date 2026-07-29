@@ -34,7 +34,8 @@ import { listLeads } from "@/lib/comercial.functions";
 import { DEFAULT_STAGES, formatBRL } from "@/lib/comercial";
 import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
 import type { SectionKey } from "@/components/AppShell";
-import { loadMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
+import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
+import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 
 type DashTask = {
   id: string;
@@ -172,6 +173,7 @@ export function InicioDashboard() {
   const [manageOpen, setManageOpen] = useState(false);
   const [tasks, setTasks] = useState<DashTask[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
   const [personal, setPersonal] = useState<PersonalItem[]>([]);
   const [newPersonal, setNewPersonal] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -215,6 +217,14 @@ export function InicioDashboard() {
       unsubMeetings();
     };
   }, []);
+
+  // Mantém o resumo aberto em sincronia com atualizações (confirmar,
+  // recusar, sugerir horário, etc.) feitas dentro do próprio diálogo.
+  useEffect(() => {
+    if (!meetingSummary) return;
+    const fresh = meetings.find((m) => m.id === meetingSummary.id);
+    setMeetingSummary(fresh ?? null);
+  }, [meetings, meetingSummary?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -495,20 +505,23 @@ export function InicioDashboard() {
                     aria-hidden
                   />
                   {todaysMeetings.map((m) => (
-                    <li
-                      key={m.id}
-                      className="relative flex items-start gap-3 rounded-md px-1 py-1.5 hover:bg-muted/40"
-                    >
-                      <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                        {m.hora}
-                      </div>
-                      <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-foreground ring-2 ring-background" />
-                      <div className="min-w-0 flex-1 pb-0.5">
-                        <p className="truncate text-xs font-medium text-foreground">{m.titulo}</p>
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {m.duracao} min · {m.local || m.com}
-                        </p>
-                      </div>
+                    <li key={m.id} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setMeetingSummary(m)}
+                        className="flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40"
+                      >
+                        <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                          {m.hora}
+                        </div>
+                        <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-foreground ring-2 ring-background" />
+                        <div className="min-w-0 flex-1 pb-0.5">
+                          <p className="truncate text-xs font-medium text-foreground">{m.titulo}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {m.duracao} min · {m.local || m.com}
+                          </p>
+                        </div>
+                      </button>
                     </li>
                   ))}
                 </ol>
@@ -693,6 +706,27 @@ export function InicioDashboard() {
           </Card>
         )}
       </div>
+
+      <MeetingSummaryDialog
+        meeting={meetingSummary}
+        me={getMe()}
+        onClose={() => setMeetingSummary(null)}
+        onEdit={() => {
+          setMeetingSummary(null);
+          navigate({ to: "/time", search: { section: "reunioes" as SectionKey } });
+        }}
+        onChange={(m) => {
+          const next = meetings.map((x) => (x.id === m.id ? m : x));
+          setMeetings(next);
+          saveMeetings(next);
+        }}
+        onDelete={(id) => {
+          const next = meetings.filter((x) => x.id !== id);
+          setMeetings(next);
+          saveMeetings(next);
+          setMeetingSummary(null);
+        }}
+      />
     </div>
   );
 }

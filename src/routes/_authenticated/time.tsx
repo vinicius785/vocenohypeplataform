@@ -1,5 +1,5 @@
-import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { InicioDashboard } from "@/components/InicioDashboard";
 import { ClientesSection } from "@/components/ClientesSection";
@@ -59,11 +59,14 @@ const SECTIONS: Record<SectionKey, { title: string; description: string }> = {
 
 function TimePage() {
   const search = useSearch({ from: "/_authenticated/time" });
-  const [active, setActive] = useState<SectionKey>(search.section ?? "inicio");
-  useEffect(() => {
-    if (search.section && search.section !== active) setActive(search.section);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.section]);
+  const navigate = useNavigate();
+  // Fonte única de verdade é a URL — antes o clique no menu só mudava um
+  // useState local, nunca a URL, então um refresh sempre voltava pro
+  // "início" mesmo tendo acabado de entrar em Comercial.
+  const active = search.section ?? "inicio";
+  const setActive = (key: SectionKey) => {
+    void navigate({ to: "/time", search: { section: key }, replace: true });
+  };
   useEffect(() => {
     const onNav = (e: Event) => {
       const detail = (e as CustomEvent<SectionKey>).detail;
@@ -71,6 +74,7 @@ function TimePage() {
     };
     window.addEventListener("nav:section", onNav);
     return () => window.removeEventListener("nav:section", onNav);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const section = SECTIONS[active];

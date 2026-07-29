@@ -1083,7 +1083,7 @@ function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: strin
   );
 }
 
-function MeetingSummaryDialog({
+export function MeetingSummaryDialog({
   meeting,
   me,
   onClose,

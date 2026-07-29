@@ -54,9 +54,22 @@ import {
 import { useClientes } from "@/lib/clientes-store";
 import type { ChatMessage } from "@/lib/chat-store";
 
-import { loadProjetos } from "@/lib/projetos";
+import { useNavigate } from "@tanstack/react-router";
+import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
+import { formatIsoDate } from "@/lib/utils";
+
+type ChatTaskInfo = {
+  id: string;
+  label: string;
+  project?: string;
+  projectId: string;
+  status: string;
+  priority?: string;
+  dueDate?: string;
+  assignees: string[];
+};
 
 export function ChatSection() {
   const [, force] = useState(0);
@@ -105,13 +118,29 @@ export function ChatSection() {
     [convoMessages, searchQuery],
   );
 
-  const tasks = useMemo(
+  const tasks = useMemo<ChatTaskInfo[]>(
     () =>
       loadProjetos().flatMap((p) =>
-        (p.tasks ?? []).map((t) => ({ id: t.id, label: t.title, project: p.name })),
+        (p.tasks ?? []).map((t) => ({
+          id: t.id,
+          label: t.title,
+          project: p.name,
+          projectId: p.id,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          assignees: getTaskAssignees(t),
+        })),
       ),
     [],
   );
+  const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const navigate = useNavigate();
+  const openTask = (taskId: string) => {
+    const t = taskInfoById.get(taskId);
+    if (!t) return;
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId } });
+  };
 
   const messagesById = useMemo(() => {
     const map = new Map<string, ChatMessage>();
@@ -311,6 +340,7 @@ export function ChatSection() {
         isDm={isDm}
         otherUserId={activeDmPartner?.id}
         typingUsers={typingUsers}
+        onOpenTask={openTask}
       />
 
       {!isSelfDm && (
@@ -417,7 +447,58 @@ type MentionOption = {
   photo?: string;
 };
 
-function renderText(text: string, mentions: ChatMention[] | undefined) {
+const CHAT_TASK_STATUS_TONE: Record<string, string> = {
+  Aberto: "bg-muted text-muted-foreground",
+  "Em andamento": "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  "Em aprovação": "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  "Em ajustes": "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+  Aprovado: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  Concluído: "bg-foreground text-background",
+  Arquivado: "bg-muted/60 text-muted-foreground line-through",
+};
+const CHAT_TASK_PRIORITY_TONE: Record<string, string> = {
+  Urgente: "text-red-600 dark:text-red-400",
+  Alta: "text-amber-600 dark:text-amber-400",
+  Normal: "text-sky-600 dark:text-sky-400",
+  Baixa: "text-muted-foreground",
+};
+
+function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(task.id)}
+      className="my-1 flex w-full max-w-xs flex-col gap-1 rounded-lg border border-border bg-muted/30 px-2.5 py-2 text-left text-xs hover:border-foreground/30 hover:bg-muted/50"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-medium text-foreground">{task.label}</span>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+            CHAT_TASK_STATUS_TONE[task.status] ?? "bg-muted text-muted-foreground"
+          }`}
+        >
+          {task.status}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+        {task.assignees.length > 0 && <span>{task.assignees.join(", ")}</span>}
+        {task.dueDate && <span>Prazo: {formatIsoDate(task.dueDate)}</span>}
+        {task.priority && (
+          <span className={CHAT_TASK_PRIORITY_TONE[task.priority] ?? undefined}>
+            {task.priority}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function renderText(
+  text: string,
+  mentions: ChatMention[] | undefined,
+  taskInfoById?: Map<string, ChatTaskInfo>,
+  onOpenTask?: (id: string) => void,
+) {
   const parts: (string | ChatMention)[] = !mentions || mentions.length === 0 ? [text] : [text];
   if (mentions && mentions.length > 0) {
     for (const m of mentions) {
@@ -434,10 +515,15 @@ function renderText(text: string, mentions: ChatMention[] | undefined) {
       }
     }
   }
-  return parts.map((p, i) =>
-    typeof p === "string" ? (
-      <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>
-    ) : (
+  return parts.map((p, i) => {
+    if (typeof p === "string") return <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>;
+    if (p.kind === "task") {
+      const task = taskInfoById?.get(p.id);
+      if (task && onOpenTask) {
+        return <TaskMentionCard key={i} task={task} onOpen={onOpenTask} />;
+      }
+    }
+    return (
       <span
         key={i}
         className={`rounded px-1 py-0.5 text-xs font-medium ${
@@ -448,8 +534,8 @@ function renderText(text: string, mentions: ChatMention[] | undefined) {
       >
         @{p.label}
       </span>
-    ),
-  );
+    );
+  });
 }
 
 function MessageList({
@@ -467,6 +553,7 @@ function MessageList({
   isDm,
   otherUserId,
   typingUsers,
+  onOpenTask,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -478,14 +565,16 @@ function MessageList({
   onReact: (id: string, emoji: string) => void;
   allowUserMentions: boolean;
   members: ChatMember[];
-  tasks: { id: string; label: string; project?: string }[];
+  tasks: ChatTaskInfo[];
   isDm: boolean;
   otherUserId?: string;
   typingUsers: { userId: string; userName: string }[];
+  onOpenTask: (taskId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
@@ -612,7 +701,7 @@ function MessageList({
                   <div>
                     {m.text && (
                       <p className="whitespace-pre-wrap break-words text-sm text-foreground">
-                        {renderText(m.text, m.mentions)}
+                        {renderText(m.text, m.mentions, taskInfoById, onOpenTask)}
                         {m.editedAt && (
                           <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>
                         )}
@@ -852,6 +941,15 @@ function MentionTextarea({
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
+  // Cresce junto com o texto (até o teto de max-h-40) em vez de ficar com
+  // altura fixa e depender só da barra de rolagem interna pra textos longos.
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   // A busca digitada na caixinha do menu tem prioridade sobre o texto após
   // o "@" na mensagem — deixa procurar uma tarefa/pessoa sem precisar
   // digitar o nome dela dentro da própria mensagem.
@@ -950,7 +1048,7 @@ function MentionTextarea({
         }}
         rows={rows}
         placeholder={placeholder}
-        className="max-h-40 min-h-[28px] w-full resize-none rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
+        className="max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
       />
       {query !== null && (showTabs || filtered.length > 0) && (
         <div className="absolute bottom-full left-0 z-20 mb-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-lg">

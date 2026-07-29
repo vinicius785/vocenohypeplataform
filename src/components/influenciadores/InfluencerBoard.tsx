@@ -1715,6 +1715,7 @@ function InfluenciadorDialog({
   const [status, setStatus] = useState<InfluStatus>("Lista");
   const [bank, setBank] = useState<BankInfo>({});
   const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
   const contratoRef = useRef<HTMLInputElement>(null);
 
@@ -1732,6 +1733,7 @@ function InfluenciadorDialog({
   useEffect(() => {
     if (!open) return;
     setStep(0);
+    setSaving(false);
     if (initial) {
       setFoto(initial.foto);
       setNome(initial.nome);
@@ -1767,6 +1769,8 @@ function InfluenciadorDialog({
   };
 
   const submit = () => {
+    if (saving || !nome.trim()) return;
+    setSaving(true);
     const finalStatus = advanceStatusFromEntregas(status, entregas);
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
@@ -2281,25 +2285,30 @@ function InfluenciadorDialog({
           >
             {step === 0 ? "Cancelar" : "Voltar"}
           </button>
-          {isLast ? (
+          <div className="flex items-center gap-2">
+            {/* Salvar fica disponível em qualquer etapa (não só na última) —
+                antes, editar um campo cedo (ex.: telefone na etapa Perfil) e
+                fechar o diálogo sem passar por todas as etapas perdia a
+                alteração silenciosamente. */}
             <button
               type="button"
               onClick={submit}
-              disabled={!nome.trim()}
+              disabled={!nome.trim() || saving}
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Salvar influenciador
+              {saving ? "Salvando..." : initial ? "Salvar" : "Salvar influenciador"}
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setStep(step + 1)}
-              disabled={!canNext}
-              className="rounded-md bg-foreground px-4 py-1.5 text-sm font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Próximo
-            </button>
-          )}
+            {!isLast && (
+              <button
+                type="button"
+                onClick={() => setStep(step + 1)}
+                disabled={!canNext}
+                className="rounded-md border border-border px-4 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próximo
+              </button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
