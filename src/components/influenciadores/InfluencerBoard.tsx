@@ -18,9 +18,11 @@ import {
   Landmark,
   Linkedin,
   LayoutList,
+  Mail,
   Package,
   Paperclip,
   Pencil,
+  Phone,
   Plus,
   Search,
   Share2,
@@ -111,6 +113,19 @@ function getCurrentAuthor() {
     }
   }
   return { name: "Você", initials: "VC", color: "bg-foreground text-background" };
+}
+
+/** Formata dígitos de telefone BR como (DDD) 9XXXX-XXXX (ou XXXX-XXXX pra
+ * fixo/8 dígitos), mantendo o texto digitável enquanto o usuário digita —
+ * qualquer coisa que não seja número é descartada antes de formatar. */
+export function formatPhoneBR(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits ? `(${digits}` : "";
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (digits.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 }
 
 export type Rede = { id: string; plataforma: string; handle: string };
@@ -401,6 +416,8 @@ export type Influ = {
   bank?: BankInfo;
   comments?: InfluComment[];
   activity?: InfluActivity[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 /**
@@ -664,6 +681,7 @@ export function InfluencerBoard({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "kanban">("lista");
+  const [sortBy, setSortBy] = useState<"az" | "za" | "updated" | "created">("az");
   const [dragId, setDragId] = useState<string | null>(null);
   const carRef = useRef<HTMLDivElement>(null);
   const scrollBy = (dir: 1 | -1) =>
@@ -673,6 +691,7 @@ export function InfluencerBoard({
     const me = getCurrentAuthor();
     return {
       ...i,
+      updatedAt: new Date().toISOString(),
       activity: [
         ...(i.activity ?? []),
         {
@@ -707,6 +726,7 @@ export function InfluencerBoard({
       x.id === influId
         ? {
             ...x,
+            updatedAt: new Date().toISOString(),
             comments: [
               ...(x.comments ?? []),
               {
@@ -726,12 +746,17 @@ export function InfluencerBoard({
   };
 
   const save = (i: Influ) => {
+    const now = new Date().toISOString();
     if (influDialog?.mode === "edit") {
-      onChange(influs.map((x) => (x.id === i.id ? i : x)));
+      const existing = influs.find((x) => x.id === i.id);
+      const withStamps = { ...i, createdAt: existing?.createdAt ?? now, updatedAt: now };
+      onChange(influs.map((x) => (x.id === i.id ? withStamps : x)));
+      syncToBanco(withStamps);
     } else {
-      onChange([...influs, i]);
+      const withStamps = { ...i, createdAt: now, updatedAt: now };
+      onChange([...influs, withStamps]);
+      syncToBanco(withStamps);
     }
-    syncToBanco(i);
   };
 
   const setAprovacao = (influId: string, entregaId: string, aprovacao: AprovacaoPagamento) => {
@@ -739,6 +764,7 @@ export function InfluencerBoard({
       if (x.id !== influId) return x;
       return {
         ...x,
+        updatedAt: new Date().toISOString(),
         entregas: x.entregas.map((e) =>
           e.id === entregaId && e.pagamento
             ? {
@@ -780,6 +806,24 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  const sortedInflus = useMemo(() => {
+    const list = [...influs];
+    switch (sortBy) {
+      case "az":
+        return list.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      case "za":
+        return list.sort((a, b) => b.nome.localeCompare(a.nome, "pt-BR"));
+      case "updated":
+        return list.sort(
+          (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
+        );
+      case "created":
+        return list.sort(
+          (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+        );
+    }
+  }, [influs, sortBy]);
+
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
@@ -816,6 +860,17 @@ export function InfluencerBoard({
               <Columns3 className="h-3.5 w-3.5" /> Kanban
             </button>
           </div>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            aria-label="Ordenar por"
+            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground outline-none hover:bg-muted"
+          >
+            <option value="az">Ordenar: A-Z</option>
+            <option value="za">Ordenar: Z-A</option>
+            <option value="updated">Ordenar: Última atualização</option>
+            <option value="created">Ordenar: Mais recentes</option>
+          </select>
           {viewMode === "lista" && (
             <>
               <button
@@ -874,7 +929,7 @@ export function InfluencerBoard({
       ) : viewMode === "kanban" ? (
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
           {INFLU_STATUSES.map((col) => {
-            const items = influs.filter((i) => i.status === col);
+            const items = sortedInflus.filter((i) => i.status === col);
             return (
               <div
                 key={col}
@@ -924,7 +979,7 @@ export function InfluencerBoard({
           ref={carRef}
           className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
         >
-          {influs.map((i) => (
+          {sortedInflus.map((i) => (
             <InfluCard
               key={i.id}
               influ={i}
@@ -1320,9 +1375,20 @@ function InfluencerProfileDialog({
                 </span>
               )}
               {(influ.telefone || influ.email) && (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {[influ.telefone, influ.email].filter(Boolean).join(" · ")}
-                </p>
+                <div className="mt-1 space-y-0.5">
+                  {influ.telefone && (
+                    <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                      <Phone className="h-3 w-3 shrink-0" />
+                      {formatPhoneBR(influ.telefone)}
+                    </p>
+                  )}
+                  {influ.email && (
+                    <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      {influ.email}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -1896,7 +1962,7 @@ function InfluenciadorDialog({
                   </label>
                   <input
                     value={telefone}
-                    onChange={(e) => setTelefone(e.target.value)}
+                    onChange={(e) => setTelefone(formatPhoneBR(e.target.value))}
                     placeholder="(00) 00000-0000"
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                   />
