@@ -275,12 +275,32 @@ export function approvalSlaOverdueDays(influ: Influ): number | null {
  * influenciador e — só a partir desse momento — vira uma despesa real
  * no Financeiro (ver financeiro-entries.ts).
  */
+export const ENTREGA_CONTEUDO_STATUSES = [
+  "Combinado",
+  "Aguardando roteiro",
+  "Roteiro aprovado",
+  "Em gravação",
+  "Gravação aprovada",
+  "Postado",
+] as const;
+export type EntregaConteudoStatus = (typeof ENTREGA_CONTEUDO_STATUSES)[number];
+export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
+  Combinado: "bg-muted text-muted-foreground",
+  "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  "Gravação aprovada": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+};
+
 export type Entrega = {
   id: string;
   tipo: string;
   titulo?: string;
   quantidade: number;
   status: "orcado" | "combinado" | "publicado";
+  /** Etapa de produção do conteúdo — independente do status de orçamento/publicação acima. */
+  conteudoStatus?: EntregaConteudoStatus;
   dataPostagem?: string; // data planejada para a postagem
   roteiro?: string; // anexo do roteiro/briefing de conteúdo combinado
   roteiroNome?: string;
@@ -371,6 +391,8 @@ export type Influ = {
   foto?: string;
   nome: string;
   nicho?: string;
+  telefone?: string;
+  email?: string;
   redes: Rede[];
   entregas: Entrega[];
   contrato?: string;
@@ -736,6 +758,28 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  const setConteudoStatus = (
+    influId: string,
+    entregaId: string,
+    conteudoStatus: EntregaConteudoStatus,
+  ) => {
+    const next = influs.map((x) => {
+      if (x.id !== influId) return x;
+      const entrega = x.entregas.find((e) => e.id === entregaId);
+      if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
+      const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+      return pushActivity(
+        {
+          ...x,
+          entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, conteudoStatus } : e)),
+        },
+        `mudou status de "${label}" para ${conteudoStatus}`,
+      );
+    });
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
@@ -909,6 +953,9 @@ export function InfluencerBoard({
             setViewing(null);
           }}
           onSetAprovacao={(entregaId, aprovacao) => setAprovacao(viewing.id, entregaId, aprovacao)}
+          onSetConteudoStatus={(entregaId, status) =>
+            setConteudoStatus(viewing.id, entregaId, status)
+          }
           onComment={(text) => addComment(viewing.id, text)}
         />
       )}
@@ -1181,6 +1228,7 @@ function InfluencerProfileDialog({
   onEdit,
   onRemove,
   onSetAprovacao,
+  onSetConteudoStatus,
   onComment,
 }: {
   influ: Influ;
@@ -1189,6 +1237,7 @@ function InfluencerProfileDialog({
   onEdit: () => void;
   onRemove: () => void;
   onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
+  onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
   onComment: (text: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
@@ -1270,6 +1319,11 @@ function InfluencerProfileDialog({
                   {influ.status}
                 </span>
               )}
+              {(influ.telefone || influ.email) && (
+                <p className="mt-1 truncate text-xs text-muted-foreground">
+                  {[influ.telefone, influ.email].filter(Boolean).join(" · ")}
+                </p>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -1323,6 +1377,24 @@ function InfluencerProfileDialog({
                                   : "Combinado"}
                             </span>
                           </span>
+                        </div>
+                        <div
+                          className={`mt-1.5 inline-block rounded ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
+                        >
+                          <select
+                            value={e.conteudoStatus ?? "Combinado"}
+                            onChange={(ev) =>
+                              onSetConteudoStatus(e.id, ev.target.value as EntregaConteudoStatus)
+                            }
+                            onClick={(ev) => ev.stopPropagation()}
+                            className="cursor-pointer appearance-none rounded bg-transparent px-1.5 py-0.5 text-[10px] font-medium outline-none"
+                          >
+                            {ENTREGA_CONTEUDO_STATUSES.map((s) => (
+                              <option key={s} value={s} className="bg-background text-foreground">
+                                {s}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         {e.url && (
                           <a
@@ -1634,6 +1706,8 @@ function InfluenciadorDialog({
   const [foto, setFoto] = useState<string | undefined>();
   const [nome, setNome] = useState("");
   const [nicho, setNicho] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [email, setEmail] = useState("");
   const [redes, setRedes] = useState<Rede[]>([]);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [contrato, setContrato] = useState<string | undefined>();
@@ -1662,6 +1736,8 @@ function InfluenciadorDialog({
       setFoto(initial.foto);
       setNome(initial.nome);
       setNicho(initial.nicho ?? "");
+      setTelefone(initial.telefone ?? "");
+      setEmail(initial.email ?? "");
       setRedes(initial.redes);
       setEntregas(initial.entregas);
       setContrato(initial.contrato);
@@ -1672,6 +1748,8 @@ function InfluenciadorDialog({
       setFoto(undefined);
       setNome("");
       setNicho("");
+      setTelefone("");
+      setEmail("");
       setRedes([]);
       setEntregas([]);
       setContrato(undefined);
@@ -1695,6 +1773,8 @@ function InfluenciadorDialog({
       foto,
       nome: nome.trim(),
       nicho: nicho || undefined,
+      telefone: telefone.trim() || undefined,
+      email: email.trim() || undefined,
       redes,
       entregas,
       contrato,
@@ -1804,6 +1884,31 @@ function InfluenciadorDialog({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+                    Telefone
+                  </label>
+                  <input
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+                    E-mail
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="email@exemplo.com"
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                  />
+                </div>
               </div>
             </div>
           )}

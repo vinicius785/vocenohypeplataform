@@ -40,6 +40,7 @@ import {
   fmtDate,
   normalizeInflus,
   totalAceito,
+  canPublishEntrega,
   type ApprovalBadge,
   type Influ,
   type InfluStatus,
@@ -223,14 +224,6 @@ export function CampanhasSection() {
  * Detail page
  * ============================================================ */
 
-const APPROVED_SET = new Set<InfluStatus>([
-  "Aprovado",
-  "Em gravação",
-  "Aprovação de conteúdo",
-  "Conteúdo aprovado",
-  "Postado",
-  "Pago",
-]);
 const IN_APPROVAL_SET = new Set<InfluStatus>(["Enviado para aprovação", "Aprovação de conteúdo"]);
 
 /** Resumo com o valor/config de cada tipo de pagamento, pro badge não mostrar só o nome do tipo. */
@@ -290,7 +283,9 @@ function CampanhaDetail({ row, onBack }: { row: Row; onBack: () => void }) {
 
   // Approval metrics
   const enviados = influs.filter((i) => i.status !== "Lista").length;
-  const aprovados = influs.filter((i) => APPROVED_SET.has(i.status)).length;
+  // Qualquer status a partir de "Aprovado" (Aguardando roteiro, Em gravação,
+  // ..., Pago) já passou pela aprovação — continua contando como aprovado.
+  const aprovados = influs.filter((i) => canPublishEntrega(i.status)).length;
   const emAprovacao = influs.filter((i) => IN_APPROVAL_SET.has(i.status)).length;
 
   // Budget
