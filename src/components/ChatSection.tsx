@@ -837,7 +837,9 @@ function MentionTextarea({
   placeholder?: string;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [triggerAt, setTriggerAt] = useState(-1);
   const [highlight, setHighlight] = useState(0);
   const [tab, setTab] = useState<"user" | "task">("user");
@@ -850,14 +852,25 @@ function MentionTextarea({
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
+  // A busca digitada na caixinha do menu tem prioridade sobre o texto após
+  // o "@" na mensagem — deixa procurar uma tarefa/pessoa sem precisar
+  // digitar o nome dela dentro da própria mensagem.
+  const effectiveQuery = search || query || "";
+
   const filtered = useMemo(() => {
     if (query === null) return [];
-    const q = query.toLowerCase();
+    const q = effectiveQuery.toLowerCase();
     return options
       .filter((o) => o.kind === tab)
       .filter((o) => o.label.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [query, options, tab]);
+  }, [query, effectiveQuery, options, tab]);
+
+  const switchTab = (t: "user" | "task") => {
+    setTab(t);
+    setSearch("");
+    setHighlight(0);
+  };
 
   const updateQuery = (text: string, caret: number) => {
     const before = text.slice(0, caret);
@@ -873,7 +886,10 @@ function MentionTextarea({
     setHighlight(0);
     // Só define a aba padrão quando o menu está abrindo (não a cada tecla
     // digitada) — abre em "Pessoas" quando disponível, senão "Tarefas".
-    if (justOpened) setTab(hasUsers ? "user" : "task");
+    if (justOpened) {
+      setTab(hasUsers ? "user" : "task");
+      setSearch("");
+    }
   };
 
   const pick = (opt: MentionOption) => {
@@ -882,12 +898,38 @@ function MentionTextarea({
     const next = value.slice(0, triggerAt) + "@" + opt.label + " " + value.slice(caret);
     onChange(next);
     setQuery(null);
+    setSearch("");
     setTriggerAt(-1);
     requestAnimationFrame(() => {
       taRef.current?.focus();
       const pos = triggerAt + opt.label.length + 2;
       taRef.current?.setSelectionRange(pos, pos);
     });
+  };
+
+  const pickerKeyDown = (e: React.KeyboardEvent) => {
+    if (query === null || filtered.length === 0) return false;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % filtered.length);
+      return true;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => (h - 1 + filtered.length) % filtered.length);
+      return true;
+    }
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      pick(filtered[highlight]);
+      return true;
+    }
+    if (e.key === "Escape") {
+      setQuery(null);
+      setSearch("");
+      return true;
+    }
+    return false;
   };
 
   return (
@@ -900,27 +942,7 @@ function MentionTextarea({
           updateQuery(e.target.value, e.target.selectionStart);
         }}
         onKeyDown={(e) => {
-          if (query !== null && filtered.length > 0) {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setHighlight((h) => (h + 1) % filtered.length);
-              return;
-            }
-            if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setHighlight((h) => (h - 1 + filtered.length) % filtered.length);
-              return;
-            }
-            if (e.key === "Enter" || e.key === "Tab") {
-              e.preventDefault();
-              pick(filtered[highlight]);
-              return;
-            }
-            if (e.key === "Escape") {
-              setQuery(null);
-              return;
-            }
-          }
+          if (pickerKeyDown(e)) return;
           if (e.key === "Enter" && !e.shiftKey && onEnterSubmit) {
             e.preventDefault();
             onEnterSubmit();
@@ -937,10 +959,7 @@ function MentionTextarea({
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setTab("user");
-                  setHighlight(0);
-                }}
+                onClick={() => switchTab("user")}
                 className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
                   tab === "user"
                     ? "border-b-2 border-foreground text-foreground"
@@ -952,10 +971,7 @@ function MentionTextarea({
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setTab("task");
-                  setHighlight(0);
-                }}
+                onClick={() => switchTab("task")}
                 className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
                   tab === "task"
                     ? "border-b-2 border-foreground text-foreground"
@@ -966,6 +982,22 @@ function MentionTextarea({
               </button>
             </div>
           )}
+          <div className="border-b border-border p-1.5">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setHighlight(0);
+              }}
+              onKeyDown={(e) => {
+                pickerKeyDown(e);
+              }}
+              placeholder={tab === "task" ? "Buscar tarefa..." : "Buscar pessoa..."}
+              className="w-full rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
           <ul className="max-h-56 overflow-auto">
             {filtered.length === 0 ? (
               <li className="px-2 py-3 text-center text-[11px] text-muted-foreground">

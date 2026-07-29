@@ -121,7 +121,15 @@ export function fmtMonth(k: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // `toISOString().slice(0, 10)` pega o dia em UTC — no Brasil (UTC-3), depois
+  // das 21h já vira o dia seguinte em UTC, fazendo entregas feitas "hoje" à
+  // noite parecerem atrasadas por um dia. Monta a data a partir dos
+  // componentes locais em vez de depender do fuso UTC.
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export { formatIsoDate } from "./utils";

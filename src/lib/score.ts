@@ -51,10 +51,21 @@ export type MemberScore = {
   breakdown: (ScoreRule & { count: number; total: number })[];
 };
 
+function toLocalDateISO(iso: string): string {
+  // Mesmo cuidado de `todayISO()`: pegar a data em UTC (slice direto do ISO)
+  // faz uma conclusão feita à noite no Brasil (UTC-3) contar como o dia
+  // seguinte, marcando entregas no prazo como atrasadas por engano.
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function taskCompletionDate(t: Task): string | null {
   const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
   if (entries.length === 0) return null;
-  return entries[entries.length - 1].createdAt.slice(0, 10);
+  return toLocalDateISO(entries[entries.length - 1].createdAt);
 }
 
 function taskHours(t: Task): number {
