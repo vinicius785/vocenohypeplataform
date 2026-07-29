@@ -22,6 +22,7 @@ import {
   saveMeetings,
   onMeetingsChange,
   meetingDisplayStatus,
+  meetingNeedsMyAction,
   meetingEndTime,
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
@@ -181,7 +182,7 @@ export function ReunioesSection() {
   const confirmadas = myMeetings.filter(
     (m) => m.data >= today && meetingDisplayStatus(m) === "Confirmada",
   ).length;
-  const pendentes = myMeetings.filter((m) => meetingDisplayStatus(m) === "Pendente").length;
+  const pendentes = myMeetings.filter((m) => meetingNeedsMyAction(m, me.id)).length;
 
   const selectedMeetings = useMemo(
     () =>
@@ -333,7 +334,7 @@ export function ReunioesSection() {
       )}
 
       {tab === "solicitacoes" && (
-        <SolicitacoesTab meetings={myMeetings} onOpen={(m) => setSummary(m)} />
+        <SolicitacoesTab meetings={myMeetings} me={me} onOpen={(m) => setSummary(m)} />
       )}
 
       {tab === "disponibilidade" && <DisponibilidadeTab avail={avail} onChange={persistAvail} />}
@@ -348,13 +349,14 @@ export function ReunioesSection() {
           persist(meetings.filter((m) => m.id !== id));
           setDialog(null);
         }}
-        onSave={(m) => {
-          if (dialog?.mode === "edit") {
+        onSave={(saved) => {
+          if (dialog?.mode === "edit" && saved.length === 1) {
+            const m = saved[0];
             persist(meetings.map((x) => (x.id === m.id ? m : x)));
           } else {
-            persist([...meetings, m]);
+            persist([...meetings, ...saved]);
           }
-          setSelected(m.data);
+          setSelected(saved[0].data);
           setDialog(null);
         }}
       />
@@ -510,18 +512,22 @@ function MonthGrid({
 
 function SolicitacoesTab({
   meetings,
+  me,
   onOpen,
 }: {
   meetings: Meeting[];
+  me: { id: string; name: string };
   onOpen: (m: Meeting) => void;
 }) {
   const pend = meetings
-    .filter((m) => meetingDisplayStatus(m) === "Pendente")
+    .filter((m) => meetingNeedsMyAction(m, me.id))
     .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
   return (
     <div className="mt-6">
       <h2 className="text-sm font-semibold">Solicitações pendentes</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">Reuniões aguardando confirmação.</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Reuniões que você ainda não confirmou nem recusou.
+      </p>
       {pend.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Nenhuma solicitação pendente.
@@ -771,7 +777,7 @@ function MeetingDialog({
   defaultDate: string;
   me: { id: string; name: string };
   onClose: () => void;
-  onSave: (m: Meeting) => void;
+  onSave: (meetings: Meeting[]) => void;
   onDelete: (id: string) => void;
 }) {
   const [titulo, setTitulo] = useState("");
@@ -785,6 +791,8 @@ function MeetingDialog({
   const [status, setStatus] = useState<MeetingStatus>("Confirmada");
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "monthly">("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -801,6 +809,8 @@ function MeetingDialog({
     setNotas(initial?.notas ?? "");
     setStatus(initial?.status ?? "Confirmada");
     setPickerOpen(false);
+    setRepeat("none");
+    setRepeatUntil("");
   }, [open, initial, defaultDate]);
 
   const selectedMembers = team.filter((t) => participanteIds.includes(t.id));
@@ -817,13 +827,24 @@ function MeetingDialog({
     });
   };
 
+  // Próxima data da série a partir de `d` (yyyy-mm-dd), conforme a
+  // frequência escolhida — mensal usa o dia do mês da primeira ocorrência,
+  // então cai automaticamente pro último dia válido em meses mais curtos.
+  const nextRepeatDate = (d: string, freq: "daily" | "weekly" | "monthly"): string => {
+    const dt = parseISODate(d);
+    if (freq === "daily") dt.setDate(dt.getDate() + 1);
+    else if (freq === "weekly") dt.setDate(dt.getDate() + 7);
+    else dt.setMonth(dt.getMonth() + 1);
+    return toISODate(dt);
+  };
+
+  const MAX_OCCURRENCES = 52;
+
   const submit = () => {
     if (!titulo.trim() || !data) return;
     const finalStatus: MeetingStatus = !initial && participanteIds.length > 0 ? "Pendente" : status;
-    onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+    const base: Omit<Meeting, "id" | "data"> = {
       titulo: titulo.trim(),
-      data,
       hora,
       duracao,
       com: com.trim(),
@@ -836,7 +857,21 @@ function MeetingDialog({
       confirmedBy: initial?.confirmedBy,
       declinedBy: initial?.declinedBy,
       rescheduleProposal: initial?.rescheduleProposal,
-    });
+    };
+
+    if (initial || repeat === "none" || !repeatUntil || repeatUntil < data) {
+      onSave([{ id: initial?.id ?? crypto.randomUUID(), data, ...base }]);
+      return;
+    }
+
+    const dates: string[] = [data];
+    let cursor = data;
+    while (dates.length < MAX_OCCURRENCES) {
+      cursor = nextRepeatDate(cursor, repeat);
+      if (cursor > repeatUntil) break;
+      dates.push(cursor);
+    }
+    onSave(dates.map((d) => ({ id: crypto.randomUUID(), data: d, ...base })));
   };
 
   return (
@@ -984,6 +1019,37 @@ function MeetingDialog({
               />
             </div>
           </div>
+
+          {!initial && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Repetir</label>
+                <select
+                  value={repeat}
+                  onChange={(e) => setRepeat(e.target.value as typeof repeat)}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="none">Não repete</option>
+                  <option value="daily">Diariamente</option>
+                  <option value="weekly">Semanalmente</option>
+                  <option value="monthly">Mensalmente</option>
+                </select>
+              </div>
+              {repeat !== "none" && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Repetir até</label>
+                  <input
+                    type="date"
+                    value={repeatUntil}
+                    min={data}
+                    onChange={(e) => setRepeatUntil(e.target.value)}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-xs font-medium text-muted-foreground">Notas</label>
             <textarea
@@ -1037,7 +1103,7 @@ function MeetingDialog({
             <button
               type="button"
               onClick={submit}
-              disabled={!titulo.trim() || !data}
+              disabled={!titulo.trim() || !data || (repeat !== "none" && !repeatUntil)}
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
               Salvar

@@ -69,7 +69,7 @@ import {
 import { useClientes } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
-import { loadMeetings, onMeetingsChange, meetingDisplayStatus } from "@/lib/reunioes-store";
+import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 
 export type SectionKey =
   | "inicio"
@@ -148,8 +148,9 @@ function useHasUnreadChat(): boolean {
   }, [tick, activeId]);
 }
 
-/** Tem alguma reunião pendente (aguardando confirmação) onde eu sou
- * criador ou convidado? Usado pra bolinha do item "Reuniões" no menu. */
+/** Tem alguma reunião onde eu ainda não confirmei nem recusei? Usado pra
+ * bolinha do item "Reuniões" no menu — some assim que EU ajo, mesmo que a
+ * reunião como um todo continue "Pendente" esperando outra pessoa. */
 function useHasPendingMeetingRequests(): boolean {
   const [meetings, setMeetings] = useState(() => loadMeetings());
   useEffect(() => {
@@ -161,7 +162,7 @@ function useHasPendingMeetingRequests(): boolean {
   return meetings.some(
     (m) =>
       (m.criadorId === me.id || m.participanteIds?.includes(me.id)) &&
-      meetingDisplayStatus(m) === "Pendente",
+      meetingNeedsMyAction(m, me.id),
   );
 }
 
@@ -1063,11 +1064,58 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
   );
 }
 
+type BellTab = "tarefas" | "mensagens" | "reunioes" | "outros";
+
+function BellItem({
+  icon,
+  iconTone,
+  title,
+  subtitle,
+  time,
+  badge,
+  onClick,
+}: {
+  icon: ReactNode;
+  iconTone: string;
+  title: ReactNode;
+  subtitle: ReactNode;
+  time?: string;
+  badge?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
+    >
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconTone}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-xs font-semibold text-foreground">{title}</span>
+          {time && <span className="shrink-0 text-[10px] text-muted-foreground">{time}</span>}
+        </div>
+        <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
+      </div>
+      {!!badge && (
+        <span className="mt-0.5 inline-flex min-w-[16px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   useEffect(() => onMeetingsChange(() => force((n) => n + 1)), []);
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<BellTab>("tarefas");
   const clientes = useClientes();
   const me = getMe();
   const active = useActiveConvo();
@@ -1265,25 +1313,39 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     );
     force((n) => n + 1);
   };
-  const markAll = () => {
-    chatItems.forEach((i) => {
-      void markRead(i.convoId);
-    });
-    mentionItems.forEach((m) => seenMentions.add(m.id));
-    localStorage.setItem("notif:seenMentions", JSON.stringify(Array.from(seenMentions)));
-    taskItems.forEach((t) => seenTasks.add(t.id));
-    localStorage.setItem("notif:seenTasks", JSON.stringify(Array.from(seenTasks)));
-    taskActivityItems.forEach((a) => seenTaskActivity.add(a.id));
-    localStorage.setItem("notif:seenTaskActivity", JSON.stringify(Array.from(seenTaskActivity)));
-    meetingItems.forEach((m) => seenMeetings.add(m.id));
-    localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
-    rescheduleItems.forEach((m) => seenReuniaoReagendamento.add(m.id));
-    localStorage.setItem(
-      "notif:seenReuniaoReagendamento",
-      JSON.stringify(Array.from(seenReuniaoReagendamento)),
-    );
+  const tarefasCount = taskItems.length + taskActivityItems.length;
+  const mensagensCount = chatItems.reduce((s, i) => s + i.count, 0) + mentionItems.length;
+  const reunioesCount = meetingItems.length + rescheduleItems.length;
+  const outrosCount = 0;
+
+  const markTab = (t: BellTab) => {
+    if (t === "tarefas") {
+      taskItems.forEach((x) => seenTasks.add(x.id));
+      localStorage.setItem("notif:seenTasks", JSON.stringify(Array.from(seenTasks)));
+      taskActivityItems.forEach((a) => seenTaskActivity.add(a.id));
+      localStorage.setItem("notif:seenTaskActivity", JSON.stringify(Array.from(seenTaskActivity)));
+    } else if (t === "mensagens") {
+      chatItems.forEach((i) => void markRead(i.convoId));
+      mentionItems.forEach((m) => seenMentions.add(m.id));
+      localStorage.setItem("notif:seenMentions", JSON.stringify(Array.from(seenMentions)));
+    } else if (t === "reunioes") {
+      meetingItems.forEach((m) => seenMeetings.add(m.id));
+      localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
+      rescheduleItems.forEach((m) => seenReuniaoReagendamento.add(m.id));
+      localStorage.setItem(
+        "notif:seenReuniaoReagendamento",
+        JSON.stringify(Array.from(seenReuniaoReagendamento)),
+      );
+    }
     force((n) => n + 1);
   };
+
+  const BELL_TABS: { key: BellTab; label: string; count: number }[] = [
+    { key: "tarefas", label: "Tarefas", count: tarefasCount },
+    { key: "mensagens", label: "Mensagens", count: mensagensCount },
+    { key: "reunioes", label: "Reuniões", count: reunioesCount },
+    { key: "outros", label: "Outros", count: outrosCount },
+  ];
 
   const fmtTime = (ts: number) => {
     const d = new Date(ts);
@@ -1294,11 +1356,24 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
       : d.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
   };
 
+  const openBell = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (next) {
+        const firstWithItems = BELL_TABS.find((t) => t.count > 0);
+        setTab(firstWithItems?.key ?? "tarefas");
+      }
+      return next;
+    });
+  };
+
+  const activeCount = BELL_TABS.find((t) => t.key === tab)?.count ?? 0;
+
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={openBell}
         className="relative rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
         aria-label="Notificações"
       >
@@ -1312,234 +1387,176 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-96 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="absolute right-0 top-full z-50 mt-2 w-[26rem] overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notificações</span>
-              {total > 0 && (
+              {activeCount > 0 && (
                 <button
-                  onClick={markAll}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => markTab(tab)}
+                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Marcar todas como lidas
+                  Marcar esta aba como lida
                 </button>
               )}
             </div>
-            <div className="max-h-[28rem] overflow-y-auto">
-              {total === 0 && (
-                <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  Sem novas notificações
+
+            <div className="flex gap-1 border-b border-border px-2 pb-2">
+              {BELL_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                    tab === t.key
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t.label}
+                  {t.count > 0 && (
+                    <span
+                      className={`inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-4 ${
+                        tab === t.key
+                          ? "bg-background/20 text-background"
+                          : "bg-destructive text-destructive-foreground"
+                      }`}
+                    >
+                      {t.count > 99 ? "99+" : t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-[26rem] overflow-y-auto p-1.5">
+              {tab === "tarefas" && (
+                <>
+                  {taskItems.length === 0 && taskActivityItems.length === 0 && (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                      Nenhuma notificação de tarefa
+                    </p>
+                  )}
+                  {taskItems.map((t) => (
+                    <BellItem
+                      key={t.id}
+                      icon={<CheckSquare className="h-4 w-4" />}
+                      iconTone="bg-sky-500/15 text-sky-600 dark:text-sky-400"
+                      title={t.title}
+                      subtitle={t.projectName}
+                      time={t.dueDate}
+                      onClick={() => {
+                        dismissTask(t.id);
+                        onSelect("projetos");
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
+                  {taskActivityItems.map((a) => (
+                    <BellItem
+                      key={a.id}
+                      icon={<CheckSquare className="h-4 w-4" />}
+                      iconTone="bg-violet-500/15 text-violet-600 dark:text-violet-400"
+                      title={a.taskTitle}
+                      subtitle={`${a.action} · ${a.projectName}`}
+                      onClick={() => {
+                        dismissTaskActivity(a.id);
+                        onSelect("projetos");
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+
+              {tab === "mensagens" && (
+                <>
+                  {mentionItems.length === 0 && chatItems.length === 0 && (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                      Nenhuma mensagem nova
+                    </p>
+                  )}
+                  {mentionItems.map((m) => (
+                    <BellItem
+                      key={m.id}
+                      icon={<AtSign className="h-4 w-4" />}
+                      iconTone="bg-primary/15 text-primary"
+                      title={`${m.authorName} · ${labelFor(m.convoId)}`}
+                      subtitle={m.text}
+                      time={fmtTime(m.createdAt)}
+                      onClick={() => {
+                        dismissMention(m.id);
+                        openConvo(m.convoId);
+                      }}
+                    />
+                  ))}
+                  {chatItems.map((i) => (
+                    <BellItem
+                      key={i.convoId}
+                      icon={<MessageSquare className="h-4 w-4" />}
+                      iconTone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                      title={labelFor(i.convoId)}
+                      subtitle={
+                        <>
+                          <span className="font-medium text-foreground/80">
+                            {i.last.authorName}:
+                          </span>{" "}
+                          {i.last.text}
+                        </>
+                      }
+                      time={fmtTime(i.last.createdAt)}
+                      badge={i.count}
+                      onClick={() => openConvo(i.convoId)}
+                    />
+                  ))}
+                </>
+              )}
+
+              {tab === "reunioes" && (
+                <>
+                  {meetingItems.length === 0 && rescheduleItems.length === 0 && (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                      Nenhuma notificação de reunião
+                    </p>
+                  )}
+                  {meetingItems.map((m) => (
+                    <BellItem
+                      key={m.id}
+                      icon={<CalendarClock className="h-4 w-4" />}
+                      iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      title={m.titulo}
+                      subtitle="Aguardando confirmação"
+                      onClick={() => {
+                        dismissMeeting(m.id);
+                        onSelect("reunioes");
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
+                  {rescheduleItems.map((m) => (
+                    <BellItem
+                      key={m.id}
+                      icon={<CalendarClock className="h-4 w-4" />}
+                      iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      title={m.titulo}
+                      subtitle={`Novo horário sugerido${
+                        m.rescheduleProposal?.proposedByName
+                          ? ` por ${m.rescheduleProposal.proposedByName}`
+                          : ""
+                      }`}
+                      onClick={() => {
+                        dismissReschedule(m.id);
+                        onSelect("reunioes");
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
+                </>
+              )}
+
+              {tab === "outros" && (
+                <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                  Nenhuma notificação por aqui ainda
                 </p>
-              )}
-
-              {mentionItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Menções
-                  </p>
-                  <ul>
-                    {mentionItems.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          onClick={() => {
-                            dismissMention(m.id);
-                            openConvo(m.convoId);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <AtSign className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-xs font-semibold text-foreground">
-                                {m.authorName} · {labelFor(m.convoId)}
-                              </span>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
-                                {fmtTime(m.createdAt)}
-                              </span>
-                            </div>
-                            <p className="truncate text-[11px] text-muted-foreground">{m.text}</p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {taskItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Tarefas atribuídas a você
-                  </p>
-                  <ul>
-                    {taskItems.map((t) => (
-                      <li key={t.id}>
-                        <button
-                          onClick={() => {
-                            dismissTask(t.id);
-                            onSelect("projetos");
-                            setOpen(false);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-xs font-semibold text-foreground">
-                                {t.title}
-                              </span>
-                              {t.dueDate && (
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
-                                  {t.dueDate}
-                                </span>
-                              )}
-                            </div>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              {t.projectName}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {taskActivityItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Mudanças em suas tarefas
-                  </p>
-                  <ul>
-                    {taskActivityItems.map((a) => (
-                      <li key={a.id}>
-                        <button
-                          onClick={() => {
-                            dismissTaskActivity(a.id);
-                            onSelect("projetos");
-                            setOpen(false);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <span className="truncate text-xs font-semibold text-foreground">
-                              {a.taskTitle}
-                            </span>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              {a.action} · {a.projectName}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {meetingItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Solicitações de reunião
-                  </p>
-                  <ul>
-                    {meetingItems.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          onClick={() => {
-                            dismissMeeting(m.id);
-                            onSelect("reunioes");
-                            setOpen(false);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <span className="truncate text-xs font-semibold text-foreground">
-                              {m.titulo}
-                            </span>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              Aguardando confirmação
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {rescheduleItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Reagendamentos sugeridos
-                  </p>
-                  <ul>
-                    {rescheduleItems.map((m) => (
-                      <li key={m.id}>
-                        <button
-                          onClick={() => {
-                            dismissReschedule(m.id);
-                            onSelect("reunioes");
-                            setOpen(false);
-                          }}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <span className="truncate text-xs font-semibold text-foreground">
-                              {m.titulo}
-                            </span>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              Novo horário sugerido
-                              {m.rescheduleProposal?.proposedByName
-                                ? ` por ${m.rescheduleProposal.proposedByName}`
-                                : ""}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {chatItems.length > 0 && (
-                <div>
-                  <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Mensagens
-                  </p>
-                  <ul>
-                    {chatItems.map((i) => (
-                      <li key={i.convoId}>
-                        <button
-                          onClick={() => openConvo(i.convoId)}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
-                        >
-                          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-xs font-semibold text-foreground">
-                                {labelFor(i.convoId)}
-                              </span>
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
-                                {fmtTime(i.last.createdAt)}
-                              </span>
-                            </div>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              <span className="font-medium text-foreground/80">
-                                {i.last.authorName}:
-                              </span>{" "}
-                              {i.last.text}
-                            </p>
-                          </div>
-                          <span className="ml-1 inline-flex min-w-[16px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
-                            {i.count}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               )}
             </div>
           </div>

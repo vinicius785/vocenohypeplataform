@@ -53,6 +53,18 @@ export function meetingDisplayStatus(m: Meeting): MeetingStatus {
   return "Pendente";
 }
 
+/**
+ * A notificação/badge de "solicitação pendente" é por pessoa, não pelo
+ * status agregado da reunião: uma vez que a pessoa confirma ou recusa, a
+ * pendência dela sumiu — mesmo que a reunião como um todo ainda esteja
+ * "Pendente" esperando outros participantes agirem.
+ */
+export function meetingNeedsMyAction(m: Meeting, meId: string): boolean {
+  if (m.status === "Cancelada") return false;
+  if (m.confirmedBy?.includes(meId) || m.declinedBy?.includes(meId)) return false;
+  return true;
+}
+
 const store = createTableArrayStore<Meeting>("reunioes");
 
 export function initReunioesSync(): Promise<void> {
