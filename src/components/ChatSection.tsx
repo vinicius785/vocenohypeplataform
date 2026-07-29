@@ -409,7 +409,13 @@ export function ChatSection() {
   );
 }
 
-type MentionOption = { kind: "task" | "user"; id: string; label: string; hint?: string };
+type MentionOption = {
+  kind: "task" | "user";
+  id: string;
+  label: string;
+  hint?: string;
+  photo?: string;
+};
 
 function renderText(text: string, mentions: ChatMention[] | undefined) {
   const parts: (string | ChatMention)[] = !mentions || mentions.length === 0 ? [text] : [text];
@@ -753,7 +759,7 @@ function useMentions(
       hint: x.project,
     }));
     const u: MentionOption[] = allowUserMentions
-      ? members.map((m) => ({ kind: "user", id: m.id, label: m.name }))
+      ? members.map((m) => ({ kind: "user", id: m.id, label: m.name, photo: m.photo }))
       : [];
     return [...t, ...u];
   }, [members, tasks, allowUserMentions]);
@@ -834,6 +840,11 @@ function MentionTextarea({
   const [query, setQuery] = useState<string | null>(null);
   const [triggerAt, setTriggerAt] = useState(-1);
   const [highlight, setHighlight] = useState(0);
+  const [tab, setTab] = useState<"user" | "task">("user");
+
+  const hasUsers = useMemo(() => options.some((o) => o.kind === "user"), [options]);
+  const hasTasks = useMemo(() => options.some((o) => o.kind === "task"), [options]);
+  const showTabs = hasUsers && hasTasks;
 
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
@@ -842,8 +853,11 @@ function MentionTextarea({
   const filtered = useMemo(() => {
     if (query === null) return [];
     const q = query.toLowerCase();
-    return options.filter((o) => o.label.toLowerCase().includes(q)).slice(0, 8);
-  }, [query, options]);
+    return options
+      .filter((o) => o.kind === tab)
+      .filter((o) => o.label.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [query, options, tab]);
 
   const updateQuery = (text: string, caret: number) => {
     const before = text.slice(0, caret);
@@ -853,9 +867,13 @@ function MentionTextarea({
     if (prev !== " " && prev !== "\n") return setQuery(null);
     const q = before.slice(at + 1);
     if (/\s/.test(q)) return setQuery(null);
+    const justOpened = query === null;
     setTriggerAt(at);
     setQuery(q);
     setHighlight(0);
+    // Só define a aba padrão quando o menu está abrindo (não a cada tecla
+    // digitada) — abre em "Pessoas" quando disponível, senão "Tarefas".
+    if (justOpened) setTab(hasUsers ? "user" : "task");
   };
 
   const pick = (opt: MentionOption) => {
@@ -912,35 +930,87 @@ function MentionTextarea({
         placeholder={placeholder}
         className="max-h-40 min-h-[28px] w-full resize-none rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
       />
-      {query !== null && filtered.length > 0 && (
-        <ul className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-64 overflow-auto rounded-md border border-border bg-background shadow-lg">
-          {filtered.map((o, i) => (
-            <li key={o.kind + ":" + o.id}>
+      {query !== null && (showTabs || filtered.length > 0) && (
+        <div className="absolute bottom-full left-0 z-20 mb-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-lg">
+          {showTabs && (
+            <div className="flex border-b border-border">
               <button
                 type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pick(o);
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setTab("user");
+                  setHighlight(0);
                 }}
-                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
-                  i === highlight ? "bg-muted" : "hover:bg-muted/60"
+                className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
+                  tab === "user"
+                    ? "border-b-2 border-foreground text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span
-                  className={`inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold ${
-                    o.kind === "task"
-                      ? "bg-amber-500/20 text-amber-700 dark:text-amber-300"
-                      : "bg-sky-500/20 text-sky-700 dark:text-sky-300"
-                  }`}
-                >
-                  {o.kind === "task" ? "T" : "@"}
-                </span>
-                <span className="flex-1 truncate">{o.label}</span>
-                {o.hint && <span className="text-[10px] text-muted-foreground">{o.hint}</span>}
+                Pessoas
               </button>
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setTab("task");
+                  setHighlight(0);
+                }}
+                className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
+                  tab === "task"
+                    ? "border-b-2 border-foreground text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Tarefas
+              </button>
+            </div>
+          )}
+          <ul className="max-h-56 overflow-auto">
+            {filtered.length === 0 ? (
+              <li className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                Nada encontrado
+              </li>
+            ) : (
+              filtered.map((o, i) => (
+                <li key={o.kind + ":" + o.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      pick(o);
+                    }}
+                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
+                      i === highlight ? "bg-muted" : "hover:bg-muted/60"
+                    }`}
+                  >
+                    {o.kind === "user" ? (
+                      o.photo ? (
+                        <img
+                          src={o.photo}
+                          alt=""
+                          className="h-5 w-5 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500/20 text-[9px] font-semibold text-sky-700 dark:text-sky-300">
+                          {o.label.trim()[0]?.toUpperCase() ?? "?"}
+                        </span>
+                      )
+                    ) : (
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-amber-500/20 text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                        T
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    {o.hint && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{o.hint}</span>
+                    )}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
       )}
     </div>
   );
