@@ -91,21 +91,7 @@ export const Route = createFileRoute("/api/public/leads")({
         }
         const d = parsed.data;
 
-        const budgetStr =
-          typeof d.monthly_budget === "number"
-            ? String(d.monthly_budget)
-            : (d.monthly_budget ?? "");
         const budgetNum = parseMoney(d.monthly_budget);
-
-        // Bloco em PT-BR para aparecer bonito nas notas do lead
-        const notasLinhas = [
-          d.role && `Cargo: ${d.role}`,
-          d.industry && `Setor: ${d.industry}`,
-          budgetStr && `Orçamento mensal: ${budgetStr}`,
-          d.urgency && `Urgência: ${d.urgency}`,
-          d.agency_experience && `Experiência com agência: ${d.agency_experience}`,
-        ].filter(Boolean);
-        const notes = [d.notes, notasLinhas.join("\n")].filter(Boolean).join("\n\n") || null;
 
         const { data: inserted, error } = await supabaseAdmin
           .from("leads")
@@ -120,14 +106,14 @@ export const Route = createFileRoute("/api/public/leads")({
             source: d.source || "site",
             source_form: d.source_form || "site",
             responsible: null,
-            notes,
+            notes: d.notes || null,
             tags: [] as never,
             extra: {
               role: d.role || null,
-              industry: d.industry || null,
-              monthly_budget: budgetStr || null,
+              vertical: d.industry || null,
+              budget: budgetNum || null,
               urgency: d.urgency || null,
-              agency_experience: d.agency_experience || null,
+              experience: d.agency_experience || null,
             } as never,
           } as never)
           .select("id")

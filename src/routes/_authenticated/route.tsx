@@ -117,9 +117,23 @@ function AuthenticatedLayout() {
     };
     hydrate();
     const interval = window.setInterval(hydrate, 30_000);
+
+    // Sem isso, um membro do time só via alterações de outra pessoa (nome,
+    // foto, permissões, etc.) até 30s depois, ou dando refresh na página.
+    let debounce: number | null = null;
+    const channel = supabase
+      .channel(`rt-profiles-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        if (debounce) window.clearTimeout(debounce);
+        debounce = window.setTimeout(hydrate, 500);
+      })
+      .subscribe();
+
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      if (debounce) window.clearTimeout(debounce);
+      void supabase.removeChannel(channel);
       void shutdownCallController();
     };
   }, [fetchDirectory]);

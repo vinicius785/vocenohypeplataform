@@ -15,6 +15,7 @@ import {
   upsertProjeto,
 } from "@/lib/projetos";
 import { clientesStore } from "@/lib/clientes-store";
+import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
   Plus,
@@ -107,6 +108,19 @@ export function ComercialSection() {
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["leads"] });
+
+  // Além do polling de 15s, escuta mudanças em tempo real na tabela `leads`
+  // (ex.: um lead novo chegando pelo webhook do Make) para atualizar o board
+  // na hora, sem precisar esperar o próximo tick nem dar refresh na página.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`rt-leads-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, () => invalidate())
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   const upsertMutation = useMutation({
     mutationFn: (lead: Lead) => {
@@ -358,6 +372,38 @@ function LeadCard({
           {lead.company && (
             <div className="truncate text-xs text-muted-foreground">{lead.company}</div>
           )}
+          {(lead.role || lead.vertical || lead.budget || lead.urgency) && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {lead.role && (
+                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {lead.role}
+                </span>
+              )}
+              {lead.vertical && (
+                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {lead.vertical}
+                </span>
+              )}
+              {!!lead.budget && (
+                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {formatBRL(lead.budget)}
+                </span>
+              )}
+              {lead.urgency && (
+                <span className="truncate rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400">
+                  {lead.urgency}
+                </span>
+              )}
+            </div>
+          )}
+          {lead.experience && (
+            <div
+              className="mt-1 truncate text-[11px] text-muted-foreground"
+              title={lead.experience}
+            >
+              {lead.experience}
+            </div>
+          )}
           {isStale(lead) && (
             <div className="mt-1 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
               <Clock className="h-3 w-3" /> Parado há {daysSince(lead.updatedAt)}d
@@ -417,6 +463,10 @@ function LeadForm({
   const [email, setEmail] = useState(initial?.email ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [role, setRole] = useState(initial?.role ?? "");
+  const [vertical, setVertical] = useState(initial?.vertical ?? "");
+  const [budget, setBudget] = useState<string>(initial?.budget ? String(initial.budget) : "");
+  const [urgency, setUrgency] = useState<string>(initial?.urgency ?? "");
+  const [experience, setExperience] = useState(initial?.experience ?? "");
   const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
   const [stage, setStage] = useState<StageKey>(initial?.stage ?? stages[0]?.key ?? "lead");
   const [source, setSource] = useState(initial?.source ?? "");
@@ -444,6 +494,10 @@ function LeadForm({
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       role: role.trim() || undefined,
+      vertical: vertical.trim() || undefined,
+      budget: budget.trim() ? Number(budget.replace(/[^\d.,]/g, "").replace(",", ".")) : undefined,
+      urgency: (urgency.trim() || undefined) as Lead["urgency"],
+      experience: experience.trim() || undefined,
       value: parsedValue,
       stage,
       tags: initial?.tags ?? [],
@@ -603,6 +657,49 @@ function LeadForm({
                   onChange={(e) => setCompany(e.target.value)}
                   className={inputCls}
                   maxLength={120}
+                />
+              </label>
+            </Section>
+
+            <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className={labelCls}>
+                  <span>Setor</span>
+                  <input
+                    value={vertical}
+                    onChange={(e) => setVertical(e.target.value)}
+                    className={inputCls}
+                    maxLength={120}
+                  />
+                </label>
+                <label className={labelCls}>
+                  <span>Orçamento mensal</span>
+                  <input
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value)}
+                    className={inputCls}
+                    placeholder="R$"
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className={labelCls}>
+                  <span>Urgência</span>
+                  <input
+                    value={urgency}
+                    onChange={(e) => setUrgency(e.target.value)}
+                    className={inputCls}
+                    maxLength={60}
+                  />
+                </label>
+              </div>
+              <label className={labelCls}>
+                <span>Experiência com agência</span>
+                <textarea
+                  value={experience}
+                  onChange={(e) => setExperience(e.target.value)}
+                  className={`${inputCls} h-16 resize-none py-2`}
+                  maxLength={500}
                 />
               </label>
             </Section>
