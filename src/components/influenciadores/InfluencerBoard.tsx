@@ -18,11 +18,13 @@ import {
   Landmark,
   Linkedin,
   LayoutList,
+  MessageSquare,
   Package,
   Paperclip,
   Pencil,
   Plus,
   Search,
+  Send,
   Share2,
   Trash2,
   Twitter,
@@ -56,6 +58,62 @@ import type { PagGrupo } from "@/components/VincularCampanhaDialog";
  * was chosen when the project was created (see INFLUENCIADORES
  * FEATURES config below).
  * ============================================================ */
+
+export type InfluComment = {
+  id: string;
+  author: string;
+  initials: string;
+  color: string;
+  text: string;
+  createdAt: string;
+};
+export type InfluActivity = {
+  id: string;
+  author: string;
+  initials: string;
+  color: string;
+  action: string;
+  createdAt: string;
+};
+
+const AUTHOR_COLORS = [
+  "bg-rose-500 text-white",
+  "bg-sky-500 text-white",
+  "bg-emerald-500 text-white",
+  "bg-amber-500 text-white",
+  "bg-violet-500 text-white",
+  "bg-teal-500 text-white",
+  "bg-fuchsia-500 text-white",
+  "bg-orange-500 text-white",
+];
+function initialsOf(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+function colorFor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AUTHOR_COLORS[h % AUTHOR_COLORS.length];
+}
+function getCurrentAuthor() {
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("config:perfil");
+      if (raw) {
+        const p = JSON.parse(raw) as { nome?: string; foto?: string };
+        const name = (p.nome ?? "").trim();
+        if (name) return { name, initials: initialsOf(name) || "?", color: colorFor(name) };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return { name: "Você", initials: "VC", color: "bg-foreground text-background" };
+}
 
 export type Rede = { id: string; plataforma: string; handle: string };
 export type PostMetrics = {
@@ -321,6 +379,8 @@ export type Influ = {
   status: InfluStatus;
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
   bank?: BankInfo;
+  comments?: InfluComment[];
+  activity?: InfluActivity[];
 };
 
 /**
@@ -589,10 +649,61 @@ export function InfluencerBoard({
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
 
+  const pushActivity = (i: Influ, action: string): Influ => {
+    const me = getCurrentAuthor();
+    return {
+      ...i,
+      activity: [
+        ...(i.activity ?? []),
+        {
+          id: crypto.randomUUID(),
+          author: me.name,
+          initials: me.initials,
+          color: me.color,
+          action,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+  };
+
   const changeStatus = (influId: string, status: InfluStatus) =>
     onChange(
-      influs.map((x) => (x.id === influId ? { ...x, status, statusUpdatedAt: todayISO() } : x)),
+      influs.map((x) =>
+        x.id === influId
+          ? pushActivity(
+              { ...x, status, statusUpdatedAt: todayISO() },
+              `mudou status para ${status}`,
+            )
+          : x,
+      ),
     );
+
+  const addComment = (influId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const me = getCurrentAuthor();
+    const next = influs.map((x) =>
+      x.id === influId
+        ? {
+            ...x,
+            comments: [
+              ...(x.comments ?? []),
+              {
+                id: crypto.randomUUID(),
+                author: me.name,
+                initials: me.initials,
+                color: me.color,
+                text: trimmed,
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          }
+        : x,
+    );
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
 
   const save = (i: Influ) => {
     if (influDialog?.mode === "edit") {
@@ -800,6 +911,7 @@ export function InfluencerBoard({
             setViewing(null);
           }}
           onSetAprovacao={(entregaId, aprovacao) => setAprovacao(viewing.id, entregaId, aprovacao)}
+          onComment={(text) => addComment(viewing.id, text)}
         />
       )}
 
@@ -1071,6 +1183,7 @@ function InfluencerProfileDialog({
   onEdit,
   onRemove,
   onSetAprovacao,
+  onComment,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -1078,7 +1191,9 @@ function InfluencerProfileDialog({
   onEdit: () => void;
   onRemove: () => void;
   onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
+  onComment: (text: string) => void;
 }) {
+  const [commentText, setCommentText] = useState("");
   const bank = influ.bank ?? {};
   const hasBank = Object.values(bank).some((v) => v && String(v).trim());
 
@@ -1365,6 +1480,84 @@ function InfluencerProfileDialog({
                 Nenhuma informação adicional configurada para este influenciador.
               </p>
             )}
+
+          <ProfileSection icon={<MessageSquare className="h-3.5 w-3.5" />} title="Atividade">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && commentText.trim()) {
+                      onComment(commentText);
+                      setCommentText("");
+                    }
+                  }}
+                  placeholder="Adicionar comentário..."
+                  className="h-8 flex-1 rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!commentText.trim()) return;
+                    onComment(commentText);
+                    setCommentText("");
+                  }}
+                  disabled={!commentText.trim()}
+                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-foreground px-2.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-40"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {influ.comments?.length || influ.activity?.length ? (
+                <ul className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border p-2.5">
+                  {[
+                    ...(influ.comments ?? []).map((c) => ({ ...c, _type: "comment" as const })),
+                    ...(influ.activity ?? []).map((a) => ({
+                      ...a,
+                      _type: "activity" as const,
+                      text: a.action,
+                    })),
+                  ]
+                    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+                    .map((item) => (
+                      <li key={item.id} className="flex items-start gap-2 text-xs">
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${item.color}`}
+                        >
+                          {item.initials}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          {item._type === "comment" ? (
+                            <p className="whitespace-pre-wrap break-words text-foreground">
+                              <span className="font-medium">{item.author}</span> {item.text}
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground">
+                              <span className="font-medium text-foreground">{item.author}</span>{" "}
+                              {item.text}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            {new Date(item.createdAt).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Nenhuma atividade ou comentário ainda.
+                </p>
+              )}
+            </div>
+          </ProfileSection>
         </div>
 
         <DialogFooter className="flex-row items-center justify-between border-t border-border bg-muted/30 px-6 py-3 sm:justify-between">
