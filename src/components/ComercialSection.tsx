@@ -23,7 +23,6 @@ import {
   X,
   Trash2,
   Pencil,
-  GripVertical,
   Building2,
   User,
   Mail,
@@ -348,6 +347,8 @@ function LeadCard({
   onDelete: () => void;
   onDragStart: () => void;
 }) {
+  const meta = [lead.role, lead.vertical].filter(Boolean).join(" · ");
+
   return (
     <div
       draggable
@@ -361,84 +362,73 @@ function LeadCard({
           onEdit();
         }
       }}
-      className={`group cursor-pointer rounded-md border bg-background p-2.5 shadow-sm hover:border-foreground/30 active:cursor-grabbing ${
+      className={`group cursor-pointer rounded-lg border bg-background p-3 shadow-sm transition-colors hover:border-foreground/30 active:cursor-grabbing ${
         isStale(lead) ? "border-amber-500/50" : "border-border"
       }`}
     >
-      <div className="flex items-start gap-1.5">
-        <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      {/* Header: nome + ações */}
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{lead.name}</div>
+          <div className="truncate text-sm font-medium text-foreground">{lead.name}</div>
           {lead.company && (
             <div className="truncate text-xs text-muted-foreground">{lead.company}</div>
           )}
-          {(lead.role || lead.vertical || lead.budget || lead.urgency) && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {lead.role && (
-                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {lead.role}
-                </span>
-              )}
-              {lead.vertical && (
-                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {lead.vertical}
-                </span>
-              )}
-              {!!lead.budget && (
-                <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {formatBRL(lead.budget)}
-                </span>
-              )}
-              {lead.urgency && (
-                <span className="truncate rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400">
-                  {lead.urgency}
-                </span>
-              )}
-            </div>
-          )}
-          {lead.experience && (
-            <div
-              className="mt-1 truncate text-[11px] text-muted-foreground"
-              title={lead.experience}
-            >
-              {lead.experience}
-            </div>
-          )}
-          {isStale(lead) && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-              <Clock className="h-3 w-3" /> Parado há {daysSince(lead.updatedAt)}d
-            </div>
-          )}
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold">{formatBRL(lead.value || 0)}</span>
-            {lead.responsible && (
-              <span className="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {lead.responsible}
-              </span>
-            )}
-          </div>
         </div>
-        <div className="flex flex-col gap-1 opacity-0 transition group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
           <button
             onClick={onEdit}
-            className="rounded p-1 hover:bg-muted"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             title="Editar"
             type="button"
           >
-            <Pencil className="h-3 w-3" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
-            className="rounded p-1 text-rose-500 hover:bg-muted"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-rose-500"
             title="Excluir"
             type="button"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
+      </div>
+
+      {/* Cargo/setor — uma linha só, sem repetir o valor (já aparece embaixo) */}
+      {meta && (
+        <div className="mt-1.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+          <Briefcase className="h-3 w-3 shrink-0" />
+          <span className="truncate">{meta}</span>
+        </div>
+      )}
+
+      {/* Avisos: urgência e parado há X dias */}
+      {(lead.urgency || isStale(lead)) && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {lead.urgency && (
+            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+              Urgência: {lead.urgency}
+            </span>
+          )}
+          {isStale(lead) && (
+            <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+              <Clock className="h-3 w-3" /> Parado há {daysSince(lead.updatedAt)}d
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Rodapé: valor + responsável */}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+        <span className="text-sm font-semibold text-foreground">{formatBRL(lead.value || 0)}</span>
+        {lead.responsible && (
+          <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {lead.responsible}
+          </span>
+        )}
       </div>
     </div>
   );
