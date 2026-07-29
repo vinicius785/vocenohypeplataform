@@ -37,6 +37,7 @@ import { SidebarProfile } from "./ConfiguracoesSection";
 import { CreateChannelModal } from "./CreateChannelModal";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
+import { VersionWatcher } from "./VersionWatcher";
 import {
   getMe,
   loadMembers,
@@ -153,6 +154,7 @@ export function AppShell({
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
+      <VersionWatcher />
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"

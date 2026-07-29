@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-const SHOWN_KEY = "bomdia:lastDate";
 const MEMBERS_KEY = "time:membros";
 const PERFIL_KEY = "config:perfil";
 
@@ -11,28 +10,83 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function todaySixAM(): number {
+  const d = new Date();
+  d.setHours(6, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * "Já começou o dia hoje?" precisa ser um estado por usuário no banco, não
+ * por navegador (localStorage) — senão a pessoa vê o convite de novo em
+ * cada dispositivo que abrir. E o check roda num intervalo (não só uma vez
+ * no mount) pra aparecer sozinho se a aba ficar aberta cruzando as 6h, sem
+ * precisar de refresh.
+ */
 export function BomDiaDialog() {
   const [open, setOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [lastStartedAt, setLastStartedAt] = useState<string | null | undefined>(undefined);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    try {
-      const now = new Date();
-      if (now.getHours() < 6) return;
-      const today = todayStr();
-      if (localStorage.getItem(SHOWN_KEY) === today) return;
-      setOpen(true);
-    } catch {
-      /* ignore */
-    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id;
+      if (!uid || cancelled) return;
+      setUserId(uid);
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("last_day_started_at")
+        .eq("id", uid)
+        .maybeSingle();
+      if (cancelled) return;
+      setLastStartedAt(prof?.last_day_started_at ?? null);
+    })();
+    const iv = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+    };
   }, []);
+
+  // Outro dispositivo pode marcar o dia como começado enquanto esta aba
+  // segue aberta — a realtime fecha o convite aqui na hora, sem refresh.
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`rt-bomdia-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+        (payload) => {
+          const row = payload.new as { last_day_started_at?: string | null };
+          setLastStartedAt(row.last_day_started_at ?? null);
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (lastStartedAt === undefined) return; // ainda carregando
+    const sixAM = todaySixAM();
+    const alreadyStartedToday = !!lastStartedAt && new Date(lastStartedAt).getTime() >= sixAM;
+    setOpen(now >= sixAM && !alreadyStartedToday);
+  }, [now, lastStartedAt]);
 
   const start = async () => {
     const today = todayStr();
-    const now = new Date();
-    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    try {
-      localStorage.setItem(SHOWN_KEY, today);
+    const nowDate = new Date();
+    const hhmm = `${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
+    const iso = nowDate.toISOString();
+    setLastStartedAt(iso);
+    setOpen(false);
 
+    try {
       const perfilRaw = localStorage.getItem(PERFIL_KEY);
       const email = perfilRaw ? (JSON.parse(perfilRaw).email ?? "").trim().toLowerCase() : "";
       const membersRaw = localStorage.getItem(MEMBERS_KEY);
@@ -52,28 +106,25 @@ export function BomDiaDialog() {
     } catch {
       /* ignore */
     }
+
+    if (!userId) return;
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
-      if (uid) {
-        const { data: prof } = await supabase
-          .from("profiles")
-          .select("start_times")
-          .eq("id", uid)
-          .maybeSingle();
-        const current =
-          prof?.start_times && typeof prof.start_times === "object"
-            ? (prof.start_times as Record<string, string>)
-            : {};
-        await supabase
-          .from("profiles")
-          .update({ start_times: { ...current, [today]: hhmm } })
-          .eq("id", uid);
-      }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("start_times")
+        .eq("id", userId)
+        .maybeSingle();
+      const current =
+        prof?.start_times && typeof prof.start_times === "object"
+          ? (prof.start_times as Record<string, string>)
+          : {};
+      await supabase
+        .from("profiles")
+        .update({ start_times: { ...current, [today]: hhmm }, last_day_started_at: iso })
+        .eq("id", userId);
     } catch {
       /* ignore */
     }
-    setOpen(false);
   };
 
   if (!open) return null;

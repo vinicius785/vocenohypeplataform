@@ -459,6 +459,7 @@ export type Database = {
           email: string;
           full_name: string | null;
           id: string;
+          last_day_started_at: string | null;
           must_change_password: boolean;
           permissions: Json;
           phone: string | null;
@@ -475,6 +476,7 @@ export type Database = {
           email: string;
           full_name?: string | null;
           id: string;
+          last_day_started_at?: string | null;
           must_change_password?: boolean;
           permissions?: Json;
           phone?: string | null;
@@ -491,6 +493,7 @@ export type Database = {
           email?: string;
           full_name?: string | null;
           id?: string;
+          last_day_started_at?: string | null;
           must_change_password?: boolean;
           permissions?: Json;
           phone?: string | null;
