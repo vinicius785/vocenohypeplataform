@@ -1118,8 +1118,8 @@ export function TaskDialog({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Escreva algo, adicione detalhes, links…"
-                rows={3}
-                className="w-full resize-none border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                rows={10}
+                className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
               />
             </div>
 

@@ -710,6 +710,7 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
   }
   const today = toISODate(new Date());
   const monthLabel = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const toneDot: Record<CalendarEvent["tone"], string> = {
     inicio: "bg-sky-500",
@@ -761,13 +762,16 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
             const iso = toISODate(d);
             const inMonth = d.getMonth() === cursor.getMonth();
             const isToday = iso === today;
+            const isSelected = iso === selectedDate;
             const items = eventsByDate.get(iso) ?? [];
             return (
-              <div
+              <button
+                type="button"
                 key={idx}
-                className={`min-h-[64px] border-b border-r border-border p-1.5 text-left align-top ${
+                onClick={() => setSelectedDate((prev) => (prev === iso ? null : iso))}
+                className={`min-h-[64px] border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/40 ${
                   inMonth ? "" : "bg-background/40 text-muted-foreground/50"
-                }`}
+                } ${isSelected ? "bg-muted/60" : ""}`}
               >
                 <span
                   className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${
@@ -784,33 +788,39 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
                     </div>
                   ))}
                   {items.length > 2 && (
-                    <div className="text-[9px] text-muted-foreground">+{items.length - 2}</div>
+                    <div className="text-[9px] font-medium text-muted-foreground">
+                      +{items.length - 2} evento{items.length - 2 === 1 ? "" : "s"}
+                    </div>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
 
-      {sortedUpcoming.length > 0 ? (
-        <div className="space-y-1.5">
-          {sortedUpcoming.map(([date, events]) => (
-            <div key={date} className="flex items-start gap-3 text-sm">
-              <span className="w-20 shrink-0 tabular-nums text-muted-foreground">
-                {fmtDate(date)}
-              </span>
-              <div className="space-y-0.5">
-                {events.map((ev, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full ${toneDot[ev.tone]}`} />
-                    <span className="text-foreground">{ev.label}</span>
-                  </div>
-                ))}
+      {/* Em vez de listar todas as datas com todos os eventos (o que deixava
+          o painel excessivamente comprido em campanhas com muita coisa
+          marcada), mostra só o dia selecionado no grid — com scroll interno
+          como segunda trava de segurança caso o dia tenha muitos eventos. */}
+      {selectedDate ? (
+        <div className="rounded-lg border border-border p-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {fmtDate(selectedDate)}
+          </p>
+          <div className="max-h-56 space-y-1.5 overflow-y-auto">
+            {(eventsByDate.get(selectedDate) ?? []).map((ev, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-sm">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneDot[ev.tone]}`} />
+                <span className="text-foreground">{ev.label}</span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+      ) : sortedUpcoming.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Clique num dia com eventos para ver os detalhes.
+        </p>
       ) : (
         <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
       )}

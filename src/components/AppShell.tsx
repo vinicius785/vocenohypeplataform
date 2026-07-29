@@ -121,6 +121,105 @@ const groups: NavGroup[] = [
   },
 ];
 
+/** Existe alguma mensagem não lida (fora da conversa aberta agora) em
+ * qualquer canal/DM? Usado só pra bolinha do item "Chat" no menu — os
+ * detalhes (por conversa) ficam no sino de notificações. */
+function useHasUnreadChat(): boolean {
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeChat(() => setTick((t) => t + 1)), []);
+  const activeId = useActiveConvo();
+  return useMemo(() => {
+    void tick;
+    const me = getMe();
+    const lastRead = loadLastRead();
+    for (const m of loadMessages()) {
+      if (m.authorId === me.id) continue;
+      if (m.convoId === activeId) continue;
+      if (m.createdAt > (lastRead[m.convoId] ?? 0)) return true;
+    }
+    return false;
+  }, [tick, activeId]);
+}
+
+const SEEN_LEADS_KEY = "notif:seenLeadIds";
+function readSeenLeadIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(SEEN_LEADS_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+function writeSeenLeadIds(ids: Set<string>) {
+  try {
+    localStorage.setItem(SEEN_LEADS_KEY, JSON.stringify(Array.from(ids)));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Leads novos ainda não vistos — bolinha do item "Comercial" no menu +
+ * som quando um lead de verdade chega (não quando a lista só recarrega). */
+function useLeadNotifications() {
+  const [unseenCount, setUnseenCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let bootstrapped = false;
+
+    const bootstrap = async () => {
+      const { data } = await supabase.from("leads").select("id");
+      if (cancelled || !data) return;
+      const seen = readSeenLeadIds();
+      // Primeira carga: marca tudo que já existe como visto, senão todo
+      // lead antigo apareceria como "novo" na primeira visita depois do
+      // deploy dessa feature.
+      let changed = false;
+      for (const row of data) {
+        if (!seen.has(row.id)) {
+          seen.add(row.id);
+          changed = true;
+        }
+      }
+      if (changed) writeSeenLeadIds(seen);
+      bootstrapped = true;
+      setUnseenCount(0);
+    };
+    void bootstrap();
+
+    const channel = supabase
+      .channel(`rt-nav-leads-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "leads" }, (payload) => {
+        if (!bootstrapped) return; // ignora eventos que cheguem antes do bootstrap
+        const row = payload.new as { id?: string };
+        if (!row.id) return;
+        const seen = readSeenLeadIds();
+        if (seen.has(row.id)) return; // já visto (outra aba já processou)
+        setUnseenCount((n) => n + 1);
+        playNotifSound();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const markSeen = async () => {
+    if (unseenCount === 0) return;
+    setUnseenCount(0);
+    try {
+      const { data } = await supabase.from("leads").select("id");
+      if (data) writeSeenLeadIds(new Set(data.map((r) => r.id)));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return { unseenCount, markSeen };
+}
+
 export function AppShell({
   children,
   active,
@@ -135,6 +234,8 @@ export function AppShell({
   );
   useEffect(() => subscribeWorkspace(() => setWs(loadWorkspace())), []);
   useIncomingMessageNotifier();
+  const hasUnreadChat = useHasUnreadChat();
+  const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -209,13 +310,19 @@ export function AppShell({
                 {group.items.map((item) => {
                   const isActive = active === item.key;
                   const Icon = item.icon;
+                  const showDot =
+                    (item.key === "chat" && hasUnreadChat) ||
+                    (item.key === "comercial" && unseenLeads > 0);
                   return (
                     <li key={item.key}>
                       <button
                         type="button"
-                        onClick={() => onSelect(item.key)}
+                        onClick={() => {
+                          onSelect(item.key);
+                          if (item.key === "comercial") void markLeadsSeen();
+                        }}
                         title={!showFull ? item.label : undefined}
-                        className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                        className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
                           !showFull ? "justify-center" : ""
                         } ${
                           isActive
@@ -223,8 +330,20 @@ export function AppShell({
                             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                         }`}
                       >
-                        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        {showFull && <span className="truncate">{item.label}</span>}
+                        <span className="relative shrink-0">
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                          {showDot && !showFull && (
+                            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+                          )}
+                        </span>
+                        {showFull && (
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+                            {item.label}
+                            {showDot && (
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                            )}
+                          </span>
+                        )}
                       </button>
                       {item.key === "chat" && isActive && showFull && (
                         <ChatSubNav onSelect={onSelect} />
