@@ -31,6 +31,7 @@ import {
   normalizeCampaignPagGrupos,
 } from "./VincularCampanhaDialog";
 import { SectionHeader } from "./SectionHeader";
+import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
 import {
   InfluencerBoard,
@@ -82,7 +83,25 @@ export function CampanhasSection() {
   const clientes = useClientes();
   const setClientes = clientesStore.set;
   const [openId, setOpenId] = useState<string | null>(null);
+  const [initialTaskId, setInitialTaskId] = useState<string | undefined>(undefined);
   const { confirm, confirmDialog } = useConfirm();
+
+  // Deep link vindo do indicador de timer ativo (AppShell) — abre direto a
+  // campanha + tarefa cujo timer está rodando, em vez de só cair na lista.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(OPEN_CAMPANHA_TASK_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(OPEN_CAMPANHA_TASK_KEY);
+      const parsed = JSON.parse(raw) as { campanhaId?: string; taskId?: string };
+      if (parsed.campanhaId) {
+        setOpenId(parsed.campanhaId);
+        setInitialTaskId(parsed.taskId);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const rows: Row[] = useMemo(
     () =>
@@ -98,7 +117,14 @@ export function CampanhasSection() {
   const current = openId ? (rows.find((r) => r.campanha.id === openId) ?? null) : null;
 
   if (current) {
-    return <CampanhaDetail row={current} onBack={() => setOpenId(null)} />;
+    return (
+      <CampanhaDetail
+        row={current}
+        onBack={() => setOpenId(null)}
+        initialTaskId={initialTaskId}
+        onInitialTaskHandled={() => setInitialTaskId(undefined)}
+      />
+    );
   }
 
   const today = new Date();
@@ -234,7 +260,17 @@ function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
   return cfg.outroValor ? fmtBRL(parseMoney(cfg.outroValor)) : (cfg.outroDescricao ?? "");
 }
 
-function CampanhaDetail({ row, onBack }: { row: Row; onBack: () => void }) {
+function CampanhaDetail({
+  row,
+  onBack,
+  initialTaskId,
+  onInitialTaskHandled,
+}: {
+  row: Row;
+  onBack: () => void;
+  initialTaskId?: string;
+  onInitialTaskHandled?: () => void;
+}) {
   const { campanha: c, cliente } = row;
   const isRecorrente = c.pagClienteTipo === "Recorrente";
   const now = new Date();
@@ -435,7 +471,13 @@ function CampanhaDetail({ row, onBack }: { row: Row; onBack: () => void }) {
         />
       </div>
 
-      <TaskBoard tasks={tasks} onChange={persistTasks} scope={{ kind: "campanha", id: c.id }} />
+      <TaskBoard
+        tasks={tasks}
+        onChange={persistTasks}
+        scope={{ kind: "campanha", id: c.id }}
+        initialOpenTaskId={initialTaskId}
+        onInitialOpenTaskHandled={onInitialTaskHandled}
+      />
 
       <InfluencerBoard
         influs={influs}

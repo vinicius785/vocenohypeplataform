@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   LayoutGrid,
   Users,
@@ -83,6 +84,11 @@ export type SectionKey =
   | "gestao"
   | "chat"
   | "configuracoes";
+
+/** Usado pra abrir uma campanha + tarefa específica ao clicar no indicador
+ * de timer ativo — CampanhasSection lê isso ao montar (não é URL-driven
+ * ainda, então esse é o jeito de passar "abre essa tarefa" na navegação). */
+export const OPEN_CAMPANHA_TASK_KEY = "campanhas:openTask";
 
 type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
 type NavGroup = { title: string; items: NavItem[] };
@@ -967,6 +973,7 @@ function useIncomingMessageNotifier() {
  * timer pode ficar rodando fora da tela onde foi iniciado. */
 function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const me = getMe();
+  const navigate = useNavigate();
   const [tick, force] = useState(0);
   useEffect(() => onProjetosChange(() => force((n) => n + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => force((n) => n + 1)), []);
@@ -977,6 +984,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
 
   const active = useMemo(() => {
     type MinimalTask = {
+      id: string;
       title: string;
       assignee?: string;
       assignees?: string[];
@@ -988,22 +996,28 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
     const flatten = (list: MinimalTask[]): MinimalTask[] =>
       list.flatMap((t) => [t, ...flatten(t.subtasks ?? [])]);
     for (const p of loadProjetos()) {
-      const found = flatten(p.tasks ?? []).find((t) => t.timerRunning && isMine(t));
+      const found = flatten((p.tasks ?? []) as MinimalTask[]).find(
+        (t) => t.timerRunning && isMine(t),
+      );
       if (found) {
         return {
           title: found.title,
           startedAt: found.timerStartedAt,
-          section: "projetos" as SectionKey,
+          section: "projetos" as const,
+          taskId: found.id,
+          projectId: p.id,
         };
       }
     }
-    for (const [, tasks] of getAllCampanhaTarefas()) {
+    for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
       const found = (tasks as MinimalTask[]).find((t) => t.timerRunning && isMine(t));
       if (found) {
         return {
           title: found.title,
           startedAt: found.timerStartedAt,
-          section: "campanhas" as SectionKey,
+          section: "campanhas" as const,
+          taskId: found.id,
+          campanhaId,
         };
       }
     }
@@ -1021,7 +1035,25 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
   return (
     <button
       type="button"
-      onClick={() => onSelect(active.section)}
+      onClick={() => {
+        if (active.section === "projetos") {
+          void navigate({
+            to: "/projeto/$id",
+            params: { id: active.projectId },
+            search: { taskId: active.taskId },
+          });
+          return;
+        }
+        try {
+          sessionStorage.setItem(
+            OPEN_CAMPANHA_TASK_KEY,
+            JSON.stringify({ campanhaId: active.campanhaId, taskId: active.taskId }),
+          );
+        } catch {
+          /* ignore */
+        }
+        onSelect(active.section);
+      }}
       title={`Timer ativo: ${active.title}`}
       className="inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-1.5 text-xs font-medium tabular-nums text-sky-700 hover:bg-sky-500/20 dark:text-sky-400"
     >

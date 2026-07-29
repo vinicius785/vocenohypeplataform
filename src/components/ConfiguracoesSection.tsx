@@ -57,6 +57,7 @@ import {
   deleteOutgoingWebhook,
 } from "@/lib/integrations.functions";
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
+import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, saveNotifPrefs } from "@/lib/notif-prefs";
 
 type TabKey = "perfil" | "workspace" | "av" | "senhas" | "preferencias" | "integracoes" | "dados";
@@ -68,7 +69,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.6.0";
+export const APP_VERSION = "1.7.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -1590,6 +1591,7 @@ function VaultTotpEnroll() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
 
   const refresh = useCallback(() => {
     void statusFn()
@@ -1613,6 +1615,17 @@ function VaultTotpEnroll() {
     }
   };
 
+  // Regenerar invalida o código que já está no app de qualquer admin — não
+  // é um passo do dia a dia (o fluxo normal é só ler o código do app já
+  // configurado), então fica atrás de uma confirmação explícita em vez de
+  // um botão de destaque igual ao de configurar pela primeira vez.
+  const regenerate = async () => {
+    const ok = await confirm(
+      "Gerar uma nova chave invalida o código que já está configurado no Google Authenticator de qualquer admin — todos vão precisar re-adicionar a chave nos apps deles. Continuar?",
+    );
+    if (ok) void enroll();
+  };
+
   const copy = () => {
     if (!secret) return;
     navigator.clipboard?.writeText(secret);
@@ -1622,21 +1635,43 @@ function VaultTotpEnroll() {
 
   if (!status) return null;
 
+  if (status.enrolled && !secret) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2">
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+          Autenticador configurado — para dar acesso a alguém, só peça o código de 6 dígitos que já
+          está no seu Google Authenticator.
+        </p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void regenerate()}
+          className="shrink-0 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+        >
+          {busy ? "Gerando..." : "Perdeu acesso? Gerar nova chave"}
+        </button>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        {confirmDialog}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 rounded-lg border border-border bg-background p-3">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         Autenticador (Google Authenticator)
       </p>
       <p className="text-xs text-muted-foreground">
-        {status.enrolled
-          ? `Configurado em ${new Date(status.createdAt!).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Qualquer pessoa com o código de um admin desbloqueia o cofre por 10 minutos.`
-          : "Ainda não configurado. Sem isso, ninguém sem a chave de admin consegue pedir acesso temporário."}
+        Ainda não configurado. Sem isso, ninguém sem a chave de admin consegue pedir acesso
+        temporário.
       </p>
       {secret && (
         <div className="space-y-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
           <p className="text-[11px] text-amber-700 dark:text-amber-400">
             Adicione manualmente no Google Authenticator (tipo "baseado em tempo") — essa chave não
-            aparece de novo depois que você sair desta tela.
+            aparece de novo depois que você sair desta tela. Depois de configurado, você só precisa
+            ler o código do app quando alguém pedir acesso — não é preciso configurar de novo.
           </p>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-background px-2 py-1 font-mono text-xs">
@@ -1653,15 +1688,18 @@ function VaultTotpEnroll() {
         </div>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void enroll()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-      >
-        <ShieldCheck className="h-3.5 w-3.5" />
-        {busy ? "Gerando..." : status.enrolled ? "Gerar nova chave" : "Configurar autenticador"}
-      </button>
+      {!secret && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void enroll()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+          {busy ? "Gerando..." : "Configurar autenticador"}
+        </button>
+      )}
+      {confirmDialog}
     </div>
   );
 }
