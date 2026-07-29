@@ -224,8 +224,6 @@ export function CampanhasSection() {
  * Detail page
  * ============================================================ */
 
-const IN_APPROVAL_SET = new Set<InfluStatus>(["Enviado para aprovação", "Aprovação de conteúdo"]);
-
 /** Resumo com o valor/config de cada tipo de pagamento, pro badge não mostrar só o nome do tipo. */
 function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
   if (t === "Valor") return cfg.valor ? fmtBRL(parseMoney(cfg.valor)) : "";
@@ -286,7 +284,10 @@ function CampanhaDetail({ row, onBack }: { row: Row; onBack: () => void }) {
   // Qualquer status a partir de "Aprovado" (Aguardando roteiro, Em gravação,
   // ..., Pago) já passou pela aprovação — continua contando como aprovado.
   const aprovados = influs.filter((i) => canPublishEntrega(i.status)).length;
-  const emAprovacao = influs.filter((i) => IN_APPROVAL_SET.has(i.status)).length;
+  // KPI reflete só a coluna "Enviado para aprovação" — antes também contava
+  // "Aprovação de conteúdo" (etapa seguinte, já aprovado como influenciador),
+  // o que inflava o número em relação ao que a coluna realmente mostra.
+  const emAprovacao = influs.filter((i) => i.status === "Enviado para aprovação").length;
 
   // Budget
   const orcamento = parseMoney(c.orcamento);
