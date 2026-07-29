@@ -209,6 +209,7 @@ export function ReunioesSection() {
             active={tab === "solicitacoes"}
             onClick={() => setTab("solicitacoes")}
             icon={<Users className="h-4 w-4" />}
+            showDot={pendentes > 0}
           >
             Solicitações
           </TabBtn>
@@ -381,11 +382,13 @@ function TabBtn({
   onClick,
   icon,
   children,
+  showDot,
 }: {
   active: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   children: React.ReactNode;
+  showDot?: boolean;
 }) {
   return (
     <button
@@ -398,7 +401,8 @@ function TabBtn({
       }`}
     >
       {icon}
-      {children}
+      <span className="flex-1">{children}</span>
+      {showDot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
     </button>
   );
 }

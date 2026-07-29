@@ -38,6 +38,7 @@ import { CreateChannelModal } from "./CreateChannelModal";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { VersionWatcher } from "./VersionWatcher";
+import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
   getMe,
   loadMembers,
@@ -67,7 +68,7 @@ import {
 import { useClientes } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
-import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
+import { loadMeetings, onMeetingsChange, meetingDisplayStatus } from "@/lib/reunioes-store";
 
 export type SectionKey =
   | "inicio"
@@ -139,6 +140,23 @@ function useHasUnreadChat(): boolean {
     }
     return false;
   }, [tick, activeId]);
+}
+
+/** Tem alguma reunião pendente (aguardando confirmação) onde eu sou
+ * criador ou convidado? Usado pra bolinha do item "Reuniões" no menu. */
+function useHasPendingMeetingRequests(): boolean {
+  const [meetings, setMeetings] = useState(() => loadMeetings());
+  useEffect(() => {
+    const refresh = () => setMeetings(loadMeetings());
+    refresh();
+    return onMeetingsChange(refresh);
+  }, []);
+  const me = getMe();
+  return meetings.some(
+    (m) =>
+      (m.criadorId === me.id || m.participanteIds?.includes(me.id)) &&
+      meetingDisplayStatus(m) === "Pendente",
+  );
 }
 
 const SEEN_LEADS_KEY = "notif:seenLeadIds";
@@ -235,6 +253,7 @@ export function AppShell({
   useEffect(() => subscribeWorkspace(() => setWs(loadWorkspace())), []);
   useIncomingMessageNotifier();
   const hasUnreadChat = useHasUnreadChat();
+  const hasPendingMeetings = useHasPendingMeetingRequests();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
 
   const [collapsed, setCollapsed] = useState(false);
@@ -256,6 +275,7 @@ export function AppShell({
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
       <VersionWatcher />
+      <MeetingReminderToast />
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -312,7 +332,8 @@ export function AppShell({
                   const Icon = item.icon;
                   const showDot =
                     (item.key === "chat" && hasUnreadChat) ||
-                    (item.key === "comercial" && unseenLeads > 0);
+                    (item.key === "comercial" && unseenLeads > 0) ||
+                    (item.key === "reunioes" && hasPendingMeetings);
                   return (
                     <li key={item.key}>
                       <button

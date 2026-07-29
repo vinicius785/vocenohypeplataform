@@ -628,6 +628,35 @@ export function playNotifSound() {
   }
 }
 
+/** Som distinto (3 notas ascendentes) pro lembrete de "reunião em 5 min" —
+ * não pode ser confundido com o beep de mensagem nova. */
+export function playMeetingReminderSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const AC: typeof AudioContext =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AC();
+    const notes = [523.25, 659.25, 783.99]; // Dó, Mi, Sol
+    notes.forEach((freq, i) => {
+      const start = ctx.currentTime + i * 0.16;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(freq, start);
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(0.2, start + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+      o.connect(g).connect(ctx.destination);
+      o.start(start);
+      o.stop(start + 0.32);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), notes.length * 160 + 400);
+  } catch {
+    /* ignore */
+  }
+}
+
 // ---------- Derived channels ----------
 export type CampaignChannel = { id: string; name: string; clienteId: string; empresa: string };
 export function loadCampaignChannels(

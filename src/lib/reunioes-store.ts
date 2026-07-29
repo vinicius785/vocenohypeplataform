@@ -31,9 +31,14 @@ export type Meeting = {
   transcricao?: string; // colada pelo criador junto com o registro de presença
 };
 
+/** Horário em que a reunião começa (data+hora), como epoch ms. */
+export function meetingStartTime(m: Meeting): number {
+  return new Date(`${m.data}T${m.hora}:00`).getTime();
+}
+
 /** Horário em que a reunião termina (data+hora+duração), como epoch ms. */
 export function meetingEndTime(m: Meeting): number {
-  return new Date(`${m.data}T${m.hora}:00`).getTime() + m.duracao * 60_000;
+  return meetingStartTime(m) + m.duracao * 60_000;
 }
 
 /**
