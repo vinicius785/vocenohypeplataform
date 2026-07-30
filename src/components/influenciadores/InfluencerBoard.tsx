@@ -826,7 +826,7 @@ export function InfluencerBoard({
 
   return (
     <section className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Influenciadores
@@ -835,6 +835,8 @@ export function InfluencerBoard({
             {influs.length} {influs.length === 1 ? "adicionado" : "adicionados"}
           </p>
         </div>
+
+        {/* Visualização: alternância lista/kanban + ordenação, agrupadas à parte das ações */}
         <div className="flex items-center gap-1.5">
           <div className="flex items-center rounded-md border border-border p-0.5">
             <button
@@ -871,31 +873,15 @@ export function InfluencerBoard({
             <option value="updated">Ordenar: Última atualização</option>
             <option value="created">Ordenar: Mais recentes</option>
           </select>
-          {viewMode === "lista" && (
-            <>
-              <button
-                type="button"
-                onClick={() => scrollBy(-1)}
-                className="rounded-md border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Anterior"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollBy(1)}
-                className="rounded-md border border-border bg-background p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Próximo"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </>
-          )}
+        </div>
+
+        {/* Ações: sempre juntas, separadas do bloco de visualização acima */}
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setDownloadOpen(true)}
             disabled={influs.length === 0}
-            className="ml-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" /> Baixar lista
           </button>
@@ -975,22 +961,40 @@ export function InfluencerBoard({
           })}
         </div>
       ) : (
-        <div
-          ref={carRef}
-          className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
-        >
-          {sortedInflus.map((i) => (
-            <InfluCard
-              key={i.id}
-              influ={i}
-              has={has}
-              onView={() => setViewing(i)}
-              onEdit={() => setInfluDialog({ mode: "edit", data: i })}
-              onStatus={(status) => changeStatus(i.id, status)}
-              onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
-              approval={approvalStatusFor?.(i.id)}
-            />
-          ))}
+        <div className="group/carousel relative">
+          <div
+            ref={carRef}
+            className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
+          >
+            {sortedInflus.map((i) => (
+              <InfluCard
+                key={i.id}
+                influ={i}
+                has={has}
+                onView={() => setViewing(i)}
+                onEdit={() => setInfluDialog({ mode: "edit", data: i })}
+                onStatus={(status) => changeStatus(i.id, status)}
+                onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
+                approval={approvalStatusFor?.(i.id)}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollBy(-1)}
+            className="absolute -left-3 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-background p-1.5 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/carousel:opacity-100 md:block"
+            aria-label="Anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBy(1)}
+            className="absolute -right-3 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-background p-1.5 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/carousel:opacity-100 md:block"
+            aria-label="Próximo"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       )}
 

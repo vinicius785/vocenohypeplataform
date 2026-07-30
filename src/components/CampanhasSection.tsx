@@ -471,6 +471,37 @@ function CampanhaDetail({
         />
       </div>
 
+      {/* FERRAMENTAS ADICIONAIS — informações secundárias, abertas sob demanda */}
+      <section>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Ferramentas adicionais
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <FeatureButton
+            icon={FolderOpen}
+            label="Documentos"
+            count={docs.length}
+            onClick={() => setOpenPanel("documentos")}
+          />
+          <FeatureButton
+            icon={CalendarClock}
+            label="Calendário da campanha"
+            onClick={() => setOpenPanel("calendario")}
+          />
+          <FeatureButton
+            icon={Wallet}
+            label="Composição & pagamentos"
+            onClick={() => setOpenPanel("composicao")}
+          />
+          <FeatureButton
+            icon={ShieldCheck}
+            label="Direitos de imagem"
+            active={c.direitosImagem?.permitido}
+            onClick={() => setOpenPanel("direitos")}
+          />
+        </div>
+      </section>
+
       <TaskBoard
         tasks={tasks}
         onChange={persistTasks}
@@ -498,37 +529,6 @@ function CampanhaDetail({
       />
 
       <GaleriaConteudosSection influs={influs} />
-
-      {/* FUNÇÕES ADICIONAIS — informações secundárias, abertas sob demanda */}
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Funções adicionais
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <FeatureButton
-            icon={FolderOpen}
-            label="Documentos"
-            count={docs.length}
-            onClick={() => setOpenPanel("documentos")}
-          />
-          <FeatureButton
-            icon={CalendarClock}
-            label="Calendário da campanha"
-            onClick={() => setOpenPanel("calendario")}
-          />
-          <FeatureButton
-            icon={Wallet}
-            label="Composição & pagamentos"
-            onClick={() => setOpenPanel("composicao")}
-          />
-          <FeatureButton
-            icon={ShieldCheck}
-            label="Direitos de imagem"
-            active={c.direitosImagem?.permitido}
-            onClick={() => setOpenPanel("direitos")}
-          />
-        </div>
-      </section>
 
       <Dialog open={openPanel === "documentos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
         <DialogContent className="max-w-xl border-border bg-card">

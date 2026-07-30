@@ -39,7 +39,7 @@ async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
 
 export const getTeamDirectory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data, error } = await supabaseAdmin
       .from("profiles")
@@ -50,21 +50,38 @@ export const getTeamDirectory = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id,role");
     const adminSet = new Set((roles ?? []).filter((r) => r.role === "admin").map((r) => r.user_id));
-    return (data ?? []).map((p) => ({
-      id: p.id,
-      name: (p.full_name ?? "").trim() || "Sem nome",
-      photo: p.photo_url ?? undefined,
-      role: p.role_label ?? undefined,
-      salary: p.salary ?? "",
-      email: p.email ?? "",
-      birthday: p.birthday ?? null,
-      permissions: (Array.isArray(p.permissions) ? p.permissions : []) as string[],
-      timeView: (Array.isArray(p.time_view) ? p.time_view : []) as string[],
-      startTimes: (p.start_times && typeof p.start_times === "object"
-        ? p.start_times
-        : {}) as Record<string, string>,
-      isAdmin: adminSet.has(p.id),
-    }));
+    const { data: viewerIsAdmin } = await context.supabase.rpc("is_admin", {
+      _user_id: context.userId,
+    });
+
+    // Cada linha (exceto a do próprio usuário e as vistas por um admin) só
+    // expõe os campos sensíveis (salário, aniversário, e-mail, horário) que a
+    // PESSOA escolheu compartilhar em `time_view` — antes isso só era
+    // filtrado no cliente, então qualquer chamada direta a essa função
+    // devolvia a folha salarial inteira pra qualquer usuário autenticado.
+    return (data ?? []).map((p) => {
+      const timeView = (Array.isArray(p.time_view) ? p.time_view : []) as string[];
+      const canSeeAll = Boolean(viewerIsAdmin) || p.id === context.userId;
+      return {
+        id: p.id,
+        name: (p.full_name ?? "").trim() || "Sem nome",
+        photo: p.photo_url ?? undefined,
+        role: p.role_label ?? undefined,
+        salary: canSeeAll || timeView.includes("salary") ? (p.salary ?? "") : "",
+        email: canSeeAll || timeView.includes("email") ? (p.email ?? "") : "",
+        birthday: canSeeAll || timeView.includes("birthday") ? (p.birthday ?? null) : null,
+        permissions: (canSeeAll
+          ? Array.isArray(p.permissions)
+            ? p.permissions
+            : []
+          : []) as string[],
+        timeView,
+        startTimes: (canSeeAll && p.start_times && typeof p.start_times === "object"
+          ? p.start_times
+          : {}) as Record<string, string>,
+        isAdmin: adminSet.has(p.id),
+      };
+    });
   });
 
 export const createTeamMember = createServerFn({ method: "POST" })

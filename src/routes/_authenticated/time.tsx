@@ -14,6 +14,8 @@ import { ConfiguracoesSection } from "@/components/ConfiguracoesSection";
 import { FinanceiroSection } from "@/components/FinanceiroSection";
 
 import { ChatSection } from "@/components/ChatSection";
+import { LockedSection } from "@/components/LockedSection";
+import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 
 const VALID: SectionKey[] = [
   "inicio",
@@ -78,10 +80,17 @@ function TimePage() {
   }, []);
 
   const section = SECTIONS[active];
+  const access = useMyAccess();
+  // "configuracoes" fica de fora aqui: a própria tela filtra suas abas
+  // (perfil/preferências continuam sempre acessíveis, só as abas
+  // administrativas exigem a permissão).
+  const allowed = active === "configuracoes" || hasPermission(access, SECTION_PERMISSION[active]);
 
   return (
     <AppShell active={active} onSelect={setActive}>
-      {active === "inicio" ? (
+      {!allowed ? (
+        <LockedSection title={section.title} />
+      ) : active === "inicio" ? (
         <InicioDashboard />
       ) : active === "clientes" ? (
         <ClientesSection />

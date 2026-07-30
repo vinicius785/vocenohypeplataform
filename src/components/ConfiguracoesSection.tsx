@@ -59,6 +59,8 @@ import {
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, saveNotifPrefs } from "@/lib/notif-prefs";
+import { useMyAccess, hasPermission } from "@/lib/permissions";
+import { LockedSection } from "./LockedSection";
 
 type TabKey = "perfil" | "workspace" | "av" | "senhas" | "preferencias" | "integracoes" | "dados";
 
@@ -69,7 +71,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.10.0";
+export const APP_VERSION = "1.11.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -136,10 +138,17 @@ const loadSenhas = (): Senha[] => {
   }
 };
 
+/** Abas administrativas do workspace — exigem a permissão "configuracoes"
+ * (ou ser admin). "perfil", "preferencias" e "av" são autoatendimento e
+ * ficam sempre acessíveis pra qualquer membro. */
+const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas", "integracoes"];
+
 export function ConfiguracoesSection() {
   const [tab, setTab] = useState<TabKey>("perfil");
   const [perfil, setPerfil] = useState<Perfil>(() => loadPerfil());
   const [status, setStatus] = useState<UserStatus>(() => loadStatus());
+  const access = useMyAccess();
+  const canConfig = hasPermission(access, "configuracoes");
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -174,6 +183,7 @@ export function ConfiguracoesSection() {
           label="Workspace"
           tab={tab}
           setTab={setTab}
+          locked={canConfig ? [] : RESTRICTED_TABS}
           tabs={[
             { k: "workspace", label: "Identidade", icon: Building2 },
             { k: "senhas", label: "Senhas", icon: KeyRound },
@@ -184,11 +194,13 @@ export function ConfiguracoesSection() {
       </div>
 
       {tab === "perfil" && <PerfilTab perfil={perfil} setPerfil={setPerfil} />}
-      {tab === "workspace" && <WorkspaceTab />}
+      {tab === "workspace" &&
+        (canConfig ? <WorkspaceTab /> : <LockedSection title="Identidade do workspace" />)}
       {tab === "av" && <AVTab />}
-      {tab === "senhas" && <SenhasTab />}
+      {tab === "senhas" && (canConfig ? <SenhasTab /> : <LockedSection title="Senhas" />)}
       {tab === "preferencias" && <PreferenciasTab />}
-      {tab === "integracoes" && <IntegracoesTab />}
+      {tab === "integracoes" &&
+        (canConfig ? <IntegracoesTab /> : <LockedSection title="Integrações" />)}
       {tab === "dados" && <DadosTab />}
 
       <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
@@ -201,11 +213,13 @@ function TabGroup({
   tabs,
   tab,
   setTab,
+  locked = [],
 }: {
   label: string;
   tabs: { k: TabKey; label: string; icon: typeof User }[];
   tab: TabKey;
   setTab: (k: TabKey) => void;
+  locked?: TabKey[];
 }) {
   return (
     <div>
@@ -213,20 +227,26 @@ function TabGroup({
         {label}
       </p>
       <div className="flex gap-1">
-        {tabs.map(({ k, label: tabLabel, icon: Icon }) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
-              tab === k
-                ? "bg-foreground font-medium text-background"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {tabLabel}
-          </button>
-        ))}
+        {tabs.map(({ k, label: tabLabel, icon: Icon }) => {
+          const isLocked = locked.includes(k);
+          return (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              title={isLocked ? "Sem permissão — apenas visualização bloqueada" : undefined}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                isLocked
+                  ? "text-muted-foreground/40 hover:bg-muted/40"
+                  : tab === k
+                    ? "bg-foreground font-medium text-background"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+              {tabLabel}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -70,6 +70,7 @@ import { useClientes } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
+import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 
 export type SectionKey =
   | "inicio"
@@ -262,6 +263,7 @@ export function AppShell({
   const hasUnreadChat = useHasUnreadChat();
   const hasPendingMeetings = useHasPendingMeetingRequests();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
+  const access = useMyAccess();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -337,31 +339,46 @@ export function AppShell({
                 {group.items.map((item) => {
                   const isActive = active === item.key;
                   const Icon = item.icon;
+                  const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
                   const showDot =
-                    (item.key === "chat" && hasUnreadChat) ||
-                    (item.key === "comercial" && unseenLeads > 0) ||
-                    (item.key === "reunioes" && hasPendingMeetings);
+                    allowed &&
+                    ((item.key === "chat" && hasUnreadChat) ||
+                      (item.key === "comercial" && unseenLeads > 0) ||
+                      (item.key === "reunioes" && hasPendingMeetings));
                   return (
                     <li key={item.key}>
                       <button
                         type="button"
+                        disabled={!allowed}
                         onClick={() => {
+                          if (!allowed) return;
                           onSelect(item.key);
                           if (item.key === "comercial") void markLeadsSeen();
                         }}
-                        title={!showFull ? item.label : undefined}
+                        title={
+                          !allowed
+                            ? "Sem permissão para acessar esta seção"
+                            : !showFull
+                              ? item.label
+                              : undefined
+                        }
                         className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
                           !showFull ? "justify-center" : ""
                         } ${
-                          isActive
-                            ? "bg-muted font-medium text-foreground"
-                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          !allowed
+                            ? "cursor-not-allowed text-muted-foreground/40"
+                            : isActive
+                              ? "bg-muted font-medium text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                         }`}
                       >
                         <span className="relative shrink-0">
                           <Icon className="h-4 w-4" aria-hidden="true" />
                           {showDot && !showFull && (
                             <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+                          )}
+                          {!allowed && (
+                            <Lock className="absolute -right-1 -top-1 h-2.5 w-2.5 text-muted-foreground/60" />
                           )}
                         </span>
                         {showFull && (

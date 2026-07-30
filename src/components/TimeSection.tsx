@@ -22,6 +22,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { SectionHeader } from "./SectionHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  type Permission,
+  PERMISSION_GROUPS,
+  CONFIG_SUB_PERMISSIONS,
+  ALL_PERMISSIONS,
+} from "@/lib/permissions";
+import {
   createTeamMember,
   updateTeamMember,
   deleteTeamMember,
@@ -55,64 +61,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useStorageSync } from "@/lib/use-storage-sync";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
-
-type Permission =
-  | "clientes"
-  | "campanhas"
-  | "projetos"
-  | "reunioes"
-  | "comercial"
-  | "financeiro"
-  | "time"
-  | "gestao"
-  | "influenciadores"
-  | "chat"
-  | "senhas"
-  | "configuracoes"
-  | "configuracoes:perfil"
-  | "configuracoes:workspace"
-  | "configuracoes:av"
-  | "configuracoes:senhas";
-
-const CONFIG_SUB_PERMISSIONS: { key: Permission; label: string }[] = [
-  { key: "configuracoes:perfil", label: "Meu Perfil" },
-  { key: "configuracoes:workspace", label: "Workspace" },
-  { key: "configuracoes:av", label: "Áudio e Vídeo" },
-  { key: "configuracoes:senhas", label: "Senhas" },
-];
-
-const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: string }[] }[] = [
-  {
-    label: "Operação",
-    items: [
-      { key: "clientes", label: "Clientes" },
-      { key: "campanhas", label: "Campanhas" },
-      { key: "projetos", label: "Projetos" },
-      { key: "reunioes", label: "Reuniões" },
-      { key: "influenciadores", label: "Influenciadores" },
-    ],
-  },
-  {
-    label: "Negócio",
-    items: [
-      { key: "comercial", label: "Comercial" },
-      { key: "financeiro", label: "Financeiro" },
-    ],
-  },
-  {
-    label: "Time & Comunicação",
-    items: [
-      { key: "time", label: "Time" },
-      { key: "gestao", label: "Gestão" },
-      { key: "chat", label: "Chat" },
-    ],
-  },
-  { label: "Administração", items: [{ key: "configuracoes", label: "Configurações" }] },
-];
-const ALL_PERMISSIONS: Permission[] = [
-  ...PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key)),
-  ...CONFIG_SUB_PERMISSIONS.map((i) => i.key),
-];
 
 function formatBirthday(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
