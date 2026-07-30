@@ -49,6 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import type { PagGrupo } from "@/components/VincularCampanhaDialog";
 import { useConfirm } from "@/hooks/use-confirm";
+import { linkifyText } from "@/lib/linkify";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -2132,14 +2133,14 @@ function InfluencerProfileDialog({
                         new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
                     )
                     .map((e) => (
-                      <div key={e.item.id} className="flex items-start gap-2">
+                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
                         <span
                           className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
                         >
                           {e.item.initials}
                         </span>
                         {e.kind === "activity" ? (
-                          <div className="flex-1 text-xs leading-relaxed">
+                          <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
                             <span className="font-medium text-foreground">{e.item.author}</span>{" "}
                             <span className="text-muted-foreground">{e.item.action}</span>
                             <div className="text-[10px] text-muted-foreground/70">
@@ -2152,7 +2153,7 @@ function InfluencerProfileDialog({
                             </div>
                           </div>
                         ) : (
-                          <div className="flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                          <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
                             <div className="mb-0.5 flex items-baseline gap-1.5">
                               <span className="text-xs font-medium">{e.item.author}</span>
                               <span className="text-[10px] text-muted-foreground/70">
@@ -2164,8 +2165,8 @@ function InfluencerProfileDialog({
                                 })}
                               </span>
                             </div>
-                            <div className="whitespace-pre-wrap text-xs leading-relaxed">
-                              {e.item.text}
+                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                              {linkifyText(e.item.text)}
                             </div>
                           </div>
                         )}

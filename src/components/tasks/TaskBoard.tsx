@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { linkifyText } from "@/lib/linkify";
 import {
   isRequested,
   requestForMarketing,
@@ -326,7 +327,7 @@ function renderMentions(text: string, members: Member[]) {
         );
       }
     }
-    return <span key={i}>{p}</span>;
+    return <span key={i}>{linkifyText(p, `mention-link-${i}`)}</span>;
   });
 }
 
@@ -1428,7 +1429,7 @@ export function TaskDialog({
                   )
                   .map((e) =>
                     e.kind === "activity" ? (
-                      <div key={e.item.id} className="flex items-start gap-2">
+                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
                         <Avatar
                           member={
                             members.find((m) => m.name === e.item.author) ?? {
@@ -1439,7 +1440,7 @@ export function TaskDialog({
                           }
                           size={24}
                         />
-                        <div className="flex-1 text-xs leading-relaxed">
+                        <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
                           <span className="font-medium text-foreground">{e.item.author}</span>{" "}
                           <span className="text-muted-foreground">{e.item.action}</span>
                           <div className="text-[10px] text-muted-foreground/70">
@@ -1448,7 +1449,7 @@ export function TaskDialog({
                         </div>
                       </div>
                     ) : (
-                      <div key={e.item.id} className="flex items-start gap-2">
+                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
                         <Avatar
                           member={
                             members.find((m) => m.name === e.item.author) ?? {
@@ -1459,14 +1460,14 @@ export function TaskDialog({
                           }
                           size={24}
                         />
-                        <div className="flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                        <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
                           <div className="mb-0.5 flex items-baseline gap-1.5">
                             <span className="text-xs font-medium">{e.item.author}</span>
                             <span className="text-[10px] text-muted-foreground/70">
                               {formatWhen(e.item.createdAt)}
                             </span>
                           </div>
-                          <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                          <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
                             {renderMentions(e.item.text, members)}
                           </div>
                         </div>

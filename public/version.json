@@ -1,6 +1,6 @@
 {
-  "version": "1.28.0",
+  "version": "1.28.1",
   "notes": [
-    "Chat: tarefas de campanha agora aparecem como opção ao mencionar tarefas com @ (antes só tarefas de projeto apareciam)."
+    "Corrige comentários/atividade (tarefas e influenciadores) que ficavam cortados exigindo rolagem lateral — texto agora quebra linha automaticamente e links viram clicáveis."
   ]
 }
