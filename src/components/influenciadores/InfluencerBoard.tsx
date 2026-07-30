@@ -296,6 +296,7 @@ export const ENTREGA_CONTEUDO_STATUSES = [
   "Aguardando roteiro",
   "Roteiro aprovado",
   "Em gravação",
+  "Aguardando aprovação da gravação",
   "Gravação aprovada",
   "Postado",
 ] as const;
@@ -305,6 +306,7 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  "Aguardando aprovação da gravação": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   "Gravação aprovada": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
@@ -704,6 +706,7 @@ export function InfluencerBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const exportMenu = useDropdown();
   const novoMenu = useDropdown();
+  const viewMenu = useDropdown();
   const carRef = useRef<HTMLDivElement>(null);
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
@@ -805,6 +808,11 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  // O status geral da entrega (orçado/combinado/publicado) não tem mais um
+  // controle manual próprio — ele é derivado do status individual (etapa de
+  // produção). "Postado" vira "publicado" (libera link/métricas e entra no
+  // Financeiro); qualquer outra etapa volta a ser "combinado". A trava de só
+  // publicar a partir de "Aprovado" (ver `canPublishEntrega`) continua valendo.
   const setConteudoStatus = (
     influId: string,
     entregaId: string,
@@ -814,11 +822,22 @@ export function InfluencerBoard({
       if (x.id !== influId) return x;
       const entrega = x.entregas.find((e) => e.id === entregaId);
       if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
+      if (conteudoStatus === "Postado" && !canPublishEntrega(x.status)) return x;
       const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
       return pushActivity(
         {
           ...x,
-          entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, conteudoStatus } : e)),
+          entregas: x.entregas.map((e) =>
+            e.id === entregaId
+              ? {
+                  ...e,
+                  conteudoStatus,
+                  status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+                  publicadoEm:
+                    conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+                }
+              : e,
+          ),
         },
         `mudou status de "${label}" para ${conteudoStatus}`,
       );
@@ -857,47 +876,70 @@ export function InfluencerBoard({
           </p>
         </div>
 
-        {/* Visualização: alternância lista/kanban + ordenação, agrupadas à parte das ações */}
         <div className="flex items-center gap-1.5">
-          <div className="flex items-center rounded-md border border-border p-0.5">
+          <div ref={viewMenu.ref} className="relative">
             <button
               type="button"
-              onClick={() => setViewMode("lista")}
-              className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
-                viewMode === "lista"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={() => viewMenu.setOpen((o) => !o)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
             >
-              <LayoutList className="h-3.5 w-3.5" /> Lista
+              {viewMode === "lista" ? (
+                <LayoutList className="h-3.5 w-3.5" />
+              ) : (
+                <Columns3 className="h-3.5 w-3.5" />
+              )}
+              Visualização
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
             </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("kanban")}
-              className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
-                viewMode === "kanban"
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Columns3 className="h-3.5 w-3.5" /> Kanban
-            </button>
+            {viewMenu.open && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-popover p-1 shadow-md">
+                <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Exibir como
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("lista")}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted ${
+                    viewMode === "lista" ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <LayoutList className="h-3.5 w-3.5" /> Lista
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("kanban")}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted ${
+                    viewMode === "kanban" ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Columns3 className="h-3.5 w-3.5" /> Kanban
+                </button>
+                <div className="my-1 border-t border-border" />
+                <p className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ordenar por
+                </p>
+                {(
+                  [
+                    { k: "az", label: "A-Z" },
+                    { k: "za", label: "Z-A" },
+                    { k: "updated", label: "Última atualização" },
+                    { k: "created", label: "Mais recentes" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.k}
+                    type="button"
+                    onClick={() => setSortBy(o.k)}
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted ${
+                      sortBy === o.k ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            aria-label="Ordenar por"
-            className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground outline-none hover:bg-muted"
-          >
-            <option value="az">Ordenar: A-Z</option>
-            <option value="za">Ordenar: Z-A</option>
-            <option value="updated">Ordenar: Última atualização</option>
-            <option value="created">Ordenar: Mais recentes</option>
-          </select>
-        </div>
-
-        {/* Ações: sempre juntas, separadas do bloco de visualização acima */}
-        <div className="flex items-center gap-1.5">
           <div ref={exportMenu.ref} className="relative">
             <button
               type="button"
@@ -1518,8 +1560,15 @@ function InfluencerProfileDialog({
                             className="cursor-pointer appearance-none rounded bg-transparent px-1.5 py-0.5 text-[10px] font-medium outline-none"
                           >
                             {ENTREGA_CONTEUDO_STATUSES.map((s) => (
-                              <option key={s} value={s} className="bg-background text-foreground">
-                                {s}
+                              <option
+                                key={s}
+                                value={s}
+                                disabled={s === "Postado" && !canPublishEntrega(influ.status)}
+                                className="bg-background text-foreground"
+                              >
+                                {s === "Postado" && !canPublishEntrega(influ.status)
+                                  ? "Postado (disponível a partir de Aprovado)"
+                                  : s}
                               </option>
                             ))}
                           </select>
@@ -2110,14 +2159,14 @@ function InfluenciadorDialog({
             <div className="space-y-3">
               <FieldLabel
                 title="Entregas"
-                hint="Combine o formato e a quantidade; quando publicar, marque como Publicado e anexe o link/arquivo com as métricas."
+                hint="Combine o formato e a quantidade. O status individual de cada entrega (etapa de produção) fica na tela de resumo do influenciador."
               />
               {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
               <div className="space-y-2">
                 {entregas.map((e) => {
                   const update = (patch: Partial<Entrega>) =>
                     setEntregas((es) => es.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
-                  const published = e.status === "publicado";
+                  const published = e.conteudoStatus === "Postado";
                   return (
                     <div
                       key={e.id}
@@ -2153,53 +2202,6 @@ function InfluenciadorDialog({
                         <RemoveBtn
                           onClick={() => setEntregas((es) => es.filter((x) => x.id !== e.id))}
                         />
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => update({ status: "orcado" })}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                            e.status === "orcado"
-                              ? "bg-amber-500 text-white"
-                              : "bg-muted text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          Orçado
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => update({ status: "combinado" })}
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                            e.status === "combinado"
-                              ? "bg-foreground text-background"
-                              : "bg-muted text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          Combinado
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!canPublishEntrega(status)}
-                          title={
-                            canPublishEntrega(status)
-                              ? undefined
-                              : "Disponível a partir de 'Aprovado'"
-                          }
-                          onClick={() =>
-                            update({
-                              status: "publicado",
-                              publicadoEm: e.publicadoEm ?? todayISO(),
-                            })
-                          }
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                            published
-                              ? "bg-emerald-600 text-white"
-                              : "bg-muted text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          Publicado
-                        </button>
                       </div>
 
                       <div className="grid grid-cols-2 items-center gap-2">
