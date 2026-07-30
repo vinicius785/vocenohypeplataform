@@ -856,7 +856,16 @@ export function InfluencerBoard({
     const now = new Date().toISOString();
     if (influDialog?.mode === "edit") {
       const existing = influs.find((x) => x.id === i.id);
-      const withStamps = { ...i, createdAt: existing?.createdAt ?? now, updatedAt: now };
+      // O wizard só conhece os campos que ele mesmo edita — merge com
+      // `existing` primeiro (e `i` por cima) preserva comentários, atividade
+      // e checklist, que o formulário não tem como carregar/reenviar. Antes
+      // `i` sozinho substituía a linha inteira e apagava tudo isso ao editar.
+      const withStamps = {
+        ...existing,
+        ...i,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
       onChange(influs.map((x) => (x.id === i.id ? withStamps : x)));
       syncToBanco(withStamps);
     } else {

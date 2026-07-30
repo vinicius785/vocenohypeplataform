@@ -1,6 +1,6 @@
 {
-  "version": "1.26.0",
+  "version": "1.26.1",
   "notes": [
-    "Novo: checklist livre no resumo de cada influenciador — escreva o que quiser, marque como feito, e aplique a mesma lista a todos os outros influenciadores da campanha de uma vez."
+    "Corrige checklist (e comentários/atividade) do influenciador sendo apagados ao salvar uma edição pelo formulário — o formulário não conhece esses campos, então salvar substituía a linha inteira em vez de só atualizar o que foi editado."
   ]
 }
