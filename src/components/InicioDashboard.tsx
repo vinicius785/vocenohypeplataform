@@ -39,8 +39,10 @@ import { listLeads } from "@/lib/comercial.functions";
 import { DEFAULT_STAGES, formatBRL } from "@/lib/comercial";
 import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
 import type { SectionKey } from "@/components/AppShell";
+import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
 import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
+import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 
 type DashTask = {
   id: string;
@@ -51,6 +53,10 @@ type DashTask = {
   due: string;
   priority?: ProjTask["priority"];
   status: ProjTask["status"];
+  /** Ausente = tarefa de projeto (rota própria); presente = tarefa de
+   * campanha, que não tem rota própria e precisa do deep-link por
+   * sessionStorage já usado pelo indicador de timer ativo. */
+  campanhaId?: string;
 };
 
 type PersonalItem = { id: string; text: string; done: boolean };
@@ -99,7 +105,19 @@ function formatDue(dueISO: string | undefined, bucket: DashTask["bucket"]): stri
   return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
 }
 
-function loadAllTasks(): DashTask[] {
+type CampanhaTaskLike = {
+  id: string;
+  title: string;
+  dueDate?: string;
+  priority?: ProjTask["priority"];
+  status: ProjTask["status"];
+};
+
+/** `campanhaNames` mapeia campanhaId -> nome, pra dar título nas tarefas de
+ * campanha do mesmo jeito que as de projeto já têm `p.name`. Sem isso as
+ * tarefas de campanha (guardadas à parte, em `campanha_tarefas`, não em
+ * `Project.tasks`) nunca apareciam aqui — só as de projeto. */
+function loadAllTasks(campanhaNames: Map<string, string>): DashTask[] {
   const projs = loadProjetos();
   const out: DashTask[] = [];
   for (const p of projs) {
@@ -114,6 +132,22 @@ function loadAllTasks(): DashTask[] {
         due: formatDue(t.dueDate, b),
         priority: t.priority,
         status: t.status,
+      });
+    }
+  }
+  for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
+    for (const t of tasks as unknown as CampanhaTaskLike[]) {
+      const b = bucketFor(t.dueDate, t.status);
+      out.push({
+        id: t.id,
+        projectId: "",
+        projectName: campanhaNames.get(campanhaId) ?? "Campanha",
+        title: t.title,
+        bucket: b,
+        due: formatDue(t.dueDate, b),
+        priority: t.priority,
+        status: t.status,
+        campanhaId,
       });
     }
   }
@@ -170,6 +204,14 @@ type TaskFilter = "hoje" | "atrasada" | "semana";
 
 export function InicioDashboard() {
   const navigate = useNavigate();
+  const clientesForChat = useClientes();
+  const campanhaNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clientesForChat) {
+      for (const camp of c.campanhas ?? []) map.set(camp.id, camp.nome);
+    }
+    return map;
+  }, [clientesForChat]);
   const [name, setName] = useState("Você");
   const [foto, setFoto] = useState<string | undefined>();
   const [greeting, setGreeting] = useState("Olá");
@@ -210,7 +252,7 @@ export function InicioDashboard() {
     setToday(`${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`);
 
     const refresh = () => {
-      setTasks(loadAllTasks());
+      setTasks(loadAllTasks(campanhaNameMap));
       setMeetings(loadMeetings());
       setPersonal(loadPersonal());
     };
@@ -218,16 +260,21 @@ export function InicioDashboard() {
     window.addEventListener("storage", refresh);
     const unsubMeetings = onMeetingsChange(refresh);
     // `storage` só dispara pra troca feita em OUTRA aba do mesmo navegador —
-    // tarefas de projeto mudadas por outra pessoa chegam via realtime do
-    // Supabase, que usa esse pub/sub próprio (`onProjetosChange`), não o
-    // evento `storage`. Sem isso o card "Meu trabalho" só atualizava com F5.
+    // tarefas mudadas por outra pessoa chegam via realtime do Supabase, que
+    // usa esses pub/sub próprios (`onProjetosChange`/`onCampanhaTarefasChange`),
+    // não o evento `storage`. Sem isso o card "Meu trabalho" só atualizava
+    // com F5 — e tarefas de campanha (guardadas à parte de `Project.tasks`)
+    // não apareciam nem depois do F5.
     const unsubProjetos = onProjetosChange(refresh);
+    const unsubCampanhaTarefas = onCampanhaTarefasChange(refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       unsubMeetings();
       unsubProjetos();
+      unsubCampanhaTarefas();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campanhaNameMap]);
 
   // Mantém o resumo aberto em sincronia com atualizações (confirmar,
   // recusar, sugerir horário, etc.) feitas dentro do próprio diálogo.
@@ -293,7 +340,6 @@ export function InicioDashboard() {
     window.dispatchEvent(new StorageEvent("storage", { key: "notif:seenMentions" }));
     setSeenTick((t) => t + 1);
   };
-  const clientesForChat = useClientes();
   const mentionItems = useMemo(() => {
     const me = getMe();
     const seen = readSeenMentions();
@@ -374,6 +420,17 @@ export function InicioDashboard() {
   };
 
   const openTask = (t: DashTask) => {
+    if (t.campanhaId) {
+      // Campanhas não têm rota própria (é tudo dentro de /time?section=campanhas,
+      // navegação client-side) — mesmo deep-link por sessionStorage que o
+      // indicador de timer ativo (AppShell) já usa pra abrir campanha + tarefa.
+      sessionStorage.setItem(
+        OPEN_CAMPANHA_TASK_KEY,
+        JSON.stringify({ campanhaId: t.campanhaId, taskId: t.id }),
+      );
+      navigate({ to: "/time", search: { section: "campanhas" as SectionKey } });
+      return;
+    }
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 

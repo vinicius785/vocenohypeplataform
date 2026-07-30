@@ -1,7 +1,6 @@
 {
-  "version": "1.22.1",
+  "version": "1.23.0",
   "notes": [
-    "Início: tarefas de projeto agora atualizam em tempo real quando outra pessoa muda algo (antes só refletia com F5).",
-    "Aviso de nova versão: version.json passa a ter cache desativado no servidor, corrigindo casos em que o aviso não chegava pra todo mundo."
+    "Início: tarefas de campanha (não só de projeto) agora aparecem no card \"Meu trabalho\", com atualização em tempo real."
   ]
 }
