@@ -1072,7 +1072,7 @@ export function InfluencerBoard({
           Adicionar o primeiro influenciador
         </button>
       ) : viewMode === "kanban" ? (
-        <div className="thin-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3">
           {INFLU_STATUSES.map((col) => {
             const items = sortedInflus.filter((i) => i.status === col);
             return (
@@ -1123,7 +1123,7 @@ export function InfluencerBoard({
         <div className="group/carousel relative">
           <div
             ref={carRef}
-            className="thin-scrollbar -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
+            className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3"
           >
             {sortedInflus.map((i) => (
               <InfluCard
@@ -1610,7 +1610,7 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
         <DialogDescription className="sr-only">
           Informações completas do influenciador.
@@ -1683,7 +1683,7 @@ function InfluencerProfileDialog({
             {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
-                <div className="thin-scrollbar -mx-1 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+                <div className="-mx-1 overflow-x-auto px-1 pb-2">
                   <div className="flex min-w-max gap-5 border-t-2 border-border pt-7">
                     {influ.entregas.map((e) => {
                       const anexosVisiveis = (e.anexos ?? []).slice(0, 2);

@@ -143,18 +143,32 @@
   }
 }
 
-/* Barra de rolagem fina no tom do tema (Chrome/Safari) — sem isso, listas
- * horizontais (carrossel de influenciadores, linha do tempo de entregas)
- * mostram a barra padrão do SO, larga e destoando do resto do design. O
- * `[scrollbar-width:thin]` inline nesses containers já cobre o Firefox. */
-.thin-scrollbar::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
+/* Barra de rolagem personalizada, aplicada globalmente (não só num container
+ * opt-in) — sem isso, TODA barra (vertical ou horizontal, em qualquer tela)
+ * cai na barra padrão do sistema operacional, larga e destoando do resto do
+ * design. `scrollbar-width`/`scrollbar-color` cobrem o Firefox; as regras
+ * `::-webkit-scrollbar-*` cobrem Chrome/Safari/Edge. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
-.thin-scrollbar::-webkit-scrollbar-track {
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
   background: transparent;
 }
-.thin-scrollbar::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background-color: var(--color-border);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-muted-foreground);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
