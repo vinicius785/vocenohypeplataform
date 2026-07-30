@@ -311,6 +311,18 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   "Conteúdo aprovado": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
+/** Contorno colorido (por status) do botão que abre o popup de status —
+ * fundo neutro (preto/branco conforme o tema) + texto legível, em vez do
+ * preenchimento tingido do badge, que era usado só dentro do popup/listas. */
+export const ENTREGA_CONTEUDO_BORDER: Record<EntregaConteudoStatus, string> = {
+  Combinado: "border-muted-foreground/40",
+  "Aguardando roteiro": "border-amber-500",
+  "Roteiro aprovado": "border-sky-500",
+  "Em gravação": "border-violet-500",
+  "Aprovação conteúdo": "border-orange-500",
+  "Conteúdo aprovado": "border-teal-500",
+  Postado: "border-emerald-500",
+};
 
 export const ENTREGA_ANEXO_CATEGORIAS = [
   "Roteiro",
@@ -409,6 +421,20 @@ export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
   "Conteúdo aprovado": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   Postado: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   Pago: "bg-foreground text-background",
+};
+/** Contorno colorido (por status) do botão que abre o popup — mesmo
+ * espírito do `ENTREGA_CONTEUDO_BORDER`, para o status geral do influ. */
+export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
+  Lista: "border-muted-foreground/40",
+  "Enviado para aprovação": "border-amber-500",
+  Aprovado: "border-emerald-500",
+  "Aguardando roteiro": "border-orange-500",
+  "Aprovação de roteiro": "border-amber-500",
+  "Em gravação": "border-sky-500",
+  "Aprovação de conteúdo": "border-amber-500",
+  "Conteúdo aprovado": "border-emerald-500",
+  Postado: "border-violet-500",
+  Pago: "border-foreground",
 };
 
 export const NICHOS = [
@@ -1494,7 +1520,7 @@ function InfluStatusPill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
+        className={`inline-flex items-center gap-1 rounded-md border-2 bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm ${INFLU_STATUS_BORDER[value]}`}
       >
         {value}
         <ChevronDown className="h-2.5 w-2.5" />
@@ -1548,7 +1574,7 @@ function EntregaStatusPill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
+        className={`inline-flex shrink-0 items-center gap-1 rounded border-2 bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground ${ENTREGA_CONTEUDO_BORDER[value]}`}
       >
         {value}
         <ChevronDown className="h-2.5 w-2.5" />
