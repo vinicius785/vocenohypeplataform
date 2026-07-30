@@ -334,7 +334,9 @@ export type Entrega = {
   status: "orcado" | "combinado" | "publicado";
   /** Etapa de produção do conteúdo — independente do status de orçamento/publicação acima. */
   conteudoStatus?: EntregaConteudoStatus;
-  dataPostagem?: string; // data planejada para a postagem
+  dataPostagem?: string; // data planejada (ou realizada) para a postagem
+  dataRecebimentoRoteiro?: string; // quando o roteiro foi recebido do influenciador
+  dataRecebimentoConteudo?: string; // quando a gravação/conteúdo foi recebido do influenciador
   /** Anexos da entrega (roteiro, gravação, conteúdo publicado, etc) — podem
    * ser adicionados em qualquer etapa/status, e mais de um por categoria. */
   anexos?: EntregaAnexo[];
@@ -1692,7 +1694,7 @@ function InfluencerProfileDialog({
                       return (
                         <div key={e.id} className="relative w-64 shrink-0">
                           <span className="absolute -top-[31px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
-                          <div className="flex h-40 flex-col rounded-lg border border-border bg-background p-3 shadow-sm">
+                          <div className="flex h-28 flex-col overflow-hidden rounded-lg border border-border bg-background p-2.5 shadow-sm">
                             <div className="flex items-start justify-between gap-2">
                               <p className="min-w-0 truncate text-sm font-medium text-foreground">
                                 {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
@@ -1708,7 +1710,7 @@ function InfluencerProfileDialog({
                               {e.dataPostagem &&
                                 ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
                             </p>
-                            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-1.5">
                               {e.url && (
                                 <a
                                   href={e.url}
@@ -2025,6 +2027,18 @@ function InfluenciadorDialog({
   const [email, setEmail] = useState("");
   const [redes, setRedes] = useState<Rede[]>([]);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
+  // Cada entrega vira um card recolhido por padrão (só cabeçalho: formato +
+  // quantidade + resumo) — expandir só quando for mexer em data/anexos/
+  // pagamento/publicação, senão 3+ entregas deixavam a etapa gigantesca e
+  // poluída de olhar.
+  const [expandedEntregas, setExpandedEntregas] = useState<Set<string>>(new Set());
+  const toggleEntregaExpanded = (id: string) =>
+    setExpandedEntregas((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [contrato, setContrato] = useState<string | undefined>();
   const [contratoNome, setContratoNome] = useState<string>("");
   const [status, setStatus] = useState<InfluStatus>("Lista");
@@ -2051,6 +2065,7 @@ function InfluenciadorDialog({
     if (!open) return;
     setStep(0);
     setSaving(false);
+    setExpandedEntregas(new Set());
     if (initial) {
       setFoto(initial.foto);
       setNome(initial.nome);
@@ -2329,21 +2344,46 @@ function InfluenciadorDialog({
                   const update = (patch: Partial<Entrega>) =>
                     setEntregas((es) => es.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
                   const published = e.conteudoStatus === "Postado";
+                  const expanded = expandedEntregas.has(e.id);
+                  const resumoBits = [
+                    e.dataPostagem &&
+                      new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR"),
+                    e.pagamento && pagamentoResumo(e.pagamento),
+                    (e.anexos?.length ?? 0) > 0 &&
+                      `${e.anexos!.length} anexo${e.anexos!.length === 1 ? "" : "s"}`,
+                  ].filter(Boolean);
                   return (
-                    <div
-                      key={e.id}
-                      className="space-y-3 rounded-lg border border-border bg-background p-3"
-                    >
-                      {/* Formato, quantidade e data — o essencial da entrega */}
-                      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                        <input
-                          list="entregas-tipos"
-                          value={e.tipo}
-                          onChange={(ev) => update({ tipo: ev.target.value })}
-                          placeholder="Reels, Stories..."
-                          className="rounded-md bg-transparent px-2 py-1.5 text-sm font-medium outline-none"
-                        />
-                        <div className="flex items-center rounded-md bg-muted">
+                    <div key={e.id} className="rounded-lg border border-border bg-background">
+                      {/* Cabeçalho sempre visível: formato + quantidade + resumo compacto.
+                          Detalhes (data, anexos, pagamento, publicação) só aparecem expandidos —
+                          com 3+ entregas, tudo sempre aberto virava uma parede de campos. */}
+                      <div className="flex items-center gap-2 p-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleEntregaExpanded(e.id)}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+                          />
+                          <input
+                            list="entregas-tipos"
+                            value={e.tipo}
+                            onClick={(ev) => ev.stopPropagation()}
+                            onChange={(ev) => update({ tipo: ev.target.value })}
+                            placeholder="Reels, Stories..."
+                            className="w-28 shrink-0 rounded-md bg-transparent px-1 py-1 text-sm font-medium outline-none"
+                          />
+                          {!expanded && resumoBits.length > 0 && (
+                            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                              {resumoBits.join(" · ")}
+                            </span>
+                          )}
+                        </button>
+                        <div
+                          className="flex shrink-0 items-center rounded-md bg-muted"
+                          onClick={(ev) => ev.stopPropagation()}
+                        >
                           <button
                             type="button"
                             onClick={() => update({ quantidade: Math.max(1, e.quantidade - 1) })}
@@ -2351,7 +2391,7 @@ function InfluenciadorDialog({
                           >
                             −
                           </button>
-                          <span className="w-8 text-center text-sm font-medium tabular-nums">
+                          <span className="w-7 text-center text-sm font-medium tabular-nums">
                             {e.quantidade}
                           </span>
                           <button
@@ -2366,55 +2406,65 @@ function InfluenciadorDialog({
                           onClick={() => setEntregas((es) => es.filter((x) => x.id !== e.id))}
                         />
                       </div>
-                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                        <span className="shrink-0">Data de postagem</span>
-                        <input
-                          type="date"
-                          value={e.dataPostagem ?? ""}
-                          onChange={(ev) => update({ dataPostagem: ev.target.value || undefined })}
-                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </label>
 
-                      <div className="space-y-2 border-t border-border pt-2.5">
-                        <EntregaAnexosEditor
-                          anexos={e.anexos ?? []}
-                          onChange={(anexos) => update({ anexos })}
-                        />
-                      </div>
-
-                      <div className="space-y-1.5 border-t border-border pt-2.5">
-                        <p className="text-[11px] font-medium text-muted-foreground">
-                          Pagamento combinado
-                        </p>
-                        <PagamentoEditor
-                          value={e.pagamento}
-                          onChange={(pagamento) => update({ pagamento })}
-                          pagGrupos={pagGrupos}
-                        />
-                      </div>
-
-                      {published && (
-                        <div className="space-y-2 border-t border-border pt-2.5">
-                          <p className="text-[11px] font-medium text-muted-foreground">
-                            Publicação
-                          </p>
-                          <input
-                            value={e.url ?? ""}
-                            onChange={(ev) => update({ url: ev.target.value })}
-                            placeholder="Link do conteúdo publicado"
-                            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <div>
-                            <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                              Métricas
-                            </p>
-                            <MetricsEditor
-                              value={e.metrics}
-                              onChange={(m) => update({ metrics: m })}
+                      {expanded && (
+                        <div className="space-y-3 border-t border-border p-3">
+                          <div className="space-y-1.5">
+                            <EntregaDateField
+                              label="Recebimento do roteiro"
+                              value={e.dataRecebimentoRoteiro}
+                              onChange={(v) => update({ dataRecebimentoRoteiro: v })}
+                            />
+                            <EntregaDateField
+                              label="Recebimento do conteúdo"
+                              value={e.dataRecebimentoConteudo}
+                              onChange={(v) => update({ dataRecebimentoConteudo: v })}
+                            />
+                            <EntregaDateField
+                              label="Postagem"
+                              value={e.dataPostagem}
+                              onChange={(v) => update({ dataPostagem: v })}
                             />
                           </div>
+
+                          <EntregaAnexosEditor
+                            anexos={e.anexos ?? []}
+                            onChange={(anexos) => update({ anexos })}
+                          />
+
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-medium text-muted-foreground">
+                              Pagamento combinado
+                            </p>
+                            <PagamentoEditor
+                              value={e.pagamento}
+                              onChange={(pagamento) => update({ pagamento })}
+                              pagGrupos={pagGrupos}
+                            />
+                          </div>
+
+                          {published && (
+                            <div className="space-y-2 border-t border-border pt-2.5">
+                              <p className="text-[11px] font-medium text-muted-foreground">
+                                Publicação
+                              </p>
+                              <input
+                                value={e.url ?? ""}
+                                onChange={(ev) => update({ url: ev.target.value })}
+                                placeholder="Link do conteúdo publicado"
+                                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+                              />
+                              <div>
+                                <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+                                  Métricas
+                                </p>
+                                <MetricsEditor
+                                  value={e.metrics}
+                                  onChange={(m) => update({ metrics: m })}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2428,17 +2478,14 @@ function InfluenciadorDialog({
               </datalist>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  const id = crypto.randomUUID();
                   setEntregas((es) => [
                     ...es,
-                    {
-                      id: crypto.randomUUID(),
-                      tipo: "Reels",
-                      quantidade: 1,
-                      status: "combinado",
-                    },
-                  ])
-                }
+                    { id, tipo: "Reels", quantidade: 1, status: "combinado" },
+                  ]);
+                  setExpandedEntregas((s) => new Set(s).add(id));
+                }}
                 className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
               >
                 <Plus className="h-3.5 w-3.5" /> Adicionar entrega
@@ -3009,6 +3056,42 @@ function PagamentosList({
  * gravação, conteúdo publicado, etc), independente do status/etapa em que
  * ela está e sem limite de quantidade por categoria.
  * ============================================================ */
+
+/** Campo de data opcional de uma entrega (roteiro/conteúdo/postagem são
+ * controles independentes) — com um "x" pra limpar quando não se aplica
+ * àquela entrega em específico, sem afetar as outras datas. */
+function EntregaDateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+      <span className="w-40 shrink-0">{label}</span>
+      <input
+        type="date"
+        value={value ?? ""}
+        onChange={(ev) => onChange(ev.target.value || undefined)}
+        className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          aria-label={`Limpar ${label.toLowerCase()}`}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </label>
+  );
+}
 
 const ENTREGA_ANEXO_TONE: Record<EntregaAnexoCategoria, string> = {
   Roteiro: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
