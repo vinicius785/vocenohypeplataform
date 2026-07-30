@@ -1407,7 +1407,10 @@ function MetricStat({ label, value }: { label: string; value: string }) {
  * "Editar" jumps into the same wizard used to create/edit.
  * ============================================================ */
 
-function ProfileSection({
+/** Seção secundária do resumo (Métricas, Pagamentos, Dados bancários,
+ * Contrato) — fica fechada por padrão pra manter o foco nas Entregas; a
+ * pessoa expande só quando precisa. */
+function CollapsibleSection({
   icon,
   title,
   children,
@@ -1416,14 +1419,24 @@ function ProfileSection({
   title: string;
   children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <section className="space-y-2.5">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-        {icon}
-        {title}
-      </div>
-      {children}
-    </section>
+    <div className="rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+      >
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          {icon}
+          {title}
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="border-t border-border px-3 py-3">{children}</div>}
+    </div>
   );
 }
 
@@ -1465,45 +1478,29 @@ function InfluencerProfileDialog({
   const hasMetrics = Object.values(metricsTotal).some((v) => v > 0);
   const reliability = computeReliability(influ.entregas);
 
-  const anexos: { key: string; nome: string; url: string; tipo: string }[] = [];
-  influ.entregas.forEach((e) => {
-    (e.anexos ?? []).forEach((a) => {
-      anexos.push({
-        key: a.id,
-        nome: a.nome,
-        url: a.url,
-        tipo: `${e.tipo} · ${a.categoria}`,
-      });
-    });
-  });
-  if (influ.contrato) {
-    anexos.push({
-      key: "contrato",
-      nome: "Contrato assinado",
-      url: influ.contrato,
-      tipo: "Contrato",
-    });
-  }
+  const hasExtras = has("pagamentos") || has("bancario") || has("contrato");
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
-          <DialogDescription className="sr-only">
-            Informações completas do influenciador.
-          </DialogDescription>
+        <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
+        <DialogDescription className="sr-only">
+          Informações completas do influenciador.
+        </DialogDescription>
+
+        {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
+        <DialogHeader className="space-y-3 border-b border-border bg-muted/20 px-6 py-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
               {influ.foto ? (
                 <img src={influ.foto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <User className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
+                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                <p className="truncate text-base font-semibold text-foreground">
+                <p className="truncate text-xl font-semibold text-foreground">
                   {influ.nome || "Sem nome"}
                 </p>
                 {influ.nicho && (
@@ -1519,23 +1516,36 @@ function InfluencerProfileDialog({
                   </span>
                 )}
               </div>
+              {has("redes") && influ.redes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {influ.redes.map((r) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                    >
+                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                      {r.handle ? `@${r.handle}` : r.plataforma}
+                    </span>
+                  ))}
+                </div>
+              )}
               {(influ.telefone || influ.email) && (
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   {influ.telefone && (
                     <a
                       href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                      className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
                     >
-                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Phone className="h-4 w-4 text-muted-foreground" />
                       {formatPhoneBR(influ.telefone)}
                     </a>
                   )}
                   {influ.email && (
                     <a
                       href={`mailto:${influ.email}`}
-                      className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                      className="inline-flex min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
                     >
-                      <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{influ.email}</span>
                     </a>
                   )}
@@ -1546,172 +1556,85 @@ function InfluencerProfileDialog({
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
-            {has("redes") &&
-              (influ.redes.length > 0 ? (
-                <ProfileSection icon={<Share2 className="h-3.5 w-3.5" />} title="Redes sociais">
-                  <div className="flex flex-wrap gap-1.5">
-                    {influ.redes.map((r) => (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground"
-                      >
-                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                        {r.handle ? `@${r.handle}` : r.plataforma}
-                      </span>
-                    ))}
-                  </div>
-                </ProfileSection>
-              ) : null)}
-
-            {anexos.length > 0 && (
-              <ProfileSection icon={<Paperclip className="h-3.5 w-3.5" />} title="Anexos">
-                <div className="flex flex-wrap gap-1.5">
-                  {anexos.map((a) => (
-                    <a
-                      key={a.key}
-                      href={a.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      download={a.nome}
-                      title={a.nome}
-                      className="group inline-flex max-w-[220px] items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs hover:border-foreground/30 hover:bg-muted"
-                    >
-                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="block truncate font-medium text-foreground">{a.nome}</span>
-                        <span className="block truncate text-[10px] text-muted-foreground">
-                          {a.tipo}
-                        </span>
-                      </span>
-                      <Download className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
-                    </a>
-                  ))}
-                </div>
-              </ProfileSection>
-            )}
-
+          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-6">
+            {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
-                <ProfileSection icon={<Package className="h-3.5 w-3.5" />} title="Entregas">
-                  <div className="space-y-2.5">
-                    {influ.entregas.map((e) => (
-                      <div
-                        key={e.id}
-                        className="space-y-2 rounded-lg border border-border bg-background p-3 text-xs"
-                      >
-                        {/* Cabeçalho: o quê + quantidade + status geral */}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 truncate font-medium text-foreground">
+                <div className="space-y-2.5">
+                  {influ.entregas.map((e) => (
+                    <div key={e.id} className="rounded-lg border border-border bg-background p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
                             {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                            <span className="ml-1 font-normal tabular-nums text-muted-foreground">
-                              {e.quantidade}×
-                            </span>
-                          </span>
-                          <span
-                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                              e.status === "publicado"
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                : e.status === "orcado"
-                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                  : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {e.status === "publicado"
-                              ? "Publicado"
-                              : e.status === "orcado"
-                                ? "Orçado"
-                                : "Combinado"}
-                          </span>
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {e.quantidade}×
+                            {e.dataPostagem &&
+                              ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
+                          </p>
                         </div>
-
-                        {/* Etapa de produção — o status individual editável */}
-                        <label className="flex items-center gap-1.5">
-                          <span className="shrink-0 text-[10px] text-muted-foreground">Etapa</span>
-                          <select
-                            value={e.conteudoStatus ?? "Combinado"}
-                            onChange={(ev) =>
-                              onSetConteudoStatus(e.id, ev.target.value as EntregaConteudoStatus)
-                            }
-                            className={`cursor-pointer flex-1 rounded px-1.5 py-1 text-[11px] font-medium outline-none ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
-                          >
-                            {ENTREGA_CONTEUDO_STATUSES.map((s) => (
-                              <option
-                                key={s}
-                                value={s}
-                                disabled={s === "Postado" && !canPublishEntrega(influ.status)}
-                                className="bg-background text-foreground"
-                              >
-                                {s === "Postado" && !canPublishEntrega(influ.status)
-                                  ? "Postado (disponível a partir de Aprovado)"
-                                  : s}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        {(e.url || (e.anexos?.length ?? 0) > 0) && (
-                          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
-                            {e.url && (
-                              <a
-                                href={e.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
-                              >
-                                <ExternalLink className="h-3 w-3" /> Ver publicação
-                              </a>
-                            )}
-                            {e.anexos?.map((a) => (
-                              <a
-                                key={a.id}
-                                href={a.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                download={a.nome}
-                                title={a.nome}
-                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-                              >
-                                <Paperclip className="h-3 w-3" />
-                                {a.categoria}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-
-                        {(e.pagamento ||
-                          (e.metrics && Object.values(e.metrics).some((v) => v))) && (
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
-                            {e.pagamento && (
-                              <span className="inline-flex items-center gap-1.5">
-                                <Coins className="h-3 w-3" />
-                                {pagamentoResumo(e.pagamento)}
-                                <span
-                                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                                >
-                                  {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                                </span>
-                              </span>
-                            )}
-                            {e.metrics?.views != null && <span>{e.metrics.views} views</span>}
-                            {e.metrics?.likes != null && <span>{e.metrics.likes} curtidas</span>}
-                            {e.metrics?.comments != null && (
-                              <span>{e.metrics.comments} coment.</span>
-                            )}
-                            {e.metrics?.shares != null && <span>{e.metrics.shares} compart.</span>}
-                            {e.metrics?.saves != null && <span>{e.metrics.saves} salvos</span>}
-                            {e.metrics?.reach != null && <span>{e.metrics.reach} alcance</span>}
-                          </div>
-                        )}
+                        <select
+                          value={e.conteudoStatus ?? "Combinado"}
+                          onChange={(ev) =>
+                            onSetConteudoStatus(e.id, ev.target.value as EntregaConteudoStatus)
+                          }
+                          className={`shrink-0 cursor-pointer rounded px-1.5 py-1 text-[10px] font-medium outline-none ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
+                        >
+                          {ENTREGA_CONTEUDO_STATUSES.map((s) => (
+                            <option
+                              key={s}
+                              value={s}
+                              disabled={s === "Postado" && !canPublishEntrega(influ.status)}
+                              className="bg-background text-foreground"
+                            >
+                              {s === "Postado" && !canPublishEntrega(influ.status)
+                                ? "Postado (disponível a partir de Aprovado)"
+                                : s}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    ))}
-                  </div>
-                </ProfileSection>
-              ) : null)}
 
+                      {(e.url || (e.anexos?.length ?? 0) > 0) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                          {e.url && (
+                            <a
+                              href={e.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
+                            >
+                              <ExternalLink className="h-3 w-3" /> Ver publicação
+                            </a>
+                          )}
+                          {e.anexos?.map((a) => (
+                            <a
+                              key={a.id}
+                              href={a.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={a.nome}
+                              title={a.nome}
+                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+                            >
+                              <Paperclip className="h-3 w-3" />
+                              {a.categoria}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nenhuma entrega combinada ainda.</p>
+              ))}
+
+            {/* SEÇÕES SECUNDÁRIAS — ocultas por padrão, expandem sob demanda */}
             {has("entregas") && (hasMetrics || reliability.total > 0) && (
-              <ProfileSection icon={<BarChart3 className="h-3.5 w-3.5" />} title="Métricas">
-                <div className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg border border-border px-3 py-3 sm:grid-cols-4">
+              <CollapsibleSection icon={<BarChart3 className="h-3.5 w-3.5" />} title="Métricas">
+                <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
                   <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
                   {metricsTotal.views > 0 && (
                     <MetricStat
@@ -1747,61 +1670,57 @@ function InfluencerProfileDialog({
                     <MetricStat label="Salvos" value={metricsTotal.saves.toLocaleString("pt-BR")} />
                   )}
                 </div>
-              </ProfileSection>
+              </CollapsibleSection>
             )}
 
             {has("pagamentos") && (
-              <ProfileSection icon={<Coins className="h-3.5 w-3.5" />} title="Pagamentos">
+              <CollapsibleSection icon={<Coins className="h-3.5 w-3.5" />} title="Pagamentos">
                 <PagamentosList entregas={influ.entregas} onSetAprovacao={onSetAprovacao} />
-              </ProfileSection>
+              </CollapsibleSection>
             )}
 
-            {has("bancario") &&
-              (hasBank ? (
-                <ProfileSection icon={<Landmark className="h-3.5 w-3.5" />} title="Dados bancários">
-                  <dl className="space-y-1 rounded-lg border border-border px-3 py-2 text-xs">
-                    {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
-                    {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
-                    {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
-                    {(bank.agencia || bank.conta) && (
-                      <MetaRow
-                        label="Ag./Conta"
-                        value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
-                      />
-                    )}
-                    {bank.pixChave && (
-                      <MetaRow
-                        label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
-                        value={bank.pixChave}
-                      />
-                    )}
-                  </dl>
-                </ProfileSection>
-              ) : null)}
+            {has("bancario") && hasBank && (
+              <CollapsibleSection
+                icon={<Landmark className="h-3.5 w-3.5" />}
+                title="Dados bancários"
+              >
+                <dl className="space-y-1 text-xs">
+                  {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
+                  {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
+                  {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
+                  {(bank.agencia || bank.conta) && (
+                    <MetaRow
+                      label="Ag./Conta"
+                      value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
+                    />
+                  )}
+                  {bank.pixChave && (
+                    <MetaRow
+                      label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
+                      value={bank.pixChave}
+                    />
+                  )}
+                </dl>
+              </CollapsibleSection>
+            )}
 
-            {has("contrato") &&
-              (influ.contrato ? (
-                <ProfileSection icon={<FileText className="h-3.5 w-3.5" />} title="Contrato">
-                  <a
-                    href={influ.contrato}
-                    download
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
-                  </a>
-                </ProfileSection>
-              ) : null)}
+            {has("contrato") && influ.contrato && (
+              <CollapsibleSection icon={<FileText className="h-3.5 w-3.5" />} title="Contrato">
+                <a
+                  href={influ.contrato}
+                  download
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
+                </a>
+              </CollapsibleSection>
+            )}
 
-            {!has("redes") &&
-              !has("entregas") &&
-              !has("pagamentos") &&
-              !has("bancario") &&
-              !has("contrato") &&
-              anexos.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Nenhuma informação adicional configurada para este influenciador.
-                </p>
-              )}
+            {!has("entregas") && !hasExtras && (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma informação adicional configurada para este influenciador.
+              </p>
+            )}
           </div>
 
           <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
