@@ -56,6 +56,8 @@ import type { ChatMessage } from "@/lib/chat-store";
 
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
+import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
 import { formatIsoDate } from "@/lib/utils";
@@ -65,6 +67,7 @@ type ChatTaskInfo = {
   label: string;
   project?: string;
   projectId: string;
+  campanhaId?: string;
   status: string;
   priority?: string;
   dueDate?: string;
@@ -118,27 +121,61 @@ export function ChatSection() {
     [convoMessages, searchQuery],
   );
 
-  const tasks = useMemo<ChatTaskInfo[]>(
-    () =>
-      loadProjetos().flatMap((p) =>
-        (p.tasks ?? []).map((t) => ({
+  const campanhaNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clientes) {
+      for (const camp of c.campanhas ?? []) map.set(camp.id, camp.nome);
+    }
+    return map;
+  }, [clientes]);
+
+  const [, forceTasks] = useState(0);
+  useEffect(() => onCampanhaTarefasChange(() => forceTasks((n) => n + 1)), []);
+
+  const tasks = useMemo<ChatTaskInfo[]>(() => {
+    const projectTasks = loadProjetos().flatMap((p) =>
+      (p.tasks ?? []).map((t) => ({
+        id: t.id,
+        label: t.title,
+        project: p.name,
+        projectId: p.id,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        assignees: getTaskAssignees(t),
+      })),
+    );
+    const campanhaTasks: ChatTaskInfo[] = [];
+    for (const [campanhaId, campTasks] of getAllCampanhaTarefas()) {
+      for (const t of campTasks) {
+        campanhaTasks.push({
           id: t.id,
           label: t.title,
-          project: p.name,
-          projectId: p.id,
+          project: campanhaNameMap.get(campanhaId),
+          projectId: "",
+          campanhaId,
           status: t.status,
           priority: t.priority,
           dueDate: t.dueDate,
           assignees: getTaskAssignees(t),
-        })),
-      ),
-    [],
-  );
+        });
+      }
+    }
+    return [...projectTasks, ...campanhaTasks];
+  }, [campanhaNameMap]);
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const navigate = useNavigate();
   const openTask = (taskId: string) => {
     const t = taskInfoById.get(taskId);
     if (!t) return;
+    if (t.campanhaId) {
+      sessionStorage.setItem(
+        OPEN_CAMPANHA_TASK_KEY,
+        JSON.stringify({ campanhaId: t.campanhaId, taskId }),
+      );
+      navigate({ to: "/time", search: { section: "campanhas" satisfies SectionKey } });
+      return;
+    }
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId } });
   };
 

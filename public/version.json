@@ -1,6 +1,6 @@
 {
-  "version": "1.27.0",
+  "version": "1.28.0",
   "notes": [
-    "Gestão: tarefas de campanha agora pontuam no ranking (antes só tarefas de projeto contavam) e o ranking atualiza na hora assim que uma ação que pontue é feita."
+    "Chat: tarefas de campanha agora aparecem como opção ao mencionar tarefas com @ (antes só tarefas de projeto apareciam)."
   ]
 }
