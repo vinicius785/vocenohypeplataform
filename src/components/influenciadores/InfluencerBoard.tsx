@@ -296,7 +296,7 @@ export const ENTREGA_CONTEUDO_STATUSES = [
   "Aguardando roteiro",
   "Roteiro aprovado",
   "Em gravação",
-  "Aguardando aprovação da gravação",
+  "Aprovação gravação",
   "Gravação aprovada",
   "Postado",
 ] as const;
@@ -306,7 +306,7 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  "Aguardando aprovação da gravação": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  "Aprovação gravação": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   "Gravação aprovada": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
