@@ -1,1 +1,6 @@
-{ "version": "1.20.2" }
+{
+  "version": "1.21.0",
+  "notes": [
+    "Aviso de nova versão foi redesenhado e agora mostra as notas da atualização (o que você está vendo agora)."
+  ]
+}
