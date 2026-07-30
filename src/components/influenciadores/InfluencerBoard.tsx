@@ -1407,35 +1407,89 @@ function MetricStat({ label, value }: { label: string; value: string }) {
  * "Editar" jumps into the same wizard used to create/edit.
  * ============================================================ */
 
-/** Seção secundária do resumo (Métricas, Pagamentos, Dados bancários,
- * Contrato) — fica fechada por padrão pra manter o foco nas Entregas; a
- * pessoa expande só quando precisa. */
-function CollapsibleSection({
-  icon,
-  title,
-  children,
+/** Botões lado a lado (Métricas, Pagamentos, Dados bancários, Contrato) —
+ * nenhum aberto por padrão; clicar num abre o painel dele logo abaixo (e
+ * fecha automaticamente se outro for aberto). */
+function HiddenSectionsPanel({
+  sections,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
+  sections: { key: string; icon: React.ReactNode; title: string; content: React.ReactNode }[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState<string | null>(null);
+  const activeSection = sections.find((s) => s.key === active);
   return (
-    <div className="rounded-lg border border-border">
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {sections.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setActive((a) => (a === s.key ? null : s.key))}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              active === s.key
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {s.icon}
+            {s.title}
+          </button>
+        ))}
+      </div>
+      {activeSection && (
+        <div className="rounded-lg border border-border bg-background p-3">
+          {activeSection.content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pill do status individual de uma entrega — dropdown customizado (não um
+ * `<select>` nativo, que renderia como uma caixa cinza do navegador). */
+function EntregaStatusPill({
+  value,
+  influStatus,
+  onChange,
+}: {
+  value: EntregaConteudoStatus;
+  influStatus: InfluStatus;
+  onChange: (s: EntregaConteudoStatus) => void;
+}) {
+  const menu = useDropdown();
+  return (
+    <div ref={menu.ref} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+        onClick={() => menu.setOpen((o) => !o)}
+        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
       >
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-          {icon}
-          {title}
-        </span>
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        {value}
+        <ChevronDown className="h-2.5 w-2.5" />
       </button>
-      {open && <div className="border-t border-border px-3 py-3">{children}</div>}
+      {menu.open && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-md">
+          {ENTREGA_CONTEUDO_STATUSES.map((s) => {
+            const disabled = s === "Postado" && !canPublishEntrega(influStatus);
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={disabled}
+                title={disabled ? "Disponível a partir de 'Aprovado'" : undefined}
+                onClick={() => {
+                  onChange(s);
+                  menu.setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_CONTEUDO_TONE[s]}`} />
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -1489,28 +1543,28 @@ function InfluencerProfileDialog({
         </DialogDescription>
 
         {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
-        <DialogHeader className="space-y-3 border-b border-border bg-muted/20 px-6 py-5">
-          <div className="flex items-start gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+        <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
+          <div className="flex items-start gap-5">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
               {influ.foto ? (
                 <img src={influ.foto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
+                <User className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <p className="truncate text-xl font-semibold text-foreground">
+            <div className="min-w-0 flex-1 space-y-2.5 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-2xl font-semibold text-foreground">
                   {influ.nome || "Sem nome"}
                 </p>
                 {influ.nicho && (
-                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
                     {influ.nicho}
                   </span>
                 )}
                 {has("status") && (
                   <span
-                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${INFLU_STATUS_TONE[influ.status]}`}
+                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[influ.status]}`}
                   >
                     {influ.status}
                   </span>
@@ -1521,7 +1575,7 @@ function InfluencerProfileDialog({
                   {influ.redes.map((r) => (
                     <span
                       key={r.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm"
                     >
                       <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                       {r.handle ? `@${r.handle}` : r.plataforma}
@@ -1534,7 +1588,7 @@ function InfluencerProfileDialog({
                   {influ.telefone && (
                     <a
                       href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                      className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+                      className="inline-flex items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-background/70"
                     >
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       {formatPhoneBR(influ.telefone)}
@@ -1543,7 +1597,7 @@ function InfluencerProfileDialog({
                   {influ.email && (
                     <a
                       href={`mailto:${influ.email}`}
-                      className="inline-flex min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+                      className="inline-flex min-w-0 items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-background/70"
                     >
                       <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{influ.email}</span>
@@ -1560,161 +1614,180 @@ function InfluencerProfileDialog({
             {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
-                <div className="space-y-2.5">
-                  {influ.entregas.map((e) => (
-                    <div key={e.id} className="rounded-lg border border-border bg-background p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                  <div className="flex min-w-max gap-5 border-t-2 border-border pt-6">
+                    {influ.entregas.map((e) => (
+                      <div key={e.id} className="relative w-60 shrink-0">
+                        <span className="absolute -top-[27px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
+                        <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                              {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                            </p>
+                            <EntregaStatusPill
+                              value={e.conteudoStatus ?? "Combinado"}
+                              influStatus={influ.status}
+                              onChange={(s) => onSetConteudoStatus(e.id, s)}
+                            />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
                             {e.quantidade}×
                             {e.dataPostagem &&
                               ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
                           </p>
-                        </div>
-                        <select
-                          value={e.conteudoStatus ?? "Combinado"}
-                          onChange={(ev) =>
-                            onSetConteudoStatus(e.id, ev.target.value as EntregaConteudoStatus)
-                          }
-                          className={`shrink-0 cursor-pointer rounded px-1.5 py-1 text-[10px] font-medium outline-none ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
-                        >
-                          {ENTREGA_CONTEUDO_STATUSES.map((s) => (
-                            <option
-                              key={s}
-                              value={s}
-                              disabled={s === "Postado" && !canPublishEntrega(influ.status)}
-                              className="bg-background text-foreground"
-                            >
-                              {s === "Postado" && !canPublishEntrega(influ.status)
-                                ? "Postado (disponível a partir de Aprovado)"
-                                : s}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {(e.url || (e.anexos?.length ?? 0) > 0) && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
-                          {e.url && (
-                            <a
-                              href={e.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
-                            >
-                              <ExternalLink className="h-3 w-3" /> Ver publicação
-                            </a>
+                          {(e.url || (e.anexos?.length ?? 0) > 0) && (
+                            <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                              {e.url && (
+                                <a
+                                  href={e.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Ver publicação
+                                </a>
+                              )}
+                              {e.anexos?.map((a) => (
+                                <a
+                                  key={a.id}
+                                  href={a.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  download={a.nome}
+                                  title={a.nome}
+                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+                                >
+                                  <Paperclip className="h-3 w-3" />
+                                  {a.categoria}
+                                </a>
+                              ))}
+                            </div>
                           )}
-                          {e.anexos?.map((a) => (
-                            <a
-                              key={a.id}
-                              href={a.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download={a.nome}
-                              title={a.nome}
-                              className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-                            >
-                              <Paperclip className="h-3 w-3" />
-                              {a.categoria}
-                            </a>
-                          ))}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">Nenhuma entrega combinada ainda.</p>
               ))}
 
-            {/* SEÇÕES SECUNDÁRIAS — ocultas por padrão, expandem sob demanda */}
-            {has("entregas") && (hasMetrics || reliability.total > 0) && (
-              <CollapsibleSection icon={<BarChart3 className="h-3.5 w-3.5" />} title="Métricas">
-                <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                  <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
-                  {metricsTotal.views > 0 && (
-                    <MetricStat
-                      label="Visualizações"
-                      value={metricsTotal.views.toLocaleString("pt-BR")}
-                    />
-                  )}
-                  {metricsTotal.reach > 0 && (
-                    <MetricStat
-                      label="Alcance"
-                      value={metricsTotal.reach.toLocaleString("pt-BR")}
-                    />
-                  )}
-                  {metricsTotal.likes > 0 && (
-                    <MetricStat
-                      label="Curtidas"
-                      value={metricsTotal.likes.toLocaleString("pt-BR")}
-                    />
-                  )}
-                  {metricsTotal.comments > 0 && (
-                    <MetricStat
-                      label="Comentários"
-                      value={metricsTotal.comments.toLocaleString("pt-BR")}
-                    />
-                  )}
-                  {metricsTotal.shares > 0 && (
-                    <MetricStat
-                      label="Compart."
-                      value={metricsTotal.shares.toLocaleString("pt-BR")}
-                    />
-                  )}
-                  {metricsTotal.saves > 0 && (
-                    <MetricStat label="Salvos" value={metricsTotal.saves.toLocaleString("pt-BR")} />
-                  )}
-                </div>
-              </CollapsibleSection>
-            )}
-
-            {has("pagamentos") && (
-              <CollapsibleSection icon={<Coins className="h-3.5 w-3.5" />} title="Pagamentos">
-                <PagamentosList entregas={influ.entregas} onSetAprovacao={onSetAprovacao} />
-              </CollapsibleSection>
-            )}
-
-            {has("bancario") && hasBank && (
-              <CollapsibleSection
-                icon={<Landmark className="h-3.5 w-3.5" />}
-                title="Dados bancários"
-              >
-                <dl className="space-y-1 text-xs">
-                  {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
-                  {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
-                  {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
-                  {(bank.agencia || bank.conta) && (
-                    <MetaRow
-                      label="Ag./Conta"
-                      value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
-                    />
-                  )}
-                  {bank.pixChave && (
-                    <MetaRow
-                      label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
-                      value={bank.pixChave}
-                    />
-                  )}
-                </dl>
-              </CollapsibleSection>
-            )}
-
-            {has("contrato") && influ.contrato && (
-              <CollapsibleSection icon={<FileText className="h-3.5 w-3.5" />} title="Contrato">
-                <a
-                  href={influ.contrato}
-                  download
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
-                </a>
-              </CollapsibleSection>
-            )}
+            {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, conteúdo oculto até clicar */}
+            <HiddenSectionsPanel
+              sections={[
+                ...(has("entregas") && (hasMetrics || reliability.total > 0)
+                  ? [
+                      {
+                        key: "metricas",
+                        icon: <BarChart3 className="h-3.5 w-3.5" />,
+                        title: "Métricas",
+                        content: (
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
+                            {metricsTotal.views > 0 && (
+                              <MetricStat
+                                label="Visualizações"
+                                value={metricsTotal.views.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.reach > 0 && (
+                              <MetricStat
+                                label="Alcance"
+                                value={metricsTotal.reach.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.likes > 0 && (
+                              <MetricStat
+                                label="Curtidas"
+                                value={metricsTotal.likes.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.comments > 0 && (
+                              <MetricStat
+                                label="Comentários"
+                                value={metricsTotal.comments.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.shares > 0 && (
+                              <MetricStat
+                                label="Compart."
+                                value={metricsTotal.shares.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.saves > 0 && (
+                              <MetricStat
+                                label="Salvos"
+                                value={metricsTotal.saves.toLocaleString("pt-BR")}
+                              />
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("pagamentos")
+                  ? [
+                      {
+                        key: "pagamentos",
+                        icon: <Coins className="h-3.5 w-3.5" />,
+                        title: "Pagamentos",
+                        content: (
+                          <PagamentosList
+                            entregas={influ.entregas}
+                            onSetAprovacao={onSetAprovacao}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("bancario") && hasBank
+                  ? [
+                      {
+                        key: "bancario",
+                        icon: <Landmark className="h-3.5 w-3.5" />,
+                        title: "Dados bancários",
+                        content: (
+                          <dl className="space-y-1 text-xs">
+                            {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
+                            {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
+                            {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
+                            {(bank.agencia || bank.conta) && (
+                              <MetaRow
+                                label="Ag./Conta"
+                                value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
+                              />
+                            )}
+                            {bank.pixChave && (
+                              <MetaRow
+                                label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
+                                value={bank.pixChave}
+                              />
+                            )}
+                          </dl>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("contrato") && influ.contrato
+                  ? [
+                      {
+                        key: "contrato",
+                        icon: <FileText className="h-3.5 w-3.5" />,
+                        title: "Contrato",
+                        content: (
+                          <a
+                            href={influ.contrato}
+                            download
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
+                          </a>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
 
             {!has("entregas") && !hasExtras && (
               <p className="text-xs text-muted-foreground">
