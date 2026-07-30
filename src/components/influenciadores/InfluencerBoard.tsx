@@ -1513,59 +1513,38 @@ function EntregaStatusPill({
 /** Botão compacto de "Adicionar anexo" pro card de entrega no resumo — abre
  * o mesmo menu de categoria do editor, mas sem precisar sair do resumo pra
  * anexar roteiro/gravação/conteúdo publicado. */
-function EntregaAnexoQuickAdd({ onAdd }: { onAdd: (anexo: EntregaAnexo) => void }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
-  const menu = useDropdown();
-
+/** Botão "Anexos" do card de entrega no resumo — abre um popup (não um menu
+ * suspenso, que ficava cortado dentro do card) mostrando todos os anexos
+ * daquela entrega e permitindo adicionar novos escolhendo a categoria. */
+function EntregaAnexosPopup({
+  entregaLabel,
+  anexos,
+  onChange,
+}: {
+  entregaLabel: string;
+  anexos: EntregaAnexo[];
+  onChange: (next: EntregaAnexo[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <div ref={menu.ref} className="relative shrink-0">
-      <input
-        ref={fileRef}
-        type="file"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const r = new FileReader();
-          r.onload = () =>
-            onAdd({
-              id: crypto.randomUUID(),
-              categoria: pendingCategoria.current,
-              nome: file.name,
-              url: String(r.result),
-            });
-          r.readAsDataURL(file);
-          if (fileRef.current) fileRef.current.value = "";
-        }}
-      />
+    <>
       <button
         type="button"
-        onClick={() => menu.setOpen((o) => !o)}
+        onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
       >
-        <Paperclip className="h-3 w-3" /> Anexar
+        <Paperclip className="h-3 w-3" /> Anexos{anexos.length > 0 ? ` (${anexos.length})` : ""}
       </button>
-      {menu.open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-md border border-border bg-popover p-1 shadow-md">
-          {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => {
-                pendingCategoria.current = c;
-                menu.setOpen(false);
-                fileRef.current?.click();
-              }}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-            >
-              <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_ANEXO_TONE[c]}`} />
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm border-border bg-background">
+          <DialogTitle className="text-sm font-semibold">Anexos · {entregaLabel}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Anexos da entrega: visualize, adicione ou remova arquivos.
+          </DialogDescription>
+          <EntregaAnexosEditor anexos={anexos} onChange={onChange} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1613,7 +1592,7 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[70vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[56vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
         <DialogDescription className="sr-only">
           Informações completas do influenciador.
@@ -1689,8 +1668,6 @@ function InfluencerProfileDialog({
                 <div className="-mx-1 overflow-x-auto overflow-y-visible px-1 pb-2">
                   <div className="flex min-w-max gap-5 border-t-2 border-border pt-7">
                     {influ.entregas.map((e) => {
-                      const anexosVisiveis = (e.anexos ?? []).slice(0, 2);
-                      const anexosOcultos = (e.anexos?.length ?? 0) - anexosVisiveis.length;
                       return (
                         <div key={e.id} className="relative w-64 shrink-0">
                           <span className="absolute -top-[31px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
@@ -1721,27 +1698,10 @@ function InfluencerProfileDialog({
                                   <ExternalLink className="h-3 w-3" /> Ver publicação
                                 </a>
                               )}
-                              {anexosVisiveis.map((a) => (
-                                <a
-                                  key={a.id}
-                                  href={a.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  download={a.nome}
-                                  title={a.nome}
-                                  className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-                                >
-                                  <Paperclip className="h-3 w-3" />
-                                  {a.categoria}
-                                </a>
-                              ))}
-                              {anexosOcultos > 0 && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  +{anexosOcultos}
-                                </span>
-                              )}
-                              <EntregaAnexoQuickAdd
-                                onAdd={(a) => onSetAnexos(e.id, [...(e.anexos ?? []), a])}
+                              <EntregaAnexosPopup
+                                entregaLabel={e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                                anexos={e.anexos ?? []}
+                                onChange={(anexos) => onSetAnexos(e.id, anexos)}
                               />
                             </div>
                           </div>

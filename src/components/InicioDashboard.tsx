@@ -260,12 +260,32 @@ export function InicioDashboard() {
     [meetings, todayISO],
   );
 
-  // Comentários atribuídos — menções a mim em qualquer conversa do chat
+  // Comentários atribuídos — menções a mim em qualquer conversa do chat.
+  // "Limpar" (por pessoa/item ou tudo de uma vez) grava em `notif:seenMentions`
+  // — o mesmo set que o sino de notificações usa — então limpar aqui também
+  // tira o item de lá, em vez de manter duas listas de "visto" divergentes.
   const [, forceChat] = useState(0);
   useEffect(() => subscribeChat(() => forceChat((n) => n + 1)), []);
+  const [seenTick, setSeenTick] = useState(0);
+  const readSeenMentions = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem("notif:seenMentions");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  };
+  const dismissMentions = (ids: string[]) => {
+    const seen = readSeenMentions();
+    ids.forEach((id) => seen.add(id));
+    localStorage.setItem("notif:seenMentions", JSON.stringify(Array.from(seen)));
+    window.dispatchEvent(new StorageEvent("storage", { key: "notif:seenMentions" }));
+    setSeenTick((t) => t + 1);
+  };
   const clientesForChat = useClientes();
   const mentionItems = useMemo(() => {
     const me = getMe();
+    const seen = readSeenMentions();
     const channels = loadChannels();
     const campaigns = loadCampaignChannels(clientesForChat);
     const projects = loadProjectChannels();
@@ -279,12 +299,16 @@ export function InicioDashboard() {
     };
     return loadMessages()
       .filter(
-        (m) => m.authorId !== me.id && m.mentions?.some((x) => x.kind === "user" && x.id === me.id),
+        (m) =>
+          m.authorId !== me.id &&
+          !seen.has(m.id) &&
+          m.mentions?.some((x) => x.kind === "user" && x.id === me.id),
       )
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, 6)
       .map((m) => ({ ...m, convoLabel: labelFor(m.convoId) }));
-  }, [clientesForChat]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientesForChat, seenTick]);
 
   const openMention = (convoId: string) => {
     setActiveConvo(convoId);
@@ -536,6 +560,16 @@ export function InicioDashboard() {
             <CardHeader
               icon={<MessageSquare className="h-4 w-4" />}
               title="Comentários atribuídos"
+              action={
+                mentionItems.length > 0 && (
+                  <button
+                    onClick={() => dismissMentions(mentionItems.map((m) => m.id))}
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Limpar tudo
+                  </button>
+                )
+              }
             />
             {mentionItems.length === 0 ? (
               <p className="px-4 py-8 text-center text-xs text-muted-foreground">
@@ -544,22 +578,31 @@ export function InicioDashboard() {
             ) : (
               <div className="divide-y divide-border">
                 {mentionItems.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => openMention(m.convoId)}
-                    className="group flex w-full items-start gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-foreground">
-                        {m.authorName}{" "}
-                        <span className="font-normal text-muted-foreground">
-                          mencionou você em {m.convoLabel}
-                        </span>
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{m.text}</p>
-                    </div>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                  </button>
+                  <div key={m.id} className="group flex items-start gap-1 px-4 py-2.5">
+                    <button
+                      onClick={() => openMention(m.convoId)}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-foreground">
+                          {m.authorName}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            mencionou você em {m.convoLabel}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{m.text}</p>
+                      </div>
+                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                    <button
+                      onClick={() => dismissMentions([m.id])}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                      aria-label={`Limpar menção de ${m.authorName}`}
+                      title={`Limpar menção de ${m.authorName}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
