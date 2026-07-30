@@ -7,6 +7,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  Flag,
   MessageSquare,
   Newspaper,
   Plus,
@@ -21,6 +22,7 @@ import {
 import {
   loadProjetos,
   onProjetosChange,
+  getTaskAssignees,
   type BlogPost,
   type Task as ProjTask,
 } from "@/lib/projetos";
@@ -41,6 +43,7 @@ import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries
 import type { SectionKey } from "@/components/AppShell";
 import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
 import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
+import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 
@@ -111,17 +114,24 @@ type CampanhaTaskLike = {
   dueDate?: string;
   priority?: ProjTask["priority"];
   status: ProjTask["status"];
+  assignee?: string;
+  assignees?: string[];
 };
 
 /** `campanhaNames` mapeia campanhaId -> nome, pra dar título nas tarefas de
  * campanha do mesmo jeito que as de projeto já têm `p.name`. Sem isso as
  * tarefas de campanha (guardadas à parte, em `campanha_tarefas`, não em
- * `Project.tasks`) nunca apareciam aqui — só as de projeto. */
-function loadAllTasks(campanhaNames: Map<string, string>): DashTask[] {
+ * `Project.tasks`) nunca apareciam aqui — só as de projeto.
+ *
+ * `meName` filtra pra só entrar tarefa onde a pessoa está entre os
+ * responsáveis (sozinha ou dividindo com mais alguém) — "Meu trabalho" é
+ * pra ser pessoal, não a lista de tarefas de todo mundo. */
+function loadAllTasks(campanhaNames: Map<string, string>, meName: string): DashTask[] {
   const projs = loadProjetos();
   const out: DashTask[] = [];
   for (const p of projs) {
     for (const t of p.tasks ?? []) {
+      if (!getTaskAssignees(t).includes(meName)) continue;
       const b = bucketFor(t.dueDate, t.status);
       out.push({
         id: t.id,
@@ -137,6 +147,7 @@ function loadAllTasks(campanhaNames: Map<string, string>): DashTask[] {
   }
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
     for (const t of tasks as unknown as CampanhaTaskLike[]) {
+      if (!getTaskAssignees(t).includes(meName)) continue;
       const b = bucketFor(t.dueDate, t.status);
       out.push({
         id: t.id,
@@ -252,7 +263,7 @@ export function InicioDashboard() {
     setToday(`${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`);
 
     const refresh = () => {
-      setTasks(loadAllTasks(campanhaNameMap));
+      setTasks(loadAllTasks(campanhaNameMap, getMe().name));
       setMeetings(loadMeetings());
       setPersonal(loadPersonal());
     };
@@ -545,12 +556,18 @@ export function InicioDashboard() {
                   onClick={() => openTask(t)}
                   className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
                 >
-                  <PriorityDot priority={t.priority} bucket={t.bucket} />
+                  <PriorityFlag priority={t.priority} bucket={t.bucket} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-foreground group-hover:underline">
                       {t.title}
                     </p>
                   </div>
+                  <span
+                    className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
+                    {t.status}
+                  </span>
                   <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
                     {t.projectName}
                   </span>
@@ -927,7 +944,7 @@ function StatChip({
   );
 }
 
-function PriorityDot({
+function PriorityFlag({
   priority,
   bucket,
 }: {
@@ -936,14 +953,23 @@ function PriorityDot({
 }) {
   const color =
     bucket === "atrasada"
-      ? "bg-destructive"
-      : priority === "Alta" || priority === "Urgente"
-        ? "bg-orange-500"
-        : priority === "Normal"
-          ? "bg-yellow-500"
-          : "bg-muted-foreground/40";
+      ? "text-destructive"
+      : priority === "Urgente"
+        ? "text-red-500"
+        : priority === "Alta"
+          ? "text-orange-500"
+          : priority === "Normal"
+            ? "text-yellow-500"
+            : "text-muted-foreground/40";
 
-  return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
+  return (
+    <Flag
+      className={`h-3.5 w-3.5 shrink-0 ${color}`}
+      fill="currentColor"
+      strokeWidth={1.5}
+      aria-label={priority ?? "Sem prioridade"}
+    />
+  );
 }
 
 function MuralNovidades() {

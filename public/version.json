@@ -1,6 +1,8 @@
 {
-  "version": "1.23.0",
+  "version": "1.24.0",
   "notes": [
-    "Início: tarefas de campanha (não só de projeto) agora aparecem no card \"Meu trabalho\", com atualização em tempo real."
+    "Início: \"Meu trabalho\" agora só mostra tarefas onde você está marcado como responsável (sozinho ou junto com outra pessoa).",
+    "Início: prioridade da tarefa vira bandeira colorida e o status agora aparece do lado.",
+    "Correção de fundo: tarefas/influenciadores/documentos de campanha excluídos por alguém podiam continuar aparecendo pra quem já estava com a aba aberta (ex: tarefas atrasadas fantasmas)."
   ]
 }
