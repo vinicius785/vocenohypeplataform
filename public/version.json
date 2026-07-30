@@ -1,6 +1,7 @@
 {
-  "version": "1.24.2",
+  "version": "1.25.0",
   "notes": [
-    "Tarefas: clicar fora do card (ou apertar Esc) agora salva a edição antes de fechar, em vez de descartar silenciosamente — o botão \"Cancelar\" continua descartando de propósito."
+    "Editor de artigo do blog corrigido: o texto não apaga/reaparece mais enquanto você digita (mudanças só sincronizam com o resto do app 500ms depois de parar de escrever).",
+    "Editor de artigo do blog ganha pré-visualização em tempo real, ao lado do texto."
   ]
 }

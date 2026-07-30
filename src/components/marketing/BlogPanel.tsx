@@ -1,10 +1,59 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, X, Newspaper, ImageIcon, Calendar } from "lucide-react";
+import { Plus, X, Newspaper, ImageIcon, Calendar, Eye, Check } from "lucide-react";
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
 import { notifyBlogPublished } from "@/lib/marketing.functions";
+
+/** Conversor bem simples de markdown pra HTML — só o suficiente pra
+ * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
+ * pra ser um parser completo, só dar uma ideia real de como o texto digitado
+ * vai ficar formatado, sem precisar de uma lib externa. */
+function renderMarkdownLite(md: string): string {
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const lines = escape(md).split("\n");
+  const html: string[] = [];
+  let inList = false;
+  const closeList = () => {
+    if (inList) {
+      html.push("</ul>");
+      inList = false;
+    }
+  };
+  const inline = (s: string) =>
+    s
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      closeList();
+      continue;
+    }
+    const heading = /^(#{1,3})\s+(.*)/.exec(line);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      if (!inList) {
+        html.push("<ul>");
+        inList = true;
+      }
+      html.push(`<li>${inline(line.replace(/^[-*]\s+/, ""))}</li>`);
+      continue;
+    }
+    closeList();
+    html.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return html.join("\n");
+}
 
 const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
   { key: "rascunho", label: "Rascunho", cls: "bg-muted text-foreground" },
@@ -185,6 +234,15 @@ export function BlogPanel({
   );
 }
 
+/** Campos de texto (título/slug/resumo/conteúdo) vivem em estado local,
+ * inicializado só quando o post muda (troca de artigo), e só sobem pro
+ * componente pai (que persiste via `update({ blog })`, disparando um
+ * round-trip pelo store compartilhado de projetos) num debounce. Antes
+ * cada tecla disparava `onChange` direto no post vindo por prop — como
+ * esse mesmo prop é recalculado a cada emissão do store compartilhado
+ * (inclusive a que a própria digitação acabou de causar), o campo
+ * controlado piscava/"apagava e reaparecia" a cada letra digitada.
+ */
 function BlogEditor({
   post,
   onChange,
@@ -197,21 +255,90 @@ function BlogEditor({
   onDelete: () => void;
 }) {
   const team = useMemo(() => loadTeamMembers(), []);
-  const p = post;
+  const [draft, setDraft] = useState(post);
+  const [savedTick, setSavedTick] = useState(0);
+  const debounceRef = useRef<number | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const pendingRef = useRef(false);
+
+  useEffect(() => {
+    setDraft(post);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
+  const flush = (next: BlogPost) => {
+    pendingRef.current = false;
+    onChange(next);
+    setSavedTick((t) => t + 1);
+  };
+
+  // Se sair da tela (Voltar, trocar de artigo, fechar o painel) antes do
+  // debounce dos 500ms disparar, a última mudança não podia ficar perdida.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        if (pendingRef.current) onChange(draftRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
+
+  // Campos digitados: atualiza o rascunho na hora (preview reage
+  // instantaneamente) e só propaga pro pai/persistência 500ms depois de
+  // parar de digitar.
+  const patchDebounced = (patch: Partial<BlogPost>) => {
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      pendingRef.current = true;
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      debounceRef.current = window.setTimeout(() => flush(next), 500);
+      return next;
+    });
+  };
+  // Campos de escolha (select, upload de capa, data): não têm o problema
+  // de "digitar" — propaga na hora.
+  const patchImmediate = (patch: Partial<BlogPost>) => {
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      flush(next);
+      return next;
+    });
+  };
+
+  const handleClose = () => {
+    if (debounceRef.current && pendingRef.current) {
+      window.clearTimeout(debounceRef.current);
+      flush(draftRef.current);
+    }
+    onClose();
+  };
+
+  const p = draft;
+  const statusInfo = STATUS.find((s) => s.key === p.status)!;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
         >
           ← Voltar
         </button>
+        <span className={`rounded px-1.5 py-0.5 text-[10px] ${statusInfo.cls}`}>
+          {statusInfo.label}
+        </span>
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] ${STATUS.find((s) => s.key === p.status)!.cls}`}
+          key={savedTick}
+          className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
         >
-          {STATUS.find((s) => s.key === p.status)!.label}
+          <Check className="h-3 w-3" /> Salvo
         </span>
         <div className="ml-auto flex gap-2">
           <button
@@ -223,7 +350,7 @@ function BlogEditor({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr_260px]">
         <div className="space-y-3 rounded-lg border border-border bg-background p-4">
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Título</span>
@@ -231,7 +358,7 @@ function BlogEditor({
               value={p.title}
               onChange={(e) => {
                 const title = e.target.value;
-                onChange({ title, slug: p.slug ? p.slug : slugify(title) });
+                patchDebounced({ title, slug: p.slug ? p.slug : slugify(title) });
               }}
               className="w-full border-0 bg-transparent p-0 text-xl font-semibold outline-none focus:ring-0"
             />
@@ -240,7 +367,7 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Slug</span>
             <input
               value={p.slug ?? ""}
-              onChange={(e) => onChange({ slug: slugify(e.target.value) })}
+              onChange={(e) => patchDebounced({ slug: slugify(e.target.value) })}
               className={inputCls}
             />
           </label>
@@ -248,7 +375,7 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Resumo</span>
             <textarea
               value={p.excerpt ?? ""}
-              onChange={(e) => onChange({ excerpt: e.target.value })}
+              onChange={(e) => patchDebounced({ excerpt: e.target.value })}
               rows={2}
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
             />
@@ -257,16 +384,55 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Conteúdo</span>
             <textarea
               value={p.content ?? ""}
-              onChange={(e) => onChange({ content: e.target.value })}
-              rows={16}
-              placeholder="Escreva o artigo... (Markdown suportado)"
+              onChange={(e) => patchDebounced({ content: e.target.value })}
+              rows={20}
+              placeholder="Escreva o artigo... (markdown básico: # título, **negrito**, *itálico*, - lista)"
               className="w-full rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
         </div>
 
+        <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Eye className="h-3.5 w-3.5" /> Pré-visualização
+          </p>
+          <article className="max-h-[520px] overflow-y-auto rounded-md border border-border bg-background p-4">
+            {p.cover && (
+              <img
+                src={p.cover}
+                alt=""
+                className="mb-3 aspect-video w-full rounded-md object-cover"
+              />
+            )}
+            {p.category && (
+              <span className="mb-1.5 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {p.category}
+              </span>
+            )}
+            <h1 className="text-xl font-bold leading-tight">{p.title || "Sem título"}</h1>
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span>{p.authorName || "Sem autor"}</span>
+              {p.publishDate && (
+                <>
+                  <span>·</span>
+                  <span>{new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>
+                </>
+              )}
+            </div>
+            {p.excerpt && <p className="mt-2 text-sm italic text-muted-foreground">{p.excerpt}</p>}
+            <div
+              className="mt-4 space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
+              dangerouslySetInnerHTML={{
+                __html:
+                  renderMarkdownLite(p.content ?? "") ||
+                  '<p class="text-muted-foreground">O conteúdo aparece aqui conforme você escreve.</p>',
+              }}
+            />
+          </article>
+        </div>
+
         <aside className="space-y-3 rounded-lg border border-border bg-background p-4">
-          <CoverUploadField cover={p.cover} onChange={(cover) => onChange({ cover })} />
+          <CoverUploadField cover={p.cover} onChange={(cover) => patchImmediate({ cover })} />
 
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Autor (time)</span>
@@ -275,7 +441,7 @@ function BlogEditor({
               onChange={(e) => {
                 const id = e.target.value;
                 const m = team.find((x) => x.id === id);
-                onChange({ authorId: id || undefined, authorName: m?.name });
+                patchImmediate({ authorId: id || undefined, authorName: m?.name });
               }}
               className={inputCls}
             >
@@ -300,7 +466,7 @@ function BlogEditor({
             </span>
             <input
               value={p.authorName ?? ""}
-              onChange={(e) => onChange({ authorName: e.target.value, authorId: undefined })}
+              onChange={(e) => patchDebounced({ authorName: e.target.value, authorId: undefined })}
               className={inputCls}
             />
           </label>
@@ -309,7 +475,7 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Categoria</span>
             <input
               value={p.category ?? ""}
-              onChange={(e) => onChange({ category: e.target.value })}
+              onChange={(e) => patchDebounced({ category: e.target.value })}
               placeholder="Marketing, Design..."
               className={inputCls}
             />
@@ -319,7 +485,7 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Destino</span>
             <select
               value={p.audience ?? "site"}
-              onChange={(e) => onChange({ audience: e.target.value as "site" | "mural" })}
+              onChange={(e) => patchImmediate({ audience: e.target.value as "site" | "mural" })}
               className={inputCls}
             >
               <option value="site">Artigo do site</option>
@@ -331,7 +497,7 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">Status</span>
             <select
               value={p.status}
-              onChange={(e) => onChange({ status: e.target.value as BlogStatus })}
+              onChange={(e) => patchImmediate({ status: e.target.value as BlogStatus })}
               className={inputCls}
             >
               {STATUS.map((s) => (
@@ -349,7 +515,7 @@ function BlogEditor({
             <input
               type="date"
               value={p.publishDate ?? ""}
-              onChange={(e) => onChange({ publishDate: e.target.value || undefined })}
+              onChange={(e) => patchImmediate({ publishDate: e.target.value || undefined })}
               className={inputCls}
             />
           </label>
