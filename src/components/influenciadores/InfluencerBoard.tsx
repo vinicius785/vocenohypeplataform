@@ -893,6 +893,18 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  // Deixa anexar (ou remover) arquivo de uma entrega direto no resumo, sem
+  // precisar abrir o formulário de edição inteiro.
+  const setEntregaAnexos = (influId: string, entregaId: string, anexos: EntregaAnexo[]) => {
+    const next = influs.map((x) =>
+      x.id !== influId
+        ? x
+        : { ...x, entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, anexos } : e)) },
+    );
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   const sortedInflus = useMemo(() => {
     const list = [...influs];
     switch (sortBy) {
@@ -1060,7 +1072,7 @@ export function InfluencerBoard({
           Adicionar o primeiro influenciador
         </button>
       ) : viewMode === "kanban" ? (
-        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
+        <div className="thin-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
           {INFLU_STATUSES.map((col) => {
             const items = sortedInflus.filter((i) => i.status === col);
             return (
@@ -1111,7 +1123,7 @@ export function InfluencerBoard({
         <div className="group/carousel relative">
           <div
             ref={carRef}
-            className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
+            className="thin-scrollbar -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]"
           >
             {sortedInflus.map((i) => (
               <InfluCard
@@ -1162,6 +1174,7 @@ export function InfluencerBoard({
           onSetConteudoStatus={(entregaId, status) =>
             setConteudoStatus(viewing.id, entregaId, status)
           }
+          onSetAnexos={(entregaId, anexos) => setEntregaAnexos(viewing.id, entregaId, anexos)}
           onComment={(text) => addComment(viewing.id, text)}
         />
       )}
@@ -1494,6 +1507,65 @@ function EntregaStatusPill({
   );
 }
 
+/** Botão compacto de "Adicionar anexo" pro card de entrega no resumo — abre
+ * o mesmo menu de categoria do editor, mas sem precisar sair do resumo pra
+ * anexar roteiro/gravação/conteúdo publicado. */
+function EntregaAnexoQuickAdd({ onAdd }: { onAdd: (anexo: EntregaAnexo) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
+  const menu = useDropdown();
+
+  return (
+    <div ref={menu.ref} className="relative shrink-0">
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const r = new FileReader();
+          r.onload = () =>
+            onAdd({
+              id: crypto.randomUUID(),
+              categoria: pendingCategoria.current,
+              nome: file.name,
+              url: String(r.result),
+            });
+          r.readAsDataURL(file);
+          if (fileRef.current) fileRef.current.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => menu.setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Paperclip className="h-3 w-3" /> Anexar
+      </button>
+      {menu.open && (
+        <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-md border border-border bg-popover p-1 shadow-md">
+          {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => {
+                pendingCategoria.current = c;
+                menu.setOpen(false);
+                fileRef.current?.click();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_ANEXO_TONE[c]}`} />
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InfluencerProfileDialog({
   influ,
   has,
@@ -1502,6 +1574,7 @@ function InfluencerProfileDialog({
   onRemove,
   onSetAprovacao,
   onSetConteudoStatus,
+  onSetAnexos,
   onComment,
 }: {
   influ: Influ;
@@ -1511,6 +1584,7 @@ function InfluencerProfileDialog({
   onRemove: () => void;
   onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
   onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
+  onSetAnexos: (entregaId: string, anexos: EntregaAnexo[]) => void;
   onComment: (text: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
@@ -1544,17 +1618,17 @@ function InfluencerProfileDialog({
 
         {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
         <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
-          <div className="flex items-start gap-5">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
+          <div className="flex items-start gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
               {influ.foto ? (
                 <img src={influ.foto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <User className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
+                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-2.5 pt-1">
+            <div className="min-w-0 flex-1 space-y-2 pt-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-2xl font-semibold text-foreground">
+                <p className="truncate text-lg font-semibold text-foreground">
                   {influ.nome || "Sem nome"}
                 </p>
                 {influ.nicho && (
@@ -1570,9 +1644,9 @@ function InfluencerProfileDialog({
                   </span>
                 )}
               </div>
-              {has("redes") && influ.redes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {influ.redes.map((r) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {has("redes") &&
+                  influ.redes.map((r) => (
                     <span
                       key={r.id}
                       className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm"
@@ -1581,30 +1655,25 @@ function InfluencerProfileDialog({
                       {r.handle ? `@${r.handle}` : r.plataforma}
                     </span>
                   ))}
-                </div>
-              )}
-              {(influ.telefone || influ.email) && (
-                <div className="flex flex-wrap items-center gap-2">
-                  {influ.telefone && (
-                    <a
-                      href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                      className="inline-flex items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-background/70"
-                    >
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      {formatPhoneBR(influ.telefone)}
-                    </a>
-                  )}
-                  {influ.email && (
-                    <a
-                      href={`mailto:${influ.email}`}
-                      className="inline-flex min-w-0 items-center gap-2 rounded-md bg-background px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-background/70"
-                    >
-                      <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{influ.email}</span>
-                    </a>
-                  )}
-                </div>
-              )}
+                {influ.telefone && (
+                  <a
+                    href={`tel:${influ.telefone.replace(/\D/g, "")}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                    {formatPhoneBR(influ.telefone)}
+                  </a>
+                )}
+                {influ.email && (
+                  <a
+                    href={`mailto:${influ.email}`}
+                    className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
+                  >
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{influ.email}</span>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </DialogHeader>
@@ -1614,29 +1683,31 @@ function InfluencerProfileDialog({
             {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
-                <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-                  <div className="flex min-w-max gap-5 border-t-2 border-border pt-6">
-                    {influ.entregas.map((e) => (
-                      <div key={e.id} className="relative w-60 shrink-0">
-                        <span className="absolute -top-[27px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
-                        <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                              {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                <div className="thin-scrollbar -mx-1 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+                  <div className="flex min-w-max gap-5 border-t-2 border-border pt-7">
+                    {influ.entregas.map((e) => {
+                      const anexosVisiveis = (e.anexos ?? []).slice(0, 2);
+                      const anexosOcultos = (e.anexos?.length ?? 0) - anexosVisiveis.length;
+                      return (
+                        <div key={e.id} className="relative w-64 shrink-0">
+                          <span className="absolute -top-[31px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
+                          <div className="flex h-40 flex-col rounded-lg border border-border bg-background p-3 shadow-sm">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                                {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                              </p>
+                              <EntregaStatusPill
+                                value={e.conteudoStatus ?? "Combinado"}
+                                influStatus={influ.status}
+                                onChange={(s) => onSetConteudoStatus(e.id, s)}
+                              />
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {e.quantidade}×
+                              {e.dataPostagem &&
+                                ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
                             </p>
-                            <EntregaStatusPill
-                              value={e.conteudoStatus ?? "Combinado"}
-                              influStatus={influ.status}
-                              onChange={(s) => onSetConteudoStatus(e.id, s)}
-                            />
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">
-                            {e.quantidade}×
-                            {e.dataPostagem &&
-                              ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
-                          </p>
-                          {(e.url || (e.anexos?.length ?? 0) > 0) && (
-                            <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
                               {e.url && (
                                 <a
                                   href={e.url}
@@ -1647,7 +1718,7 @@ function InfluencerProfileDialog({
                                   <ExternalLink className="h-3 w-3" /> Ver publicação
                                 </a>
                               )}
-                              {e.anexos?.map((a) => (
+                              {anexosVisiveis.map((a) => (
                                 <a
                                   key={a.id}
                                   href={a.url}
@@ -1661,11 +1732,19 @@ function InfluencerProfileDialog({
                                   {a.categoria}
                                 </a>
                               ))}
+                              {anexosOcultos > 0 && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  +{anexosOcultos}
+                                </span>
+                              )}
+                              <EntregaAnexoQuickAdd
+                                onAdd={(a) => onSetAnexos(e.id, [...(e.anexos ?? []), a])}
+                              />
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

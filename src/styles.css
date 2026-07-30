@@ -142,3 +142,19 @@
     color: var(--color-foreground);
   }
 }
+
+/* Barra de rolagem fina no tom do tema (Chrome/Safari) — sem isso, listas
+ * horizontais (carrossel de influenciadores, linha do tempo de entregas)
+ * mostram a barra padrão do SO, larga e destoando do resto do design. O
+ * `[scrollbar-width:thin]` inline nesses containers já cobre o Firefox. */
+.thin-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 9999px;
+}
