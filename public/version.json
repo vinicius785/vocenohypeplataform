@@ -1,6 +1,6 @@
 {
-  "version": "1.28.1",
+  "version": "1.29.0",
   "notes": [
-    "Corrige comentários/atividade (tarefas e influenciadores) que ficavam cortados exigindo rolagem lateral — texto agora quebra linha automaticamente e links viram clicáveis."
+    "Comercial: cada lead agora tem um histórico automático (criado por fulano ou recebido via webhook, status alterado, etc), visível no painel lateral ao abrir o lead."
   ]
 }

@@ -35,7 +35,9 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
+  History,
 } from "lucide-react";
+import { linkifyText } from "@/lib/linkify";
 
 const STALE_DAYS = 5;
 function daysSince(ms: number): number {
@@ -127,12 +129,14 @@ export function ComercialSection() {
         (l) => l.id === lead.id,
       );
       const payload = existing ? lead : { ...lead, id: undefined };
-      return upsertFn({ data: payload as never });
+      const stageLabel = stages.find((s) => s.key === lead.stage)?.label;
+      return upsertFn({ data: { ...payload, stageLabel } as never });
     },
     onSuccess: invalidate,
   });
   const stageMutation = useMutation({
-    mutationFn: (v: { id: string; stage: string }) => stageFn({ data: v }),
+    mutationFn: (v: { id: string; stage: string }) =>
+      stageFn({ data: { ...v, stageLabel: stages.find((s) => s.key === v.stage)?.label } }),
     onMutate: async (v) => {
       await queryClient.cancelQueries({ queryKey: ["leads"] });
       const prev = queryClient.getQueryData<Lead[]>(["leads"]);
@@ -812,6 +816,38 @@ function LeadForm({
                   <FileText className="h-3.5 w-3.5" /> Observações
                 </div>
                 <p className="line-clamp-6 whitespace-pre-wrap text-muted-foreground">{notes}</p>
+              </div>
+            )}
+
+            {initial && (
+              <div className="mt-4">
+                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <History className="h-3.5 w-3.5" /> Histórico
+                </div>
+                {(initial.history?.length ?? 0) === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">Sem eventos registrados.</p>
+                ) : (
+                  <ul className="space-y-2 border-l border-border pl-3">
+                    {[...(initial.history ?? [])]
+                      .sort((a, b) => b.createdAt - a.createdAt)
+                      .map((h) => (
+                        <li key={h.id} className="text-[11px] leading-relaxed">
+                          <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
+                            {linkifyText(h.text)}
+                          </div>
+                          <div className="text-muted-foreground/70">
+                            {new Date(h.createdAt).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                )}
               </div>
             )}
           </aside>

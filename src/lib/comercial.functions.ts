@@ -1,8 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import type { Lead } from "./comercial";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+import type { Lead, LeadHistoryEntry } from "./comercial";
 import { dispatchOutgoingWebhook } from "./outgoing-webhooks";
+
+async function getActorName(supabase: SupabaseClient<Database>, userId: string): Promise<string> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.full_name || data?.email || "alguém";
+}
 
 type LeadRow = {
   id: string;
@@ -41,6 +52,7 @@ function rowToLead(row: LeadRow): Lead {
     responsible: row.responsible ?? undefined,
     notes: row.notes ?? undefined,
     activities: Array.isArray(row.activities) ? (row.activities as Lead["activities"]) : [],
+    history: Array.isArray(extra.history) ? (extra.history as LeadHistoryEntry[]) : [],
     nextMeeting: row.next_meeting ?? undefined,
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
@@ -94,6 +106,7 @@ const leadInputSchema = z.object({
   contactRole: z.string().optional(),
   clienteId: z.string().optional(),
   projectId: z.string().optional(),
+  stageLabel: z.string().optional(),
 });
 
 type LeadInput = z.infer<typeof leadInputSchema>;
@@ -156,7 +169,30 @@ export const upsertLead = createServerFn({ method: "POST" })
   .inputValidator((input: LeadInput) => leadInputSchema.parse(input))
   .handler(async ({ data, context }) => {
     const row = inputToRow(data);
+    const actorName = await getActorName(context.supabase, context.userId);
     if (data.id) {
+      const { data: existingRow, error: fetchErr } = await context.supabase
+        .from("leads")
+        .select("stage, extra")
+        .eq("id", data.id)
+        .single();
+      if (fetchErr) throw new Error(fetchErr.message);
+      const prevExtra = ((existingRow as { extra: Record<string, unknown> } | null)?.extra ??
+        {}) as Record<string, unknown>;
+      const prevHistory = Array.isArray(prevExtra.history)
+        ? (prevExtra.history as LeadHistoryEntry[])
+        : [];
+      const history = [...prevHistory];
+      const prevStage = (existingRow as { stage: string } | null)?.stage;
+      if (prevStage && prevStage !== data.stage) {
+        history.push({
+          id: crypto.randomUUID(),
+          type: "stage",
+          text: `${actorName} moveu o lead para "${data.stageLabel ?? data.stage}"`,
+          createdAt: Date.now(),
+        });
+      }
+      row.extra.history = history;
       const { data: updated, error } = await context.supabase
         .from("leads")
         .update(row as never)
@@ -166,6 +202,14 @@ export const upsertLead = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return rowToLead(updated as unknown as LeadRow);
     }
+    row.extra.history = [
+      {
+        id: crypto.randomUUID(),
+        type: "created",
+        text: `Lead criado por ${actorName}`,
+        createdAt: Date.now(),
+      },
+    ] satisfies LeadHistoryEntry[];
     const { data: inserted, error } = await context.supabase
       .from("leads")
       .insert(row as never)
@@ -179,13 +223,34 @@ export const upsertLead = createServerFn({ method: "POST" })
 
 export const updateLeadStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string; stage: string }) =>
-    z.object({ id: z.string(), stage: z.string() }).parse(input),
+  .inputValidator((input: { id: string; stage: string; stageLabel?: string }) =>
+    z.object({ id: z.string(), stage: z.string(), stageLabel: z.string().optional() }).parse(input),
   )
   .handler(async ({ data, context }) => {
+    const actorName = await getActorName(context.supabase, context.userId);
+    const { data: existingRow, error: fetchErr } = await context.supabase
+      .from("leads")
+      .select("extra")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr) throw new Error(fetchErr.message);
+    const prevExtra = ((existingRow as { extra: Record<string, unknown> } | null)?.extra ??
+      {}) as Record<string, unknown>;
+    const prevHistory = Array.isArray(prevExtra.history)
+      ? (prevExtra.history as LeadHistoryEntry[])
+      : [];
+    const history: LeadHistoryEntry[] = [
+      ...prevHistory,
+      {
+        id: crypto.randomUUID(),
+        type: "stage",
+        text: `${actorName} moveu o lead para "${data.stageLabel ?? data.stage}"`,
+        createdAt: Date.now(),
+      },
+    ];
     const { error } = await context.supabase
       .from("leads")
-      .update({ stage: data.stage })
+      .update({ stage: data.stage, extra: { ...prevExtra, history } })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     if (data.stage === "ganho") {

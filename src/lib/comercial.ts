@@ -23,6 +23,15 @@ export type Activity = {
   done?: boolean;
 };
 
+/** Registro automático de eventos do lead (criação, mudança de status, etc) —
+ * gerado pelo servidor, diferente de `Activity` (que a pessoa cria manualmente). */
+export type LeadHistoryEntry = {
+  id: string;
+  type: "created" | "stage" | "edit";
+  text: string;
+  createdAt: number;
+};
+
 export type Lead = {
   id: string;
   name: string; // deal name
@@ -37,6 +46,7 @@ export type Lead = {
   responsible?: string;
   notes?: string;
   activities: Activity[];
+  history?: LeadHistoryEntry[];
   createdAt: number;
   updatedAt: number;
   // Kommo-style extended fields

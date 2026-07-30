@@ -114,6 +114,14 @@ export const Route = createFileRoute("/api/public/leads")({
               budget: budgetNum || null,
               urgency: d.urgency || null,
               experience: d.agency_experience || null,
+              history: [
+                {
+                  id: crypto.randomUUID(),
+                  type: "created",
+                  text: `Lead recebido via webhook (${d.source_form || d.source || "site"})`,
+                  createdAt: Date.now(),
+                },
+              ],
             } as never,
           } as never)
           .select("id")
