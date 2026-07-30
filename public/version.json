@@ -1,8 +1,6 @@
 {
-  "version": "1.24.0",
+  "version": "1.24.1",
   "notes": [
-    "Início: \"Meu trabalho\" agora só mostra tarefas onde você está marcado como responsável (sozinho ou junto com outra pessoa).",
-    "Início: prioridade da tarefa vira bandeira colorida e o status agora aparece do lado.",
-    "Correção de fundo: tarefas/influenciadores/documentos de campanha excluídos por alguém podiam continuar aparecendo pra quem já estava com a aba aberta (ex: tarefas atrasadas fantasmas)."
+    "Correção adicional dos itens fantasma de campanha: além do realtime, agora há uma re-sincronização automática a cada 5 minutos que corrige qualquer resíduo deixado por eventos perdidos antes da correção anterior."
   ]
 }

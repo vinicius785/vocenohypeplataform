@@ -15,11 +15,25 @@ const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "c
 const tarefasStore = createScopedArrayStore<Task>("campanha_tarefas", "campanha_id");
 const docsStore = createScopedArrayStore<CampaignDoc>("campanha_documentos", "campanha_id");
 
+let resyncStarted = false;
+
 export async function initCampanhaScopedSync(): Promise<void> {
   await Promise.all([influsStore.init(), tarefasStore.init(), docsStore.init()]);
   influsStore.subscribeRealtime();
   tarefasStore.subscribeRealtime();
   docsStore.subscribeRealtime();
+  // Segunda trava além do realtime: re-busca essas 3 tabelas do zero de
+  // tempos em tempos, corrigindo qualquer drift que um evento perdido ou
+  // mal aplicado (ex: DELETE sem a coluna do parent, antes de
+  // REPLICA IDENTITY FULL) tenha deixado como "fantasma" no cache.
+  if (!resyncStarted) {
+    resyncStarted = true;
+    setInterval(() => {
+      void influsStore.resync();
+      void tarefasStore.resync();
+      void docsStore.resync();
+    }, 5 * 60_000);
+  }
 }
 
 export function loadCampanhaInflus(campanhaId: string): Influ[] {

@@ -24,24 +24,45 @@ export function createScopedArrayStore<T extends { id: string }>(
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((l) => l());
 
+  async function fetchAll(): Promise<Map<string, T[]> | null> {
+    const { data, error } = await supabase.from(table).select(`data, ${parentColumn}`);
+    if (error) throw error;
+    const next = new Map<string, T[]>();
+    for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
+      const parentId = row[parentColumn] as string;
+      const arr = next.get(parentId) ?? [];
+      arr.push(row.data as T);
+      next.set(parentId, arr);
+    }
+    return next;
+  }
+
   async function init(): Promise<void> {
     if (loaded) return;
     try {
-      const { data, error } = await supabase.from(table).select(`data, ${parentColumn}`);
-      if (error) throw error;
-      const next = new Map<string, T[]>();
-      for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
-        const parentId = row[parentColumn] as string;
-        const arr = next.get(parentId) ?? [];
-        arr.push(row.data as T);
-        next.set(parentId, arr);
-      }
-      cache = next;
+      cache = (await fetchAll()) ?? cache;
     } catch (e) {
       console.warn(`[${table}] initial load failed`, e);
     } finally {
       loaded = true;
       emit();
+    }
+  }
+
+  // Re-busca a tabela inteira e substitui o cache — uma segunda trava além
+  // do realtime, pra corrigir qualquer drift que um evento perdido/mal
+  // aplicado tenha deixado pra trás (ex: uma linha apagada que ficou de
+  // "fantasma" no cache de quem já estava com a aba aberta). Chamado
+  // periodicamente por quem inicializa este store.
+  async function resync(): Promise<void> {
+    try {
+      const next = await fetchAll();
+      if (next) {
+        cache = next;
+        emit();
+      }
+    } catch (e) {
+      console.warn(`[${table}] resync failed`, e);
     }
   }
 
@@ -122,5 +143,6 @@ export function createScopedArrayStore<T extends { id: string }>(
     },
     init,
     subscribeRealtime,
+    resync,
   };
 }
