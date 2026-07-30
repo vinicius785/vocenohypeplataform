@@ -6,6 +6,7 @@ import {
   Camera,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -644,6 +645,24 @@ function MetricsEditor({
   );
 }
 
+/** Menu suspenso simples (sem Radix): abre/fecha por estado local e fecha
+ * sozinho ao clicar fora. Usado pelos botões "Baixar lista"/"Solicitar
+ * aprovação" e "Novo influenciador" no cabeçalho, pra não empilhar botões
+ * soltos lado a lado. */
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
 /* ============================================================
  * Board — header, carousel of cards, dialogs. This is the piece
  * both Campanhas and Projetos mount.
@@ -683,6 +702,8 @@ export function InfluencerBoard({
   const [viewMode, setViewMode] = useState<"lista" | "kanban">("lista");
   const [sortBy, setSortBy] = useState<"az" | "za" | "updated" | "created">("az");
   const [dragId, setDragId] = useState<string | null>(null);
+  const exportMenu = useDropdown();
+  const novoMenu = useDropdown();
   const carRef = useRef<HTMLDivElement>(null);
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
@@ -877,29 +898,66 @@ export function InfluencerBoard({
 
         {/* Ações: sempre juntas, separadas do bloco de visualização acima */}
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setDownloadOpen(true)}
-            disabled={influs.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
-          >
-            <Download className="h-3.5 w-3.5" /> Baixar lista
-          </button>
-          {headerExtra}
-          <button
-            type="button"
-            onClick={() => setBankPickerOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
-            <Users className="h-3.5 w-3.5" /> Adicionar do banco
-          </button>
-          <button
-            type="button"
-            onClick={() => setInfluDialog({ mode: "new" })}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <Plus className="h-3.5 w-3.5" /> Novo influenciador
-          </button>
+          <div ref={exportMenu.ref} className="relative">
+            <button
+              type="button"
+              onClick={() => exportMenu.setOpen((o) => !o)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" /> Exportar
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {exportMenu.open && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDownloadOpen(true);
+                    exportMenu.setOpen(false);
+                  }}
+                  disabled={influs.length === 0}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" /> Baixar lista
+                </button>
+                <div onClick={() => exportMenu.setOpen(false)}>{headerExtra}</div>
+              </div>
+            )}
+          </div>
+          <div ref={novoMenu.ref} className="relative">
+            <button
+              type="button"
+              onClick={() => novoMenu.setOpen((o) => !o)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            >
+              <Plus className="h-3.5 w-3.5" /> Novo influenciador
+              <ChevronDown className="h-3 w-3 opacity-70" />
+            </button>
+            {novoMenu.open && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInfluDialog({ mode: "new" });
+                    novoMenu.setOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Criar do zero
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBankPickerOpen(true);
+                    novoMenu.setOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Users className="h-3.5 w-3.5" /> Adicionar do banco
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
