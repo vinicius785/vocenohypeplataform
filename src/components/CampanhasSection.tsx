@@ -812,7 +812,7 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
                 type="button"
                 key={idx}
                 onClick={() => setSelectedDate((prev) => (prev === iso ? null : iso))}
-                className={`min-h-[64px] border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/40 ${
+                className={`h-20 overflow-hidden border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/40 ${
                   inMonth ? "" : "bg-background/40 text-muted-foreground/50"
                 } ${isSelected ? "bg-muted/60" : ""}`}
               >
