@@ -297,8 +297,8 @@ export const ENTREGA_CONTEUDO_STATUSES = [
   "Aguardando roteiro",
   "Roteiro aprovado",
   "Em gravação",
-  "Aprovação gravação",
-  "Gravação aprovada",
+  "Aprovação conteúdo",
+  "Conteúdo aprovado",
   "Postado",
 ] as const;
 export type EntregaConteudoStatus = (typeof ENTREGA_CONTEUDO_STATUSES)[number];
@@ -307,8 +307,8 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  "Aprovação gravação": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  "Gravação aprovada": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  "Aprovação conteúdo": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  "Conteúdo aprovado": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
   Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
@@ -908,6 +908,19 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  // Igual a `changeStatus` (usado pelo kanban), mas também atualiza `viewing`
+  // pra refletir na hora no cabeçalho do resumo, que fica com seu próprio
+  // snapshot do influenciador.
+  const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
+    const next = influs.map((x) =>
+      x.id === influId
+        ? pushActivity({ ...x, status, statusUpdatedAt: todayISO() }, `mudou status para ${status}`)
+        : x,
+    );
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   const sortedInflus = useMemo(() => {
     const list = [...influs];
     switch (sortBy) {
@@ -1178,6 +1191,7 @@ export function InfluencerBoard({
             setConteudoStatus(viewing.id, entregaId, status)
           }
           onSetAnexos={(entregaId, anexos) => setEntregaAnexos(viewing.id, entregaId, anexos)}
+          onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
           onComment={(text) => addComment(viewing.id, text)}
         />
       )}
@@ -1463,6 +1477,62 @@ function HiddenSectionsPanel({
 
 /** Pill do status individual de uma entrega — dropdown customizado (não um
  * `<select>` nativo, que renderia como uma caixa cinza do navegador). */
+/** Status individual da entrega, no resumo — abre um popup (não um menu
+ * suspenso, que ficava apertado dentro do card) pra escolher a etapa. */
+/** Status geral do influenciador, no cabeçalho do resumo — também abre um
+ * popup em vez de exigir ir até a etapa "Status" do editor pra mudar. */
+function InfluStatusPill({
+  value,
+  onChange,
+}: {
+  value: InfluStatus;
+  onChange: (s: InfluStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
+      >
+        {value}
+        <ChevronDown className="h-2.5 w-2.5" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xs border-border bg-background">
+          <DialogTitle className="text-sm font-semibold">Status do influenciador</DialogTitle>
+          <DialogDescription className="sr-only">
+            Escolha o status geral deste influenciador no fluxo da campanha.
+          </DialogDescription>
+          <div className="max-h-80 space-y-1 overflow-y-auto">
+            {INFLU_STATUSES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  onChange(s);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium hover:bg-muted ${
+                  s === value ? "bg-muted" : ""
+                }`}
+              >
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${INFLU_STATUS_TONE[s]}`}
+                >
+                  {s}
+                </span>
+                {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function EntregaStatusPill({
   value,
   influStatus,
@@ -1472,41 +1542,50 @@ function EntregaStatusPill({
   influStatus: InfluStatus;
   onChange: (s: EntregaConteudoStatus) => void;
 }) {
-  const menu = useDropdown();
+  const [open, setOpen] = useState(false);
   return (
-    <div ref={menu.ref} className="relative shrink-0">
+    <>
       <button
         type="button"
-        onClick={() => menu.setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
+        onClick={() => setOpen(true)}
+        className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
       >
         {value}
         <ChevronDown className="h-2.5 w-2.5" />
       </button>
-      {menu.open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-md">
-          {ENTREGA_CONTEUDO_STATUSES.map((s) => {
-            const disabled = s === "Postado" && !canPublishEntrega(influStatus);
-            return (
-              <button
-                key={s}
-                type="button"
-                disabled={disabled}
-                title={disabled ? "Disponível a partir de 'Aprovado'" : undefined}
-                onClick={() => {
-                  onChange(s);
-                  menu.setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_CONTEUDO_TONE[s]}`} />
-                {s}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xs border-border bg-background">
+          <DialogTitle className="text-sm font-semibold">Etapa da entrega</DialogTitle>
+          <DialogDescription className="sr-only">
+            Escolha a etapa de produção desta entrega.
+          </DialogDescription>
+          <div className="space-y-1">
+            {ENTREGA_CONTEUDO_STATUSES.map((s) => {
+              const disabled = s === "Postado" && !canPublishEntrega(influStatus);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={disabled}
+                  title={disabled ? "Disponível a partir de 'Aprovado'" : undefined}
+                  onClick={() => {
+                    onChange(s);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${
+                    s === value ? "bg-muted" : ""
+                  }`}
+                >
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_CONTEUDO_TONE[s]}`} />
+                  {s}
+                  {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1557,6 +1636,7 @@ function InfluencerProfileDialog({
   onSetAprovacao,
   onSetConteudoStatus,
   onSetAnexos,
+  onSetStatus,
   onComment,
 }: {
   influ: Influ;
@@ -1567,6 +1647,7 @@ function InfluencerProfileDialog({
   onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
   onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
   onSetAnexos: (entregaId: string, anexos: EntregaAnexo[]) => void;
+  onSetStatus: (status: InfluStatus) => void;
   onComment: (text: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
@@ -1618,13 +1699,7 @@ function InfluencerProfileDialog({
                     {influ.nicho}
                   </span>
                 )}
-                {has("status") && (
-                  <span
-                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[influ.status]}`}
-                  >
-                    {influ.status}
-                  </span>
-                )}
+                {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {has("redes") &&
