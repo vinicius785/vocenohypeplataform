@@ -62,6 +62,7 @@ import {
   loadCampanhaDocs,
   saveCampanhaDocs,
   onCampanhaDocsChange,
+  deleteCampanhaScopedData,
 } from "@/lib/campanha-scoped-store";
 
 export { BankFields, type BankInfo };
@@ -229,6 +230,11 @@ export function CampanhasSection() {
                             : c,
                         ),
                       );
+                      // Sem isso, influs/tarefas/docs escopados a essa campanha
+                      // ficavam órfãos no banco (a campanha some daqui, mas
+                      // essas linhas continuam existindo e reaparecem em telas
+                      // que agregam tudo, tipo "Meu trabalho" no Início).
+                      deleteCampanhaScopedData(r.campanha.id);
                     }}
                     className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                     aria-label="Excluir campanha"

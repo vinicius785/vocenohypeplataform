@@ -75,3 +75,15 @@ export function saveCampanhaDocs(campanhaId: string, list: CampaignDoc[]) {
 export function onCampanhaDocsChange(cb: () => void): () => void {
   return docsStore.subscribe(cb);
 }
+
+/** Apaga tudo que estava escopado a uma campanha (influs/tarefas/docs) —
+ * chamar sempre que a campanha em si for excluída. Sem isso essas linhas
+ * ficam orfãs no banco (a campanha nem existe mais em `clientes.data`, mas
+ * a tarefa/influ/doc continua lá) e reaparecem em telas que agregam
+ * "tudo de todas as campanhas" (ex: "Meu trabalho" no Início), sem jeito
+ * de acessar ou excluir pela UI normal. */
+export function deleteCampanhaScopedData(campanhaId: string) {
+  influsStore.set(campanhaId, () => []);
+  tarefasStore.set(campanhaId, () => []);
+  docsStore.set(campanhaId, () => []);
+}
