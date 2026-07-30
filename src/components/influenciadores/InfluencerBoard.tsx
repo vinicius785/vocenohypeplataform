@@ -1613,7 +1613,7 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[70vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
         <DialogDescription className="sr-only">
           Informações completas do influenciador.
@@ -1686,7 +1686,7 @@ function InfluencerProfileDialog({
             {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
-                <div className="-mx-1 overflow-x-auto px-1 pb-2">
+                <div className="-mx-1 overflow-x-auto overflow-y-visible px-1 pb-2">
                   <div className="flex min-w-max gap-5 border-t-2 border-border pt-7">
                     {influ.entregas.map((e) => {
                       const anexosVisiveis = (e.anexos ?? []).slice(0, 2);
@@ -1694,7 +1694,7 @@ function InfluencerProfileDialog({
                       return (
                         <div key={e.id} className="relative w-64 shrink-0">
                           <span className="absolute -top-[31px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
-                          <div className="flex h-28 flex-col overflow-hidden rounded-lg border border-border bg-background p-2.5 shadow-sm">
+                          <div className="flex h-28 flex-col rounded-lg border border-border bg-background p-2.5 shadow-sm">
                             <div className="flex items-start justify-between gap-2">
                               <p className="min-w-0 truncate text-sm font-medium text-foreground">
                                 {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}

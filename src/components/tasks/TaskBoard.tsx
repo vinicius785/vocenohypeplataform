@@ -580,6 +580,7 @@ export function TaskDialog({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskDate, setNewSubtaskDate] = useState("");
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState("");
+  const [newSubtaskPriority, setNewSubtaskPriority] = useState<TaskPriority>("Normal");
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const [editSubtask, setEditSubtask] = useState<Task | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -651,6 +652,7 @@ export function TaskDialog({
     setNewSubtaskTitle("");
     setNewSubtaskDate("");
     setNewSubtaskAssignee("");
+    setNewSubtaskPriority("Normal");
     setNewTag("");
     setShowSubtaskInput(false);
     setMentionQuery(null);
@@ -752,7 +754,7 @@ export function TaskDialog({
       id: crypto.randomUUID(),
       title: t,
       status: "Aberto",
-      priority: "Normal",
+      priority: newSubtaskPriority,
       dueDate: newSubtaskDate || undefined,
       assignee: newSubtaskAssignee.trim() || undefined,
       createdAt: new Date().toISOString(),
@@ -762,6 +764,7 @@ export function TaskDialog({
     setNewSubtaskTitle("");
     setNewSubtaskDate("");
     setNewSubtaskAssignee("");
+    setNewSubtaskPriority("Normal");
     setShowSubtaskInput(false);
   };
   const toggleSubtask = (id: string) => {
@@ -1167,32 +1170,66 @@ export function TaskDialog({
                         key={s.id}
                         className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
                       >
-                        <input
-                          type="checkbox"
-                          checked={done}
-                          onChange={() => toggleSubtask(s.id)}
+                        {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
+                            não um item de checklist — status muda direto aqui, sem checkbox. */}
+                        <select
+                          value={s.status}
                           onClick={(e) => e.stopPropagation()}
-                          className="h-3.5 w-3.5 cursor-pointer accent-primary"
-                        />
+                          onChange={(e) => {
+                            const next = e.target.value as TaskStatus;
+                            setSubtasks((prev) =>
+                              prev.map((st) => (st.id === s.id ? { ...st, status: next } : st)),
+                            );
+                            setActivity((a) =>
+                              pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                            );
+                          }}
+                          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[s.status]}`}
+                        >
+                          {TASK_STATUSES.map((st) => (
+                            <option key={st} value={st} className="bg-background text-foreground">
+                              {st}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={s.priority}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const next = e.target.value as TaskPriority;
+                            setSubtasks((prev) =>
+                              prev.map((st) => (st.id === s.id ? { ...st, priority: next } : st)),
+                            );
+                          }}
+                          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide outline-none ${PRIORITY_TONE[s.priority]}`}
+                        >
+                          {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
+                            <option key={p} value={p} className="bg-background text-foreground">
+                              {p}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           onClick={() => setEditSubtask(s)}
-                          className="flex flex-1 items-center gap-2 text-left"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
                         >
-                          <span
-                            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${TASK_STATUS_TONE[s.status]}`}
-                          >
-                            <span className={`h-1 w-1 rounded-full ${TASK_STATUS_DOT[s.status]}`} />
-                            {s.status}
-                          </span>
                           <span
                             className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
                           >
                             {s.title}
                           </span>
-                          {member && <Avatar member={member} />}
+                          {member ? (
+                            <Avatar member={member} />
+                          ) : (
+                            s.assignee && (
+                              <span className="shrink-0 truncate text-[11px] text-muted-foreground">
+                                {s.assignee}
+                              </span>
+                            )
+                          )}
                           {s.dueDate && (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                               <Calendar className="h-3 w-3" />
                               {fmtDate(s.dueDate)}
                             </span>
@@ -1240,6 +1277,17 @@ export function TaskDialog({
                           {members.map((m) => (
                             <option key={m.name} value={m.name}>
                               {m.name}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={newSubtaskPriority}
+                          onChange={(e) => setNewSubtaskPriority(e.target.value as TaskPriority)}
+                          className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
+                        >
+                          {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
+                            <option key={p} value={p} className="bg-background text-foreground">
+                              {p}
                             </option>
                           ))}
                         </select>
