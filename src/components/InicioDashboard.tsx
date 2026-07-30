@@ -18,7 +18,12 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { loadProjetos, type BlogPost, type Task as ProjTask } from "@/lib/projetos";
+import {
+  loadProjetos,
+  onProjetosChange,
+  type BlogPost,
+  type Task as ProjTask,
+} from "@/lib/projetos";
 import {
   subscribeChat,
   getMe,
@@ -212,9 +217,15 @@ export function InicioDashboard() {
     refresh();
     window.addEventListener("storage", refresh);
     const unsubMeetings = onMeetingsChange(refresh);
+    // `storage` só dispara pra troca feita em OUTRA aba do mesmo navegador —
+    // tarefas de projeto mudadas por outra pessoa chegam via realtime do
+    // Supabase, que usa esse pub/sub próprio (`onProjetosChange`), não o
+    // evento `storage`. Sem isso o card "Meu trabalho" só atualizava com F5.
+    const unsubProjetos = onProjetosChange(refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       unsubMeetings();
+      unsubProjetos();
     };
   }, []);
 
