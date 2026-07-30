@@ -311,6 +311,20 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
 };
 
+export const ENTREGA_ANEXO_CATEGORIAS = [
+  "Roteiro",
+  "Gravação",
+  "Conteúdo publicado",
+  "Outro",
+] as const;
+export type EntregaAnexoCategoria = (typeof ENTREGA_ANEXO_CATEGORIAS)[number];
+export type EntregaAnexo = {
+  id: string;
+  categoria: EntregaAnexoCategoria;
+  nome: string;
+  url: string;
+};
+
 export type Entrega = {
   id: string;
   tipo: string;
@@ -320,9 +334,16 @@ export type Entrega = {
   /** Etapa de produção do conteúdo — independente do status de orçamento/publicação acima. */
   conteudoStatus?: EntregaConteudoStatus;
   dataPostagem?: string; // data planejada para a postagem
-  roteiro?: string; // anexo do roteiro/briefing de conteúdo combinado
+  /** Anexos da entrega (roteiro, gravação, conteúdo publicado, etc) — podem
+   * ser adicionados em qualquer etapa/status, e mais de um por categoria. */
+  anexos?: EntregaAnexo[];
+  /** @deprecated migrado para `anexos` (categoria "Roteiro") por `normalizeInflus`. */
+  roteiro?: string;
+  /** @deprecated migrado para `anexos` (categoria "Roteiro") por `normalizeInflus`. */
   roteiroNome?: string;
+  /** Link do post publicado (texto, não anexo). */
   url?: string;
+  /** @deprecated quando presente, `url` era o anexo em si — migrado pra `anexos` (categoria "Conteúdo publicado"). */
   arquivoNome?: string;
   publicadoEm?: string;
   metrics?: PostMetrics;
@@ -440,10 +461,36 @@ export function normalizeInflus(list: unknown): Influ[] {
       conteudos?: Array<Record<string, unknown>>;
       valores?: Array<{ id: string; valor: string; quando: string }>;
     };
-    const entregas: Entrega[] = (r.entregas ?? []).map((e) => ({
-      ...e,
-      status: e.status ?? "combinado",
-    }));
+    const entregas: Entrega[] = (r.entregas ?? []).map((e) => {
+      const anexos = [...(e.anexos ?? [])];
+      if (e.roteiro) {
+        anexos.push({
+          id: `${e.id}-mig-roteiro`,
+          categoria: "Roteiro",
+          nome: e.roteiroNome || "Roteiro",
+          url: e.roteiro,
+        });
+      }
+      if (e.url && e.arquivoNome) {
+        anexos.push({
+          id: `${e.id}-mig-publicado`,
+          categoria: "Conteúdo publicado",
+          nome: e.arquivoNome,
+          url: e.url,
+        });
+      }
+      return {
+        ...e,
+        status: e.status ?? "combinado",
+        anexos,
+        // Quando `url` era o próprio anexo (arquivoNome setado), o link vira
+        // o anexo acima — não faz mais sentido manter os dois.
+        url: e.arquivoNome ? undefined : e.url,
+        roteiro: undefined,
+        roteiroNome: undefined,
+        arquivoNome: undefined,
+      };
+    });
     for (const c of r.conteudos ?? []) {
       entregas.push({
         id: (c.id as string) ?? crypto.randomUUID(),
@@ -1420,22 +1467,14 @@ function InfluencerProfileDialog({
 
   const anexos: { key: string; nome: string; url: string; tipo: string }[] = [];
   influ.entregas.forEach((e) => {
-    if (e.roteiro) {
+    (e.anexos ?? []).forEach((a) => {
       anexos.push({
-        key: `${e.id}-roteiro`,
-        nome: e.roteiroNome || "Roteiro",
-        url: e.roteiro,
-        tipo: `${e.tipo} · Roteiro`,
+        key: a.id,
+        nome: a.nome,
+        url: a.url,
+        tipo: `${e.tipo} · ${a.categoria}`,
       });
-    }
-    if (e.url) {
-      anexos.push({
-        key: `${e.id}-conteudo`,
-        nome: e.arquivoNome || "Conteúdo publicado",
-        url: e.url,
-        tipo: `${e.tipo} · Publicado`,
-      });
-    }
+    });
   });
   if (influ.contrato) {
     anexos.push({
@@ -1578,12 +1617,29 @@ function InfluencerProfileDialog({
                             href={e.url}
                             target="_blank"
                             rel="noreferrer"
-                            download={e.arquivoNome}
                             className="mt-1 inline-flex items-center gap-1 text-[11px] text-foreground underline underline-offset-2"
                           >
                             <ExternalLink className="h-3 w-3" />
-                            {e.arquivoNome ?? "Ver conteúdo"}
+                            Ver conteúdo publicado
                           </a>
+                        )}
+                        {(e.anexos?.length ?? 0) > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {e.anexos!.map((a) => (
+                              <a
+                                key={a.id}
+                                href={a.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                download={a.nome}
+                                title={a.nome}
+                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium underline underline-offset-2 ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+                              >
+                                <Paperclip className="h-3 w-3" />
+                                {a.categoria}
+                              </a>
+                            ))}
+                          </div>
                         )}
                         {e.pagamento && (
                           <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -2204,27 +2260,20 @@ function InfluenciadorDialog({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 items-center gap-2">
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                          <input
-                            type="date"
-                            value={e.dataPostagem ?? ""}
-                            onChange={(ev) =>
-                              update({ dataPostagem: ev.target.value || undefined })
-                            }
-                            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-                          />
-                        </label>
-                        <EntregaFileInput
-                          label="Roteiro"
-                          arquivoNome={e.roteiroNome}
-                          onFile={(dataUrl, name) =>
-                            update({ roteiro: dataUrl, roteiroNome: name })
-                          }
-                          onClear={() => update({ roteiro: undefined, roteiroNome: undefined })}
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                        <input
+                          type="date"
+                          value={e.dataPostagem ?? ""}
+                          onChange={(ev) => update({ dataPostagem: ev.target.value || undefined })}
+                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
                         />
-                      </div>
+                      </label>
+
+                      <EntregaAnexosEditor
+                        anexos={e.anexos ?? []}
+                        onChange={(anexos) => update({ anexos })}
+                      />
 
                       <PagamentoEditor
                         value={e.pagamento}
@@ -2237,13 +2286,8 @@ function InfluenciadorDialog({
                           <input
                             value={e.url ?? ""}
                             onChange={(ev) => update({ url: ev.target.value })}
-                            placeholder="Link do conteúdo publicado (ou anexe abaixo)"
+                            placeholder="Link do conteúdo publicado"
                             className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-                          />
-                          <EntregaFileInput
-                            arquivoNome={e.arquivoNome}
-                            onFile={(dataUrl, name) => update({ url: dataUrl, arquivoNome: name })}
-                            onClear={() => update({ url: undefined, arquivoNome: undefined })}
                           />
                           <div>
                             <p className="mb-1 text-[11px] font-medium text-muted-foreground">
@@ -2844,53 +2888,101 @@ function PagamentosList({
 }
 
 /* ============================================================
- * Entrega file input — small helper for attaching the published
- * content (link typed directly, or a file) to an Entrega.
+ * Entrega anexos — lista de arquivos ligados a uma entrega (roteiro,
+ * gravação, conteúdo publicado, etc), independente do status/etapa em que
+ * ela está e sem limite de quantidade por categoria.
  * ============================================================ */
 
-function EntregaFileInput({
-  arquivoNome,
-  onFile,
-  onClear,
-  label = "Anexar arquivo",
+const ENTREGA_ANEXO_TONE: Record<EntregaAnexoCategoria, string> = {
+  Roteiro: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  Gravação: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  "Conteúdo publicado": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  Outro: "bg-muted text-muted-foreground",
+};
+
+function EntregaAnexosEditor({
+  anexos,
+  onChange,
 }: {
-  arquivoNome?: string;
-  onFile: (dataUrl: string, name: string) => void;
-  onClear: () => void;
-  label?: string;
+  anexos: EntregaAnexo[];
+  onChange: (next: EntregaAnexo[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [categoria, setCategoria] = useState<EntregaAnexoCategoria>("Roteiro");
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        ref={fileRef}
-        type="file"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const r = new FileReader();
-          r.onload = () => onFile(String(r.result), file.name);
-          r.readAsDataURL(file);
-          if (fileRef.current) fileRef.current.value = "";
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-      >
-        <Paperclip className="h-3 w-3" /> {arquivoNome ?? label}
-      </button>
-      {arquivoNome && (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
+      {anexos.length > 0 && (
+        <ul className="space-y-1">
+          {anexos.map((a) => (
+            <li
+              key={a.id}
+              className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1"
+            >
+              <span
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+              >
+                {a.categoria}
+              </span>
+              <a
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                download={a.nome}
+                className="min-w-0 flex-1 truncate text-xs text-foreground underline underline-offset-2"
+              >
+                {a.nome}
+              </a>
+              <button
+                type="button"
+                onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Remover anexo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-2">
+        <select
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value as EntregaAnexoCategoria)}
+          className="rounded-md border border-border bg-background px-2 py-1.5 text-[11px] font-medium text-foreground outline-none"
+        >
+          {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = () =>
+              onChange([
+                ...anexos,
+                { id: crypto.randomUUID(), categoria, nome: file.name, url: String(r.result) },
+              ]);
+            r.readAsDataURL(file);
+            if (fileRef.current) fileRef.current.value = "";
+          }}
+        />
         <button
           type="button"
-          onClick={onClear}
-          className="text-[11px] text-muted-foreground hover:text-destructive"
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
         >
-          Remover
+          <Paperclip className="h-3 w-3" /> Anexar arquivo
         </button>
-      )}
+      </div>
     </div>
   );
 }

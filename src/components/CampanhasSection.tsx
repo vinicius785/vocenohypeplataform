@@ -46,6 +46,7 @@ import {
   type Influ,
   type InfluStatus,
   type BankInfo,
+  type Entrega,
 } from "@/components/influenciadores/InfluencerBoard";
 import { createApprovalLink, listApprovalsForCampanha } from "@/lib/approval.functions";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
@@ -995,13 +996,16 @@ function ApprovalRequestButton({
               nome: i.nome,
               foto: i.foto,
               redes: i.redes.map((r) => ({ plataforma: r.plataforma, handle: r.handle })),
-              entregas: i.entregas.map((e) => ({
-                id: e.id,
-                tipo: e.tipo,
-                dataPostagem: e.dataPostagem,
-                roteiro: e.roteiro,
-                roteiroNome: e.roteiroNome,
-              })),
+              entregas: i.entregas.map((e) => {
+                const roteiro = e.anexos?.find((a) => a.categoria === "Roteiro");
+                return {
+                  id: e.id,
+                  tipo: e.tipo,
+                  dataPostagem: e.dataPostagem,
+                  roteiro: roteiro?.url,
+                  roteiroNome: roteiro?.nome,
+                };
+              }),
             })),
           },
         }),
@@ -1126,13 +1130,24 @@ function ApprovalRequestButton({
  * ============================================================ */
 
 function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
+  const isImage = (nome?: string) => !!nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
+
   const items = influs.flatMap((i) =>
     i.entregas
-      .filter((e) => e.status === "publicado" && (e.url || e.arquivoNome))
-      .map((e) => ({ influ: i, entrega: e })),
+      .filter((e) => e.status === "publicado")
+      .flatMap((e) => {
+        const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo publicado");
+        const galeria: { influ: Influ; entrega: Entrega; nome?: string; url: string }[] = [];
+        if (publicados.length > 0) {
+          publicados.forEach((a) =>
+            galeria.push({ influ: i, entrega: e, nome: a.nome, url: a.url }),
+          );
+        } else if (e.url) {
+          galeria.push({ influ: i, entrega: e, url: e.url });
+        }
+        return galeria;
+      }),
   );
-
-  const isImage = (nome?: string) => !!nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
 
   if (items.length === 0) return null;
 
@@ -1142,21 +1157,21 @@ function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
         Galeria de conteúdos
       </h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {items.map(({ influ, entrega }) => {
-          const showImage = entrega.arquivoNome ? isImage(entrega.arquivoNome) : false;
+        {items.map(({ influ, entrega, nome, url }, idx) => {
+          const showImage = isImage(nome);
           return (
             <a
-              key={entrega.id}
-              href={entrega.url}
-              target={entrega.arquivoNome ? undefined : "_blank"}
+              key={`${entrega.id}-${idx}`}
+              href={url}
+              target={nome ? undefined : "_blank"}
               rel="noreferrer"
-              download={entrega.arquivoNome}
+              download={nome}
               className="group overflow-hidden rounded-lg border border-border bg-background transition-colors hover:border-foreground/30"
             >
               <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
-                {showImage && entrega.url ? (
+                {showImage ? (
                   <img
-                    src={entrega.url}
+                    src={url}
                     alt={entrega.titulo ?? entrega.tipo}
                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
