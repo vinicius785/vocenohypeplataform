@@ -78,11 +78,21 @@ function flatten(tasks: Task[]): Task[] {
   return tasks.flatMap((t) => [t, ...flatten(t.subtasks ?? [])]);
 }
 
+/** Grupo genérico de tarefas com dono (projeto OU campanha) — deixa
+ * `computeMemberScores`/`collectTaskItems` tratar os dois tipos de tarefa
+ * igual, sem duplicar a lógica de pontuação para cada origem. */
+export type TaskGroup = { id: string; name: string; tasks: Task[] };
+
+function projetosAsGroups(projetos: Project[]): TaskGroup[] {
+  return projetos.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks ?? [] }));
+}
+
 export function computeMemberScores(
   projetos: Project[],
   meetings: Meeting[],
   members: ChatMember[],
   range?: DateRange,
+  campanhaGroups: TaskGroup[] = [],
 ): MemberScore[] {
   const today = todayISO();
   const byId = new Map<string, MemberScore>();
@@ -116,7 +126,7 @@ export function computeMemberScores(
 
   for (const m of members) ensure(m);
 
-  for (const p of projetos) {
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
     for (const t of flatten(p.tasks ?? [])) {
       // Cada responsável ganha a pontuação cheia (não dividida entre eles).
       for (const name of getTaskAssignees(t)) {
@@ -181,9 +191,12 @@ export type TaskItem = {
   status: string;
 };
 
-export function collectTaskItems(projetos: Project[]): TaskItem[] {
+export function collectTaskItems(
+  projetos: Project[],
+  campanhaGroups: TaskGroup[] = [],
+): TaskItem[] {
   const out: TaskItem[] = [];
-  for (const p of projetos) {
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
     for (const t of flatten(p.tasks ?? [])) {
       out.push({
         id: t.id,

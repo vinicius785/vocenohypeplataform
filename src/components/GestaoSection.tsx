@@ -5,6 +5,8 @@ import { loadMembers, subscribeChat, type ChatMember } from "@/lib/chat-store";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
 import { todayISO } from "@/lib/financeiro-entries";
+import { useClientes } from "@/lib/clientes-store";
+import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import {
   computeMemberScores,
   collectTaskItems,
@@ -13,6 +15,7 @@ import {
   SCORE_RULES,
   type MemberScore,
   type TaskItem,
+  type TaskGroup,
 } from "@/lib/score";
 
 const MEMBERS_KEY = "time:membros";
@@ -188,6 +191,24 @@ export function GestaoSection() {
   );
   useEffect(() => onProjetosChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onMeetingsChange(() => setTick((t) => t + 1)), []);
+  useEffect(() => onCampanhaTarefasChange(() => setTick((t) => t + 1)), []);
+
+  // Tarefas de campanha pontuam igual às de projeto — precisa do nome de
+  // cada campanha (id -> nome) pra exibir de onde veio, igual ao Início.
+  const clientes = useClientes();
+  const campanhaGroups = useMemo<TaskGroup[]>(() => {
+    const names = new Map<string, string>();
+    for (const c of clientes) {
+      for (const camp of c.campanhas ?? []) names.set(camp.id, camp.nome);
+    }
+    void tick;
+    return Array.from(getAllCampanhaTarefas()).map(([id, tasks]) => ({
+      id,
+      name: names.get(id) ?? "Campanha",
+      tasks,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, tick]);
 
   const range = useMemo(
     () =>
@@ -197,13 +218,13 @@ export function GestaoSection() {
 
   const allScores = useMemo<MemberScore[]>(() => {
     void tick;
-    return computeMemberScores(loadProjetos(), loadMeetings(), members, range);
-  }, [members, tick, range]);
+    return computeMemberScores(loadProjetos(), loadMeetings(), members, range, campanhaGroups);
+  }, [members, tick, range, campanhaGroups]);
 
   const taskItems = useMemo(() => {
     void tick;
-    return collectTaskItems(loadProjetos());
-  }, [tick]);
+    return collectTaskItems(loadProjetos(), campanhaGroups);
+  }, [tick, campanhaGroups]);
 
   const today = todayISO();
   const dueTodayAll = useMemo(() => tasksDueToday(taskItems, today), [taskItems, today]);

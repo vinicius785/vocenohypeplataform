@@ -1,6 +1,6 @@
 {
-  "version": "1.26.2",
+  "version": "1.27.0",
   "notes": [
-    "Corrige tarefas/influenciadores/documentos órfãos de campanhas já excluídas (como a \"Exemplo Tarefa\" perdida que aparecia como atrasada no Início) — excluir uma campanha agora limpa também os dados escopados a ela, e removi os resíduos que já existiam no banco."
+    "Gestão: tarefas de campanha agora pontuam no ranking (antes só tarefas de projeto contavam) e o ranking atualiza na hora assim que uma ação que pontue é feita."
   ]
 }
