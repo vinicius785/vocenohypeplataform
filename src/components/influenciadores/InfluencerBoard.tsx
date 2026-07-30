@@ -783,6 +783,7 @@ export function InfluencerBoard({
   const exportMenu = useDropdown();
   const novoMenu = useDropdown();
   const viewMenu = useDropdown();
+  const [query, setQuery] = useState("");
   const carRef = useRef<HTMLDivElement>(null);
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
@@ -965,6 +966,12 @@ export function InfluencerBoard({
     }
   }, [influs, sortBy]);
 
+  const filteredInflus = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sortedInflus;
+    return sortedInflus.filter((i) => i.nome.toLowerCase().includes(q));
+  }, [sortedInflus, query]);
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -978,6 +985,16 @@ export function InfluencerBoard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar influenciador..."
+              aria-label="Buscar influenciador"
+              className="h-8 w-44 rounded-md border border-border bg-background pl-8 pr-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
+          </div>
           <div ref={viewMenu.ref} className="relative">
             <button
               type="button"
@@ -1116,7 +1133,7 @@ export function InfluencerBoard({
       ) : viewMode === "kanban" ? (
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3">
           {INFLU_STATUSES.map((col) => {
-            const items = sortedInflus.filter((i) => i.status === col);
+            const items = filteredInflus.filter((i) => i.status === col);
             return (
               <div
                 key={col}
@@ -1167,7 +1184,7 @@ export function InfluencerBoard({
             ref={carRef}
             className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3"
           >
-            {sortedInflus.map((i) => (
+            {filteredInflus.map((i) => (
               <InfluCard
                 key={i.id}
                 influ={i}

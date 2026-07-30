@@ -1,6 +1,6 @@
 {
-  "version": "1.21.0",
+  "version": "1.22.0",
   "notes": [
-    "Aviso de nova versão foi redesenhado e agora mostra as notas da atualização (o que você está vendo agora)."
+    "Busca em tempo real por nome ao lado do botão Visualização, na etapa de Influenciadores das campanhas."
   ]
 }
