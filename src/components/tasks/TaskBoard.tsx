@@ -881,8 +881,18 @@ export function TaskDialog({
         ? "Marketing"
         : "Campanhas");
 
+  // Clicar fora do card (ou apertar Esc) dispara o onOpenChange do Radix com
+  // `false` — antes isso só fechava e descartava qualquer edição feita sem
+  // apertar "Salvar". Agora salva primeiro (se houver título) e só então
+  // fecha. O botão "Cancelar" continua descartando de propósito — ele chama
+  // `onOpenChange(false)` direto, sem passar por aqui.
+  const handleOpenChange = (o: boolean) => {
+    if (!o && canSave) save();
+    onOpenChange(o);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
         <DialogDescription className="sr-only">
