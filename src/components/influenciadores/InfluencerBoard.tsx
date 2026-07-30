@@ -1493,7 +1493,7 @@ function InfluencerProfileDialog({
           <DialogDescription className="sr-only">
             Informações completas do influenciador.
           </DialogDescription>
-          <div className="flex items-center gap-4">
+          <div className="flex items-start gap-4">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
               {influ.foto ? (
                 <img src={influ.foto} alt="" className="h-full w-full object-cover" />
@@ -1501,35 +1501,43 @@ function InfluencerProfileDialog({
                 <User className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-semibold text-foreground">
-                {influ.nome || "Sem nome"}
-              </p>
-              {influ.nicho && (
-                <span className="mr-1.5 mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                  {influ.nicho}
-                </span>
-              )}
-              {has("status") && (
-                <span
-                  className={`mt-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${INFLU_STATUS_TONE[influ.status]}`}
-                >
-                  {influ.status}
-                </span>
-              )}
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="truncate text-base font-semibold text-foreground">
+                  {influ.nome || "Sem nome"}
+                </p>
+                {influ.nicho && (
+                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {influ.nicho}
+                  </span>
+                )}
+                {has("status") && (
+                  <span
+                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${INFLU_STATUS_TONE[influ.status]}`}
+                  >
+                    {influ.status}
+                  </span>
+                )}
+              </div>
               {(influ.telefone || influ.email) && (
-                <div className="mt-1 space-y-0.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {influ.telefone && (
-                    <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                      <Phone className="h-3 w-3 shrink-0" />
+                    <a
+                      href={`tel:${influ.telefone.replace(/\D/g, "")}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                       {formatPhoneBR(influ.telefone)}
-                    </p>
+                    </a>
                   )}
                   {influ.email && (
-                    <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      {influ.email}
-                    </p>
+                    <a
+                      href={`mailto:${influ.email}`}
+                      className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{influ.email}</span>
+                    </a>
                   )}
                 </div>
               )}
@@ -1556,47 +1564,76 @@ function InfluencerProfileDialog({
                 </ProfileSection>
               ) : null)}
 
+            {anexos.length > 0 && (
+              <ProfileSection icon={<Paperclip className="h-3.5 w-3.5" />} title="Anexos">
+                <div className="flex flex-wrap gap-1.5">
+                  {anexos.map((a) => (
+                    <a
+                      key={a.key}
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={a.nome}
+                      title={a.nome}
+                      className="group inline-flex max-w-[220px] items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs hover:border-foreground/30 hover:bg-muted"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="block truncate font-medium text-foreground">{a.nome}</span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {a.tipo}
+                        </span>
+                      </span>
+                      <Download className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                    </a>
+                  ))}
+                </div>
+              </ProfileSection>
+            )}
+
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
                 <ProfileSection icon={<Package className="h-3.5 w-3.5" />} title="Entregas">
-                  <ul className="divide-y divide-border rounded-lg border border-border">
+                  <div className="space-y-2.5">
                     {influ.entregas.map((e) => (
-                      <li key={e.id} className="px-3 py-2 text-xs">
+                      <div
+                        key={e.id}
+                        className="space-y-2 rounded-lg border border-border bg-background p-3 text-xs"
+                      >
+                        {/* Cabeçalho: o quê + quantidade + status geral */}
                         <div className="flex items-center justify-between gap-2">
                           <span className="min-w-0 truncate font-medium text-foreground">
                             {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <span className="tabular-nums text-muted-foreground">
+                            <span className="ml-1 font-normal tabular-nums text-muted-foreground">
                               {e.quantidade}×
                             </span>
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                e.status === "publicado"
-                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                  : e.status === "orcado"
-                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                    : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {e.status === "publicado"
-                                ? "Publicado"
+                          </span>
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                              e.status === "publicado"
+                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                 : e.status === "orcado"
-                                  ? "Orçado"
-                                  : "Combinado"}
-                            </span>
+                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                  : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {e.status === "publicado"
+                              ? "Publicado"
+                              : e.status === "orcado"
+                                ? "Orçado"
+                                : "Combinado"}
                           </span>
                         </div>
-                        <div
-                          className={`mt-1.5 inline-block rounded ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
-                        >
+
+                        {/* Etapa de produção — o status individual editável */}
+                        <label className="flex items-center gap-1.5">
+                          <span className="shrink-0 text-[10px] text-muted-foreground">Etapa</span>
                           <select
                             value={e.conteudoStatus ?? "Combinado"}
                             onChange={(ev) =>
                               onSetConteudoStatus(e.id, ev.target.value as EntregaConteudoStatus)
                             }
-                            onClick={(ev) => ev.stopPropagation()}
-                            className="cursor-pointer appearance-none rounded bg-transparent px-1.5 py-0.5 text-[10px] font-medium outline-none"
+                            className={`cursor-pointer flex-1 rounded px-1.5 py-1 text-[11px] font-medium outline-none ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "Combinado"]}`}
                           >
                             {ENTREGA_CONTEUDO_STATUSES.map((s) => (
                               <option
@@ -1611,21 +1648,21 @@ function InfluencerProfileDialog({
                               </option>
                             ))}
                           </select>
-                        </div>
-                        {e.url && (
-                          <a
-                            href={e.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] text-foreground underline underline-offset-2"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Ver conteúdo publicado
-                          </a>
-                        )}
-                        {(e.anexos?.length ?? 0) > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {e.anexos!.map((a) => (
+                        </label>
+
+                        {(e.url || (e.anexos?.length ?? 0) > 0) && (
+                          <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+                            {e.url && (
+                              <a
+                                href={e.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
+                              >
+                                <ExternalLink className="h-3 w-3" /> Ver publicação
+                              </a>
+                            )}
+                            {e.anexos?.map((a) => (
                               <a
                                 key={a.id}
                                 href={a.url}
@@ -1641,32 +1678,34 @@ function InfluencerProfileDialog({
                             ))}
                           </div>
                         )}
-                        {e.pagamento && (
-                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                            <Coins className="h-3 w-3" />
-                            <span>{pagamentoResumo(e.pagamento)}</span>
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                            >
-                              {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                            </span>
-                          </div>
-                        )}
-                        {e.metrics && Object.values(e.metrics).some((v) => v) && (
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                            {e.metrics.views != null && <span>{e.metrics.views} views</span>}
-                            {e.metrics.likes != null && <span>{e.metrics.likes} curtidas</span>}
-                            {e.metrics.comments != null && (
+
+                        {(e.pagamento ||
+                          (e.metrics && Object.values(e.metrics).some((v) => v))) && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                            {e.pagamento && (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Coins className="h-3 w-3" />
+                                {pagamentoResumo(e.pagamento)}
+                                <span
+                                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
+                                >
+                                  {APROVACAO_LABEL[e.pagamento.aprovacao]}
+                                </span>
+                              </span>
+                            )}
+                            {e.metrics?.views != null && <span>{e.metrics.views} views</span>}
+                            {e.metrics?.likes != null && <span>{e.metrics.likes} curtidas</span>}
+                            {e.metrics?.comments != null && (
                               <span>{e.metrics.comments} coment.</span>
                             )}
-                            {e.metrics.shares != null && <span>{e.metrics.shares} compart.</span>}
-                            {e.metrics.saves != null && <span>{e.metrics.saves} salvos</span>}
-                            {e.metrics.reach != null && <span>{e.metrics.reach} alcance</span>}
+                            {e.metrics?.shares != null && <span>{e.metrics.shares} compart.</span>}
+                            {e.metrics?.saves != null && <span>{e.metrics.saves} salvos</span>}
+                            {e.metrics?.reach != null && <span>{e.metrics.reach} alcance</span>}
                           </div>
                         )}
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </ProfileSection>
               ) : null)}
 
@@ -1708,35 +1747,6 @@ function InfluencerProfileDialog({
                     <MetricStat label="Salvos" value={metricsTotal.saves.toLocaleString("pt-BR")} />
                   )}
                 </div>
-              </ProfileSection>
-            )}
-
-            {anexos.length > 0 && (
-              <ProfileSection icon={<Paperclip className="h-3.5 w-3.5" />} title="Anexos">
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {anexos.map((a) => (
-                    <li
-                      key={a.key}
-                      className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
-                    >
-                      <span className="min-w-0 truncate">
-                        <span className="block truncate font-medium text-foreground">{a.nome}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {a.tipo}
-                        </span>
-                      </span>
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        download={a.nome}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted"
-                      >
-                        <Download className="h-3 w-3" /> Baixar
-                      </a>
-                    </li>
-                  ))}
-                </ul>
               </ProfileSection>
             )}
 
@@ -2226,15 +2236,16 @@ function InfluenciadorDialog({
                   return (
                     <div
                       key={e.id}
-                      className="space-y-2 rounded-md border border-border bg-background p-2"
+                      className="space-y-3 rounded-lg border border-border bg-background p-3"
                     >
+                      {/* Formato, quantidade e data — o essencial da entrega */}
                       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
                         <input
                           list="entregas-tipos"
                           value={e.tipo}
                           onChange={(ev) => update({ tipo: ev.target.value })}
                           placeholder="Reels, Stories..."
-                          className="rounded-md bg-transparent px-2 py-1.5 text-sm outline-none"
+                          className="rounded-md bg-transparent px-2 py-1.5 text-sm font-medium outline-none"
                         />
                         <div className="flex items-center rounded-md bg-muted">
                           <button
@@ -2259,9 +2270,9 @@ function InfluenciadorDialog({
                           onClick={() => setEntregas((es) => es.filter((x) => x.id !== e.id))}
                         />
                       </div>
-
                       <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                         <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                        <span className="shrink-0">Data de postagem</span>
                         <input
                           type="date"
                           value={e.dataPostagem ?? ""}
@@ -2270,19 +2281,29 @@ function InfluenciadorDialog({
                         />
                       </label>
 
-                      <EntregaAnexosEditor
-                        anexos={e.anexos ?? []}
-                        onChange={(anexos) => update({ anexos })}
-                      />
+                      <div className="space-y-2 border-t border-border pt-2.5">
+                        <EntregaAnexosEditor
+                          anexos={e.anexos ?? []}
+                          onChange={(anexos) => update({ anexos })}
+                        />
+                      </div>
 
-                      <PagamentoEditor
-                        value={e.pagamento}
-                        onChange={(pagamento) => update({ pagamento })}
-                        pagGrupos={pagGrupos}
-                      />
+                      <div className="space-y-1.5 border-t border-border pt-2.5">
+                        <p className="text-[11px] font-medium text-muted-foreground">
+                          Pagamento combinado
+                        </p>
+                        <PagamentoEditor
+                          value={e.pagamento}
+                          onChange={(pagamento) => update({ pagamento })}
+                          pagGrupos={pagGrupos}
+                        />
+                      </div>
 
                       {published && (
-                        <div className="space-y-2 border-t border-border pt-2">
+                        <div className="space-y-2 border-t border-border pt-2.5">
+                          <p className="text-[11px] font-medium text-muted-foreground">
+                            Publicação
+                          </p>
                           <input
                             value={e.url ?? ""}
                             onChange={(ev) => update({ url: ev.target.value })}
@@ -2908,12 +2929,68 @@ function EntregaAnexosEditor({
   onChange: (next: EntregaAnexo[]) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [categoria, setCategoria] = useState<EntregaAnexoCategoria>("Roteiro");
+  const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
+  const addMenu = useDropdown();
+
+  const pickCategoria = (c: EntregaAnexoCategoria) => {
+    pendingCategoria.current = c;
+    addMenu.setOpen(false);
+    fileRef.current?.click();
+  };
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
-      {anexos.length > 0 && (
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
+        <div ref={addMenu.ref} className="relative">
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const r = new FileReader();
+              r.onload = () =>
+                onChange([
+                  ...anexos,
+                  {
+                    id: crypto.randomUUID(),
+                    categoria: pendingCategoria.current,
+                    nome: file.name,
+                    url: String(r.result),
+                  },
+                ]);
+              r.readAsDataURL(file);
+              if (fileRef.current) fileRef.current.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => addMenu.setOpen((o) => !o)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          >
+            <Paperclip className="h-3 w-3" /> Adicionar anexo
+            <ChevronDown className="h-3 w-3" />
+          </button>
+          {addMenu.open && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-border bg-popover p-1 shadow-md">
+              {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => pickCategoria(c)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_ANEXO_TONE[c]}`} />
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {anexos.length > 0 ? (
         <ul className="space-y-1">
           {anexos.map((a) => (
             <li
@@ -2945,44 +3022,9 @@ function EntregaAnexosEditor({
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="text-[11px] text-muted-foreground/70">Nenhum anexo ainda.</p>
       )}
-      <div className="flex items-center gap-2">
-        <select
-          value={categoria}
-          onChange={(e) => setCategoria(e.target.value as EntregaAnexoCategoria)}
-          className="rounded-md border border-border bg-background px-2 py-1.5 text-[11px] font-medium text-foreground outline-none"
-        >
-          {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const r = new FileReader();
-            r.onload = () =>
-              onChange([
-                ...anexos,
-                { id: crypto.randomUUID(), categoria, nome: file.name, url: String(r.result) },
-              ]);
-            r.readAsDataURL(file);
-            if (fileRef.current) fileRef.current.value = "";
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-        >
-          <Paperclip className="h-3 w-3" /> Anexar arquivo
-        </button>
-      </div>
     </div>
   );
 }
