@@ -1520,7 +1520,7 @@ function InfluStatusPill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 rounded-md border-2 bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground shadow-sm ${INFLU_STATUS_BORDER[value]}`}
+        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
       >
         {value}
         <ChevronDown className="h-2.5 w-2.5" />
@@ -1531,7 +1531,7 @@ function InfluStatusPill({
           <DialogDescription className="sr-only">
             Escolha o status geral deste influenciador no fluxo da campanha.
           </DialogDescription>
-          <div className="max-h-80 space-y-1 overflow-y-auto">
+          <div className="max-h-80 space-y-1.5 overflow-y-auto">
             {INFLU_STATUSES.map((s) => (
               <button
                 key={s}
@@ -1540,15 +1540,9 @@ function InfluStatusPill({
                   onChange(s);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium hover:bg-muted ${
-                  s === value ? "bg-muted" : ""
-                }`}
+                className={`flex w-full items-center gap-2 rounded-md border-2 bg-background px-2.5 py-2 text-left text-sm font-semibold text-foreground hover:bg-muted ${INFLU_STATUS_BORDER[s]}`}
               >
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${INFLU_STATUS_TONE[s]}`}
-                >
-                  {s}
-                </span>
+                {s}
                 {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
               </button>
             ))}
@@ -1574,7 +1568,7 @@ function EntregaStatusPill({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex shrink-0 items-center gap-1 rounded border-2 bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground ${ENTREGA_CONTEUDO_BORDER[value]}`}
+        className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
       >
         {value}
         <ChevronDown className="h-2.5 w-2.5" />
@@ -1585,7 +1579,7 @@ function EntregaStatusPill({
           <DialogDescription className="sr-only">
             Escolha a etapa de produção desta entrega.
           </DialogDescription>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {ENTREGA_CONTEUDO_STATUSES.map((s) => {
               const disabled = s === "Postado" && !canPublishEntrega(influStatus);
               return (
@@ -1598,11 +1592,8 @@ function EntregaStatusPill({
                     onChange(s);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${
-                    s === value ? "bg-muted" : ""
-                  }`}
+                  className={`flex w-full items-center gap-2 rounded-md border-2 bg-background px-2.5 py-2 text-left text-sm font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${ENTREGA_CONTEUDO_BORDER[s]}`}
                 >
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_CONTEUDO_TONE[s]}`} />
                   {s}
                   {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
                 </button>
