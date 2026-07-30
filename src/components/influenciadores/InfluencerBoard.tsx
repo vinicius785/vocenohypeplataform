@@ -48,6 +48,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import type { PagGrupo } from "@/components/VincularCampanhaDialog";
+import { useConfirm } from "@/hooks/use-confirm";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -454,6 +455,8 @@ export const NICHOS = [
   "Outro",
 ] as const;
 
+export type ChecklistItem = { id: string; text: string; done: boolean };
+
 export type Influ = {
   id: string;
   foto?: string;
@@ -471,6 +474,9 @@ export type Influ = {
   activity?: InfluActivity[];
   createdAt?: string;
   updatedAt?: string;
+  /** Checklist livre do influenciador (texto qualquer, marcar feito) — pode
+   * ser aplicado de um influ pros outros todos da campanha de uma vez. */
+  checklist?: ChecklistItem[];
 };
 
 /**
@@ -948,6 +954,23 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  const setInfluChecklist = (influId: string, checklist: ChecklistItem[]) => {
+    const next = influs.map((x) => (x.id === influId ? { ...x, checklist } : x));
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
+  // Copia a checklist (textos, tudo desmarcado) de um influ pros demais da
+  // campanha/projeto de uma vez — pra não recriar item por item em cada um.
+  const applyChecklistToAll = (checklist: ChecklistItem[]) => {
+    const next = influs.map((x) => ({
+      ...x,
+      checklist: checklist.map((c) => ({ id: crypto.randomUUID(), text: c.text, done: false })),
+    }));
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   const sortedInflus = useMemo(() => {
     const list = [...influs];
     switch (sortBy) {
@@ -1235,6 +1258,8 @@ export function InfluencerBoard({
           }
           onSetAnexos={(entregaId, anexos) => setEntregaAnexos(viewing.id, entregaId, anexos)}
           onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
+          onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
+          onApplyChecklistToAll={(checklist) => applyChecklistToAll(checklist)}
           onComment={(text) => addComment(viewing.id, text)}
         />
       )}
@@ -1480,6 +1505,124 @@ function MetricStat({ label, value }: { label: string; value: string }) {
  * "Editar" jumps into the same wizard used to create/edit.
  * ============================================================ */
 
+/** Checklist livre por influenciador — escreve o que quiser, marca feito, e
+ * pode aplicar a mesma lista (desmarcada) a todos os outros influs de uma
+ * vez, pra não recriar item por item em cada um. */
+function ChecklistSection({
+  checklist,
+  onChange,
+  onApplyToAll,
+}: {
+  checklist: ChecklistItem[];
+  onChange: (next: ChecklistItem[]) => void;
+  onApplyToAll: (checklist: ChecklistItem[]) => void;
+}) {
+  const [newText, setNewText] = useState("");
+  const { confirm, confirmDialog } = useConfirm();
+
+  const addItem = () => {
+    const text = newText.trim();
+    if (!text) return;
+    onChange([...checklist, { id: crypto.randomUUID(), text, done: false }]);
+    setNewText("");
+  };
+
+  const applyToAll = async () => {
+    if (checklist.length === 0) return;
+    const ok = await confirm(
+      "Aplicar esta checklist a todos os influenciadores? A checklist atual de cada um será substituída (desmarcada).",
+    );
+    if (ok) onApplyToAll(checklist);
+  };
+
+  const doneCount = checklist.filter((c) => c.done).length;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Checklist
+          {checklist.length > 0 && (
+            <span className="font-normal text-muted-foreground">
+              ({doneCount}/{checklist.length})
+            </span>
+          )}
+        </p>
+        {checklist.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void applyToAll()}
+            className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            Aplicar a todos os influenciadores
+          </button>
+        )}
+      </div>
+
+      {checklist.length > 0 && (
+        <ul className="space-y-1">
+          {checklist.map((item) => (
+            <li key={item.id} className="group flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={() =>
+                  onChange(checklist.map((c) => (c.id === item.id ? { ...c, done: !c.done } : c)))
+                }
+                className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-foreground"
+              />
+              <input
+                value={item.text}
+                onChange={(e) =>
+                  onChange(
+                    checklist.map((c) => (c.id === item.id ? { ...c, text: e.target.value } : c)),
+                  )
+                }
+                className={`min-w-0 flex-1 bg-transparent text-xs outline-none ${
+                  item.done ? "text-muted-foreground line-through" : "text-foreground"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => onChange(checklist.filter((c) => c.id !== item.id))}
+                className="shrink-0 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                aria-label="Remover item"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex items-center gap-2 border-t border-border pt-2">
+        <input
+          value={newText}
+          onChange={(e) => setNewText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addItem();
+            }
+          }}
+          placeholder="Adicionar item..."
+          className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+        />
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={!newText.trim()}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="h-3 w-3" /> Adicionar
+        </button>
+      </div>
+      {confirmDialog}
+    </div>
+  );
+}
+
 /** Botões lado a lado (Métricas, Pagamentos, Dados bancários, Contrato) —
  * nenhum aberto por padrão; clicar num abre o painel dele logo abaixo (e
  * fecha automaticamente se outro for aberto). */
@@ -1671,6 +1814,8 @@ function InfluencerProfileDialog({
   onSetConteudoStatus,
   onSetAnexos,
   onSetStatus,
+  onSetChecklist,
+  onApplyChecklistToAll,
   onComment,
 }: {
   influ: Influ;
@@ -1682,6 +1827,8 @@ function InfluencerProfileDialog({
   onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
   onSetAnexos: (entregaId: string, anexos: EntregaAnexo[]) => void;
   onSetStatus: (status: InfluStatus) => void;
+  onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
@@ -1822,6 +1969,12 @@ function InfluencerProfileDialog({
               ) : (
                 <p className="text-xs text-muted-foreground">Nenhuma entrega combinada ainda.</p>
               ))}
+
+            <ChecklistSection
+              checklist={influ.checklist ?? []}
+              onChange={onSetChecklist}
+              onApplyToAll={onApplyChecklistToAll}
+            />
 
             {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, conteúdo oculto até clicar */}
             <HiddenSectionsPanel
