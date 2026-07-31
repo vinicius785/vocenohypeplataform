@@ -125,7 +125,13 @@ let channelsCache: ChatChannel[] = [];
 let messagesCache: ChatMessage[] = [];
 let lastReadCache: Record<string, number> = {};
 let allReadsCache: Record<string, Record<string, number>> = {};
-let statusCache: Record<string, MemberStatus> = {};
+// Guarda o status "cru" (o que a pessoa escolheu, ou "online" por padrão) mais
+// o horário do último heartbeat — `getStatus` deriva o status exibido a partir
+// disso, então quem fecha a aba (ou perde conexão) automaticamente vira
+// "offline" depois de `HEARTBEAT_STALE_MS`, em vez de ficar preso no último
+// valor gravado pra sempre.
+let statusCache: Record<string, { status: MemberStatus; updatedAt: number }> = {};
+const HEARTBEAT_STALE_MS = 90_000; // hydrate() manda heartbeat a cada 30s
 
 let initPromise: Promise<void> | null = null;
 let currentUserId: string | null = null;
@@ -158,7 +164,7 @@ type MessageRow = {
 const MESSAGE_COLUMNS =
   "id,convo_id,author_id,author_name,author_photo,text,mentions,attachments,reactions,reply_to_id,created_at,edited_at";
 type ReadRow = { convo_id: string; last_read_at: string };
-type StatusRow = { user_id: string; status: string };
+type StatusRow = { user_id: string; status: string; updated_at: string };
 
 function mapChannel(r: ChannelRow): ChatChannel {
   return {
@@ -235,11 +241,13 @@ async function reloadAllReads() {
   emit();
 }
 async function reloadStatuses() {
-  const { data } = await supabase.from("chat_status").select("user_id,status");
-  const next: Record<string, MemberStatus> = {};
+  const { data } = await supabase.from("chat_status").select("user_id,status,updated_at");
+  const next: Record<string, { status: MemberStatus; updatedAt: number }> = {};
   for (const r of (data ?? []) as StatusRow[]) {
     const s = r.status as MemberStatus;
-    if (s === "online" || s === "away" || s === "offline") next[r.user_id] = s;
+    if (s === "online" || s === "away" || s === "offline") {
+      next[r.user_id] = { status: s, updatedAt: new Date(r.updated_at).getTime() };
+    }
   }
   statusCache = next;
   emit();
@@ -258,6 +266,11 @@ export async function initChatSync(userId: string) {
     ]);
     if (realtimeStarted) return;
     realtimeStarted = true;
+    // `getStatus` deriva "offline" a partir do tempo decorrido desde o último
+    // heartbeat — sem isso, o ponto de presença só re-renderiza quando chega
+    // uma mudança real (mensagem, etc), então alguém que fechou a aba ficaria
+    // "online" na tela até a próxima ação de qualquer pessoa no chat.
+    window.setInterval(() => emit(), 20_000);
     supabase
       .channel("rt-chat-channels")
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_channels" }, () => {
@@ -326,10 +339,15 @@ export function loadMessages(): ChatMessage[] {
   return messagesCache;
 }
 export function loadStatuses(): Record<string, MemberStatus> {
-  return statusCache;
+  const out: Record<string, MemberStatus> = {};
+  for (const id of Object.keys(statusCache)) out[id] = getStatus(id);
+  return out;
 }
 export function getStatus(id: string): MemberStatus {
-  return statusCache[id] ?? "online";
+  const row = statusCache[id];
+  if (!row) return "offline";
+  if (Date.now() - row.updatedAt > HEARTBEAT_STALE_MS) return "offline";
+  return row.status === "away" ? "away" : "online";
 }
 
 // ---------- Mutations ----------
@@ -590,8 +608,9 @@ export function getUnreadCount(convoId: string, messages: ChatMessage[], meId: s
 }
 
 // ---------- Status ----------
+/** Muda o status escolhido pela pessoa (online/away/offline manual). */
 export async function setStatus(id: string, s: MemberStatus) {
-  statusCache = { ...statusCache, [id]: s };
+  statusCache = { ...statusCache, [id]: { status: s, updatedAt: Date.now() } };
   emit();
   if (currentUserId && id === currentUserId) {
     await supabase
@@ -601,6 +620,28 @@ export async function setStatus(id: string, s: MemberStatus) {
         { onConflict: "user_id" },
       );
   }
+}
+
+/** Heartbeat de presença (chamado a cada 30s enquanto o app está aberto) —
+ * só atualiza `updated_at`, nunca sobrescreve um status "away" escolhido
+ * manualmente pela pessoa. Sem heartbeat recente, `getStatus` já deriva
+ * "offline" sozinho (ver HEARTBEAT_STALE_MS). */
+export async function heartbeat(id: string) {
+  if (currentUserId !== id) return;
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("chat_status")
+    .update({ updated_at: nowIso })
+    .eq("user_id", id)
+    .select("user_id");
+  if (!error && (!data || data.length === 0)) {
+    await supabase
+      .from("chat_status")
+      .insert({ user_id: id, status: "online", updated_at: nowIso });
+  }
+  const prevStatus = statusCache[id]?.status ?? "online";
+  statusCache = { ...statusCache, [id]: { status: prevStatus, updatedAt: Date.now() } };
+  emit();
 }
 
 // ---------- Notification sound ----------

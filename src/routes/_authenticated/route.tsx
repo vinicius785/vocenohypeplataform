@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getTeamDirectory } from "@/lib/team.functions";
-import { saveMe, initChatSync, setStatus } from "@/lib/chat-store";
+import { saveMe, initChatSync, heartbeat } from "@/lib/chat-store";
 import { initWorkspaceSync } from "@/lib/workspace-store";
 import { initSharedSync } from "@/lib/shared-sync";
 import { initClientesSync } from "@/lib/clientes-store";
@@ -99,7 +99,7 @@ function AuthenticatedLayout() {
           email: profile.email ?? data.user.email ?? undefined,
         });
         void initChatSync(data.user.id);
-        void setStatus(data.user.id, "online");
+        void heartbeat(data.user.id);
         initWorkspaceSync();
         void initCallController(
           data.user.id,

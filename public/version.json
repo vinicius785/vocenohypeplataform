@@ -1,6 +1,6 @@
 {
-  "version": "1.29.0",
+  "version": "1.30.0",
   "notes": [
-    "Comercial: cada lead agora tem um histórico automático (criado por fulano ou recebido via webhook, status alterado, etc), visível no painel lateral ao abrir o lead."
+    "Status de presença (online/ausente/offline) agora é real: quem fecha o app fica Offline sozinho depois de ~1min e meio, em vez de continuar aparecendo Online pra sempre; o seletor de status em Configurações agora realmente marca Ausente pro resto do time (antes só mudava localmente)."
   ]
 }

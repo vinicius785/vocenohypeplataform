@@ -34,7 +34,7 @@ import {
   type Workspace,
 } from "@/lib/workspace-store";
 import { supabase } from "@/integrations/supabase/client";
-import { saveMe } from "@/lib/chat-store";
+import { saveMe, getMe, setStatus as setPresenceStatus, type MemberStatus } from "@/lib/chat-store";
 import { useStorageSync } from "@/lib/use-storage-sync";
 import {
   isVaultUnlocked,
@@ -71,7 +71,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.29.0";
+export const APP_VERSION = "1.30.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -114,6 +114,13 @@ const STATUS_META: Record<StatusKey, { label: string; dot: string }> = {
   ausente: { label: "Ausente", dot: "bg-amber-500" },
   offline: { label: "Offline", dot: "bg-muted-foreground" },
 };
+// Aplica a escolha de status na presença real (tabela chat_status), além do
+// espelho local em localStorage — sem isso o toggle aqui era só cosmético e
+// não refletia no ponto de presença exibido pro resto do time.
+const toPresenceStatus = (s: StatusKey): MemberStatus => (s === "ausente" ? "away" : s);
+function applyPresenceStatus(next: UserStatus) {
+  void setPresenceStatus(getMe().id, toPresenceStatus(next.status));
+}
 
 type Senha = {
   id: string;
@@ -162,6 +169,7 @@ export function ConfiguracoesSection() {
   const updateStatus = (next: UserStatus) => {
     setStatus(next);
     localStorage.setItem(STATUS_KEY, JSON.stringify(next));
+    applyPresenceStatus(next);
   };
 
   return (
@@ -1996,6 +2004,7 @@ export function SidebarProfile() {
   const updateStatus = (next: UserStatus) => {
     setStatus(next);
     localStorage.setItem(STATUS_KEY, JSON.stringify(next));
+    applyPresenceStatus(next);
   };
 
   const initials =
