@@ -126,8 +126,13 @@ function AprovacaoPublicPage() {
     getByTokenFn({ data: { token } })
       .then((row) => {
         if (cancelled) return;
-        setData(row as ApprovalData);
+        const approvalData = row as ApprovalData;
+        setData(approvalData);
         setStatus("ready");
+        document.title =
+          approvalData.mode === "view"
+            ? "Visualização de influenciadores · Hype"
+            : "Aprovação de influenciadores · Hype";
       })
       .catch(() => {
         if (!cancelled) setStatus("notfound");
@@ -201,6 +206,12 @@ function AprovacaoPublicPage() {
               : "Aprove ou reprove cada influenciador abaixo. Reprovações precisam de um motivo."}
           </p>
         </header>
+
+        {data.mode === "view" && (
+          <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 sm:grid-cols-5">
+            <Kpi label="Influenciadores" value={data.influencers.length.toString()} />
+          </div>
+        )}
 
         {data.mode === "approve" &&
           (() => {

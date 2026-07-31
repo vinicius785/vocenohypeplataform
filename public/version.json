@@ -1,7 +1,6 @@
 {
-  "version": "1.31.1",
+  "version": "1.32.0",
   "notes": [
-    "Corrige de vez o botão 'Solicitar aprovação' (o diálogo vivia dentro do próprio menu Exportar, que se fechava e o destruía no mesmo clique).",
-    "'Link de visualização' agora aparece como item separado no menu Exportar, junto de 'Baixar lista' e 'Solicitar aprovação'."
+    "Link 'somente visualização' de influenciadores: aba do navegador agora mostra 'Visualização de influenciadores' (antes sempre dizia 'Aprovação') e ganhou um KPI com o total de influenciadores na lista."
   ]
 }
