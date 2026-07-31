@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
   FileText,
   FolderOpen,
   ImageIcon,
@@ -370,6 +371,8 @@ function CampanhaDetail({
   const [openPanel, setOpenPanel] = useState<
     null | "documentos" | "calendario" | "composicao" | "direitos"
   >(null);
+  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [approvalInitialMode, setApprovalInitialMode] = useState<"approve" | "view">("approve");
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
@@ -524,16 +527,47 @@ function CampanhaDetail({
         approvalStatusFor={approvalStatusFor}
         pagGrupos={normalizeCampaignPagGrupos(c)}
         headerExtra={(closeMenu) => (
-          <ApprovalRequestButton
-            influs={influs}
-            campanhaId={c.id}
-            campanhaNome={c.nome}
-            clienteNome={cliente.empresa}
-            totalPlanejado={totalInflus}
-            onCreated={refreshApprovals}
-            onOpenDialog={closeMenu}
-          />
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setApprovalInitialMode("approve");
+                setApprovalDialogOpen(true);
+                closeMenu();
+              }}
+              disabled={influs.length === 0}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Solicitar aprovação
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setApprovalInitialMode("view");
+                setApprovalDialogOpen(true);
+                closeMenu();
+              }}
+              disabled={influs.length === 0}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Link de visualização
+            </button>
+          </>
         )}
+      />
+
+      <ApprovalRequestDialog
+        open={approvalDialogOpen}
+        onOpenChange={setApprovalDialogOpen}
+        initialMode={approvalInitialMode}
+        influs={influs}
+        campanhaId={c.id}
+        campanhaNome={c.nome}
+        clienteNome={cliente.empresa}
+        totalPlanejado={totalInflus}
+        onCreated={refreshApprovals}
       />
 
       <GaleriaConteudosSection influs={influs} />
@@ -939,26 +973,37 @@ function useInfluencerApprovals(campanhaId: string) {
   return { links, refresh, approvalStatusFor };
 }
 
-function ApprovalRequestButton({
+/**
+ * Diálogo de "solicitar aprovação / gerar link de visualização" — renderizado
+ * como irmão do InfluencerBoard (não dentro do dropdown "Exportar"). Antes
+ * vivia dentro do próprio botão que abria o dropdown; como o dropdown se
+ * fecha (desmontando seu conteúdo) assim que o diálogo abre, o estado
+ * `open=true` era destruído no mesmo clique que o criava, e o diálogo nunca
+ * chegava a aparecer. Vive aqui, fora dessa árvore, controlado por
+ * `open`/`onOpenChange` vindos do componente pai.
+ */
+function ApprovalRequestDialog({
+  open,
+  onOpenChange,
+  initialMode = "approve",
   influs,
   campanhaId,
   campanhaNome,
   clienteNome,
   totalPlanejado,
   onCreated,
-  onOpenDialog,
 }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  initialMode?: "approve" | "view";
   influs: Influ[];
   campanhaId: string;
   campanhaNome: string;
   clienteNome: string;
   totalPlanejado: number;
   onCreated: () => void;
-  /** Fecha o dropdown "Exportar" que contém este botão, assim que o diálogo abrir. */
-  onOpenDialog?: () => void;
 }) {
   const createLinkFn = useServerFn(createApprovalLink);
-  const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"approve" | "view">("approve");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
@@ -982,14 +1027,15 @@ function ApprovalRequestButton({
       return next;
     });
 
-  const openDialog = () => {
+  // Reseta o formulário sempre que o diálogo é reaberto.
+  useEffect(() => {
+    if (!open) return;
     setSelected(new Set());
-    setMode("approve");
+    setMode(initialMode);
     setNewToken(null);
     setError("");
-    setOpen(true);
-    onOpenDialog?.();
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const submit = async () => {
     if (selected.size === 0) return;
@@ -1033,135 +1079,121 @@ function ApprovalRequestButton({
     }
   };
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={openDialog}
-        disabled={influs.length === 0}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Share2 className="h-3.5 w-3.5" />
-        Solicitar aprovação
-      </button>
+  if (!open) return null;
 
-      {open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4">
-          <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-background">
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">
-                {mode === "view" ? "Gerar link de visualização" : "Solicitar aprovação"}
-              </h3>
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4">
+      <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-background">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h3 className="text-sm font-semibold">
+            {mode === "view" ? "Gerar link de visualização" : "Solicitar aprovação"}
+          </h3>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {newToken ? (
+          <div className="space-y-3 px-5 py-6">
+            <p className="text-sm text-foreground">Link gerado com sucesso.</p>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+              <span className="flex-1 truncate">{linkFor(newToken)}</span>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                onClick={() => copyLink(newToken)}
+                className="shrink-0 text-foreground hover:opacity-70"
               >
-                <X className="h-4 w-4" />
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
             </div>
-
-            {newToken ? (
-              <div className="space-y-3 px-5 py-6">
-                <p className="text-sm text-foreground">Link gerado com sucesso.</p>
-                <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-                  <span className="flex-1 truncate">{linkFor(newToken)}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyLink(newToken)}
-                    className="shrink-0 text-foreground hover:opacity-70"
-                  >
-                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="mt-2 w-full rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            >
+              Concluir
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
+              <div className="mb-3 flex gap-1 rounded-md bg-muted p-1">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
-                  className="mt-2 w-full rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+                  onClick={() => setMode("approve")}
+                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                    mode === "approve"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
-                  Concluir
+                  Solicitar aprovação
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("view")}
+                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                    mode === "view"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Somente visualização
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
-                  <div className="mb-3 flex gap-1 rounded-md bg-muted p-1">
-                    <button
-                      type="button"
-                      onClick={() => setMode("approve")}
-                      className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-                        mode === "approve"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Solicitar aprovação
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode("view")}
-                      className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-                        mode === "view"
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Somente visualização
-                    </button>
+              <p className="mb-2 text-xs text-muted-foreground">
+                {mode === "view"
+                  ? "Selecione quem aparece no link — mostra só foto, nome e rede social, sem aprovar/reprovar."
+                  : "Selecione quem enviar para aprovação do cliente."}
+              </p>
+              {influs.map((i) => (
+                <label
+                  key={i.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(i.id)}
+                    onChange={() => toggle(i.id)}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                    {i.foto ? (
+                      <img src={i.foto} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-4 w-4 text-muted-foreground" />
+                    )}
                   </div>
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    {mode === "view"
-                      ? "Selecione quem aparece no link — mostra só foto, nome e rede social, sem aprovar/reprovar."
-                      : "Selecione quem enviar para aprovação do cliente."}
-                  </p>
-                  {influs.map((i) => (
-                    <label
-                      key={i.id}
-                      className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(i.id)}
-                        onChange={() => toggle(i.id)}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                        {i.foto ? (
-                          <img src={i.foto} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <User className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {i.nome || "Sem nome"}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {error && <p className="px-5 text-xs text-destructive">{error}</p>}
-                <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void submit()}
-                    disabled={selected.size === 0 || creating}
-                    className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {creating ? "Gerando..." : `Gerar link (${selected.size})`}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
+                  <span className="min-w-0 flex-1 truncate text-sm">{i.nome || "Sem nome"}</span>
+                </label>
+              ))}
+            </div>
+            {error && <p className="px-5 text-xs text-destructive">{error}</p>}
+            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={selected.size === 0 || creating}
+                className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creating ? "Gerando..." : `Gerar link (${selected.size})`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

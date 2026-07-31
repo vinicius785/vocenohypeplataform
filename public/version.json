@@ -1,8 +1,7 @@
 {
-  "version": "1.31.0",
+  "version": "1.31.1",
   "notes": [
-    "Corrige o botão 'Solicitar aprovação' de influenciadores em Campanhas, que não abria (o menu Exportar se fechava sozinho no clique).",
-    "Novo: link 'Somente visualização' — mostra foto, nome e rede social dos influenciadores em destaque, sem aprovar/reprovar.",
-    "Corrige checklist de influenciador: 'Aplicar a todos' não desmarca mais itens já concluídos."
+    "Corrige de vez o botão 'Solicitar aprovação' (o diálogo vivia dentro do próprio menu Exportar, que se fechava e o destruía no mesmo clique).",
+    "'Link de visualização' agora aparece como item separado no menu Exportar, junto de 'Baixar lista' e 'Solicitar aprovação'."
   ]
 }
