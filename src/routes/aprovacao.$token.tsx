@@ -83,6 +83,7 @@ type ApprovalData = {
   influencers: ApprovalInfluencer[];
   responses: Record<string, ApprovalResponse>;
   total_planejado: number | null;
+  mode: "approve" | "view";
 };
 
 function Kpi({
@@ -195,36 +196,93 @@ function AprovacaoPublicPage() {
             {data.campanha_nome || "Selecione os influenciadores"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Aprove ou reprove cada influenciador abaixo. Reprovações precisam de um motivo.
+            {data.mode === "view"
+              ? "Influenciadores selecionados para esta campanha."
+              : "Aprove ou reprove cada influenciador abaixo. Reprovações precisam de um motivo."}
           </p>
         </header>
 
-        {(() => {
-          const total = data.influencers.length;
-          const aprovados = data.influencers.filter(
-            (i) => data.responses[i.id]?.status === "aprovado",
-          ).length;
-          const reprovados = data.influencers.filter(
-            (i) => data.responses[i.id]?.status === "reprovado",
-          ).length;
-          const aguardando = total - aprovados - reprovados;
-          return (
-            <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 sm:grid-cols-5">
-              {typeof data.total_planejado === "number" && (
-                <Kpi label="Planejado" value={data.total_planejado.toString()} />
-              )}
-              <Kpi label="Influenciadores" value={total.toString()} />
-              <Kpi label="Aprovados" value={aprovados.toString()} tone="success" />
-              <Kpi label="Aguardando" value={aguardando.toString()} tone="warning" />
-              <Kpi label="Reprovados" value={reprovados.toString()} tone="danger" />
-            </div>
-          );
-        })()}
+        {data.mode === "approve" &&
+          (() => {
+            const total = data.influencers.length;
+            const aprovados = data.influencers.filter(
+              (i) => data.responses[i.id]?.status === "aprovado",
+            ).length;
+            const reprovados = data.influencers.filter(
+              (i) => data.responses[i.id]?.status === "reprovado",
+            ).length;
+            const aguardando = total - aprovados - reprovados;
+            return (
+              <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 sm:grid-cols-5">
+                {typeof data.total_planejado === "number" && (
+                  <Kpi label="Planejado" value={data.total_planejado.toString()} />
+                )}
+                <Kpi label="Influenciadores" value={total.toString()} />
+                <Kpi label="Aprovados" value={aprovados.toString()} tone="success" />
+                <Kpi label="Aguardando" value={aguardando.toString()} tone="warning" />
+                <Kpi label="Reprovados" value={reprovados.toString()} tone="danger" />
+              </div>
+            );
+          })()}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {data.influencers.map((inf) => {
             const resp = data.responses[inf.id];
             const isRejectingThis = rejecting === inf.id;
+            const redes = (
+              <div className={`flex flex-wrap gap-1.5 ${data.mode === "view" ? "mt-2" : "mt-1"}`}>
+                {inf.redes.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
+                ) : (
+                  inf.redes.map((r, i) => {
+                    const url = profileUrl(r.plataforma, r.handle);
+                    const content = (
+                      <>
+                        <PlatformIcon
+                          plataforma={r.plataforma}
+                          className={data.mode === "view" ? "h-3.5 w-3.5" : "h-3 w-3"}
+                        />
+                        {r.handle || r.plataforma}
+                      </>
+                    );
+                    const className =
+                      (data.mode === "view"
+                        ? "inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground"
+                        : "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground") +
+                      (url ? " hover:bg-muted-foreground/20" : "");
+                    return url ? (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" className={className}>
+                        {content}
+                      </a>
+                    ) : (
+                      <span key={i} className={className}>
+                        {content}
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+            );
+
+            if (data.mode === "view") {
+              return (
+                <div
+                  key={inf.id}
+                  className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center"
+                >
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                    {inf.foto ? (
+                      <img src={inf.foto} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
+                  {redes}
+                </div>
+              );
+            }
+
             return (
               <div
                 key={inf.id}
@@ -240,39 +298,7 @@ function AprovacaoPublicPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-semibold text-foreground">{inf.nome}</p>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {inf.redes.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
-                      ) : (
-                        inf.redes.map((r, i) => {
-                          const url = profileUrl(r.plataforma, r.handle);
-                          const content = (
-                            <>
-                              <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
-                              {r.handle || r.plataforma}
-                            </>
-                          );
-                          const className =
-                            "inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground" +
-                            (url ? " hover:bg-muted-foreground/20" : "");
-                          return url ? (
-                            <a
-                              key={i}
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={className}
-                            >
-                              {content}
-                            </a>
-                          ) : (
-                            <span key={i} className={className}>
-                              {content}
-                            </span>
-                          );
-                        })
-                      )}
-                    </div>
+                    {redes}
                   </div>
                 </div>
 

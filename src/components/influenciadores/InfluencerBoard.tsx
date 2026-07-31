@@ -768,8 +768,11 @@ export function InfluencerBoard({
   onChange: (next: Influ[]) => void;
   exportName: string;
   allowedFields?: InfluencerFieldKey[];
-  /** Extra action rendered in the header row, next to "Baixar lista" (e.g. campaign approval-link button). */
-  headerExtra?: ReactNode;
+  /** Extra action rendered in the header row, next to "Baixar lista" (e.g. campaign approval-link button).
+   * Receives a `closeMenu` callback so it can close the "Exportar" dropdown itself once its own
+   * dialog opens — the dropdown used to auto-close on any click inside it, which unmounted this
+   * button (and destroyed its own dialog-open state) before its dialog ever got to render. */
+  headerExtra?: (closeMenu: () => void) => ReactNode;
   /** Looks up the latest public-approval response for an influencer, shown as a badge on their card. */
   approvalStatusFor?: (influId: string) => ApprovalBadge | undefined;
   /** Grupos de pagamento configurados na campanha (ver VincularCampanhaDialog) — quando presentes, o editor de pagamento por entrega deixa escolher um grupo pronto em vez de preencher tudo do zero. */
@@ -970,13 +973,21 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
-  // Copia a checklist (textos, tudo desmarcado) de um influ pros demais da
+  // Copia os itens (textos) da checklist de um influ pros demais da
   // campanha/projeto de uma vez — pra não recriar item por item em cada um.
+  // Preserva o "concluído" de itens que o influ já tinha marcado (casando
+  // pelo texto), em vez de desmarcar tudo de novo a cada aplicação.
   const applyChecklistToAll = (checklist: ChecklistItem[]) => {
-    const next = influs.map((x) => ({
-      ...x,
-      checklist: checklist.map((c) => ({ id: crypto.randomUUID(), text: c.text, done: false })),
-    }));
+    const next = influs.map((x) => {
+      const existingByText = new Map((x.checklist ?? []).map((c) => [c.text, c]));
+      return {
+        ...x,
+        checklist: checklist.map(
+          (c) =>
+            existingByText.get(c.text) ?? { id: crypto.randomUUID(), text: c.text, done: false },
+        ),
+      };
+    });
     onChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
@@ -1113,7 +1124,7 @@ export function InfluencerBoard({
                 >
                   <Download className="h-3.5 w-3.5" /> Baixar lista
                 </button>
-                <div onClick={() => exportMenu.setOpen(false)}>{headerExtra}</div>
+                {headerExtra?.(() => exportMenu.setOpen(false))}
               </div>
             )}
           </div>

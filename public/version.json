@@ -1,6 +1,8 @@
 {
-  "version": "1.30.0",
+  "version": "1.31.0",
   "notes": [
-    "Status de presença (online/ausente/offline) agora é real: quem fecha o app fica Offline sozinho depois de ~1min e meio, em vez de continuar aparecendo Online pra sempre; o seletor de status em Configurações agora realmente marca Ausente pro resto do time (antes só mudava localmente)."
+    "Corrige o botão 'Solicitar aprovação' de influenciadores em Campanhas, que não abria (o menu Exportar se fechava sozinho no clique).",
+    "Novo: link 'Somente visualização' — mostra foto, nome e rede social dos influenciadores em destaque, sem aprovar/reprovar.",
+    "Corrige checklist de influenciador: 'Aplicar a todos' não desmarca mais itens já concluídos."
   ]
 }

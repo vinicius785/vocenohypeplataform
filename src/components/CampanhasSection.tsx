@@ -523,7 +523,7 @@ function CampanhaDetail({
         exportName={c.nome}
         approvalStatusFor={approvalStatusFor}
         pagGrupos={normalizeCampaignPagGrupos(c)}
-        headerExtra={
+        headerExtra={(closeMenu) => (
           <ApprovalRequestButton
             influs={influs}
             campanhaId={c.id}
@@ -531,8 +531,9 @@ function CampanhaDetail({
             clienteNome={cliente.empresa}
             totalPlanejado={totalInflus}
             onCreated={refreshApprovals}
+            onOpenDialog={closeMenu}
           />
-        }
+        )}
       />
 
       <GaleriaConteudosSection influs={influs} />
@@ -945,6 +946,7 @@ function ApprovalRequestButton({
   clienteNome,
   totalPlanejado,
   onCreated,
+  onOpenDialog,
 }: {
   influs: Influ[];
   campanhaId: string;
@@ -952,9 +954,12 @@ function ApprovalRequestButton({
   clienteNome: string;
   totalPlanejado: number;
   onCreated: () => void;
+  /** Fecha o dropdown "Exportar" que contém este botão, assim que o diálogo abrir. */
+  onOpenDialog?: () => void;
 }) {
   const createLinkFn = useServerFn(createApprovalLink);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"approve" | "view">("approve");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
@@ -979,9 +984,11 @@ function ApprovalRequestButton({
 
   const openDialog = () => {
     setSelected(new Set());
+    setMode("approve");
     setNewToken(null);
     setError("");
     setOpen(true);
+    onOpenDialog?.();
   };
 
   const submit = async () => {
@@ -1013,6 +1020,7 @@ function ApprovalRequestButton({
                 };
               }),
             })),
+            mode,
           },
         }),
       );
@@ -1041,7 +1049,9 @@ function ApprovalRequestButton({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4">
           <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-background">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <h3 className="text-sm font-semibold">Solicitar aprovação</h3>
+              <h3 className="text-sm font-semibold">
+                {mode === "view" ? "Gerar link de visualização" : "Solicitar aprovação"}
+              </h3>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -1075,8 +1085,34 @@ function ApprovalRequestButton({
             ) : (
               <>
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
+                  <div className="mb-3 flex gap-1 rounded-md bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => setMode("approve")}
+                      className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                        mode === "approve"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Solicitar aprovação
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("view")}
+                      className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                        mode === "view"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Somente visualização
+                    </button>
+                  </div>
                   <p className="mb-2 text-xs text-muted-foreground">
-                    Selecione quem enviar para aprovação do cliente.
+                    {mode === "view"
+                      ? "Selecione quem aparece no link — mostra só foto, nome e rede social, sem aprovar/reprovar."
+                      : "Selecione quem enviar para aprovação do cliente."}
                   </p>
                   {influs.map((i) => (
                     <label

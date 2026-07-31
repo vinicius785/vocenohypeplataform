@@ -36,6 +36,7 @@ const CreateInput = z.object({
   clienteNome: z.string().optional(),
   totalPlanejado: z.number().optional(),
   influencers: z.array(InfluencerSnapshot).min(1),
+  mode: z.enum(["approve", "view"]).default("approve"),
 });
 
 export const createApprovalLink = createServerFn({ method: "POST" })
@@ -53,6 +54,7 @@ export const createApprovalLink = createServerFn({ method: "POST" })
       created_by: context.userId,
       influencers: data.influencers,
       responses: {},
+      mode: data.mode,
     });
     if (error) throw new Error(error.message);
     return { token };
@@ -83,7 +85,7 @@ export const getApprovalByToken = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("influencer_approvals")
-      .select("campanha_nome, cliente_nome, influencers, responses, total_planejado")
+      .select("campanha_nome, cliente_nome, influencers, responses, total_planejado, mode")
       .eq("token", data.token)
       .maybeSingle();
     if (error || !row) throw new Error("Link não encontrado.");
