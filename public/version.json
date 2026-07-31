@@ -1,6 +1,6 @@
 {
-  "version": "1.32.0",
+  "version": "1.32.1",
   "notes": [
-    "Link 'somente visualização' de influenciadores: aba do navegador agora mostra 'Visualização de influenciadores' (antes sempre dizia 'Aprovação') e ganhou um KPI com o total de influenciadores na lista."
+    "Corrige erro 'about:blank#blocked' ao abrir anexos de tarefas em nova aba — o navegador bloqueia links data: diretos por segurança; agora convertemos para um link temporário compatível antes de abrir."
   ]
 }

@@ -1595,6 +1595,25 @@ function isImageAttachment(a: Attachment): boolean {
   return /\.(png|jpe?g|gif|webp|svg)$/i.test(a.name);
 }
 
+// Anexos são salvos como data URL (ver `addFiles`), e navegadores modernos
+// bloqueiam abrir um `data:` diretamente numa nova aba via target="_blank"
+// (mostra "about:blank#blocked") — por segurança contra phishing. Convertendo
+// pra um Blob e abrindo a `blob:` URL resultante contorna o bloqueio.
+function openAttachment(url: string) {
+  if (!url.startsWith("data:")) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const [header, base64] = url.split(",");
+  const mime = header.match(/data:(.*?)(;base64)?$/)?.[1] || "application/octet-stream";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  window.open(blobUrl, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 function AttachmentPreviewDialog({
   attachment,
   onClose,
@@ -1614,15 +1633,14 @@ function AttachmentPreviewDialog({
           <div className="flex shrink-0 items-center gap-1">
             {attachment.url && (
               <>
-                <a
-                  href={attachment.url}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openAttachment(attachment.url!)}
                   aria-label="Abrir em nova aba"
                   className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   <ExternalLink className="h-4 w-4" />
-                </a>
+                </button>
                 <a
                   href={attachment.url}
                   download={attachment.name}
@@ -1648,14 +1666,13 @@ function AttachmentPreviewDialog({
               <FileText className="h-10 w-10" />
               <p>Sem pré-visualização disponível para este arquivo.</p>
               {attachment.url && (
-                <a
-                  href={attachment.url}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => openAttachment(attachment.url!)}
                   className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                 >
                   <ExternalLink className="h-3.5 w-3.5" /> Abrir em nova aba
-                </a>
+                </button>
               )}
             </div>
           )}
