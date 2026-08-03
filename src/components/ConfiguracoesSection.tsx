@@ -59,6 +59,13 @@ import {
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, saveNotifPrefs } from "@/lib/notif-prefs";
+import { savePushSubscription, deletePushSubscription } from "@/lib/push.functions";
+import {
+  isPushSupported,
+  getExistingPushSubscription,
+  subscribeBrowserToPush,
+  pushSubscriptionToKeys,
+} from "@/lib/push-notifications";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { LockedSection } from "./LockedSection";
 
@@ -71,7 +78,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.34.0";
+export const APP_VERSION = "1.35.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -310,32 +317,138 @@ function PreferenciasTab() {
   const visibleItems = ITEMS.filter((i) => !i.adminOnly || isAdmin);
 
   return (
-    <div className="max-w-lg space-y-3 rounded-lg border border-border bg-background p-4">
-      <div>
-        <h3 className="text-sm font-semibold">Notificações</h3>
-        <p className="text-xs text-muted-foreground">
-          Controla o que aparece no sino de notificações, neste navegador.
-        </p>
+    <div className="max-w-lg space-y-4">
+      <PushNotificationsCard />
+      <div className="space-y-3 rounded-lg border border-border bg-background p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Notificações</h3>
+          <p className="text-xs text-muted-foreground">
+            Controla o que aparece no sino de notificações, neste navegador.
+          </p>
+        </div>
+        <div className="divide-y divide-border">
+          {visibleItems.map((item) => (
+            <label
+              key={item.key}
+              className="flex cursor-pointer items-center justify-between gap-3 py-3"
+            >
+              <div>
+                <div className="text-sm font-medium">{item.label}</div>
+                <div className="text-xs text-muted-foreground">{item.hint}</div>
+              </div>
+              <input
+                type="checkbox"
+                checked={prefs[item.key]}
+                onChange={() => toggle(item.key)}
+                className="h-4 w-4 accent-foreground"
+              />
+            </label>
+          ))}
+        </div>
       </div>
-      <div className="divide-y divide-border">
-        {visibleItems.map((item) => (
-          <label
-            key={item.key}
-            className="flex cursor-pointer items-center justify-between gap-3 py-3"
+    </div>
+  );
+}
+
+/** Notificação push de verdade (celular/desktop) — hoje dispara pra mensagem
+ * de DM e @menção no chat (ver sendChatPush em push.functions.ts). Só
+ * funciona com o app instalado no iPhone (iOS 16.4+); no Android/desktop
+ * (Chrome/Edge) funciona mesmo sem instalar. */
+function PushNotificationsCard() {
+  const saveFn = useServerFn(savePushSubscription);
+  const deleteFn = useServerFn(deletePushSubscription);
+  const [status, setStatus] = useState<"loading" | "off" | "on" | "unsupported" | "denied">(
+    "loading",
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isPushSupported()) {
+      setStatus("unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setStatus("denied");
+      return;
+    }
+    void getExistingPushSubscription().then((sub) => setStatus(sub ? "on" : "off"));
+  }, []);
+
+  const enable = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const sub = await subscribeBrowserToPush();
+      await saveFn({ data: pushSubscriptionToKeys(sub) });
+      setStatus("on");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível ativar.");
+      if (Notification.permission === "denied") setStatus("denied");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const disable = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const sub = await getExistingPushSubscription();
+      if (sub) {
+        await deleteFn({ data: { endpoint: sub.endpoint } });
+        await sub.unsubscribe();
+      }
+      setStatus("off");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível desativar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-background p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Notificações no celular/desktop</h3>
+          <p className="text-xs text-muted-foreground">
+            Receba um aviso mesmo com o app fechado (mensagens diretas e menções no chat).
+          </p>
+        </div>
+        {status === "on" ? (
+          <button
+            type="button"
+            onClick={() => void disable()}
+            disabled={busy}
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
           >
-            <div>
-              <div className="text-sm font-medium">{item.label}</div>
-              <div className="text-xs text-muted-foreground">{item.hint}</div>
-            </div>
-            <input
-              type="checkbox"
-              checked={prefs[item.key]}
-              onChange={() => toggle(item.key)}
-              className="h-4 w-4 accent-foreground"
-            />
-          </label>
-        ))}
+            Desativar
+          </button>
+        ) : status === "off" ? (
+          <button
+            type="button"
+            onClick={() => void enable()}
+            disabled={busy}
+            className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+          >
+            Ativar
+          </button>
+        ) : null}
       </div>
+      {status === "unsupported" && (
+        <p className="text-xs text-muted-foreground">
+          Este navegador não suporta notificações push. No iPhone, funciona a partir do iOS 16.4 — e
+          só depois de instalar o app na tela de início (Safari → Compartilhar → "Adicionar à Tela
+          de Início").
+        </p>
+      )}
+      {status === "denied" && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Notificações bloqueadas nas permissões do navegador/sistema — reative manualmente para
+          ativar aqui.
+        </p>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

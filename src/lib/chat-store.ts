@@ -491,7 +491,29 @@ export async function sendMessage(input: {
   const mapped = mapMessage(data as MessageRow);
   messagesCache = messagesCache.map((m) => (m.id === tempId ? mapped : m));
   emit();
+  if (!input.system) void triggerChatPush(mapped);
   return mapped;
+}
+
+/** Best-effort: dispara a notificação push (celular/desktop) de quem deveria
+ * ser avisado desta mensagem. Nunca deve travar/quebrar o envio do chat, por
+ * isso é sempre "void" no call site e engole qualquer erro aqui. */
+async function triggerChatPush(message: ChatMessage) {
+  try {
+    const { sendChatPush } = await import("./push.functions");
+    await sendChatPush({
+      data: {
+        convoId: message.convoId,
+        text: message.text,
+        authorName: message.authorName,
+        mentionedUserIds: (message.mentions ?? [])
+          .filter((m) => m.kind === "user")
+          .map((m) => m.id),
+      },
+    });
+  } catch (err) {
+    console.warn("[chat] push notification failed", err);
+  }
 }
 
 export async function editMessage(id: string, text: string, mentions: ChatMention[]) {

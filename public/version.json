@@ -1,6 +1,6 @@
 {
-  "version": "1.34.0",
+  "version": "1.35.0",
   "notes": [
-    "A plataforma agora pode ser instalada como app no celular (iOS/Android) ou desktop: abra pelo navegador e use 'Adicionar à tela de início' (iOS) ou o botão de instalar (Android/Chrome) — ganha ícone próprio e abre em tela cheia, sem a barra do navegador."
+    "Novo: notificações push de verdade (celular/desktop) para mensagens diretas e menções no chat — ative em Configurações > Preferências > 'Notificações no celular/desktop'. Funciona no Android/Chrome/Edge direto, e no iPhone a partir do iOS 16.4 com o app instalado na tela de início."
   ]
 }
