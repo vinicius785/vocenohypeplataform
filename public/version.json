@@ -1,8 +1,6 @@
 {
-  "version": "1.33.0",
+  "version": "1.33.1",
   "notes": [
-    "Sistema de chamadas refeito do zero: liga com toque, som de chamada, minimizar/trocar de aba sem derrubar a ligação, compartilhamento de tela, e agora chamadas em grupo de verdade (até 4 pessoas) ao ligar de um canal.",
-    "Nova UI de chamada, inspirada no Discord, com grade de participantes.",
-    "IMPORTANTE: para chamadas funcionarem de forma confiável em redes com NAT restritivo (4G, wifi corporativo), configure um servidor TURN (variáveis VITE_TURN_URLS/VITE_TURN_USERNAME/VITE_TURN_CREDENTIAL) — sem isso, só STUN, que pode falhar entre redes diferentes."
+    "Corrige a janela de chamada 'Chamando/Recebendo': estava enorme e mostrava a pessoa duas vezes (avatar duplicado) — agora o card fica compacto e mostra cada participante uma única vez."
   ]
 }

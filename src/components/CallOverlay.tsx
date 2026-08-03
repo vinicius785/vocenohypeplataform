@@ -150,11 +150,14 @@ export function CallOverlay() {
     );
 
   const active = call.status === "in-call";
+  const isRinging = call.status === "ringing-in" || call.status === "ringing-out";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
       <section
-        className="relative flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-zinc-900 text-zinc-100 shadow-2xl"
+        className={`relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-border bg-zinc-900 text-zinc-100 shadow-2xl ${
+          isRinging ? "max-w-xs" : "max-w-3xl"
+        }`}
         aria-label="Chamada"
       >
         <header className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
@@ -174,9 +177,12 @@ export function CallOverlay() {
           )}
         </header>
 
-        <div className="min-h-72 flex-1 overflow-y-auto bg-black p-3">
-          {call.status === "ringing-in" || call.status === "ringing-out" ? (
+        <div
+          className={isRinging ? "bg-black p-4" : "min-h-72 flex-1 overflow-y-auto bg-black p-3"}
+        >
+          {isRinging ? (
             <RingingGrid
+              hostId={call.hostId}
               hostName={call.hostName}
               hostPhoto={call.hostPhoto}
               isHost={call.isHost}
@@ -314,21 +320,25 @@ export function CallOverlay() {
 }
 
 function RingingGrid({
+  hostId,
   hostName,
   hostPhoto,
   isHost,
   participants,
 }: {
+  hostId: string;
   hostName: string;
   hostPhoto?: string;
   isHost: boolean;
   participants: CallParticipant[];
 }) {
-  // Ligando: mostra todo mundo sendo chamado. Recebendo: mostra quem ligou
-  // em destaque (+ demais convidados, se for chamada em grupo).
-  const others = isHost ? participants : participants;
+  // Ligando: mostra todo mundo sendo chamado (host nunca aparece em
+  // `participants`, já que sou eu). Recebendo: quem ligou já é mostrado em
+  // destaque acima, então tira ele da lista de baixo pra não duplicar —
+  // "outros" só sobra quando é uma chamada em grupo (mais convidados).
+  const others = isHost ? participants : participants.filter((p) => p.userId !== hostId);
   return (
-    <div className="flex min-h-64 flex-col items-center justify-center gap-6 py-6">
+    <div className="flex flex-col items-center justify-center gap-4 py-2">
       {!isHost && (
         <div className="text-center">
           <TileAvatar name={hostName} photo={hostPhoto} large ringing />
