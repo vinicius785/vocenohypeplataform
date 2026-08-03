@@ -27,6 +27,35 @@ import {
   removeRequest,
   onRequestsChange,
 } from "@/lib/marketing-tasks";
+import { loadTeamMembers } from "@/lib/projetos";
+import { getMe } from "@/lib/chat-store";
+
+/** Best-effort: notifica (push no celular/desktop) quem acabou de ser
+ * atribuído a esta tarefa — nunca deve travar/quebrar o salvamento se
+ * falhar. Resolve nome -> id via o diretório do time (o campo `assignees`
+ * da tarefa guarda nomes, não ids). */
+async function notifyNewAssignees(names: string[], taskTitle: string) {
+  if (names.length === 0) return;
+  try {
+    const me = getMe();
+    const directory = loadTeamMembers();
+    const ids = names
+      .map((name) => directory.find((m) => m.name === name)?.id)
+      .filter((id): id is string => !!id && id !== me.id);
+    if (ids.length === 0) return;
+    const { sendAppPush } = await import("@/lib/push.functions");
+    await sendAppPush({
+      data: {
+        userIds: ids,
+        title: "Nova tarefa atribuída a você",
+        body: taskTitle,
+        url: "/time?section=projetos",
+      },
+    });
+  } catch (err) {
+    console.warn("[task] push notification failed", err);
+  }
+}
 
 /* ============================================================
  * Types & constants (shared task model — same as Campanhas)
@@ -701,15 +730,22 @@ export function TaskDialog({
       }
       if (initial.priority !== priority) act = pushActivity(act, `definiu prioridade ${priority}`);
       const prevAssignees = getTaskAssignees(initial);
-      if (prevAssignees.join(",") !== assignees.join(","))
+      if (prevAssignees.join(",") !== assignees.join(",")) {
         act = pushActivity(
           act,
           assignees.length ? `atribuiu a ${assignees.join(", ")}` : "removeu responsável",
         );
+        void notifyNewAssignees(
+          assignees.filter((a) => !prevAssignees.includes(a)),
+          title.trim(),
+        );
+      }
       if ((initial.dueDate ?? "") !== dueDate)
         act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo");
       if ((initial.description ?? "") !== description)
         act = pushActivity(act, "atualizou a descrição");
+    } else {
+      void notifyNewAssignees(assignees, title.trim());
     }
     onSave({
       id: initial?.id ?? crypto.randomUUID(),

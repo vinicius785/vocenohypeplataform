@@ -1,6 +1,6 @@
 {
-  "version": "1.35.0",
+  "version": "1.36.0",
   "notes": [
-    "Novo: notificações push de verdade (celular/desktop) para mensagens diretas e menções no chat — ative em Configurações > Preferências > 'Notificações no celular/desktop'. Funciona no Android/Chrome/Edge direto, e no iPhone a partir do iOS 16.4 com o app instalado na tela de início."
+    "Notificações push agora também avisam sobre tarefas atribuídas a você e convites de reunião — não só chat. Ative em Configurações > Preferências > 'Notificações no celular/desktop'."
   ]
 }

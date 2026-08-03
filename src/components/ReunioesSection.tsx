@@ -763,6 +763,24 @@ function DisponibilidadeTab({
   );
 }
 
+/** Best-effort: notifica (push no celular/desktop) quem acabou de ser
+ * convidado pra esta reunião — nunca deve travar/quebrar o salvamento. */
+async function notifyMeetingInvite(userIds: string[], titulo: string) {
+  try {
+    const { sendAppPush } = await import("@/lib/push.functions");
+    await sendAppPush({
+      data: {
+        userIds,
+        title: "Convite de reunião",
+        body: titulo,
+        url: "/time?section=reunioes",
+      },
+    });
+  } catch (err) {
+    console.warn("[reuniao] push notification failed", err);
+  }
+}
+
 function MeetingDialog({
   open,
   initial,
@@ -842,6 +860,12 @@ function MeetingDialog({
 
   const submit = () => {
     if (!titulo.trim() || !data) return;
+    const prevParticipantIds =
+      initial?.participanteIds ?? (initial?.participanteId ? [initial.participanteId] : []);
+    const newlyInvited = participanteIds.filter(
+      (id) => id !== me.id && !prevParticipantIds.includes(id),
+    );
+    if (newlyInvited.length > 0) void notifyMeetingInvite(newlyInvited, titulo.trim());
     const finalStatus: MeetingStatus = !initial && participanteIds.length > 0 ? "Pendente" : status;
     const base: Omit<Meeting, "id" | "data"> = {
       titulo: titulo.trim(),
