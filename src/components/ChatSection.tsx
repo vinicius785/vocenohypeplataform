@@ -22,7 +22,7 @@ import {
   Play,
   Pause,
 } from "lucide-react";
-import { startCall, useCallState } from "@/lib/call-controller";
+import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import {
   getMe,
   loadMembers,
@@ -238,6 +238,10 @@ export function ChatSection() {
   }, [activeId, activeDmPartner]);
 
   const [callPickerOpen, setCallPickerOpen] = useState(false);
+  const [callPickerSelected, setCallPickerSelected] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!callPickerOpen) setCallPickerSelected(new Set());
+  }, [callPickerOpen]);
   const channelCallCandidates = useMemo<ChatMember[]>(() => {
     const others = members.filter((m) => m.id !== me.id);
     if (activeChannel) {
@@ -325,7 +329,13 @@ export function ChatSection() {
             <button
               onClick={() => {
                 if (callState.status !== "idle") return;
-                void startCall(activeDmPartner.id, activeDmPartner.name, activeDmPartner.photo);
+                void startCall([
+                  {
+                    id: activeDmPartner.id,
+                    name: activeDmPartner.name,
+                    photo: activeDmPartner.photo,
+                  },
+                ]);
               }}
               disabled={callState.status !== "idle"}
               aria-label="Iniciar chamada"
@@ -413,7 +423,12 @@ export function ChatSection() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h3 className="text-sm font-semibold">Ligar para</h3>
+              <div>
+                <h3 className="text-sm font-semibold">Ligar para</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Escolha até {MAX_GROUP_PARTICIPANTS} pessoas — mais de uma vira chamada em grupo.
+                </p>
+              </div>
               <button
                 onClick={() => setCallPickerOpen(false)}
                 className="text-muted-foreground hover:text-foreground"
@@ -431,15 +446,28 @@ export function ChatSection() {
                 <ul className="flex flex-col gap-0.5">
                   {channelCallCandidates.map((m) => {
                     const s = getStatus(m.id);
+                    const checked = callPickerSelected.has(m.id);
+                    const atLimit = callPickerSelected.size >= MAX_GROUP_PARTICIPANTS && !checked;
                     return (
                       <li key={m.id}>
                         <button
+                          disabled={atLimit}
                           onClick={() => {
-                            setCallPickerOpen(false);
-                            void startCall(m.id, m.name, m.photo);
+                            setCallPickerSelected((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(m.id)) next.delete(m.id);
+                              else next.add(m.id);
+                              return next;
+                            });
                           }}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                         >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            readOnly
+                            className="h-4 w-4 rounded border-input"
+                          />
                           <span className="relative h-8 w-8 shrink-0">
                             {m.photo ? (
                               <img
@@ -460,13 +488,32 @@ export function ChatSection() {
                           <span className="text-[10px] text-muted-foreground">
                             {STATUS_LABEL[s]}
                           </span>
-                          <Phone className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </li>
                     );
                   })}
                 </ul>
               )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <button
+                onClick={() => setCallPickerOpen(false)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={callPickerSelected.size === 0}
+                onClick={() => {
+                  const chosen = channelCallCandidates.filter((m) => callPickerSelected.has(m.id));
+                  setCallPickerOpen(false);
+                  void startCall(chosen.map((m) => ({ id: m.id, name: m.name, photo: m.photo })));
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Phone className="h-3.5 w-3.5" />
+                Ligar {callPickerSelected.size > 0 ? `(${callPickerSelected.size})` : ""}
+              </button>
             </div>
           </div>
         </div>

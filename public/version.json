@@ -1,6 +1,8 @@
 {
-  "version": "1.32.1",
+  "version": "1.33.0",
   "notes": [
-    "Corrige erro 'about:blank#blocked' ao abrir anexos de tarefas em nova aba — o navegador bloqueia links data: diretos por segurança; agora convertemos para um link temporário compatível antes de abrir."
+    "Sistema de chamadas refeito do zero: liga com toque, som de chamada, minimizar/trocar de aba sem derrubar a ligação, compartilhamento de tela, e agora chamadas em grupo de verdade (até 4 pessoas) ao ligar de um canal.",
+    "Nova UI de chamada, inspirada no Discord, com grade de participantes.",
+    "IMPORTANTE: para chamadas funcionarem de forma confiável em redes com NAT restritivo (4G, wifi corporativo), configure um servidor TURN (variáveis VITE_TURN_URLS/VITE_TURN_USERNAME/VITE_TURN_CREDENTIAL) — sem isso, só STUN, que pode falhar entre redes diferentes."
   ]
 }
