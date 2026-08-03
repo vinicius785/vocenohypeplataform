@@ -1,6 +1,6 @@
 {
-  "version": "1.38.0",
+  "version": "1.38.1",
   "notes": [
-    "Corrige webhook do blog: publicar, arquivar e apagar um artigo agora disparam o mesmo endpoint (BLOG_WEBHOOK_URL), com o payload trazendo action: upsert/archive/delete."
+    "Corrige ícone do app cortado/com bordas brancas ao instalar no Android — o ícone 'maskable' tinha um preenchimento branco artificial em vez do fundo em degradê do logo de verdade."
   ]
 }
