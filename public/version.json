@@ -1,6 +1,6 @@
 {
-  "version": "1.37.1",
+  "version": "1.38.0",
   "notes": [
-    "Unifica os 3 webhooks de blog (publicado/arquivado/apagado) em um só evento 'blog', com o campo action indicando o que aconteceu — mais simples de configurar e consumir do outro lado."
+    "Corrige webhook do blog: publicar, arquivar e apagar um artigo agora disparam o mesmo endpoint (BLOG_WEBHOOK_URL), com o payload trazendo action: upsert/archive/delete."
   ]
 }

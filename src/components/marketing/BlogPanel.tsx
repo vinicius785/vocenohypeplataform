@@ -118,9 +118,9 @@ export function BlogPanel({
     // Só avisa se o artigo já tinha ido pro site — apagar um rascunho que
     // nunca saiu daqui não é um evento que o outro lado precise saber.
     if (removed && removed.status !== "rascunho" && removed.audience !== "mural") {
-      void notifyBlog({
-        data: { action: "deleted", id: removed.id, title: removed.title, slug: removed.slug },
-      }).catch((err) => console.error("[blog] webhook de exclusão falhou", err));
+      void notifyBlog({ data: { action: "delete", id: removed.id } }).catch((err) =>
+        console.error("[BlogWebhook] request failed", err),
+      );
     }
   };
   const change = (id: string, patch: Partial<BlogPost>) => {
@@ -134,14 +134,13 @@ export function BlogPanel({
       }),
     );
     if (!updated) return;
-    // Avisa o site externo (webhook de saída — evento único "blog", com
-    // `action` indicando o que aconteceu) sempre que um artigo com destino
-    // "Site" for salvo publicado (primeira vez ou edições seguintes) ou
-    // passar a arquivado vindo de outro status.
+    // Avisa o Make (webhook único de blog, ver src/lib/blog-webhook.ts) sempre
+    // que um artigo com destino "Site" for salvo publicado (primeira vez ou
+    // edições seguintes) ou passar a arquivado vindo de outro status.
     if (updated.status === "publicado" && updated.audience !== "mural") {
       void notifyBlog({
         data: {
-          action: "published",
+          action: "upsert",
           id: updated.id,
           title: updated.title,
           slug: updated.slug,
@@ -150,18 +149,17 @@ export function BlogPanel({
           cover: updated.cover,
           category: updated.category,
           authorName: updated.authorName,
-          publishDate: updated.publishDate,
         },
-      }).catch((err) => console.error("[blog] webhook de publicação falhou", err));
+      }).catch((err) => console.error("[BlogWebhook] request failed", err));
     }
     if (
       updated.status === "arquivado" &&
       previous?.status !== "arquivado" &&
       updated.audience !== "mural"
     ) {
-      void notifyBlog({
-        data: { action: "archived", id: updated.id, title: updated.title, slug: updated.slug },
-      }).catch((err) => console.error("[blog] webhook de arquivamento falhou", err));
+      void notifyBlog({ data: { action: "archive", id: updated.id } }).catch((err) =>
+        console.error("[BlogWebhook] request failed", err),
+      );
     }
   };
 

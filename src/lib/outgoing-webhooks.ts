@@ -6,10 +6,12 @@
  * failures are logged, never thrown, so a broken external endpoint can't
  * break the action that triggered it (e.g. saving a lead).
  */
+// O webhook de blog (upsert/archive/delete) tem endpoint próprio e
+// centralizado — ver src/lib/blog-webhook.ts (BLOG_WEBHOOK_URL) — não passa
+// mais por esta lista genérica de webhooks configuráveis pelo admin.
 export const OUTGOING_WEBHOOK_EVENTS = [
   { key: "lead.created", label: "Novo lead" },
   { key: "lead.won", label: "Lead ganho" },
-  { key: "blog", label: "Artigo do blog (publicado, arquivado ou apagado)" },
 ] as const;
 export type OutgoingWebhookEvent = (typeof OUTGOING_WEBHOOK_EVENTS)[number]["key"];
 
