@@ -4,7 +4,7 @@ import { Plus, X, Newspaper, ImageIcon, Calendar, Eye, Check } from "lucide-reac
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
-import { notifyBlogPublished, notifyBlogRemoved } from "@/lib/marketing.functions";
+import { notifyBlogEvent } from "@/lib/marketing.functions";
 
 /** Conversor bem simples de markdown pra HTML — só o suficiente pra
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
@@ -97,8 +97,7 @@ export function BlogPanel({
   const [audiencePick, setAudiencePick] = useState(false);
 
   const setPosts = (next: BlogPost[]) => update({ blog: next });
-  const notifyPublished = useServerFn(notifyBlogPublished);
-  const notifyRemoved = useServerFn(notifyBlogRemoved);
+  const notifyBlog = useServerFn(notifyBlogEvent);
 
   const create = (audience: "site" | "mural") => {
     const p: BlogPost = {
@@ -119,8 +118,8 @@ export function BlogPanel({
     // Só avisa se o artigo já tinha ido pro site — apagar um rascunho que
     // nunca saiu daqui não é um evento que o outro lado precise saber.
     if (removed && removed.status !== "rascunho" && removed.audience !== "mural") {
-      void notifyRemoved({
-        data: { id: removed.id, title: removed.title, slug: removed.slug, reason: "deleted" },
+      void notifyBlog({
+        data: { action: "deleted", id: removed.id, title: removed.title, slug: removed.slug },
       }).catch((err) => console.error("[blog] webhook de exclusão falhou", err));
     }
   };
@@ -135,12 +134,14 @@ export function BlogPanel({
       }),
     );
     if (!updated) return;
-    // Avisa o site externo (webhook de saída) sempre que um artigo com destino
-    // "Site" for salvo já publicado — tanto na primeira publicação quanto em
-    // edições posteriores, para o outro lado ficar sempre com a versão mais recente.
+    // Avisa o site externo (webhook de saída — evento único "blog", com
+    // `action` indicando o que aconteceu) sempre que um artigo com destino
+    // "Site" for salvo publicado (primeira vez ou edições seguintes) ou
+    // passar a arquivado vindo de outro status.
     if (updated.status === "publicado" && updated.audience !== "mural") {
-      void notifyPublished({
+      void notifyBlog({
         data: {
+          action: "published",
           id: updated.id,
           title: updated.title,
           slug: updated.slug,
@@ -153,14 +154,13 @@ export function BlogPanel({
         },
       }).catch((err) => console.error("[blog] webhook de publicação falhou", err));
     }
-    // Idem quando o artigo passa a "arquivado" vindo de qualquer outro status.
     if (
       updated.status === "arquivado" &&
       previous?.status !== "arquivado" &&
       updated.audience !== "mural"
     ) {
-      void notifyRemoved({
-        data: { id: updated.id, title: updated.title, slug: updated.slug, reason: "archived" },
+      void notifyBlog({
+        data: { action: "archived", id: updated.id, title: updated.title, slug: updated.slug },
       }).catch((err) => console.error("[blog] webhook de arquivamento falhou", err));
     }
   };

@@ -9,9 +9,7 @@
 export const OUTGOING_WEBHOOK_EVENTS = [
   { key: "lead.created", label: "Novo lead" },
   { key: "lead.won", label: "Lead ganho" },
-  { key: "blog.published", label: "Artigo do blog publicado" },
-  { key: "blog.archived", label: "Artigo do blog arquivado" },
-  { key: "blog.deleted", label: "Artigo do blog apagado" },
+  { key: "blog", label: "Artigo do blog (publicado, arquivado ou apagado)" },
 ] as const;
 export type OutgoingWebhookEvent = (typeof OUTGOING_WEBHOOK_EVENTS)[number]["key"];
 

@@ -3,7 +3,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { dispatchOutgoingWebhook } from "./outgoing-webhooks";
 
-const blogPublishedSchema = z.object({
+const blogEventSchema = z.object({
+  action: z.enum(["published", "archived", "deleted"]),
   id: z.string(),
   title: z.string(),
   slug: z.string().optional(),
@@ -15,30 +16,15 @@ const blogPublishedSchema = z.object({
   publishDate: z.string().optional(),
 });
 
-/** Dispara o evento `blog.published` para os webhooks de saída configurados (ver Configurações > Integrações). */
-export const notifyBlogPublished = createServerFn({ method: "POST" })
+/** Dispara o evento `blog` (publicado/arquivado/apagado, diferenciados pelo
+ * campo `action` no payload) para os webhooks de saída configurados — ver
+ * Configurações > Integrações. Um único evento em vez de três, pra quem
+ * consome o webhook não precisar assinar/tratar múltiplos endpoints pra
+ * acompanhar o ciclo de vida de um artigo. */
+export const notifyBlogEvent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof blogPublishedSchema>) => blogPublishedSchema.parse(input))
+  .inputValidator((input: z.infer<typeof blogEventSchema>) => blogEventSchema.parse(input))
   .handler(async ({ data }) => {
-    await dispatchOutgoingWebhook("blog.published", data);
-    return { ok: true };
-  });
-
-const blogRemovedSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  slug: z.string().optional(),
-  reason: z.enum(["archived", "deleted"]),
-});
-
-/** Dispara `blog.archived`/`blog.deleted` (ver Configurações > Integrações). */
-export const notifyBlogRemoved = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof blogRemovedSchema>) => blogRemovedSchema.parse(input))
-  .handler(async ({ data }) => {
-    await dispatchOutgoingWebhook(
-      data.reason === "archived" ? "blog.archived" : "blog.deleted",
-      data,
-    );
+    await dispatchOutgoingWebhook("blog", data);
     return { ok: true };
   });
