@@ -1,6 +1,6 @@
 {
-  "version": "1.33.1",
+  "version": "1.34.0",
   "notes": [
-    "Corrige a janela de chamada 'Chamando/Recebendo': estava enorme e mostrava a pessoa duas vezes (avatar duplicado) — agora o card fica compacto e mostra cada participante uma única vez."
+    "A plataforma agora pode ser instalada como app no celular (iOS/Android) ou desktop: abra pelo navegador e use 'Adicionar à tela de início' (iOS) ou o botão de instalar (Android/Chrome) — ganha ícone próprio e abre em tela cheia, sem a barra do navegador."
   ]
 }
