@@ -1,7 +1,7 @@
 {
-  "version": "1.36.1",
+  "version": "1.37.0",
   "notes": [
-    "Corrige o painel de notificações (sino) ficando cortado/não usável no celular.",
-    "Mitigação para o app instalado no iPhone deslogar ao ser fechado de vez: sessão de login agora também é guardada em IndexedDB, mais resistente à limpeza de dados que o WebKit às vezes faz em apps 'Adicionar à Tela de Início'."
+    "Novo: webhook de saída quando um artigo do blog é apagado ou arquivado (status 'Arquivado' novo, ao lado de Rascunho/Em revisão/Publicado). Configure em Configurações > Integrações.",
+    "Aba Integrações reorganizada em 'Entrada' e 'Saída', para ficar mais claro o que cada webhook faz."
   ]
 }

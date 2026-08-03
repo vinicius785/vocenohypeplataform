@@ -4,7 +4,7 @@ import { Plus, X, Newspaper, ImageIcon, Calendar, Eye, Check } from "lucide-reac
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
-import { notifyBlogPublished } from "@/lib/marketing.functions";
+import { notifyBlogPublished, notifyBlogRemoved } from "@/lib/marketing.functions";
 
 /** Conversor bem simples de markdown pra HTML — só o suficiente pra
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
@@ -67,6 +67,11 @@ const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
     label: "Publicado",
     cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   },
+  {
+    key: "arquivado",
+    label: "Arquivado",
+    cls: "bg-muted text-muted-foreground",
+  },
 ];
 
 const inputCls =
@@ -93,6 +98,7 @@ export function BlogPanel({
 
   const setPosts = (next: BlogPost[]) => update({ blog: next });
   const notifyPublished = useServerFn(notifyBlogPublished);
+  const notifyRemoved = useServerFn(notifyBlogRemoved);
 
   const create = (audience: "site" | "mural") => {
     const p: BlogPost = {
@@ -107,11 +113,20 @@ export function BlogPanel({
   };
 
   const remove = (id: string) => {
+    const removed = posts.find((p) => p.id === id);
     setPosts(posts.filter((p) => p.id !== id));
     if (editingId === id) setEditingId(null);
+    // Só avisa se o artigo já tinha ido pro site — apagar um rascunho que
+    // nunca saiu daqui não é um evento que o outro lado precise saber.
+    if (removed && removed.status !== "rascunho" && removed.audience !== "mural") {
+      void notifyRemoved({
+        data: { id: removed.id, title: removed.title, slug: removed.slug, reason: "deleted" },
+      }).catch((err) => console.error("[blog] webhook de exclusão falhou", err));
+    }
   };
   const change = (id: string, patch: Partial<BlogPost>) => {
     let updated: BlogPost | undefined;
+    const previous = posts.find((p) => p.id === id);
     setPosts(
       posts.map((p) => {
         if (p.id !== id) return p;
@@ -119,10 +134,11 @@ export function BlogPanel({
         return updated;
       }),
     );
+    if (!updated) return;
     // Avisa o site externo (webhook de saída) sempre que um artigo com destino
     // "Site" for salvo já publicado — tanto na primeira publicação quanto em
     // edições posteriores, para o outro lado ficar sempre com a versão mais recente.
-    if (updated && updated.status === "publicado" && updated.audience !== "mural") {
+    if (updated.status === "publicado" && updated.audience !== "mural") {
       void notifyPublished({
         data: {
           id: updated.id,
@@ -136,6 +152,16 @@ export function BlogPanel({
           publishDate: updated.publishDate,
         },
       }).catch((err) => console.error("[blog] webhook de publicação falhou", err));
+    }
+    // Idem quando o artigo passa a "arquivado" vindo de qualquer outro status.
+    if (
+      updated.status === "arquivado" &&
+      previous?.status !== "arquivado" &&
+      updated.audience !== "mural"
+    ) {
+      void notifyRemoved({
+        data: { id: updated.id, title: updated.title, slug: updated.slug, reason: "archived" },
+      }).catch((err) => console.error("[blog] webhook de arquivamento falhou", err));
     }
   };
 

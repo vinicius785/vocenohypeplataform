@@ -78,7 +78,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.36.1";
+export const APP_VERSION = "1.37.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -538,9 +538,30 @@ function IntegracoesTab() {
   if (isAdmin === null) return null;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <LeadsWebhookCard />
-      <OutgoingWebhooksCard />
+    <div className="max-w-2xl space-y-8">
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Entrada
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Recebe dados de fora pra dentro da plataforma (ex: Make, Typeform).
+          </p>
+        </div>
+        <LeadsWebhookCard />
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Saída
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Avisa outros sistemas quando algo acontece aqui dentro (ex: Zapier, Make, Slack).
+          </p>
+        </div>
+        <OutgoingWebhooksCard />
+      </section>
     </div>
   );
 }
