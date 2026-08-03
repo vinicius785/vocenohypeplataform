@@ -1404,7 +1404,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-[26rem] overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold text-foreground">Notificações</span>
               {activeCount > 0 && (

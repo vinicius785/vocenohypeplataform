@@ -1,6 +1,7 @@
 {
-  "version": "1.36.0",
+  "version": "1.36.1",
   "notes": [
-    "Notificações push agora também avisam sobre tarefas atribuídas a você e convites de reunião — não só chat. Ative em Configurações > Preferências > 'Notificações no celular/desktop'."
+    "Corrige o painel de notificações (sino) ficando cortado/não usável no celular.",
+    "Mitigação para o app instalado no iPhone deslogar ao ser fechado de vez: sessão de login agora também é guardada em IndexedDB, mais resistente à limpeza de dados que o WebKit às vezes faz em apps 'Adicionar à Tela de Início'."
   ]
 }
