@@ -52,28 +52,28 @@ function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6">
       <div className="pointer-events-none absolute inset-0">
         <Grainient
-          color1="#3f3f3f"
-          color2="#5227FF"
-          color3="#d90e89"
-          timeSpeed={0.25}
-          colorBalance={0}
-          warpStrength={3.4}
-          warpFrequency={4.3}
-          warpSpeed={2}
-          warpAmplitude={50}
-          blendAngle={0}
+          color1="#ff009c"
+          color2="#3300ff"
+          color3="#ffffff"
+          timeSpeed={0.5}
+          colorBalance={-0.01}
+          warpStrength={1.0}
+          warpFrequency={5.0}
+          warpSpeed={2.0}
+          warpAmplitude={50.0}
+          blendAngle={0.0}
           blendSoftness={0.05}
-          rotationAmount={500}
-          noiseScale={2}
+          rotationAmount={500.0}
+          noiseScale={2.0}
           grainAmount={0.1}
-          grainScale={2}
+          grainScale={2.0}
           grainAnimated={false}
-          contrast={1.5}
-          gamma={1}
-          saturation={1}
-          centerX={0}
-          centerY={0}
-          zoom={0.9}
+          contrast={0.95}
+          gamma={1.0}
+          saturation={1.0}
+          centerX={0.0}
+          centerY={0.0}
+          zoom={1.4}
         />
       </div>
       <div

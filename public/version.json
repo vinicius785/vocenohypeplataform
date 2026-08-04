@@ -1,6 +1,8 @@
 {
-  "version": "1.40.0",
+  "version": "1.40.1",
   "notes": [
-    "Novo design dos cards de membro na aba Time (ProfileCard, React Bits) — cartão holográfico com inclinação 3D ao passar o mouse, foto, cargo, status e ações de admin preservadas."
+    "Desfaz o novo design dos cards de membro na aba Time — voltou ao card original.",
+    "Corrige popups/formulários abrindo cortados ou fora da tela — diálogos agora têm altura máxima com rolagem interna, em vez de serem cortados.",
+    "Novo visual do fundo animado da tela de login (rosa/roxo/branco)."
   ]
 }
