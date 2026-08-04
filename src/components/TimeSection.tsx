@@ -42,6 +42,7 @@ import {
   type MemberStatus,
 } from "@/lib/chat-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import ProfileCard from "./ProfileCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -510,6 +511,14 @@ function PresenceDot({ status }: { status: MemberStatus }) {
   );
 }
 
+// Cores fixas por status (independem do tema light/dark do resto do app,
+// já que o ProfileCard é sempre escuro por baixo).
+const PC_STATUS_GLOW: Record<MemberStatus, string> = {
+  online: "rgba(34, 197, 94, 0.55)",
+  away: "rgba(245, 158, 11, 0.55)",
+  offline: "rgba(125, 190, 255, 0.35)",
+};
+
 function MemberCard({
   m,
   isSelf,
@@ -531,56 +540,42 @@ function MemberCard({
   const allowed = (f: TimeField) => canManage || m.timeView.includes(f);
   const showName = allowed("name");
   const showRole = allowed("role");
-  const showEmail = allowed("email");
-  const showBirthday = allowed("birthday");
   const status = getStatus(m.id);
+  const displayName = showName ? m.name || "(sem nome)" : "Membro";
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className="group relative cursor-pointer rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
-    >
-      <div className="flex items-start gap-3">
-        <div className="relative shrink-0">
-          <Avatar className="h-12 w-12">
-            {m.photo && <AvatarImage src={m.photo} alt={m.name} />}
-            <AvatarFallback className={`text-sm font-semibold ${avatarAccent(m.id)}`}>
-              {initialsOf(showName ? m.name : "", m.email)}
-            </AvatarFallback>
-          </Avatar>
-          <PresenceDot status={status} />
-        </div>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {showName ? m.name || "(sem nome)" : "Membro"}
-            </p>
-            {isSelf && (
-              <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
-                Você
-              </Badge>
-            )}
-          </div>
-          {showRole && m.role && <p className="truncate text-xs text-muted-foreground">{m.role}</p>}
-          {m.isAdmin && (
-            <Badge
-              variant="outline"
-              className="mt-1 gap-1 border-foreground/20 px-1.5 py-0 text-[10px] font-medium text-foreground"
-            >
-              <ShieldCheck className="h-2.5 w-2.5" /> Admin
-            </Badge>
-          )}
-        </div>
-        {canManage && (
-          <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+    <div className="group relative">
+      <ProfileCard
+        avatarUrl={m.photo}
+        name={displayName}
+        title={showRole ? m.role || "" : ""}
+        handle={showName ? (m.email.split("@")[0] ?? m.email) : "membro"}
+        status={STATUS_LABEL[status]}
+        contactText={canManage ? "Editar" : "Ver perfil"}
+        behindGlowColor={PC_STATUS_GLOW[status]}
+        onContactClick={onOpen}
+      />
+      <div className="pointer-events-none absolute left-3 top-3 z-[6] flex items-center gap-1.5">
+        {isSelf && (
+          <Badge
+            variant="secondary"
+            className="pointer-events-auto shrink-0 border-white/10 bg-black/40 px-1.5 py-0 text-[10px] text-white backdrop-blur"
+          >
+            Você
+          </Badge>
+        )}
+        {m.isAdmin && (
+          <Badge
+            variant="outline"
+            className="pointer-events-auto gap-1 border-white/20 bg-black/40 px-1.5 py-0 text-[10px] font-medium text-white backdrop-blur"
+          >
+            <ShieldCheck className="h-2.5 w-2.5" /> Admin
+          </Badge>
+        )}
+      </div>
+      {canManage && (
+        <div className="pointer-events-none absolute right-3 top-3 z-[6] flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="pointer-events-auto flex items-center gap-0.5 rounded-md bg-black/50 p-0.5 backdrop-blur">
             <IconAction
               label="Redefinir senha"
               onClick={(e) => {
@@ -588,7 +583,7 @@ function MemberCard({
                 onReset();
               }}
             >
-              <KeyRound className="h-3.5 w-3.5" />
+              <KeyRound className="h-3.5 w-3.5 text-white" />
             </IconAction>
             <IconAction
               label="Editar"
@@ -597,7 +592,7 @@ function MemberCard({
                 onEdit();
               }}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-3.5 w-3.5 text-white" />
             </IconAction>
             {!isSelf && (
               <IconAction
@@ -608,42 +603,10 @@ function MemberCard({
                   onDelete();
                 }}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5 text-white" />
               </IconAction>
             )}
           </div>
-        )}
-      </div>
-
-      {(showEmail || (showBirthday && m.birthday)) && (
-        <dl className="mt-3 space-y-1 border-t border-border/60 pt-2.5 text-xs text-muted-foreground">
-          {showEmail && (
-            <div className="flex items-center gap-1.5 truncate">
-              <Mail className="h-3 w-3 shrink-0" />
-              <span className="truncate">{m.email}</span>
-            </div>
-          )}
-          {showBirthday && m.birthday && (
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-3 w-3 shrink-0" />
-              <span>{formatBirthday(m.birthday)}</span>
-            </div>
-          )}
-        </dl>
-      )}
-
-      {canManage && m.permissions.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {m.permissions.slice(0, 4).map((p) => (
-            <Badge key={p} variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
-              {p}
-            </Badge>
-          ))}
-          {m.permissions.length > 4 && (
-            <span className="self-center text-[10px] text-muted-foreground">
-              +{m.permissions.length - 4}
-            </span>
-          )}
         </div>
       )}
     </div>
