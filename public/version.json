@@ -1,8 +1,7 @@
 {
-  "version": "1.40.1",
+  "version": "1.41.0",
   "notes": [
-    "Desfaz o novo design dos cards de membro na aba Time — voltou ao card original.",
-    "Corrige popups/formulários abrindo cortados ou fora da tela — diálogos agora têm altura máxima com rolagem interna, em vez de serem cortados.",
-    "Novo visual do fundo animado da tela de login (rosa/roxo/branco)."
+    "Corrige de vez popups/formulários abrindo cortados ou fora da tela — o centering trocou de um hack frágil (translate) para um wrapper flex, testado com um formulário de 20 campos até o fim da rolagem.",
+    "Remove o efeito de luz (spotlight) de dentro dos popups, como pedido."
   ]
 }

@@ -76,14 +76,7 @@ function LoginPage() {
           zoom={1.4}
         />
       </div>
-      <div
-        className="card-spotlight relative w-full max-w-sm overflow-hidden rounded-xl border border-border bg-card p-6 shadow-sm"
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          e.currentTarget.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
-          e.currentTarget.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
-        }}
-      >
+      <div className="relative w-full max-w-sm overflow-hidden rounded-xl border border-border bg-card p-6 shadow-sm">
         <h1 className="text-2xl font-semibold tracking-tight">Entrar</h1>
         <p className="mt-1 text-sm text-muted-foreground">Acesse o workspace com seu e-mail.</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
