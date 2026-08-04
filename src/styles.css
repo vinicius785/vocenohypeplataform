@@ -172,3 +172,37 @@
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Efeito "spotlight" (React Bits SpotlightCard) — usado em todo popup/form
+ * (ver DialogContent em src/components/ui/dialog.tsx) e em cards que
+ * adotarem a classe `card-spotlight`. Só o brilho radial que segue o mouse;
+ * cor/borda/fundo do card continuam vindo das classes Tailwind normais. */
+.card-spotlight {
+  position: relative;
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --spotlight-color: rgba(255, 255, 255, 0.15);
+}
+.card-spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mouse-x) var(--mouse-y),
+    var(--spotlight-color),
+    transparent 80%
+  );
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.card-spotlight:hover::before,
+.card-spotlight:focus-within::before {
+  opacity: 1;
+}
+.card-spotlight > * {
+  position: relative;
+  z-index: 1;
+}

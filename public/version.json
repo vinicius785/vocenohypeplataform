@@ -1,6 +1,7 @@
 {
-  "version": "1.38.1",
+  "version": "1.39.0",
   "notes": [
-    "Corrige ícone do app cortado/com bordas brancas ao instalar no Android — o ícone 'maskable' tinha um preenchimento branco artificial em vez do fundo em degradê do logo de verdade."
+    "Novo fundo animado (degradê com textura de grão) na tela de login.",
+    "Todo popup/diálogo da plataforma agora tem um efeito 'spotlight' que segue o mouse."
   ]
 }

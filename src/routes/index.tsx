@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import Grainient from "@/components/Grainient";
 
 export const Route = createFileRoute("/")({
   component: LoginPage,
@@ -48,8 +49,41 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-sm">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6">
+      <div className="pointer-events-none absolute inset-0">
+        <Grainient
+          color1="#3f3f3f"
+          color2="#5227FF"
+          color3="#d90e89"
+          timeSpeed={0.25}
+          colorBalance={0}
+          warpStrength={3.4}
+          warpFrequency={4.3}
+          warpSpeed={2}
+          warpAmplitude={50}
+          blendAngle={0}
+          blendSoftness={0.05}
+          rotationAmount={500}
+          noiseScale={2}
+          grainAmount={0.1}
+          grainScale={2}
+          grainAnimated={false}
+          contrast={1.5}
+          gamma={1}
+          saturation={1}
+          centerX={0}
+          centerY={0}
+          zoom={0.9}
+        />
+      </div>
+      <div
+        className="card-spotlight relative w-full max-w-sm overflow-hidden rounded-xl border border-border bg-card p-6 shadow-sm"
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          e.currentTarget.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
+          e.currentTarget.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
+        }}
+      >
         <h1 className="text-2xl font-semibold tracking-tight">Entrar</h1>
         <p className="mt-1 text-sm text-muted-foreground">Acesse o workspace com seu e-mail.</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
