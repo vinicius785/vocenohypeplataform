@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { VincularCampanhaDialog, type Campaign } from "./VincularCampanhaDialog";
+import FlowingMenu from "@/components/FlowingMenu";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { loadMembers } from "@/lib/chat-store";
 import { SectionHeader } from "./SectionHeader";
@@ -304,30 +305,15 @@ export function ClientesSection() {
             Nenhum cliente cadastrado ainda.
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {clientes.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setSelectedId(c.id)}
-                className="group flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
-              >
-                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-muted">
-                  {c.photo ? (
-                    <img src={c.photo} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <Building2 className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{c.empresa}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {c.responsavel || "Sem responsável"}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+          <FlowingMenu
+            items={clientes.map((c) => ({
+              id: c.id,
+              text: c.empresa,
+              subtitle: c.responsavel || "Sem responsável",
+              image: c.photo,
+              onSelect: () => setSelectedId(c.id),
+            }))}
+          />
         )}
       </div>
 

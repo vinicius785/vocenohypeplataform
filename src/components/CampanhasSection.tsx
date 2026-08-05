@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import FlowingMenu from "@/components/FlowingMenu";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import {
   type Campaign,
@@ -159,60 +160,20 @@ export function CampanhasSection() {
             Nenhuma campanha vinculada ainda.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {rows.map((r) => {
+          <FlowingMenu
+            items={rows.map((r) => {
               const planejados = r.campanha.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
-
-              return (
-                <div key={r.campanha.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => setOpenId(r.campanha.id)}
-                    className="flex w-full flex-col gap-4 rounded-xl border border-border bg-background p-5 text-left shadow-sm transition-colors hover:border-foreground/20 hover:bg-muted/30"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground">
-                        {r.cliente.photo ? (
-                          <img
-                            src={r.cliente.photo}
-                            alt={r.cliente.empresa}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Megaphone className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {r.campanha.nome}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {r.cliente.empresa}
-                        </p>
-                      </div>
-                      {r.campanha.pagClienteTipo === "Recorrente" && (
-                        <span className="shrink-0 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300">
-                          Recorrente
-                          {r.campanha.pagClienteRecorrenteDia
-                            ? ` · dia ${r.campanha.pagClienteRecorrenteDia}`
-                            : ""}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
-                      <span>
-                        {r.campanha.pagClienteTipo === "Recorrente" ? "Mensal" : "Prazo"}{" "}
-                        <span className="text-foreground">
-                          {r.campanha.pagClienteTipo === "Recorrente"
-                            ? `dia ${r.campanha.pagClienteRecorrenteDia ?? "—"}`
-                            : fmtDate(r.campanha.prazo)}
-                        </span>
-                      </span>
-                      <span>
-                        <span className="text-foreground tabular-nums">{planejados}</span> influs
-                      </span>
-                    </div>
-                  </button>
+              const prazo =
+                r.campanha.pagClienteTipo === "Recorrente"
+                  ? `Mensal · dia ${r.campanha.pagClienteRecorrenteDia ?? "—"}`
+                  : `Prazo ${fmtDate(r.campanha.prazo)}`;
+              return {
+                id: r.campanha.id,
+                text: r.campanha.nome,
+                subtitle: `${r.cliente.empresa} · ${prazo} · ${planejados} influs`,
+                image: r.cliente.photo,
+                onSelect: () => setOpenId(r.campanha.id),
+                rightSlot: (
                   <button
                     type="button"
                     onClick={async (e) => {
@@ -237,16 +198,16 @@ export function CampanhasSection() {
                       // que agregam tudo, tipo "Meu trabalho" no Início).
                       deleteCampanhaScopedData(r.campanha.id);
                     }}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                    className="rounded-md bg-background/80 p-1.5 text-muted-foreground backdrop-blur hover:bg-destructive/10 hover:text-destructive"
                     aria-label="Excluir campanha"
                     title="Excluir campanha"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                </div>
-              );
+                ),
+              };
             })}
-          </div>
+          />
         )}
       </div>
       {confirmDialog}

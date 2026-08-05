@@ -16,7 +16,9 @@ import {
   Copy,
   Clock,
   Users as UsersIcon,
+  LayoutGrid,
 } from "lucide-react";
+import CircularGallery from "@/components/CircularGallery";
 
 import { useServerFn } from "@tanstack/react-start";
 import { SectionHeader } from "./SectionHeader";
@@ -114,6 +116,17 @@ export type Member = {
   isAdmin?: boolean;
 };
 
+function initialsAvatar(name: string): string {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#27272a"/><text x="50%" y="50%" dy=".1em" font-family="sans-serif" font-size="150" font-weight="600" fill="#a1a1aa" text-anchor="middle" dominant-baseline="middle">${initials}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 const MEMBERS_KEY = "time:membros";
 const friendlyError = friendlyNetworkError;
 
@@ -130,6 +143,7 @@ export function TimeSection() {
   );
   const [isAdmin, setIsAdmin] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
+  const [showManage, setShowManage] = useState(false);
   const [, forcePresence] = useState(0);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -349,7 +363,11 @@ export function TimeSection() {
                   className="h-9 w-40 pl-8 text-xs sm:w-56"
                 />
               </div>
-              {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setShowManage((v) => !v)}>
+                <LayoutGrid className="h-3.5 w-3.5" />
+                {showManage ? "Ver galeria" : "Gerenciar membros"}
+              </Button>
+              {isAdmin && showManage && (
                 <Button
                   size="sm"
                   onClick={() => {
@@ -421,59 +439,89 @@ export function TimeSection() {
           </div>
         )}
 
-        {loading ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[132px] animate-pulse rounded-xl border border-border bg-muted/30"
+        {!showManage &&
+          (loading ? (
+            <div className="h-[440px] animate-pulse rounded-xl border border-border bg-muted/30" />
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
+              <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                {members.length === 0
+                  ? "Nenhum membro ainda."
+                  : "Nenhum resultado para essa busca."}
+              </p>
+            </div>
+          ) : (
+            <div style={{ height: "440px", position: "relative" }}>
+              <CircularGallery
+                items={filtered.map((m) => ({
+                  image: m.photo || initialsAvatar(m.name),
+                  text: m.name,
+                }))}
+                bend={3}
+                textColor="var(--foreground)"
+                borderRadius={0.05}
+                scrollEase={0.02}
               />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
-            <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              {members.length === 0 ? "Nenhum membro ainda." : "Nenhum resultado para essa busca."}
-            </p>
-            {members.length === 0 && isAdmin && (
-              <button
-                onClick={() => setOpen(true)}
-                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
-              >
-                Adicionar o primeiro
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((m) => {
-              const canManage = isAdmin;
-              return (
-                <MemberCard
-                  key={m.id}
-                  m={m}
-                  isSelf={m.id === meId}
-                  canManage={canManage}
-                  onOpen={() => {
-                    if (canManage) {
+            </div>
+          ))}
+
+        {showManage &&
+          (loading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-[132px] animate-pulse rounded-xl border border-border bg-muted/30"
+                />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
+              <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
+              <p className="mt-3 text-sm text-muted-foreground">
+                {members.length === 0
+                  ? "Nenhum membro ainda."
+                  : "Nenhum resultado para essa busca."}
+              </p>
+              {members.length === 0 && isAdmin && (
+                <button
+                  onClick={() => setOpen(true)}
+                  className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+                >
+                  Adicionar o primeiro
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((m) => {
+                const canManage = isAdmin;
+                return (
+                  <MemberCard
+                    key={m.id}
+                    m={m}
+                    isSelf={m.id === meId}
+                    canManage={canManage}
+                    onOpen={() => {
+                      if (canManage) {
+                        setEditing(m);
+                        setOpen(true);
+                      } else {
+                        setViewing(m);
+                      }
+                    }}
+                    onEdit={() => {
                       setEditing(m);
                       setOpen(true);
-                    } else {
-                      setViewing(m);
-                    }
-                  }}
-                  onEdit={() => {
-                    setEditing(m);
-                    setOpen(true);
-                  }}
-                  onDelete={() => handleDelete(m.id)}
-                  onReset={() => handleReset(m.id)}
-                />
-              );
-            })}
-          </div>
-        )}
+                    }}
+                    onDelete={() => handleDelete(m.id)}
+                    onReset={() => handleReset(m.id)}
+                  />
+                );
+              })}
+            </div>
+          ))}
 
         <MemberDialog
           open={open}

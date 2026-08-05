@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import StepIndicator from "@/components/StepIndicator";
 import {
   AlertTriangle,
   AtSign,
@@ -2378,46 +2379,12 @@ function InfluenciadorDialog({
             Etapa {step + 1} de {steps.length} · {steps[step]?.label}
           </DialogDescription>
 
-          <ol className="mt-4 flex items-start">
-            {steps.map((s, i) => {
-              const done = i < step;
-              const active = i === step;
-              const reachable = i <= step || (i === 1 && canNext);
-              const Icon = s.icon;
-              return (
-                <li key={s.key} className="flex flex-1 flex-col items-center gap-1">
-                  <div className="flex w-full items-center">
-                    <div
-                      className={`h-0.5 flex-1 rounded-full transition-colors ${i === 0 ? "invisible" : done || active ? "bg-foreground" : "bg-muted"}`}
-                    />
-                    <button
-                      type="button"
-                      disabled={!reachable}
-                      onClick={() => reachable && setStep(i)}
-                      aria-label={`Ir para ${s.label}`}
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors ${
-                        done
-                          ? "border-foreground bg-foreground text-background"
-                          : active
-                            ? "border-foreground text-foreground"
-                            : "border-border text-muted-foreground"
-                      } ${reachable ? "cursor-pointer" : "cursor-not-allowed"}`}
-                    >
-                      {done ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
-                    </button>
-                    <div
-                      className={`h-0.5 flex-1 rounded-full transition-colors ${i === steps.length - 1 ? "invisible" : done ? "bg-foreground" : "bg-muted"}`}
-                    />
-                  </div>
-                  <span
-                    className={`max-w-full truncate text-[10px] font-medium ${active ? "text-foreground" : "text-muted-foreground"}`}
-                  >
-                    {s.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+          <StepIndicator
+            steps={steps}
+            currentStep={step}
+            isReachable={(i) => i <= step || (i === 1 && canNext)}
+            onStepClick={setStep}
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
