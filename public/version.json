@@ -1,6 +1,6 @@
 {
-  "version": "1.56.0",
+  "version": "1.57.0",
   "notes": [
-    "Corrige participantes ficando presos em \"Conectando...\" pra sempre nas chamadas — qualquer falha na negociação (sinalização ou ICE que nunca resolve) agora marca a pessoa como \"falhou\" em até 20s, em vez de travar o status indefinidamente."
+    "Corrige o áudio parando ao minimizar uma chamada — a barra minimizada não tinha nenhum elemento tocando o som recebido, então minimizar silenciava a ligação mesmo com a conexão ainda ativa."
   ]
 }

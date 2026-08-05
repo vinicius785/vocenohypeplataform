@@ -50,6 +50,12 @@ export function CallOverlay() {
   const localScreenRef = useRef<HTMLVideoElement>(null);
   const remoteRefs = useRef(new Map<string, HTMLVideoElement>());
   const remoteScreenRefs = useRef(new Map<string, HTMLVideoElement>());
+  // O <video> que carrega o áudio remoto some quando minimiza (a barra
+  // minimizada não renderiza vídeo/áudio nenhum) — sem uma trilha de áudio
+  // sempre montada, minimizar silenciava a ligação inteira mesmo com o
+  // WebRTC continuando conectado por trás. Esses <audio> ficam sempre no ar,
+  // visualmente ocultos, e tocam independente do estado de minimizado.
+  const hiddenAudioRefs = useRef(new Map<string, HTMLAudioElement>());
 
   useEffect(() => {
     if (call.status !== "in-call") return;
@@ -87,8 +93,17 @@ export function CallOverlay() {
       const remote = remoteRefs.current.get(peerId);
       if (remote) {
         remote.srcObject = getRemoteCallStream(peerId);
-        void setCallAudioOutput(remote)
-          .then(() => remote.play())
+        // O <video> visível fica mudo — quem toca o áudio é o <audio>
+        // oculto sempre montado abaixo, senão minimizar e depois voltar a
+        // maximizar tocaria a mesma trilha duas vezes ao mesmo tempo.
+        remote.muted = true;
+        void remote.play().catch(() => undefined);
+      }
+      const hiddenAudio = hiddenAudioRefs.current.get(peerId);
+      if (hiddenAudio) {
+        hiddenAudio.srcObject = getRemoteCallStream(peerId);
+        void setCallAudioOutput(hiddenAudio)
+          .then(() => hiddenAudio.play())
           .catch(() => undefined);
       }
       const remoteScreen = remoteScreenRefs.current.get(peerId);
@@ -132,9 +147,27 @@ export function CallOverlay() {
   const remoteScreenPeer = participants.find((p) => getRemoteScreenStream(p.userId));
   const anySharing = screenSharing || !!remoteScreenPeer;
 
+  // Sempre montado, minimizado ou não — é isso que garante que o áudio
+  // continua tocando quando a chamada é minimizada.
+  const hiddenAudioPool = (
+    <div className="hidden">
+      {participants.map((p) => (
+        <audio
+          key={p.userId}
+          ref={(el) => {
+            if (el) hiddenAudioRefs.current.set(p.userId, el);
+            else hiddenAudioRefs.current.delete(p.userId);
+          }}
+          autoPlay
+        />
+      ))}
+    </div>
+  );
+
   if (call.minimized && call.status !== "ringing-in")
     return (
       <div className="fixed bottom-4 right-4 z-[100] flex w-[min(22rem,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-border bg-background/95 p-3 shadow-2xl backdrop-blur">
+        {hiddenAudioPool}
         <TileAvatar name={primaryName} photo={participants[0]?.photo} small />
         <button className="min-w-0 flex-1 text-left" onClick={() => setCallMinimized(false)}>
           <p className="truncate text-sm font-semibold">{title}</p>
@@ -154,6 +187,7 @@ export function CallOverlay() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+      {hiddenAudioPool}
       <section
         className={`relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-border bg-zinc-900 text-zinc-100 shadow-2xl ${
           isRinging ? "max-w-xs" : "max-w-3xl"
