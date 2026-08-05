@@ -1,7 +1,6 @@
 {
-  "version": "1.45.0",
+  "version": "1.45.1",
   "notes": [
-    "Cor de destaque roxa oficial da plataforma, aplicada de forma visível (não só no hover) em botões primários, etapas ativas, menu ativo e borda dos popups em foco.",
-    "Aba Time redesenhada: galeria de membros maior, com rotação automática, e cabeçalho com estatísticas simplificado."
+    "Remove o efeito colorido/vidro (BorderGlow) dos popups e formulários, mantendo só a borda roxa sutil de destaque."
   ]
 }
