@@ -239,7 +239,7 @@ export function ComercialSection() {
       </div>
 
       {/* KPIs */}
-      <div className="flex flex-wrap gap-x-6 gap-y-3">
+      <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
         <Kpi label="Leads" value={String(totals.count)} />
         <Kpi label="Em aberto" value={String(totals.abertos)} />
         <Kpi label="Ganhos" value={formatBRL(totals.ganho)} />
@@ -321,7 +321,7 @@ export function ComercialSection() {
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
+    <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
       <span className="text-xl font-semibold tabular-nums text-foreground">{value}</span>
       <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}

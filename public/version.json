@@ -1,6 +1,6 @@
 {
-  "version": "1.52.0",
+  "version": "1.53.0",
   "notes": [
-    "Novo componente base de Popover com animação de morphing (botão vira o painel), pronto para substituir os menus suspensos da plataforma."
+    "Correções de responsividade mobile: KPIs não quebram mais linha (rolagem horizontal), galeria em acordeão da aba Time seleciona com um toque só (sem precisar tocar duas vezes), e botões de ação que só apareciam no hover do mouse agora ficam visíveis em telas touch."
   ]
 }

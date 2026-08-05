@@ -28,11 +28,11 @@ export function SectionHeader({
       </div>
 
       {kpis && kpis.length > 0 && (
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+        <div className="mt-5 flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
           {kpis.map((k, i) => (
             <div
               key={k.label}
-              className={`flex items-baseline gap-2 ${i > 0 ? "border-l border-border pl-6" : ""}`}
+              className={`flex shrink-0 items-baseline gap-2 ${i > 0 ? "border-l border-border pl-6" : ""}`}
             >
               <span className="text-xl font-semibold tabular-nums text-foreground">{k.value}</span>
               <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">

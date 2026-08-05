@@ -173,3 +173,12 @@
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Em telas touch (sem hover real), botões que só aparecem em
+ * `group-hover:opacity-100` ficam permanentemente invisíveis/inacessíveis
+ * — o hover nunca dispara. Força visíveis nesses dispositivos. */
+@media (hover: none) {
+  .group-hover\:opacity-100 {
+    opacity: 1 !important;
+  }
+}

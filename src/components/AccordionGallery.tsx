@@ -71,6 +71,20 @@ export default function AccordionGallery({
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
       : false;
 
+  // Em telas sem hover (touch), esperar um primeiro toque só pra "expandir"
+  // e exigir um segundo pra selecionar é uma armadilha de duplo-toque — sem
+  // mouse, o hover nunca ativa o painel, então o toque já precisa valer
+  // como seleção direta.
+  const [noHover, setNoHover] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(hover: none), (pointer: coarse)");
+    setNoHover(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setNoHover(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   const applyLayout = useCallback(
     (animate: boolean) => {
       const panels = panelRefs.current;
@@ -184,6 +198,12 @@ export default function AccordionGallery({
   };
 
   const handleClick = (i: number, item: AccordionGalleryItem, e: React.MouseEvent) => {
+    if (noHover) {
+      e.preventDefault();
+      setActive(i);
+      item.onSelect?.();
+      return;
+    }
     if (i !== active) {
       e.preventDefault();
       setActive(i);

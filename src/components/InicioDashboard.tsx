@@ -503,7 +503,7 @@ export function InicioDashboard() {
 
       {/* Stat strip */}
       {visible.stats && (
-        <div className="flex flex-wrap gap-x-6 gap-y-3">
+        <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
           <StatChip label="Hoje" value={hoje} />
           <StatChip label="Amanhã" value={amanha} />
           <StatChip label="7 dias" value={semana + hoje + amanha} />
@@ -911,7 +911,7 @@ function StatChip({
   tone?: "default" | "danger";
 }) {
   return (
-    <div className="flex items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
+    <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
       <span className="text-xl font-semibold tabular-nums text-foreground">
         {value.toString().padStart(2, "0")}
       </span>
