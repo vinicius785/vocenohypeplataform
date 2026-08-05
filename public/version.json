@@ -1,6 +1,6 @@
 {
-  "version": "1.54.0",
+  "version": "1.54.1",
   "notes": [
-    "Financeiro ganha \"Importar lista\": cole uma lista copiada do ClickUp (ou de qualquer planilha), mapeie as colunas (descrição, status, valor, data) e importe vários lançamentos de uma vez, em vez de digitar um por um."
+    "Corrige lançamentos do Financeiro que apareciam na lista mas não abriam pra edição — acontecia com qualquer lançamento que chegasse por fora da própria tela (ex.: sincronização entre abas ou inserido diretamente no banco)."
   ]
 }

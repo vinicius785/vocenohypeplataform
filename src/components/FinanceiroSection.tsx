@@ -33,6 +33,7 @@ import {
   type PaidMap,
   loadManual,
   saveManual,
+  onManualChange,
   fmtBRL,
   parseMoney,
   monthKey,
@@ -93,6 +94,13 @@ export function FinanceiroSection() {
   const [editing, setEditing] = useState<ManualEntry | null>(null);
   const [viewing, setViewing] = useState<Entry | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+
+  // Sem isso, `manual` só refletia o que essa própria aba salvava — um
+  // lançamento criado por SQL direto, outra aba, ou o eco do realtime
+  // aparecia na lista (que lê de `useFinanceiroEntries`, já reativo) mas o
+  // clique em editar buscava em `manual` desatualizado, achava nada e não
+  // fazia nada, silenciosamente.
+  useEffect(() => onManualChange(() => setManualState(loadManual())), []);
 
   const [paid, setPaidState] = useState<PaidMap>(() => loadPaid());
   const setPaid = (u: PaidMap | ((p: PaidMap) => PaidMap)) =>
