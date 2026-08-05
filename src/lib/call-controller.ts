@@ -423,10 +423,22 @@ async function acquireAudio() {
 }
 /** Garante que um peer recém-criado já saia com as tracks locais atuais
  * (áudio, e câmera/tela se já ligadas) — usado ao conectar com alguém que
- * entrou depois que eu já tinha mídia ativa. */
+ * entrou depois que eu já tinha mídia ativa.
+ *
+ * Também é chamada de novo a cada oferta recebida (não só a primeira) —
+ * qualquer renegociação do outro lado (ex.: ele ligou a câmera) reusa o
+ * mesmo link já conectado e cai aqui de novo. Sem checar `getSenders()`
+ * antes, isso tentava adicionar uma track que já tinha sender nesse peer
+ * connection, e o WebRTC recusa com "A sender already exists for the
+ * track" — travando a renegociação (e a chamada) silenciosamente. */
 function attachLocalTracksTo(link: PeerLink) {
-  for (const track of localStream?.getTracks() ?? []) link.pc.addTrack(track, localStream!);
-  for (const track of screenStream?.getTracks() ?? []) link.pc.addTrack(track, screenStream!);
+  const senderTracks = new Set(link.pc.getSenders().map((s) => s.track));
+  for (const track of localStream?.getTracks() ?? []) {
+    if (!senderTracks.has(track)) link.pc.addTrack(track, localStream!);
+  }
+  for (const track of screenStream?.getTracks() ?? []) {
+    if (!senderTracks.has(track)) link.pc.addTrack(track, screenStream!);
+  }
 }
 
 function fail(error: unknown) {

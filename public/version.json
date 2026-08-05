@@ -1,6 +1,6 @@
 {
-  "version": "1.55.0",
+  "version": "1.55.1",
   "notes": [
-    "Corrige o filtro de mês em campanhas recorrentes: agora ele realmente restringe tarefas e influenciadores aos criados naquele mês (antes o seletor existia mas não filtrava nada)."
+    "Corrige erro nas chamadas (\"A sender already exists for the track\") que podia travar a renegociação — acontecia sempre que alguém ligava a câmera/tela durante a chamada."
   ]
 }
