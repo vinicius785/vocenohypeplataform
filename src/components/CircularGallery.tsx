@@ -289,6 +289,8 @@ type GalleryItem = { image: string; text: string };
 class App {
   container: HTMLElement;
   scrollSpeed: number;
+  autoRotateSpeed: number;
+  pauseAutoUntil = 0;
   scroll: { ease: number; current: number; target: number; last: number; position?: number };
   onCheckDebounce: () => void;
   renderer: any;
@@ -320,6 +322,7 @@ class App {
       font = "bold 30px Figtree",
       scrollSpeed = 2,
       scrollEase = 0.05,
+      autoRotateSpeed = 0,
     }: {
       items?: GalleryItem[];
       bend: number;
@@ -328,11 +331,13 @@ class App {
       font?: string;
       scrollSpeed?: number;
       scrollEase?: number;
+      autoRotateSpeed?: number;
     },
   ) {
     autoBind(this as unknown as Record<string, unknown>);
     this.container = container;
     this.scrollSpeed = scrollSpeed;
+    this.autoRotateSpeed = autoRotateSpeed;
     this.scroll = { ease: scrollEase, current: 0, target: 0, last: 0 };
     this.onCheckDebounce = debounce(this.onCheck.bind(this), 200);
     this.createRenderer();
@@ -393,7 +398,9 @@ class App {
     });
   }
   onTouchDown(e: MouseEvent | TouchEvent) {
+    if (!this.container.contains(e.target as Node)) return;
     this.isDown = true;
+    this.pauseAutoUntil = Date.now() + 4000;
     this.scroll.position = this.scroll.current;
     this.start = "touches" in e ? e.touches[0].clientX : e.clientX;
   }
@@ -408,6 +415,8 @@ class App {
     this.onCheck();
   }
   onWheel(e: WheelEvent) {
+    if (!this.container.contains(e.target as Node)) return;
+    this.pauseAutoUntil = Date.now() + 4000;
     const delta = e.deltaY || (e as any).wheelDelta || (e as any).detail;
     this.scroll.target += (delta > 0 ? this.scrollSpeed : -this.scrollSpeed) * 0.2;
     this.onCheckDebounce();
@@ -455,6 +464,9 @@ class App {
     }
   }
   update() {
+    if (this.autoRotateSpeed && !this.isDown && Date.now() > this.pauseAutoUntil) {
+      this.scroll.target += this.autoRotateSpeed;
+    }
     this.scroll.current = lerp(this.scroll.current, this.scroll.target, this.scroll.ease);
     const direction = this.scroll.current > this.scroll.last ? "right" : "left";
     if (this.medias) {
@@ -507,6 +519,7 @@ export type CircularGalleryProps = {
   font?: string;
   scrollSpeed?: number;
   scrollEase?: number;
+  autoRotateSpeed?: number;
 };
 
 export default function CircularGallery({
@@ -517,6 +530,7 @@ export default function CircularGallery({
   font = "bold 30px Figtree",
   scrollSpeed = 2,
   scrollEase = 0.02,
+  autoRotateSpeed = 0,
 }: CircularGalleryProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -525,6 +539,7 @@ export default function CircularGallery({
     const app = new App(containerRef.current, {
       items,
       bend,
+      autoRotateSpeed,
       textColor,
       borderRadius,
       font,
@@ -532,7 +547,7 @@ export default function CircularGallery({
       scrollEase,
     });
     return () => app.destroy();
-  }, [items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase]);
+  }, [items, bend, textColor, borderRadius, font, scrollSpeed, scrollEase, autoRotateSpeed]);
 
   return (
     <div

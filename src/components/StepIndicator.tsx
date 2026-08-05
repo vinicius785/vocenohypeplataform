@@ -34,7 +34,7 @@ export default function StepIndicator({
             <div className="flex w-full items-center">
               <div className={`h-0.5 flex-1 rounded-full ${i === 0 ? "invisible" : "bg-border"}`}>
                 <motion.div
-                  className="h-full rounded-full bg-foreground"
+                  className="h-full rounded-full bg-primary"
                   initial={false}
                   animate={{ width: done || active ? "100%" : "0%" }}
                   transition={{ duration: 0.3 }}
@@ -55,9 +55,9 @@ export default function StepIndicator({
                 transition={{ duration: 0.25 }}
                 className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border transition-colors ${
                   done
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : active
-                      ? "border-foreground text-foreground"
+                      ? "border-primary text-primary ring-4 ring-primary/15"
                       : "border-border text-muted-foreground"
                 } ${reachable ? "cursor-pointer" : "cursor-not-allowed"}`}
               >
@@ -67,7 +67,7 @@ export default function StepIndicator({
                 className={`h-0.5 flex-1 rounded-full ${i === steps.length - 1 ? "invisible" : "bg-border"}`}
               >
                 <motion.div
-                  className="h-full rounded-full bg-foreground"
+                  className="h-full rounded-full bg-primary"
                   initial={false}
                   animate={{ width: done ? "100%" : "0%" }}
                   transition={{ duration: 0.3 }}

@@ -340,19 +340,68 @@ export function TimeSection() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
-        <SectionHeader
-          title="Time"
-          subtitle={`${members.length} ${members.length === 1 ? "membro" : "membros"} no workspace`}
-          kpis={[
-            { label: "Membros", value: members.length },
-            { label: "Administradores", value: adminCount },
-            {
-              label: "Online agora",
-              value: onlineCount,
-              tone: onlineCount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
-            },
-          ]}
-          action={
+        {showManage ? (
+          <SectionHeader
+            title="Time"
+            subtitle={`${members.length} ${members.length === 1 ? "membro" : "membros"} no workspace`}
+            kpis={[
+              { label: "Membros", value: members.length },
+              { label: "Administradores", value: adminCount },
+              {
+                label: "Online agora",
+                value: onlineCount,
+                tone: onlineCount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
+              },
+            ]}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Buscar por nome, cargo ou email"
+                    className="h-9 w-40 pl-8 text-xs sm:w-56"
+                  />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setShowManage((v) => !v)}>
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  Ver galeria
+                </Button>
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditing(null);
+                      setOpen(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Novo membro
+                  </Button>
+                )}
+              </div>
+            }
+          />
+        ) : (
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Time</h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 font-medium">
+                  {members.length} {members.length === 1 ? "membro" : "membros"}
+                </span>
+                <span
+                  className={`rounded-full border px-2.5 py-1 font-medium ${
+                    onlineCount > 0
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "border-border bg-muted/50"
+                  }`}
+                >
+                  {onlineCount} online agora
+                </span>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -365,23 +414,11 @@ export function TimeSection() {
               </div>
               <Button size="sm" variant="outline" onClick={() => setShowManage((v) => !v)}>
                 <LayoutGrid className="h-3.5 w-3.5" />
-                {showManage ? "Ver galeria" : "Gerenciar membros"}
+                Gerenciar membros
               </Button>
-              {isAdmin && showManage && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditing(null);
-                    setOpen(true);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Novo membro
-                </Button>
-              )}
             </div>
-          }
-        />
+          </div>
+        )}
 
         {error && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
@@ -441,7 +478,7 @@ export function TimeSection() {
 
         {!showManage &&
           (loading ? (
-            <div className="h-[440px] animate-pulse rounded-xl border border-border bg-muted/30" />
+            <div className="h-[520px] animate-pulse rounded-2xl border border-border bg-muted/30" />
           ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
               <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -452,16 +489,21 @@ export function TimeSection() {
               </p>
             </div>
           ) : (
-            <div style={{ height: "440px", position: "relative" }}>
+            <div
+              className="overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-background"
+              style={{ height: "520px", position: "relative" }}
+            >
               <CircularGallery
                 items={filtered.map((m) => ({
                   image: m.photo || initialsAvatar(m.name),
                   text: m.name,
                 }))}
-                bend={3}
+                bend={filtered.length > 1 ? 3 : 0}
                 textColor="var(--foreground)"
-                borderRadius={0.05}
-                scrollEase={0.02}
+                borderRadius={0.08}
+                scrollEase={0.03}
+                autoRotateSpeed={0.6}
+                font="700 36px sans-serif"
               />
             </div>
           ))}

@@ -1,6 +1,7 @@
 {
-  "version": "1.44.0",
+  "version": "1.45.0",
   "notes": [
-    "Novo visual em pílula (PillNav) no menu lateral e nas sub-abas de Configurações, com preenchimento animado ao passar o mouse."
+    "Cor de destaque roxa oficial da plataforma, aplicada de forma visível (não só no hover) em botões primários, etapas ativas, menu ativo e borda dos popups em foco.",
+    "Aba Time redesenhada: galeria de membros maior, com rotação automática, e cabeçalho com estatísticas simplificado."
   ]
 }

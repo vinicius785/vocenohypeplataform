@@ -34,7 +34,8 @@ const AlertDialogContent = React.forwardRef<
   const glow = useBorderGlowVars({
     borderRadius: 8,
     glowRadius: 24,
-    glowIntensity: 0.7,
+    glowIntensity: 1.1,
+    edgeSensitivity: 5,
     colors: ["#8b5cf6", "#ec4899", "#38bdf8"],
     glowColor: "280 85% 70%",
   });
@@ -51,7 +52,7 @@ const AlertDialogContent = React.forwardRef<
           onPointerMove={glow.onPointerMove}
           style={glow.style}
           className={cn(
-            "border-glow-card relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            "border-glow-card relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg ring-1 ring-primary/25 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             className,
           )}
           {...props}

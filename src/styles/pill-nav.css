@@ -16,7 +16,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--foreground);
+  background: var(--primary);
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -28,7 +28,7 @@
 }
 
 .pill-nav-item:hover {
-  color: var(--background) !important;
+  color: var(--primary-foreground) !important;
 }
 
 .pill-nav-item-active {
@@ -37,9 +37,9 @@
 
 .pill-nav-item-active::before {
   transform: scaleX(1);
-  background: var(--foreground);
+  background: var(--primary);
 }
 
 .pill-nav-item-active {
-  color: var(--background) !important;
+  color: var(--primary-foreground) !important;
 }
