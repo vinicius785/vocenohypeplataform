@@ -1,0 +1,45 @@
+/* Estilo "pílula" (React Bits PillNav) aplicado aos botões de navegação
+ * existentes (sidebar e sub-abas de Configurações) — puramente visual,
+ * via classe adicional, sem tocar na lógica de onClick/active/disabled. */
+.pill-nav-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px !important;
+  isolation: isolate;
+  transition:
+    color 0.3s ease,
+    background-color 0.3s ease;
+}
+
+.pill-nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--foreground);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: -1;
+}
+
+.pill-nav-item:hover::before {
+  transform: scaleX(1);
+}
+
+.pill-nav-item:hover {
+  color: var(--background) !important;
+}
+
+.pill-nav-item-active {
+  border-radius: 9999px !important;
+}
+
+.pill-nav-item-active::before {
+  transform: scaleX(1);
+  background: var(--foreground);
+}
+
+.pill-nav-item-active {
+  color: var(--background) !important;
+}

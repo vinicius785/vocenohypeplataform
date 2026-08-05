@@ -1,8 +1,6 @@
 {
-  "version": "1.43.0",
+  "version": "1.44.0",
   "notes": [
-    "Indicador de etapas animado (Stepper) no formulário de influenciadores.",
-    "Galerias de Clientes e Campanhas em novo formato de lista com efeito de marquee ao passar o mouse (FlowingMenu).",
-    "Galeria circular 3D para os membros do Time, com opção de alternar para a visão de gerenciamento (ações de admin)."
+    "Novo visual em pílula (PillNav) no menu lateral e nas sub-abas de Configurações, com preenchimento animado ao passar o mouse."
   ]
 }

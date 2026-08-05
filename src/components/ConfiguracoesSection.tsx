@@ -78,7 +78,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.43.0";
+export const APP_VERSION = "1.44.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -249,12 +249,12 @@ function TabGroup({
               key={k}
               onClick={() => setTab(k)}
               title={isLocked ? "Sem permissão — apenas visualização bloqueada" : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
                 isLocked
                   ? "text-muted-foreground/40 hover:bg-muted/40"
                   : tab === k
-                    ? "bg-foreground font-medium text-background"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "pill-nav-item pill-nav-item-active font-medium"
+                    : "pill-nav-item text-muted-foreground"
               }`}
             >
               {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}

@@ -367,9 +367,7 @@ export function AppShell({
                         } ${
                           !allowed
                             ? "cursor-not-allowed text-muted-foreground/40"
-                            : isActive
-                              ? "bg-muted font-medium text-foreground"
-                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            : `pill-nav-item ${isActive ? "pill-nav-item-active font-medium" : "text-muted-foreground"}`
                         }`}
                       >
                         <span className="relative shrink-0">
@@ -409,12 +407,12 @@ export function AppShell({
               type="button"
               onClick={() => onSelect("configuracoes")}
               title={!showFull ? "Configurações" : undefined}
-              className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+              className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors pill-nav-item ${
                 !showFull ? "justify-center" : ""
               } ${
                 active === "configuracoes"
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  ? "pill-nav-item-active font-medium"
+                  : "text-muted-foreground"
               }`}
             >
               <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
