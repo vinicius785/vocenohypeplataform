@@ -19,6 +19,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import CircularGallery from "@/components/CircularGallery";
+import TextLoop from "@/components/TextLoop";
 
 import { useServerFn } from "@tanstack/react-start";
 import { SectionHeader } from "./SectionHeader";
@@ -473,6 +474,27 @@ export function TimeSection() {
                 fechar
               </button>
             </div>
+          </div>
+        )}
+
+        {!showManage && (
+          <div className="mx-auto max-w-2xl">
+            <TextLoop
+              text="Você no Hype"
+              shape="line"
+              speed={70}
+              separator="✦"
+              curviness={0}
+              fontSize={26}
+              fontWeight={800}
+              letterSpacing={2}
+              uppercase
+              color="var(--foreground)"
+              ribbon
+              ribbonColor="var(--muted)"
+              ribbonWidth={56}
+              pauseOnHover
+            />
           </div>
         )}
 

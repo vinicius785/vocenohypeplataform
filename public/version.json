@@ -1,6 +1,6 @@
 {
-  "version": "1.46.0",
+  "version": "1.47.0",
   "notes": [
-    "Banco de influenciadores ganha uma galeria 3D (DriftWall) com foto e nome como visão padrão, com opção de alternar para a lista completa com busca, filtro por nicho e confiabilidade."
+    "Aba Time ganha uma faixa animada \"Você no Hype\" acima da galeria de membros."
   ]
 }
