@@ -33,6 +33,7 @@ import {
   type ProjectLayout,
 } from "@/lib/projetos";
 import { SectionHeader } from "./SectionHeader";
+import CardSwap, { Card } from "@/components/CardSwap";
 
 const FEATURE_ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   roadmap: Map,
@@ -111,6 +112,46 @@ export function ProjetosSection() {
           </div>
         }
       />
+
+      {items.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Em destaque
+          </p>
+          <div className="relative h-[280px] sm:h-[320px]">
+            <CardSwap width={340} height={220} cardDistance={50} verticalDistance={50} delay={4500}>
+              {items
+                .slice(-5)
+                .reverse()
+                .map((p) => (
+                  <Card
+                    key={p.id}
+                    onClick={() => navigate({ to: "/projeto/$id", params: { id: p.id } })}
+                    className="cursor-pointer overflow-hidden !bg-card p-0 shadow-lg"
+                  >
+                    <div className="flex h-full flex-col">
+                      <div className="h-24 shrink-0 overflow-hidden bg-muted">
+                        {p.cover ? (
+                          <img src={p.cover} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                            <ImageIcon className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 p-3">
+                        <p className="truncate text-sm font-semibold">{p.name}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {p.description || "Sem descrição"}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+            </CardSwap>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-background p-12 text-center">

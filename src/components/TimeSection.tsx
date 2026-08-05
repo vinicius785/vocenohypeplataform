@@ -18,8 +18,6 @@ import {
   Users as UsersIcon,
   LayoutGrid,
 } from "lucide-react";
-import CircularGallery from "@/components/CircularGallery";
-import TextLoop from "@/components/TextLoop";
 
 import { useServerFn } from "@tanstack/react-start";
 import { SectionHeader } from "./SectionHeader";
@@ -116,17 +114,6 @@ export type Member = {
   startTimes?: Record<string, string>;
   isAdmin?: boolean;
 };
-
-function initialsAvatar(name: string): string {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#27272a"/><text x="50%" y="50%" dy=".1em" font-family="sans-serif" font-size="150" font-weight="600" fill="#a1a1aa" text-anchor="middle" dominant-baseline="middle">${initials}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
 
 const MEMBERS_KEY = "time:membros";
 const friendlyError = friendlyNetworkError;
@@ -477,30 +464,13 @@ export function TimeSection() {
           </div>
         )}
 
-        {!showManage && (
-          <div className="mx-auto max-w-2xl">
-            <TextLoop
-              text="Você no Hype"
-              shape="line"
-              speed={70}
-              separator="✦"
-              curviness={0}
-              fontSize={26}
-              fontWeight={800}
-              letterSpacing={2}
-              uppercase
-              color="var(--foreground)"
-              ribbon
-              ribbonColor="var(--muted)"
-              ribbonWidth={56}
-              pauseOnHover
-            />
-          </div>
-        )}
-
         {!showManage &&
           (loading ? (
-            <div className="h-[520px] animate-pulse rounded-2xl border border-border bg-muted/30" />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="aspect-square animate-pulse rounded-xl bg-muted/30" />
+              ))}
+            </div>
           ) : filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
               <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -511,22 +481,26 @@ export function TimeSection() {
               </p>
             </div>
           ) : (
-            <div
-              className="overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-background"
-              style={{ height: "520px", position: "relative" }}
-            >
-              <CircularGallery
-                items={filtered.map((m) => ({
-                  image: m.photo || initialsAvatar(m.name),
-                  text: m.name,
-                }))}
-                bend={filtered.length > 1 ? 3 : 0}
-                textColor="var(--foreground)"
-                borderRadius={0.08}
-                scrollEase={0.03}
-                autoRotateSpeed={0.6}
-                font="700 36px sans-serif"
-              />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {filtered.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setViewing(m)}
+                  className="group flex flex-col items-center gap-2 text-center"
+                >
+                  <div className="aspect-square w-full overflow-hidden rounded-xl bg-muted">
+                    {m.photo ? (
+                      <img src={m.photo} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-2xl font-semibold text-muted-foreground">
+                        {m.name.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+                  <span className="truncate text-sm font-medium text-foreground">{m.name}</span>
+                </button>
+              ))}
             </div>
           ))}
 

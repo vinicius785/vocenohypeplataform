@@ -9,7 +9,6 @@ import {
   MapPin,
   History,
   FileBadge2,
-  LayoutGrid,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useClientes } from "@/lib/clientes-store";
@@ -61,7 +60,6 @@ export function InfluenciadoresSection() {
   const [nichoFilter, setNichoFilter] = useState("");
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: BankInflu } | null>(null);
   const [detail, setDetail] = useState<BankInflu | null>(null);
-  const [showList, setShowList] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
 
   const persist = (next: BankInflu[]) => {
@@ -410,178 +408,160 @@ export function InfluenciadoresSection() {
           },
         ]}
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowList((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" />
-              {showList ? "Ver galeria" : "Ver lista completa"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDialog({ mode: "new" })}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              <Plus className="h-3.5 w-3.5" /> Novo influenciador
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setDialog({ mode: "new" })}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            <Plus className="h-3.5 w-3.5" /> Novo influenciador
+          </button>
         }
       />
 
-      {!showList && (
+      {filtered.length > 0 && (
         <div
           className="mt-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-background"
-          style={{ height: "460px" }}
+          style={{ height: "380px" }}
         >
-          {filtered.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Nenhum influenciador cadastrado ainda.
-            </div>
-          ) : (
-            <DriftWall
-              items={filtered.map((i) => ({
-                image: i.foto || initialsAvatarInflu(i.nome),
-                title: i.nome || "Sem nome",
-                onClick: () => setDetail(i),
-              }))}
-              columns={Math.min(5, Math.max(2, filtered.length))}
-              tileWidth={180}
-              tileHeight={180}
-              speed={30}
-              overlayColor="var(--muted)"
-            />
-          )}
+          <DriftWall
+            items={filtered.map((i) => ({
+              image: i.foto || initialsAvatarInflu(i.nome),
+              title: i.nome || "Sem nome",
+              onClick: () => setDetail(i),
+            }))}
+            columns={Math.min(5, Math.max(2, filtered.length))}
+            tileWidth={160}
+            tileHeight={160}
+            speed={30}
+            overlayColor="var(--muted)"
+          />
         </div>
       )}
 
-      {showList && (
-        <>
-          <div className="mt-6 flex max-w-lg gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome ou @"
-                className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <select
-              value={nichoFilter}
-              onChange={(e) => setNichoFilter(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Todos os nichos</option>
-              {nichosEmUso.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+      <>
+        <div className="mt-6 flex max-w-lg gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nome ou @"
+              className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            />
           </div>
+          <select
+            value={nichoFilter}
+            onChange={(e) => setNichoFilter(e.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">Todos os nichos</option>
+            {nichosEmUso.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          {filtered.length === 0 ? (
-            <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                {list.length === 0
-                  ? "Nenhum influenciador cadastrado ainda."
-                  : "Nenhum resultado para essa busca."}
-              </p>
-              {list.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => setDialog({ mode: "new" })}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+        {filtered.length === 0 ? (
+          <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              {list.length === 0
+                ? "Nenhum influenciador cadastrado ainda."
+                : "Nenhum resultado para essa busca."}
+            </p>
+            {list.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setDialog({ mode: "new" })}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              >
+                <Plus className="h-4 w-4" /> Adicionar o primeiro
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filtered.map((i) => {
+              const history = historyFor(i.nome);
+              const count = history.length;
+              const reliability = computeReliability(history.flatMap((h) => h.influ.entregas));
+              return (
+                <div
+                  key={i.id}
+                  className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40"
                 >
-                  <Plus className="h-4 w-4" /> Adicionar o primeiro
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filtered.map((i) => {
-                const history = historyFor(i.nome);
-                const count = history.length;
-                const reliability = computeReliability(history.flatMap((h) => h.influ.entregas));
-                return (
-                  <div
-                    key={i.id}
-                    className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40"
+                  <button
+                    type="button"
+                    onClick={() => setDetail(i)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
-                    <button
-                      type="button"
-                      onClick={() => setDetail(i)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    >
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
-                        {i.foto ? (
-                          <img src={i.foto} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
-                            {i.nome.charAt(0).toUpperCase() || "?"}
-                          </div>
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
+                      {i.foto ? (
+                        <img src={i.foto} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
+                          {i.nome.charAt(0).toUpperCase() || "?"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {i.nome || "Sem nome"}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {i.redes
+                          .map((r) => r.handle || r.plataforma)
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {i.nicho && (
+                          <span className="max-w-[120px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {i.nicho}
+                          </span>
+                        )}
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {count} {count === 1 ? "campanha" : "campanhas"}
+                        </span>
+                        {reliability.total > 0 && (
+                          <span
+                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              reliability.score >= 80
+                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                : reliability.score >= 50
+                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                  : "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                            }`}
+                            title="Confiabilidade: % de entregas cumpridas no prazo combinado"
+                          >
+                            {reliability.score}% confiável
+                          </span>
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-foreground">
-                          {i.nome || "Sem nome"}
-                        </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {i.redes
-                            .map((r) => r.handle || r.plataforma)
-                            .filter(Boolean)
-                            .join(" · ") || "—"}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {i.nicho && (
-                            <span className="max-w-[120px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              {i.nicho}
-                            </span>
-                          )}
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {count} {count === 1 ? "campanha" : "campanhas"}
-                          </span>
-                          {reliability.total > 0 && (
-                            <span
-                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                                reliability.score >= 80
-                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                  : reliability.score >= 50
-                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                    : "bg-rose-500/10 text-rose-700 dark:text-rose-400"
-                              }`}
-                              title="Confiabilidade: % de entregas cumpridas no prazo combinado"
-                            >
-                              {reliability.score}% confiável
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Apagar influenciador"
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const ok = await confirm(`Apagar "${i.nome}" do banco?`);
-                        if (ok) {
-                          persist(list.filter((x) => x.id !== i.id));
-                        }
-                      }}
-                      className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-destructive group-hover:opacity-100"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Apagar influenciador"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const ok = await confirm(`Apagar "${i.nome}" do banco?`);
+                      if (ok) {
+                        persist(list.filter((x) => x.id !== i.id));
+                      }
+                    }}
+                    className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-destructive group-hover:opacity-100"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>
 
       <BankInfluDialog
         open={!!dialog}

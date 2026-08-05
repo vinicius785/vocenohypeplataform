@@ -1,6 +1,8 @@
 {
-  "version": "1.47.0",
+  "version": "1.48.0",
   "notes": [
-    "Aba Time ganha uma faixa animada \"Você no Hype\" acima da galeria de membros."
+    "Aba Time volta a um formato de galeria minimalista, sem animação — remove a faixa \"Você no Hype\" e a galeria 3D.",
+    "Banco de influenciadores mostra KPIs, galeria e lista completa com filtros sempre juntos, sem precisar alternar entre visões.",
+    "Aba Projetos ganha um destaque no topo com os projetos mais recentes girando (CardSwap), mantendo a grade completa com busca abaixo."
   ]
 }
