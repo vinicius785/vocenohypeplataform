@@ -234,6 +234,7 @@ export function InfluenciadoresSection() {
                     <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
                     {r.plataforma}
                     {r.handle ? ` · ${r.handle}` : ""}
+                    {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
                   </span>
                 ))
               )}
@@ -514,7 +515,11 @@ export function InfluenciadoresSection() {
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {i.redes
-                          .map((r) => r.handle || r.plataforma)
+                          .map((r) =>
+                            [r.handle || r.plataforma, r.seguidores ? `${r.seguidores} seg.` : ""]
+                              .filter(Boolean)
+                              .join(" · "),
+                          )
                           .filter(Boolean)
                           .join(" · ") || "—"}
                       </div>
@@ -740,6 +745,19 @@ function BankInfluDialog({
                     }
                     placeholder="@handle"
                     className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={r.seguidores ?? ""}
+                    onChange={(e) =>
+                      setRedes((list) =>
+                        list.map((x) => (x.id === r.id ? { ...x, seguidores: e.target.value } : x)),
+                      )
+                    }
+                    placeholder="Seguidores"
+                    title="Seguidores"
+                    className="h-9 w-28 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <button
                     type="button"

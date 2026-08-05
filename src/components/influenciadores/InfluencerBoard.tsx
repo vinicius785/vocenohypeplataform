@@ -133,7 +133,7 @@ export function formatPhoneBR(raw: string): string {
   return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 }
 
-export type Rede = { id: string; plataforma: string; handle: string };
+export type Rede = { id: string; plataforma: string; handle: string; seguidores?: string };
 export type PostMetrics = {
   views?: number;
   likes?: number;
@@ -1913,6 +1913,7 @@ function InfluencerProfileDialog({
                     >
                       <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                       {r.handle ? `@${r.handle}` : r.plataforma}
+                      {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
                     </span>
                   ))}
                 {influ.telefone && (
@@ -2535,6 +2536,22 @@ function InfluenciadorDialog({
                         placeholder="usuario"
                         className="flex-1 bg-transparent text-sm outline-none"
                       />
+                      <div className="flex shrink-0 items-center gap-1 border-l border-border pl-3">
+                        <input
+                          value={r.seguidores ?? ""}
+                          onChange={(e) =>
+                            setRedes((rs) =>
+                              rs.map((x) =>
+                                x.id === r.id ? { ...x, seguidores: e.target.value } : x,
+                              ),
+                            )
+                          }
+                          placeholder="0"
+                          inputMode="numeric"
+                          className="w-16 bg-transparent text-right text-sm outline-none"
+                        />
+                        <span className="text-xs text-muted-foreground">seguidores</span>
+                      </div>
                     </div>
                   ))}
                 </div>

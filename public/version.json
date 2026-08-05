@@ -1,6 +1,6 @@
 {
-  "version": "1.57.0",
+  "version": "1.58.0",
   "notes": [
-    "Corrige o áudio parando ao minimizar uma chamada — a barra minimizada não tinha nenhum elemento tocando o som recebido, então minimizar silenciava a ligação mesmo com a conexão ainda ativa."
+    "Adiciona campo manual de seguidores em cada rede social dos influenciadores (campanha e Banco de Influenciadores), exibido junto ao @ nas listagens."
   ]
 }
