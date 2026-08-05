@@ -14,7 +14,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  * way to reach `influencer_approvals` with a bare token.
  */
 
-const RedeInput = z.object({ plataforma: z.string(), handle: z.string() });
+const RedeInput = z.object({
+  plataforma: z.string(),
+  handle: z.string(),
+  seguidores: z.string().optional(),
+});
 const EntregaSnapshot = z.object({
   id: z.string(),
   tipo: z.string(),

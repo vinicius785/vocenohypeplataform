@@ -1050,7 +1050,11 @@ function ApprovalRequestDialog({
               id: i.id,
               nome: i.nome,
               foto: i.foto,
-              redes: i.redes.map((r) => ({ plataforma: r.plataforma, handle: r.handle })),
+              redes: i.redes.map((r) => ({
+                plataforma: r.plataforma,
+                handle: r.handle,
+                seguidores: r.seguidores,
+              })),
               entregas: i.entregas.map((e) => {
                 const roteiro = e.anexos?.find((a) => a.categoria === "Roteiro");
                 return {

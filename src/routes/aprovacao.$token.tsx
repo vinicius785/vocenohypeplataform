@@ -61,7 +61,7 @@ export const Route = createFileRoute("/aprovacao/$token")({
   }),
 });
 
-type Rede = { plataforma: string; handle: string };
+type Rede = { plataforma: string; handle: string; seguidores?: string };
 type ApprovalEntrega = {
   id: string;
   tipo: string;
@@ -254,6 +254,7 @@ function AprovacaoPublicPage() {
                           className={data.mode === "view" ? "h-3.5 w-3.5" : "h-3 w-3"}
                         />
                         {r.handle || r.plataforma}
+                        {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
                       </>
                     );
                     const className =
