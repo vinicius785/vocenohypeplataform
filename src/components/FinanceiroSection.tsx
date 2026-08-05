@@ -263,25 +263,10 @@ export function FinanceiroSection() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Kpi
-          icon={<TrendingUp className="h-3.5 w-3.5" />}
-          label="Receitas"
-          value={fmtBRL(totals.receita)}
-          tone="pos"
-        />
-        <Kpi
-          icon={<TrendingDown className="h-3.5 w-3.5" />}
-          label="Despesas"
-          value={fmtBRL(totals.despesa)}
-          tone="neg"
-        />
-        <Kpi
-          icon={<Wallet className="h-3.5 w-3.5" />}
-          label="Saldo"
-          value={fmtBRL(totals.saldo)}
-          tone={totals.saldo >= 0 ? "pos" : "neg"}
-        />
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
+        <Kpi label="Receitas" value={fmtBRL(totals.receita)} />
+        <Kpi label="Despesas" value={fmtBRL(totals.despesa)} />
+        <Kpi label="Saldo" value={fmtBRL(totals.saldo)} />
       </div>
 
       {/* Filtros */}
@@ -508,35 +493,12 @@ export function FinanceiroSection() {
   );
 }
 
-function Kpi({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone: "pos" | "neg";
-}) {
+function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span
-          className={`flex h-7 w-7 items-center justify-center rounded-md ${
-            tone === "pos" ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
-          }`}
-        >
-          {icon}
-        </span>
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <span
-        className={`text-base font-semibold tabular-nums ${
-          tone === "pos" ? "text-emerald-600" : "text-rose-600"
-        }`}
-      >
-        {value}
+    <div className="flex items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
+      <span className="text-xl font-semibold tabular-nums text-foreground">{value}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
       </span>
     </div>
   );

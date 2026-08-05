@@ -28,6 +28,7 @@ import {
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
+import { SectionHeader } from "./SectionHeader";
 
 type TeamMember = { id: string; name: string; photo?: string };
 function loadTeam(): TeamMember[] {
@@ -192,43 +193,39 @@ export function ReunioesSection() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Reuniões</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Agenda unificada com clientes e time.</p>
-      </div>
+      <SectionHeader
+        title="Reuniões"
+        subtitle="Agenda unificada com clientes e time."
+        kpis={[
+          { label: "PRÓXIMAS", value: proximas },
+          { label: "CONFIRMADAS", value: confirmadas },
+          { label: "PENDENTES", value: pendentes },
+        ]}
+      />
 
-      <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-[240px_1fr_1fr_1fr]">
-        <div className="rounded-lg border border-border bg-card p-2">
-          <TabBtn
-            active={tab === "calendario"}
-            onClick={() => setTab("calendario")}
-            icon={<CalendarDays className="h-4 w-4" />}
-          >
-            Calendário
-          </TabBtn>
-          <TabBtn
-            active={tab === "solicitacoes"}
-            onClick={() => setTab("solicitacoes")}
-            icon={<Users className="h-4 w-4" />}
-            showDot={pendentes > 0}
-          >
-            Solicitações
-          </TabBtn>
-          <TabBtn
-            active={tab === "disponibilidade"}
-            onClick={() => setTab("disponibilidade")}
-            icon={<Clock className="h-4 w-4" />}
-          >
-            Disponibilidade
-          </TabBtn>
-        </div>
-        <StatCard label="PRÓXIMAS" value={proximas} tone="text-foreground" />
-        <StatCard
-          label="CONFIRMADAS"
-          value={confirmadas}
-          tone="text-emerald-600 dark:text-emerald-400"
-        />
-        <StatCard label="PENDENTES" value={pendentes} tone="text-amber-600 dark:text-amber-400" />
+      <div className="mt-6 flex flex-row gap-1 rounded-lg border border-border bg-card p-2 lg:w-fit">
+        <TabBtn
+          active={tab === "calendario"}
+          onClick={() => setTab("calendario")}
+          icon={<CalendarDays className="h-4 w-4" />}
+        >
+          Calendário
+        </TabBtn>
+        <TabBtn
+          active={tab === "solicitacoes"}
+          onClick={() => setTab("solicitacoes")}
+          icon={<Users className="h-4 w-4" />}
+          showDot={pendentes > 0}
+        >
+          Solicitações
+        </TabBtn>
+        <TabBtn
+          active={tab === "disponibilidade"}
+          onClick={() => setTab("disponibilidade")}
+          icon={<Clock className="h-4 w-4" />}
+        >
+          Disponibilidade
+        </TabBtn>
       </div>
 
       {tab === "calendario" && (
@@ -396,27 +393,16 @@ function TabBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
         active
-          ? "bg-muted font-medium text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+          ? "bg-foreground font-medium text-background"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       {icon}
-      <span className="flex-1">{children}</span>
+      {children}
       {showDot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
     </button>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className={`mt-2 text-3xl font-semibold ${tone}`}>{value}</div>
-    </div>
   );
 }
 

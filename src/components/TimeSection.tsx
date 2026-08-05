@@ -60,6 +60,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useStorageSync } from "@/lib/use-storage-sync";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
+import AccordionGallery from "@/components/AccordionGallery";
+
+function initialsAvatar(name: string): string {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#27272a"/><text x="50%" y="50%" dy=".1em" font-family="sans-serif" font-size="150" font-weight="600" fill="#a1a1aa" text-anchor="middle" dominant-baseline="middle">${initials || "?"}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 function formatBirthday(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -438,33 +450,25 @@ export function TimeSection() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((m) => {
-              const canManage = isAdmin;
-              return (
-                <MemberCard
-                  key={m.id}
-                  m={m}
-                  isSelf={m.id === meId}
-                  canManage={canManage}
-                  onOpen={() => {
-                    if (canManage) {
-                      setEditing(m);
-                      setOpen(true);
-                    } else {
-                      setViewing(m);
-                    }
-                  }}
-                  onEdit={() => {
-                    setEditing(m);
-                    setOpen(true);
-                  }}
-                  onDelete={() => handleDelete(m.id)}
-                  onReset={() => handleReset(m.id)}
-                />
-              );
-            })}
-          </div>
+          <AccordionGallery
+            height={420}
+            accentColor="var(--foreground)"
+            overlayColor="var(--background)"
+            textColor="var(--foreground)"
+            grayscale={false}
+            items={filtered.map((m) => ({
+              image: m.photo || initialsAvatar(m.name),
+              label: m.name,
+              onSelect: () => {
+                if (isAdmin) {
+                  setEditing(m);
+                  setOpen(true);
+                } else {
+                  setViewing(m);
+                }
+              },
+            }))}
+          />
         )}
 
         <MemberDialog

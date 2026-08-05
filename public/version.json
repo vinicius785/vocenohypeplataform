@@ -1,9 +1,9 @@
 {
-  "version": "1.49.0",
+  "version": "1.50.0",
   "notes": [
-    "Remove o destaque giratório (CardSwap) da aba Projetos, que ficou ruim — volta à grade simples.",
-    "Todos os KPIs da plataforma (Time, Clientes, Campanhas, etc.) foram refeitos: visual minimalista e monocromático, sem caixas nem cores.",
-    "Aba Time reorganizada: título, busca e botão \"Novo membro\" no topo, cards de membro com efeito de vidro (glass), sem alternância de modo.",
-    "Corrige espaço vazio na galeria do Banco de Influenciadores, preenchendo o box por completo."
+    "Aba Projetos passa a usar o mesmo formato de lista com marquee no hover da aba Campanhas.",
+    "Aba Time ganha uma galeria em acordeão (expande ao passar o mouse), preservando as ações de administrador.",
+    "KPIs de Comercial e Financeiro refeitos no mesmo padrão minimalista e monocromático do restante da plataforma.",
+    "Aba Reuniões: KPIs no padrão da plataforma e menu interno em formato de pílula, igual ao das sub-abas de Configurações."
   ]
 }

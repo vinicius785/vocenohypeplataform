@@ -239,16 +239,12 @@ export function ComercialSection() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
         <Kpi label="Leads" value={String(totals.count)} />
         <Kpi label="Em aberto" value={String(totals.abertos)} />
         <Kpi label="Ganhos" value={formatBRL(totals.ganho)} />
         <Kpi label="Pipeline total" value={formatBRL(totals.total)} />
-        <Kpi
-          label={`Parados (${STALE_DAYS}+ dias)`}
-          value={String(totals.parados)}
-          tone={totals.parados > 0 ? "warning" : undefined}
-        />
+        <Kpi label={`Parados (${STALE_DAYS}+ dias)`} value={String(totals.parados)} />
       </div>
 
       {/* Board */}
@@ -323,19 +319,13 @@ export function ComercialSection() {
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: string; tone?: "warning" }) {
+function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`rounded-lg border p-3 ${
-        tone === "warning" ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-card"
-      }`}
-    >
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div
-        className={`mt-1 text-lg font-semibold ${tone === "warning" ? "text-amber-700 dark:text-amber-400" : ""}`}
-      >
-        {value}
-      </div>
+    <div className="flex items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
+      <span className="text-xl font-semibold tabular-nums text-foreground">{value}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
     </div>
   );
 }

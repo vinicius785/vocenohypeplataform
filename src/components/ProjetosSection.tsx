@@ -33,6 +33,7 @@ import {
   type ProjectLayout,
 } from "@/lib/projetos";
 import { SectionHeader } from "./SectionHeader";
+import FlowingMenu from "@/components/FlowingMenu";
 
 const FEATURE_ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   roadmap: Map,
@@ -127,20 +128,42 @@ export function ProjetosSection() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => (
-            <ProjectCard
-              key={p.id}
-              p={p}
-              onOpen={() => navigate({ to: "/projeto/$id", params: { id: p.id } })}
-              onEdit={() => {
-                setEditing(p);
-                setOpen(true);
-              }}
-              onDelete={() => setItems((prev) => prev.filter((x) => x.id !== p.id))}
-            />
-          ))}
-        </div>
+        <FlowingMenu
+          items={filtered.map((p) => ({
+            id: p.id,
+            text: p.name,
+            subtitle: `${p.description || "Sem descrição"} · ${p.features?.length ?? 0} funcionalidades`,
+            image: p.cover,
+            onSelect: () => navigate({ to: "/projeto/$id", params: { id: p.id } }),
+            rightSlot: (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditing(p);
+                    setOpen(true);
+                  }}
+                  aria-label="Editar"
+                  className="rounded-md bg-background/80 p-1.5 text-muted-foreground backdrop-blur hover:bg-muted hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setItems((prev) => prev.filter((x) => x.id !== p.id));
+                  }}
+                  aria-label="Remover"
+                  className="rounded-md bg-background/80 p-1.5 text-muted-foreground backdrop-blur hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ),
+          }))}
+        />
       )}
 
       {open && (
@@ -153,72 +176,6 @@ export function ProjetosSection() {
           onSave={handleSave}
         />
       )}
-    </div>
-  );
-}
-
-function ProjectCard({
-  p,
-  onOpen,
-  onEdit,
-  onDelete,
-}: {
-  p: Project;
-  onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="group overflow-hidden rounded-lg border border-border bg-background transition-shadow hover:shadow-md">
-      <button onClick={onOpen} className="block w-full text-left">
-        <div className="relative aspect-[16/9] w-full bg-muted">
-          {p.cover ? (
-            <img src={p.cover} alt={p.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <ImageIcon className="h-6 w-6 text-muted-foreground" />
-            </div>
-          )}
-        </div>
-      </button>
-      <div className="absolute right-2 top-2 hidden gap-1 group-hover:flex" />
-      <div className="relative p-4">
-        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={onEdit} aria-label="Editar" className="rounded p-1 hover:bg-muted">
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-          </button>
-          <button onClick={onDelete} aria-label="Remover" className="rounded p-1 hover:bg-muted">
-            <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-          </button>
-        </div>
-        <button onClick={onOpen} className="group/link flex items-center gap-1 text-left">
-          <p className="truncate text-sm font-medium text-foreground group-hover/link:underline">
-            {p.name}
-          </p>
-          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/link:opacity-100" />
-        </button>
-        {p.description && (
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
-        )}
-        {p.features.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1">
-            {p.features.map((f) => {
-              const meta = FEATURES.find((x) => x.key === f);
-              if (!meta) return null;
-              const Icon = FEATURE_ICONS[f];
-              return (
-                <span
-                  key={f}
-                  className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                >
-                  <Icon className="h-3 w-3" />
-                  {meta.label}
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
