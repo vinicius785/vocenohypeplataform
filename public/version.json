@@ -1,6 +1,6 @@
 {
-  "version": "1.54.1",
+  "version": "1.55.0",
   "notes": [
-    "Corrige lançamentos do Financeiro que apareciam na lista mas não abriam pra edição — acontecia com qualquer lançamento que chegasse por fora da própria tela (ex.: sincronização entre abas ou inserido diretamente no banco)."
+    "Corrige o filtro de mês em campanhas recorrentes: agora ele realmente restringe tarefas e influenciadores aos criados naquele mês (antes o seletor existia mas não filtrava nada)."
   ]
 }

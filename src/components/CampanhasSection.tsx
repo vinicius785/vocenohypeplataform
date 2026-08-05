@@ -267,6 +267,16 @@ function CampanhaDetail({
   const totalInflus = c.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
   const totalEnviar = c.linhas.reduce((s, l) => s + (l.enviar || 0), 0);
 
+  // Campanhas recorrentes reaproveitam a mesma página mês a mês — sem
+  // separar por mês de criação, tarefas e influenciadores de todos os
+  // ciclos ficavam empilhados juntos, misturando meses diferentes. O
+  // filtro de mês já existia no seletor mas nunca era de fato aplicado.
+  const inSelectedMonth = (createdAt: string | undefined) => {
+    if (!isRecorrente) return true;
+    if (!createdAt) return false;
+    return createdAt.slice(0, 7) === monthFilter;
+  };
+
   const [influs, setInflus] = useState<Influ[]>(() => normalizeInflus(loadCampanhaInflus(c.id)));
   const persistInflus = (next: Influ[]) => {
     setInflus(next);
@@ -284,19 +294,34 @@ function CampanhaDetail({
   };
   useEffect(() => onCampanhaDocsChange(() => setDocs(loadCampanhaDocs(c.id))), [c.id]);
 
+  // Só os influenciadores/tarefas criados dentro do mês selecionado (campanha
+  // recorrente). Passamos esse subconjunto pros componentes filhos, mas ao
+  // salvar reconciliamos de volta com os itens escondidos (`hiddenInflus`/
+  // `hiddenTasks`) — senão o onChange deles, construído só a partir do que
+  // recebeu, sobrescreveria a campanha inteira e apagaria os outros meses.
+  const visibleInflus = useMemo(
+    () => influs.filter((i) => inSelectedMonth(i.createdAt)),
+    [influs, monthFilter, isRecorrente],
+  );
+  const hiddenInflus = useMemo(
+    () => influs.filter((i) => !inSelectedMonth(i.createdAt)),
+    [influs, monthFilter, isRecorrente],
+  );
+  const persistVisibleInflus = (next: Influ[]) => persistInflus([...hiddenInflus, ...next]);
+
   // Approval metrics
-  const enviados = influs.filter((i) => i.status !== "Lista").length;
+  const enviados = visibleInflus.filter((i) => i.status !== "Lista").length;
   // Qualquer status a partir de "Aprovado" (Aguardando roteiro, Em gravação,
   // ..., Pago) já passou pela aprovação — continua contando como aprovado.
-  const aprovados = influs.filter((i) => canPublishEntrega(i.status)).length;
+  const aprovados = visibleInflus.filter((i) => canPublishEntrega(i.status)).length;
   // KPI reflete só a coluna "Enviado para aprovação" — antes também contava
   // "Aprovação de conteúdo" (etapa seguinte, já aprovado como influenciador),
   // o que inflava o número em relação ao que a coluna realmente mostra.
-  const emAprovacao = influs.filter((i) => i.status === "Enviado para aprovação").length;
+  const emAprovacao = visibleInflus.filter((i) => i.status === "Enviado para aprovação").length;
 
   // Budget
   const orcamento = parseMoney(c.orcamento);
-  const gasto = influs.reduce((sum, i) => sum + totalAceito(i.entregas), 0);
+  const gasto = visibleInflus.reduce((sum, i) => sum + totalAceito(i.entregas), 0);
   const disponivel = Math.max(0, orcamento - gasto);
   const pctGasto = orcamento > 0 ? Math.min(100, (gasto / orcamento) * 100) : 0;
   const overBudget = orcamento > 0 && gasto > orcamento;
@@ -308,6 +333,16 @@ function CampanhaDetail({
     saveCampanhaTarefas(c.id, next);
   };
   useEffect(() => onCampanhaTarefasChange(() => setTasks(loadCampanhaTarefas(c.id))), [c.id]);
+
+  const visibleTasks = useMemo(
+    () => tasks.filter((t) => inSelectedMonth(t.createdAt)),
+    [tasks, monthFilter, isRecorrente],
+  );
+  const hiddenTasks = useMemo(
+    () => tasks.filter((t) => !inSelectedMonth(t.createdAt)),
+    [tasks, monthFilter, isRecorrente],
+  );
+  const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
   // Public approval links — tie client responses back into the influencer's
   // status (and therefore the campaign KPIs above) as soon as they come in.
@@ -474,16 +509,16 @@ function CampanhaDetail({
       </section>
 
       <TaskBoard
-        tasks={tasks}
-        onChange={persistTasks}
+        tasks={visibleTasks}
+        onChange={persistVisibleTasks}
         scope={{ kind: "campanha", id: c.id }}
         initialOpenTaskId={initialTaskId}
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
       <InfluencerBoard
-        influs={influs}
-        onChange={persistInflus}
+        influs={visibleInflus}
+        onChange={persistVisibleInflus}
         exportName={c.nome}
         approvalStatusFor={approvalStatusFor}
         pagGrupos={normalizeCampaignPagGrupos(c)}
@@ -496,7 +531,7 @@ function CampanhaDetail({
                 setApprovalDialogOpen(true);
                 closeMenu();
               }}
-              disabled={influs.length === 0}
+              disabled={visibleInflus.length === 0}
               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Share2 className="h-3.5 w-3.5" />
@@ -509,7 +544,7 @@ function CampanhaDetail({
                 setApprovalDialogOpen(true);
                 closeMenu();
               }}
-              disabled={influs.length === 0}
+              disabled={visibleInflus.length === 0}
               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Eye className="h-3.5 w-3.5" />
@@ -523,7 +558,7 @@ function CampanhaDetail({
         open={approvalDialogOpen}
         onOpenChange={setApprovalDialogOpen}
         initialMode={approvalInitialMode}
-        influs={influs}
+        influs={visibleInflus}
         campanhaId={c.id}
         campanhaNome={c.nome}
         clienteNome={cliente.empresa}
@@ -531,7 +566,7 @@ function CampanhaDetail({
         onCreated={refreshApprovals}
       />
 
-      <GaleriaConteudosSection influs={influs} />
+      <GaleriaConteudosSection influs={visibleInflus} />
 
       <Dialog open={openPanel === "documentos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
         <DialogContent className="max-w-xl border-border bg-card">
@@ -553,7 +588,7 @@ function CampanhaDetail({
           <DialogDescription className="sr-only">
             Datas e prazos importantes da campanha.
           </DialogDescription>
-          <CampaignCalendar campanha={c} influs={influs} />
+          <CampaignCalendar campanha={c} influs={visibleInflus} />
         </DialogContent>
       </Dialog>
 
