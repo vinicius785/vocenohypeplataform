@@ -1,6 +1,6 @@
 {
-  "version": "1.45.2",
+  "version": "1.46.0",
   "notes": [
-    "Volta a paleta monocromática (preto/branco/cinza) — remove o roxo de destaque introduzido na versão anterior."
+    "Banco de influenciadores ganha uma galeria 3D (DriftWall) com foto e nome como visão padrão, com opção de alternar para a lista completa com busca, filtro por nicho e confiabilidade."
   ]
 }
