@@ -178,6 +178,7 @@ type PeerLink = {
   makingOffer: boolean;
   ignoreOffer: boolean;
   iceFailureRetried: boolean;
+  connectTimeout: number | null;
 };
 const peers = new Map<string, PeerLink>();
 
@@ -269,6 +270,7 @@ function startRing(pattern: "outgoing" | "incoming") {
 function closePeer(peerId: string) {
   const link = peers.get(peerId);
   if (!link) return;
+  clearConnectTimeout(link);
   link.pc.close();
   link.remoteStream.getTracks().forEach((t) => t.stop());
   link.remoteScreenStream?.getTracks().forEach((t) => t.stop());
@@ -310,6 +312,7 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
     makingOffer: false,
     ignoreOffer: false,
     iceFailureRetried: false,
+    connectTimeout: null,
   };
   peers.set(peerId, link);
 
@@ -354,6 +357,7 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === "connected") {
+      clearConnectTimeout(link);
       patchParticipant(peerId, { status: "connected" });
       if (state.status !== "idle" && !state.connectedAt)
         patch({ status: "in-call", connectedAt: Date.now(), error: undefined });
@@ -363,11 +367,34 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
         link.iceFailureRetried = true;
         pc.restartIce();
       } else {
+        clearConnectTimeout(link);
         patchParticipant(peerId, { status: "failed" });
       }
     }
   };
   return link;
+}
+
+/** Sem isso, qualquer coisa que travasse a negociação sem lançar um erro
+ * "pegável" (ICE que nunca resolve nem pra "connected" nem pra "failed" —
+ * comum atrás de NAT/firewall difícil, mesmo com TURN) deixava a pessoa
+ * presa em "Conectando..." pra sempre, sem nenhum jeito de perceber que
+ * travou ou tentar de novo. 20s é folgado o bastante pra ICE real (que
+ * normalmente resolve em poucos segundos) sem deixar a UI pendurada. */
+function armConnectTimeout(peerId: string, link: PeerLink) {
+  clearConnectTimeout(link);
+  link.connectTimeout = window.setTimeout(() => {
+    link.connectTimeout = null;
+    if (link.pc.connectionState !== "connected") {
+      patchParticipant(peerId, { status: "failed" });
+    }
+  }, 20_000);
+}
+function clearConnectTimeout(link: PeerLink) {
+  if (link.connectTimeout !== null) {
+    window.clearTimeout(link.connectTimeout);
+    link.connectTimeout = null;
+  }
 }
 
 /**
@@ -456,6 +483,7 @@ function fail(error: unknown) {
  * então nunca há duas ofertas cruzadas pro mesmo par. */
 async function connectToExistingPeer(peerId: string, callId: string) {
   const link = createPeerLink(peerId, callId);
+  armConnectTimeout(peerId, link);
   await acquireAudio();
   attachLocalTracksTo(link);
 }
@@ -539,6 +567,7 @@ async function handle(signal: Signal) {
     if (state.status === "ringing-out") patch({ status: "in-call" });
     try {
       const link = createPeerLink(signal.fromUserId, state.callId);
+      armConnectTimeout(signal.fromUserId, link);
       await acquireAudio();
       attachLocalTracksTo(link);
       // Só o host coordena o roster da sala (evita duas fontes de verdade).
@@ -567,6 +596,7 @@ async function handle(signal: Signal) {
       }
     } catch (error) {
       fail(error);
+      patchParticipant(signal.fromUserId, { status: "failed" });
     }
     return;
   }
@@ -582,7 +612,10 @@ async function handle(signal: Signal) {
           },
         });
       }
-      await connectToExistingPeer(p.userId, state.callId).catch(fail);
+      await connectToExistingPeer(p.userId, state.callId).catch((error) => {
+        fail(error);
+        patchParticipant(p.userId, { status: "failed" });
+      });
     }
     return;
   }
@@ -603,6 +636,7 @@ async function handle(signal: Signal) {
   if (signal.type === "offer" && signal.sdp) {
     try {
       const link = createPeerLink(signal.fromUserId, state.callId);
+      if (link.pc.connectionState !== "connected") armConnectTimeout(signal.fromUserId, link);
       const offerCollision =
         signal.type === "offer" && (link.makingOffer || link.pc.signalingState !== "stable");
       link.ignoreOffer = !link.polite && offerCollision;
@@ -628,6 +662,13 @@ async function handle(signal: Signal) {
       });
     } catch (error) {
       fail(error);
+      // Uma renegociação (câmera/tela ligando no meio da chamada) que falha
+      // não deve derrubar uma ligação que já está de pé — só marca "failed"
+      // se a conexão de fato nunca chegou a se estabelecer.
+      const link = peers.get(signal.fromUserId);
+      if (!link || link.pc.connectionState !== "connected") {
+        patchParticipant(signal.fromUserId, { status: "failed" });
+      }
     }
     return;
   }
@@ -762,11 +803,13 @@ export async function acceptCall() {
   patchParticipant(hostId, { status: "connecting" });
   try {
     const link = createPeerLink(hostId, callId);
+    armConnectTimeout(hostId, link);
     await acquireAudio();
     attachLocalTracksTo(link);
     await send({ type: "accept", callId, toUserId: hostId });
   } catch (error) {
     fail(error);
+    patchParticipant(hostId, { status: "failed" });
   }
 }
 export function rejectCall() {
