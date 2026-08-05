@@ -503,20 +503,11 @@ export function InicioDashboard() {
 
       {/* Stat strip */}
       {visible.stats && (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <StatChip icon={<Clock className="h-3.5 w-3.5" />} label="Hoje" value={hoje} />
-          <StatChip icon={<Calendar className="h-3.5 w-3.5" />} label="Amanhã" value={amanha} />
-          <StatChip
-            icon={<Target className="h-3.5 w-3.5" />}
-            label="7 dias"
-            value={semana + hoje + amanha}
-          />
-          <StatChip
-            icon={<TrendingUp className="h-3.5 w-3.5" />}
-            label="Atrasadas"
-            value={atrasadas}
-            tone={atrasadas > 0 ? "danger" : "default"}
-          />
+        <div className="flex flex-wrap gap-x-6 gap-y-3">
+          <StatChip label="Hoje" value={hoje} />
+          <StatChip label="Amanhã" value={amanha} />
+          <StatChip label="7 dias" value={semana + hoje + amanha} />
+          <StatChip label="Atrasadas" value={atrasadas} />
         </div>
       )}
 
@@ -751,13 +742,13 @@ export function InicioDashboard() {
             <div className="grid grid-cols-2 divide-x divide-border">
               <div className="px-4 py-3">
                 <p className="text-[11px] text-muted-foreground">Receita</p>
-                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-emerald-600">
+                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
                   {fmtBRL(financeiroMes.receita)}
                 </p>
               </div>
               <div className="px-4 py-3">
                 <p className="text-[11px] text-muted-foreground">Despesa</p>
-                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-destructive">
+                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
                   {fmtBRL(financeiroMes.despesa)}
                 </p>
               </div>
@@ -899,8 +890,10 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        active
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       {children}
@@ -909,36 +902,21 @@ function Tab({
 }
 
 function StatChip({
-  icon,
   label,
   value,
-  tone = "default",
 }: {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   value: number;
   tone?: "default" | "danger";
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5">
-      <div className="flex items-center gap-2">
-        <span
-          className={`flex h-6 w-6 items-center justify-center rounded-md ${
-            tone === "danger"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {icon}
-        </span>
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <span
-        className={`text-lg font-semibold tabular-nums ${
-          tone === "danger" && value > 0 ? "text-destructive" : "text-foreground"
-        }`}
-      >
+    <div className="flex items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
+      <span className="text-xl font-semibold tabular-nums text-foreground">
         {value.toString().padStart(2, "0")}
+      </span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
       </span>
     </div>
   );

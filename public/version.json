@@ -1,9 +1,6 @@
 {
-  "version": "1.50.0",
+  "version": "1.51.0",
   "notes": [
-    "Aba Projetos passa a usar o mesmo formato de lista com marquee no hover da aba Campanhas.",
-    "Aba Time ganha uma galeria em acordeão (expande ao passar o mouse), preservando as ações de administrador.",
-    "KPIs de Comercial e Financeiro refeitos no mesmo padrão minimalista e monocromático do restante da plataforma.",
-    "Aba Reuniões: KPIs no padrão da plataforma e menu interno em formato de pílula, igual ao das sub-abas de Configurações."
+    "Aba Início redesenhada: KPIs no mesmo padrão minimalista e monocromático da plataforma, e filtros internos (Hoje/Atrasadas/Semana) em formato de pílula."
   ]
 }
