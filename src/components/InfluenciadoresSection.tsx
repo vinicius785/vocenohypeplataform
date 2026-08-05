@@ -429,10 +429,12 @@ export function InfluenciadoresSection() {
               title: i.nome || "Sem nome",
               onClick: () => setDetail(i),
             }))}
-            columns={Math.min(5, Math.max(2, filtered.length))}
+            columns={Math.max(6, filtered.length)}
             tileWidth={160}
             tileHeight={160}
             speed={30}
+            tilt={8}
+            turn={0}
             overlayColor="var(--muted)"
           />
         </div>

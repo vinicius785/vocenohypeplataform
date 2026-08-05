@@ -28,18 +28,16 @@ export function SectionHeader({
       </div>
 
       {kpis && kpis.length > 0 && (
-        <div className="mt-6 flex flex-wrap gap-3">
-          {kpis.map((k) => (
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3">
+          {kpis.map((k, i) => (
             <div
               key={k.label}
-              className="min-w-[160px] flex-1 rounded-lg border border-border bg-card p-4"
+              className={`flex items-baseline gap-2 ${i > 0 ? "border-l border-border pl-6" : ""}`}
             >
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="text-xl font-semibold tabular-nums text-foreground">{k.value}</span>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 {k.label}
-              </div>
-              <div className={`mt-2 text-3xl font-semibold ${k.tone ?? "text-foreground"}`}>
-                {k.value}
-              </div>
+              </span>
             </div>
           ))}
         </div>

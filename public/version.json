@@ -1,8 +1,9 @@
 {
-  "version": "1.48.0",
+  "version": "1.49.0",
   "notes": [
-    "Aba Time volta a um formato de galeria minimalista, sem animação — remove a faixa \"Você no Hype\" e a galeria 3D.",
-    "Banco de influenciadores mostra KPIs, galeria e lista completa com filtros sempre juntos, sem precisar alternar entre visões.",
-    "Aba Projetos ganha um destaque no topo com os projetos mais recentes girando (CardSwap), mantendo a grade completa com busca abaixo."
+    "Remove o destaque giratório (CardSwap) da aba Projetos, que ficou ruim — volta à grade simples.",
+    "Todos os KPIs da plataforma (Time, Clientes, Campanhas, etc.) foram refeitos: visual minimalista e monocromático, sem caixas nem cores.",
+    "Aba Time reorganizada: título, busca e botão \"Novo membro\" no topo, cards de membro com efeito de vidro (glass), sem alternância de modo.",
+    "Corrige espaço vazio na galeria do Banco de Influenciadores, preenchendo o box por completo."
   ]
 }

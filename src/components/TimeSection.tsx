@@ -16,11 +16,9 @@ import {
   Copy,
   Clock,
   Users as UsersIcon,
-  LayoutGrid,
 } from "lucide-react";
 
 import { useServerFn } from "@tanstack/react-start";
-import { SectionHeader } from "./SectionHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
   type Permission,
@@ -131,7 +129,6 @@ export function TimeSection() {
   );
   const [isAdmin, setIsAdmin] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
-  const [showManage, setShowManage] = useState(false);
   const [, forcePresence] = useState(0);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -328,85 +325,37 @@ export function TimeSection() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
-        {showManage ? (
-          <SectionHeader
-            title="Time"
-            subtitle={`${members.length} ${members.length === 1 ? "membro" : "membros"} no workspace`}
-            kpis={[
-              { label: "Membros", value: members.length },
-              { label: "Administradores", value: adminCount },
-              {
-                label: "Online agora",
-                value: onlineCount,
-                tone: onlineCount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
-              },
-            ]}
-            action={
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Buscar por nome, cargo ou email"
-                    className="h-9 w-40 pl-8 text-xs sm:w-56"
-                  />
-                </div>
-                <Button size="sm" variant="outline" onClick={() => setShowManage((v) => !v)}>
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                  Ver galeria
-                </Button>
-                {isAdmin && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setEditing(null);
-                      setOpen(true);
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Novo membro
-                  </Button>
-                )}
-              </div>
-            }
-          />
-        ) : (
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Time</h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border border-border bg-muted/50 px-2.5 py-1 font-medium">
-                  {members.length} {members.length === 1 ? "membro" : "membros"}
-                </span>
-                <span
-                  className={`rounded-full border px-2.5 py-1 font-medium ${
-                    onlineCount > 0
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                      : "border-border bg-muted/50"
-                  }`}
-                >
-                  {onlineCount} online agora
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar por nome, cargo ou email"
-                  className="h-9 w-40 pl-8 text-xs sm:w-56"
-                />
-              </div>
-              <Button size="sm" variant="outline" onClick={() => setShowManage((v) => !v)}>
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Gerenciar membros
-              </Button>
-            </div>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Time</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {members.length} {members.length === 1 ? "membro" : "membros"} no workspace
+            </p>
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nome, cargo ou email"
+                className="h-9 w-40 pl-8 text-xs sm:w-56"
+              />
+            </div>
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditing(null);
+                  setOpen(true);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Novo membro
+              </Button>
+            )}
+          </div>
+        </div>
 
         {error && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
@@ -464,102 +413,59 @@ export function TimeSection() {
           </div>
         )}
 
-        {!showManage &&
-          (loading ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="aspect-square animate-pulse rounded-xl bg-muted/30" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
-              <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-              <p className="mt-3 text-sm text-muted-foreground">
-                {members.length === 0
-                  ? "Nenhum membro ainda."
-                  : "Nenhum resultado para essa busca."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {filtered.map((m) => (
-                <button
+        {loading ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[132px] animate-pulse rounded-xl border border-border bg-muted/30"
+              />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
+            <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              {members.length === 0 ? "Nenhum membro ainda." : "Nenhum resultado para essa busca."}
+            </p>
+            {members.length === 0 && isAdmin && (
+              <button
+                onClick={() => setOpen(true)}
+                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
+              >
+                Adicionar o primeiro
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((m) => {
+              const canManage = isAdmin;
+              return (
+                <MemberCard
                   key={m.id}
-                  type="button"
-                  onClick={() => setViewing(m)}
-                  className="group flex flex-col items-center gap-2 text-center"
-                >
-                  <div className="aspect-square w-full overflow-hidden rounded-xl bg-muted">
-                    {m.photo ? (
-                      <img src={m.photo} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-2xl font-semibold text-muted-foreground">
-                        {m.name.charAt(0).toUpperCase() || "?"}
-                      </div>
-                    )}
-                  </div>
-                  <span className="truncate text-sm font-medium text-foreground">{m.name}</span>
-                </button>
-              ))}
-            </div>
-          ))}
-
-        {showManage &&
-          (loading ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-[132px] animate-pulse rounded-xl border border-border bg-muted/30"
-                />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
-              <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-              <p className="mt-3 text-sm text-muted-foreground">
-                {members.length === 0
-                  ? "Nenhum membro ainda."
-                  : "Nenhum resultado para essa busca."}
-              </p>
-              {members.length === 0 && isAdmin && (
-                <button
-                  onClick={() => setOpen(true)}
-                  className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
-                >
-                  Adicionar o primeiro
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((m) => {
-                const canManage = isAdmin;
-                return (
-                  <MemberCard
-                    key={m.id}
-                    m={m}
-                    isSelf={m.id === meId}
-                    canManage={canManage}
-                    onOpen={() => {
-                      if (canManage) {
-                        setEditing(m);
-                        setOpen(true);
-                      } else {
-                        setViewing(m);
-                      }
-                    }}
-                    onEdit={() => {
+                  m={m}
+                  isSelf={m.id === meId}
+                  canManage={canManage}
+                  onOpen={() => {
+                    if (canManage) {
                       setEditing(m);
                       setOpen(true);
-                    }}
-                    onDelete={() => handleDelete(m.id)}
-                    onReset={() => handleReset(m.id)}
-                  />
-                );
-              })}
-            </div>
-          ))}
+                    } else {
+                      setViewing(m);
+                    }
+                  }}
+                  onEdit={() => {
+                    setEditing(m);
+                    setOpen(true);
+                  }}
+                  onDelete={() => handleDelete(m.id)}
+                  onReset={() => handleReset(m.id)}
+                />
+              );
+            })}
+          </div>
+        )}
 
         <MemberDialog
           open={open}
@@ -632,7 +538,7 @@ function MemberCard({
           onOpen();
         }
       }}
-      className="group relative cursor-pointer rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+      className="group relative cursor-pointer rounded-xl border border-white/10 bg-card/60 p-4 text-left shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-foreground/30 hover:bg-card/80 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
     >
       <div className="flex items-start gap-3">
         <div className="relative shrink-0">
