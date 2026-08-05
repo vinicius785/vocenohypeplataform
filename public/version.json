@@ -1,6 +1,6 @@
 {
-  "version": "1.53.0",
+  "version": "1.54.0",
   "notes": [
-    "Correções de responsividade mobile: KPIs não quebram mais linha (rolagem horizontal), galeria em acordeão da aba Time seleciona com um toque só (sem precisar tocar duas vezes), e botões de ação que só apareciam no hover do mouse agora ficam visíveis em telas touch."
+    "Financeiro ganha \"Importar lista\": cole uma lista copiada do ClickUp (ou de qualquer planilha), mapeie as colunas (descrição, status, valor, data) e importe vários lançamentos de uma vez, em vez de digitar um por um."
   ]
 }
