@@ -3,6 +3,8 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { useBorderGlowVars } from "@/components/BorderGlow";
+import "@/components/BorderGlow.css";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -28,21 +30,39 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
-      <AlertDialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          "relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-          className,
-        )}
-        {...props}
-      />
-    </div>
-  </AlertDialogPortal>
-));
+>(({ className, ...props }, ref) => {
+  const glow = useBorderGlowVars({
+    borderRadius: 8,
+    glowRadius: 24,
+    glowIntensity: 0.7,
+    colors: ["#8b5cf6", "#ec4899", "#38bdf8"],
+    glowColor: "280 85% 70%",
+  });
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+        <AlertDialogPrimitive.Content
+          ref={(node) => {
+            glow.ref.current = node;
+            if (typeof ref === "function") ref(node);
+            else if (ref) (ref as React.MutableRefObject<typeof node>).current = node;
+          }}
+          onPointerMove={glow.onPointerMove}
+          style={glow.style}
+          className={cn(
+            "border-glow-card relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+            className,
+          )}
+          {...props}
+        >
+          <span className="edge-light" />
+          {props.children}
+        </AlertDialogPrimitive.Content>
+      </div>
+    </AlertDialogPortal>
+  );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

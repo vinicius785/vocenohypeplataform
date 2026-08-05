@@ -81,6 +81,71 @@ function animateValue({
   setTimeout(() => requestAnimationFrame(tick), delay);
 }
 
+export function useBorderGlowVars({
+  glowColor = "40 80 80",
+  backgroundColor = "#120F17",
+  borderRadius = 28,
+  glowRadius = 40,
+  glowIntensity = 1.0,
+  edgeSensitivity = 30,
+  coneSpread = 25,
+  colors = ["#c084fc", "#f472b6", "#38bdf8"],
+  fillOpacity = 0.5,
+}: Partial<
+  Pick<
+    BorderGlowProps,
+    | "glowColor"
+    | "backgroundColor"
+    | "borderRadius"
+    | "glowRadius"
+    | "glowIntensity"
+    | "edgeSensitivity"
+    | "coneSpread"
+    | "colors"
+    | "fillOpacity"
+  >
+> = {}) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const card = ref.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const dx = x - cx;
+    const dy = y - cy;
+    let kx = Infinity;
+    let ky = Infinity;
+    if (dx !== 0) kx = cx / Math.abs(dx);
+    if (dy !== 0) ky = cy / Math.abs(dy);
+    const edge = Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+    let degrees = 0;
+    if (dx !== 0 || dy !== 0) {
+      degrees = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+      if (degrees < 0) degrees += 360;
+    }
+    card.style.setProperty("--edge-proximity", `${(edge * 100).toFixed(3)}`);
+    card.style.setProperty("--cursor-angle", `${degrees.toFixed(3)}deg`);
+  }, []);
+
+  const glowVars = buildGlowVars(glowColor, glowIntensity);
+  const style = {
+    "--card-bg": backgroundColor,
+    "--edge-sensitivity": edgeSensitivity,
+    "--border-radius": `${borderRadius}px`,
+    "--glow-padding": `${glowRadius}px`,
+    "--cone-spread": coneSpread,
+    "--fill-opacity": fillOpacity,
+    ...glowVars,
+    ...buildGradientVars(colors),
+  } as CSSProperties;
+
+  return { ref, onPointerMove, style };
+}
+
 export type BorderGlowProps = {
   children: ReactNode;
   className?: string;

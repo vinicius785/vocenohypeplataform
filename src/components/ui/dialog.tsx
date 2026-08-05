@@ -5,6 +5,8 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useBorderGlowVars } from "@/components/BorderGlow";
+import "@/components/BorderGlow.css";
 
 const Dialog = DialogPrimitive.Root;
 
@@ -32,32 +34,48 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    {/* O centering por `top-50%/translate(-50%,-50%)` deixava diálogos altos
-     * (ou telas curtas) com o topo negativo/fora da tela, cortados embaixo —
-     * um wrapper flex que centraliza e nunca deixa passar da viewport é
-     * bem mais robusto, e não depende de cada consumidor lembrar de somar
-     * seu próprio max-height. */}
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          "relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
-      </DialogPrimitive.Content>
-    </div>
-  </DialogPortal>
-));
+>(({ className, children, ...props }, ref) => {
+  const glow = useBorderGlowVars({
+    borderRadius: 8,
+    glowRadius: 24,
+    glowIntensity: 0.7,
+    colors: ["#8b5cf6", "#ec4899", "#38bdf8"],
+    glowColor: "280 85% 70%",
+  });
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      {/* O centering por `top-50%/translate(-50%,-50%)` deixava diálogos altos
+       * (ou telas curtas) com o topo negativo/fora da tela, cortados embaixo —
+       * um wrapper flex que centraliza e nunca deixa passar da viewport é
+       * bem mais robusto, e não depende de cada consumidor lembrar de somar
+       * seu próprio max-height. */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+        <DialogPrimitive.Content
+          ref={(node) => {
+            glow.ref.current = node;
+            if (typeof ref === "function") ref(node);
+            else if (ref) (ref as React.MutableRefObject<typeof node>).current = node;
+          }}
+          onPointerMove={glow.onPointerMove}
+          style={glow.style}
+          className={cn(
+            "border-glow-card relative my-auto grid max-h-[calc(100vh-2rem)] w-full max-w-lg gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+            className,
+          )}
+          {...props}
+        >
+          <span className="edge-light" />
+          {children}
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </DialogPrimitive.Content>
+      </div>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
