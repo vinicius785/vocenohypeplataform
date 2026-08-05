@@ -1,6 +1,6 @@
 {
-  "version": "1.45.1",
+  "version": "1.45.2",
   "notes": [
-    "Remove o efeito colorido/vidro (BorderGlow) dos popups e formulários, mantendo só a borda roxa sutil de destaque."
+    "Volta a paleta monocromática (preto/branco/cinza) — remove o roxo de destaque introduzido na versão anterior."
   ]
 }
