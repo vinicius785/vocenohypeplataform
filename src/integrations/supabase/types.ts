@@ -33,6 +33,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      bug_reports: {
+        Row: {
+          created_at: string;
+          description: string;
+          id: string;
+          page_context: string | null;
+          reporter_id: string;
+          reporter_name: string;
+          screenshot_path: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          description: string;
+          id?: string;
+          page_context?: string | null;
+          reporter_id: string;
+          reporter_name?: string;
+          screenshot_path?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          description?: string;
+          id?: string;
+          page_context?: string | null;
+          reporter_id?: string;
+          reporter_name?: string;
+          screenshot_path?: string | null;
+        };
+        Relationships: [];
+      };
       campanha_documentos: {
         Row: {
           campanha_id: string;

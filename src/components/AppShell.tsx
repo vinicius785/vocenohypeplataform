@@ -37,6 +37,7 @@ import { SidebarProfile } from "./ConfiguracoesSection";
 import { CreateChannelModal } from "./CreateChannelModal";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
+import { BugReportButton } from "./BugReportButton";
 import { VersionWatcher } from "./VersionWatcher";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
@@ -282,6 +283,7 @@ export function AppShell({
       <BomDiaDialog />
       <VersionWatcher />
       <MeetingReminderToast />
+      <BugReportButton />
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
