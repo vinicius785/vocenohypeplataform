@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import StepIndicator from "@/components/StepIndicator";
 import {
   AlertTriangle,
@@ -28,7 +29,6 @@ import {
   Phone,
   Plus,
   Search,
-  Share2,
   Trash2,
   Twitter,
   Upload,
@@ -142,6 +142,27 @@ export type PostMetrics = {
   shares?: number;
   saves?: number;
   reach?: number;
+};
+
+/** Uma fatia de distribuição demográfica (ex: "18-24 anos" → 32%). */
+export type DemographicEntry = { id: string; label: string; percentual: number };
+
+/**
+ * Métricas do perfil do influenciador em si (não de uma entrega/post
+ * específico) — seguidores, engajamento agregado e composição do público.
+ * Preenchido manualmente a partir dos insights nativos da rede social.
+ */
+export type ProfileMetrics = {
+  seguidores?: number;
+  interacoes?: number;
+  visualizacoes?: number;
+  /** % */
+  taxaInteracao?: number;
+  /** % — retenção nos primeiros segundos/scroll do conteúdo. */
+  taxaAtencaoInicial?: number;
+  faixaEtaria?: DemographicEntry[];
+  paises?: DemographicEntry[];
+  cidades?: DemographicEntry[];
 };
 /**
  * Formas de pagamento — mesmas opções e campos usados ao configurar o
@@ -469,6 +490,7 @@ export type Influ = {
   email?: string;
   redes: Rede[];
   entregas: Entrega[];
+  profileMetrics?: ProfileMetrics;
   contrato?: string;
   status: InfluStatus;
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
@@ -599,13 +621,19 @@ export type InfluencerFieldKey =
   | "pagamentos"
   | "bancario"
   | "contrato"
-  | "status";
+  | "status"
+  | "metricas";
 
 export const INFLUENCER_FIELDS: { key: InfluencerFieldKey; label: string; hint: string }[] = [
   {
     key: "redes",
     label: "Redes sociais",
     hint: "Instagram, TikTok, YouTube e outras, com handle.",
+  },
+  {
+    key: "metricas",
+    label: "Métricas do perfil",
+    hint: "Seguidores, interações, alcance e demografia do público, com gráficos.",
   },
   {
     key: "entregas",
@@ -728,6 +756,200 @@ function MetricsEditor({
           />
         </label>
       ))}
+    </div>
+  );
+}
+
+/** Lista editável de fatias demográficas (ex: faixa etária → %), com um
+ * gráfico de barras horizontal logo abaixo que atualiza em tempo real. */
+function DemographicEntriesEditor({
+  title,
+  placeholder,
+  entries,
+  onChange,
+}: {
+  title: string;
+  placeholder: string;
+  entries: DemographicEntry[];
+  onChange: (entries: DemographicEntry[]) => void;
+}) {
+  const chartData = entries
+    .filter((e) => e.label.trim())
+    .map((e) => ({ name: e.label, valor: e.percentual }))
+    .sort((a, b) => b.valor - a.valor);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-medium text-muted-foreground">{title}</p>
+      <div className="space-y-1.5">
+        {entries.map((entry) => (
+          <div key={entry.id} className="flex items-center gap-2">
+            <input
+              value={entry.label}
+              onChange={(e) =>
+                onChange(
+                  entries.map((x) => (x.id === entry.id ? { ...x, label: e.target.value } : x)),
+                )
+              }
+              placeholder={placeholder}
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex shrink-0 items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={entry.percentual || ""}
+                onChange={(e) =>
+                  onChange(
+                    entries.map((x) =>
+                      x.id === entry.id ? { ...x, percentual: Number(e.target.value) || 0 } : x,
+                    ),
+                  )
+                }
+                className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+            </div>
+            <RemoveBtn onClick={() => onChange(entries.filter((x) => x.id !== entry.id))} />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          onChange([...entries, { id: crypto.randomUUID(), label: "", percentual: 0 }])
+        }
+        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-transparent px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+      >
+        <Plus className="h-3 w-3" /> Adicionar
+      </button>
+      {chartData.length > 0 && (
+        <div className="h-[100px] w-full pt-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 12 }}>
+              <CartesianGrid horizontal={false} strokeOpacity={0.15} />
+              <XAxis type="number" domain={[0, 100]} hide />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={90}
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Gráfico de barras horizontal somente-leitura para uma distribuição
+ * demográfica — usado no resumo do perfil (fora do modo de edição). */
+function DemographicChart({ title, entries }: { title: string; entries?: DemographicEntry[] }) {
+  const data = (entries ?? [])
+    .filter((e) => e.label.trim() && e.percentual > 0)
+    .map((e) => ({ name: e.label, valor: e.percentual }))
+    .sort((a, b) => b.valor - a.valor);
+  if (data.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="h-[90px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }}>
+            <CartesianGrid horizontal={false} strokeOpacity={0.15} />
+            <XAxis type="number" domain={[0, 100]} hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={90}
+              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+/** Editor das métricas do perfil do influenciador (não de uma entrega
+ * específica): números agregados de audiência/engajamento + composição
+ * demográfica do público, cada bloco demográfico com seu próprio gráfico. */
+function ProfileMetricsEditor({
+  value,
+  onChange,
+}: {
+  value?: ProfileMetrics;
+  onChange: (m: ProfileMetrics) => void;
+}) {
+  const m = value ?? {};
+  const set = (patch: Partial<ProfileMetrics>) => onChange({ ...m, ...patch });
+
+  const SCALAR_FIELDS: { key: keyof ProfileMetrics; label: string; suffix?: string }[] = [
+    { key: "seguidores", label: "Seguidores" },
+    { key: "interacoes", label: "Interações" },
+    { key: "visualizacoes", label: "Visualizações" },
+    { key: "taxaInteracao", label: "Taxa de interação", suffix: "%" },
+    { key: "taxaAtencaoInicial", label: "Taxa de atenção inicial", suffix: "%" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {SCALAR_FIELDS.map((f) => (
+          <label key={f.key} className="space-y-1">
+            <span className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+              {f.label}
+            </span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                value={(m[f.key] as number | undefined) ?? ""}
+                onChange={(e) =>
+                  set({ [f.key]: e.target.value === "" ? undefined : Number(e.target.value) })
+                }
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              />
+              {f.suffix && <span className="text-xs text-muted-foreground">{f.suffix}</span>}
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <div className="space-y-4 border-t border-border pt-4">
+        <FieldLabel
+          title="Demografia do público"
+          hint="Distribuição percentual do público real do influenciador, por faixa etária, país e cidade."
+        />
+        <DemographicEntriesEditor
+          title="Faixa etária"
+          placeholder="Ex: 18-24 anos"
+          entries={m.faixaEtaria ?? []}
+          onChange={(faixaEtaria) => set({ faixaEtaria })}
+        />
+        <DemographicEntriesEditor
+          title="Principais países"
+          placeholder="Ex: Brasil"
+          entries={m.paises ?? []}
+          onChange={(paises) => set({ paises })}
+        />
+        <DemographicEntriesEditor
+          title="Principais cidades"
+          placeholder="Ex: São Paulo"
+          entries={m.cidades ?? []}
+          onChange={(cidades) => set({ cidades })}
+        />
+      </div>
     </div>
   );
 }
@@ -1872,8 +2094,20 @@ function InfluencerProfileDialog({
   );
   const hasMetrics = Object.values(metricsTotal).some((v) => v > 0);
   const reliability = computeReliability(influ.entregas);
+  const pm = influ.profileMetrics;
+  const hasProfileMetrics = Boolean(
+    pm &&
+    (pm.seguidores ||
+      pm.interacoes ||
+      pm.visualizacoes ||
+      pm.taxaInteracao ||
+      pm.taxaAtencaoInicial ||
+      pm.faixaEtaria?.length ||
+      pm.paises?.length ||
+      pm.cidades?.length),
+  );
 
-  const hasExtras = has("pagamentos") || has("bancario") || has("contrato");
+  const hasExtras = has("pagamentos") || has("bancario") || has("contrato") || has("metricas");
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -2003,50 +2237,105 @@ function InfluencerProfileDialog({
             {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, conteúdo oculto até clicar */}
             <HiddenSectionsPanel
               sections={[
-                ...(has("entregas") && (hasMetrics || reliability.total > 0)
+                ...((has("entregas") && (hasMetrics || reliability.total > 0)) ||
+                (has("metricas") && hasProfileMetrics)
                   ? [
                       {
                         key: "metricas",
                         icon: <BarChart3 className="h-3.5 w-3.5" />,
                         title: "Métricas",
                         content: (
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
-                            {metricsTotal.views > 0 && (
-                              <MetricStat
-                                label="Visualizações"
-                                value={metricsTotal.views.toLocaleString("pt-BR")}
-                              />
+                          <div className="space-y-4">
+                            {has("entregas") && (hasMetrics || reliability.total > 0) && (
+                              <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                                <MetricStat
+                                  label="Confiabilidade"
+                                  value={`${reliability.score}%`}
+                                />
+                                {metricsTotal.views > 0 && (
+                                  <MetricStat
+                                    label="Visualizações"
+                                    value={metricsTotal.views.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                                {metricsTotal.reach > 0 && (
+                                  <MetricStat
+                                    label="Alcance"
+                                    value={metricsTotal.reach.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                                {metricsTotal.likes > 0 && (
+                                  <MetricStat
+                                    label="Curtidas"
+                                    value={metricsTotal.likes.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                                {metricsTotal.comments > 0 && (
+                                  <MetricStat
+                                    label="Comentários"
+                                    value={metricsTotal.comments.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                                {metricsTotal.shares > 0 && (
+                                  <MetricStat
+                                    label="Compart."
+                                    value={metricsTotal.shares.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                                {metricsTotal.saves > 0 && (
+                                  <MetricStat
+                                    label="Salvos"
+                                    value={metricsTotal.saves.toLocaleString("pt-BR")}
+                                  />
+                                )}
+                              </div>
                             )}
-                            {metricsTotal.reach > 0 && (
-                              <MetricStat
-                                label="Alcance"
-                                value={metricsTotal.reach.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.likes > 0 && (
-                              <MetricStat
-                                label="Curtidas"
-                                value={metricsTotal.likes.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.comments > 0 && (
-                              <MetricStat
-                                label="Comentários"
-                                value={metricsTotal.comments.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.shares > 0 && (
-                              <MetricStat
-                                label="Compart."
-                                value={metricsTotal.shares.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.saves > 0 && (
-                              <MetricStat
-                                label="Salvos"
-                                value={metricsTotal.saves.toLocaleString("pt-BR")}
-                              />
+
+                            {has("metricas") && hasProfileMetrics && pm && (
+                              <div
+                                className={`space-y-4 ${has("entregas") && (hasMetrics || reliability.total > 0) ? "border-t border-border pt-4" : ""}`}
+                              >
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Perfil
+                                </p>
+                                <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                                  {pm.seguidores ? (
+                                    <MetricStat
+                                      label="Seguidores"
+                                      value={pm.seguidores.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                  {pm.interacoes ? (
+                                    <MetricStat
+                                      label="Interações"
+                                      value={pm.interacoes.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                  {pm.visualizacoes ? (
+                                    <MetricStat
+                                      label="Visualizações"
+                                      value={pm.visualizacoes.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                  {pm.taxaInteracao ? (
+                                    <MetricStat
+                                      label="Taxa de interação"
+                                      value={`${pm.taxaInteracao}%`}
+                                    />
+                                  ) : null}
+                                  {pm.taxaAtencaoInicial ? (
+                                    <MetricStat
+                                      label="Atenção inicial"
+                                      value={`${pm.taxaAtencaoInicial}%`}
+                                    />
+                                  ) : null}
+                                </div>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                  <DemographicChart title="Faixa etária" entries={pm.faixaEtaria} />
+                                  <DemographicChart title="Países" entries={pm.paises} />
+                                  <DemographicChart title="Cidades" entries={pm.cidades} />
+                                </div>
+                              </div>
                             )}
                           </div>
                         ),
@@ -2249,7 +2538,16 @@ function InfluencerProfileDialog({
  * Create / edit dialog — steps adapt to `allowedFields`.
  * ============================================================ */
 
-type StepKey = "perfil" | "redes" | "entregas" | "pagamentos" | "bancario" | "contrato" | "status";
+/**
+ * Etapas do wizard — agrupadas por tema em vez de um passo por campo
+ * configurável: "perfil" cobre identificação + redes sociais, "financeiro"
+ * cobre pagamentos + dados bancários, "contrato" cobre contrato + status do
+ * fluxo. Cada etapa some inteira se nenhum dos campos que ela reúne estiver
+ * habilitado (via `has`), e dentro dela cada bloco também só aparece se seu
+ * campo individual estiver habilitado — mantém a mesma configuração por
+ * campanha/projeto de antes, só com menos cliques pra navegar.
+ */
+type StepKey = "perfil" | "metricas" | "entregas" | "financeiro" | "contrato";
 
 function InfluenciadorDialog({
   open,
@@ -2272,6 +2570,7 @@ function InfluenciadorDialog({
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [redes, setRedes] = useState<Rede[]>([]);
+  const [profileMetrics, setProfileMetrics] = useState<ProfileMetrics>({});
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   // Cada entrega vira um card recolhido por padrão (só cabeçalho: formato +
   // quantidade + resumo) — expandir só quando for mexer em data/anexos/
@@ -2298,12 +2597,12 @@ function InfluenciadorDialog({
     const s: { key: StepKey; label: string; icon: typeof User }[] = [
       { key: "perfil", label: "Perfil", icon: User },
     ];
-    if (has("redes")) s.push({ key: "redes", label: "Redes", icon: Share2 });
+    if (has("metricas")) s.push({ key: "metricas", label: "Métricas", icon: BarChart3 });
     if (has("entregas")) s.push({ key: "entregas", label: "Entregas", icon: Package });
-    if (has("pagamentos")) s.push({ key: "pagamentos", label: "Pagamentos", icon: Coins });
-    if (has("bancario")) s.push({ key: "bancario", label: "Bancário", icon: Landmark });
-    if (has("contrato")) s.push({ key: "contrato", label: "Contrato", icon: FileText });
-    if (has("status")) s.push({ key: "status", label: "Status", icon: CheckCircle2 });
+    if (has("pagamentos") || has("bancario"))
+      s.push({ key: "financeiro", label: "Financeiro", icon: Coins });
+    if (has("contrato") || has("status"))
+      s.push({ key: "contrato", label: "Contrato", icon: FileText });
     return s;
   }, [has]);
 
@@ -2319,6 +2618,7 @@ function InfluenciadorDialog({
       setTelefone(initial.telefone ?? "");
       setEmail(initial.email ?? "");
       setRedes(initial.redes);
+      setProfileMetrics(initial.profileMetrics ?? {});
       setEntregas(initial.entregas);
       setContrato(initial.contrato);
       setContratoNome(initial.contrato ? "Contrato anexado" : "");
@@ -2331,6 +2631,7 @@ function InfluenciadorDialog({
       setTelefone("");
       setEmail("");
       setRedes([]);
+      setProfileMetrics({});
       setEntregas([]);
       setContrato(undefined);
       setContratoNome("");
@@ -2358,6 +2659,7 @@ function InfluenciadorDialog({
       telefone: telefone.trim() || undefined,
       email: email.trim() || undefined,
       redes,
+      profileMetrics,
       entregas,
       contrato,
       status: finalStatus,
@@ -2480,82 +2782,94 @@ function InfluenciadorDialog({
                   />
                 </div>
               </div>
+
+              {has("redes") && (
+                <div className="space-y-4 border-t border-border pt-5">
+                  <FieldLabel
+                    title="Redes sociais"
+                    hint="Selecione as plataformas e adicione o handle."
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {REDES_OPTS.map((p) => {
+                      const active = redes.some((r) => r.plataforma === p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() =>
+                            setRedes((rs) =>
+                              active
+                                ? rs.filter((r) => r.plataforma !== p)
+                                : [...rs, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
+                            )
+                          }
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            active
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border bg-background text-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {redes.length === 0 ? (
+                    <EmptyHint text="Nenhuma rede selecionada." />
+                  ) : (
+                    <div className="space-y-2">
+                      {redes.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
+                        >
+                          <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
+                            {r.plataforma}
+                          </span>
+                          <span className="text-sm text-muted-foreground">@</span>
+                          <input
+                            value={r.handle}
+                            onChange={(e) =>
+                              setRedes((rs) =>
+                                rs.map((x) =>
+                                  x.id === r.id ? { ...x, handle: e.target.value } : x,
+                                ),
+                              )
+                            }
+                            placeholder="usuario"
+                            className="flex-1 bg-transparent text-sm outline-none"
+                          />
+                          <div className="flex shrink-0 items-center gap-1 border-l border-border pl-3">
+                            <input
+                              value={formatSeguidores(r.seguidores)}
+                              onChange={(e) => {
+                                const digits = e.target.value.replace(/\D/g, "");
+                                setRedes((rs) =>
+                                  rs.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
+                                );
+                              }}
+                              placeholder="0"
+                              inputMode="numeric"
+                              className="w-24 bg-transparent text-right text-sm outline-none"
+                            />
+                            <span className="text-xs text-muted-foreground">seguidores</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {current === "redes" && (
-            <div className="space-y-4">
+          {current === "metricas" && (
+            <div className="space-y-3">
               <FieldLabel
-                title="Redes sociais"
-                hint="Selecione as plataformas e adicione o handle."
+                title="Métricas do perfil"
+                hint="Números do perfil como um todo — vindos dos insights nativos da rede social, não de uma entrega específica."
               />
-              <div className="flex flex-wrap gap-1.5">
-                {REDES_OPTS.map((p) => {
-                  const active = redes.some((r) => r.plataforma === p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() =>
-                        setRedes((rs) =>
-                          active
-                            ? rs.filter((r) => r.plataforma !== p)
-                            : [...rs, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
-                        )
-                      }
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        active
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  );
-                })}
-              </div>
-              {redes.length === 0 ? (
-                <EmptyHint text="Nenhuma rede selecionada." />
-              ) : (
-                <div className="space-y-2">
-                  {redes.map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
-                    >
-                      <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
-                        {r.plataforma}
-                      </span>
-                      <span className="text-sm text-muted-foreground">@</span>
-                      <input
-                        value={r.handle}
-                        onChange={(e) =>
-                          setRedes((rs) =>
-                            rs.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)),
-                          )
-                        }
-                        placeholder="usuario"
-                        className="flex-1 bg-transparent text-sm outline-none"
-                      />
-                      <div className="flex shrink-0 items-center gap-1 border-l border-border pl-3">
-                        <input
-                          value={formatSeguidores(r.seguidores)}
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/\D/g, "");
-                            setRedes((rs) =>
-                              rs.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
-                            );
-                          }}
-                          placeholder="0"
-                          inputMode="numeric"
-                          className="w-24 bg-transparent text-right text-sm outline-none"
-                        />
-                        <span className="text-xs text-muted-foreground">seguidores</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <ProfileMetricsEditor value={profileMetrics} onChange={setProfileMetrics} />
             </div>
           )}
 
@@ -2720,124 +3034,136 @@ function InfluenciadorDialog({
             </div>
           )}
 
-          {current === "pagamentos" && (
-            <div className="space-y-3">
-              <FieldLabel
-                title="Pagamentos"
-                hint="Aceite ou recuse os orçamentos combinados em cada entrega (etapa anterior). Só o que estiver Aceito conta no Financeiro."
-              />
-              <PagamentosList
-                entregas={entregas}
-                onSetAprovacao={(entregaId, aprovacao) =>
-                  setEntregas((es) =>
-                    es.map((x) =>
-                      x.id === entregaId && x.pagamento
-                        ? {
-                            ...x,
-                            pagamento: {
-                              ...x.pagamento,
-                              aprovacao,
-                              data:
-                                x.pagamento.data ||
-                                (aprovacao === "aceito" ? todayISO() : x.pagamento.data),
-                            },
-                          }
-                        : x,
-                    ),
-                  )
-                }
-              />
-            </div>
-          )}
-
-          {current === "bancario" && (
-            <div className="space-y-3">
-              <FieldLabel
-                title="Dados bancários"
-                hint="Para transferência ou PIX ao influenciador."
-              />
-              <BankFields value={bank} onChange={setBank} />
-            </div>
-          )}
-
-          {current === "contrato" && (
-            <div className="space-y-3">
-              <FieldLabel title="Contrato assinado" hint="Anexe PDF, imagem ou documento." />
-              <input
-                ref={contratoRef}
-                type="file"
-                className="hidden"
-                onChange={(e) =>
-                  readFile(e.target.files?.[0], (d, n) => {
-                    setContrato(d);
-                    setContratoNome(n);
-                  })
-                }
-              />
-              {contrato ? (
-                <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{contratoNome || "Contrato"}</p>
-                    <p className="text-xs text-muted-foreground">Anexado</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => contratoRef.current?.click()}
-                    className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
-                  >
-                    Substituir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setContrato(undefined);
-                      setContratoNome("");
-                    }}
-                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Remover"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+          {current === "financeiro" && (
+            <div className="space-y-6">
+              {has("pagamentos") && (
+                <div className="space-y-3">
+                  <FieldLabel
+                    title="Pagamentos"
+                    hint="Aceite ou recuse os orçamentos combinados em cada entrega. Só o que estiver Aceito conta no Financeiro."
+                  />
+                  <PagamentosList
+                    entregas={entregas}
+                    onSetAprovacao={(entregaId, aprovacao) =>
+                      setEntregas((es) =>
+                        es.map((x) =>
+                          x.id === entregaId && x.pagamento
+                            ? {
+                                ...x,
+                                pagamento: {
+                                  ...x.pagamento,
+                                  aprovacao,
+                                  data:
+                                    x.pagamento.data ||
+                                    (aprovacao === "aceito" ? todayISO() : x.pagamento.data),
+                                },
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => contratoRef.current?.click()}
-                  className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-10 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              )}
+
+              {has("bancario") && (
+                <div
+                  className={`space-y-3 ${has("pagamentos") ? "border-t border-border pt-5" : ""}`}
                 >
-                  <Upload className="h-5 w-5" />
-                  <span>Clique para anexar o contrato</span>
-                </button>
+                  <FieldLabel
+                    title="Dados bancários"
+                    hint="Para transferência ou PIX ao influenciador."
+                  />
+                  <BankFields value={bank} onChange={setBank} />
+                </div>
               )}
             </div>
           )}
 
-          {current === "status" && (
-            <div className="space-y-3">
-              <FieldLabel title="Status atual" hint="Onde este influenciador está no fluxo." />
-              <div className="flex flex-col gap-1.5">
-                {INFLU_STATUSES.map((s) => {
-                  const active = status === s;
-                  return (
+          {current === "contrato" && (
+            <div className="space-y-6">
+              {has("contrato") && (
+                <div className="space-y-3">
+                  <FieldLabel title="Contrato assinado" hint="Anexe PDF, imagem ou documento." />
+                  <input
+                    ref={contratoRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) =>
+                      readFile(e.target.files?.[0], (d, n) => {
+                        setContrato(d);
+                        setContratoNome(n);
+                      })
+                    }
+                  />
+                  {contrato ? (
+                    <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{contratoNome || "Contrato"}</p>
+                        <p className="text-xs text-muted-foreground">Anexado</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => contratoRef.current?.click()}
+                        className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
+                      >
+                        Substituir
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setContrato(undefined);
+                          setContratoNome("");
+                        }}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Remover"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      key={s}
                       type="button"
-                      onClick={() => setStatus(s)}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                        active
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-foreground hover:bg-muted"
-                      }`}
+                      onClick={() => contratoRef.current?.click()}
+                      className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-10 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                     >
-                      <span>{s}</span>
-                      {active && <CheckCircle2 className="h-4 w-4" />}
+                      <Upload className="h-5 w-5" />
+                      <span>Clique para anexar o contrato</span>
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+              )}
+
+              {has("status") && (
+                <div
+                  className={`space-y-3 ${has("contrato") ? "border-t border-border pt-5" : ""}`}
+                >
+                  <FieldLabel title="Status atual" hint="Onde este influenciador está no fluxo." />
+                  <div className="flex flex-col gap-1.5">
+                    {INFLU_STATUSES.map((s) => {
+                      const active = status === s;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setStatus(s)}
+                          className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                            active
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border bg-background text-foreground hover:bg-muted"
+                          }`}
+                        >
+                          <span>{s}</span>
+                          {active && <CheckCircle2 className="h-4 w-4" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
