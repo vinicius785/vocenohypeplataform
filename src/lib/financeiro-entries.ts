@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useClientes, type Cliente } from "@/lib/clientes-store";
-import { createTableArrayStore } from "@/lib/table-array-store";
+import { supabase } from "@/integrations/supabase/client";
 import type { BankInfo } from "@/components/CampanhasSection";
 import {
   pagamentoCashValue,
@@ -134,33 +134,108 @@ export function todayISO() {
 
 export { formatIsoDate } from "./utils";
 
-const manualStore = createTableArrayStore<ManualEntry>("financeiro_lancamentos");
+/**
+ * Persistência dos lançamentos manuais do Financeiro — reescrita do zero
+ * depois de uma sequência de bugs causados pelo modelo antigo (store
+ * genérico que comparava um array inteiro contra um "snapshot anterior"
+ * pra decidir o que fazer upsert/delete no Supabase). Esse modelo de diff
+ * tinha uma falha de fundo: se o array recebido estivesse um passo
+ * dessincronizado do cache real (o normal em UI assíncrona — outra aba,
+ * clique duplo, realtime chegando fora de ordem), qualquer id ausente
+ * virava um "apagar" — inclusive ids que só estavam faltando por estarem
+ * atrasados, não porque alguém quis apagar.
+ *
+ * Aqui cada operação (criar/editar/apagar) é uma chamada direta e
+ * independente ao Supabase, com o `id` explícito de qual linha mexer.
+ * O cache local só muda depois que o banco confirma — nunca antes
+ * (sem otimismo) e nunca por diferença entre dois arrays. Cada ação afeta
+ * exatamente a linha que ela diz que afeta, nem mais, nem menos.
+ */
+let manualCache: ManualEntry[] = [];
+let manualLoaded = false;
+const manualListeners = new Set<() => void>();
+const emitManual = () => manualListeners.forEach((l) => l());
 
-export function initFinanceiroSync(): Promise<void> {
-  const p = manualStore.init();
-  manualStore.subscribeRealtime();
-  return p;
+let manualChannel: ReturnType<typeof supabase.channel> | null = null;
+function subscribeManualRealtime() {
+  if (manualChannel) return;
+  manualChannel = supabase
+    .channel(`rt-financeiro_lancamentos-${Math.random().toString(36).slice(2)}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "financeiro_lancamentos" },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const old = payload.old as { id?: string } | null;
+          if (!old?.id) return;
+          manualCache = manualCache.filter((x) => x.id !== old.id);
+        } else {
+          const row = payload.new as { data?: ManualEntry } | null;
+          if (!row?.data) return;
+          const item = row.data;
+          const idx = manualCache.findIndex((x) => x.id === item.id);
+          manualCache =
+            idx >= 0 ? manualCache.map((x, i) => (i === idx ? item : x)) : [...manualCache, item];
+        }
+        emitManual();
+      },
+    )
+    .subscribe();
+}
+
+export async function initFinanceiroSync(): Promise<void> {
+  if (!manualLoaded) {
+    try {
+      const { data, error } = await supabase
+        .from("financeiro_lancamentos")
+        .select("data")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      manualCache = (data ?? []).map((row) => row.data as ManualEntry);
+    } catch (e) {
+      console.warn("[financeiro_lancamentos] initial load failed", e);
+    } finally {
+      manualLoaded = true;
+      emitManual();
+    }
+  }
+  subscribeManualRealtime();
 }
 
 export function loadManual(): ManualEntry[] {
-  return manualStore.get();
-}
-// Recebe uma função de atualização (não uma lista pronta): `manualStore.set`
-// diffa contra o cache real do módulo pra decidir o que fazer upsert/delete
-// no Supabase. Se o chamador passasse uma lista já calculada a partir do
-// estado local do componente, e esse estado local estivesse um passo
-// atrasado em relação ao cache (ex.: entre o realtime de outra aba/usuário
-// chegar e o componente re-renderizar), qualquer lançamento presente só no
-// cache real seria interpretado como "removido" e apagado do banco —
-// causando o sumiço/zeragem de lançamentos alheios ao editar/importar aqui.
-export function saveManual(
-  updater: ManualEntry[] | ((prev: ManualEntry[]) => ManualEntry[]),
-  onError?: (err: Error) => void,
-) {
-  manualStore.set((prev) => (typeof updater === "function" ? updater(prev) : updater), onError);
+  return manualCache;
 }
 export function onManualChange(callback: () => void): () => void {
-  return manualStore.subscribe(callback);
+  manualListeners.add(callback);
+  return () => manualListeners.delete(callback);
+}
+
+export async function createManualEntry(entry: ManualEntry): Promise<void> {
+  const { error } = await supabase
+    .from("financeiro_lancamentos")
+    .insert({ id: entry.id, data: entry, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  if (!manualCache.some((x) => x.id === entry.id)) {
+    manualCache = [...manualCache, entry];
+    emitManual();
+  }
+}
+
+export async function updateManualEntry(entry: ManualEntry): Promise<void> {
+  const { error } = await supabase
+    .from("financeiro_lancamentos")
+    .update({ data: entry, updated_at: new Date().toISOString() })
+    .eq("id", entry.id);
+  if (error) throw new Error(error.message);
+  manualCache = manualCache.map((x) => (x.id === entry.id ? entry : x));
+  emitManual();
+}
+
+export async function deleteManualEntry(id: string): Promise<void> {
+  const { error } = await supabase.from("financeiro_lancamentos").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  manualCache = manualCache.filter((x) => x.id !== id);
+  emitManual();
 }
 function loadMembers(): Member[] {
   try {

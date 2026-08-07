@@ -32,7 +32,9 @@ import {
   savePaid,
   type PaidMap,
   loadManual,
-  saveManual,
+  createManualEntry,
+  updateManualEntry,
+  deleteManualEntry,
   onManualChange,
   fmtBRL,
   parseMoney,
@@ -76,15 +78,6 @@ export function FinanceiroSection() {
   const clientes = useClientes();
   const [manual, setManualState] = useState<ManualEntry[]>(() => loadManual());
   const [syncError, setSyncError] = useState<string | null>(null);
-  // Encaminha a atualização direto pro store (que diffa contra o cache real,
-  // não contra este `manual` local) — `onManualChange` abaixo já resincroniza
-  // o estado local a partir do resultado, então não escrevemos aqui também.
-  // Se o upsert/delete falhar de verdade no banco, o store já reverte a
-  // mudança otimista sozinho — só precisamos avisar o usuário aqui.
-  const setManual = (u: ManualEntry[] | ((p: ManualEntry[]) => ManualEntry[])) =>
-    saveManual(u, (err) =>
-      setSyncError(`Não foi possível salvar no banco: ${err.message}. A alteração foi desfeita.`),
-    );
 
   const [month, setMonth] = useState<string>(monthKey(new Date()));
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mes");
@@ -202,17 +195,29 @@ export function FinanceiroSection() {
     return Array.from(set).sort((a, b) => (a < b ? 1 : -1));
   }, [entries]);
 
-  const handleSave = (m: ManualEntry) => {
-    setManual((p) =>
-      p.some((x) => x.id === m.id) ? p.map((x) => (x.id === m.id ? m : x)) : [...p, m],
-    );
-    setOpen(false);
-    setEditing(null);
+  const handleSave = async (m: ManualEntry) => {
+    const isNew = !manual.some((x) => x.id === m.id);
+    try {
+      if (isNew) await createManualEntry(m);
+      else await updateManualEntry(m);
+      setOpen(false);
+      setEditing(null);
+    } catch (err) {
+      setSyncError(
+        `Não foi possível salvar: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
+      );
+    }
   };
 
-  const handleDelete = (e: Entry) => {
+  const handleDelete = async (e: Entry) => {
     if (!e.editable) return;
-    setManual((p) => p.filter((x) => x.id !== e.id));
+    try {
+      await deleteManualEntry(e.id);
+    } catch (err) {
+      setSyncError(
+        `Não foi possível apagar: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
+      );
+    }
   };
 
   return (
@@ -286,8 +291,23 @@ export function FinanceiroSection() {
         <ImportDialog
           onClose={() => setImportOpen(false)}
           onImport={(entries) => {
-            setManual((prev) => [...prev, ...entries]);
             setImportOpen(false);
+            void (async () => {
+              const failed: string[] = [];
+              for (const entry of entries) {
+                try {
+                  await createManualEntry(entry);
+                } catch (err) {
+                  failed.push(entry.description);
+                  console.warn("[financeiro] import entry failed", entry, err);
+                }
+              }
+              if (failed.length > 0) {
+                setSyncError(
+                  `${failed.length} de ${entries.length} lançamento(s) não foram importados: ${failed.slice(0, 3).join(", ")}${failed.length > 3 ? "..." : ""}.`,
+                );
+              }
+            })();
           }}
         />
       )}

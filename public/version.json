@@ -1,6 +1,6 @@
 {
-  "version": "1.65.3",
+  "version": "1.66.0",
   "notes": [
-    "Reverte a mudança da versão anterior: tratar 'zero linhas apagadas' como falha estava causando o próprio bug que tentava resolver — um segundo clique em apagar (já removido) fazia o item 'ressuscitar' na tela, criando um ciclo. Agora só um erro de verdade do banco desfaz a remoção."
+    "Reescreve do zero como o Financeiro salva/edita/apaga lançamentos manuais: cada ação agora é uma chamada direta ao banco pra aquela linha específica, sem comparar arrays inteiros — elimina de vez a classe de bug de itens 'ressuscitando' depois de apagados."
   ]
 }
