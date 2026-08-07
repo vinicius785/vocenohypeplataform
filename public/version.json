@@ -1,7 +1,6 @@
 {
-  "version": "1.65.0",
+  "version": "1.65.1",
   "notes": [
-    "Aba Time virou uma lista única: cada pessoa é uma linha (foto, cargo, score) que expande pra mostrar tarefas, reuniões e início de dia, sem trocar de tela.",
-    "Formulário de novo membro ganhou um preset \"Membro padrão\" — a lista completa de permissões só aparece se você escolher \"Personalizado\"."
+    "Corrige lançamento do Financeiro (e itens de outras seções) que sumia ao apagar mas voltava depois de atualizar a página — se apagar falhasse de verdade no banco, agora o item volta pra tela na hora e mostra um aviso, em vez de continuar 'apagado' só até o próximo reload."
   ]
 }

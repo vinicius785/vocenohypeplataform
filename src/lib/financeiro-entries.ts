@@ -153,8 +153,11 @@ export function loadManual(): ManualEntry[] {
 // chegar e o componente re-renderizar), qualquer lançamento presente só no
 // cache real seria interpretado como "removido" e apagado do banco —
 // causando o sumiço/zeragem de lançamentos alheios ao editar/importar aqui.
-export function saveManual(updater: ManualEntry[] | ((prev: ManualEntry[]) => ManualEntry[])) {
-  manualStore.set((prev) => (typeof updater === "function" ? updater(prev) : updater));
+export function saveManual(
+  updater: ManualEntry[] | ((prev: ManualEntry[]) => ManualEntry[]),
+  onError?: (err: Error) => void,
+) {
+  manualStore.set((prev) => (typeof updater === "function" ? updater(prev) : updater), onError);
 }
 export function onManualChange(callback: () => void): () => void {
   return manualStore.subscribe(callback);

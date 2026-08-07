@@ -75,10 +75,16 @@ function isoDaysAgo(days: number) {
 export function FinanceiroSection() {
   const clientes = useClientes();
   const [manual, setManualState] = useState<ManualEntry[]>(() => loadManual());
+  const [syncError, setSyncError] = useState<string | null>(null);
   // Encaminha a atualização direto pro store (que diffa contra o cache real,
   // não contra este `manual` local) — `onManualChange` abaixo já resincroniza
   // o estado local a partir do resultado, então não escrevemos aqui também.
-  const setManual = (u: ManualEntry[] | ((p: ManualEntry[]) => ManualEntry[])) => saveManual(u);
+  // Se o upsert/delete falhar de verdade no banco, o store já reverte a
+  // mudança otimista sozinho — só precisamos avisar o usuário aqui.
+  const setManual = (u: ManualEntry[] | ((p: ManualEntry[]) => ManualEntry[])) =>
+    saveManual(u, (err) =>
+      setSyncError(`Não foi possível salvar no banco: ${err.message}. A alteração foi desfeita.`),
+    );
 
   const [month, setMonth] = useState<string>(monthKey(new Date()));
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mes");
@@ -284,6 +290,18 @@ export function FinanceiroSection() {
             setImportOpen(false);
           }}
         />
+      )}
+
+      {syncError && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+          <span>{syncError}</span>
+          <button
+            onClick={() => setSyncError(null)}
+            className="shrink-0 font-medium underline underline-offset-2"
+          >
+            fechar
+          </button>
+        </div>
       )}
 
       {/* KPIs */}

@@ -71,7 +71,7 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    set: (updater: (prev: T[]) => T[]) => {
+    set: (updater: (prev: T[]) => T[], onError?: (err: Error) => void) => {
       const prev = cache;
       const next = updater(prev);
       if (next === prev) return;
@@ -88,7 +88,20 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
             .from(table)
             .upsert({ id: item.id, data: item, updated_at: new Date().toISOString() })
             .then(({ error }) => {
-              if (error) console.warn(`[${table}] upsert failed`, error);
+              if (!error) return;
+              console.warn(`[${table}] upsert failed`, error);
+              // A optimistic update aplicada acima nunca era desfeita se o
+              // upsert falhasse (RLS, rede, etc.) — o item ficava "salvo"
+              // na tela mas nunca chegava no banco, então sumia de novo
+              // silenciosamente na próxima vez que a página recarregasse.
+              // Reverte pro valor anterior (ou remove, se era um item novo)
+              // e avisa quem chamou, em vez de deixar a UI mentir.
+              const old = prevById.get(item.id);
+              cache = old
+                ? cache.map((x) => (x.id === item.id ? old : x))
+                : cache.filter((x) => x.id !== item.id);
+              emit();
+              onError?.(new Error(error.message));
             });
         }
       }
@@ -99,7 +112,16 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
             .delete()
             .eq("id", id)
             .then(({ error }) => {
-              if (error) console.warn(`[${table}] delete failed`, error);
+              if (!error) return;
+              console.warn(`[${table}] delete failed`, error);
+              // Mesma lógica: se apagar falhou de verdade no banco, restaura
+              // o item na tela em vez de deixar sumido até o próximo reload.
+              const old = prevById.get(id)!;
+              if (!cache.some((x) => x.id === id)) {
+                cache = [...cache, old];
+                emit();
+              }
+              onError?.(new Error(error.message));
             });
         }
       }
