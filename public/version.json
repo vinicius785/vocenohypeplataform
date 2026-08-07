@@ -1,6 +1,7 @@
 {
-  "version": "1.64.0",
+  "version": "1.65.0",
   "notes": [
-    "Unifica \"Time\" e \"Gestão\" numa aba só, com sub-abas (Diretório, Visão geral, Tarefas, Início de dia) e 3 métricas novas no ranking: tarefas abertas no momento, atraso médio nas entregas e taxa de presença em reuniões."
+    "Aba Time virou uma lista única: cada pessoa é uma linha (foto, cargo, score) que expande pra mostrar tarefas, reuniões e início de dia, sem trocar de tela.",
+    "Formulário de novo membro ganhou um preset \"Membro padrão\" — a lista completa de permissões só aparece se você escolher \"Personalizado\"."
   ]
 }
