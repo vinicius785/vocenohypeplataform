@@ -1,6 +1,6 @@
 {
-  "version": "1.66.0",
+  "version": "1.66.1",
   "notes": [
-    "Reescreve do zero como o Financeiro salva/edita/apaga lançamentos manuais: cada ação agora é uma chamada direta ao banco pra aquela linha específica, sem comparar arrays inteiros — elimina de vez a classe de bug de itens 'ressuscitando' depois de apagados."
+    "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ]
 }

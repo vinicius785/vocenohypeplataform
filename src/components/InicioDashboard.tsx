@@ -26,6 +26,8 @@ import {
   type BlogPost,
   type Task as ProjTask,
 } from "@/lib/projetos";
+import { renderMarkdownLite } from "@/components/marketing/BlogPanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   subscribeChat,
   getMe,
@@ -988,6 +990,8 @@ function MuralNovidades() {
     }
   };
 
+  const [openArticle, setOpenArticle] = useState<(BlogPost & { projectName: string }) | null>(null);
+
   const visibleItems = items.filter((i) => !dismissed.includes(i.id));
   if (visibleItems.length === 0) return null;
 
@@ -1004,8 +1008,12 @@ function MuralNovidades() {
             {p.cover && (
               <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded object-cover" />
             )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{p.title}</p>
+            <button
+              type="button"
+              onClick={() => setOpenArticle(p)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <p className="truncate text-sm font-medium hover:underline">{p.title}</p>
               {p.excerpt && (
                 <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{p.excerpt}</p>
               )}
@@ -1013,7 +1021,7 @@ function MuralNovidades() {
                 <span>{p.projectName}</span>
                 {p.publishDate && <span>· {p.publishDate}</span>}
               </div>
-            </div>
+            </button>
             <button
               onClick={() => dismiss(p.id)}
               className="opacity-0 transition-opacity group-hover:opacity-100"
@@ -1024,6 +1032,37 @@ function MuralNovidades() {
           </li>
         ))}
       </ul>
+
+      <Dialog open={!!openArticle} onOpenChange={(v) => !v && setOpenArticle(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          {openArticle && (
+            <>
+              <DialogHeader className="border-b border-border px-6 py-4">
+                <DialogTitle>{openArticle.title}</DialogTitle>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{openArticle.projectName}</span>
+                  {openArticle.publishDate && <span>· {openArticle.publishDate}</span>}
+                </div>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                {openArticle.cover && (
+                  <img
+                    src={openArticle.cover}
+                    alt=""
+                    className="mb-4 max-h-64 w-full rounded-lg object-cover"
+                  />
+                )}
+                <div
+                  className="space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
+                  dangerouslySetInnerHTML={{
+                    __html: renderMarkdownLite(openArticle.content ?? openArticle.excerpt ?? ""),
+                  }}
+                />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

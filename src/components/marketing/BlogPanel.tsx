@@ -10,7 +10,7 @@ import { notifyBlogEvent } from "@/lib/marketing.functions";
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
  * pra ser um parser completo, só dar uma ideia real de como o texto digitado
  * vai ficar formatado, sem precisar de uma lib externa. */
-function renderMarkdownLite(md: string): string {
+export function renderMarkdownLite(md: string): string {
   const escape = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const lines = escape(md).split("\n");
