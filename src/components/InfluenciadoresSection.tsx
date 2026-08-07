@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useClientes } from "@/lib/clientes-store";
+import { formatSeguidores } from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
 import {
   PlatformIcon,
@@ -234,7 +235,7 @@ export function InfluenciadoresSection() {
                     <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
                     {r.plataforma}
                     {r.handle ? ` · ${r.handle}` : ""}
-                    {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
+                    {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
                   </span>
                 ))
               )}
@@ -516,7 +517,10 @@ export function InfluenciadoresSection() {
                       <div className="truncate text-xs text-muted-foreground">
                         {i.redes
                           .map((r) =>
-                            [r.handle || r.plataforma, r.seguidores ? `${r.seguidores} seg.` : ""]
+                            [
+                              r.handle || r.plataforma,
+                              r.seguidores ? `${formatSeguidores(r.seguidores)} seg.` : "",
+                            ]
                               .filter(Boolean)
                               .join(" · "),
                           )
@@ -749,12 +753,13 @@ function BankInfluDialog({
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={r.seguidores ?? ""}
-                    onChange={(e) =>
+                    value={formatSeguidores(r.seguidores)}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
                       setRedes((list) =>
-                        list.map((x) => (x.id === r.id ? { ...x, seguidores: e.target.value } : x)),
-                      )
-                    }
+                        list.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
+                      );
+                    }}
                     placeholder="Seguidores"
                     title="Seguidores"
                     className="h-9 w-28 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"

@@ -51,6 +51,7 @@ import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import type { PagGrupo } from "@/components/VincularCampanhaDialog";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
+import { formatSeguidores } from "@/lib/format";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -1913,7 +1914,7 @@ function InfluencerProfileDialog({
                     >
                       <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                       {r.handle ? `@${r.handle}` : r.plataforma}
-                      {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
+                      {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
                     </span>
                   ))}
                 {influ.telefone && (
@@ -2538,17 +2539,16 @@ function InfluenciadorDialog({
                       />
                       <div className="flex shrink-0 items-center gap-1 border-l border-border pl-3">
                         <input
-                          value={r.seguidores ?? ""}
-                          onChange={(e) =>
+                          value={formatSeguidores(r.seguidores)}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "");
                             setRedes((rs) =>
-                              rs.map((x) =>
-                                x.id === r.id ? { ...x, seguidores: e.target.value } : x,
-                              ),
-                            )
-                          }
+                              rs.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
+                            );
+                          }}
                           placeholder="0"
                           inputMode="numeric"
-                          className="w-16 bg-transparent text-right text-sm outline-none"
+                          className="w-24 bg-transparent text-right text-sm outline-none"
                         />
                         <span className="text-xs text-muted-foreground">seguidores</span>
                       </div>

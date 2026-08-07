@@ -16,6 +16,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { getApprovalByToken, respondApproval } from "@/lib/approval.functions";
+import { formatSeguidores } from "@/lib/format";
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
@@ -254,7 +255,7 @@ function AprovacaoPublicPage() {
                           className={data.mode === "view" ? "h-3.5 w-3.5" : "h-3 w-3"}
                         />
                         {r.handle || r.plataforma}
-                        {r.seguidores ? ` · ${r.seguidores} seg.` : ""}
+                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
                       </>
                     );
                     const className =
