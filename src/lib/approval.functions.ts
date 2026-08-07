@@ -38,6 +38,7 @@ const RedeMetricsSnapshot = z.object({
   visualizacoes: z.number().optional(),
   taxaInteracao: z.number().optional(),
   taxaAtencaoInicial: z.number().optional(),
+  genero: z.array(DemographicEntrySnapshot).optional(),
   faixaEtaria: z.array(DemographicEntrySnapshot).optional(),
   paises: z.array(DemographicEntrySnapshot).optional(),
   cidades: z.array(DemographicEntrySnapshot).optional(),

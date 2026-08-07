@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from "recharts";
 import StepIndicator from "@/components/StepIndicator";
 import {
   AlertTriangle,
@@ -161,6 +173,7 @@ export type RedeMetrics = {
   taxaInteracao?: number;
   /** % — retenção nos primeiros segundos/scroll do conteúdo. */
   taxaAtencaoInicial?: number;
+  genero?: DemographicEntry[];
   faixaEtaria?: DemographicEntry[];
   paises?: DemographicEntry[];
   cidades?: DemographicEntry[];
@@ -180,6 +193,7 @@ function hasRedeMetrics(m?: RedeMetrics): boolean {
       m.visualizacoes ||
       m.taxaInteracao ||
       m.taxaAtencaoInicial ||
+      m.genero?.length ||
       m.faixaEtaria?.length ||
       m.paises?.length ||
       m.cidades?.length),
@@ -783,16 +797,133 @@ function MetricsEditor({
 
 /** Lista editável de fatias demográficas (ex: faixa etária → %), com um
  * gráfico de barras horizontal logo abaixo que atualiza em tempo real. */
+/** Paleta fixa (mesmas cores do design system, `--chart-1..5`) usada nos
+ * gráficos de pizza — arrays maiores repetem o ciclo. */
+const PIE_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+/** Rótulo com a % fora da fatia, ligado por uma linha — padrão recharts
+ * pra pizza/donut (a prop `label` não aceita texto customizado sem isso). */
+function renderPieLabel(props: {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  outerRadius: number;
+  valor: number;
+}) {
+  const { cx, cy, midAngle, outerRadius, valor } = props;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 16;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="var(--muted-foreground)"
+      fontSize={10}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+    >
+      {`${valor}%`}
+    </text>
+  );
+}
+
+/** Gráfico de barra (horizontal) ou pizza pra uma lista `{ name, valor }%` —
+ * usado tanto no editor quanto no resumo somente-leitura das métricas. */
+function DemographicMiniChart({
+  data,
+  chartType,
+}: {
+  data: { name: string; valor: number }[];
+  chartType: "bar" | "pie";
+}) {
+  if (data.length === 0) return null;
+  if (chartType === "pie") {
+    return (
+      <div className="h-[150px] w-full pt-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="valor"
+              nameKey="name"
+              innerRadius="42%"
+              outerRadius="72%"
+              isAnimationActive={false}
+              label={renderPieLabel}
+              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
+            >
+              {data.map((entry, i) => (
+                <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <Legend
+              layout="vertical"
+              verticalAlign="middle"
+              align="right"
+              formatter={(value, entry) =>
+                `${value} — ${(entry as { payload?: { valor?: number } }).payload?.valor ?? 0}%`
+              }
+              wrapperStyle={{ fontSize: 10, color: "var(--muted-foreground)" }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+  return (
+    <div className="h-[100px] w-full pt-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 28 }}>
+          <CartesianGrid horizontal={false} strokeOpacity={0.15} />
+          <XAxis type="number" domain={[0, 100]} hide />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={90}
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Bar
+            dataKey="valor"
+            fill="var(--foreground)"
+            radius={3}
+            barSize={12}
+            isAnimationActive={false}
+          >
+            <LabelList
+              dataKey="valor"
+              position="right"
+              formatter={(v: number) => `${v}%`}
+              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function DemographicEntriesEditor({
   title,
   placeholder,
   entries,
   onChange,
+  chartType = "bar",
 }: {
   title: string;
   placeholder: string;
   entries: DemographicEntry[];
   onChange: (entries: DemographicEntry[]) => void;
+  chartType?: "bar" | "pie";
 }) {
   const chartData = entries
     .filter((e) => e.label.trim())
@@ -845,38 +976,22 @@ function DemographicEntriesEditor({
       >
         <Plus className="h-3 w-3" /> Adicionar
       </button>
-      {chartData.length > 0 && (
-        <div className="h-[100px] w-full pt-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 12 }}>
-              <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-              <XAxis type="number" domain={[0, 100]} hide />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={90}
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Bar
-                dataKey="valor"
-                fill="var(--foreground)"
-                radius={3}
-                barSize={12}
-                isAnimationActive={false}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <DemographicMiniChart data={chartData} chartType={chartType} />
     </div>
   );
 }
 
-/** Gráfico de barras horizontal somente-leitura para uma distribuição
+/** Gráfico (barra ou pizza) somente-leitura para uma distribuição
  * demográfica — usado no resumo do perfil (fora do modo de edição). */
-function DemographicChart({ title, entries }: { title: string; entries?: DemographicEntry[] }) {
+function DemographicChart({
+  title,
+  entries,
+  chartType = "bar",
+}: {
+  title: string;
+  entries?: DemographicEntry[];
+  chartType?: "bar" | "pie";
+}) {
   const data = (entries ?? [])
     .filter((e) => e.label.trim() && e.percentual > 0)
     .map((e) => ({ name: e.label, valor: e.percentual }))
@@ -887,29 +1002,7 @@ function DemographicChart({ title, entries }: { title: string; entries?: Demogra
       <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </p>
-      <div className="h-[90px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }}>
-            <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-            <XAxis type="number" domain={[0, 100]} hide />
-            <YAxis
-              type="category"
-              dataKey="name"
-              width={90}
-              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Bar
-              dataKey="valor"
-              fill="var(--foreground)"
-              radius={3}
-              barSize={12}
-              isAnimationActive={false}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <DemographicMiniChart data={data} chartType={chartType} />
     </div>
   );
 }
@@ -920,9 +1013,13 @@ function DemographicChart({ title, entries }: { title: string; entries?: Demogra
 /** Métricas de uma única rede (sub-editor usado por `ProfileMetricsEditor`
  * uma vez por rede selecionada). */
 function RedeMetricsFields({
+  seguidores,
+  onChangeSeguidores,
   value,
   onChange,
 }: {
+  seguidores?: string;
+  onChangeSeguidores: (v: string) => void;
   value?: RedeMetrics;
   onChange: (m: RedeMetrics) => void;
 }) {
@@ -939,6 +1036,18 @@ function RedeMetricsFields({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <label className="space-y-1">
+          <span className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+            Seguidores
+          </span>
+          <input
+            value={formatSeguidores(seguidores)}
+            onChange={(e) => onChangeSeguidores(e.target.value.replace(/\D/g, ""))}
+            placeholder="0"
+            inputMode="numeric"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+        </label>
         {SCALAR_FIELDS.map((f) => (
           <label key={f.key} className="space-y-1">
             <span className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
@@ -963,7 +1072,14 @@ function RedeMetricsFields({
       <div className="space-y-4 border-t border-border pt-4">
         <FieldLabel
           title="Demografia do público"
-          hint="Distribuição percentual do público real dessa rede, por faixa etária, país e cidade."
+          hint="Distribuição percentual do público real dessa rede, por gênero, faixa etária, país e cidade."
+        />
+        <DemographicEntriesEditor
+          title="Gênero"
+          placeholder="Ex: Feminino"
+          entries={m.genero ?? []}
+          onChange={(genero) => set({ genero })}
+          chartType="pie"
         />
         <DemographicEntriesEditor
           title="Faixa etária"
@@ -992,10 +1108,12 @@ function RedeMetricsFields({
  * cadastradas na etapa Perfil) e edita as métricas daquela rede. */
 function ProfileMetricsEditor({
   redes,
+  onChangeRedes,
   value,
   onChange,
 }: {
   redes: Rede[];
+  onChangeRedes: (redes: Rede[]) => void;
   value?: ProfileMetrics;
   onChange: (m: ProfileMetrics) => void;
 }) {
@@ -1034,6 +1152,10 @@ function ProfileMetricsEditor({
       {activeId && (
         <RedeMetricsFields
           key={activeId}
+          seguidores={redes.find((r) => r.id === activeId)?.seguidores}
+          onChangeSeguidores={(seguidores) =>
+            onChangeRedes(redes.map((r) => (r.id === activeId ? { ...r, seguidores } : r)))
+          }
           value={porRede[activeId]}
           onChange={(m) => onChange({ ...value, porRede: { ...porRede, [activeId]: m } })}
         />
@@ -2191,7 +2313,7 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[56vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
         <DialogDescription className="sr-only">
           Informações completas do influenciador.
@@ -2255,7 +2377,69 @@ function InfluencerProfileDialog({
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-6">
+          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
+            {/* MÉTRICAS DO PERFIL — sempre visível quando preenchida, uma rede por bloco */}
+            {has("metricas") && hasProfileMetrics && pm?.porRede && (
+              <section className="space-y-4">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <BarChart3 className="h-4 w-4" /> Métricas do perfil
+                </h4>
+                <div className="space-y-4">
+                  {influ.redes
+                    .filter((r) => hasRedeMetrics(pm.porRede?.[r.id]))
+                    .map((r) => {
+                      const rm = pm.porRede![r.id]!;
+                      return (
+                        <div key={r.id} className="space-y-3 rounded-xl border border-border p-4">
+                          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                            {r.handle ? `@${r.handle}` : r.plataforma}
+                          </p>
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-5">
+                            {r.seguidores ? (
+                              <MetricStat
+                                label="Seguidores"
+                                value={formatSeguidores(r.seguidores)}
+                              />
+                            ) : null}
+                            {rm.interacoes ? (
+                              <MetricStat
+                                label="Interações"
+                                value={rm.interacoes.toLocaleString("pt-BR")}
+                              />
+                            ) : null}
+                            {rm.visualizacoes ? (
+                              <MetricStat
+                                label="Visualizações"
+                                value={rm.visualizacoes.toLocaleString("pt-BR")}
+                              />
+                            ) : null}
+                            {rm.taxaInteracao ? (
+                              <MetricStat
+                                label="Taxa de interação"
+                                value={`${rm.taxaInteracao}%`}
+                              />
+                            ) : null}
+                            {rm.taxaAtencaoInicial ? (
+                              <MetricStat
+                                label="Atenção inicial"
+                                value={`${rm.taxaAtencaoInicial}%`}
+                              />
+                            ) : null}
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <DemographicChart title="Gênero" entries={rm.genero} chartType="pie" />
+                            <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
+                            <DemographicChart title="Países" entries={rm.paises} />
+                            <DemographicChart title="Cidades" entries={rm.cidades} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </section>
+            )}
+
             {/* ENTREGAS — conteúdo principal, sempre visível */}
             {has("entregas") &&
               (influ.entregas.length > 0 ? (
@@ -2317,121 +2501,50 @@ function InfluencerProfileDialog({
             {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, conteúdo oculto até clicar */}
             <HiddenSectionsPanel
               sections={[
-                ...((has("entregas") && (hasMetrics || reliability.total > 0)) ||
-                (has("metricas") && hasProfileMetrics)
+                ...(has("entregas") && (hasMetrics || reliability.total > 0)
                   ? [
                       {
                         key: "metricas",
                         icon: <BarChart3 className="h-3.5 w-3.5" />,
                         title: "Métricas",
                         content: (
-                          <div className="space-y-4">
-                            {has("entregas") && (hasMetrics || reliability.total > 0) && (
-                              <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                                <MetricStat
-                                  label="Confiabilidade"
-                                  value={`${reliability.score}%`}
-                                />
-                                {metricsTotal.views > 0 && (
-                                  <MetricStat
-                                    label="Visualizações"
-                                    value={metricsTotal.views.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                                {metricsTotal.reach > 0 && (
-                                  <MetricStat
-                                    label="Alcance"
-                                    value={metricsTotal.reach.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                                {metricsTotal.likes > 0 && (
-                                  <MetricStat
-                                    label="Curtidas"
-                                    value={metricsTotal.likes.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                                {metricsTotal.comments > 0 && (
-                                  <MetricStat
-                                    label="Comentários"
-                                    value={metricsTotal.comments.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                                {metricsTotal.shares > 0 && (
-                                  <MetricStat
-                                    label="Compart."
-                                    value={metricsTotal.shares.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                                {metricsTotal.saves > 0 && (
-                                  <MetricStat
-                                    label="Salvos"
-                                    value={metricsTotal.saves.toLocaleString("pt-BR")}
-                                  />
-                                )}
-                              </div>
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
+                            {metricsTotal.views > 0 && (
+                              <MetricStat
+                                label="Visualizações"
+                                value={metricsTotal.views.toLocaleString("pt-BR")}
+                              />
                             )}
-
-                            {has("metricas") && hasProfileMetrics && pm?.porRede && (
-                              <div
-                                className={`space-y-5 ${has("entregas") && (hasMetrics || reliability.total > 0) ? "border-t border-border pt-4" : ""}`}
-                              >
-                                {influ.redes
-                                  .filter((r) => hasRedeMetrics(pm.porRede?.[r.id]))
-                                  .map((r) => {
-                                    const rm = pm.porRede![r.id]!;
-                                    return (
-                                      <div key={r.id} className="space-y-3">
-                                        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                          <PlatformIcon
-                                            plataforma={r.plataforma}
-                                            className="h-3 w-3"
-                                          />
-                                          {r.handle ? `@${r.handle}` : r.plataforma}
-                                        </p>
-                                        <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                                          {r.seguidores ? (
-                                            <MetricStat
-                                              label="Seguidores"
-                                              value={formatSeguidores(r.seguidores)}
-                                            />
-                                          ) : null}
-                                          {rm.interacoes ? (
-                                            <MetricStat
-                                              label="Interações"
-                                              value={rm.interacoes.toLocaleString("pt-BR")}
-                                            />
-                                          ) : null}
-                                          {rm.visualizacoes ? (
-                                            <MetricStat
-                                              label="Visualizações"
-                                              value={rm.visualizacoes.toLocaleString("pt-BR")}
-                                            />
-                                          ) : null}
-                                          {rm.taxaInteracao ? (
-                                            <MetricStat
-                                              label="Taxa de interação"
-                                              value={`${rm.taxaInteracao}%`}
-                                            />
-                                          ) : null}
-                                          {rm.taxaAtencaoInicial ? (
-                                            <MetricStat
-                                              label="Atenção inicial"
-                                              value={`${rm.taxaAtencaoInicial}%`}
-                                            />
-                                          ) : null}
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                          <DemographicChart
-                                            title="Faixa etária"
-                                            entries={rm.faixaEtaria}
-                                          />
-                                          <DemographicChart title="Países" entries={rm.paises} />
-                                          <DemographicChart title="Cidades" entries={rm.cidades} />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                              </div>
+                            {metricsTotal.reach > 0 && (
+                              <MetricStat
+                                label="Alcance"
+                                value={metricsTotal.reach.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.likes > 0 && (
+                              <MetricStat
+                                label="Curtidas"
+                                value={metricsTotal.likes.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.comments > 0 && (
+                              <MetricStat
+                                label="Comentários"
+                                value={metricsTotal.comments.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.shares > 0 && (
+                              <MetricStat
+                                label="Compart."
+                                value={metricsTotal.shares.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.saves > 0 && (
+                              <MetricStat
+                                label="Salvos"
+                                value={metricsTotal.saves.toLocaleString("pt-BR")}
+                              />
                             )}
                           </div>
                         ),
@@ -2883,7 +2996,7 @@ function InfluenciadorDialog({
                 <div className="space-y-4 border-t border-border pt-5">
                   <FieldLabel
                     title="Redes sociais"
-                    hint="Selecione as plataformas e adicione o handle."
+                    hint="Selecione as plataformas e adicione o handle. Seguidores e demais métricas ficam na etapa Métricas."
                   />
                   <div className="flex flex-wrap gap-1.5">
                     {REDES_OPTS.map((p) => {
@@ -2935,21 +3048,6 @@ function InfluenciadorDialog({
                             placeholder="usuario"
                             className="flex-1 bg-transparent text-sm outline-none"
                           />
-                          <div className="flex shrink-0 items-center gap-1 border-l border-border pl-3">
-                            <input
-                              value={formatSeguidores(r.seguidores)}
-                              onChange={(e) => {
-                                const digits = e.target.value.replace(/\D/g, "");
-                                setRedes((rs) =>
-                                  rs.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
-                                );
-                              }}
-                              placeholder="0"
-                              inputMode="numeric"
-                              className="w-24 bg-transparent text-right text-sm outline-none"
-                            />
-                            <span className="text-xs text-muted-foreground">seguidores</span>
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -2967,6 +3065,7 @@ function InfluenciadorDialog({
               />
               <ProfileMetricsEditor
                 redes={redes}
+                onChangeRedes={setRedes}
                 value={profileMetrics}
                 onChange={setProfileMetrics}
               />

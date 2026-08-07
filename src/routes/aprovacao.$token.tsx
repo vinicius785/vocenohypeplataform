@@ -1,7 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   AtSign,
   BarChart3,
@@ -80,6 +92,7 @@ type RedeMetrics = {
   visualizacoes?: number;
   taxaInteracao?: number;
   taxaAtencaoInicial?: number;
+  genero?: DemographicEntry[];
   faixaEtaria?: DemographicEntry[];
   paises?: DemographicEntry[];
   cidades?: DemographicEntry[];
@@ -146,40 +159,138 @@ function MetricStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DemographicChart({ title, entries }: { title: string; entries?: DemographicEntry[] }) {
+/** Paleta fixa (mesmas cores do design system, `--chart-1..5`) usada nos
+ * gráficos de pizza — arrays maiores repetem o ciclo. */
+const PIE_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+/** Rótulo com a % fora da fatia, ligado por uma linha — padrão recharts
+ * pra pizza/donut (a prop `label` não aceita texto customizado sem isso). */
+function renderPieLabel(props: {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  outerRadius: number;
+  valor: number;
+}) {
+  const { cx, cy, midAngle, outerRadius, valor } = props;
+  const RADIAN = Math.PI / 180;
+  const radius = outerRadius + 16;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="var(--muted-foreground)"
+      fontSize={10}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+    >
+      {`${valor}%`}
+    </text>
+  );
+}
+
+/** Gráfico de barra (horizontal) ou pizza pra uma lista `{ name, valor }%`. */
+function DemographicMiniChart({
+  data,
+  chartType,
+}: {
+  data: { name: string; valor: number }[];
+  chartType: "bar" | "pie";
+}) {
+  if (data.length === 0) return null;
+  if (chartType === "pie") {
+    return (
+      <div className="h-[150px] w-full pt-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="valor"
+              nameKey="name"
+              innerRadius="42%"
+              outerRadius="72%"
+              isAnimationActive={false}
+              label={renderPieLabel}
+              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
+            >
+              {data.map((entry, i) => (
+                <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <Legend
+              layout="vertical"
+              verticalAlign="middle"
+              align="right"
+              formatter={(value, entry) =>
+                `${value} — ${(entry as { payload?: { valor?: number } }).payload?.valor ?? 0}%`
+              }
+              wrapperStyle={{ fontSize: 10, color: "var(--muted-foreground)" }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+  return (
+    <div className="h-[100px] w-full pt-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 28 }}>
+          <CartesianGrid horizontal={false} strokeOpacity={0.15} />
+          <XAxis type="number" domain={[0, 100]} hide />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={90}
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Bar
+            dataKey="valor"
+            fill="var(--foreground)"
+            radius={3}
+            barSize={12}
+            isAnimationActive={false}
+          >
+            <LabelList
+              dataKey="valor"
+              position="right"
+              formatter={(v: number) => `${v}%`}
+              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DemographicChart({
+  title,
+  entries,
+  chartType = "bar",
+}: {
+  title: string;
+  entries?: DemographicEntry[];
+  chartType?: "bar" | "pie";
+}) {
   const data = (entries ?? [])
     .filter((e) => e.label.trim() && e.percentual > 0)
     .map((e) => ({ name: e.label, valor: e.percentual }))
     .sort((a, b) => b.valor - a.valor);
   if (data.length === 0) return null;
   return (
-    <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
-      <div className="h-[90px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }}>
-            <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-            <XAxis type="number" domain={[0, 100]} hide />
-            <YAxis
-              type="category"
-              dataKey="name"
-              width={90}
-              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Bar
-              dataKey="valor"
-              fill="var(--foreground)"
-              radius={3}
-              barSize={12}
-              isAnimationActive={false}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <p className="text-xs font-semibold text-foreground">{title}</p>
+      <DemographicMiniChart data={data} chartType={chartType} />
     </div>
   );
 }
@@ -191,6 +302,7 @@ function hasRedeMetrics(m?: RedeMetrics): boolean {
       m.visualizacoes ||
       m.taxaInteracao ||
       m.taxaAtencaoInicial ||
+      m.genero?.length ||
       m.faixaEtaria?.length ||
       m.paises?.length ||
       m.cidades?.length),
@@ -213,6 +325,8 @@ function InfluencerProfileDialog({
   onClose: () => void;
 }) {
   const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
+  const redesComMetrics = inf.redes.filter((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""]));
+  const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
 
   return (
     <div
@@ -220,73 +334,76 @@ function InfluencerProfileDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-background"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+        <div className="flex items-start justify-between gap-4 border-b border-border bg-muted/30 px-6 py-5">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-background">
               {inf.foto ? (
                 <img src={inf.foto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+                <User className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
-            <h3 className="text-sm font-semibold">{inf.nome}</h3>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-foreground">{inf.nome}</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {inf.redes.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
+                ) : (
+                  inf.redes.map((r, i) => {
+                    const url = profileUrl(r.plataforma, r.handle);
+                    const content = (
+                      <>
+                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                        {r.handle || r.plataforma}
+                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
+                      </>
+                    );
+                    const className = `inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm${url ? " hover:bg-muted" : ""}`;
+                    return url ? (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" className={className}>
+                        {content}
+                      </a>
+                    ) : (
+                      <span key={i} className={className}>
+                        {content}
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          <div className="flex flex-wrap gap-1.5">
-            {inf.redes.length === 0 ? (
-              <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
-            ) : (
-              inf.redes.map((r, i) => {
-                const url = profileUrl(r.plataforma, r.handle);
-                const content = (
-                  <>
-                    <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                    {r.handle || r.plataforma}
-                    {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                  </>
-                );
-                const className = `inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground${url ? " hover:bg-muted-foreground/20" : ""}`;
-                return url ? (
-                  <a key={i} href={url} target="_blank" rel="noreferrer" className={className}>
-                    {content}
-                  </a>
-                ) : (
-                  <span key={i} className={className}>
-                    {content}
-                  </span>
-                );
-              })
-            )}
-          </div>
-
-          {inf.redes.some((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""])) && (
-            <div className="space-y-4 border-t border-border pt-4">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
-                <BarChart3 className="h-3.5 w-3.5" /> Métricas do perfil
-              </p>
-              {inf.redes
-                .filter((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""]))
-                .map((r) => {
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
+          {redesComMetrics.length > 0 && (
+            <section className="space-y-5">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <BarChart3 className="h-4 w-4" /> Métricas do perfil
+              </h4>
+              <div className="space-y-6">
+                {redesComMetrics.map((r) => {
                   const rm = inf.profileMetrics![r.id ?? ""]!;
                   return (
-                    <div key={r.id} className="space-y-2.5">
-                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
+                    <div
+                      key={r.id}
+                      className="space-y-4 rounded-xl border border-border bg-card p-4"
+                    >
+                      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                         {r.handle ? `@${r.handle}` : r.plataforma}
                       </p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
                         {r.seguidores ? (
                           <MetricStat label="Seguidores" value={formatSeguidores(r.seguidores)} />
                         ) : null}
@@ -309,7 +426,8 @@ function InfluencerProfileDialog({
                           <MetricStat label="Atenção inicial" value={`${rm.taxaAtencaoInicial}%`} />
                         ) : null}
                       </div>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <DemographicChart title="Gênero" entries={rm.genero} chartType="pie" />
                         <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
                         <DemographicChart title="Países" entries={rm.paises} />
                         <DemographicChart title="Cidades" entries={rm.cidades} />
@@ -317,57 +435,65 @@ function InfluencerProfileDialog({
                     </div>
                   );
                 })}
-            </div>
+              </div>
+            </section>
           )}
 
           {entregasComMetrics.length > 0 && (
-            <div className="space-y-3 border-t border-border pt-4">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
-                <Users className="h-3.5 w-3.5" /> Métricas das entregas
-              </p>
-              {entregasComMetrics.map((e) => (
-                <div key={e.id} className="space-y-1.5 rounded-md bg-muted/40 p-2.5">
-                  <p className="text-xs font-medium text-foreground">{e.tipo}</p>
-                  <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-6">
-                    {e.metrics?.views ? (
-                      <MetricStat label="Views" value={e.metrics.views.toLocaleString("pt-BR")} />
-                    ) : null}
-                    {e.metrics?.reach ? (
-                      <MetricStat label="Alcance" value={e.metrics.reach.toLocaleString("pt-BR")} />
-                    ) : null}
-                    {e.metrics?.likes ? (
-                      <MetricStat
-                        label="Curtidas"
-                        value={e.metrics.likes.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.comments ? (
-                      <MetricStat
-                        label="Coment."
-                        value={e.metrics.comments.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.shares ? (
-                      <MetricStat
-                        label="Compart."
-                        value={e.metrics.shares.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.saves ? (
-                      <MetricStat label="Salvos" value={e.metrics.saves.toLocaleString("pt-BR")} />
-                    ) : null}
+            <section className="space-y-4">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Users className="h-4 w-4" /> Métricas das entregas
+              </h4>
+              <div className="space-y-3">
+                {entregasComMetrics.map((e) => (
+                  <div key={e.id} className="rounded-xl border border-border bg-card p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {e.tipo}
+                    </p>
+                    <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+                      {e.metrics?.views ? (
+                        <MetricStat label="Views" value={e.metrics.views.toLocaleString("pt-BR")} />
+                      ) : null}
+                      {e.metrics?.reach ? (
+                        <MetricStat
+                          label="Alcance"
+                          value={e.metrics.reach.toLocaleString("pt-BR")}
+                        />
+                      ) : null}
+                      {e.metrics?.likes ? (
+                        <MetricStat
+                          label="Curtidas"
+                          value={e.metrics.likes.toLocaleString("pt-BR")}
+                        />
+                      ) : null}
+                      {e.metrics?.comments ? (
+                        <MetricStat
+                          label="Coment."
+                          value={e.metrics.comments.toLocaleString("pt-BR")}
+                        />
+                      ) : null}
+                      {e.metrics?.shares ? (
+                        <MetricStat
+                          label="Compart."
+                          value={e.metrics.shares.toLocaleString("pt-BR")}
+                        />
+                      ) : null}
+                      {e.metrics?.saves ? (
+                        <MetricStat
+                          label="Salvos"
+                          value={e.metrics.saves.toLocaleString("pt-BR")}
+                        />
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </section>
           )}
 
-          {entregasComMetrics.length === 0 &&
-            !inf.redes.some((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""])) && (
-              <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-                Nenhuma métrica cadastrada ainda.
-              </p>
-            )}
+          {semNadaAlem && (
+            <p className="text-sm text-muted-foreground">Nenhuma métrica cadastrada ainda.</p>
+          )}
         </div>
       </div>
     </div>

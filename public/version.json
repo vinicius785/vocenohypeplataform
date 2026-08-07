@@ -1,6 +1,10 @@
 {
-  "version": "1.68.2",
+  "version": "1.69.0",
   "notes": [
+    "Nova métrica Gênero (gráfico de pizza) na demografia do influenciador, ao lado de faixa etária/países/cidades. Todos os gráficos (barra e pizza) agora mostram a % em número junto com a barra/fatia.",
+    "Campo Seguidores passa a ser preenchido na etapa Métricas (por rede social), não mais na etapa Redes.",
+    "Dentro da plataforma, clicar num influenciador agora abre um perfil bem mais completo: métricas do perfil em destaque com gráficos, junto de entregas, checklist e comentários — mesmo padrão visual do link público de aprovação.",
+    "Redesenha o card de perfil do link público de aprovação: maior, mais espaçado, com títulos e seções bem definidas.",
     "Corrige os gráficos de demografia (influenciador e link público de aprovação): as barras não apareciam por um bug de cor, ficando invisíveis sobre o card. Aproveitando, o card de perfil do link público ficou maior para nenhuma métrica ficar cortada.",
     "Métricas do influenciador agora são por rede social (selecione a rede e preencha interações/visualizações/demografia específicas dela), removendo o campo \"Seguidores\" que aparecia duplicado (já existe por rede na etapa Perfil).",
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas.",
