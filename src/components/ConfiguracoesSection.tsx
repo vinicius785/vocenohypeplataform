@@ -74,7 +74,7 @@ import {
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { LockedSection } from "./LockedSection";
 
-type TabKey = "perfil" | "workspace" | "av" | "senhas" | "preferencias" | "integracoes" | "dados";
+type TabKey = "perfil" | "workspace" | "senhas" | "preferencias" | "integracoes";
 
 type Perfil = {
   nome: string;
@@ -83,7 +83,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.62.1";
+export const APP_VERSION = "1.63.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -199,7 +199,6 @@ export function ConfiguracoesSection() {
           tabs={[
             { k: "perfil", label: "Meu Perfil", icon: User },
             { k: "preferencias", label: "Preferências", icon: Bell },
-            { k: "av", label: "Áudio e Vídeo", icon: Mic },
           ]}
         />
         <TabGroup
@@ -211,7 +210,6 @@ export function ConfiguracoesSection() {
             { k: "workspace", label: "Identidade", icon: Building2 },
             { k: "senhas", label: "Senhas", icon: KeyRound },
             { k: "integracoes", label: "Integrações", icon: Webhook },
-            { k: "dados", label: "Dados", icon: Download },
           ]}
         />
       </div>
@@ -219,12 +217,9 @@ export function ConfiguracoesSection() {
       {tab === "perfil" && <PerfilTab perfil={perfil} setPerfil={setPerfil} />}
       {tab === "workspace" &&
         (canConfig ? <WorkspaceTab /> : <LockedSection title="Identidade do workspace" />)}
-      {tab === "av" && <AVTab />}
       {tab === "senhas" && (canConfig ? <SenhasTab /> : <LockedSection title="Senhas" />)}
       {tab === "preferencias" && <PreferenciasTab />}
-      {tab === "integracoes" &&
-        (canConfig ? <IntegracoesTab /> : <LockedSection title="Integrações" />)}
-      {tab === "dados" && <DadosTab />}
+      {tab === "integracoes" && <IntegracoesTab />}
 
       <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
     </div>
@@ -353,6 +348,10 @@ function PreferenciasTab() {
             </label>
           ))}
         </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <DadosTab />
       </div>
     </div>
   );
@@ -490,7 +489,7 @@ function DadosTab() {
   };
 
   return (
-    <div className="max-w-lg space-y-4 rounded-lg border border-border bg-background p-4">
+    <div className="space-y-4 rounded-lg border border-border bg-background p-4">
       <div>
         <h3 className="text-sm font-semibold">Exportação de dados</h3>
         <p className="text-xs text-muted-foreground">
@@ -513,9 +512,9 @@ function DadosTab() {
 }
 
 /* ============================================================
- * Integrações — webhook de entrada para leads e webhooks de saída
- * (estilo Zapier/Make). Integrações pessoais (Google Agenda) ficam
- * em "Preferências", que é autoatendimento e não exige admin.
+ * Integrações — Calendário (Google Agenda) é self-service, disponível
+ * a qualquer membro; Entrada/Saída (webhooks) exigem admin, checado
+ * seção a seção (não trava a aba inteira).
  * ============================================================ */
 
 function IntegracoesSectionHeader({
@@ -1332,6 +1331,26 @@ function StatusPopover({
 const inputCls =
   "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 
+function SettingsSectionHeader({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="mt-0.5 text-muted-foreground">{icon}</div>
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 function PerfilTab({ perfil, setPerfil }: { perfil: Perfil; setPerfil: (p: Perfil) => void }) {
   const [p, setP] = useState<Perfil>(perfil);
   const [saved, setSaved] = useState(false);
@@ -1417,6 +1436,61 @@ function PerfilTab({ perfil, setPerfil }: { perfil: Perfil; setPerfil: (p: Perfi
       .slice(0, 2)
       .map((s) => s[0]?.toUpperCase())
       .join("") || "?";
+
+  return (
+    <div className="max-w-2xl space-y-8">
+      <section className="space-y-3">
+        <SettingsSectionHeader
+          icon={<User className="h-4 w-4" />}
+          title="Perfil"
+          description="Nome, foto e contato exibidos pro resto do time."
+        />
+        <PerfilForm
+          p={p}
+          setP={setP}
+          error={error}
+          save={save}
+          saving={saving}
+          saved={saved}
+          onPickFile={onPickFile}
+          initials={initials}
+        />
+      </section>
+
+      <div className="border-t border-border" />
+
+      <section className="space-y-3">
+        <SettingsSectionHeader
+          icon={<Mic className="h-4 w-4" />}
+          title="Áudio e vídeo"
+          description="Microfone, câmera e saída de áudio usados nas chamadas da plataforma."
+        />
+        <AVTab />
+      </section>
+    </div>
+  );
+}
+
+function PerfilForm({
+  p,
+  setP,
+  error,
+  save,
+  saving,
+  saved,
+  onPickFile,
+  initials,
+}: {
+  p: Perfil;
+  setP: (p: Perfil) => void;
+  error: string;
+  save: (e: React.FormEvent) => void;
+  saving: boolean;
+  saved: boolean;
+  onPickFile: (file?: File | null) => void;
+  initials: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
 
   return (
     <form

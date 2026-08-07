@@ -1,6 +1,6 @@
 {
-  "version": "1.62.1",
+  "version": "1.63.0",
   "notes": [
-    "Corrige horário errado dos eventos sincronizados no Google Agenda (deslocamento de fuso) e passa a incluir os e-mails convidados de cada reunião como participantes do evento."
+    "Reorganiza Configurações: de 7 abas para 5 — Meu Perfil agora inclui Áudio e Vídeo, e Preferências inclui Exportação de dados, deixando o menu mais enxuto."
   ]
 }
