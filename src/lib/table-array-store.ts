@@ -111,17 +111,29 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
             .from(table)
             .delete()
             .eq("id", id)
-            .then(({ error }) => {
-              if (!error) return;
-              console.warn(`[${table}] delete failed`, error);
-              // Mesma lógica: se apagar falhou de verdade no banco, restaura
-              // o item na tela em vez de deixar sumido até o próximo reload.
+            .select("id")
+            .then(({ data, error }) => {
+              // `.select("id")` faz o delete devolver as linhas que de fato
+              // apagou. Sem isso, uma policy de RLS que barra a linha (sem
+              // dar erro — PostgREST trata "0 linhas afetadas" como sucesso)
+              // passava batido: a UI já tinha removido o item da tela, o
+              // banco nunca mudou, e ele reaparecia no próximo reload sem
+              // nenhum aviso.
+              if (!error && (data?.length ?? 0) > 0) return;
+              console.warn(
+                `[${table}] delete failed`,
+                error ?? "0 linhas afetadas (RLS bloqueou ou o id não existia)",
+              );
               const old = prevById.get(id)!;
               if (!cache.some((x) => x.id === id)) {
                 cache = [...cache, old];
                 emit();
               }
-              onError?.(new Error(error.message));
+              onError?.(
+                error
+                  ? new Error(error.message)
+                  : new Error("Sem permissão para apagar este item."),
+              );
             });
         }
       }

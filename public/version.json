@@ -1,6 +1,6 @@
 {
-  "version": "1.65.1",
+  "version": "1.65.2",
   "notes": [
-    "Corrige lançamento do Financeiro (e itens de outras seções) que sumia ao apagar mas voltava depois de atualizar a página — se apagar falhasse de verdade no banco, agora o item volta pra tela na hora e mostra um aviso, em vez de continuar 'apagado' só até o próximo reload."
+    "Reforça a detecção de falha ao apagar: agora também cobre o caso onde o banco responde 'sucesso' mas zero linhas foram removidas (ex: bloqueio silencioso de permissão), que antes passava despercebido e deixava o item reaparecer sem nenhum aviso."
   ]
 }
