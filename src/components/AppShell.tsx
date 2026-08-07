@@ -27,7 +27,6 @@ import {
   AtSign,
   CheckSquare,
   CalendarClock,
-  Trophy,
   Timer,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
@@ -82,7 +81,6 @@ export type SectionKey =
   | "financeiro"
   | "time"
   | "influenciadores"
-  | "gestao"
   | "chat"
   | "configuracoes";
 
@@ -119,7 +117,6 @@ const groups: NavGroup[] = [
     title: "Estrutura",
     items: [
       { key: "time", label: "Time", icon: UserCog },
-      { key: "gestao", label: "Gestão", icon: Trophy },
       { key: "influenciadores", label: "Banco de influenciadores", icon: Star },
     ],
   },

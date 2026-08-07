@@ -1,6 +1,6 @@
 {
-  "version": "1.63.0",
+  "version": "1.64.0",
   "notes": [
-    "Reorganiza Configurações: de 7 abas para 5 — Meu Perfil agora inclui Áudio e Vídeo, e Preferências inclui Exportação de dados, deixando o menu mais enxuto."
+    "Unifica \"Time\" e \"Gestão\" numa aba só, com sub-abas (Diretório, Visão geral, Tarefas, Início de dia) e 3 métricas novas no ranking: tarefas abertas no momento, atraso médio nas entregas e taxa de presença em reuniões."
   ]
 }

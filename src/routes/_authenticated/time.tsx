@@ -5,7 +5,6 @@ import { InicioDashboard } from "@/components/InicioDashboard";
 import { ClientesSection } from "@/components/ClientesSection";
 import { CampanhasSection } from "@/components/CampanhasSection";
 import { TimeSection } from "@/components/TimeSection";
-import { GestaoSection } from "@/components/GestaoSection";
 import { InfluenciadoresSection } from "@/components/InfluenciadoresSection";
 import { ReunioesSection } from "@/components/ReunioesSection";
 import { ProjetosSection } from "@/components/ProjetosSection";
@@ -27,7 +26,6 @@ const VALID: SectionKey[] = [
   "financeiro",
   "time",
   "influenciadores",
-  "gestao",
   "chat",
   "configuracoes",
 ];
@@ -52,8 +50,7 @@ const SECTIONS: Record<SectionKey, { title: string; description: string }> = {
   comercial: { title: "Comercial", description: "Pipeline e vendas." },
   financeiro: { title: "Financeiro", description: "Receitas, despesas e fluxo." },
 
-  time: { title: "Time", description: "Membros e permissões." },
-  gestao: { title: "Gestão", description: "Métricas e pontuação do time." },
+  time: { title: "Time", description: "Membros, métricas e pontuação do time." },
   influenciadores: { title: "Banco de influenciadores", description: "Catálogo de criadores." },
   chat: { title: "Chat", description: "Conversas do time." },
   configuracoes: { title: "Configurações", description: "Preferências do workspace." },
@@ -100,8 +97,6 @@ function TimePage() {
         <TimeSection />
       ) : active === "influenciadores" ? (
         <InfluenciadoresSection />
-      ) : active === "gestao" ? (
-        <GestaoSection />
       ) : active === "reunioes" ? (
         <ReunioesSection />
       ) : active === "projetos" ? (

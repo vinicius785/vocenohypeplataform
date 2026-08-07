@@ -9,7 +9,6 @@ export type Permission =
   | "comercial"
   | "financeiro"
   | "time"
-  | "gestao"
   | "influenciadores"
   | "chat"
   | "senhas"
@@ -48,7 +47,6 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     label: "Time & Comunicação",
     items: [
       { key: "time", label: "Time" },
-      { key: "gestao", label: "Gestão" },
       { key: "chat", label: "Chat" },
     ],
   },
@@ -71,7 +69,6 @@ export const SECTION_PERMISSION: Record<string, Permission> = {
   comercial: "comercial",
   financeiro: "financeiro",
   time: "time",
-  gestao: "gestao",
   influenciadores: "influenciadores",
   chat: "chat",
   configuracoes: "configuracoes",

@@ -30,6 +30,14 @@ export const SCORE_RULES: ScoreRule[] = [
   { key: "meeting_missed", label: "Reunião perdida (convidado, mas não participou)", points: -5 },
 ];
 
+export const OPEN_STATUSES = new Set([
+  "Aberto",
+  "Em andamento",
+  "Em aprovação",
+  "Em ajustes",
+  "Aprovado",
+]);
+
 export type DateRange = { from?: string; to?: string };
 
 function inRange(date: string | null | undefined, range?: DateRange): boolean {
@@ -45,11 +53,21 @@ export type MemberScore = {
   tasksOnTime: number;
   tasksLate: number;
   tasksOverdue: number;
+  /** Tarefas abertas neste momento (não é filtrado pelo `range` — é sempre
+   * o estado atual, diferente de tasksOnTime/tasksLate/tasksOverdue que
+   * refletem o período selecionado). */
+  openTasks: number;
   meetingsAttended: number;
   meetingsMissed: number;
   hoursTracked: number;
+  /** Média de dias de atraso (positivo) ou antecedência (negativo) nas
+   * tarefas concluídas dentro do `range` que tinham prazo definido.
+   * `null` quando não há nenhuma tarefa concluída com prazo pra calcular. */
+  avgDelayDays: number | null;
   breakdown: (ScoreRule & { count: number; total: number })[];
 };
+
+type MemberScoreAcc = MemberScore & { delaySumDays: number; delayCount: number };
 
 function toLocalDateISO(iso: string): string {
   // Mesmo cuidado de `todayISO()`: pegar a data em UTC (slice direto do ISO)
@@ -66,6 +84,12 @@ function taskCompletionDate(t: Task): string | null {
   const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
   if (entries.length === 0) return null;
   return toLocalDateISO(entries[entries.length - 1].createdAt);
+}
+
+function daysBetween(fromISO: string, toISO: string): number {
+  const from = new Date(`${fromISO}T00:00:00`);
+  const to = new Date(`${toISO}T00:00:00`);
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000);
 }
 
 function taskHours(t: Task): number {
@@ -95,21 +119,25 @@ export function computeMemberScores(
   campanhaGroups: TaskGroup[] = [],
 ): MemberScore[] {
   const today = todayISO();
-  const byId = new Map<string, MemberScore>();
+  const byId = new Map<string, MemberScoreAcc>();
   const byName = new Map(members.map((m) => [m.name, m]));
 
-  const ensure = (member: ChatMember): MemberScore => {
+  const ensure = (member: ChatMember): MemberScoreAcc => {
     const existing = byId.get(member.id);
     if (existing) return existing;
-    const created: MemberScore = {
+    const created: MemberScoreAcc = {
       member,
       score: 0,
       tasksOnTime: 0,
       tasksLate: 0,
       tasksOverdue: 0,
+      openTasks: 0,
       meetingsAttended: 0,
       meetingsMissed: 0,
       hoursTracked: 0,
+      avgDelayDays: null,
+      delaySumDays: 0,
+      delayCount: 0,
       breakdown: SCORE_RULES.map((r) => ({ ...r, count: 0, total: 0 })),
     };
     byId.set(member.id, created);
@@ -134,9 +162,14 @@ export function computeMemberScores(
         if (!member) continue;
         const stat = ensure(member);
         stat.hoursTracked += taskHours(t);
+        if (OPEN_STATUSES.has(t.status)) stat.openTasks += 1;
         if (t.status === "Concluído") {
           const completedAt = taskCompletionDate(t);
           if (!inRange(completedAt, range)) continue;
+          if (t.dueDate && completedAt) {
+            stat.delaySumDays += daysBetween(t.dueDate, completedAt);
+            stat.delayCount += 1;
+          }
           const late = !!(t.dueDate && completedAt && completedAt > t.dueDate);
           if (late) {
             stat.tasksLate += 1;
@@ -174,7 +207,12 @@ export function computeMemberScores(
     }
   }
 
-  return Array.from(byId.values()).sort((a, b) => b.score - a.score);
+  return Array.from(byId.values())
+    .map(({ delaySumDays, delayCount, ...rest }) => ({
+      ...rest,
+      avgDelayDays: delayCount > 0 ? delaySumDays / delayCount : null,
+    }))
+    .sort((a, b) => b.score - a.score);
 }
 
 /* ============================================================
@@ -211,8 +249,6 @@ export function collectTaskItems(
   }
   return out;
 }
-
-const OPEN_STATUSES = new Set(["Aberto", "Em andamento", "Em aprovação", "Em ajustes", "Aprovado"]);
 
 export function tasksDueToday(items: TaskItem[], today = todayISO()): TaskItem[] {
   return items.filter((t) => t.dueDate === today && OPEN_STATUSES.has(t.status));

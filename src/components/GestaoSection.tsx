@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, ChevronDown, Sunrise, Trophy, User } from "lucide-react";
-import { SectionHeader } from "./SectionHeader";
 import { loadMembers, subscribeChat, type ChatMember } from "@/lib/chat-store";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
@@ -141,35 +140,9 @@ function StartOfDayCard({ member }: { member: MemberWithStart }) {
   );
 }
 
-type GestaoTab = "geral" | "tarefas" | "inicio-dia";
+export type GestaoTab = "geral" | "tarefas" | "inicio-dia";
 
-function GestaoTabs({ tab, setTab }: { tab: GestaoTab; setTab: (t: GestaoTab) => void }) {
-  const TABS: { k: GestaoTab; label: string }[] = [
-    { k: "geral", label: "Visão geral" },
-    { k: "tarefas", label: "Tarefas" },
-    { k: "inicio-dia", label: "Início de dia" },
-  ];
-  return (
-    <div className="flex gap-1">
-      {TABS.map(({ k, label }) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => setTab(k)}
-          className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm transition-colors ${
-            tab === k
-              ? "bg-foreground font-medium text-background"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function GestaoSection() {
+export function GestaoContent({ tab }: { tab: GestaoTab }) {
   const [members, setMembers] = useState<ChatMember[]>(() => loadMembers());
   const [membersWithStart, setMembersWithStart] = useState<MemberWithStart[]>(() =>
     loadMembersWithStart(),
@@ -179,7 +152,6 @@ export function GestaoSection() {
   const [personFilter, setPersonFilter] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
-  const [tab, setTab] = useState<GestaoTab>("geral");
 
   useEffect(
     () =>
@@ -254,25 +226,35 @@ export function GestaoSection() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8">
-      <SectionHeader
-        title="Gestão"
-        subtitle="Métricas, pontuação e presença do time — tarefas de projetos, reuniões e início de dia."
-        kpis={[
-          { label: "Total de tarefas", value: totalTasks },
-          { label: "Concluídas no período", value: totalConcluded },
-          {
-            label: "Atrasadas (todo mundo)",
-            value: totalOverdue,
-            tone: totalOverdue > 0 ? "text-destructive" : undefined,
-          },
-          { label: "Vencem hoje (todo mundo)", value: totalDueToday },
-          {
-            label: "Já começaram o dia hoje",
-            value: `${checkedInToday}/${membersWithStart.length}`,
-          },
-        ]}
-      />
+    <div className="space-y-6">
+      <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
+        <div className="flex shrink-0 items-baseline gap-2">
+          <span className="text-lg font-bold text-foreground">{totalTasks}</span>
+          <span className="text-xs uppercase text-muted-foreground">Total de tarefas</span>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+          <span className="text-lg font-bold text-foreground">{totalConcluded}</span>
+          <span className="text-xs uppercase text-muted-foreground">Concluídas no período</span>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+          <span
+            className={`text-lg font-bold ${totalOverdue > 0 ? "text-destructive" : "text-foreground"}`}
+          >
+            {totalOverdue}
+          </span>
+          <span className="text-xs uppercase text-muted-foreground">Atrasadas (todo mundo)</span>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+          <span className="text-lg font-bold text-foreground">{totalDueToday}</span>
+          <span className="text-xs uppercase text-muted-foreground">Vencem hoje (todo mundo)</span>
+        </div>
+        <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+          <span className="text-lg font-bold text-foreground">
+            {checkedInToday}/{membersWithStart.length}
+          </span>
+          <span className="text-xs uppercase text-muted-foreground">Começaram o dia hoje</span>
+        </div>
+      </div>
 
       <section className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3">
         <div>
@@ -329,8 +311,6 @@ export function GestaoSection() {
         </p>
       </section>
 
-      <GestaoTabs tab={tab} setTab={setTab} />
-
       {tab === "geral" && (
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -381,8 +361,29 @@ export function GestaoSection() {
                       <Stat label="No prazo" value={s.tasksOnTime} />
                       <Stat label="Entregue atrasada" value={s.tasksLate} />
                       <Stat label="Atrasada (aberta)" value={s.tasksOverdue} />
+                      <Stat label="Abertas agora" value={s.openTasks} />
+                      <Stat
+                        label="Atraso médio nas entregas"
+                        value={
+                          s.avgDelayDays === null
+                            ? "—"
+                            : s.avgDelayDays === 0
+                              ? "no dia"
+                              : s.avgDelayDays > 0
+                                ? `${s.avgDelayDays.toFixed(1)}d atraso`
+                                : `${Math.abs(s.avgDelayDays).toFixed(1)}d adiantado`
+                        }
+                      />
                       <Stat label="Reuniões OK" value={s.meetingsAttended} />
                       <Stat label="Reuniões perdidas" value={s.meetingsMissed} />
+                      <Stat
+                        label="Presença em reuniões"
+                        value={
+                          s.meetingsAttended + s.meetingsMissed === 0
+                            ? "—"
+                            : `${Math.round((s.meetingsAttended / (s.meetingsAttended + s.meetingsMissed)) * 100)}%`
+                        }
+                      />
                     </div>
                   )}
                 </div>

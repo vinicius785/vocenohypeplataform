@@ -16,7 +16,13 @@ import {
   Copy,
   Clock,
   Users as UsersIcon,
+  UserCog,
+  Trophy,
+  CalendarClock,
+  Sunrise,
 } from "lucide-react";
+import { SectionHeader } from "./SectionHeader";
+import { GestaoContent, type GestaoTab } from "./GestaoSection";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -128,7 +134,7 @@ export type Member = {
 const MEMBERS_KEY = "time:membros";
 const friendlyError = friendlyNetworkError;
 
-export function TimeSection() {
+function DiretorioTab() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -336,37 +342,46 @@ export function TimeSection() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Time</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {members.length} {members.length === 1 ? "membro" : "membros"} no workspace
-            </p>
+      <div className="space-y-6">
+        <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
+          <div className="flex shrink-0 items-baseline gap-2">
+            <span className="text-lg font-bold text-foreground">{members.length}</span>
+            <span className="text-xs uppercase text-muted-foreground">
+              {members.length === 1 ? "Membro" : "Membros"}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome, cargo ou email"
-                className="h-9 w-40 pl-8 text-xs sm:w-56"
-              />
-            </div>
-            {isAdmin && (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditing(null);
-                  setOpen(true);
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Novo membro
-              </Button>
-            )}
+          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+            <span className="text-lg font-bold text-foreground">{adminCount}</span>
+            <span className="text-xs uppercase text-muted-foreground">Admins</span>
           </div>
+          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
+            <span className="text-lg font-bold text-foreground">{onlineCount}</span>
+            <span className="text-xs uppercase text-muted-foreground">Online agora</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nome, cargo ou email"
+              className="h-9 w-40 pl-8 text-xs sm:w-56"
+            />
+          </div>
+          {isAdmin && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Novo membro
+            </Button>
+          )}
         </div>
 
         {error && (
@@ -903,36 +918,33 @@ function MemberDialog({
               {!isNew && (
                 <>
                   <Separator />
-                  <section className="space-y-3">
+                  <section className="space-y-2">
                     <SectionTitle
                       icon={<Clock className="h-3.5 w-3.5" />}
-                      title="Histórico de início de dia"
+                      title="Início de dia"
                       hint="Horário em que o membro tocou 'Começar o dia'."
                     />
                     {(() => {
-                      const entries = Object.entries(initial?.startTimes ?? {})
-                        .filter(([d, h]) => d && h)
-                        .sort((a, b) => (a[0] < b[0] ? 1 : -1));
+                      const entries = Object.entries(initial?.startTimes ?? {}).filter(
+                        ([d, h]) => d && h,
+                      );
                       if (entries.length === 0) {
                         return (
                           <p className="text-xs text-muted-foreground">Sem registros ainda.</p>
                         );
                       }
-                      const fmt = (d: string) => {
-                        const [y, m, day] = d.split("-");
-                        return `${day}/${m}/${y}`;
-                      };
+                      const [lastDate, lastTime] = entries.sort((a, b) =>
+                        a[0] < b[0] ? 1 : -1,
+                      )[0];
+                      const [y, m, day] = lastDate.split("-");
                       return (
-                        <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-                          <ul className="divide-y divide-border text-xs">
-                            {entries.slice(0, 60).map(([d, h]) => (
-                              <li key={d} className="flex items-center justify-between px-3 py-1.5">
-                                <span className="text-muted-foreground">{fmt(d)}</span>
-                                <span className="font-medium tabular-nums">{h}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Último registro:{" "}
+                          <span className="font-medium tabular-nums text-foreground">
+                            {day}/{m}/{y} às {lastTime}
+                          </span>{" "}
+                          · histórico completo na aba "Início de dia".
+                        </p>
                       );
                     })()}
                   </section>
@@ -1253,20 +1265,17 @@ function MemberViewDialog({
             )}
 
             {startEntries.length > 0 && (
-              <section className="space-y-2">
+              <section className="space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Clock className="h-3.5 w-3.5" /> Histórico de início de dia
+                  <Clock className="h-3.5 w-3.5" /> Início de dia
                 </div>
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-                  <ul className="divide-y divide-border text-xs">
-                    {startEntries.slice(0, 60).map(([d, h]) => (
-                      <li key={d} className="flex items-center justify-between px-3 py-1.5">
-                        <span className="text-muted-foreground">{fmtDate(d)}</span>
-                        <span className="font-medium tabular-nums">{h}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Último registro:{" "}
+                  <span className="font-medium tabular-nums text-foreground">
+                    {fmtDate(startEntries[0][0])} às {startEntries[0][1]}
+                  </span>{" "}
+                  · histórico completo na aba "Início de dia".
+                </p>
               </section>
             )}
           </div>
@@ -1278,5 +1287,54 @@ function MemberViewDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type UnifiedTab = "diretorio" | GestaoTab;
+const UNIFIED_TABS: { k: UnifiedTab; label: string; icon: typeof UserCog }[] = [
+  { k: "diretorio", label: "Diretório", icon: UserCog },
+  { k: "geral", label: "Visão geral", icon: Trophy },
+  { k: "tarefas", label: "Tarefas", icon: CalendarClock },
+  { k: "inicio-dia", label: "Início de dia", icon: Sunrise },
+];
+
+function UnifiedTabs({ tab, setTab }: { tab: UnifiedTab; setTab: (t: UnifiedTab) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {UNIFIED_TABS.map(({ k, label, icon: Icon }) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => setTab(k)}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
+            tab === k
+              ? "bg-foreground font-medium text-background"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * "Time" e "Gestão" eram duas seções separadas no menu (diretório de
+ * membros + métricas/ranking/tarefas/início de dia) mostrando dados
+ * sobrepostos (início de dia aparecia em 3 lugares diferentes: aqui,
+ * dentro do editar/ver membro, e na antiga aba Gestão). Unificadas numa
+ * só, com sub-abas — início de dia agora só existe aqui.
+ */
+export function TimeSection() {
+  const [tab, setTab] = useState<UnifiedTab>("diretorio");
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-6">
+      <SectionHeader title="Time" subtitle="Membros, métricas e pontuação do time." />
+      <UnifiedTabs tab={tab} setTab={setTab} />
+      {tab === "diretorio" ? <DiretorioTab /> : <GestaoContent tab={tab} />}
+    </div>
   );
 }
