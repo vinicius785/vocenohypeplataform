@@ -111,29 +111,25 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
             .from(table)
             .delete()
             .eq("id", id)
-            .select("id")
-            .then(({ data, error }) => {
-              // `.select("id")` faz o delete devolver as linhas que de fato
-              // apagou. Sem isso, uma policy de RLS que barra a linha (sem
-              // dar erro — PostgREST trata "0 linhas afetadas" como sucesso)
-              // passava batido: a UI já tinha removido o item da tela, o
-              // banco nunca mudou, e ele reaparecia no próximo reload sem
-              // nenhum aviso.
-              if (!error && (data?.length ?? 0) > 0) return;
-              console.warn(
-                `[${table}] delete failed`,
-                error ?? "0 linhas afetadas (RLS bloqueou ou o id não existia)",
-              );
+            .then(({ error }) => {
+              // Só um `error` de verdade (RLS negando, rede, etc.) é uma
+              // falha. "0 linhas afetadas" SEM erro não é: DELETE é
+              // idempotente — significa que a linha já não existia mais
+              // (ex.: outro clique/aba/usuário já apagou ela antes). Tratar
+              // isso como falha e "ressuscitar" o item na tela criava um
+              // ciclo: reverte -> item reaparece -> usuário clica de novo
+              // (já que sumiu e voltou) -> acha "0 linhas" nesse id de novo
+              // (porque já tinha sido apagado da primeira vez) -> reverte de
+              // novo — um item que já estava corretamente apagado no banco
+              // nunca ficava apagado na tela.
+              if (!error) return;
+              console.warn(`[${table}] delete failed`, error);
               const old = prevById.get(id)!;
               if (!cache.some((x) => x.id === id)) {
                 cache = [...cache, old];
                 emit();
               }
-              onError?.(
-                error
-                  ? new Error(error.message)
-                  : new Error("Sem permissão para apagar este item."),
-              );
+              onError?.(new Error(error.message));
             });
         }
       }
