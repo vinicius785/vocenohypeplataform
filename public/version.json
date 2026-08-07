@@ -1,6 +1,6 @@
 {
-  "version": "1.61.0",
+  "version": "1.61.1",
   "notes": [
-    "Integração com Google Agenda: conecte sua conta em Configurações → Preferências e suas reuniões da plataforma passam a aparecer no seu Google Agenda (sincronização automática a cada poucos minutos)."
+    "Corrige erro 'invalid_client' ao conectar o Google Agenda quando a env var do Client ID/Secret tinha um espaço ou quebra de linha colado junto."
   ]
 }

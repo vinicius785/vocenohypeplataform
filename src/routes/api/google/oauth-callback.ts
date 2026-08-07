@@ -35,8 +35,8 @@ export const Route = createFileRoute("/api/google/oauth-callback")({
           return redirectTo(origin, "error");
         }
 
-        const clientId = process.env.GOOGLE_CLIENT_ID;
-        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
         if (!clientId || !clientSecret) return redirectTo(origin, "error");
 
         const tokenRes = await fetch(TOKEN_URL, {

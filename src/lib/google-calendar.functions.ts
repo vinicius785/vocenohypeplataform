@@ -19,8 +19,12 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
 function requireGoogleEnv() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  // .trim() blinda contra espaço/quebra de linha colada junto no valor ao
+  // configurar a env var (ex: no painel do Vercel) — o Google rejeita o
+  // client_id inteiro com "invalid_client" se sobrar um \n no final, um erro
+  // silencioso e difícil de enxergar só olhando o campo no painel.
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
     throw new Error(
       "Integração com Google Calendar não configurada (GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET ausentes).",
