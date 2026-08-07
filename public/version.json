@@ -1,6 +1,7 @@
 {
-  "version": "1.67.0",
+  "version": "1.67.1",
   "notes": [
+    "Deixa o botão \"Encontrou um bug?\" mais discreto: menor, minúsculo e com estilo mais sutil.",
     "Novo botão flutuante \"ENCONTROU UM BUG?\" em todas as telas: permite anexar um print e descrever o problema. Os relatos ficam disponíveis para admins na seção Time.",
     "Corrige a tela de edição de membro do time: ao abrir um membro salvo como \"Membro padrão\", o diálogo mostrava \"Personalizado\" mesmo assim, dando a impressão de que a troca para padrão não tinha sido salva.",
     "Corrige a formatação dos artigos do Mural de novidades: agora respeitam espaçamento entre parágrafos, negrito, itálico e listas numeradas/com marcadores (antes tudo aparecia como texto corrido).",

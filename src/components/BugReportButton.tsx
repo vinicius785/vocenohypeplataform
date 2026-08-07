@@ -63,11 +63,12 @@ export function BugReportButton() {
     <>
       <Button
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 gap-2 rounded-full px-4 py-5 shadow-lg"
-        variant="destructive"
+        size="sm"
+        variant="outline"
+        className="fixed bottom-4 right-4 z-40 gap-1.5 rounded-full bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground"
       >
-        <Bug className="h-4 w-4" />
-        ENCONTROU UM BUG?
+        <Bug className="h-3.5 w-3.5" />
+        Encontrou um bug?
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
