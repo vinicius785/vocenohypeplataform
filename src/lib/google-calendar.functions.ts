@@ -152,9 +152,17 @@ type SlimMeeting = {
   participanteIds?: string[];
 };
 
+// `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
+// fuso) — sem o offset explícito "-03:00", `new Date(...)` interpretaria a
+// string no fuso do servidor (UTC nas functions do Vercel), deslocando o
+// evento em 3h no Google Agenda em relação ao horário mostrado na plataforma.
 function meetingTimeRange(m: SlimMeeting) {
-  const start = new Date(`${m.data}T${m.hora}:00`);
-  const end = new Date(start.getTime() + m.duracao * 60_000);
+  const start = new Date(`${m.data}T${m.hora}:00-03:00`);
+  // Reuniões sem duração válida gerariam um evento de instante zero — o
+  // Google Agenda renderiza isso como um chip minúsculo sem bloco de
+  // horário (visualmente parece uma "tarefa", não uma reunião de verdade).
+  const durationMin = m.duracao > 0 ? m.duracao : 60;
+  const end = new Date(start.getTime() + durationMin * 60_000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
@@ -168,12 +176,16 @@ async function findGoogleEventId(accessToken: string, meetingId: string): Promis
   return json.items?.[0]?.id ?? null;
 }
 
-async function syncOneMeeting(accessToken: string, m: SlimMeeting): Promise<void> {
+async function syncOneMeeting(
+  accessToken: string,
+  m: SlimMeeting,
+  emailById: Map<string, string>,
+): Promise<void> {
   const existingId = await findGoogleEventId(accessToken, m.id);
 
   if (m.status === "Cancelada") {
     if (existingId) {
-      await fetch(`${EVENTS_URL}/${existingId}`, {
+      await fetch(`${EVENTS_URL}/${existingId}?sendUpdates=none`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },
       }).catch(() => {});
@@ -182,18 +194,29 @@ async function syncOneMeeting(accessToken: string, m: SlimMeeting): Promise<void
   }
 
   const { start, end } = meetingTimeRange(m);
+  const attendeeIds = new Set([
+    ...(m.participanteIds ?? []),
+    ...(m.criadorId ? [m.criadorId] : []),
+  ]);
+  const attendees = Array.from(attendeeIds)
+    .map((id) => emailById.get(id))
+    .filter((email): email is string => Boolean(email))
+    .map((email) => ({ email }));
+
   const body = {
     summary: m.titulo || "Reunião",
     description: m.notas || undefined,
     location: m.local || undefined,
-    start: { dateTime: start },
-    end: { dateTime: end },
+    start: { dateTime: start, timeZone: "America/Sao_Paulo" },
+    end: { dateTime: end, timeZone: "America/Sao_Paulo" },
+    attendees: attendees.length > 0 ? attendees : undefined,
     extendedProperties: { private: { vnhMeetingId: m.id } },
   };
 
   const url = existingId ? `${EVENTS_URL}/${existingId}` : EVENTS_URL;
   const method = existingId ? "PATCH" : "POST";
-  const res = await fetch(url, {
+  const params = new URLSearchParams({ sendUpdates: "none" });
+  const res = await fetch(`${url}?${params}`, {
     method,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -217,8 +240,22 @@ export const syncMyMeetingsToGoogle = createServerFn({ method: "POST" })
       .map((r) => r.data as SlimMeeting)
       .filter((m) => m.criadorId === context.userId || m.participanteIds?.includes(context.userId));
 
+    const allIds = new Set<string>();
     for (const m of mine) {
-      await syncOneMeeting(accessToken, m);
+      m.participanteIds?.forEach((id) => allIds.add(id));
+      if (m.criadorId) allIds.add(m.criadorId);
+    }
+    const emailById = new Map<string, string>();
+    if (allIds.size > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .in("id", Array.from(allIds));
+      for (const p of profiles ?? []) emailById.set(p.id, p.email);
+    }
+
+    for (const m of mine) {
+      await syncOneMeeting(accessToken, m, emailById);
     }
     return { synced: mine.length, connected: true as const };
   });

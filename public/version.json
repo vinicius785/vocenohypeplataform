@@ -1,6 +1,6 @@
 {
-  "version": "1.62.0",
+  "version": "1.62.1",
   "notes": [
-    "Move o Google Agenda para a aba Integrações (Configurações), com ícone próprio, organizada em seções — Calendário fica disponível pra todo o time, Entrada/Saída continuam admin-only."
+    "Corrige horário errado dos eventos sincronizados no Google Agenda (deslocamento de fuso) e passa a incluir os e-mails convidados de cada reunião como participantes do evento."
   ]
 }
