@@ -15,9 +15,32 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
  */
 
 const RedeInput = z.object({
+  id: z.string().optional(),
   plataforma: z.string(),
   handle: z.string(),
   seguidores: z.string().optional(),
+});
+const PostMetricsSnapshot = z.object({
+  views: z.number().optional(),
+  likes: z.number().optional(),
+  comments: z.number().optional(),
+  shares: z.number().optional(),
+  saves: z.number().optional(),
+  reach: z.number().optional(),
+});
+const DemographicEntrySnapshot = z.object({
+  id: z.string(),
+  label: z.string(),
+  percentual: z.number(),
+});
+const RedeMetricsSnapshot = z.object({
+  interacoes: z.number().optional(),
+  visualizacoes: z.number().optional(),
+  taxaInteracao: z.number().optional(),
+  taxaAtencaoInicial: z.number().optional(),
+  faixaEtaria: z.array(DemographicEntrySnapshot).optional(),
+  paises: z.array(DemographicEntrySnapshot).optional(),
+  cidades: z.array(DemographicEntrySnapshot).optional(),
 });
 const EntregaSnapshot = z.object({
   id: z.string(),
@@ -25,6 +48,7 @@ const EntregaSnapshot = z.object({
   dataPostagem: z.string().optional(),
   roteiro: z.string().optional(),
   roteiroNome: z.string().optional(),
+  metrics: PostMetricsSnapshot.optional(),
 });
 const InfluencerSnapshot = z.object({
   id: z.string(),
@@ -32,6 +56,7 @@ const InfluencerSnapshot = z.object({
   foto: z.string().optional(),
   redes: z.array(RedeInput).default([]),
   entregas: z.array(EntregaSnapshot).default([]),
+  profileMetrics: z.record(z.string(), RedeMetricsSnapshot).optional(),
 });
 
 const CreateInput = z.object({

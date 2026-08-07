@@ -1,6 +1,8 @@
 {
-  "version": "1.68.0",
+  "version": "1.68.1",
   "notes": [
+    "Métricas do influenciador agora são por rede social (selecione a rede e preencha interações/visualizações/demografia específicas dela), removendo o campo \"Seguidores\" que aparecia duplicado (já existe por rede na etapa Perfil).",
+    "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas.",
     "Reorganiza o formulário de criar/editar influenciador: de 7 etapas soltas para 5 etapas agrupadas por tema (Perfil, Métricas, Entregas, Financeiro, Contrato) — menos cliques para preencher o mesmo cadastro.",
     "Nova etapa \"Métricas\" no influenciador: seguidores, interações, visualizações, taxa de interação/atenção inicial e demografia do público (faixa etária, países, cidades) com gráficos de barras. Aparece também no perfil do influenciador e é opcional por campanha/projeto.",
     "Botão \"Encontrou um bug?\" ganha contorno vermelho, mantendo o visual discreto.",

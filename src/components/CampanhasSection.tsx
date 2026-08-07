@@ -1051,6 +1051,7 @@ function ApprovalRequestDialog({
               nome: i.nome,
               foto: i.foto,
               redes: i.redes.map((r) => ({
+                id: r.id,
                 plataforma: r.plataforma,
                 handle: r.handle,
                 seguidores: r.seguidores,
@@ -1063,8 +1064,10 @@ function ApprovalRequestDialog({
                   dataPostagem: e.dataPostagem,
                   roteiro: roteiro?.url,
                   roteiroNome: roteiro?.nome,
+                  metrics: e.metrics,
                 };
               }),
+              profileMetrics: i.profileMetrics?.porRede,
             })),
             mode,
           },

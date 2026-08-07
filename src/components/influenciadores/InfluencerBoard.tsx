@@ -148,12 +148,13 @@ export type PostMetrics = {
 export type DemographicEntry = { id: string; label: string; percentual: number };
 
 /**
- * Métricas do perfil do influenciador em si (não de uma entrega/post
- * específico) — seguidores, engajamento agregado e composição do público.
- * Preenchido manualmente a partir dos insights nativos da rede social.
+ * Métricas de uma rede social específica do influenciador (não de uma
+ * entrega/post pontual) — engajamento agregado e composição do público
+ * daquela rede. Seguidores não entra aqui pois já existe por rede em
+ * `Rede.seguidores` (etapa Perfil) — repetir o campo aqui duplicava a
+ * mesma informação em dois lugares do formulário.
  */
-export type ProfileMetrics = {
-  seguidores?: number;
+export type RedeMetrics = {
   interacoes?: number;
   visualizacoes?: number;
   /** % */
@@ -164,6 +165,26 @@ export type ProfileMetrics = {
   paises?: DemographicEntry[];
   cidades?: DemographicEntry[];
 };
+
+/** Métricas do perfil do influenciador, uma entrada por rede social
+ * (chave = `Rede.id`) — preenchidas manualmente a partir dos insights
+ * nativos de cada plataforma. */
+export type ProfileMetrics = {
+  porRede?: Record<string, RedeMetrics>;
+};
+
+function hasRedeMetrics(m?: RedeMetrics): boolean {
+  return Boolean(
+    m &&
+    (m.interacoes ||
+      m.visualizacoes ||
+      m.taxaInteracao ||
+      m.taxaAtencaoInicial ||
+      m.faixaEtaria?.length ||
+      m.paises?.length ||
+      m.cidades?.length),
+  );
+}
 /**
  * Formas de pagamento — mesmas opções e campos usados ao configurar o
  * pagamento do cliente em VincularCampanhaDialog, agora por entrega.
@@ -884,18 +905,19 @@ function DemographicChart({ title, entries }: { title: string; entries?: Demogra
 /** Editor das métricas do perfil do influenciador (não de uma entrega
  * específica): números agregados de audiência/engajamento + composição
  * demográfica do público, cada bloco demográfico com seu próprio gráfico. */
-function ProfileMetricsEditor({
+/** Métricas de uma única rede (sub-editor usado por `ProfileMetricsEditor`
+ * uma vez por rede selecionada). */
+function RedeMetricsFields({
   value,
   onChange,
 }: {
-  value?: ProfileMetrics;
-  onChange: (m: ProfileMetrics) => void;
+  value?: RedeMetrics;
+  onChange: (m: RedeMetrics) => void;
 }) {
   const m = value ?? {};
-  const set = (patch: Partial<ProfileMetrics>) => onChange({ ...m, ...patch });
+  const set = (patch: Partial<RedeMetrics>) => onChange({ ...m, ...patch });
 
-  const SCALAR_FIELDS: { key: keyof ProfileMetrics; label: string; suffix?: string }[] = [
-    { key: "seguidores", label: "Seguidores" },
+  const SCALAR_FIELDS: { key: keyof RedeMetrics; label: string; suffix?: string }[] = [
     { key: "interacoes", label: "Interações" },
     { key: "visualizacoes", label: "Visualizações" },
     { key: "taxaInteracao", label: "Taxa de interação", suffix: "%" },
@@ -929,7 +951,7 @@ function ProfileMetricsEditor({
       <div className="space-y-4 border-t border-border pt-4">
         <FieldLabel
           title="Demografia do público"
-          hint="Distribuição percentual do público real do influenciador, por faixa etária, país e cidade."
+          hint="Distribuição percentual do público real dessa rede, por faixa etária, país e cidade."
         />
         <DemographicEntriesEditor
           title="Faixa etária"
@@ -950,6 +972,60 @@ function ProfileMetricsEditor({
           onChange={(cidades) => set({ cidades })}
         />
       </div>
+    </div>
+  );
+}
+
+/** Métricas do perfil, uma rede social por vez — seleciona a rede (das
+ * cadastradas na etapa Perfil) e edita as métricas daquela rede. */
+function ProfileMetricsEditor({
+  redes,
+  value,
+  onChange,
+}: {
+  redes: Rede[];
+  value?: ProfileMetrics;
+  onChange: (m: ProfileMetrics) => void;
+}) {
+  const porRede = value?.porRede ?? {};
+  const [selected, setSelected] = useState<string | undefined>(redes[0]?.id);
+  const activeId = selected && redes.some((r) => r.id === selected) ? selected : redes[0]?.id;
+
+  if (redes.length === 0) {
+    return (
+      <EmptyHint text="Adicione redes sociais em Perfil antes de preencher as métricas — cada rede tem suas próprias métricas." />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1.5">
+        {redes.map((r) => {
+          const active = r.id === activeId;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setSelected(r.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                active
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              }`}
+            >
+              <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+              {r.handle ? `@${r.handle}` : r.plataforma}
+            </button>
+          );
+        })}
+      </div>
+      {activeId && (
+        <RedeMetricsFields
+          key={activeId}
+          value={porRede[activeId]}
+          onChange={(m) => onChange({ ...value, porRede: { ...porRede, [activeId]: m } })}
+        />
+      )}
     </div>
   );
 }
@@ -2096,15 +2172,7 @@ function InfluencerProfileDialog({
   const reliability = computeReliability(influ.entregas);
   const pm = influ.profileMetrics;
   const hasProfileMetrics = Boolean(
-    pm &&
-    (pm.seguidores ||
-      pm.interacoes ||
-      pm.visualizacoes ||
-      pm.taxaInteracao ||
-      pm.taxaAtencaoInicial ||
-      pm.faixaEtaria?.length ||
-      pm.paises?.length ||
-      pm.cidades?.length),
+    pm?.porRede && Object.values(pm.porRede).some((rm) => hasRedeMetrics(rm)),
   );
 
   const hasExtras = has("pagamentos") || has("bancario") || has("contrato") || has("metricas");
@@ -2291,50 +2359,66 @@ function InfluencerProfileDialog({
                               </div>
                             )}
 
-                            {has("metricas") && hasProfileMetrics && pm && (
+                            {has("metricas") && hasProfileMetrics && pm?.porRede && (
                               <div
-                                className={`space-y-4 ${has("entregas") && (hasMetrics || reliability.total > 0) ? "border-t border-border pt-4" : ""}`}
+                                className={`space-y-5 ${has("entregas") && (hasMetrics || reliability.total > 0) ? "border-t border-border pt-4" : ""}`}
                               >
-                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                  Perfil
-                                </p>
-                                <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                                  {pm.seguidores ? (
-                                    <MetricStat
-                                      label="Seguidores"
-                                      value={pm.seguidores.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
-                                  {pm.interacoes ? (
-                                    <MetricStat
-                                      label="Interações"
-                                      value={pm.interacoes.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
-                                  {pm.visualizacoes ? (
-                                    <MetricStat
-                                      label="Visualizações"
-                                      value={pm.visualizacoes.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
-                                  {pm.taxaInteracao ? (
-                                    <MetricStat
-                                      label="Taxa de interação"
-                                      value={`${pm.taxaInteracao}%`}
-                                    />
-                                  ) : null}
-                                  {pm.taxaAtencaoInicial ? (
-                                    <MetricStat
-                                      label="Atenção inicial"
-                                      value={`${pm.taxaAtencaoInicial}%`}
-                                    />
-                                  ) : null}
-                                </div>
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                  <DemographicChart title="Faixa etária" entries={pm.faixaEtaria} />
-                                  <DemographicChart title="Países" entries={pm.paises} />
-                                  <DemographicChart title="Cidades" entries={pm.cidades} />
-                                </div>
+                                {influ.redes
+                                  .filter((r) => hasRedeMetrics(pm.porRede?.[r.id]))
+                                  .map((r) => {
+                                    const rm = pm.porRede![r.id]!;
+                                    return (
+                                      <div key={r.id} className="space-y-3">
+                                        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                          <PlatformIcon
+                                            plataforma={r.plataforma}
+                                            className="h-3 w-3"
+                                          />
+                                          {r.handle ? `@${r.handle}` : r.plataforma}
+                                        </p>
+                                        <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                                          {r.seguidores ? (
+                                            <MetricStat
+                                              label="Seguidores"
+                                              value={formatSeguidores(r.seguidores)}
+                                            />
+                                          ) : null}
+                                          {rm.interacoes ? (
+                                            <MetricStat
+                                              label="Interações"
+                                              value={rm.interacoes.toLocaleString("pt-BR")}
+                                            />
+                                          ) : null}
+                                          {rm.visualizacoes ? (
+                                            <MetricStat
+                                              label="Visualizações"
+                                              value={rm.visualizacoes.toLocaleString("pt-BR")}
+                                            />
+                                          ) : null}
+                                          {rm.taxaInteracao ? (
+                                            <MetricStat
+                                              label="Taxa de interação"
+                                              value={`${rm.taxaInteracao}%`}
+                                            />
+                                          ) : null}
+                                          {rm.taxaAtencaoInicial ? (
+                                            <MetricStat
+                                              label="Atenção inicial"
+                                              value={`${rm.taxaAtencaoInicial}%`}
+                                            />
+                                          ) : null}
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                          <DemographicChart
+                                            title="Faixa etária"
+                                            entries={rm.faixaEtaria}
+                                          />
+                                          <DemographicChart title="Países" entries={rm.paises} />
+                                          <DemographicChart title="Cidades" entries={rm.cidades} />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                             )}
                           </div>
@@ -2867,9 +2951,13 @@ function InfluenciadorDialog({
             <div className="space-y-3">
               <FieldLabel
                 title="Métricas do perfil"
-                hint="Números do perfil como um todo — vindos dos insights nativos da rede social, não de uma entrega específica."
+                hint="Métricas por rede social — vindas dos insights nativos de cada plataforma, não de uma entrega específica."
               />
-              <ProfileMetricsEditor value={profileMetrics} onChange={setProfileMetrics} />
+              <ProfileMetricsEditor
+                redes={redes}
+                value={profileMetrics}
+                onChange={setProfileMetrics}
+              />
             </div>
           )}
 

@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import {
   AtSign,
+  BarChart3,
   CalendarDays,
   CheckCircle2,
   Facebook,
@@ -12,6 +14,7 @@ import {
   Twitter,
   User,
   Users,
+  X,
   XCircle,
   Youtube,
 } from "lucide-react";
@@ -62,13 +65,32 @@ export const Route = createFileRoute("/aprovacao/$token")({
   }),
 });
 
-type Rede = { plataforma: string; handle: string; seguidores?: string };
+type Rede = { id?: string; plataforma: string; handle: string; seguidores?: string };
+type PostMetrics = {
+  views?: number;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  saves?: number;
+  reach?: number;
+};
+type DemographicEntry = { id: string; label: string; percentual: number };
+type RedeMetrics = {
+  interacoes?: number;
+  visualizacoes?: number;
+  taxaInteracao?: number;
+  taxaAtencaoInicial?: number;
+  faixaEtaria?: DemographicEntry[];
+  paises?: DemographicEntry[];
+  cidades?: DemographicEntry[];
+};
 type ApprovalEntrega = {
   id: string;
   tipo: string;
   dataPostagem?: string;
   roteiro?: string;
   roteiroNome?: string;
+  metrics?: PostMetrics;
 };
 type ApprovalInfluencer = {
   id: string;
@@ -76,6 +98,7 @@ type ApprovalInfluencer = {
   foto?: string;
   redes: Rede[];
   entregas: ApprovalEntrega[];
+  profileMetrics?: Record<string, RedeMetrics>;
 };
 type ApprovalResponse = { status: "aprovado" | "reprovado"; motivo?: string; respondedAt: string };
 type ApprovalData = {
@@ -112,6 +135,239 @@ function Kpi({
   );
 }
 
+function MetricStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function DemographicChart({ title, entries }: { title: string; entries?: DemographicEntry[] }) {
+  const data = (entries ?? [])
+    .filter((e) => e.label.trim() && e.percentual > 0)
+    .map((e) => ({ name: e.label, valor: e.percentual }))
+    .sort((a, b) => b.valor - a.valor);
+  if (data.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="h-[90px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ left: 0, right: 12 }}>
+            <CartesianGrid horizontal={false} strokeOpacity={0.15} />
+            <XAxis type="number" domain={[0, 100]} hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={90}
+              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function hasRedeMetrics(m?: RedeMetrics): boolean {
+  return Boolean(
+    m &&
+    (m.interacoes ||
+      m.visualizacoes ||
+      m.taxaInteracao ||
+      m.taxaAtencaoInicial ||
+      m.faixaEtaria?.length ||
+      m.paises?.length ||
+      m.cidades?.length),
+  );
+}
+
+function hasEntregaMetrics(m?: PostMetrics): boolean {
+  return Boolean(m && Object.values(m).some((v) => v));
+}
+
+/** Perfil completo do influenciador — aberto ao clicar no card, tanto no
+ * modo "view" quanto "approve". Mostra redes sociais, as métricas do
+ * perfil (por rede) e as métricas de cada entrega já publicada, quando
+ * disponíveis — nada disso é editável aqui, é só leitura. */
+function InfluencerProfileDialog({
+  inf,
+  onClose,
+}: {
+  inf: ApprovalInfluencer;
+  onClose: () => void;
+}) {
+  const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-background"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+              {inf.foto ? (
+                <img src={inf.foto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
+              )}
+            </div>
+            <h3 className="text-sm font-semibold">{inf.nome}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <div className="flex flex-wrap gap-1.5">
+            {inf.redes.length === 0 ? (
+              <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
+            ) : (
+              inf.redes.map((r, i) => {
+                const url = profileUrl(r.plataforma, r.handle);
+                const content = (
+                  <>
+                    <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                    {r.handle || r.plataforma}
+                    {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
+                  </>
+                );
+                const className = `inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground${url ? " hover:bg-muted-foreground/20" : ""}`;
+                return url ? (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" className={className}>
+                    {content}
+                  </a>
+                ) : (
+                  <span key={i} className={className}>
+                    {content}
+                  </span>
+                );
+              })
+            )}
+          </div>
+
+          {inf.redes.some((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""])) && (
+            <div className="space-y-4 border-t border-border pt-4">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                <BarChart3 className="h-3.5 w-3.5" /> Métricas do perfil
+              </p>
+              {inf.redes
+                .filter((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""]))
+                .map((r) => {
+                  const rm = inf.profileMetrics![r.id ?? ""]!;
+                  return (
+                    <div key={r.id} className="space-y-2.5">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
+                        {r.handle ? `@${r.handle}` : r.plataforma}
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                        {r.seguidores ? (
+                          <MetricStat label="Seguidores" value={formatSeguidores(r.seguidores)} />
+                        ) : null}
+                        {rm.interacoes ? (
+                          <MetricStat
+                            label="Interações"
+                            value={rm.interacoes.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {rm.visualizacoes ? (
+                          <MetricStat
+                            label="Visualizações"
+                            value={rm.visualizacoes.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {rm.taxaInteracao ? (
+                          <MetricStat label="Taxa de interação" value={`${rm.taxaInteracao}%`} />
+                        ) : null}
+                        {rm.taxaAtencaoInicial ? (
+                          <MetricStat label="Atenção inicial" value={`${rm.taxaAtencaoInicial}%`} />
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
+                        <DemographicChart title="Países" entries={rm.paises} />
+                        <DemographicChart title="Cidades" entries={rm.cidades} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {entregasComMetrics.length > 0 && (
+            <div className="space-y-3 border-t border-border pt-4">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                <Users className="h-3.5 w-3.5" /> Métricas das entregas
+              </p>
+              {entregasComMetrics.map((e) => (
+                <div key={e.id} className="space-y-1.5 rounded-md bg-muted/40 p-2.5">
+                  <p className="text-xs font-medium text-foreground">{e.tipo}</p>
+                  <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 sm:grid-cols-6">
+                    {e.metrics?.views ? (
+                      <MetricStat label="Views" value={e.metrics.views.toLocaleString("pt-BR")} />
+                    ) : null}
+                    {e.metrics?.reach ? (
+                      <MetricStat label="Alcance" value={e.metrics.reach.toLocaleString("pt-BR")} />
+                    ) : null}
+                    {e.metrics?.likes ? (
+                      <MetricStat
+                        label="Curtidas"
+                        value={e.metrics.likes.toLocaleString("pt-BR")}
+                      />
+                    ) : null}
+                    {e.metrics?.comments ? (
+                      <MetricStat
+                        label="Coment."
+                        value={e.metrics.comments.toLocaleString("pt-BR")}
+                      />
+                    ) : null}
+                    {e.metrics?.shares ? (
+                      <MetricStat
+                        label="Compart."
+                        value={e.metrics.shares.toLocaleString("pt-BR")}
+                      />
+                    ) : null}
+                    {e.metrics?.saves ? (
+                      <MetricStat label="Salvos" value={e.metrics.saves.toLocaleString("pt-BR")} />
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {entregasComMetrics.length === 0 &&
+            !inf.redes.some((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""])) && (
+              <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+                Nenhuma métrica cadastrada ainda.
+              </p>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AprovacaoPublicPage() {
   const { token } = Route.useParams();
   const getByTokenFn = useServerFn(getApprovalByToken);
@@ -121,6 +377,7 @@ function AprovacaoPublicPage() {
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [viewingProfile, setViewingProfile] = useState<ApprovalInfluencer | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -281,7 +538,11 @@ function AprovacaoPublicPage() {
               return (
                 <div
                   key={inf.id}
-                  className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingProfile(inf)}
+                  onKeyDown={(e) => e.key === "Enter" && setViewingProfile(inf)}
+                  className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center transition-colors hover:bg-muted/40"
                 >
                   <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
                     {inf.foto ? (
@@ -291,7 +552,7 @@ function AprovacaoPublicPage() {
                     )}
                   </div>
                   <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
-                  {redes}
+                  <div onClick={(e) => e.stopPropagation()}>{redes}</div>
                 </div>
               );
             }
@@ -301,7 +562,13 @@ function AprovacaoPublicPage() {
                 key={inf.id}
                 className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5"
               >
-                <div className="flex items-center gap-3">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingProfile(inf)}
+                  onKeyDown={(e) => e.key === "Enter" && setViewingProfile(inf)}
+                  className="flex cursor-pointer items-center gap-3 text-left"
+                >
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
                     {inf.foto ? (
                       <img src={inf.foto} alt="" className="h-full w-full object-cover" />
@@ -311,7 +578,7 @@ function AprovacaoPublicPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-semibold text-foreground">{inf.nome}</p>
-                    {redes}
+                    <div onClick={(e) => e.stopPropagation()}>{redes}</div>
                   </div>
                 </div>
 
@@ -420,6 +687,10 @@ function AprovacaoPublicPage() {
           })}
         </div>
       </div>
+
+      {viewingProfile && (
+        <InfluencerProfileDialog inf={viewingProfile} onClose={() => setViewingProfile(null)} />
+      )}
     </div>
   );
 }
