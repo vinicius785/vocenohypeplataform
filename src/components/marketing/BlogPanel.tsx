@@ -15,11 +15,11 @@ export function renderMarkdownLite(md: string): string {
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const lines = escape(md).split("\n");
   const html: string[] = [];
-  let inList = false;
+  let listType: "ul" | "ol" | null = null;
   const closeList = () => {
-    if (inList) {
-      html.push("</ul>");
-      inList = false;
+    if (listType) {
+      html.push(`</${listType}>`);
+      listType = null;
     }
   };
   const inline = (s: string) =>
@@ -40,10 +40,24 @@ export function renderMarkdownLite(md: string): string {
       html.push(`<h${level}>${inline(heading[2])}</h${level}>`);
       continue;
     }
+    // Lista numerada ("1. ", "2) ") — antes só listas com marcador (-/*)
+    // eram reconhecidas, então qualquer passo-a-passo numerado (comum em
+    // "como fazer X") virava parágrafo corrido em vez de lista.
+    const ordered = /^\d+[.)]\s+(.*)/.exec(line);
+    if (ordered) {
+      if (listType !== "ol") {
+        closeList();
+        html.push("<ol>");
+        listType = "ol";
+      }
+      html.push(`<li>${inline(ordered[1])}</li>`);
+      continue;
+    }
     if (/^[-*]\s+/.test(line)) {
-      if (!inList) {
+      if (listType !== "ul") {
+        closeList();
         html.push("<ul>");
-        inList = true;
+        listType = "ul";
       }
       html.push(`<li>${inline(line.replace(/^[-*]\s+/, ""))}</li>`);
       continue;
@@ -54,6 +68,13 @@ export function renderMarkdownLite(md: string): string {
   closeList();
   return html.join("\n");
 }
+
+/** Classes compartilhadas por qualquer lugar que renderize
+ * `renderMarkdownLite` (editor de blog e o dialog do Mural de novidades) —
+ * define como cada tag HTML gerada aparece: espaçamento de parágrafo,
+ * marcador de lista (bolinha vs. número), tamanho de título, etc. */
+export const MARKDOWN_LITE_CLASSES =
+  "space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:list-decimal [&_li]:ml-5 [&_li]:pl-0.5 [&_p]:my-2 [&_strong]:font-semibold [&_em]:italic";
 
 const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
   { key: "rascunho", label: "Rascunho", cls: "bg-muted text-foreground" },
@@ -445,7 +466,7 @@ function BlogEditor({
             </div>
             {p.excerpt && <p className="mt-2 text-sm italic text-muted-foreground">{p.excerpt}</p>}
             <div
-              className="mt-4 space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
+              className={`mt-4 ${MARKDOWN_LITE_CLASSES}`}
               dangerouslySetInnerHTML={{
                 __html:
                   renderMarkdownLite(p.content ?? "") ||

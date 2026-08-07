@@ -26,7 +26,7 @@ import {
   type BlogPost,
   type Task as ProjTask,
 } from "@/lib/projetos";
-import { renderMarkdownLite } from "@/components/marketing/BlogPanel";
+import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   subscribeChat,
@@ -1052,8 +1052,11 @@ function MuralNovidades() {
                     className="mb-4 max-h-64 w-full rounded-lg object-cover"
                   />
                 )}
+                {openArticle.excerpt && openArticle.content && (
+                  <p className="text-sm italic text-muted-foreground">{openArticle.excerpt}</p>
+                )}
                 <div
-                  className="space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-semibold [&_li]:ml-4 [&_li]:list-disc [&_p]:my-2"
+                  className={MARKDOWN_LITE_CLASSES}
                   dangerouslySetInnerHTML={{
                     __html: renderMarkdownLite(openArticle.content ?? openArticle.excerpt ?? ""),
                   }}
