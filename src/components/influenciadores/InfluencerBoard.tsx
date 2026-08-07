@@ -931,42 +931,44 @@ function DemographicEntriesEditor({
     .sort((a, b) => b.valor - a.valor);
 
   return (
-    <div className="space-y-2">
-      <p className="text-[11px] font-medium text-muted-foreground">{title}</p>
-      <div className="space-y-1.5">
-        {entries.map((entry) => (
-          <div key={entry.id} className="flex items-center gap-2">
-            <input
-              value={entry.label}
-              onChange={(e) =>
-                onChange(
-                  entries.map((x) => (x.id === entry.id ? { ...x, label: e.target.value } : x)),
-                )
-              }
-              placeholder={placeholder}
-              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-            />
-            <div className="flex shrink-0 items-center gap-1">
+    <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3.5">
+      <p className="text-xs font-semibold text-foreground">{title}</p>
+      {entries.length > 0 && (
+        <div className="space-y-1.5">
+          {entries.map((entry) => (
+            <div key={entry.id} className="flex items-center gap-2">
               <input
-                type="number"
-                min={0}
-                max={100}
-                value={entry.percentual || ""}
+                value={entry.label}
                 onChange={(e) =>
                   onChange(
-                    entries.map((x) =>
-                      x.id === entry.id ? { ...x, percentual: Number(e.target.value) || 0 } : x,
-                    ),
+                    entries.map((x) => (x.id === entry.id ? { ...x, label: e.target.value } : x)),
                   )
                 }
-                className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
+                placeholder={placeholder}
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
               />
-              <span className="text-xs text-muted-foreground">%</span>
+              <div className="flex shrink-0 items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={entry.percentual || ""}
+                  onChange={(e) =>
+                    onChange(
+                      entries.map((x) =>
+                        x.id === entry.id ? { ...x, percentual: Number(e.target.value) || 0 } : x,
+                      ),
+                    )
+                  }
+                  className="w-16 rounded-md border border-border bg-background px-2 py-1.5 text-right text-xs outline-none focus:ring-1 focus:ring-ring"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+              <RemoveBtn onClick={() => onChange(entries.filter((x) => x.id !== entry.id))} />
             </div>
-            <RemoveBtn onClick={() => onChange(entries.filter((x) => x.id !== entry.id))} />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       <button
         type="button"
         onClick={() =>
@@ -1034,71 +1036,79 @@ function RedeMetricsFields({
   ];
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <label className="space-y-1">
-          <span className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-            Seguidores
-          </span>
-          <input
-            value={formatSeguidores(seguidores)}
-            onChange={(e) => onChangeSeguidores(e.target.value.replace(/\D/g, ""))}
-            placeholder="0"
-            inputMode="numeric"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-          />
-        </label>
-        {SCALAR_FIELDS.map((f) => (
-          <label key={f.key} className="space-y-1">
-            <span className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-              {f.label}
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <FieldLabel title="Métricas gerais" hint="Números agregados dessa rede." />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <label className="space-y-1 rounded-xl border border-border bg-muted/20 p-3">
+            <span className="block text-[11px] font-semibold uppercase tracking-tight text-muted-foreground">
+              Seguidores
             </span>
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                value={(m[f.key] as number | undefined) ?? ""}
-                onChange={(e) =>
-                  set({ [f.key]: e.target.value === "" ? undefined : Number(e.target.value) })
-                }
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              />
-              {f.suffix && <span className="text-xs text-muted-foreground">{f.suffix}</span>}
-            </div>
+            <input
+              value={formatSeguidores(seguidores)}
+              onChange={(e) => onChangeSeguidores(e.target.value.replace(/\D/g, ""))}
+              placeholder="0"
+              inputMode="numeric"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
           </label>
-        ))}
+          {SCALAR_FIELDS.map((f) => (
+            <label
+              key={f.key}
+              className="space-y-1 rounded-xl border border-border bg-muted/20 p-3"
+            >
+              <span className="block text-[11px] font-semibold uppercase tracking-tight text-muted-foreground">
+                {f.label}
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  value={(m[f.key] as number | undefined) ?? ""}
+                  onChange={(e) =>
+                    set({ [f.key]: e.target.value === "" ? undefined : Number(e.target.value) })
+                  }
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                />
+                {f.suffix && <span className="text-xs text-muted-foreground">{f.suffix}</span>}
+              </div>
+            </label>
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-4 border-t border-border pt-4">
+      <div className="space-y-3 border-t border-border pt-5">
         <FieldLabel
           title="Demografia do público"
           hint="Distribuição percentual do público real dessa rede, por gênero, faixa etária, país e cidade."
         />
-        <DemographicEntriesEditor
-          title="Gênero"
-          placeholder="Ex: Feminino"
-          entries={m.genero ?? []}
-          onChange={(genero) => set({ genero })}
-          chartType="pie"
-        />
-        <DemographicEntriesEditor
-          title="Faixa etária"
-          placeholder="Ex: 18-24 anos"
-          entries={m.faixaEtaria ?? []}
-          onChange={(faixaEtaria) => set({ faixaEtaria })}
-        />
-        <DemographicEntriesEditor
-          title="Principais países"
-          placeholder="Ex: Brasil"
-          entries={m.paises ?? []}
-          onChange={(paises) => set({ paises })}
-        />
-        <DemographicEntriesEditor
-          title="Principais cidades"
-          placeholder="Ex: São Paulo"
-          entries={m.cidades ?? []}
-          onChange={(cidades) => set({ cidades })}
-        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <DemographicEntriesEditor
+            title="Gênero"
+            placeholder="Ex: Feminino"
+            entries={m.genero ?? []}
+            onChange={(genero) => set({ genero })}
+            chartType="pie"
+          />
+          <DemographicEntriesEditor
+            title="Faixa etária"
+            placeholder="Ex: 18-24 anos"
+            entries={m.faixaEtaria ?? []}
+            onChange={(faixaEtaria) => set({ faixaEtaria })}
+          />
+          <DemographicEntriesEditor
+            title="Principais países"
+            placeholder="Ex: Brasil"
+            entries={m.paises ?? []}
+            onChange={(paises) => set({ paises })}
+          />
+          <DemographicEntriesEditor
+            title="Principais cidades"
+            placeholder="Ex: São Paulo"
+            entries={m.cidades ?? []}
+            onChange={(cidades) => set({ cidades })}
+          />
+        </div>
       </div>
     </div>
   );
@@ -2883,7 +2893,7 @@ function InfluenciadorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
+      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">
             {initial ? "Editar influenciador" : "Novo influenciador"}

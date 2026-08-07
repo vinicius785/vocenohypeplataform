@@ -46,6 +46,7 @@ const RedeMetricsSnapshot = z.object({
 const EntregaSnapshot = z.object({
   id: z.string(),
   tipo: z.string(),
+  quantidade: z.number().default(1),
   dataPostagem: z.string().optional(),
   roteiro: z.string().optional(),
   roteiroNome: z.string().optional(),
@@ -54,6 +55,7 @@ const EntregaSnapshot = z.object({
 const InfluencerSnapshot = z.object({
   id: z.string(),
   nome: z.string(),
+  nicho: z.string().optional(),
   foto: z.string().optional(),
   redes: z.array(RedeInput).default([]),
   entregas: z.array(EntregaSnapshot).default([]),

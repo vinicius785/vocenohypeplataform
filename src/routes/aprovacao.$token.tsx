@@ -100,6 +100,7 @@ type RedeMetrics = {
 type ApprovalEntrega = {
   id: string;
   tipo: string;
+  quantidade?: number;
   dataPostagem?: string;
   roteiro?: string;
   roteiroNome?: string;
@@ -108,11 +109,21 @@ type ApprovalEntrega = {
 type ApprovalInfluencer = {
   id: string;
   nome: string;
+  nicho?: string;
   foto?: string;
   redes: Rede[];
   entregas: ApprovalEntrega[];
   profileMetrics?: Record<string, RedeMetrics>;
 };
+/** Resumo compacto das entregas agrupadas por tipo, ex: "3× Reels · 2× Stories". */
+function entregasSummary(entregas: ApprovalEntrega[]): string {
+  const byTipo = new Map<string, number>();
+  for (const e of entregas) byTipo.set(e.tipo, (byTipo.get(e.tipo) ?? 0) + (e.quantidade || 1));
+  return Array.from(byTipo.entries())
+    .map(([tipo, qtd]) => `${qtd}× ${tipo}`)
+    .join(" · ");
+}
+
 type ApprovalResponse = { status: "aprovado" | "reprovado"; motivo?: string; respondedAt: string };
 type ApprovalData = {
   campanha_nome: string | null;
@@ -320,13 +331,32 @@ function hasEntregaMetrics(m?: PostMetrics): boolean {
 function InfluencerProfileDialog({
   inf,
   onClose,
+  mode,
+  resp,
+  busyId,
+  rejecting,
+  motivo,
+  setRejecting,
+  setMotivo,
+  onApprove,
+  onConfirmReject,
 }: {
   inf: ApprovalInfluencer;
   onClose: () => void;
+  mode: "approve" | "view";
+  resp?: ApprovalResponse;
+  busyId: string | null;
+  rejecting: string | null;
+  motivo: string;
+  setRejecting: (id: string | null) => void;
+  setMotivo: (v: string) => void;
+  onApprove: () => void;
+  onConfirmReject: () => void;
 }) {
   const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
   const redesComMetrics = inf.redes.filter((r) => hasRedeMetrics(inf.profileMetrics?.[r.id ?? ""]));
   const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
+  const isRejectingThis = rejecting === inf.id;
 
   return (
     <div
@@ -347,7 +377,14 @@ function InfluencerProfileDialog({
               )}
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-foreground">{inf.nome}</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-semibold text-foreground">{inf.nome}</h3>
+                {inf.nicho && (
+                  <span className="rounded-full bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
+                    {inf.nicho}
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {inf.redes.length === 0 ? (
                   <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
@@ -386,6 +423,43 @@ function InfluencerProfileDialog({
         </div>
 
         <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
+          {inf.entregas.length > 0 && (
+            <section className="space-y-3">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Users className="h-4 w-4" /> Entregas ({inf.entregas.length})
+              </h4>
+              <ul className="space-y-1.5">
+                {inf.entregas.map((e) => (
+                  <li
+                    key={e.id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
+                  >
+                    <span className="font-medium text-foreground">
+                      {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
+                      {e.tipo}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {e.dataPostagem && (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
+                        </span>
+                      )}
+                      {e.roteiro && (
+                        <a
+                          href={e.roteiro}
+                          download={e.roteiroNome}
+                          className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                        >
+                          <FileText className="h-3 w-3" /> Roteiro
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {redesComMetrics.length > 0 && (
             <section className="space-y-5">
               <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -495,6 +569,77 @@ function InfluencerProfileDialog({
             <p className="text-sm text-muted-foreground">Nenhuma métrica cadastrada ainda.</p>
           )}
         </div>
+
+        {mode === "approve" && (
+          <div className="border-t border-border bg-muted/20 px-6 py-4">
+            {resp ? (
+              <div
+                className={`rounded-md px-3 py-2 text-xs font-medium ${
+                  resp.status === "aprovado"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    : "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                }`}
+              >
+                {resp.status === "aprovado" ? "Aprovado" : "Reprovado"}
+                {resp.motivo && <p className="mt-1 font-normal">{resp.motivo}</p>}
+              </div>
+            ) : isRejectingThis ? (
+              <div className="space-y-2">
+                <textarea
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  placeholder="Motivo da reprovação (obrigatório)"
+                  autoFocus
+                  className="h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejecting(null);
+                      setMotivo("");
+                    }}
+                    className="flex-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onConfirmReject}
+                    disabled={!motivo.trim() || busyId === inf.id}
+                    className="flex-1 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Confirmar reprovação
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onApprove}
+                  disabled={busyId === inf.id}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Aprovar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejecting(inf.id);
+                    setMotivo("");
+                  }}
+                  disabled={busyId === inf.id}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  Reprovar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -685,6 +830,9 @@ function AprovacaoPublicPage() {
                   </div>
                   <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
                   <div onClick={(e) => e.stopPropagation()}>{redes}</div>
+                  {inf.entregas.length > 0 && (
+                    <p className="text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
+                  )}
                 </div>
               );
             }
@@ -725,7 +873,10 @@ function AprovacaoPublicPage() {
                           key={e.id}
                           className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-xs"
                         >
-                          <span className="font-medium text-foreground">{e.tipo}</span>
+                          <span className="font-medium text-foreground">
+                            {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
+                            {e.tipo}
+                          </span>
                           <div className="flex items-center gap-2">
                             {e.dataPostagem && (
                               <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -821,7 +972,19 @@ function AprovacaoPublicPage() {
       </div>
 
       {viewingProfile && (
-        <InfluencerProfileDialog inf={viewingProfile} onClose={() => setViewingProfile(null)} />
+        <InfluencerProfileDialog
+          inf={viewingProfile}
+          onClose={() => setViewingProfile(null)}
+          mode={data.mode}
+          resp={data.responses[viewingProfile.id]}
+          busyId={busyId}
+          rejecting={rejecting}
+          motivo={motivo}
+          setRejecting={setRejecting}
+          setMotivo={setMotivo}
+          onApprove={() => void approve(viewingProfile.id)}
+          onConfirmReject={() => void confirmReject(viewingProfile.id)}
+        />
       )}
     </div>
   );

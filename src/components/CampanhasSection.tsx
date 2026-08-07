@@ -1049,6 +1049,7 @@ function ApprovalRequestDialog({
             influencers: chosen.map((i) => ({
               id: i.id,
               nome: i.nome,
+              nicho: i.nicho,
               foto: i.foto,
               redes: i.redes.map((r) => ({
                 id: r.id,
@@ -1061,6 +1062,7 @@ function ApprovalRequestDialog({
                 return {
                   id: e.id,
                   tipo: e.tipo,
+                  quantidade: e.quantidade,
                   dataPostagem: e.dataPostagem,
                   roteiro: roteiro?.url,
                   roteiroNome: roteiro?.nome,
