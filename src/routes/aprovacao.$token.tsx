@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { getApprovalByToken, respondApproval } from "@/lib/approval.functions";
 import { formatSeguidores } from "@/lib/format";
-import Plasma from "@/components/Plasma";
+import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
@@ -134,6 +134,25 @@ type ApprovalData = {
   total_planejado: number | null;
   mode: "approve" | "view";
 };
+
+/** Barra fixa no topo das páginas públicas de aprovação/visualização —
+ * mantém a marca do workspace visível mesmo com o resto rolando. */
+function TopBar({ ws }: { ws: Workspace }) {
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-2xl items-center gap-2.5 px-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-foreground text-background">
+          {ws.logo ? (
+            <img src={ws.logo} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-xs font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
+          )}
+        </div>
+        <span className="text-sm font-semibold text-foreground">{ws.nome}</span>
+      </div>
+    </header>
+  );
+}
 
 function Kpi({
   label,
@@ -656,6 +675,11 @@ function AprovacaoPublicPage() {
   const [motivo, setMotivo] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewingProfile, setViewingProfile] = useState<ApprovalInfluencer | null>(null);
+  const [ws, setWs] = useState<Workspace>({ nome: "Você no Hype", logo: "" });
+
+  useEffect(() => {
+    void fetchWorkspace().then(setWs);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -707,38 +731,35 @@ function AprovacaoPublicPage() {
 
   if (status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <p className="text-sm text-muted-foreground">Carregando...</p>
+      <div className="min-h-screen bg-background">
+        <TopBar ws={ws} />
+        <div className="flex min-h-screen items-center justify-center p-6 pt-14">
+          <p className="text-sm text-muted-foreground">Carregando...</p>
+        </div>
       </div>
     );
   }
 
   if (status === "notfound" || !data) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="max-w-sm text-center">
-          <h1 className="text-lg font-semibold text-foreground">Link não encontrado</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Esse link de aprovação não existe mais ou é inválido.
-          </p>
+      <div className="min-h-screen bg-background">
+        <TopBar ws={ws} />
+        <div className="flex min-h-screen items-center justify-center p-6 pt-14">
+          <div className="max-w-sm text-center">
+            <h1 className="text-lg font-semibold text-foreground">Link não encontrado</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Esse link de aprovação não existe mais ou é inválido.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background px-4 py-10">
-      <div className="pointer-events-none absolute inset-0">
-        <Plasma
-          color="#6366f1"
-          speed={0.6}
-          direction="forward"
-          scale={1.1}
-          opacity={0.35}
-          mouseInteractive={false}
-        />
-      </div>
-      <div className="relative mx-auto max-w-2xl space-y-8">
+    <div className="min-h-screen bg-background">
+      <TopBar ws={ws} />
+      <div className="mx-auto max-w-2xl space-y-8 px-4 pb-10 pt-24">
         <header>
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {data.cliente_nome || "Aprovação de influenciadores"}
