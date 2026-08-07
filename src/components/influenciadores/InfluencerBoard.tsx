@@ -855,11 +855,17 @@ function DemographicEntriesEditor({
                 type="category"
                 dataKey="name"
                 width={90}
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
                 axisLine={false}
                 tickLine={false}
               />
-              <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+              <Bar
+                dataKey="valor"
+                fill="var(--foreground)"
+                radius={3}
+                barSize={12}
+                isAnimationActive={false}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -890,11 +896,17 @@ function DemographicChart({ title, entries }: { title: string; entries?: Demogra
               type="category"
               dataKey="name"
               width={90}
-              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
               axisLine={false}
               tickLine={false}
             />
-            <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+            <Bar
+              dataKey="valor"
+              fill="var(--foreground)"
+              radius={3}
+              barSize={12}
+              isAnimationActive={false}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>

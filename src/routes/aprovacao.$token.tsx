@@ -138,10 +138,10 @@ function Kpi({
 function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-foreground">{value}</p>
+      <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }
@@ -166,11 +166,17 @@ function DemographicChart({ title, entries }: { title: string; entries?: Demogra
               type="category"
               dataKey="name"
               width={90}
-              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
               axisLine={false}
               tickLine={false}
             />
-            <Bar dataKey="valor" fill="hsl(var(--foreground))" radius={3} barSize={12} />
+            <Bar
+              dataKey="valor"
+              fill="var(--foreground)"
+              radius={3}
+              barSize={12}
+              isAnimationActive={false}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -214,7 +220,7 @@ function InfluencerProfileDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-background"
+        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-background"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
