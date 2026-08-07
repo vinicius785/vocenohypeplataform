@@ -1,6 +1,7 @@
 {
-  "version": "1.67.1",
+  "version": "1.67.2",
   "notes": [
+    "Botão \"Encontrou um bug?\" ganha contorno vermelho, mantendo o visual discreto.",
     "Deixa o botão \"Encontrou um bug?\" mais discreto: menor, minúsculo e com estilo mais sutil.",
     "Novo botão flutuante \"ENCONTROU UM BUG?\" em todas as telas: permite anexar um print e descrever o problema. Os relatos ficam disponíveis para admins na seção Time.",
     "Corrige a tela de edição de membro do time: ao abrir um membro salvo como \"Membro padrão\", o diálogo mostrava \"Personalizado\" mesmo assim, dando a impressão de que a troca para padrão não tinha sido salva.",

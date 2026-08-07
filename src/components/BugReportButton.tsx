@@ -65,7 +65,7 @@ export function BugReportButton() {
         onClick={() => setOpen(true)}
         size="sm"
         variant="outline"
-        className="fixed bottom-4 right-4 z-40 gap-1.5 rounded-full bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground"
+        className="fixed bottom-4 right-4 z-40 gap-1.5 rounded-full border-destructive/60 bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground"
       >
         <Bug className="h-3.5 w-3.5" />
         Encontrou um bug?
