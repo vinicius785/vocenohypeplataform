@@ -15,6 +15,7 @@ import { Route as AprovacaoTokenRouteImport } from './routes/aprovacao.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
+import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -47,6 +48,11 @@ const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   path: '/api/public/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGoogleOauthCallbackRoute = ApiGoogleOauthCallbackRouteImport.update({
+  id: '/api/google/oauth-callback',
+  path: '/api/google/oauth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
   id: '/projeto/$id',
   path: '/projeto/$id',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/time': typeof AuthenticatedTimeRoute
   '/aprovacao/$token': typeof AprovacaoTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
 }
 export interface FileRoutesByTo {
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/time': typeof AuthenticatedTimeRoute
   '/aprovacao/$token': typeof AprovacaoTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
 }
 export interface FileRoutesById {
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/_authenticated/time': typeof AuthenticatedTimeRoute
   '/aprovacao/$token': typeof AprovacaoTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
 }
 export interface FileRouteTypes {
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/time'
     | '/aprovacao/$token'
     | '/projeto/$id'
+    | '/api/google/oauth-callback'
     | '/api/public/leads'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
     | '/time'
     | '/aprovacao/$token'
     | '/projeto/$id'
+    | '/api/google/oauth-callback'
     | '/api/public/leads'
   id:
     | '__root__'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '/_authenticated/time'
     | '/aprovacao/$token'
     | '/_authenticated/projeto/$id'
+    | '/api/google/oauth-callback'
     | '/api/public/leads'
   fileRoutesById: FileRoutesById
 }
@@ -111,6 +123,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AprovacaoTokenRoute: typeof AprovacaoTokenRoute
+  ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
 }
 
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicLeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/google/oauth-callback': {
+      id: '/api/google/oauth-callback'
+      path: '/api/google/oauth-callback'
+      fullPath: '/api/google/oauth-callback'
+      preLoaderRoute: typeof ApiGoogleOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/projeto/$id': {
       id: '/_authenticated/projeto/$id'
       path: '/projeto/$id'
@@ -187,6 +207,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AprovacaoTokenRoute: AprovacaoTokenRoute,
+  ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
 }
 export const routeTree = rootRouteImport

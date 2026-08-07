@@ -24,6 +24,7 @@ import {
   Webhook,
   RefreshCw,
   Check,
+  CalendarClock,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -57,6 +58,11 @@ import {
   deleteOutgoingWebhook,
 } from "@/lib/integrations.functions";
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
+import {
+  startGoogleOAuth,
+  getGoogleConnectionStatus,
+  disconnectGoogleCalendar,
+} from "@/lib/google-calendar.functions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, saveNotifPrefs } from "@/lib/notif-prefs";
 import { savePushSubscription, deletePushSubscription } from "@/lib/push.functions";
@@ -78,7 +84,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.60.2";
+export const APP_VERSION = "1.61.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -318,6 +324,7 @@ function PreferenciasTab() {
 
   return (
     <div className="max-w-lg space-y-4">
+      <GoogleCalendarCard />
       <PushNotificationsCard />
       <div className="space-y-3 rounded-lg border border-border bg-background p-4">
         <div>
@@ -505,8 +512,9 @@ function DadosTab() {
 }
 
 /* ============================================================
- * Integrações — webhook de entrada para leads, webhooks de saída
- * (estilo Zapier/Make) e integrações externas (Google Agenda).
+ * Integrações — webhook de entrada para leads e webhooks de saída
+ * (estilo Zapier/Make). Integrações pessoais (Google Agenda) ficam
+ * em "Preferências", que é autoatendimento e não exige admin.
  * ============================================================ */
 
 function IntegracoesTab() {
@@ -563,6 +571,99 @@ function IntegracoesTab() {
         <OutgoingWebhooksCard />
       </section>
     </div>
+  );
+}
+
+function GoogleCalendarCard() {
+  const startFn = useServerFn(startGoogleOAuth);
+  const statusFn = useServerFn(getGoogleConnectionStatus);
+  const disconnectFn = useServerFn(disconnectGoogleCalendar);
+
+  const [status, setStatus] = useState<
+    { state: "loading" } | { state: "disconnected" } | { state: "connected"; email?: string | null }
+  >({ state: "loading" });
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [callbackNotice, setCallbackNotice] = useState<"connected" | "error" | null>(null);
+
+  const refresh = useCallback(() => {
+    statusFn()
+      .then((r) =>
+        setStatus(r.connected ? { state: "connected", email: r.email } : { state: "disconnected" }),
+      )
+      .catch(() => setStatus({ state: "disconnected" }));
+  }, [statusFn]);
+
+  useEffect(() => {
+    refresh();
+    const params = new URLSearchParams(window.location.search);
+    const google = params.get("google");
+    if (google === "connected" || google === "error") {
+      setCallbackNotice(google);
+      params.delete("google");
+      const qs = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+  }, [refresh]);
+
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const { url } = await startFn();
+      window.location.href = url;
+    } catch {
+      setConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await disconnectFn();
+      setStatus({ state: "disconnected" });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  return (
+    <IntegrationCard
+      icon={<CalendarClock className="h-4 w-4" />}
+      title="Google Agenda"
+      description="Conecte sua conta pra ver suas reuniões da plataforma direto no Google Agenda (sincronização de mão única, a cada poucos minutos)."
+    >
+      {callbackNotice === "error" && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          Não foi possível conectar sua conta Google. Tente novamente.
+        </p>
+      )}
+      {status.state === "loading" && <p className="text-xs text-muted-foreground">Carregando...</p>}
+      {status.state === "disconnected" && (
+        <button
+          type="button"
+          onClick={connect}
+          disabled={connecting}
+          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+        >
+          {connecting ? "Redirecionando..." : "Conectar Google Agenda"}
+        </button>
+      )}
+      {status.state === "connected" && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Conectado{status.email ? ` como ${status.email}` : ""}.
+          </p>
+          <button
+            type="button"
+            onClick={disconnect}
+            disabled={disconnecting}
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {disconnecting ? "Desconectando..." : "Desconectar"}
+          </button>
+        </div>
+      )}
+    </IntegrationCard>
   );
 }
 

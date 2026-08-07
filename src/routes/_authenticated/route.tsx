@@ -15,6 +15,7 @@ import { initMarketingTasksSync } from "@/lib/marketing-tasks";
 import { initCampanhaScopedSync } from "@/lib/campanha-scoped-store";
 import { initProjetoScopedSync } from "@/lib/projeto-scoped-store";
 import { initCallController, shutdownCallController } from "@/lib/call-controller";
+import { syncMyMeetingsToGoogle } from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -137,6 +138,26 @@ function AuthenticatedLayout() {
       void shutdownCallController();
     };
   }, [fetchDirectory]);
+
+  // Empurra as reuniões da plataforma pro Google Agenda de quem conectou a
+  // conta (sync de mão única, plataforma sempre vence) — a própria server
+  // function é barata pra quem não conectou (só lê a conexão e retorna).
+  const syncGoogleFn = useServerFn(syncMyMeetingsToGoogle);
+  useEffect(() => {
+    let cancelled = false;
+    const sync = () => {
+      syncGoogleFn().catch((e) => {
+        if (!cancelled) console.warn("[google-calendar] sync failed", e);
+      });
+    };
+    sync();
+    const interval = window.setInterval(sync, 3 * 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [syncGoogleFn]);
+
   return (
     <>
       <Outlet />

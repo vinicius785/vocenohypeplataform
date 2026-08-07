@@ -1,6 +1,6 @@
 {
-  "version": "1.60.2",
+  "version": "1.61.0",
   "notes": [
-    "Corrige lançamentos do Financeiro sumindo/zerando: salvar um lançamento comparava contra uma cópia local desatualizada e podia apagar entradas recém-chegadas de outra aba/usuário. Também evita duplicar ao clicar 2x em \"Importar\"."
+    "Integração com Google Agenda: conecte sua conta em Configurações → Preferências e suas reuniões da plataforma passam a aparecer no seu Google Agenda (sincronização automática a cada poucos minutos)."
   ]
 }
