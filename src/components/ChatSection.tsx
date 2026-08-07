@@ -658,10 +658,18 @@ function MessageList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
+  const jumpToMessage = (id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightedId(id);
+    window.setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 1500);
+  };
   const otherReadAt = isDm && otherUserId ? getOtherReadAt(convoId, otherUserId) : 0;
 
   if (messages.length === 0) {
@@ -721,7 +729,10 @@ function MessageList({
                 <div className="h-px flex-1 bg-border" />
               </div>
             )}
-            <div className={`group relative flex gap-3 ${grouped ? "mt-1" : "mt-3"}`}>
+            <div
+              id={`msg-${m.id}`}
+              className={`group relative flex gap-3 rounded-md transition-colors duration-500 ${grouped ? "mt-1" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
+            >
               <div className="w-8 shrink-0">
                 {!grouped &&
                   (m.authorPhoto ? (
@@ -760,13 +771,17 @@ function MessageList({
                     const original = messagesById.get(m.replyToId!);
                     if (!original) return null;
                     return (
-                      <div className="mb-1 flex items-start gap-1.5 border-l-2 border-border pl-2 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => jumpToMessage(original.id)}
+                        className="mb-1 flex w-full items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
+                      >
                         <Reply className="mt-0.5 h-3 w-3 shrink-0" />
                         <div className="min-w-0">
                           <span className="font-medium">{original.authorName}</span>{" "}
                           <span className="line-clamp-1 break-words">{original.text}</span>
                         </div>
-                      </div>
+                      </button>
                     );
                   })()}
                 {editing ? (

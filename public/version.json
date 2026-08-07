@@ -1,6 +1,6 @@
 {
-  "version": "1.59.0",
+  "version": "1.60.0",
   "notes": [
-    "Faz o número de seguidores aparecer também no link público de visualização/aprovação de influenciadores."
+    "Clicar na citação de uma resposta no chat agora rola até a mensagem original e a destaca, pra dar pra saber qual mensagem foi respondida."
   ]
 }
