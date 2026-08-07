@@ -24,7 +24,6 @@ import {
   Webhook,
   RefreshCw,
   Check,
-  CalendarClock,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -84,7 +83,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.61.1";
+export const APP_VERSION = "1.62.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -161,7 +160,10 @@ const loadSenhas = (): Senha[] => {
 /** Abas administrativas do workspace — exigem a permissão "configuracoes"
  * (ou ser admin). "perfil", "preferencias" e "av" são autoatendimento e
  * ficam sempre acessíveis pra qualquer membro. */
-const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas", "integracoes"];
+/** "integracoes" não entra aqui: webhooks continuam admin-only (checado
+ * dentro da própria aba), mas o Google Agenda é self-service — todo membro
+ * do time precisa conseguir abrir a aba pra conectar a própria conta. */
+const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas"];
 
 export function ConfiguracoesSection() {
   const [tab, setTab] = useState<TabKey>("perfil");
@@ -324,7 +326,6 @@ function PreferenciasTab() {
 
   return (
     <div className="max-w-lg space-y-4">
-      <GoogleCalendarCard />
       <PushNotificationsCard />
       <div className="space-y-3 rounded-lg border border-border bg-background p-4">
         <div>
@@ -517,6 +518,26 @@ function DadosTab() {
  * em "Preferências", que é autoatendimento e não exige admin.
  * ============================================================ */
 
+function IntegracoesSectionHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+        {eyebrow}
+      </p>
+      <h2 className="mt-0.5 text-sm font-semibold text-foreground">{title}</h2>
+      <p className="text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 function IntegracoesTab() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
@@ -533,44 +554,86 @@ function IntegracoesTab() {
     };
   }, []);
 
-  if (isAdmin === false) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-background p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          Apenas administradores podem ver e gerenciar integrações.
-        </p>
-      </div>
-    );
-  }
-
-  if (isAdmin === null) return null;
-
   return (
     <div className="max-w-2xl space-y-8">
       <section className="space-y-3">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Entrada
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Recebe dados de fora pra dentro da plataforma (ex: Make, Typeform).
-          </p>
-        </div>
-        <LeadsWebhookCard />
+        <IntegracoesSectionHeader
+          eyebrow="Pessoal · disponível pra todo o time"
+          title="Calendário"
+          description="Conecte sua própria conta Google — suas reuniões da plataforma passam a aparecer no seu Google Agenda."
+        />
+        <GoogleCalendarCard />
+      </section>
+
+      <div className="border-t border-border" />
+
+      <section className="space-y-3">
+        <IntegracoesSectionHeader
+          eyebrow="Administradores"
+          title="Entrada"
+          description="Recebe dados de fora pra dentro da plataforma (ex: Make, Typeform)."
+        />
+        {isAdmin === false ? (
+          <AdminOnlyNotice />
+        ) : isAdmin === null ? (
+          <IntegrationCardSkeleton />
+        ) : (
+          <LeadsWebhookCard />
+        )}
       </section>
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Saída
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Avisa outros sistemas quando algo acontece aqui dentro (ex: Zapier, Make, Slack).
-          </p>
-        </div>
-        <OutgoingWebhooksCard />
+        <IntegracoesSectionHeader
+          eyebrow="Administradores"
+          title="Saída"
+          description="Avisa outros sistemas quando algo acontece aqui dentro (ex: Zapier, Make, Slack)."
+        />
+        {isAdmin === false ? (
+          <AdminOnlyNotice />
+        ) : isAdmin === null ? (
+          <IntegrationCardSkeleton />
+        ) : (
+          <OutgoingWebhooksCard />
+        )}
       </section>
     </div>
+  );
+}
+
+function AdminOnlyNotice() {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-background p-4 text-center">
+      <p className="text-xs text-muted-foreground">
+        Apenas administradores podem ver e gerenciar esta integração.
+      </p>
+    </div>
+  );
+}
+
+function IntegrationCardSkeleton() {
+  return <div className="h-24 animate-pulse rounded-lg border border-border bg-muted/30" />;
+}
+
+function GoogleCalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+      <path fill="#4285F4" d="M42 22H26V6h11a5 5 0 0 1 5 5z" />
+      <path fill="#EA4335" d="M26 6H11a5 5 0 0 0-5 5v11h20z" />
+      <path fill="#FBBC05" d="M6 26v11a5 5 0 0 0 5 5h11V26z" />
+      <path fill="#34A853" d="M26 26v16h11a5 5 0 0 0 5-5V26z" />
+      <rect x="14" y="14" width="20" height="20" fill="#fff" />
+      <text
+        x="24"
+        y="29"
+        textAnchor="middle"
+        fontSize="14"
+        fontWeight="700"
+        fill="#4285F4"
+        fontFamily="Arial, sans-serif"
+      >
+        31
+      </text>
+    </svg>
   );
 }
 
@@ -628,7 +691,7 @@ function GoogleCalendarCard() {
 
   return (
     <IntegrationCard
-      icon={<CalendarClock className="h-4 w-4" />}
+      icon={<GoogleCalendarIcon className="h-5 w-5" />}
       title="Google Agenda"
       description="Conecte sua conta pra ver suas reuniões da plataforma direto no Google Agenda (sincronização de mão única, a cada poucos minutos)."
     >

@@ -1,6 +1,6 @@
 {
-  "version": "1.61.1",
+  "version": "1.62.0",
   "notes": [
-    "Corrige erro 'invalid_client' ao conectar o Google Agenda quando a env var do Client ID/Secret tinha um espaço ou quebra de linha colado junto."
+    "Move o Google Agenda para a aba Integrações (Configurações), com ícone próprio, organizada em seções — Calendário fica disponível pra todo o time, Entrada/Saída continuam admin-only."
   ]
 }
