@@ -1,6 +1,7 @@
 {
-  "version": "1.66.2",
+  "version": "1.66.3",
   "notes": [
+    "Corrige a tela de edição de membro do time: ao abrir um membro salvo como \"Membro padrão\", o diálogo mostrava \"Personalizado\" mesmo assim, dando a impressão de que a troca para padrão não tinha sido salva.",
     "Corrige a formatação dos artigos do Mural de novidades: agora respeitam espaçamento entre parágrafos, negrito, itálico e listas numeradas/com marcadores (antes tudo aparecia como texto corrido).",
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ]

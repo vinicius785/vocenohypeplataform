@@ -134,6 +134,13 @@ const MEMBER_DEFAULT_PERMISSIONS: Permission[] = [
   "chat",
 ];
 
+function isDefaultPermissionSet(permissions: Permission[]): PermissionPreset {
+  if (permissions.length !== MEMBER_DEFAULT_PERMISSIONS.length) return "personalizado";
+  const sortedA = [...permissions].sort();
+  const sortedB = [...MEMBER_DEFAULT_PERMISSIONS].sort();
+  return sortedA.every((p, i) => p === sortedB[i]) ? "padrao" : "personalizado";
+}
+
 export type Member = {
   id: string;
   photo?: string;
@@ -1063,9 +1070,11 @@ function MemberDialog({
     setPermissions(initial ? initial.permissions : MEMBER_DEFAULT_PERMISSIONS);
     setTimeView(initial?.timeView ?? DEFAULT_TIME_VIEW);
     setIsAdminRole(initial?.isAdmin ?? false);
-    // Membro novo começa no preset simples; editar um já existente sempre
-    // abre no modo Personalizado, mostrando as permissões reais dele.
-    setPreset(initial ? "personalizado" : "padrao");
+    // Abre no preset "Membro padrão" se as permissões salvas baterem
+    // exatamente com o padrão; senão abre em Personalizado mostrando as
+    // permissões reais. Sem isso, um membro salvo como padrão sempre
+    // reabria marcado como Personalizado, parecendo que a troca não salvou.
+    setPreset(isDefaultPermissionSet(initial ? initial.permissions : MEMBER_DEFAULT_PERMISSIONS));
     setError("");
   }, [open, initial]);
 
