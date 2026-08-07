@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { getApprovalByToken, respondApproval } from "@/lib/approval.functions";
 import { formatSeguidores } from "@/lib/format";
+import Plasma from "@/components/Plasma";
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
@@ -726,8 +727,18 @@ function AprovacaoPublicPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto max-w-2xl space-y-8">
+    <div className="relative min-h-screen overflow-hidden bg-background px-4 py-10">
+      <div className="pointer-events-none absolute inset-0">
+        <Plasma
+          color="#6366f1"
+          speed={0.6}
+          direction="forward"
+          scale={1.1}
+          opacity={0.35}
+          mouseInteractive={false}
+        />
+      </div>
+      <div className="relative mx-auto max-w-2xl space-y-8">
         <header>
           <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {data.cliente_nome || "Aprovação de influenciadores"}

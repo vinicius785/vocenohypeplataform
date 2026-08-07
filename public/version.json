@@ -1,6 +1,7 @@
 {
-  "version": "1.70.0",
+  "version": "1.71.0",
   "notes": [
+    "Novo fundo animado (efeito plasma) no link público de aprovação/visualização de influenciadores.",
     "Reorganiza a etapa Métricas do influenciador: números gerais e demografia agora em cards separados, com títulos e divisórias claras (antes tudo ficava empilhado sem separação visual).",
     "Card de perfil do link público de aprovação: mostra o nicho do influenciador, a quantidade de cada entrega (dentro e fora do perfil) e ganha os botões Aprovar/Reprovar também dentro do perfil (antes só fora).",
     "Nova métrica Gênero (gráfico de pizza) na demografia do influenciador, ao lado de faixa etária/países/cidades. Todos os gráficos (barra e pizza) agora mostram a % em número junto com a barra/fatia.",
