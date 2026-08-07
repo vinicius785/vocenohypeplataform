@@ -1,6 +1,6 @@
 {
-  "version": "1.60.1",
+  "version": "1.60.2",
   "notes": [
-    "Número de seguidores agora é formatado (ex: 100.000) no cadastro, na página de campanha e no link público de aprovação/visualização."
+    "Corrige lançamentos do Financeiro sumindo/zerando: salvar um lançamento comparava contra uma cópia local desatualizada e podia apagar entradas recém-chegadas de outra aba/usuário. Também evita duplicar ao clicar 2x em \"Importar\"."
   ]
 }

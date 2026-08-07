@@ -75,12 +75,10 @@ function isoDaysAgo(days: number) {
 export function FinanceiroSection() {
   const clientes = useClientes();
   const [manual, setManualState] = useState<ManualEntry[]>(() => loadManual());
-  const setManual = (u: ManualEntry[] | ((p: ManualEntry[]) => ManualEntry[])) =>
-    setManualState((prev) => {
-      const next = typeof u === "function" ? (u as (p: ManualEntry[]) => ManualEntry[])(prev) : u;
-      saveManual(next);
-      return next;
-    });
+  // Encaminha a atualização direto pro store (que diffa contra o cache real,
+  // não contra este `manual` local) — `onManualChange` abaixo já resincroniza
+  // o estado local a partir do resultado, então não escrevemos aqui também.
+  const setManual = (u: ManualEntry[] | ((p: ManualEntry[]) => ManualEntry[])) => saveManual(u);
 
   const [month, setMonth] = useState<string>(monthKey(new Date()));
   const [periodMode, setPeriodMode] = useState<PeriodMode>("mes");
@@ -827,6 +825,7 @@ function ImportDialog({
   const [pendingFilter, setPendingFilter] = useState("a fazer");
   const [defaultKind, setDefaultKind] = useState<Kind>("despesa");
   const [defaultCategory, setDefaultCategory] = useState("Importado do ClickUp");
+  const [importing, setImporting] = useState(false);
 
   const parse = () => {
     const parsed = parseCsv(raw);
@@ -864,6 +863,8 @@ function ImportDialog({
   }, [rows, roles, pendingFilter, statusColIdx, descColIdx, amountColIdx, dateColIdx]);
 
   const handleImport = () => {
+    if (importing) return;
+    setImporting(true);
     const entries: ManualEntry[] = preview.map((p) => ({
       id: crypto.randomUUID(),
       date: p.date,
@@ -1031,11 +1032,13 @@ function ImportDialog({
             </button>
             <button
               type="button"
-              disabled={preview.length === 0}
+              disabled={preview.length === 0 || importing}
               onClick={handleImport}
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
-              Importar {preview.length} {preview.length === 1 ? "lançamento" : "lançamentos"}
+              {importing
+                ? "Importando..."
+                : `Importar ${preview.length} ${preview.length === 1 ? "lançamento" : "lançamentos"}`}
             </button>
           </div>
         )}

@@ -145,8 +145,16 @@ export function initFinanceiroSync(): Promise<void> {
 export function loadManual(): ManualEntry[] {
   return manualStore.get();
 }
-export function saveManual(list: ManualEntry[]) {
-  manualStore.set(() => list);
+// Recebe uma função de atualização (não uma lista pronta): `manualStore.set`
+// diffa contra o cache real do módulo pra decidir o que fazer upsert/delete
+// no Supabase. Se o chamador passasse uma lista já calculada a partir do
+// estado local do componente, e esse estado local estivesse um passo
+// atrasado em relação ao cache (ex.: entre o realtime de outra aba/usuário
+// chegar e o componente re-renderizar), qualquer lançamento presente só no
+// cache real seria interpretado como "removido" e apagado do banco —
+// causando o sumiço/zeragem de lançamentos alheios ao editar/importar aqui.
+export function saveManual(updater: ManualEntry[] | ((prev: ManualEntry[]) => ManualEntry[])) {
+  manualStore.set((prev) => (typeof updater === "function" ? updater(prev) : updater));
 }
 export function onManualChange(callback: () => void): () => void {
   return manualStore.subscribe(callback);
