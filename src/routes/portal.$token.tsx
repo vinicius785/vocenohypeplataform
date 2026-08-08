@@ -949,13 +949,6 @@ function ClientPortalPage() {
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
   const totalInflus = allInfluencers.length;
   const totalAguardando = allInfluencers.filter((i) => pendingReason(i)).length;
-  const totalAprovados = allInfluencers.filter(
-    (i) => i.status !== "Lista" && i.status !== "Enviado para aprovação",
-  ).length;
-  const totalPostados = allInfluencers.reduce(
-    (sum, i) => sum + i.entregas.filter((e) => e.status === "publicado").length,
-    0,
-  );
 
   const feed: PendingFeedItem[] = data.campanhas.flatMap((c) =>
     c.influencers
@@ -1030,44 +1023,70 @@ function ClientPortalPage() {
       <TopBar ws={ws} />
 
       <div className="flex flex-1 flex-col md:flex-row">
-        {/* SIDEBAR — cliente + navegação entre Início e cada campanha. */}
-        <aside className="shrink-0 border-b border-border bg-muted/20 p-5 md:w-64 md:border-b-0 md:border-r">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-11 w-11 rounded-xl">
-              {data.clienteFoto && <AvatarImage src={data.clienteFoto} alt={data.clienteNome} />}
-              <AvatarFallback className="rounded-xl text-sm font-semibold">
-                {(data.clienteNome || "C").charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{data.clienteNome}</p>
+        {/* SIDEBAR — cartão de perfil do cliente + cartão de navegação,
+            igual à estrutura do LinkedIn (banner+avatar, depois uma lista
+            de "páginas" com ícone + contador). */}
+        <aside className="shrink-0 space-y-3 border-b border-border bg-muted/10 p-4 md:w-72 md:border-b-0 md:border-r">
+          <div className="overflow-hidden rounded-xl border border-border bg-background">
+            <div
+              className="h-12"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
+              }}
+            />
+            <div className="px-4 pb-4">
+              <Avatar className="-mt-7 h-14 w-14 rounded-xl ring-4 ring-background">
+                {data.clienteFoto && <AvatarImage src={data.clienteFoto} alt={data.clienteNome} />}
+                <AvatarFallback className="rounded-xl text-base font-semibold">
+                  {(data.clienteNome || "C").charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <p className="mt-2 truncate text-sm font-semibold text-foreground">
+                {data.clienteNome}
+              </p>
               <p className="text-xs text-muted-foreground">Portal do cliente</p>
+
+              <div className="mt-3 flex items-center gap-4 border-t border-border pt-3">
+                <div>
+                  <p className="text-sm font-semibold tabular-nums text-foreground">
+                    {data.campanhas.length}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Campanhas</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums text-foreground">
+                    {totalInflus}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Influenciadores</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <nav className="mt-5 space-y-0.5">
+          <nav className="overflow-hidden rounded-xl border border-border bg-background">
             <button
               type="button"
               onClick={() => {
                 setActiveCampanhaId(null);
                 setViewingId(null);
               }}
-              className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors ${
-                activeCampanhaId === null
-                  ? "bg-foreground text-background"
-                  : "text-foreground hover:bg-muted"
+              className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
+                activeCampanhaId === null ? "bg-muted" : "hover:bg-muted/60"
               }`}
             >
-              <LayoutGrid className="h-4 w-4 shrink-0" />
-              Início
-              {totalAguardando > 0 && activeCampanhaId !== null && (
-                <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-foreground">Início</span>
+              {totalAguardando > 0 && (
+                <span className="ml-auto inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                   {totalAguardando}
                 </span>
               )}
             </button>
 
-            <p className="mb-1 mt-4 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <p className="border-t border-border px-3.5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Campanhas
             </p>
             {data.campanhas.map((c) => {
@@ -1080,22 +1099,16 @@ function ClientPortalPage() {
                     setActiveCampanhaId(c.id);
                     setViewingId(null);
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors ${
-                    activeCampanhaId === c.id
-                      ? "bg-foreground text-background"
-                      : "text-foreground hover:bg-muted"
+                  className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
+                    activeCampanhaId === c.id ? "bg-muted" : "hover:bg-muted/60"
                   }`}
                 >
-                  <Megaphone className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{c.nome}</span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                    <Megaphone className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-foreground">{c.nome}</span>
                   {aguardandoAqui > 0 && (
-                    <span
-                      className={`ml-auto inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
-                        activeCampanhaId === c.id
-                          ? "bg-background/20 text-background"
-                          : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                      }`}
-                    >
+                    <span className="ml-auto inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                       {aguardandoAqui}
                     </span>
                   )}
@@ -1103,7 +1116,7 @@ function ClientPortalPage() {
               );
             })}
             {data.campanhas.length === 0 && (
-              <p className="px-2.5 py-2 text-xs text-muted-foreground">Nenhuma campanha ainda.</p>
+              <p className="px-3.5 py-2.5 text-xs text-muted-foreground">Nenhuma campanha ainda.</p>
             )}
           </nav>
         </aside>
@@ -1189,17 +1202,6 @@ function ClientPortalPage() {
               <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
                 Olá, {data.clienteNome}
               </h1>
-
-              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <KpiCard label="Campanhas" value={data.campanhas.length.toString()} />
-                <KpiCard label="Influenciadores" value={totalInflus.toString()} />
-                <KpiCard
-                  label="Aguardando você"
-                  value={totalAguardando.toString()}
-                  tone={totalAguardando > 0 ? "warning" : "default"}
-                />
-                <KpiCard label="Postados" value={totalPostados.toString()} />
-              </div>
 
               {/* Estrutura tipo LinkedIn: centro = feed do conteúdo mais
                   recente, direita = novidades pendentes + campanhas. */}
@@ -1290,23 +1292,25 @@ function ClientPortalPage() {
                   )}
                 </section>
 
-                <aside className="space-y-6">
-                  <section className="space-y-3">
-                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <aside className="space-y-3">
+                  {/* Widget "Novidades" — título dentro da mesma caixa da
+                      lista, igual o módulo de notícias do LinkedIn. */}
+                  <section className="overflow-hidden rounded-xl border border-border bg-background">
+                    <h2 className="flex items-center gap-2 border-b border-border px-3.5 py-3 text-sm font-semibold text-foreground">
                       <Clock className="h-4 w-4" /> Novidades
                     </h2>
                     {feed.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                      <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
                         Tudo em dia por aqui.
                       </p>
                     ) : (
-                      <div className="divide-y divide-border rounded-xl border border-border bg-background">
+                      <div className="divide-y divide-border">
                         {feed.slice(0, 6).map((item) => (
                           <button
                             key={`${item.campanhaId}:${item.inf.id}`}
                             type="button"
                             onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                            className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
                           >
                             <Avatar className="h-8 w-8 shrink-0">
                               {item.inf.foto && (
@@ -1330,16 +1334,16 @@ function ClientPortalPage() {
                     )}
                   </section>
 
-                  <section className="space-y-3">
-                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <section className="overflow-hidden rounded-xl border border-border bg-background">
+                    <h2 className="flex items-center gap-2 border-b border-border px-3.5 py-3 text-sm font-semibold text-foreground">
                       <Megaphone className="h-4 w-4" /> Campanhas
                     </h2>
                     {data.campanhas.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                      <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
                         Nenhuma campanha ainda.
                       </p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="divide-y divide-border">
                         {data.campanhas.map((c) => {
                           const aguardandoAqui = c.influencers.filter((i) =>
                             pendingReason(i),
@@ -1349,23 +1353,23 @@ function ClientPortalPage() {
                               key={c.id}
                               type="button"
                               onClick={() => setActiveCampanhaId(c.id)}
-                              className="flex w-full flex-col gap-1.5 rounded-xl border border-border bg-background p-3 text-left transition-colors hover:bg-muted/40"
+                              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="truncate text-xs font-semibold text-foreground">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-foreground">
                                   {c.nome}
                                 </p>
-                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                  {c.influencers.length} influenciadores
+                                  {aguardandoAqui > 0 && (
+                                    <span className="text-amber-700 dark:text-amber-400">
+                                      {" "}
+                                      · {aguardandoAqui} aguardando você
+                                    </span>
+                                  )}
+                                </p>
                               </div>
-                              <p className="text-[11px] text-muted-foreground">
-                                {c.influencers.length} influenciadores
-                              </p>
-                              {aguardandoAqui > 0 && (
-                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                                  {aguardandoAqui} aguardando você
-                                </span>
-                              )}
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                             </button>
                           );
                         })}
