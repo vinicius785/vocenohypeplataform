@@ -1,39 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
-import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { INFLU_STATUSES, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
 
 /**
- * Link público fixo por campanha (`/campanha/$token`) — substitui os links
- * avulsos de `approval.functions.ts` (removido). Em vez de uma foto
- * congelada gerada manualmente, o token é um campo fixo na própria
- * `Campaign` (`publicToken`) e cada acesso lê o estado *ao vivo* de
- * `campanha_influenciadores`. Nunca fala com Supabase direto do browser —
- * só via as server functions abaixo, sempre com o service-role client,
- * porque nem `clientes` nem `campanha_influenciadores` têm policy `anon`.
+ * Portal público fixo do CLIENTE (`/portal/$token`) — um único link mostra
+ * todas as campanhas do cliente (por isso o token mora em `Cliente`, não em
+ * `Campaign`). Nunca fala com Supabase direto do browser — só via as server
+ * functions abaixo, sempre com o service-role client, porque nem `clientes`
+ * nem `campanha_influenciadores` têm policy `anon`.
  */
 
-async function findCampanhaByToken(token: string): Promise<{
-  clienteId: string;
-  clienteNome: string;
-  clienteFoto?: string;
-  campanha: Campaign;
-} | null> {
+async function findClienteByToken(
+  token: string,
+): Promise<{ clienteId: string; cliente: Cliente } | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
   if (error) throw new Error(error.message);
   for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
-    const campanha = row.data.campanhas?.find((c) => c.publicToken === token);
-    if (campanha) {
-      return {
-        clienteId: row.id,
-        clienteNome: row.data.empresa,
-        clienteFoto: row.data.photo,
-        campanha,
-      };
-    }
+    if (row.data.publicToken === token) return { clienteId: row.id, cliente: row.data };
   }
   return null;
 }
@@ -137,34 +123,46 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
 
 const TokenInput = z.object({ token: z.string().min(1) });
 
-/** Público — sem auth. Usado pela página `/campanha/$token`. */
-export const getCampanhaLinkData = createServerFn({ method: "GET" })
+/** Público — sem auth. Usado pela página `/portal/$token`. Retorna TODAS
+ * as campanhas do cliente, cada uma já com seus influenciadores. */
+export const getClienteLinkData = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => TokenInput.parse(raw))
   .handler(async ({ data }) => {
-    const found = await findCampanhaByToken(data.token);
+    const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: rows, error } = await supabaseAdmin
-      .from("campanha_influenciadores")
-      .select("data")
-      .eq("campanha_id", found.campanha.id);
-    if (error) throw new Error(error.message);
-    // Só mostra pro cliente influenciadores que o time já enviou pra
-    // aprovação (ou mais adiante no funil) — enquanto está só "Lista"
-    // (planejamento interno, ainda não decidido/comunicado) não aparece.
+    const campanhas = found.cliente.campanhas ?? [];
     const enviadoIdx = INFLU_STATUSES.indexOf("Enviado para aprovação");
-    const influencers = ((rows ?? []) as { data: Influ }[])
-      .filter((r) => INFLU_STATUSES.indexOf(r.data.status) >= enviadoIdx)
-      .map((r) => toPublicInfluencer(r.data));
-    const planejado = found.campanha.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
+
+    const campanhasComInflus = await Promise.all(
+      campanhas.map(async (c) => {
+        const { data: rows, error } = await supabaseAdmin
+          .from("campanha_influenciadores")
+          .select("data")
+          .eq("campanha_id", c.id);
+        if (error) throw new Error(error.message);
+        // Só mostra pro cliente influenciadores que o time já enviou pra
+        // aprovação (ou mais adiante no funil) — "Lista" é planejamento
+        // interno, ainda não decidido/comunicado.
+        const influencers = ((rows ?? []) as { data: Influ }[])
+          .filter((r) => INFLU_STATUSES.indexOf(r.data.status) >= enviadoIdx)
+          .map((r) => toPublicInfluencer(r.data));
+        const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
+        return {
+          id: c.id,
+          nome: c.nome,
+          prazo: c.prazo,
+          dataInicio: c.dataInicio,
+          planejado,
+          influencers,
+        };
+      }),
+    );
+
     return {
-      campanhaNome: found.campanha.nome,
-      clienteNome: found.clienteNome,
-      clienteFoto: found.clienteFoto,
-      prazo: found.campanha.prazo,
-      dataInicio: found.campanha.dataInicio,
-      planejado,
-      influencers,
+      clienteNome: found.cliente.empresa,
+      clienteFoto: found.cliente.photo,
+      campanhas: campanhasComInflus,
     };
   });
 
@@ -190,8 +188,19 @@ async function saveInfluRow(campanhaId: string, influencerId: string, next: Infl
   if (error) throw new Error(error.message);
 }
 
+/** Confirma que `campanhaId` pertence de fato ao cliente dono do token —
+ * evita que alguém adulterar uma campanha de outro cliente adivinhando o id. */
+async function assertCampanhaDoCliente(token: string, campanhaId: string): Promise<void> {
+  const found = await findClienteByToken(token);
+  if (!found) throw new Error("Link não encontrado.");
+  if (!found.cliente.campanhas?.some((c) => c.id === campanhaId)) {
+    throw new Error("Campanha não encontrada neste link.");
+  }
+}
+
 const RespondInfluInput = z.object({
   token: z.string().min(1),
+  campanhaId: z.string().min(1),
   influencerId: z.string().min(1),
   status: z.enum(["aprovado", "reprovado"]),
   motivo: z.string().trim().max(2000).optional(),
@@ -204,16 +213,16 @@ export const respondCampanhaInflu = createServerFn({ method: "POST" })
     if (data.status === "reprovado" && !data.motivo?.trim()) {
       throw new Error("Motivo é obrigatório para reprovar.");
     }
-    const found = await findCampanhaByToken(data.token);
-    if (!found) throw new Error("Link não encontrado.");
-    const influ = await loadInfluRow(found.campanha.id, data.influencerId);
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const next = applyInfluApproval(influ, data.status, data.motivo?.trim());
-    await saveInfluRow(found.campanha.id, data.influencerId, next);
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });
 
 const RespondEntregaInput = z.object({
   token: z.string().min(1),
+  campanhaId: z.string().min(1),
   influencerId: z.string().min(1),
   entregaId: z.string().min(1),
   kind: z.enum(["roteiro", "conteudo"]),
@@ -228,9 +237,8 @@ export const respondCampanhaEntrega = createServerFn({ method: "POST" })
     if (data.status === "reprovado" && !data.motivo?.trim()) {
       throw new Error("Motivo é obrigatório para reprovar.");
     }
-    const found = await findCampanhaByToken(data.token);
-    if (!found) throw new Error("Link não encontrado.");
-    const influ = await loadInfluRow(found.campanha.id, data.influencerId);
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     if (!influ.entregas.some((e) => e.id === data.entregaId)) {
       throw new Error("Entrega não encontrada.");
     }
@@ -241,6 +249,6 @@ export const respondCampanhaEntrega = createServerFn({ method: "POST" })
       data.status,
       data.motivo?.trim(),
     );
-    await saveInfluRow(found.campanha.id, data.influencerId, next);
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });

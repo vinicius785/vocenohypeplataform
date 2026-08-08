@@ -60,10 +60,25 @@ export function ClientesSection() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campanhaOpen, setCampanhaOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { confirm, confirmDialog } = useConfirm();
 
   const selected = clientes.find((c) => c.id === selectedId) ?? null;
+
+  const copyClientLink = (cliente: Cliente) => {
+    let token = cliente.publicToken;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      setClientes((prev) =>
+        prev.map((cl) => (cl.id === cliente.id ? { ...cl, publicToken: token } : cl)),
+      );
+    }
+    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
 
   const update = <K extends keyof typeof emptyForm>(k: K, v: (typeof emptyForm)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -338,6 +353,14 @@ export function ClientesSection() {
                       {selected.responsavel || "Sem responsável"}
                     </DialogDescription>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => copyClientLink(selected)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-sm hover:opacity-90"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    {linkCopied ? "Link copiado!" : "Link do cliente"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => openEditCliente(selected)}

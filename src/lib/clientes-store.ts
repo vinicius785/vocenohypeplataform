@@ -12,6 +12,10 @@ export type Cliente = {
   whatsapp: string;
   clienteDesde: string;
   campanhas?: Campaign[];
+  /** Token do portal público fixo do cliente (/portal/$token) — gerado uma
+   * vez, na lazy, na primeira vez que alguém pede o link. Mostra TODAS as
+   * campanhas do cliente (por isso mora aqui, não em `Campaign`). */
+  publicToken?: string;
 };
 
 const store = createTableArrayStore<Cliente>("clientes");

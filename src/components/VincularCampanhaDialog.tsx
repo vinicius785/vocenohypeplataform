@@ -115,9 +115,6 @@ export type Campaign = {
   pagClienteRecorrenteInicio?: string; // data inicial da recorrência
   direitosImagem?: DireitosImagem;
   publicoAlvo?: PublicoAlvo;
-  /** Token do link público fixo da campanha (/campanha/$token) — gerado
-   * uma vez, na lazy, na primeira vez que alguém pede o link. */
-  publicToken?: string;
 };
 
 const newLinha = (): InfluLinha => ({

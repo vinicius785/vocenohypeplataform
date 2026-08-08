@@ -343,29 +343,6 @@ function CampanhaDetail({
   const [openPanel, setOpenPanel] = useState<
     null | "documentos" | "calendario" | "composicao" | "direitos"
   >(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const copyClientLink = () => {
-    let token = c.publicToken;
-    if (!token) {
-      token = crypto.randomUUID().replace(/-/g, "");
-      clientesStore.set((prev) =>
-        prev.map((cl) =>
-          cl.id !== cliente.id
-            ? cl
-            : {
-                ...cl,
-                campanhas: (cl.campanhas ?? []).map((camp) =>
-                  camp.id === c.id ? { ...camp, publicToken: token } : camp,
-                ),
-              },
-        ),
-      );
-    }
-    void navigator.clipboard.writeText(`${window.location.origin}/campanha/${token}`).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
@@ -400,32 +377,22 @@ function CampanhaDetail({
             {isRecorrente && <span className="ml-2">· Recorrente</span>}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {isRecorrente && (
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground">Mês</label>
-              <select
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs capitalize focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {monthOptions.map((m) => (
-                  <option key={m.value} value={m.value} className="capitalize">
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={copyClientLink}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-foreground px-3.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-            {linkCopied ? "Link copiado!" : "Link do cliente"}
-          </button>
-        </div>
+        {isRecorrente && (
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="text-xs text-muted-foreground">Mês</label>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs capitalize focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {monthOptions.map((m) => (
+                <option key={m.value} value={m.value} className="capitalize">
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </header>
 
       {/* BRIEFING */}

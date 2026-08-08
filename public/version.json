@@ -1,6 +1,7 @@
 {
-  "version": "1.77.1",
+  "version": "1.78.0",
   "notes": [
+    "Substitui o link por campanha por um link único do CLIENTE (botão \"Link do cliente\", em Clientes) — um portal de verdade: barra lateral fixa com Início (visão geral + novidades pendentes) e todas as campanhas do cliente, cada uma com sua lista de influenciadores. Clicar num influenciador abre o perfil na mesma tela (com voltar), não mais um popup. Mesma identidade visual da plataforma (cores, tema claro/escuro).",
     "Reverte o visual \"identidade própria\" do link do cliente (tipografia serifada, tema escuro fixo) — voltou a seguir a mesma identidade visual do resto da plataforma (mesmas cores, tema claro/escuro, tipografia).",
     "Ajustes no link do cliente: página redesenhada (banner com foto do cliente e nome da campanha em destaque, cards mais bonitos), botão \"Link do cliente\" agora fica visível no topo da campanha (antes estava escondido em Exportar), corrige as métricas do perfil que não apareciam dentro do influenciador (bug na chave da rede social), e o link só mostra influenciadores que já foram enviados pra aprovação — quem ainda está só na lista interna não aparece.",
     "Cada campanha agora tem um link fixo e único pro cliente (botão \"Link do cliente\", em Campanhas) — não precisa mais gerar link avulso toda vez. O link mostra os influenciadores com aprovação em etapas: seleção do influ, roteiro e conteúdo (cada um separado), com aviso de reprovação e motivo até o time reenviar. O time é notificado (sino + toast) a cada ação do cliente, e ganha um aviso de \"métricas pendentes\" quando um post publicado passa de 15 dias sem métricas preenchidas.",

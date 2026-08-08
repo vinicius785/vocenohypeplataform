@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CampanhaTokenRouteImport } from './routes/campanha.$token'
+import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -27,9 +27,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CampanhaTokenRoute = CampanhaTokenRouteImport.update({
-  id: '/campanha/$token',
-  path: '/campanha/$token',
+const PortalTokenRoute = PortalTokenRouteImport.update({
+  id: '/portal/$token',
+  path: '/portal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTimeRoute = AuthenticatedTimeRouteImport.update({
@@ -63,7 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
-  '/campanha/$token': typeof CampanhaTokenRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -72,7 +72,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
-  '/campanha/$token': typeof CampanhaTokenRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -83,7 +83,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
-  '/campanha/$token': typeof CampanhaTokenRoute
+  '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -94,7 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
-    | '/campanha/$token'
+    | '/portal/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -103,7 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
-    | '/campanha/$token'
+    | '/portal/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -113,7 +113,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
-    | '/campanha/$token'
+    | '/portal/$token'
     | '/_authenticated/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -122,7 +122,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  CampanhaTokenRoute: typeof CampanhaTokenRoute
+  PortalTokenRoute: typeof PortalTokenRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
 }
@@ -143,11 +143,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/campanha/$token': {
-      id: '/campanha/$token'
-      path: '/campanha/$token'
-      fullPath: '/campanha/$token'
-      preLoaderRoute: typeof CampanhaTokenRouteImport
+    '/portal/$token': {
+      id: '/portal/$token'
+      path: '/portal/$token'
+      fullPath: '/portal/$token'
+      preLoaderRoute: typeof PortalTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/time': {
@@ -206,7 +206,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  CampanhaTokenRoute: CampanhaTokenRoute,
+  PortalTokenRoute: PortalTokenRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
 }
