@@ -477,7 +477,7 @@ export function InicioDashboard() {
         <div className="relative flex items-center gap-3">
           <div className="flex flex-col items-center gap-1">
             <Folder
-              size={0.85}
+              size={0.45}
               open={gamesFolderOpen}
               onOpenChange={setGamesFolderOpen}
               items={[

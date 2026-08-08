@@ -37,8 +37,7 @@ export default function Folder({
   onOpenChange,
 }: FolderProps) {
   const maxItems = 3;
-  const papers: (ReactNode | null)[] = items.slice(0, maxItems);
-  while (papers.length < maxItems) papers.push(null);
+  const papers = items.slice(0, maxItems);
 
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
