@@ -521,41 +521,6 @@ export function InicioDashboard() {
 
       <MuralNovidades />
 
-      {/* Jogos do dia */}
-      <Card>
-        <CardHeader icon={<Puzzle className="h-4 w-4" />} title="Jogos do dia" />
-        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <button
-            type="button"
-            onClick={() => setZipOpen(true)}
-            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-              <Puzzle className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Zip do dia</p>
-              <p className="text-xs text-muted-foreground">
-                Conecte os pontos em ordem, com ranking do time.
-              </p>
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSudokuOpen(true)}
-            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-              <Grid3x3 className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Mini sudoku do dia</p>
-              <p className="text-xs text-muted-foreground">Grid 6x6, com ranking do time.</p>
-            </div>
-          </button>
-        </div>
-      </Card>
-
       {/* Widget grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* My Work */}
@@ -868,6 +833,41 @@ export function InicioDashboard() {
           </Card>
         )}
       </div>
+
+      {/* Jogos do dia */}
+      <Card>
+        <CardHeader icon={<Puzzle className="h-4 w-4" />} title="Jogos do dia" />
+        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <button
+            type="button"
+            onClick={() => setZipOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <Puzzle className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">Zip do dia</p>
+              <p className="text-xs text-muted-foreground">
+                Conecte os pontos em ordem, com ranking do time.
+              </p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSudokuOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <Grid3x3 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">Mini sudoku do dia</p>
+              <p className="text-xs text-muted-foreground">Grid 6x6, com ranking do time.</p>
+            </div>
+          </button>
+        </div>
+      </Card>
 
       <MeetingSummaryDialog
         meeting={meetingSummary}
