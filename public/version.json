@@ -1,6 +1,7 @@
 {
-  "version": "1.78.1",
+  "version": "1.78.2",
   "notes": [
+    "Deixa os cards de influenciador do portal do cliente mais enxutos: botões de aprovar/reprovar menores, foto e espaçamento reduzidos.",
     "Dentro de cada campanha no portal do cliente, os influenciadores agora aparecem em formato de galeria (fotos grandes em grid), não mais uma lista de linhas.",
     "Substitui o link por campanha por um link único do CLIENTE (botão \"Link do cliente\", em Clientes) — um portal de verdade: barra lateral fixa com Início (visão geral + novidades pendentes) e todas as campanhas do cliente, cada uma com sua lista de influenciadores. Clicar num influenciador abre o perfil na mesma tela (com voltar), não mais um popup. Mesma identidade visual da plataforma (cores, tema claro/escuro).",
     "Reverte o visual \"identidade própria\" do link do cliente (tipografia serifada, tema escuro fixo) — voltou a seguir a mesma identidade visual do resto da plataforma (mesmas cores, tema claro/escuro, tipografia).",

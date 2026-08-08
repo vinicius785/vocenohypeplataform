@@ -414,19 +414,19 @@ function ApproveRejectBar({
 }) {
   if (rejecting) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <textarea
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
           placeholder="Motivo da reprovação (obrigatório)"
           autoFocus
-          className="h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          className="h-16 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
         />
-        <div className="flex gap-2">
+        <div className="flex justify-end gap-1.5">
           <Button
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="h-7 px-2.5 text-xs"
             onClick={() => {
               setRejecting(false);
               setMotivo("");
@@ -437,7 +437,7 @@ function ApproveRejectBar({
           <Button
             variant="destructive"
             size="sm"
-            className="flex-1"
+            className="h-7 px-2.5 text-xs"
             onClick={onConfirmReject}
             disabled={!motivo.trim() || busy}
           >
@@ -448,19 +448,19 @@ function ApproveRejectBar({
     );
   }
   return (
-    <div className="flex gap-2">
-      <Button size="sm" className="flex-1 gap-1.5" onClick={onApprove} disabled={busy}>
-        <CheckCircle2 className="h-3.5 w-3.5" />
+    <div className="flex gap-1.5">
+      <Button size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={onApprove} disabled={busy}>
+        <CheckCircle2 className="h-3 w-3" />
         Aprovar
       </Button>
       <Button
         variant="outline"
         size="sm"
-        className="flex-1 gap-1.5"
+        className="h-7 gap-1 px-2.5 text-xs"
         onClick={() => setRejecting(true)}
         disabled={busy}
       >
-        <XCircle className="h-3.5 w-3.5" />
+        <XCircle className="h-3 w-3" />
         Reprovar
       </Button>
     </div>
@@ -469,18 +469,20 @@ function ApproveRejectBar({
 
 /** Selo de estágio no fim de cada linha da lista — âmbar+ponto quando
  * precisa de ação do cliente agora, neutro (Badge outline) nos demais. */
-function StatusBadge({ inf }: { inf: PublicInfluencer }) {
+function StatusBadge({ inf, className = "" }: { inf: PublicInfluencer; className?: string }) {
   const pending = pendingReason(inf);
   if (pending) {
     return (
-      <Badge className="gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+      <Badge
+        className={`gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 ${className}`}
+      >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
         {pending}
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-muted-foreground">
+    <Badge variant="outline" className={`text-muted-foreground ${className}`}>
       {inf.status}
     </Badge>
   );
@@ -493,11 +495,11 @@ function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen:
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col items-center gap-2.5 rounded-xl border border-border bg-background p-5 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
+      className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-4 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
     >
-      <Avatar className="h-20 w-20 shrink-0 ring-1 ring-border transition-all group-hover:ring-foreground/30">
+      <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border transition-all group-hover:ring-foreground/30">
         {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-        <AvatarFallback className="text-lg font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
+        <AvatarFallback className="text-base font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
       </Avatar>
       <p className="truncate text-sm font-semibold text-foreground">{inf.nome}</p>
       {inf.nicho && (
@@ -508,7 +510,7 @@ function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen:
       {inf.entregas.length > 0 && (
         <p className="truncate text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
       )}
-      <StatusBadge inf={inf} />
+      <StatusBadge inf={inf} className="px-2 py-0 text-[10px]" />
     </button>
   );
 }
@@ -583,12 +585,10 @@ function InfluencerDetail({
         <ArrowLeft className="h-3.5 w-3.5" /> Voltar pra lista
       </button>
 
-      <div className="flex items-start gap-4 rounded-xl border border-border bg-background p-5">
-        <Avatar className="h-16 w-16 shrink-0">
+      <div className="flex items-start gap-3.5 rounded-xl border border-border bg-background p-4">
+        <Avatar className="h-14 w-14 shrink-0">
           {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-          <AvatarFallback className="text-base font-semibold">
-            {initialsOf(inf.nome)}
-          </AvatarFallback>
+          <AvatarFallback className="text-sm font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
