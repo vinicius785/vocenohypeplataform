@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AprovacaoTokenRouteImport } from './routes/aprovacao.$token'
+import { Route as CampanhaTokenRouteImport } from './routes/campanha.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -27,9 +27,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AprovacaoTokenRoute = AprovacaoTokenRouteImport.update({
-  id: '/aprovacao/$token',
-  path: '/aprovacao/$token',
+const CampanhaTokenRoute = CampanhaTokenRouteImport.update({
+  id: '/campanha/$token',
+  path: '/campanha/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTimeRoute = AuthenticatedTimeRouteImport.update({
@@ -63,7 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
-  '/aprovacao/$token': typeof AprovacaoTokenRoute
+  '/campanha/$token': typeof CampanhaTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -72,7 +72,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
-  '/aprovacao/$token': typeof AprovacaoTokenRoute
+  '/campanha/$token': typeof CampanhaTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -83,7 +83,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
-  '/aprovacao/$token': typeof AprovacaoTokenRoute
+  '/campanha/$token': typeof CampanhaTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
@@ -94,7 +94,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
-    | '/aprovacao/$token'
+    | '/campanha/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -103,7 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
-    | '/aprovacao/$token'
+    | '/campanha/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -113,7 +113,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
-    | '/aprovacao/$token'
+    | '/campanha/$token'
     | '/_authenticated/projeto/$id'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
@@ -122,7 +122,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AprovacaoTokenRoute: typeof AprovacaoTokenRoute
+  CampanhaTokenRoute: typeof CampanhaTokenRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
 }
@@ -143,11 +143,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/aprovacao/$token': {
-      id: '/aprovacao/$token'
-      path: '/aprovacao/$token'
-      fullPath: '/aprovacao/$token'
-      preLoaderRoute: typeof AprovacaoTokenRouteImport
+    '/campanha/$token': {
+      id: '/campanha/$token'
+      path: '/campanha/$token'
+      fullPath: '/campanha/$token'
+      preLoaderRoute: typeof CampanhaTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/time': {
@@ -206,7 +206,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AprovacaoTokenRoute: AprovacaoTokenRoute,
+  CampanhaTokenRoute: CampanhaTokenRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
 }

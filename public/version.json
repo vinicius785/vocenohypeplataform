@@ -1,6 +1,7 @@
 {
-  "version": "1.75.0",
+  "version": "1.76.0",
   "notes": [
+    "Cada campanha agora tem um link fixo e único pro cliente (botão \"Link do cliente\", em Campanhas) — não precisa mais gerar link avulso toda vez. O link mostra os influenciadores com aprovação em etapas: seleção do influ, roteiro e conteúdo (cada um separado), com aviso de reprovação e motivo até o time reenviar. O time é notificado (sino + toast) a cada ação do cliente, e ganha um aviso de \"métricas pendentes\" quando um post publicado passa de 15 dias sem métricas preenchidas.",
     "Remove o mini sudoku diário. No lugar dele, o box \"Jogos do dia\" no Início agora mostra o líder do mês (quem está em 1º na pontuação do time).",
     "Move o box \"Jogos do dia\" no Início pra baixo, depois dos cards principais (antes ficava logo no topo, acima de tudo).",
     "Troca a pasta animada \"GAMES\" do Início por um box simples \"Jogos do dia\", com Zip e mini sudoku lado a lado — mesma função, sem a animação (que ficou grande e confusa).",

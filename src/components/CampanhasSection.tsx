@@ -9,14 +9,12 @@ import {
   Copy,
   Download,
   ExternalLink,
-  Eye,
   FileText,
   FolderOpen,
   ImageIcon,
   Link as LinkIcon,
   Megaphone,
   Paperclip,
-  Share2,
   ShieldCheck,
   Trash2,
   User,
@@ -44,13 +42,11 @@ import {
   normalizeInflus,
   totalAceito,
   canPublishEntrega,
-  type ApprovalBadge,
   type Influ,
   type InfluStatus,
   type BankInfo,
   type Entrega,
 } from "@/components/influenciadores/InfluencerBoard";
-import { createApprovalLink, listApprovalsForCampanha } from "@/lib/approval.functions";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -344,31 +340,32 @@ function CampanhaDetail({
   );
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
-  // Public approval links — tie client responses back into the influencer's
-  // status (and therefore the campaign KPIs above) as soon as they come in.
-  const { approvalStatusFor, refresh: refreshApprovals } = useInfluencerApprovals(c.id);
-  useEffect(() => {
-    let changed = false;
-    const next = influs.map((i) => {
-      const badge = approvalStatusFor(i.id);
-      if (
-        badge?.status === "aprovado" &&
-        (i.status === "Lista" || i.status === "Enviado para aprovação")
-      ) {
-        changed = true;
-        return { ...i, status: "Aprovado" as InfluStatus };
-      }
-      return i;
-    });
-    if (changed) persistInflus(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [approvalStatusFor, influs]);
-
   const [openPanel, setOpenPanel] = useState<
     null | "documentos" | "calendario" | "composicao" | "direitos"
   >(null);
-  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [approvalInitialMode, setApprovalInitialMode] = useState<"approve" | "view">("approve");
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyClientLink = () => {
+    let token = c.publicToken;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      clientesStore.set((prev) =>
+        prev.map((cl) =>
+          cl.id !== cliente.id
+            ? cl
+            : {
+                ...cl,
+                campanhas: (cl.campanhas ?? []).map((camp) =>
+                  camp.id === c.id ? { ...camp, publicToken: token } : camp,
+                ),
+              },
+        ),
+      );
+    }
+    void navigator.clipboard.writeText(`${window.location.origin}/campanha/${token}`).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
@@ -520,50 +517,20 @@ function CampanhaDetail({
         influs={visibleInflus}
         onChange={persistVisibleInflus}
         exportName={c.nome}
-        approvalStatusFor={approvalStatusFor}
         pagGrupos={normalizeCampaignPagGrupos(c)}
         headerExtra={(closeMenu) => (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                setApprovalInitialMode("approve");
-                setApprovalDialogOpen(true);
-                closeMenu();
-              }}
-              disabled={visibleInflus.length === 0}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Solicitar aprovação
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setApprovalInitialMode("view");
-                setApprovalDialogOpen(true);
-                closeMenu();
-              }}
-              disabled={visibleInflus.length === 0}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Link de visualização
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => {
+              copyClientLink();
+              closeMenu();
+            }}
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+          >
+            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+            {linkCopied ? "Link copiado!" : "Link do cliente"}
+          </button>
         )}
-      />
-
-      <ApprovalRequestDialog
-        open={approvalDialogOpen}
-        onOpenChange={setApprovalDialogOpen}
-        initialMode={approvalInitialMode}
-        influs={visibleInflus}
-        campanhaId={c.id}
-        campanhaNome={c.nome}
-        clienteNome={cliente.empresa}
-        totalPlanejado={totalInflus}
-        onCreated={refreshApprovals}
       />
 
       <GaleriaConteudosSection influs={visibleInflus} />
@@ -904,300 +871,6 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
       ) : (
         <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
       )}
-    </div>
-  );
-}
-
-/* ============================================================
- * Aprovação de influenciadores — link público para o cliente aprovar
- * ou reprovar os influenciadores selecionados (com foto, nome e redes),
- * exigindo motivo em caso de reprovação. O botão fica ao lado de
- * "Baixar lista" no board de Influenciadores, e o resultado aparece
- * como um ícone no próprio card do influenciador — sem seção própria.
- * ============================================================ */
-
-type ApprovalResponse = { status: "aprovado" | "reprovado"; motivo?: string; respondedAt: string };
-type ApprovalRow = {
-  id: string;
-  token: string;
-  influencers: { id: string; nome: string; foto?: string }[];
-  responses: Record<string, ApprovalResponse>;
-  created_at: string;
-};
-
-/** Fetches this campaign's approval links + keeps them live via realtime, exposing a per-influencer badge lookup. */
-function useInfluencerApprovals(campanhaId: string) {
-  const listFn = useServerFn(listApprovalsForCampanha);
-  const [links, setLinks] = useState<ApprovalRow[]>([]);
-
-  const refresh = useCallback(() => {
-    void listFn({ data: { campanhaId } })
-      .then((rows) => setLinks(rows as ApprovalRow[]))
-      .catch(() => undefined);
-  }, [campanhaId, listFn]);
-
-  useEffect(() => {
-    refresh();
-    const channel = supabase
-      .channel(`rt-influencer-approvals-${campanhaId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "influencer_approvals",
-          filter: `campanha_id=eq.${campanhaId}`,
-        },
-        () => refresh(),
-      )
-      .subscribe();
-    return () => void supabase.removeChannel(channel);
-  }, [campanhaId, refresh]);
-
-  const approvalStatusFor = useCallback(
-    (influId: string): ApprovalBadge | undefined => {
-      let latest: ApprovalResponse | undefined;
-      for (const link of links) {
-        const r = link.responses[influId] as ApprovalResponse | undefined;
-        if (r && (!latest || r.respondedAt > latest.respondedAt)) latest = r;
-      }
-      return latest ? { status: latest.status, motivo: latest.motivo } : undefined;
-    },
-    [links],
-  );
-
-  return { links, refresh, approvalStatusFor };
-}
-
-/**
- * Diálogo de "solicitar aprovação / gerar link de visualização" — renderizado
- * como irmão do InfluencerBoard (não dentro do dropdown "Exportar"). Antes
- * vivia dentro do próprio botão que abria o dropdown; como o dropdown se
- * fecha (desmontando seu conteúdo) assim que o diálogo abre, o estado
- * `open=true` era destruído no mesmo clique que o criava, e o diálogo nunca
- * chegava a aparecer. Vive aqui, fora dessa árvore, controlado por
- * `open`/`onOpenChange` vindos do componente pai.
- */
-function ApprovalRequestDialog({
-  open,
-  onOpenChange,
-  initialMode = "approve",
-  influs,
-  campanhaId,
-  campanhaNome,
-  clienteNome,
-  totalPlanejado,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  initialMode?: "approve" | "view";
-  influs: Influ[];
-  campanhaId: string;
-  campanhaNome: string;
-  clienteNome: string;
-  totalPlanejado: number;
-  onCreated: () => void;
-}) {
-  const createLinkFn = useServerFn(createApprovalLink);
-  const [mode, setMode] = useState<"approve" | "view">("approve");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-  const [newToken, setNewToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const linkFor = (token: string) => `${window.location.origin}/aprovacao/${token}`;
-  const copyLink = (token: string) => {
-    void navigator.clipboard.writeText(linkFor(token)).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
-  const toggle = (id: string) =>
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  // Reseta o formulário sempre que o diálogo é reaberto.
-  useEffect(() => {
-    if (!open) return;
-    setSelected(new Set());
-    setMode(initialMode);
-    setNewToken(null);
-    setError("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const submit = async () => {
-    if (selected.size === 0) return;
-    setCreating(true);
-    setError("");
-    try {
-      const chosen = influs.filter((i) => selected.has(i.id));
-      const { token } = await withRetry(() =>
-        createLinkFn({
-          data: {
-            campanhaId,
-            campanhaNome,
-            clienteNome,
-            totalPlanejado,
-            influencers: chosen.map((i) => ({
-              id: i.id,
-              nome: i.nome,
-              nicho: i.nicho,
-              foto: i.foto,
-              redes: i.redes.map((r) => ({
-                id: r.id,
-                plataforma: r.plataforma,
-                handle: r.handle,
-                seguidores: r.seguidores,
-              })),
-              entregas: i.entregas.map((e) => {
-                const roteiro = e.anexos?.find((a) => a.categoria === "Roteiro");
-                return {
-                  id: e.id,
-                  tipo: e.tipo,
-                  quantidade: e.quantidade,
-                  dataPostagem: e.dataPostagem,
-                  roteiro: roteiro?.url,
-                  roteiroNome: roteiro?.nome,
-                  metrics: e.metrics,
-                };
-              }),
-              profileMetrics: i.profileMetrics?.porRede,
-            })),
-            mode,
-          },
-        }),
-      );
-      setNewToken(token);
-      onCreated();
-    } catch (e) {
-      setError(friendlyNetworkError(e, "Não foi possível gerar o link."));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-lg border border-border bg-background">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h3 className="text-sm font-semibold">
-            {mode === "view" ? "Gerar link de visualização" : "Solicitar aprovação"}
-          </h3>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {newToken ? (
-          <div className="space-y-3 px-5 py-6">
-            <p className="text-sm text-foreground">Link gerado com sucesso.</p>
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-              <span className="flex-1 truncate">{linkFor(newToken)}</span>
-              <button
-                type="button"
-                onClick={() => copyLink(newToken)}
-                className="shrink-0 text-foreground hover:opacity-70"
-              >
-                {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="mt-2 w-full rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              Concluir
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-5 py-4">
-              <div className="mb-3 flex gap-1 rounded-md bg-muted p-1">
-                <button
-                  type="button"
-                  onClick={() => setMode("approve")}
-                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "approve"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Solicitar aprovação
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("view")}
-                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-                    mode === "view"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Somente visualização
-                </button>
-              </div>
-              <p className="mb-2 text-xs text-muted-foreground">
-                {mode === "view"
-                  ? "Selecione quem aparece no link — mostra só foto, nome e rede social, sem aprovar/reprovar."
-                  : "Selecione quem enviar para aprovação do cliente."}
-              </p>
-              {influs.map((i) => (
-                <label
-                  key={i.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.has(i.id)}
-                    onChange={() => toggle(i.id)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                    {i.foto ? (
-                      <img src={i.foto} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <User className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-sm">{i.nome || "Sem nome"}</span>
-                </label>
-              ))}
-            </div>
-            {error && <p className="px-5 text-xs text-destructive">{error}</p>}
-            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-              <button
-                type="button"
-                onClick={() => onOpenChange(false)}
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={selected.size === 0 || creating}
-                className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {creating ? "Gerando..." : `Gerar link (${selected.size})`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }

@@ -292,6 +292,16 @@ export function totalAceito(entregas: Entrega[]): number {
     .reduce((s, e) => s + pagamentoCashValue(e.pagamento), 0);
 }
 
+/** Etapa 4 do funil de aprovação: 15 dias após a postagem, o time precisa
+ * preencher as métricas do conteúdo — sem lembrete agendado (não existe
+ * cron no projeto), é um badge computado direto do estado já salvo. */
+export function metricasPendentes(e: Entrega): boolean {
+  if (e.status !== "publicado" || !e.publicadoEm) return false;
+  const dias = (Date.now() - new Date(e.publicadoEm + "T00:00:00").getTime()) / 86_400_000;
+  if (dias < 15) return false;
+  return !e.metrics || !Object.values(e.metrics).some((v) => v);
+}
+
 export type ReliabilityStats = {
   score: number; // 0-100
   total: number;
@@ -355,6 +365,7 @@ export function approvalSlaOverdueDays(influ: Influ): number | null {
 export const ENTREGA_CONTEUDO_STATUSES = [
   "Combinado",
   "Aguardando roteiro",
+  "Aguardando aprovação de roteiro",
   "Roteiro aprovado",
   "Em gravação",
   "Aprovação conteúdo",
@@ -365,6 +376,7 @@ export type EntregaConteudoStatus = (typeof ENTREGA_CONTEUDO_STATUSES)[number];
 export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
   Combinado: "bg-muted text-muted-foreground",
   "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  "Aguardando aprovação de roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   "Aprovação conteúdo": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
@@ -377,6 +389,7 @@ export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
 export const ENTREGA_CONTEUDO_BORDER: Record<EntregaConteudoStatus, string> = {
   Combinado: "border-muted-foreground/40",
   "Aguardando roteiro": "border-amber-500",
+  "Aguardando aprovação de roteiro": "border-amber-500",
   "Roteiro aprovado": "border-sky-500",
   "Em gravação": "border-violet-500",
   "Aprovação conteúdo": "border-orange-500",
@@ -423,7 +436,16 @@ export type Entrega = {
   publicadoEm?: string;
   metrics?: PostMetrics;
   pagamento?: PagamentoEntrega;
+  /** Preenchido quando o cliente reprova o roteiro pelo link público —
+   * limpo assim que ele aprova (ou reenvia e aprova de novo). */
+  roteiroReprovacao?: ClienteVeredito;
+  /** Idem, para o conteúdo publicado. */
+  conteudoReprovacao?: ClienteVeredito;
 };
+
+/** Motivo + carimbo de quando o cliente reprovou algo pelo link público
+ * (seleção de influ, roteiro ou conteúdo de uma entrega). */
+export type ClienteVeredito = { motivo: string; respondedAt: string };
 
 export type BankInfo = {
   banco?: string;
@@ -537,6 +559,20 @@ export type Influ = {
   /** Checklist livre do influenciador (texto qualquer, marcar feito) — pode
    * ser aplicado de um influ pros outros todos da campanha de uma vez. */
   checklist?: ChecklistItem[];
+  /** Preenchido quando o cliente reprova a seleção deste influ pelo link
+   * público — o `status` não muda (fica em "Enviado para aprovação"),
+   * só ganha esse aviso pro time ver e reenviar depois de ajustar. */
+  clienteReprovacao?: ClienteVeredito;
+  /** Carimbo da última ação do cliente (em qualquer etapa — seleção,
+   * roteiro ou conteúdo de alguma entrega), pro sino de notificações do
+   * time detectar "aconteceu uma ação nova agora" sem precisar diffar
+   * status de negócio. */
+  lastClientAction?: {
+    kind: "influ" | "roteiro" | "conteudo";
+    entregaId?: string;
+    status: "aprovado" | "reprovado";
+    at: string;
+  };
 };
 
 /**
@@ -1197,28 +1233,23 @@ function useDropdown() {
  * both Campanhas and Projetos mount.
  * ============================================================ */
 
-export type ApprovalBadge = { status: "aprovado" | "reprovado"; motivo?: string };
-
 export function InfluencerBoard({
   influs,
   onChange,
   exportName,
   allowedFields,
   headerExtra,
-  approvalStatusFor,
   pagGrupos,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
   exportName: string;
   allowedFields?: InfluencerFieldKey[];
-  /** Extra action rendered in the header row, next to "Baixar lista" (e.g. campaign approval-link button).
+  /** Extra action rendered in the header row, next to "Baixar lista" (e.g. campaign public-link button).
    * Receives a `closeMenu` callback so it can close the "Exportar" dropdown itself once its own
    * dialog opens — the dropdown used to auto-close on any click inside it, which unmounted this
    * button (and destroyed its own dialog-open state) before its dialog ever got to render. */
   headerExtra?: (closeMenu: () => void) => ReactNode;
-  /** Looks up the latest public-approval response for an influencer, shown as a badge on their card. */
-  approvalStatusFor?: (influId: string) => ApprovalBadge | undefined;
   /** Grupos de pagamento configurados na campanha (ver VincularCampanhaDialog) — quando presentes, o editor de pagamento por entrega deixa escolher um grupo pronto em vez de preencher tudo do zero. */
   pagGrupos?: PagGrupo[];
 }) {
@@ -1392,7 +1423,22 @@ export function InfluencerBoard({
     const next = influs.map((x) =>
       x.id !== influId
         ? x
-        : { ...x, entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, anexos } : e)) },
+        : {
+            ...x,
+            entregas: x.entregas.map((e) => {
+              if (e.id !== entregaId) return e;
+              // Anexar o roteiro enquanto a entrega ainda está "Aguardando
+              // roteiro" já avança pra "Aguardando aprovação de roteiro" —
+              // é o gatilho que manda o roteiro pro link público do cliente,
+              // sem precisar de um segundo clique pra mudar o status à mão.
+              const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
+              const conteudoStatus =
+                ganhouRoteiro && e.conteudoStatus === "Aguardando roteiro"
+                  ? "Aguardando aprovação de roteiro"
+                  : e.conteudoStatus;
+              return { ...e, anexos, conteudoStatus };
+            }),
+          },
     );
     onChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
@@ -1652,7 +1698,6 @@ export function InfluencerBoard({
                         onEdit={() => setInfluDialog({ mode: "edit", data: i })}
                         onStatus={(status) => changeStatus(i.id, status)}
                         onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
-                        approval={approvalStatusFor?.(i.id)}
                       />
                     </div>
                   ))}
@@ -1681,7 +1726,6 @@ export function InfluencerBoard({
                 onEdit={() => setInfluDialog({ mode: "edit", data: i })}
                 onStatus={(status) => changeStatus(i.id, status)}
                 onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
-                approval={approvalStatusFor?.(i.id)}
               />
             ))}
           </div>
@@ -1786,7 +1830,6 @@ function InfluCard({
   onEdit,
   onStatus,
   onRemove,
-  approval,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -1794,8 +1837,16 @@ function InfluCard({
   onEdit: () => void;
   onStatus: (s: InfluStatus) => void;
   onRemove: () => void;
-  approval?: ApprovalBadge;
 }) {
+  // Selo de aprovação do cliente (etapa 1 do link público) — derivado
+  // direto do status/veredito do influ, sem depender de uma tabela à
+  // parte (o link público agora escreve nesses mesmos campos).
+  const approval: { status: "aprovado" | "reprovado"; motivo?: string } | undefined =
+    INFLU_STATUSES.indexOf(influ.status) > INFLU_STATUSES.indexOf("Enviado para aprovação")
+      ? { status: "aprovado" }
+      : influ.clienteReprovacao
+        ? { status: "reprovado", motivo: influ.clienteReprovacao.motivo }
+        : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const totalPago = totalAceito(influ.entregas);
   const nPublicadas = influ.entregas.filter((e) => e.status === "publicado").length;
@@ -2476,6 +2527,14 @@ function InfluencerProfileDialog({
                                 ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
                             </p>
                             <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-1.5">
+                              {metricasPendentes(e) && (
+                                <span
+                                  title="Publicado há 15+ dias sem métricas preenchidas"
+                                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                                >
+                                  Métricas pendentes
+                                </span>
+                              )}
                               {e.url && (
                                 <a
                                   href={e.url}

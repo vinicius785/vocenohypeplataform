@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   LayoutGrid,
@@ -30,6 +30,7 @@ import {
   Timer,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
+import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
@@ -1124,10 +1125,160 @@ function BellItem({
   );
 }
 
+type ClienteActionItem = {
+  key: string;
+  influId: string;
+  campanhaId: string;
+  nome: string;
+  action: string;
+  at: string;
+};
+
+function describeClientAction(
+  nome: string,
+  action: NonNullable<Influ["lastClientAction"]>,
+): string {
+  const verbo = action.status === "aprovado" ? "aprovou" : "reprovou";
+  const alvo =
+    action.kind === "influ"
+      ? "a seleção pra campanha"
+      : action.kind === "roteiro"
+        ? "o roteiro"
+        : "o conteúdo";
+  return `${nome} — ${verbo} ${alvo}`;
+}
+
+/** Assina `campanha_influenciadores` (a mesma tabela que o link público
+ * `/campanha/$token` escreve) e transforma toda ação nova do cliente
+ * (aprovar/reprovar em qualquer das 3 etapas) numa notificação na aba
+ * "Outros" do sino, com toast em tempo real se a aba estiver visível —
+ * mesmo padrão de `useIncomingMessageNotifier` pras mensagens de chat. */
+function useCampanhaAprovacaoNotifier(): {
+  items: ClienteActionItem[];
+  dismiss: (keys: string[]) => void;
+} {
+  const [items, setItems] = useState<ClienteActionItem[]>([]);
+  const seenRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("notif:seenAprovacoesCliente");
+      if (raw) seenRef.current = new Set(JSON.parse(raw) as string[]);
+    } catch {
+      /* ignore */
+    }
+
+    const toItem = (row: {
+      id: string;
+      campanha_id: string;
+      data: Influ;
+    }): ClienteActionItem | null => {
+      const action = row.data.lastClientAction;
+      if (!action) return null;
+      const key = `${row.id}:${action.at}`;
+      return {
+        key,
+        influId: row.id,
+        campanhaId: row.campanha_id,
+        nome: row.data.nome,
+        action: describeClientAction(row.data.nome, action),
+        at: action.at,
+      };
+    };
+
+    void supabase
+      .from("campanha_influenciadores")
+      .select("id, campanha_id, data")
+      .then(({ data: rows }) => {
+        const typedRows = (rows ?? []) as { id: string; campanha_id: string; data: Influ }[];
+        const actionItems = typedRows
+          .map(toItem)
+          .filter((x): x is ClienteActionItem => x !== null && !seenRef.current.has(x.key));
+        // Etapa 4 do funil — badge de "métricas pendentes" (15+ dias sem
+        // preencher), sem toast (não é uma ação em tempo real de alguém).
+        const metricItems: ClienteActionItem[] = typedRows.flatMap((row) =>
+          row.data.entregas
+            .filter((e) => metricasPendentes(e))
+            .map((e) => {
+              const key = `metrics:${row.id}:${e.id}`;
+              return seenRef.current.has(key)
+                ? null
+                : {
+                    key,
+                    influId: row.id,
+                    campanhaId: row.campanha_id,
+                    nome: row.data.nome,
+                    action: `Métricas do post (${e.tipo}) pendentes há 15+ dias`,
+                    at: e.publicadoEm ?? "",
+                  };
+            })
+            .filter((x): x is ClienteActionItem => x !== null),
+        );
+        setItems([...actionItems, ...metricItems].sort((a, b) => (a.at < b.at ? 1 : -1)));
+      });
+
+    const channel = supabase
+      .channel("rt-campanha-influenciadores-notify")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "campanha_influenciadores" },
+        (payload) => {
+          const newRow = payload.new as { id: string; campanha_id: string; data: Influ } | null;
+          const oldRow = payload.old as { data?: Influ } | null;
+          if (!newRow) return;
+          const newAt = newRow.data.lastClientAction?.at;
+          const oldAt = oldRow?.data?.lastClientAction?.at;
+          if (!newAt || newAt === oldAt) return;
+          const item = toItem(newRow);
+          if (!item || seenRef.current.has(item.key)) return;
+          setItems((prev) => [item, ...prev.filter((x) => x.key !== item.key)]);
+
+          if (document.visibilityState === "visible") {
+            void import("sonner").then(({ toast }) => {
+              toast(item.nome, {
+                description: item.action,
+                action: {
+                  label: "Abrir",
+                  onClick: () => {
+                    try {
+                      sessionStorage.setItem(
+                        OPEN_CAMPANHA_TASK_KEY,
+                        JSON.stringify({ campanhaId: item.campanhaId }),
+                      );
+                    } catch {
+                      /* ignore */
+                    }
+                    window.dispatchEvent(new CustomEvent("nav:section", { detail: "campanhas" }));
+                  },
+                },
+              });
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const dismiss = (keys: string[]) => {
+    for (const k of keys) seenRef.current.add(k);
+    localStorage.setItem(
+      "notif:seenAprovacoesCliente",
+      JSON.stringify(Array.from(seenRef.current)),
+    );
+    setItems((prev) => prev.filter((x) => !keys.includes(x.key)));
+  };
+
+  return { items, dismiss };
+}
+
 function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   useEffect(() => onMeetingsChange(() => force((n) => n + 1)), []);
+  const { items: outrosItems, dismiss: dismissOutrosItems } = useCampanhaAprovacaoNotifier();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<BellTab>("tarefas");
   const clientes = useClientes();
@@ -1330,7 +1481,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const tarefasCount = taskItems.length + taskActivityItems.length;
   const mensagensCount = chatItems.reduce((s, i) => s + i.count, 0) + mentionItems.length;
   const reunioesCount = meetingItems.length + rescheduleItems.length;
-  const outrosCount = 0;
+  const outrosCount = outrosItems.length;
 
   const markTab = (t: BellTab) => {
     if (t === "tarefas") {
@@ -1350,6 +1501,8 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
         "notif:seenReuniaoReagendamento",
         JSON.stringify(Array.from(seenReuniaoReagendamento)),
       );
+    } else if (t === "outros") {
+      dismissOutrosItems(outrosItems.map((x) => x.key));
     }
     force((n) => n + 1);
   };
@@ -1568,9 +1721,39 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
               )}
 
               {tab === "outros" && (
-                <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  Nenhuma notificação por aqui ainda
-                </p>
+                <>
+                  {outrosItems.length === 0 && (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                      Nenhuma notificação por aqui ainda
+                    </p>
+                  )}
+                  {outrosItems.map((it) => (
+                    <BellItem
+                      key={it.key}
+                      icon={<Users className="h-4 w-4" />}
+                      iconTone={
+                        it.action.includes("reprovou")
+                          ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                      }
+                      title={it.nome}
+                      subtitle={it.action}
+                      onClick={() => {
+                        dismissOutrosItems([it.key]);
+                        try {
+                          sessionStorage.setItem(
+                            OPEN_CAMPANHA_TASK_KEY,
+                            JSON.stringify({ campanhaId: it.campanhaId }),
+                          );
+                        } catch {
+                          /* ignore */
+                        }
+                        onSelect("campanhas");
+                        setOpen(false);
+                      }}
+                    />
+                  ))}
+                </>
               )}
             </div>
           </div>
