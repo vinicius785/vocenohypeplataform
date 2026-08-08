@@ -16,17 +16,18 @@ import {
 } from "recharts";
 import {
   AtSign,
-  Calendar,
+  BarChart3,
   CalendarDays,
-  Check,
+  CheckCircle2,
   Facebook,
   FileText,
   Instagram,
   Linkedin,
-  Sparkles,
   Twitter,
   User,
+  Users,
   X,
+  XCircle,
   Youtube,
 } from "lucide-react";
 import {
@@ -36,13 +37,6 @@ import {
 } from "@/lib/campanha-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
-
-/**
- * Página pública de campanha (`/campanha/$token`) — microsite de marca
- * própria pro cliente ver e aprovar, deliberadamente NÃO usa o tema
- * claro/escuro do resto do app (essa é uma persona visual fixa e
- * cuidada, tipo um "relatório de campanha" premium, não uma tela interna).
- */
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
@@ -82,84 +76,8 @@ export const Route = createFileRoute("/campanha/$token")({
   component: CampanhaPublicPage,
   head: () => ({
     meta: [{ title: "Campanha · Hype" }, { name: "robots", content: "noindex, nofollow" }],
-    links: [
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap",
-      },
-    ],
   }),
 });
-
-/* ============================================================
- * Design system local desta página — paleta quente/editorial,
- * escopada via classe `.cp-root`, independente do tema do app.
- * ============================================================ */
-const PAGE_STYLES = `
-.cp-root {
-  --cp-bg: #120f0c;
-  --cp-surface: #1c1712;
-  --cp-surface-2: #241e15;
-  --cp-border: rgba(232, 213, 183, 0.12);
-  --cp-border-strong: rgba(232, 213, 183, 0.24);
-  --cp-text: #f4ead9;
-  --cp-text-dim: #b6a68d;
-  --cp-text-faint: #7d6f5a;
-  --cp-accent: #e2b657;
-  --cp-accent-ink: #241a06;
-  --cp-accent-soft: rgba(226, 182, 87, 0.14);
-  --cp-success: #93ad74;
-  --cp-success-soft: rgba(147, 173, 116, 0.14);
-  --cp-danger: #d97a5a;
-  --cp-danger-soft: rgba(217, 122, 90, 0.14);
-  --cp-font-display: "Fraunces", "Iowan Old Style", serif;
-  --cp-font-body: "Manrope", -apple-system, sans-serif;
-  background: var(--cp-bg);
-  color: var(--cp-text);
-  font-family: var(--cp-font-body);
-  min-height: 100vh;
-  position: relative;
-}
-.cp-root::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.5;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
-  z-index: 0;
-}
-.cp-serif { font-family: var(--cp-font-display); }
-@keyframes cp-fade-up {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes cp-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes cp-scale-in {
-  from { opacity: 0; transform: scale(0.96) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-.cp-anim-up { animation: cp-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
-.cp-anim-in { animation: cp-fade-in 0.5s ease backwards; }
-.cp-anim-scale { animation: cp-scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
-.cp-card {
-  background: var(--cp-surface);
-  border: 1px solid var(--cp-border);
-}
-.cp-card:hover { border-color: var(--cp-border-strong); }
-.cp-scrollbar::-webkit-scrollbar { width: 8px; }
-.cp-scrollbar::-webkit-scrollbar-thumb { background: var(--cp-border-strong); border-radius: 8px; }
-.cp-btn-accent {
-  background: var(--cp-accent);
-  color: var(--cp-accent-ink);
-}
-.cp-btn-accent:hover { filter: brightness(1.08); }
-.cp-btn-accent:disabled { opacity: 0.45; }
-`;
 
 type PostMetrics = {
   views?: number;
@@ -237,18 +155,16 @@ function pendingReason(inf: PublicInfluencer): string | null {
 
 function TopBar({ ws }: { ws: Workspace }) {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-[color:var(--cp-border)] bg-[color:var(--cp-bg)]/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-2.5 px-5">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-[color:var(--cp-accent)] text-[color:var(--cp-accent-ink)]">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-2xl items-center gap-2.5 px-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-foreground text-background">
           {ws.logo ? (
             <img src={ws.logo} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="text-[11px] font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
+            <span className="text-xs font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
           )}
         </div>
-        <span className="text-[13px] font-semibold uppercase tracking-[0.12em] text-[color:var(--cp-text-dim)]">
-          {ws.nome}
-        </span>
+        <span className="text-sm font-semibold text-foreground">{ws.nome}</span>
       </div>
     </header>
   );
@@ -258,32 +174,23 @@ function Kpi({
   label,
   value,
   tone = "default",
-  delay = 0,
 }: {
   label: string;
   value: string;
-  tone?: "default" | "success" | "warning";
-  delay?: number;
+  tone?: "default" | "success" | "warning" | "danger";
 }) {
-  const toneColor = {
-    default: "var(--cp-text)",
-    success: "var(--cp-success)",
-    warning: "var(--cp-accent)",
+  const toneClass = {
+    default: "text-foreground",
+    success: "text-emerald-600 dark:text-emerald-400",
+    warning: "text-amber-600 dark:text-amber-400",
+    danger: "text-rose-600 dark:text-rose-400",
   }[tone];
   return (
-    <div
-      className="cp-card cp-anim-up min-w-0 rounded-2xl px-5 py-4"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--cp-text-faint)]">
+    <div className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-sm">
+      <p className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <p
-        className="cp-serif mt-1.5 truncate text-3xl font-semibold tabular-nums"
-        style={{ color: toneColor }}
-      >
-        {value}
-      </p>
+      <p className={`mt-1.5 truncate text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -291,17 +198,21 @@ function Kpi({
 function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[color:var(--cp-text-faint)]">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className="cp-serif mt-0.5 text-base font-semibold tabular-nums text-[color:var(--cp-text)]">
-        {value}
-      </p>
+      <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 }
 
-const PIE_COLORS = ["#e2b657", "#c97a4a", "#93ad74", "#b3697a", "#6f9a94"];
+const PIE_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 function renderPieLabel(props: {
   cx: number;
@@ -319,7 +230,7 @@ function renderPieLabel(props: {
     <text
       x={x}
       y={y}
-      fill="var(--cp-text-dim)"
+      fill="var(--muted-foreground)"
       fontSize={10}
       textAnchor={x > cx ? "start" : "end"}
       dominantBaseline="central"
@@ -350,7 +261,7 @@ function DemographicMiniChart({
               outerRadius="72%"
               isAnimationActive={false}
               label={renderPieLabel}
-              labelLine={{ stroke: "var(--cp-text-dim)", strokeWidth: 1 }}
+              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
             >
               {data.map((entry, i) => (
                 <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
@@ -363,7 +274,7 @@ function DemographicMiniChart({
               formatter={(value, entry) =>
                 `${value} — ${(entry as { payload?: { valor?: number } }).payload?.valor ?? 0}%`
               }
-              wrapperStyle={{ fontSize: 10, color: "var(--cp-text-dim)" }}
+              wrapperStyle={{ fontSize: 10, color: "var(--muted-foreground)" }}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -374,19 +285,19 @@ function DemographicMiniChart({
     <div className="h-[100px] w-full pt-1">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} layout="vertical" margin={{ left: 0, right: 28 }}>
-          <CartesianGrid horizontal={false} stroke="var(--cp-border)" />
+          <CartesianGrid horizontal={false} strokeOpacity={0.15} />
           <XAxis type="number" domain={[0, 100]} hide />
           <YAxis
             type="category"
             dataKey="name"
             width={90}
-            tick={{ fontSize: 10, fill: "var(--cp-text-dim)" }}
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             axisLine={false}
             tickLine={false}
           />
           <Bar
             dataKey="valor"
-            fill="var(--cp-accent)"
+            fill="var(--foreground)"
             radius={3}
             barSize={12}
             isAnimationActive={false}
@@ -395,7 +306,7 @@ function DemographicMiniChart({
               dataKey="valor"
               position="right"
               formatter={(v: number) => `${v}%`}
-              style={{ fontSize: 10, fill: "var(--cp-text-dim)" }}
+              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
             />
           </Bar>
         </BarChart>
@@ -419,11 +330,8 @@ function DemographicChart({
     .sort((a, b) => b.valor - a.valor);
   if (data.length === 0) return null;
   return (
-    <div
-      className="rounded-xl p-3"
-      style={{ background: "var(--cp-surface-2)", border: "1px solid var(--cp-border)" }}
-    >
-      <p className="text-xs font-semibold text-[color:var(--cp-text)]">{title}</p>
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <p className="text-xs font-semibold text-foreground">{title}</p>
       <DemographicMiniChart data={data} chartType={chartType} />
     </div>
   );
@@ -451,12 +359,9 @@ function hasEntregaMetrics(m?: PostMetrics): boolean {
  * time reenviar e o cliente decidir de novo. */
 function ReprovacaoBanner({ v }: { v: Veredito }) {
   return (
-    <div
-      className="rounded-lg px-3.5 py-2.5 text-xs"
-      style={{ background: "var(--cp-danger-soft)", color: "var(--cp-danger)" }}
-    >
-      <p className="font-semibold">Você reprovou — aguardando reenvio do time</p>
-      <p className="mt-0.5 opacity-90">{v.motivo}</p>
+    <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-400">
+      <p className="font-medium">Você reprovou — aguardando reenvio do time</p>
+      <p className="mt-0.5">{v.motivo}</p>
     </div>
   );
 }
@@ -488,12 +393,7 @@ function ApproveRejectBar({
           onChange={(e) => setMotivo(e.target.value)}
           placeholder="Motivo da reprovação (obrigatório)"
           autoFocus
-          className="h-20 w-full resize-none rounded-lg px-3 py-2 text-sm outline-none"
-          style={{
-            background: "var(--cp-surface-2)",
-            border: "1px solid var(--cp-border-strong)",
-            color: "var(--cp-text)",
-          }}
+          className="h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
         />
         <div className="flex gap-2">
           <button
@@ -502,8 +402,7 @@ function ApproveRejectBar({
               setRejecting(false);
               setMotivo("");
             }}
-            className="flex-1 rounded-lg px-3 py-2 text-xs font-semibold"
-            style={{ border: "1px solid var(--cp-border-strong)", color: "var(--cp-text-dim)" }}
+            className="flex-1 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
           >
             Cancelar
           </button>
@@ -511,8 +410,7 @@ function ApproveRejectBar({
             type="button"
             onClick={onConfirmReject}
             disabled={!motivo.trim() || busy}
-            className="flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ background: "var(--cp-danger)" }}
+            className="flex-1 rounded-md bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Confirmar reprovação
           </button>
@@ -526,19 +424,18 @@ function ApproveRejectBar({
         type="button"
         onClick={onApprove}
         disabled={busy}
-        className="cp-btn-accent inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold"
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
-        <Check className="h-3.5 w-3.5" strokeWidth={3} />
+        <CheckCircle2 className="h-3.5 w-3.5" />
         Aprovar
       </button>
       <button
         type="button"
         onClick={() => setRejecting(true)}
         disabled={busy}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50"
-        style={{ border: "1px solid var(--cp-border-strong)", color: "var(--cp-text-dim)" }}
+        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
       >
-        <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+        <XCircle className="h-3.5 w-3.5" />
         Reprovar
       </button>
     </div>
@@ -607,53 +504,34 @@ function InfluencerProfileDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: "rgba(6, 4, 2, 0.72)" }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-foreground/60 p-4"
       onClick={onClose}
     >
       <div
-        className="cp-anim-scale cp-scrollbar flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl"
-        style={{
-          background: "var(--cp-surface)",
-          border: "1px solid var(--cp-border-strong)",
-          boxShadow: "0 40px 80px -20px rgba(0,0,0,0.6)",
-        }}
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="flex items-start justify-between gap-4 px-7 py-6"
-          style={{ background: "var(--cp-surface-2)", borderBottom: "1px solid var(--cp-border)" }}
-        >
+        <div className="flex items-start justify-between gap-4 border-b border-border bg-muted/30 px-6 py-5">
           <div className="flex items-center gap-4">
-            <div
-              className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full"
-              style={{ border: "2px solid var(--cp-accent)" }}
-            >
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-background shadow-sm">
               {inf.foto ? (
                 <img src={inf.foto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <User className="h-6 w-6 text-[color:var(--cp-text-faint)]" strokeWidth={1.5} />
+                <User className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
               )}
             </div>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="cp-serif text-xl font-semibold text-[color:var(--cp-text)]">
-                  {inf.nome}
-                </h3>
+                <h3 className="text-lg font-semibold text-foreground">{inf.nome}</h3>
                 {inf.nicho && (
-                  <span
-                    className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                    style={{ background: "var(--cp-surface)", color: "var(--cp-text-dim)" }}
-                  >
+                  <span className="rounded-full bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
                     {inf.nicho}
                   </span>
                 )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {inf.redes.length === 0 ? (
-                  <span className="text-xs text-[color:var(--cp-text-faint)]">
-                    Sem redes cadastradas
-                  </span>
+                  <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
                 ) : (
                   inf.redes.map((r, i) => {
                     const url = profileUrl(r.plataforma, r.handle);
@@ -664,21 +542,15 @@ function InfluencerProfileDialog({
                         {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
                       </>
                     );
-                    return (
-                      <a
-                        key={i}
-                        href={url}
-                        target={url ? "_blank" : undefined}
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                        style={{
-                          background: "var(--cp-surface)",
-                          color: "var(--cp-text)",
-                          pointerEvents: url ? "auto" : "none",
-                        }}
-                      >
+                    const className = `inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs font-medium text-foreground shadow-sm${url ? " hover:bg-muted" : ""}`;
+                    return url ? (
+                      <a key={i} href={url} target="_blank" rel="noreferrer" className={className}>
                         {content}
                       </a>
+                    ) : (
+                      <span key={i} className={className}>
+                        {content}
+                      </span>
                     );
                   })
                 )}
@@ -688,20 +560,16 @@ function InfluencerProfileDialog({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-full p-2 text-[color:var(--cp-text-faint)] hover:text-[color:var(--cp-text)]"
-            style={{ background: "var(--cp-surface)" }}
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="cp-scrollbar min-h-0 flex-1 space-y-7 overflow-y-auto px-7 py-6">
+        <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
           {influPending && (
-            <section
-              className="space-y-3 rounded-xl p-4"
-              style={{ background: "var(--cp-accent-soft)", border: "1px solid var(--cp-accent)" }}
-            >
-              <p className="text-sm font-semibold text-[color:var(--cp-text)]">
+            <section className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+              <p className="text-sm font-semibold text-foreground">
                 Aprovar {inf.nome} pra essa campanha?
               </p>
               <ApproveRejectBar
@@ -722,8 +590,8 @@ function InfluencerProfileDialog({
 
           {inf.entregas.length > 0 && (
             <section className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--cp-text-faint)]">
-                Entregas ({inf.entregas.length})
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Users className="h-4 w-4" /> Entregas ({inf.entregas.length})
               </h4>
               <ul className="space-y-3">
                 {inf.entregas.map((e) => {
@@ -734,39 +602,26 @@ function InfluencerProfileDialog({
                     (a) => a.categoria === "Conteúdo publicado",
                   );
                   return (
-                    <li
-                      key={e.id}
-                      className="rounded-xl px-4 py-3 text-xs"
-                      style={{ background: "var(--cp-surface-2)" }}
-                    >
+                    <li key={e.id} className="rounded-md bg-muted/40 px-3 py-2.5 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-[color:var(--cp-text)]">
+                        <span className="font-medium text-foreground">
                           {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
                           {e.tipo}
                           {e.conteudoStatus && (
-                            <span
-                              className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                              style={{
-                                background: "var(--cp-surface)",
-                                color: "var(--cp-text-dim)",
-                              }}
-                            >
+                            <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                               {e.conteudoStatus}
                             </span>
                           )}
                         </span>
                         {e.dataPostagem && (
-                          <span className="inline-flex items-center gap-1 text-[color:var(--cp-text-faint)]">
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
                             <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
                           </span>
                         )}
                       </div>
 
                       {roteiroPendente && (
-                        <div
-                          className="mt-3 space-y-2 pt-3"
-                          style={{ borderTop: "1px solid var(--cp-border)" }}
-                        >
+                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
                           {roteiroAnexos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {roteiroAnexos.map((a) => (
@@ -775,7 +630,7 @@ function InfluencerProfileDialog({
                                   href={a.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-1 font-semibold text-[color:var(--cp-accent)] underline underline-offset-2"
+                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
                                 >
                                   <FileText className="h-3 w-3" /> {a.nome}
                                 </a>
@@ -797,16 +652,13 @@ function InfluencerProfileDialog({
                         </div>
                       )}
                       {!roteiroPendente && e.roteiroReprovacao && (
-                        <div className="mt-3">
+                        <div className="mt-2.5">
                           <ReprovacaoBanner v={e.roteiroReprovacao} />
                         </div>
                       )}
 
                       {conteudoPendente && (
-                        <div
-                          className="mt-3 space-y-2 pt-3"
-                          style={{ borderTop: "1px solid var(--cp-border)" }}
-                        >
+                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
                           {conteudoAnexos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {conteudoAnexos.map((a) => (
@@ -815,7 +667,7 @@ function InfluencerProfileDialog({
                                   href={a.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-1 font-semibold text-[color:var(--cp-accent)] underline underline-offset-2"
+                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
                                 >
                                   <FileText className="h-3 w-3" /> {a.nome}
                                 </a>
@@ -837,7 +689,7 @@ function InfluencerProfileDialog({
                         </div>
                       )}
                       {!conteudoPendente && e.conteudoReprovacao && (
-                        <div className="mt-3">
+                        <div className="mt-2.5">
                           <ReprovacaoBanner v={e.conteudoReprovacao} />
                         </div>
                       )}
@@ -849,23 +701,19 @@ function InfluencerProfileDialog({
           )}
 
           {redesComMetrics.length > 0 && (
-            <section className="space-y-4">
-              <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--cp-text-faint)]">
-                Métricas do perfil
+            <section className="space-y-5">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <BarChart3 className="h-4 w-4" /> Métricas do perfil
               </h4>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {redesComMetrics.map((r) => {
                   const rm = inf.profileMetrics!.porRede![r.id ?? r.plataforma]!;
                   return (
                     <div
                       key={r.id ?? r.plataforma}
-                      className="space-y-4 rounded-xl p-4"
-                      style={{
-                        background: "var(--cp-surface-2)",
-                        border: "1px solid var(--cp-border)",
-                      }}
+                      className="space-y-4 rounded-xl border border-border bg-card p-4"
                     >
-                      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--cp-text-dim)]">
+                      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                         {r.handle ? `@${r.handle}` : r.plataforma}
                       </p>
@@ -907,20 +755,13 @@ function InfluencerProfileDialog({
 
           {entregasComMetrics.length > 0 && (
             <section className="space-y-4">
-              <h4 className="text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--cp-text-faint)]">
-                Métricas das entregas
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Users className="h-4 w-4" /> Métricas das entregas
               </h4>
               <div className="space-y-3">
                 {entregasComMetrics.map((e) => (
-                  <div
-                    key={e.id}
-                    className="rounded-xl p-4"
-                    style={{
-                      background: "var(--cp-surface-2)",
-                      border: "1px solid var(--cp-border)",
-                    }}
-                  >
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[color:var(--cp-text-dim)]">
+                  <div key={e.id} className="rounded-xl border border-border bg-card p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {e.tipo}
                     </p>
                     <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
@@ -965,9 +806,7 @@ function InfluencerProfileDialog({
           )}
 
           {semNadaAlem && !influPending && (
-            <p className="text-sm text-[color:var(--cp-text-faint)]">
-              Nenhuma métrica cadastrada ainda.
-            </p>
+            <p className="text-sm text-muted-foreground">Nenhuma métrica cadastrada ainda.</p>
           )}
         </div>
       </div>
@@ -1008,11 +847,10 @@ function CampanhaPublicPage() {
 
   if (status === "loading") {
     return (
-      <div className="cp-root">
-        <style>{PAGE_STYLES}</style>
+      <div className="min-h-screen bg-background">
         <TopBar ws={ws} />
         <div className="flex min-h-screen items-center justify-center p-6 pt-14">
-          <p className="cp-anim-in text-sm text-[color:var(--cp-text-dim)]">Carregando...</p>
+          <p className="text-sm text-muted-foreground">Carregando...</p>
         </div>
       </div>
     );
@@ -1020,15 +858,12 @@ function CampanhaPublicPage() {
 
   if (status === "notfound" || !data) {
     return (
-      <div className="cp-root">
-        <style>{PAGE_STYLES}</style>
+      <div className="min-h-screen bg-background">
         <TopBar ws={ws} />
         <div className="flex min-h-screen items-center justify-center p-6 pt-14">
-          <div className="cp-anim-up max-w-sm text-center">
-            <h1 className="cp-serif text-xl font-semibold text-[color:var(--cp-text)]">
-              Link não encontrado
-            </h1>
-            <p className="mt-2 text-sm text-[color:var(--cp-text-dim)]">
+          <div className="max-w-sm text-center">
+            <h1 className="text-lg font-semibold text-foreground">Link não encontrado</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Esse link de campanha não existe mais ou é inválido.
             </p>
           </div>
@@ -1048,109 +883,70 @@ function CampanhaPublicPage() {
   );
 
   return (
-    <div className="cp-root">
-      <style>{PAGE_STYLES}</style>
+    <div className="min-h-screen bg-background">
       <TopBar ws={ws} />
-
-      {/* HERO */}
-      <div className="relative z-[1] overflow-hidden pt-14">
+      <div className="relative overflow-hidden border-b border-border">
         <div
-          className="pointer-events-none absolute -top-24 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full opacity-[0.18] blur-[100px]"
-          style={{ background: "var(--cp-accent)" }}
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--chart-1) 0%, var(--chart-2) 45%, var(--chart-3) 100%)",
+            opacity: 0.12,
+          }}
         />
-        <div className="relative mx-auto max-w-5xl px-5 pb-12 pt-16 sm:pb-16 sm:pt-20">
-          <div className="cp-anim-up flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--cp-accent)]">
-            <Sparkles className="h-3 w-3" />
-            Campanha de influenciadores
-          </div>
-          <div className="mt-6 flex flex-wrap items-center gap-6">
-            <div
-              className="cp-anim-up flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl"
-              style={{
-                animationDelay: "80ms",
-                background: "var(--cp-surface)",
-                border: "1px solid var(--cp-border-strong)",
-                boxShadow: "0 20px 40px -12px rgba(0,0,0,0.5)",
-              }}
-            >
+        <div className="relative mx-auto max-w-4xl px-4 pb-10 pt-24">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-card shadow-md ring-1 ring-border">
               {data.clienteFoto ? (
                 <img src={data.clienteFoto} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span className="cp-serif text-3xl font-semibold text-[color:var(--cp-accent)]">
+                <span className="text-2xl font-bold text-foreground">
                   {(data.clienteNome || "C").charAt(0).toUpperCase()}
                 </span>
               )}
             </div>
             <div className="min-w-0">
-              <p
-                className="cp-anim-up text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--cp-text-dim)]"
-                style={{ animationDelay: "120ms" }}
-              >
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 {data.clienteNome || "Campanha"}
               </p>
-              <h1
-                className="cp-serif cp-anim-up mt-1 text-4xl font-semibold leading-[1.05] tracking-tight text-[color:var(--cp-text)] sm:text-5xl"
-                style={{ animationDelay: "160ms" }}
-              >
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
                 {data.campanhaNome || "Influenciadores"}
               </h1>
-              {data.prazo && (
-                <p
-                  className="cp-anim-up mt-3 inline-flex items-center gap-1.5 text-xs text-[color:var(--cp-text-faint)]"
-                  style={{ animationDelay: "200ms" }}
-                >
-                  <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(data.prazo)}
-                </p>
-              )}
+              <p className="mt-2.5 max-w-lg text-sm text-muted-foreground">
+                Acompanhe e aprove cada etapa — seleção, roteiro e conteúdo — clicando no
+                influenciador.
+              </p>
             </div>
           </div>
-          <p
-            className="cp-anim-up mt-6 max-w-lg text-sm leading-relaxed text-[color:var(--cp-text-dim)]"
-            style={{ animationDelay: "240ms" }}
-          >
-            Acompanhe cada etapa da campanha e aprove diretamente aqui — seleção de influenciadores,
-            roteiro e conteúdo final.
-          </p>
         </div>
       </div>
 
-      <div className="relative z-[1] mx-auto max-w-5xl space-y-12 px-5 pb-20">
-        {/* KPIs */}
+      <div className="mx-auto max-w-4xl space-y-10 px-4 pb-16 pt-8">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {data.planejado > 0 && (
-            <Kpi label="Planejado" value={data.planejado.toString()} delay={0} />
-          )}
-          <Kpi label="Influenciadores" value={total.toString()} delay={40} />
+          {data.planejado > 0 && <Kpi label="Planejado" value={data.planejado.toString()} />}
+          <Kpi label="Influenciadores" value={total.toString()} />
           <Kpi
             label="Aguardando você"
             value={aguardando.toString()}
             tone={aguardando > 0 ? "warning" : "default"}
-            delay={80}
           />
-          <Kpi label="Aprovados" value={aprovados.toString()} tone="success" delay={120} />
-          <Kpi label="Postados" value={postados.toString()} delay={160} />
+          <Kpi label="Aprovados" value={aprovados.toString()} tone="success" />
+          <Kpi label="Postados" value={postados.toString()} />
         </div>
 
-        {/* INFLUENCIADORES */}
-        <section className="space-y-5">
-          <div className="cp-anim-up flex items-center gap-3" style={{ animationDelay: "80ms" }}>
-            <h2 className="cp-serif text-lg font-semibold text-[color:var(--cp-text)]">
-              Influenciadores
-            </h2>
-            <div className="h-px flex-1" style={{ background: "var(--cp-border)" }} />
-          </div>
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Influenciadores
+          </h2>
 
           {data.influencers.length === 0 && (
-            <p
-              className="cp-anim-up rounded-2xl py-12 text-center text-sm text-[color:var(--cp-text-faint)]"
-              style={{ border: "1px dashed var(--cp-border-strong)" }}
-            >
+            <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
               Nenhum influenciador enviado pra aprovação ainda.
             </p>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.influencers.map((inf, i) => {
+            {data.influencers.map((inf) => {
               const pending = pendingReason(inf);
               return (
                 <div
@@ -1159,63 +955,31 @@ function CampanhaPublicPage() {
                   tabIndex={0}
                   onClick={() => setViewingId(inf.id)}
                   onKeyDown={(e) => e.key === "Enter" && setViewingId(inf.id)}
-                  className="cp-card cp-anim-up group flex cursor-pointer flex-col items-center gap-3 rounded-2xl p-6 text-center transition-all duration-300 hover:-translate-y-1"
-                  style={{
-                    animationDelay: `${Math.min(i, 8) * 55}ms`,
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = "0 24px 48px -16px rgba(0,0,0,0.5)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.3)";
-                  }}
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
                 >
-                  <div
-                    className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all"
-                    style={{ border: "2px solid var(--cp-border-strong)" }}
-                  >
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-border transition-colors group-hover:ring-foreground/20">
                     {inf.foto ? (
                       <img src={inf.foto} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <User
-                        className="h-10 w-10 text-[color:var(--cp-text-faint)]"
-                        strokeWidth={1.5}
-                      />
+                      <User className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
                     )}
                   </div>
-                  <p className="cp-serif text-lg font-semibold text-[color:var(--cp-text)]">
-                    {inf.nome}
-                  </p>
+                  <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
                   {inf.nicho && (
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                      style={{ background: "var(--cp-surface-2)", color: "var(--cp-text-dim)" }}
-                    >
+                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                       {inf.nicho}
                     </span>
                   )}
                   {inf.entregas.length > 0 && (
-                    <p className="text-xs text-[color:var(--cp-text-faint)]">
-                      {entregasSummary(inf.entregas)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
                   )}
                   {pending ? (
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                      style={{ background: "var(--cp-accent-soft)", color: "var(--cp-accent)" }}
-                    >
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ background: "var(--cp-accent)" }}
-                      />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                       {pending}
                     </span>
                   ) : (
-                    <span
-                      className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                      style={{ background: "var(--cp-surface-2)", color: "var(--cp-text-dim)" }}
-                    >
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
                       {inf.status}
                     </span>
                   )}

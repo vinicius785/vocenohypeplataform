@@ -1,7 +1,7 @@
 {
-  "version": "1.77.0",
+  "version": "1.77.1",
   "notes": [
-    "Refaz do zero o visual do link do cliente: identidade própria (tipografia serifada elegante, paleta escura quente, textura sutil), banner com brilho por trás da foto do cliente, cards de influenciador com animação de entrada e hover, diálogo de perfil redesenhado — todas as funções continuam as mesmas (aprovar/reprovar em cada etapa, métricas, etc), só o visual mudou por completo.",
+    "Reverte o visual \"identidade própria\" do link do cliente (tipografia serifada, tema escuro fixo) — voltou a seguir a mesma identidade visual do resto da plataforma (mesmas cores, tema claro/escuro, tipografia).",
     "Ajustes no link do cliente: página redesenhada (banner com foto do cliente e nome da campanha em destaque, cards mais bonitos), botão \"Link do cliente\" agora fica visível no topo da campanha (antes estava escondido em Exportar), corrige as métricas do perfil que não apareciam dentro do influenciador (bug na chave da rede social), e o link só mostra influenciadores que já foram enviados pra aprovação — quem ainda está só na lista interna não aparece.",
     "Cada campanha agora tem um link fixo e único pro cliente (botão \"Link do cliente\", em Campanhas) — não precisa mais gerar link avulso toda vez. O link mostra os influenciadores com aprovação em etapas: seleção do influ, roteiro e conteúdo (cada um separado), com aviso de reprovação e motivo até o time reenviar. O time é notificado (sino + toast) a cada ação do cliente, e ganha um aviso de \"métricas pendentes\" quando um post publicado passa de 15 dias sem métricas preenchidas.",
     "Remove o mini sudoku diário. No lugar dele, o box \"Jogos do dia\" no Início agora mostra o líder do mês (quem está em 1º na pontuação do time).",
