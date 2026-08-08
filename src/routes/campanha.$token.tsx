@@ -119,13 +119,14 @@ type PublicInfluencer = {
   foto?: string;
   status: string;
   clienteReprovacao?: Veredito;
-  redes: { plataforma: string; handle: string; seguidores?: string }[];
+  redes: { id?: string; plataforma: string; handle: string; seguidores?: string }[];
   entregas: PublicEntrega[];
   profileMetrics?: { porRede?: Record<string, RedeMetrics> };
 };
 type CampanhaLinkData = {
   campanhaNome: string;
   clienteNome: string;
+  clienteFoto?: string;
   prazo?: string;
   dataInicio?: string;
   planejado: number;
@@ -185,11 +186,11 @@ function Kpi({
     danger: "text-rose-600 dark:text-rose-400",
   }[tone];
   return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+    <div className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-sm">
+      <p className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1.5 truncate text-lg font-semibold tabular-nums ${toneClass}`}>{value}</p>
+      <p className={`mt-1.5 truncate text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -462,8 +463,10 @@ function InfluencerProfileDialog({
   const [motivo, setMotivo] = useState("");
 
   const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
+  // `profileMetrics.porRede` é indexado pelo id da rede (não pela plataforma
+  // — duas redes podem ser a mesma plataforma, ex: 2 contas de Instagram).
   const redesComMetrics = inf.redes.filter((r) =>
-    hasRedeMetrics(inf.profileMetrics?.porRede?.[r.plataforma]),
+    hasRedeMetrics(inf.profileMetrics?.porRede?.[r.id ?? r.plataforma]),
   );
   const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
   const influPending = inf.status === "Enviado para aprovação";
@@ -505,12 +508,12 @@ function InfluencerProfileDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border bg-muted/30 px-6 py-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-background">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-background shadow-sm">
               {inf.foto ? (
                 <img src={inf.foto} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -704,10 +707,10 @@ function InfluencerProfileDialog({
               </h4>
               <div className="space-y-6">
                 {redesComMetrics.map((r) => {
-                  const rm = inf.profileMetrics!.porRede![r.plataforma]!;
+                  const rm = inf.profileMetrics!.porRede![r.id ?? r.plataforma]!;
                   return (
                     <div
-                      key={r.plataforma}
+                      key={r.id ?? r.plataforma}
                       className="space-y-4 rounded-xl border border-border bg-card p-4"
                     >
                       <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -882,20 +885,44 @@ function CampanhaPublicPage() {
   return (
     <div className="min-h-screen bg-background">
       <TopBar ws={ws} />
-      <div className="mx-auto max-w-2xl space-y-8 px-4 pb-10 pt-24">
-        <header>
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {data.clienteNome || "Campanha"}
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-            {data.campanhaNome || "Influenciadores"}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Acompanhe e aprove cada etapa — seleção, roteiro e conteúdo — clicando no influenciador.
-          </p>
-        </header>
+      <div className="relative overflow-hidden border-b border-border">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--chart-1) 0%, var(--chart-2) 45%, var(--chart-3) 100%)",
+            opacity: 0.12,
+          }}
+        />
+        <div className="relative mx-auto max-w-4xl px-4 pb-10 pt-24">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-card shadow-md ring-1 ring-border">
+              {data.clienteFoto ? (
+                <img src={data.clienteFoto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-foreground">
+                  {(data.clienteNome || "C").charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {data.clienteNome || "Campanha"}
+              </p>
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                {data.campanhaNome || "Influenciadores"}
+              </h1>
+              <p className="mt-2.5 max-w-lg text-sm text-muted-foreground">
+                Acompanhe e aprove cada etapa — seleção, roteiro e conteúdo — clicando no
+                influenciador.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 sm:grid-cols-4">
+      <div className="mx-auto max-w-4xl space-y-10 px-4 pb-16 pt-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {data.planejado > 0 && <Kpi label="Planejado" value={data.planejado.toString()} />}
           <Kpi label="Influenciadores" value={total.toString()} />
           <Kpi
@@ -907,47 +934,60 @@ function CampanhaPublicPage() {
           <Kpi label="Postados" value={postados.toString()} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {data.influencers.map((inf) => {
-            const pending = pendingReason(inf);
-            return (
-              <div
-                key={inf.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setViewingId(inf.id)}
-                onKeyDown={(e) => e.key === "Enter" && setViewingId(inf.id)}
-                className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center transition-colors hover:bg-muted/40"
-              >
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-                  {inf.foto ? (
-                    <img src={inf.foto} alt="" className="h-full w-full object-cover" />
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Influenciadores
+          </h2>
+
+          {data.influencers.length === 0 && (
+            <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+              Nenhum influenciador enviado pra aprovação ainda.
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {data.influencers.map((inf) => {
+              const pending = pendingReason(inf);
+              return (
+                <div
+                  key={inf.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewingId(inf.id)}
+                  onKeyDown={(e) => e.key === "Enter" && setViewingId(inf.id)}
+                  className="group flex cursor-pointer flex-col items-center gap-3 rounded-2xl border border-border bg-card p-6 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
+                >
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-2 ring-border transition-colors group-hover:ring-foreground/20">
+                    {inf.foto ? (
+                      <img src={inf.foto} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
+                  {inf.nicho && (
+                    <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {inf.nicho}
+                    </span>
+                  )}
+                  {inf.entregas.length > 0 && (
+                    <p className="text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
+                  )}
+                  {pending ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                      {pending}
+                    </span>
                   ) : (
-                    <User className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                      {inf.status}
+                    </span>
                   )}
                 </div>
-                <p className="text-lg font-semibold text-foreground">{inf.nome}</p>
-                {inf.nicho && (
-                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {inf.nicho}
-                  </span>
-                )}
-                {inf.entregas.length > 0 && (
-                  <p className="text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
-                )}
-                {pending ? (
-                  <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                    {pending}
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                    {inf.status}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
 
       {viewing && (

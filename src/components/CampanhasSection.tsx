@@ -400,22 +400,32 @@ function CampanhaDetail({
             {isRecorrente && <span className="ml-2">· Recorrente</span>}
           </p>
         </div>
-        {isRecorrente && (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">Mês</label>
-            <select
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs capitalize focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {monthOptions.map((m) => (
-                <option key={m.value} value={m.value} className="capitalize">
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {isRecorrente && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground">Mês</label>
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs capitalize focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {monthOptions.map((m) => (
+                  <option key={m.value} value={m.value} className="capitalize">
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={copyClientLink}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-foreground px-3.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+            {linkCopied ? "Link copiado!" : "Link do cliente"}
+          </button>
+        </div>
       </header>
 
       {/* BRIEFING */}
@@ -518,19 +528,6 @@ function CampanhaDetail({
         onChange={persistVisibleInflus}
         exportName={c.nome}
         pagGrupos={normalizeCampaignPagGrupos(c)}
-        headerExtra={(closeMenu) => (
-          <button
-            type="button"
-            onClick={() => {
-              copyClientLink();
-              closeMenu();
-            }}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-          >
-            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-            {linkCopied ? "Link copiado!" : "Link do cliente"}
-          </button>
-        )}
       />
 
       <GaleriaConteudosSection influs={visibleInflus} />

@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
-import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import { INFLU_STATUSES, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
 
 /**
@@ -15,20 +15,31 @@ import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovac
  * porque nem `clientes` nem `campanha_influenciadores` têm policy `anon`.
  */
 
-async function findCampanhaByToken(
-  token: string,
-): Promise<{ clienteId: string; clienteNome: string; campanha: Campaign } | null> {
+async function findCampanhaByToken(token: string): Promise<{
+  clienteId: string;
+  clienteNome: string;
+  clienteFoto?: string;
+  campanha: Campaign;
+} | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
   if (error) throw new Error(error.message);
   for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
     const campanha = row.data.campanhas?.find((c) => c.publicToken === token);
-    if (campanha) return { clienteId: row.id, clienteNome: row.data.empresa, campanha };
+    if (campanha) {
+      return {
+        clienteId: row.id,
+        clienteNome: row.data.empresa,
+        clienteFoto: row.data.photo,
+        campanha,
+      };
+    }
   }
   return null;
 }
 
 const RedePublic = z.object({
+  id: z.string().optional(),
   plataforma: z.string(),
   handle: z.string(),
   seguidores: z.string().optional(),
@@ -102,6 +113,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
     status: influ.status,
     clienteReprovacao: influ.clienteReprovacao,
     redes: influ.redes.map((r) => ({
+      id: r.id,
       plataforma: r.plataforma,
       handle: r.handle,
       seguidores: r.seguidores,
@@ -137,11 +149,18 @@ export const getCampanhaLinkData = createServerFn({ method: "GET" })
       .select("data")
       .eq("campanha_id", found.campanha.id);
     if (error) throw new Error(error.message);
-    const influencers = ((rows ?? []) as { data: Influ }[]).map((r) => toPublicInfluencer(r.data));
+    // Só mostra pro cliente influenciadores que o time já enviou pra
+    // aprovação (ou mais adiante no funil) — enquanto está só "Lista"
+    // (planejamento interno, ainda não decidido/comunicado) não aparece.
+    const enviadoIdx = INFLU_STATUSES.indexOf("Enviado para aprovação");
+    const influencers = ((rows ?? []) as { data: Influ }[])
+      .filter((r) => INFLU_STATUSES.indexOf(r.data.status) >= enviadoIdx)
+      .map((r) => toPublicInfluencer(r.data));
     const planejado = found.campanha.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
     return {
       campanhaNome: found.campanha.nome,
       clienteNome: found.clienteNome,
+      clienteFoto: found.clienteFoto,
       prazo: found.campanha.prazo,
       dataInicio: found.campanha.dataInicio,
       planejado,
