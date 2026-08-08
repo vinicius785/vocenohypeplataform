@@ -486,36 +486,29 @@ function StatusBadge({ inf }: { inf: PublicInfluencer }) {
   );
 }
 
-/** Uma linha da lista mestre — igual ao padrão de lista de membros usado
- * em Time/Comercial (avatar + nome + selo + seta), não um card solto. */
-function InfluencerRow({ inf, onOpen }: { inf: PublicInfluencer; onOpen: () => void }) {
+/** Card de galeria — usado na lista de influenciadores de uma campanha
+ * (foto grande em destaque, em vez da lista de linhas). */
+function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+      className="group flex flex-col items-center gap-2.5 rounded-xl border border-border bg-background p-5 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
     >
-      <Avatar className="h-11 w-11 shrink-0">
+      <Avatar className="h-20 w-20 shrink-0 ring-1 ring-border transition-all group-hover:ring-foreground/30">
         {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-        <AvatarFallback className="text-sm font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
+        <AvatarFallback className="text-lg font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-foreground">{inf.nome}</p>
-          {inf.nicho && (
-            <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
-              {inf.nicho}
-            </Badge>
-          )}
-        </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {inf.entregas.length > 0 ? entregasSummary(inf.entregas) : "Sem entregas cadastradas"}
-        </p>
-      </div>
-      <div className="hidden shrink-0 sm:block">
-        <StatusBadge inf={inf} />
-      </div>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <p className="truncate text-sm font-semibold text-foreground">{inf.nome}</p>
+      {inf.nicho && (
+        <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
+          {inf.nicho}
+        </Badge>
+      )}
+      {inf.entregas.length > 0 && (
+        <p className="truncate text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
+      )}
+      <StatusBadge inf={inf} />
     </button>
   );
 }
@@ -1149,9 +1142,13 @@ function ClientPortalPage() {
                     Nenhum influenciador enviado pra aprovação ainda.
                   </p>
                 ) : (
-                  <div className="divide-y divide-border rounded-xl border border-border bg-background">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                     {activeCampanha.influencers.map((inf) => (
-                      <InfluencerRow key={inf.id} inf={inf} onOpen={() => setViewingId(inf.id)} />
+                      <InfluencerGalleryCard
+                        key={inf.id}
+                        inf={inf}
+                        onOpen={() => setViewingId(inf.id)}
+                      />
                     ))}
                   </div>
                 )}
