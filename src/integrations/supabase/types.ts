@@ -841,6 +841,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      zip_daily_results: {
+        Row: {
+          created_at: string;
+          date_key: string;
+          id: string;
+          moves: number;
+          time_ms: number;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          date_key: string;
+          id?: string;
+          moves: number;
+          time_ms: number;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          date_key?: string;
+          id?: string;
+          moves?: number;
+          time_ms?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

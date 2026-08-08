@@ -10,6 +10,7 @@ import {
   Wallet,
   UserCog,
   Star,
+  Puzzle,
   MessageSquare,
   Settings,
   Search,
@@ -83,6 +84,7 @@ export type SectionKey =
   | "time"
   | "influenciadores"
   | "chat"
+  | "jogo"
   | "configuracoes";
 
 /** Usado pra abrir uma campanha + tarefa específica ao clicar no indicador
@@ -124,6 +126,10 @@ const groups: NavGroup[] = [
   {
     title: "Comunicação",
     items: [{ key: "chat", label: "Chat", icon: MessageSquare }],
+  },
+  {
+    title: "Diversão",
+    items: [{ key: "jogo", label: "Zip do dia", icon: Puzzle }],
   },
 ];
 

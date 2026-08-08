@@ -13,6 +13,7 @@ import { ConfiguracoesSection } from "@/components/ConfiguracoesSection";
 import { FinanceiroSection } from "@/components/FinanceiroSection";
 
 import { ChatSection } from "@/components/ChatSection";
+import { ZipGameSection } from "@/components/games/ZipGameSection";
 import { LockedSection } from "@/components/LockedSection";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 
@@ -27,6 +28,7 @@ const VALID: SectionKey[] = [
   "time",
   "influenciadores",
   "chat",
+  "jogo",
   "configuracoes",
 ];
 
@@ -53,6 +55,7 @@ const SECTIONS: Record<SectionKey, { title: string; description: string }> = {
   time: { title: "Time", description: "Membros, métricas e pontuação do time." },
   influenciadores: { title: "Banco de influenciadores", description: "Catálogo de criadores." },
   chat: { title: "Chat", description: "Conversas do time." },
+  jogo: { title: "Zip do dia", description: "Puzzle diário com ranking do time." },
   configuracoes: { title: "Configurações", description: "Preferências do workspace." },
 };
 
@@ -109,6 +112,8 @@ function TimePage() {
         <FinanceiroSection />
       ) : active === "chat" ? (
         <ChatSection />
+      ) : active === "jogo" ? (
+        <ZipGameSection />
       ) : (
         <>
           <h1 className="text-3xl font-semibold tracking-tight">{section.title}</h1>
