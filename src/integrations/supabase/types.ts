@@ -820,6 +820,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      sudoku_daily_results: {
+        Row: {
+          created_at: string;
+          date_key: string;
+          id: string;
+          time_ms: number;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          date_key: string;
+          id?: string;
+          time_ms: number;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          date_key?: string;
+          id?: string;
+          time_ms?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       workspace_settings: {
         Row: {
           id: boolean;

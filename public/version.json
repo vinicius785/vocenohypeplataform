@@ -1,7 +1,9 @@
 {
-  "version": "1.73.0",
+  "version": "1.74.0",
   "notes": [
-    "Novo jogo diário \"Zip do dia\" (menu Diversão): puzzle de conectar pontos numerados preenchendo todo o grid, igual o jogo do LinkedIn — o mesmo puzzle pra todo mundo no workspace, com ranking em tempo real de quem resolveu mais rápido hoje.",
+    "Novo mini sudoku diário (6x6), com o mesmo ranking em tempo real do Zip. Os dois jogos agora vivem numa pasta animada \"GAMES\" ao lado de \"Gerenciar cards\" no Início, sem ocupar item de menu — clique na pasta e escolha o jogo.",
+    "Zip do dia: agora dá pra arrastar o mouse (ou o dedo) sobre o grid pra desenhar o caminho, sem precisar clicar célula por célula. Corrige também a data do puzzle, que virava o dia cedo demais em fusos atrás de UTC (aparecia sábado ainda sendo sexta).",
+    "\"Zip do dia\": puzzle de conectar pontos numerados preenchendo todo o grid, igual o jogo do LinkedIn — o mesmo puzzle pra todo mundo no workspace, com ranking em tempo real de quem resolveu mais rápido hoje.",
     "Remove o fundo animado do link público (não pegou bem) e adiciona uma barra fixa no topo, com a logo e o nome do workspace, presente em todas as telas do link (inclusive carregando e link inválido).",
     "Reorganiza a etapa Métricas do influenciador: números gerais e demografia agora em cards separados, com títulos e divisórias claras (antes tudo ficava empilhado sem separação visual).",
     "Card de perfil do link público de aprovação: mostra o nicho do influenciador, a quantidade de cada entrega (dentro e fora do perfil) e ganha os botões Aprovar/Reprovar também dentro do perfil (antes só fora).",

@@ -139,6 +139,13 @@ export function validateZipPath(puzzle: ZipPuzzle, path: ZipCell[]): boolean {
   return true;
 }
 
+/** Data de hoje no fuso local (não UTC) — `toISOString()` usa UTC e vira o
+ * dia cedo demais pra quem está num fuso atrás (ex: Brasil), fazendo o
+ * puzzle "do dia seguinte" aparecer horas antes da meia-noite local. */
 export function todayZipKey(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }

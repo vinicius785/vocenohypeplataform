@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trophy, RotateCcw, Info } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
@@ -72,30 +72,75 @@ export function ZipGameSection() {
   const visited = useMemo(() => new Set(path.map(cellKey)), [path]);
   const total = puzzle.size * puzzle.size;
   const won = path.length === total;
+  const isDragging = useRef(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  /** Estende (ou desfaz, se voltar pra célula anterior) o caminho até
+   * `cell` — usada tanto por clique único quanto por arrastar o mouse/dedo
+   * sobre o grid. `pathRef` sempre reflete o estado mais recente mesmo
+   * durante um arraste rápido (setState em lote não dá tempo de atualizar
+   * o `path` do closure entre uma célula e a próxima). */
+  const tryExtend = (cell: ZipCell) => {
+    setPath((current) => {
+      if (current.length === 0) {
+        if (cellKey(cell) !== cellKey(puzzle.checkpoints[0])) return current;
+        setStartedAt((s) => s ?? Date.now());
+        return [cell];
+      }
+      const last = current[current.length - 1];
+      if (cellKey(cell) === cellKey(last)) return current;
+      if (current.length > 1 && cellKey(cell) === cellKey(current[current.length - 2])) {
+        return current.slice(0, -1);
+      }
+      const dr = Math.abs(cell.r - last.r);
+      const dc = Math.abs(cell.c - last.c);
+      const isAdjacent = dr + dc === 1;
+      if (!isAdjacent || current.some((x) => cellKey(x) === cellKey(cell))) return current;
+      return [...current, cell];
+    });
+  };
 
   const handleCellClick = (cell: ZipCell) => {
     if (myResult || submitting || won) return;
     setError("");
-    if (path.length === 0) {
-      if (cellKey(cell) !== cellKey(puzzle.checkpoints[0])) {
-        setError("Comece pelo ponto 1.");
-        return;
-      }
-      setPath([cell]);
-      setStartedAt(Date.now());
+    if (path.length === 0 && cellKey(cell) !== cellKey(puzzle.checkpoints[0])) {
+      setError("Comece pelo ponto 1.");
       return;
     }
-    const last = path[path.length - 1];
-    if (cellKey(cell) === cellKey(last) && path.length > 1) {
-      setPath((p) => p.slice(0, -1));
-      return;
-    }
-    const dr = Math.abs(cell.r - last.r);
-    const dc = Math.abs(cell.c - last.c);
-    const isAdjacent = dr + dc === 1;
-    if (!isAdjacent || visited.has(cellKey(cell))) return;
-    setPath((p) => [...p, cell]);
+    tryExtend(cell);
   };
+
+  const cellFromPoint = (x: number, y: number): ZipCell | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const target = el?.closest<HTMLElement>("[data-zip-cell]");
+    if (!target) return null;
+    const [r, c] = target.dataset.zipCell!.split(",").map(Number);
+    return { r, c };
+  };
+
+  const handlePointerDown = (cell: ZipCell) => {
+    if (myResult || submitting || won) return;
+    isDragging.current = true;
+    handleCellClick(cell);
+  };
+
+  const handlePointerMove: React.PointerEventHandler<HTMLDivElement> = (e) => {
+    if (!isDragging.current || myResult || submitting || won) return;
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    if (cell) tryExtend(cell);
+  };
+
+  useEffect(() => {
+    const stop = () => {
+      isDragging.current = false;
+    };
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    return () => {
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+  }, []);
 
   useEffect(() => {
     if (!won || !startedAt || myResult) return;
@@ -140,7 +185,9 @@ export function ZipGameSection() {
           </div>
 
           <div
-            className="mx-auto grid w-full max-w-md gap-1"
+            ref={gridRef}
+            onPointerMove={handlePointerMove}
+            className="mx-auto grid w-full max-w-md touch-none select-none gap-1"
             style={{ gridTemplateColumns: `repeat(${puzzle.size}, minmax(0, 1fr))` }}
           >
             {Array.from({ length: puzzle.size }).map((_, r) =>
@@ -153,7 +200,9 @@ export function ZipGameSection() {
                   <button
                     key={`${r}-${c}`}
                     type="button"
+                    data-zip-cell={`${r},${c}`}
                     onClick={() => handleCellClick(cell)}
+                    onPointerDown={() => handlePointerDown(cell)}
                     disabled={Boolean(myResult)}
                     className={`flex aspect-square items-center justify-center rounded-md border text-sm font-semibold transition-colors ${
                       isVisited

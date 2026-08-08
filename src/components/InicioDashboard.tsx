@@ -9,8 +9,10 @@ import {
   Clock,
   Flag,
   MessageSquare,
+  Grid3x3,
   Newspaper,
   Plus,
+  Puzzle,
   Sparkles,
   Star,
   Target,
@@ -27,6 +29,9 @@ import {
   type Task as ProjTask,
 } from "@/lib/projetos";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
+import { ZipGameSection } from "@/components/games/ZipGameSection";
+import { SudokuGameSection } from "@/components/games/SudokuGameSection";
+import Folder from "@/components/Folder";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   subscribeChat,
@@ -237,6 +242,9 @@ export function InicioDashboard() {
   const [personal, setPersonal] = useState<PersonalItem[]>([]);
   const [newPersonal, setNewPersonal] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [zipOpen, setZipOpen] = useState(false);
+  const [sudokuOpen, setSudokuOpen] = useState(false);
+  const [gamesFolderOpen, setGamesFolderOpen] = useState(false);
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
@@ -466,7 +474,45 @@ export function InicioDashboard() {
             <p className="text-xs text-muted-foreground">{today}</p>
           </div>
         </div>
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex items-center gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <Folder
+              size={0.85}
+              open={gamesFolderOpen}
+              onOpenChange={setGamesFolderOpen}
+              items={[
+                <button
+                  key="zip"
+                  type="button"
+                  aria-label="Jogar Zip do dia"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGamesFolderOpen(false);
+                    setZipOpen(true);
+                  }}
+                  className="flex h-full w-full items-center justify-center text-neutral-800"
+                >
+                  <Puzzle className="h-4 w-4" />
+                </button>,
+                <button
+                  key="sudoku"
+                  type="button"
+                  aria-label="Jogar mini sudoku do dia"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGamesFolderOpen(false);
+                    setSudokuOpen(true);
+                  }}
+                  className="flex h-full w-full items-center justify-center text-neutral-800"
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                </button>,
+              ]}
+            />
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+              Games
+            </span>
+          </div>
           <button
             onClick={() => setManageOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
@@ -848,6 +894,20 @@ export function InicioDashboard() {
           setMeetingSummary(null);
         }}
       />
+
+      <Dialog open={zipOpen} onOpenChange={setZipOpen}>
+        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-y-auto p-6">
+          <DialogTitle className="sr-only">Zip do dia</DialogTitle>
+          <ZipGameSection />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={sudokuOpen} onOpenChange={setSudokuOpen}>
+        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-y-auto p-6">
+          <DialogTitle className="sr-only">Mini sudoku do dia</DialogTitle>
+          <SudokuGameSection />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
