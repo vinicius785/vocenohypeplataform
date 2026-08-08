@@ -9,7 +9,6 @@ import {
   Clock,
   Flag,
   MessageSquare,
-  Grid3x3,
   Newspaper,
   Plus,
   Puzzle,
@@ -18,6 +17,7 @@ import {
   Target,
   Trash2,
   TrendingUp,
+  Trophy,
   Wallet,
   X,
 } from "lucide-react";
@@ -30,11 +30,11 @@ import {
 } from "@/lib/projetos";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
 import { ZipGameSection } from "@/components/games/ZipGameSection";
-import { SudokuGameSection } from "@/components/games/SudokuGameSection";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   subscribeChat,
   getMe,
+  loadMembers,
   loadMessages,
   loadChannels,
   loadCampaignChannels,
@@ -52,6 +52,7 @@ import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/li
 import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { computeMemberScores, type MemberScore } from "@/lib/score";
 
 type DashTask = {
   id: string;
@@ -242,7 +243,7 @@ export function InicioDashboard() {
   const [newPersonal, setNewPersonal] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [zipOpen, setZipOpen] = useState(false);
-  const [sudokuOpen, setSudokuOpen] = useState(false);
+  const [monthLeader, setMonthLeader] = useState<MemberScore | null>(null);
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
@@ -274,6 +275,22 @@ export function InicioDashboard() {
       setTasks(loadAllTasks(campanhaNameMap, getMe().name));
       setMeetings(loadMeetings());
       setPersonal(loadPersonal());
+
+      const now = new Date();
+      const monthFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const campanhaGroups = Array.from(getAllCampanhaTarefas()).map(([id, tasks]) => ({
+        id,
+        name: "Campanha",
+        tasks,
+      }));
+      const scores = computeMemberScores(
+        loadProjetos(),
+        loadMeetings(),
+        loadMembers(),
+        { from: monthFrom },
+        campanhaGroups,
+      );
+      setMonthLeader(scores.find((s) => s.score > 0) ?? null);
     };
     refresh();
     window.addEventListener("storage", refresh);
@@ -853,19 +870,22 @@ export function InicioDashboard() {
               </p>
             </div>
           </button>
-          <button
-            type="button"
-            onClick={() => setSudokuOpen(true)}
-            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-              <Grid3x3 className="h-4 w-4" />
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              <Trophy className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Mini sudoku do dia</p>
-              <p className="text-xs text-muted-foreground">Grid 6x6, com ranking do time.</p>
+              <p className="text-sm font-medium text-foreground">Líder do mês</p>
+              {monthLeader ? (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{monthLeader.member.name}</span> ·{" "}
+                  {monthLeader.score} pts
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sem pontuação este mês ainda.</p>
+              )}
             </div>
-          </button>
+          </div>
         </div>
       </Card>
 
@@ -894,13 +914,6 @@ export function InicioDashboard() {
         <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-y-auto p-6">
           <DialogTitle className="sr-only">Zip do dia</DialogTitle>
           <ZipGameSection />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={sudokuOpen} onOpenChange={setSudokuOpen}>
-        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-y-auto p-6">
-          <DialogTitle className="sr-only">Mini sudoku do dia</DialogTitle>
-          <SudokuGameSection />
         </DialogContent>
       </Dialog>
     </div>
