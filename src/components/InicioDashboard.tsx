@@ -31,7 +31,6 @@ import {
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
 import { ZipGameSection } from "@/components/games/ZipGameSection";
 import { SudokuGameSection } from "@/components/games/SudokuGameSection";
-import Folder from "@/components/Folder";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   subscribeChat,
@@ -244,7 +243,6 @@ export function InicioDashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [zipOpen, setZipOpen] = useState(false);
   const [sudokuOpen, setSudokuOpen] = useState(false);
-  const [gamesFolderOpen, setGamesFolderOpen] = useState(false);
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
@@ -475,44 +473,6 @@ export function InicioDashboard() {
           </div>
         </div>
         <div className="relative flex items-center gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <Folder
-              size={0.45}
-              open={gamesFolderOpen}
-              onOpenChange={setGamesFolderOpen}
-              items={[
-                <button
-                  key="zip"
-                  type="button"
-                  aria-label="Jogar Zip do dia"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGamesFolderOpen(false);
-                    setZipOpen(true);
-                  }}
-                  className="flex h-full w-full items-center justify-center text-neutral-800"
-                >
-                  <Puzzle className="h-4 w-4" />
-                </button>,
-                <button
-                  key="sudoku"
-                  type="button"
-                  aria-label="Jogar mini sudoku do dia"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setGamesFolderOpen(false);
-                    setSudokuOpen(true);
-                  }}
-                  className="flex h-full w-full items-center justify-center text-neutral-800"
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </button>,
-              ]}
-            />
-            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-              Games
-            </span>
-          </div>
           <button
             onClick={() => setManageOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
@@ -560,6 +520,41 @@ export function InicioDashboard() {
       )}
 
       <MuralNovidades />
+
+      {/* Jogos do dia */}
+      <Card>
+        <CardHeader icon={<Puzzle className="h-4 w-4" />} title="Jogos do dia" />
+        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <button
+            type="button"
+            onClick={() => setZipOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <Puzzle className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">Zip do dia</p>
+              <p className="text-xs text-muted-foreground">
+                Conecte os pontos em ordem, com ranking do time.
+              </p>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSudokuOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <Grid3x3 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">Mini sudoku do dia</p>
+              <p className="text-xs text-muted-foreground">Grid 6x6, com ranking do time.</p>
+            </div>
+          </button>
+        </div>
+      </Card>
 
       {/* Widget grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

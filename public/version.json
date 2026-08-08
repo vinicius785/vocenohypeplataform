@@ -1,8 +1,8 @@
 {
-  "version": "1.74.1",
+  "version": "1.74.2",
   "notes": [
-    "Corrige a pasta \"GAMES\" do Início: estava gigante ao abrir e mostrava uma terceira página em branco. Agora abre no tamanho certo, só com os dois jogos.",
-    "Novo mini sudoku diário (6x6), com o mesmo ranking em tempo real do Zip. Os dois jogos agora vivem numa pasta animada \"GAMES\" ao lado de \"Gerenciar cards\" no Início, sem ocupar item de menu — clique na pasta e escolha o jogo.",
+    "Troca a pasta animada \"GAMES\" do Início por um box simples \"Jogos do dia\", com Zip e mini sudoku lado a lado — mesma função, sem a animação (que ficou grande e confusa).",
+    "Novo mini sudoku diário (6x6), com o mesmo ranking em tempo real do Zip.",
     "Zip do dia: agora dá pra arrastar o mouse (ou o dedo) sobre o grid pra desenhar o caminho, sem precisar clicar célula por célula. Corrige também a data do puzzle, que virava o dia cedo demais em fusos atrás de UTC (aparecia sábado ainda sendo sexta).",
     "\"Zip do dia\": puzzle de conectar pontos numerados preenchendo todo o grid, igual o jogo do LinkedIn — o mesmo puzzle pra todo mundo no workspace, com ranking em tempo real de quem resolveu mais rápido hoje.",
     "Remove o fundo animado do link público (não pegou bem) e adiciona uma barra fixa no topo, com a logo e o nome do workspace, presente em todas as telas do link (inclusive carregando e link inválido).",
