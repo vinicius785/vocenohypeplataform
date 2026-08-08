@@ -1,6 +1,7 @@
 {
-  "version": "1.79.1",
+  "version": "1.80.0",
   "notes": [
+    "Agora dá pra publicar artigos do Marketing direto no portal do cliente: no editor de artigo, escolha pra quais clientes ele deve aparecer (\"Publicar no portal de quais clientes\") — só aparece quando o status estiver \"Publicado\". No portal, novo item \"Artigos\" na barra lateral com a lista e leitura completa.",
     "Deixa o portal do cliente mais fiel ao formato LinkedIn: cartão de perfil com banner + foto do cliente e mini estatísticas, menu lateral em formato de \"páginas\" (ícone + contador), widgets de Novidades/Campanhas com o título dentro da mesma caixa da lista, e remove os cards de KPI do topo do Início.",
     "A tela Início do portal do cliente ganha estrutura tipo LinkedIn: barra lateral com o cliente e navegação, centro com feed dos últimos conteúdos publicados (com métricas e link pro post), e uma coluna à direita com Novidades pendentes e a lista de campanhas.",
     "Deixa os cards de influenciador do portal do cliente mais enxutos: botões de aprovar/reprovar menores, foto e espaçamento reduzidos.",

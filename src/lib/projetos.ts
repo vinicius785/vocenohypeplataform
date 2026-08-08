@@ -202,6 +202,10 @@ export type BlogPost = {
   excerpt?: string;
   content?: string;
   audience?: "site" | "mural";
+  /** Ids de `Cliente` cujo portal (`/portal/$token`) deve mostrar este
+   * artigo — independente do `audience` acima. Só entra no portal quando
+   * `status === "publicado"`. */
+  portalClienteIds?: string[];
 };
 
 export type ProjectLayout = "tabs" | "single";

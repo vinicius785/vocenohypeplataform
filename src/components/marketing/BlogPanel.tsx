@@ -5,6 +5,7 @@ import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
 import { notifyBlogEvent } from "@/lib/marketing.functions";
+import { useClientes } from "@/lib/clientes-store";
 
 /** Conversor bem simples de markdown pra HTML — só o suficiente pra
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
@@ -300,6 +301,7 @@ function BlogEditor({
   onDelete: () => void;
 }) {
   const team = useMemo(() => loadTeamMembers(), []);
+  const clientes = useClientes();
   const [draft, setDraft] = useState(post);
   const [savedTick, setSavedTick] = useState(0);
   const debounceRef = useRef<number | null>(null);
@@ -537,6 +539,47 @@ function BlogEditor({
               <option value="mural">Mural de novidades (time interno)</option>
             </select>
           </label>
+
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              Publicar no portal de quais clientes
+            </span>
+            {clientes.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground">
+                Cadastre clientes na aba Clientes pra poder selecionar.
+              </p>
+            ) : (
+              <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
+                {clientes.map((c) => {
+                  const checked = p.portalClienteIds?.includes(c.id) ?? false;
+                  return (
+                    <label
+                      key={c.id}
+                      className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const prev = p.portalClienteIds ?? [];
+                          const next = e.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((id) => id !== c.id);
+                          patchImmediate({ portalClienteIds: next });
+                        }}
+                      />
+                      {c.empresa}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {(p.portalClienteIds?.length ?? 0) > 0 && p.status !== "publicado" && (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                Só aparece no portal quando o status for &quot;Publicado&quot;.
+              </p>
+            )}
+          </div>
 
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Status</span>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
 import { INFLU_STATUSES, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
+import type { BlogPost, Project } from "@/lib/projetos";
 
 /**
  * Portal público fixo do CLIENTE (`/portal/$token`) — um único link mostra
@@ -125,6 +126,45 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
   };
 }
 
+const ArticlePublic = z.object({
+  id: z.string(),
+  title: z.string(),
+  cover: z.string().optional(),
+  category: z.string().optional(),
+  excerpt: z.string().optional(),
+  content: z.string().optional(),
+  authorName: z.string().optional(),
+  publishDate: z.string().optional(),
+});
+
+/** Busca, entre todos os projetos, os artigos do blog marcados pra
+ * aparecer no portal deste cliente (`portalClienteIds`) e já publicados —
+ * rascunho/revisão/arquivado nunca aparecem no link público. */
+async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof ArticlePublic>[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: rows, error } = await supabaseAdmin.from("projetos").select("data");
+  if (error) throw new Error(error.message);
+  const artigos: z.infer<typeof ArticlePublic>[] = [];
+  for (const row of (rows ?? []) as { data: Project }[]) {
+    for (const post of (row.data.blog ?? []) as BlogPost[]) {
+      if (post.status !== "publicado") continue;
+      if (!post.portalClienteIds?.includes(clienteId)) continue;
+      artigos.push({
+        id: post.id,
+        title: post.title,
+        cover: post.cover,
+        category: post.category,
+        excerpt: post.excerpt,
+        content: post.content,
+        authorName: post.authorName,
+        publishDate: post.publishDate,
+      });
+    }
+  }
+  artigos.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
+  return artigos;
+}
+
 const TokenInput = z.object({ token: z.string().min(1) });
 
 /** Público — sem auth. Usado pela página `/portal/$token`. Retorna TODAS
@@ -163,10 +203,13 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
       }),
     );
 
+    const artigos = await findArtigosDoCliente(found.clienteId);
+
     return {
       clienteNome: found.cliente.empresa,
       clienteFoto: found.cliente.photo,
       campanhas: campanhasComInflus,
+      artigos,
     };
   });
 
