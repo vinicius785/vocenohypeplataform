@@ -23,12 +23,14 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ExternalLink,
   Facebook,
   FileText,
   Instagram,
   Linkedin,
   LayoutGrid,
   Megaphone,
+  PlayCircle,
   Sparkles,
   Twitter,
   Users,
@@ -124,6 +126,8 @@ type PublicEntrega = {
   status: "orcado" | "combinado" | "publicado";
   conteudoStatus?: string;
   dataPostagem?: string;
+  publicadoEm?: string;
+  url?: string;
   anexos?: { id: string; categoria: string; nome: string; url: string }[];
   metrics?: PostMetrics;
   roteiroReprovacao?: Veredito;
@@ -875,6 +879,12 @@ type PendingFeedItem = {
   inf: PublicInfluencer;
   reason: string;
 };
+type ContentFeedItem = {
+  campanhaId: string;
+  campanhaNome: string;
+  inf: PublicInfluencer;
+  entrega: PublicEntrega;
+};
 
 function ClientPortalPage() {
   const { token } = Route.useParams();
@@ -955,6 +965,23 @@ function ClientPortalPage() {
       })
       .filter((x): x is PendingFeedItem => x !== null),
   );
+
+  // Conteúdo já publicado, mais recente primeiro — o "feed" central,
+  // mesmo espírito de um feed de rede social (LinkedIn), só que com os
+  // posts reais da campanha.
+  const contentFeed: ContentFeedItem[] = data.campanhas
+    .flatMap((c) =>
+      c.influencers.flatMap((inf) =>
+        inf.entregas
+          .filter((e) => e.status === "publicado")
+          .map((entrega) => ({ campanhaId: c.id, campanhaNome: c.nome, inf, entrega })),
+      ),
+    )
+    .sort((a, b) => {
+      const da = a.entrega.publicadoEm ?? a.entrega.dataPostagem ?? "";
+      const db = b.entrega.publicadoEm ?? b.entrega.dataPostagem ?? "";
+      return db.localeCompare(da);
+    });
 
   const openInflu = (campanhaId: string, influId: string) => {
     setActiveCampanhaId(campanhaId);
@@ -1163,7 +1190,7 @@ function ClientPortalPage() {
                 Olá, {data.clienteNome}
               </h1>
 
-              <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <KpiCard label="Campanhas" value={data.campanhas.length.toString()} />
                 <KpiCard label="Influenciadores" value={totalInflus.toString()} />
                 <KpiCard
@@ -1174,89 +1201,179 @@ function ClientPortalPage() {
                 <KpiCard label="Postados" value={totalPostados.toString()} />
               </div>
 
-              <section className="mb-8">
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Clock className="h-4 w-4" /> Novidades
-                </h2>
-                {feed.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                    Tudo em dia — nada aguardando sua aprovação agora.
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border rounded-xl border border-border bg-background">
-                    {feed.slice(0, 8).map((item) => (
-                      <button
-                        key={`${item.campanhaId}:${item.inf.id}`}
-                        type="button"
-                        onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-                      >
-                        <Avatar className="h-9 w-9 shrink-0">
-                          {item.inf.foto && <AvatarImage src={item.inf.foto} alt={item.inf.nome} />}
-                          <AvatarFallback className="text-xs font-semibold">
-                            {initialsOf(item.inf.nome)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {item.inf.nome}
-                            <span className="font-normal text-muted-foreground">
-                              {" "}
-                              · {item.campanhaNome}
-                            </span>
-                          </p>
-                          <p className="truncate text-xs text-amber-700 dark:text-amber-400">
-                            {item.reason}
-                          </p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Megaphone className="h-4 w-4" /> Campanhas
-                </h2>
-                {data.campanhas.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma campanha ainda.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {data.campanhas.map((c) => {
-                      const aguardandoAqui = c.influencers.filter((i) => pendingReason(i)).length;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setActiveCampanhaId(c.id)}
-                          className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:bg-muted/40"
+              {/* Estrutura tipo LinkedIn: centro = feed do conteúdo mais
+                  recente, direita = novidades pendentes + campanhas. */}
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <section className="min-w-0 space-y-3">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <PlayCircle className="h-4 w-4" /> Últimos conteúdos
+                  </h2>
+                  {contentFeed.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+                      Nenhum conteúdo publicado ainda.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {contentFeed.slice(0, 12).map((item) => (
+                        <div
+                          key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
+                          className="rounded-xl border border-border bg-background p-4"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {c.nome}
-                            </p>
-                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {c.influencers.length} influenciadores
-                            {c.prazo ? ` · Prazo ${fmtDate(c.prazo)}` : ""}
-                          </p>
-                          {aguardandoAqui > 0 && (
-                            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                              {aguardandoAqui} aguardando você
-                            </span>
+                          <button
+                            type="button"
+                            onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                            className="flex w-full items-center gap-3 text-left"
+                          >
+                            <Avatar className="h-10 w-10 shrink-0">
+                              {item.inf.foto && (
+                                <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
+                              )}
+                              <AvatarFallback className="text-sm font-semibold">
+                                {initialsOf(item.inf.nome)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {item.inf.nome}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {item.campanhaNome}
+                                {item.entrega.publicadoEm
+                                  ? ` · ${fmtDate(item.entrega.publicadoEm)}`
+                                  : item.entrega.dataPostagem
+                                    ? ` · ${fmtDate(item.entrega.dataPostagem)}`
+                                    : ""}
+                              </p>
+                            </div>
+                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                              {item.entrega.tipo}
+                            </Badge>
+                          </button>
+
+                          {(item.entrega.metrics || item.entrega.url) && (
+                            <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+                              <div className="flex flex-wrap gap-4">
+                                {item.entrega.metrics?.views ? (
+                                  <MetricStat
+                                    label="Views"
+                                    value={item.entrega.metrics.views.toLocaleString("pt-BR")}
+                                  />
+                                ) : null}
+                                {item.entrega.metrics?.likes ? (
+                                  <MetricStat
+                                    label="Curtidas"
+                                    value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
+                                  />
+                                ) : null}
+                                {item.entrega.metrics?.reach ? (
+                                  <MetricStat
+                                    label="Alcance"
+                                    value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
+                                  />
+                                ) : null}
+                              </div>
+                              {item.entrega.url && (
+                                <a
+                                  href={item.entrega.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Ver publicação
+                                </a>
+                              )}
+                            </div>
                           )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <aside className="space-y-6">
+                  <section className="space-y-3">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Clock className="h-4 w-4" /> Novidades
+                    </h2>
+                    {feed.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                        Tudo em dia por aqui.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-border rounded-xl border border-border bg-background">
+                        {feed.slice(0, 6).map((item) => (
+                          <button
+                            key={`${item.campanhaId}:${item.inf.id}`}
+                            type="button"
+                            onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                            className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                          >
+                            <Avatar className="h-8 w-8 shrink-0">
+                              {item.inf.foto && (
+                                <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
+                              )}
+                              <AvatarFallback className="text-xs font-semibold">
+                                {initialsOf(item.inf.nome)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-foreground">
+                                {item.inf.nome}
+                              </p>
+                              <p className="truncate text-[11px] text-amber-700 dark:text-amber-400">
+                                {item.reason}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Megaphone className="h-4 w-4" /> Campanhas
+                    </h2>
+                    {data.campanhas.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-muted-foreground">
+                        Nenhuma campanha ainda.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {data.campanhas.map((c) => {
+                          const aguardandoAqui = c.influencers.filter((i) =>
+                            pendingReason(i),
+                          ).length;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setActiveCampanhaId(c.id)}
+                              className="flex w-full flex-col gap-1.5 rounded-xl border border-border bg-background p-3 text-left transition-colors hover:bg-muted/40"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="truncate text-xs font-semibold text-foreground">
+                                  {c.nome}
+                                </p>
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                {c.influencers.length} influenciadores
+                              </p>
+                              {aguardandoAqui > 0 && (
+                                <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                                  {aguardandoAqui} aguardando você
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                </aside>
+              </div>
             </>
           )}
         </main>

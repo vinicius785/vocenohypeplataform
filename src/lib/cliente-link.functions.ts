@@ -56,6 +56,8 @@ const EntregaPublic = z.object({
   status: z.enum(["orcado", "combinado", "publicado"]),
   conteudoStatus: z.string().optional(),
   dataPostagem: z.string().optional(),
+  publicadoEm: z.string().optional(),
+  url: z.string().optional(),
   anexos: z
     .array(z.object({ id: z.string(), categoria: z.string(), nome: z.string(), url: z.string() }))
     .optional(),
@@ -112,6 +114,8 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
       status: e.status,
       conteudoStatus: e.conteudoStatus,
       dataPostagem: e.dataPostagem,
+      publicadoEm: e.publicadoEm,
+      url: e.url,
       anexos: e.anexos,
       metrics: e.metrics,
       roteiroReprovacao: e.roteiroReprovacao,
