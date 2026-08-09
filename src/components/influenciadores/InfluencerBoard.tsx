@@ -1467,6 +1467,16 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  // Edição inline dos campos de identidade direto no resumo (nome, nicho,
+  // contato, redes) — antes só dava pra mudar isso fechando o resumo e
+  // abrindo o wizard de edição à parte; agora clicar no influ já abre tudo
+  // pronto pra editar, sem a etapa extra.
+  const patchInflu = (influId: string, patch: Partial<Influ>) => {
+    const next = influs.map((x) => (x.id === influId ? { ...x, ...patch } : x));
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   // Copia os itens (textos) da checklist de um influ pros demais da
   // campanha/projeto de uma vez — pra não recriar item por item em cada um.
   // Preserva o "concluído" de itens que o influ já tinha marcado (casando
@@ -1699,7 +1709,6 @@ export function InfluencerBoard({
                         influ={i}
                         has={has}
                         onView={() => setViewing(i)}
-                        onEdit={() => setInfluDialog({ mode: "edit", data: i })}
                         onStatus={(status) => changeStatus(i.id, status)}
                         onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
                       />
@@ -1727,7 +1736,6 @@ export function InfluencerBoard({
                 influ={i}
                 has={has}
                 onView={() => setViewing(i)}
-                onEdit={() => setInfluDialog({ mode: "edit", data: i })}
                 onStatus={(status) => changeStatus(i.id, status)}
                 onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
               />
@@ -1774,6 +1782,7 @@ export function InfluencerBoard({
           onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
           onApplyChecklistToAll={(checklist) => applyChecklistToAll(checklist)}
           onComment={(text) => addComment(viewing.id, text)}
+          onPatch={(patch) => patchInflu(viewing.id, patch)}
         />
       )}
 
@@ -1831,14 +1840,12 @@ function InfluCard({
   influ,
   has,
   onView,
-  onEdit,
   onStatus,
   onRemove,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   onView: () => void;
-  onEdit: () => void;
   onStatus: (s: InfluStatus) => void;
   onRemove: () => void;
 }) {
@@ -1970,30 +1977,18 @@ function InfluCard({
         </dl>
       )}
 
-      <div className="flex items-center justify-between border-t border-border/60 px-4 py-2">
+      <div className="flex items-center justify-end border-t border-border/60 px-4 py-2">
         <button
           type="button"
           onClick={(e) => {
             stop(e);
-            onEdit();
+            onRemove();
           }}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground hover:opacity-80"
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Remover"
         >
-          <Pencil className="h-3.5 w-3.5" /> Editar
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={(e) => {
-              stop(e);
-              onRemove();
-            }}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Remover"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
       </div>
     </article>
   );
@@ -2337,6 +2332,7 @@ function InfluencerProfileDialog({
   onSetChecklist,
   onApplyChecklistToAll,
   onComment,
+  onPatch,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -2348,6 +2344,7 @@ function InfluencerProfileDialog({
   onSetAnexos: (entregaId: string, anexos: EntregaAnexo[]) => void;
   onSetStatus: (status: InfluStatus) => void;
   onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onPatch: (patch: Partial<Influ>) => void;
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
 }) {
@@ -2376,6 +2373,32 @@ function InfluencerProfileDialog({
 
   const hasExtras = has("pagamentos") || has("bancario") || has("contrato") || has("metricas");
 
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [draft, setDraft] = useState({
+    nome: influ.nome,
+    nicho: influ.nicho ?? "",
+    telefone: influ.telefone ?? "",
+    email: influ.email ?? "",
+  });
+  const startEditing = () => {
+    setDraft({
+      nome: influ.nome,
+      nicho: influ.nicho ?? "",
+      telefone: influ.telefone ?? "",
+      email: influ.email ?? "",
+    });
+    setEditingHeader(true);
+  };
+  const saveHeader = () => {
+    onPatch({
+      nome: draft.nome,
+      nicho: draft.nicho || undefined,
+      telefone: draft.telefone || undefined,
+      email: draft.email || undefined,
+    });
+    setEditingHeader(false);
+  };
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
@@ -2395,17 +2418,73 @@ function InfluencerProfileDialog({
               )}
             </div>
             <div className="min-w-0 flex-1 space-y-2 pt-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-lg font-semibold text-foreground">
-                  {influ.nome || "Sem nome"}
-                </p>
-                {influ.nicho && (
-                  <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
-                    {influ.nicho}
-                  </span>
-                )}
-                {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
-              </div>
+              {editingHeader ? (
+                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      value={draft.nome}
+                      onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
+                      placeholder="Nome"
+                      autoFocus
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.nicho}
+                      onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
+                      placeholder="Nicho"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.telefone}
+                      onChange={(e) => setDraft((d) => ({ ...d, telefone: e.target.value }))}
+                      placeholder="Telefone"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.email}
+                      onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                      placeholder="E-mail"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingHeader(false)}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveHeader}
+                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group/name flex flex-wrap items-center gap-2">
+                  <p className="truncate text-lg font-semibold text-foreground">
+                    {influ.nome || "Sem nome"}
+                  </p>
+                  {influ.nicho && (
+                    <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+                      {influ.nicho}
+                    </span>
+                  )}
+                  {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
+                    aria-label="Editar nome, nicho e contato"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 {has("redes") &&
                   influ.redes.map((r) => (
@@ -2418,7 +2497,7 @@ function InfluencerProfileDialog({
                       {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
                     </span>
                   ))}
-                {influ.telefone && (
+                {influ.telefone && !editingHeader && (
                   <a
                     href={`tel:${influ.telefone.replace(/\D/g, "")}`}
                     className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
@@ -2427,7 +2506,7 @@ function InfluencerProfileDialog({
                     {formatPhoneBR(influ.telefone)}
                   </a>
                 )}
-                {influ.email && (
+                {influ.email && !editingHeader && (
                   <a
                     href={`mailto:${influ.email}`}
                     className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
@@ -2806,9 +2885,9 @@ function InfluencerProfileDialog({
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
-            <Pencil className="h-3.5 w-3.5" /> Editar
+            <Pencil className="h-3.5 w-3.5" /> Redes, métricas, financeiro e contrato
           </button>
         </DialogFooter>
       </DialogContent>
@@ -4033,9 +4112,10 @@ function EntregaAnexosEditor({
         }}
       />
 
-      {/* Um botão visual por categoria, em vez de um menu genérico — dá
-          pra ver de cara o que já tem roteiro/gravação/conteúdo anexado. */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+      {/* Um box tracejado com "+" por categoria, em vez de um menu genérico
+          — dá pra ver de cara o que já tem roteiro/gravação/conteúdo
+          anexado, e onde clicar pra subir cada tipo de arquivo. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {ENTREGA_ANEXO_CATEGORIAS.map((c) => {
           const Icon = ENTREGA_ANEXO_ICON[c];
           const count = anexos.filter((a) => a.categoria === c).length;
@@ -4046,21 +4126,28 @@ function EntregaAnexosEditor({
               type="button"
               disabled={uploading !== null}
               onClick={() => pick(c)}
-              className={`flex flex-col items-center gap-1 rounded-lg border border-dashed px-2 py-2.5 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`group relative flex h-24 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                 count > 0
-                  ? "border-border bg-muted/30 hover:border-foreground/30"
-                  : "border-border hover:border-foreground/30 hover:bg-muted/20"
+                  ? "border-border bg-muted/20 hover:border-foreground/40 hover:bg-muted/30"
+                  : "border-border hover:border-foreground/40 hover:bg-muted/20"
               }`}
             >
-              {isUploadingThis ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <Icon className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="text-[10px] font-medium leading-tight text-foreground">{c}</span>
               {count > 0 && (
-                <span className="text-[10px] tabular-nums text-muted-foreground">{count}</span>
+                <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
+                  {count}
+                </span>
               )}
+              {isUploadingThis ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="relative">
+                  <Icon className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-foreground" />
+                  <span className="absolute -bottom-1 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-foreground text-background">
+                    <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+                  </span>
+                </div>
+              )}
+              <span className="text-[11px] font-medium leading-tight text-foreground">{c}</span>
             </button>
           );
         })}
