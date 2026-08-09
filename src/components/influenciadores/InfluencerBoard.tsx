@@ -12,7 +12,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import StepIndicator from "@/components/StepIndicator";
 import {
   AlertTriangle,
   AtSign,
@@ -2118,16 +2117,11 @@ function EntregaStatusPill({
  * ============================================================ */
 
 /**
- * Etapas do wizard — agrupadas por tema em vez de um passo por campo
- * configurável: "perfil" cobre identificação + redes sociais, "financeiro"
- * cobre pagamentos + dados bancários, "contrato" cobre contrato + status do
- * fluxo. Cada etapa some inteira se nenhum dos campos que ela reúne estiver
- * habilitado (via `has`), e dentro dela cada bloco também só aparece se seu
- * campo individual estiver habilitado — mantém a mesma configuração por
- * campanha/projeto de antes, só com menos cliques pra navegar.
+ * Diálogo único de perfil/edição — todas as seções (perfil, métricas,
+ * entregas, financeiro, contrato, atividade) empilhadas numa página só,
+ * rolável, cada uma só aparecendo se o campo correspondente estiver
+ * habilitado (via `has`) — sem etapas/abas, tudo visível de cara.
  */
-type StepKey = "perfil" | "metricas" | "entregas" | "financeiro" | "contrato" | "atividade";
-
 function InfluenciadorDialog({
   open,
   onOpenChange,
@@ -2181,7 +2175,6 @@ function InfluenciadorDialog({
   const [contratoNome, setContratoNome] = useState<string>("");
   const [status, setStatus] = useState<InfluStatus>("Lista");
   const [bank, setBank] = useState<BankInfo>({});
-  const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
   const contratoRef = useRef<HTMLInputElement>(null);
@@ -2194,22 +2187,8 @@ function InfluenciadorDialog({
   const liveActivity = live?.activity ?? initial?.activity ?? [];
   const liveComments = live?.comments ?? initial?.comments ?? [];
 
-  const steps = useMemo(() => {
-    const s: { key: StepKey; label: string; icon: typeof User }[] = [
-      { key: "perfil", label: "Perfil", icon: User },
-    ];
-    if (has("metricas")) s.push({ key: "metricas", label: "Métricas", icon: BarChart3 });
-    if (has("entregas")) s.push({ key: "entregas", label: "Entregas", icon: Package });
-    if (has("pagamentos") || has("bancario"))
-      s.push({ key: "financeiro", label: "Financeiro", icon: Coins });
-    if (has("contrato")) s.push({ key: "contrato", label: "Contrato", icon: FileText });
-    if (initial) s.push({ key: "atividade", label: "Atividade", icon: MessageSquare });
-    return s;
-  }, [has, initial]);
-
   useEffect(() => {
     if (!open) return;
-    setStep(0);
     setSaving(false);
     setCommentText("");
     setExpandedEntregas(new Set());
@@ -2270,15 +2249,12 @@ function InfluenciadorDialog({
     });
   };
 
-  const current = steps[step]?.key ?? "perfil";
-  const canReach = nome.trim().length > 0;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
         <div className="border-b border-border px-6 py-4">
           {initial ? (
-            <div className="mb-3 flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
                 {foto ? (
                   <img src={foto} alt="" className="h-full w-full object-cover" />
@@ -2296,179 +2272,171 @@ function InfluenciadorDialog({
               </div>
             </div>
           ) : (
-            <DialogTitle className="mb-3 text-base font-semibold">Novo influenciador</DialogTitle>
+            <DialogTitle className="text-base font-semibold">Novo influenciador</DialogTitle>
           )}
           <DialogDescription className="sr-only">
-            Etapa {step + 1} de {steps.length} · {steps[step]?.label}
+            {initial ? `Editar perfil de ${initial.nome}` : "Cadastrar novo influenciador"}
           </DialogDescription>
-
-          <StepIndicator
-            steps={steps}
-            currentStep={step}
-            isReachable={() => canReach}
-            onStepClick={setStep}
-          />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-          {current === "perfil" && (
-            <div className="space-y-5">
-              <FieldLabel title="Foto e nome" hint="Comece pela identificação do influenciador." />
-              <div className="flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => fotoRef.current?.click()}
-                  className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-all hover:ring-foreground/30"
-                  aria-label="Alterar foto"
-                >
-                  {foto ? (
-                    <>
-                      <img src={foto} alt="" className="h-full w-full object-cover" />
-                      <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
-                        <Camera className="h-5 w-5" />
-                      </span>
-                    </>
-                  ) : (
-                    <Camera className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
-                  )}
-                </button>
-                <input
-                  ref={fotoRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => readFile(e.target.files?.[0], (d) => setFoto(d))}
-                />
-                <button
-                  type="button"
-                  onClick={() => fotoRef.current?.click()}
-                  className="text-xs font-medium text-muted-foreground hover:text-foreground"
-                >
-                  {foto ? "Trocar foto" : "Adicionar foto"}
-                </button>
-              </div>
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
+          {/* Tudo numa página só, rolável — antes tinha etapas separadas por
+              clique, mas isso escondia justamente o que era mais útil de ver
+              de cara (entregas, atividade/comentários) atrás de navegação. */}
+          <section className="space-y-5">
+            <FieldLabel title="Foto e nome" hint="Comece pela identificação do influenciador." />
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fotoRef.current?.click()}
+                className="group relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border transition-all hover:ring-foreground/30"
+                aria-label="Alterar foto"
+              >
+                {foto ? (
+                  <>
+                    <img src={foto} alt="" className="h-full w-full object-cover" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
+                      <Camera className="h-5 w-5" />
+                    </span>
+                  </>
+                ) : (
+                  <Camera className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
+                )}
+              </button>
+              <input
+                ref={fotoRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => readFile(e.target.files?.[0], (d) => setFoto(d))}
+              />
+              <button
+                type="button"
+                onClick={() => fotoRef.current?.click()}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {foto ? "Trocar foto" : "Adicionar foto"}
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+                Nome
+              </label>
+              <input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome completo ou @handle"
+                autoFocus
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
+                Nicho
+              </label>
+              <select
+                value={nicho}
+                onChange={(e) => setNicho(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Selecione um nicho</option>
+                {NICHOS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-                  Nome
+                  Telefone
                 </label>
                 <input
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Nome completo ou @handle"
-                  autoFocus
+                  value={telefone}
+                  onChange={(e) => setTelefone(formatPhoneBR(e.target.value))}
+                  placeholder="(00) 00000-0000"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-                  Nicho
+                  E-mail
                 </label>
-                <select
-                  value={nicho}
-                  onChange={(e) => setNicho(e.target.value)}
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">Selecione um nicho</option>
-                  {NICHOS.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-                    Telefone
-                  </label>
-                  <input
-                    value={telefone}
-                    onChange={(e) => setTelefone(formatPhoneBR(e.target.value))}
-                    placeholder="(00) 00000-0000"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-                    E-mail
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="email@exemplo.com"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              </div>
+            </div>
 
-              {has("redes") && (
-                <div className="space-y-4 border-t border-border pt-5">
-                  <FieldLabel
-                    title="Redes sociais"
-                    hint="Selecione as plataformas e adicione o handle. Seguidores e demais métricas ficam na etapa Métricas."
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {REDES_OPTS.map((p) => {
-                      const active = redes.some((r) => r.plataforma === p);
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() =>
+            {has("redes") && (
+              <div className="space-y-4 border-t border-border pt-5">
+                <FieldLabel
+                  title="Redes sociais"
+                  hint="Selecione as plataformas e adicione o handle. Seguidores e demais métricas ficam na etapa Métricas."
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {REDES_OPTS.map((p) => {
+                    const active = redes.some((r) => r.plataforma === p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() =>
+                          setRedes((rs) =>
+                            active
+                              ? rs.filter((r) => r.plataforma !== p)
+                              : [...rs, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
+                          )
+                        }
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          active
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border bg-background text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+                {redes.length === 0 ? (
+                  <EmptyHint text="Nenhuma rede selecionada." />
+                ) : (
+                  <div className="space-y-2">
+                    {redes.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
+                      >
+                        <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
+                          {r.plataforma}
+                        </span>
+                        <span className="text-sm text-muted-foreground">@</span>
+                        <input
+                          value={r.handle}
+                          onChange={(e) =>
                             setRedes((rs) =>
-                              active
-                                ? rs.filter((r) => r.plataforma !== p)
-                                : [...rs, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
+                              rs.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)),
                             )
                           }
-                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                            active
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border bg-background text-foreground hover:bg-muted"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      );
-                    })}
+                          placeholder="usuario"
+                          className="flex-1 bg-transparent text-sm outline-none"
+                        />
+                      </div>
+                    ))}
                   </div>
-                  {redes.length === 0 ? (
-                    <EmptyHint text="Nenhuma rede selecionada." />
-                  ) : (
-                    <div className="space-y-2">
-                      {redes.map((r) => (
-                        <div
-                          key={r.id}
-                          className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
-                        >
-                          <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
-                            {r.plataforma}
-                          </span>
-                          <span className="text-sm text-muted-foreground">@</span>
-                          <input
-                            value={r.handle}
-                            onChange={(e) =>
-                              setRedes((rs) =>
-                                rs.map((x) =>
-                                  x.id === r.id ? { ...x, handle: e.target.value } : x,
-                                ),
-                              )
-                            }
-                            placeholder="usuario"
-                            className="flex-1 bg-transparent text-sm outline-none"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </section>
 
-          {current === "metricas" && (
-            <div className="space-y-3">
+          {has("metricas") && (
+            <section className="space-y-3 border-t border-border pt-6">
               <FieldLabel
                 title="Métricas do perfil"
                 hint="Métricas por rede social — vindas dos insights nativos de cada plataforma, não de uma entrega específica."
@@ -2479,14 +2447,14 @@ function InfluenciadorDialog({
                 value={profileMetrics}
                 onChange={setProfileMetrics}
               />
-            </div>
+            </section>
           )}
 
-          {current === "entregas" && (
-            <div className="space-y-3">
+          {has("entregas") && (
+            <section className="space-y-3 border-t border-border pt-6">
               <FieldLabel
                 title="Entregas"
-                hint="Combine o formato e a quantidade. O status individual de cada entrega (etapa de produção) fica na tela de resumo do influenciador."
+                hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
               />
               {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
               <div className="space-y-2">
@@ -2667,11 +2635,11 @@ function InfluenciadorDialog({
               >
                 <Plus className="h-3.5 w-3.5" /> Adicionar entrega
               </button>
-            </div>
+            </section>
           )}
 
-          {current === "financeiro" && (
-            <div className="space-y-6">
+          {(has("pagamentos") || has("bancario")) && (
+            <section className="space-y-6 border-t border-border pt-6">
               {has("pagamentos") && (
                 <div className="space-y-3">
                   <FieldLabel
@@ -2713,70 +2681,66 @@ function InfluenciadorDialog({
                   <BankFields value={bank} onChange={setBank} />
                 </div>
               )}
-            </div>
+            </section>
           )}
 
-          {current === "contrato" && (
-            <div className="space-y-6">
-              {has("contrato") && (
-                <div className="space-y-3">
-                  <FieldLabel title="Contrato assinado" hint="Anexe PDF, imagem ou documento." />
-                  <input
-                    ref={contratoRef}
-                    type="file"
-                    className="hidden"
-                    onChange={(e) =>
-                      readFile(e.target.files?.[0], (d, n) => {
-                        setContrato(d);
-                        setContratoNome(n);
-                      })
-                    }
-                  />
-                  {contrato ? (
-                    <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{contratoNome || "Contrato"}</p>
-                        <p className="text-xs text-muted-foreground">Anexado</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => contratoRef.current?.click()}
-                        className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
-                      >
-                        Substituir
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setContrato(undefined);
-                          setContratoNome("");
-                        }}
-                        className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-label="Remover"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => contratoRef.current?.click()}
-                      className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-10 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                    >
-                      <Upload className="h-5 w-5" />
-                      <span>Clique para anexar o contrato</span>
-                    </button>
-                  )}
+          {has("contrato") && (
+            <section className="space-y-3 border-t border-border pt-6">
+              <FieldLabel title="Contrato assinado" hint="Anexe PDF, imagem ou documento." />
+              <input
+                ref={contratoRef}
+                type="file"
+                className="hidden"
+                onChange={(e) =>
+                  readFile(e.target.files?.[0], (d, n) => {
+                    setContrato(d);
+                    setContratoNome(n);
+                  })
+                }
+              />
+              {contrato ? (
+                <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{contratoNome || "Contrato"}</p>
+                    <p className="text-xs text-muted-foreground">Anexado</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => contratoRef.current?.click()}
+                    className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
+                  >
+                    Substituir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContrato(undefined);
+                      setContratoNome("");
+                    }}
+                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Remover"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => contratoRef.current?.click()}
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-10 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                >
+                  <Upload className="h-5 w-5" />
+                  <span>Clique para anexar o contrato</span>
+                </button>
               )}
-            </div>
+            </section>
           )}
 
-          {current === "atividade" && initial && (
-            <div className="space-y-4">
+          {initial && (
+            <section className="space-y-4 border-t border-border pt-6">
               <FieldLabel
                 title="Checklist"
                 hint="Itens livres de acompanhamento — salvam na hora, sem precisar do botão Salvar."
@@ -2880,7 +2844,7 @@ function InfluenciadorDialog({
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           )}
         </div>
 
