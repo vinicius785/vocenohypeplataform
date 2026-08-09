@@ -1260,9 +1260,8 @@ export function InfluencerBoard({
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
 
-  const [influDialog, setInfluDialog] = useState<{ mode: "new" | "edit"; data?: Influ } | null>(
-    null,
-  );
+  const [creating, setCreating] = useState(false);
+  const [viewing, setViewing] = useState<Influ | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "kanban">("lista");
@@ -1331,33 +1330,76 @@ export function InfluencerBoard({
         : x,
     );
     onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
-  const save = (i: Influ) => {
+  // `InfluenciadorDialog` só cria (editar um influenciador existente abre o
+  // perfil via `viewing`, que salva imediato campo a campo).
+  const create = (i: Influ) => {
     const now = new Date().toISOString();
-    if (influDialog?.mode === "edit") {
-      const existing = influs.find((x) => x.id === i.id);
-      // O wizard só conhece os campos que ele mesmo edita — merge com
-      // `existing` primeiro (e `i` por cima) preserva comentários, atividade
-      // e checklist, que o formulário não tem como carregar/reenviar. Antes
-      // `i` sozinho substituía a linha inteira e apagava tudo isso ao editar.
-      const withStamps = {
-        ...existing,
-        ...i,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-      };
-      onChange(influs.map((x) => (x.id === i.id ? withStamps : x)));
-      syncToBanco(withStamps);
-    } else {
-      const withStamps = { ...i, createdAt: now, updatedAt: now };
-      onChange([...influs, withStamps]);
-      syncToBanco(withStamps);
-    }
+    const withStamps = { ...i, createdAt: now, updatedAt: now };
+    onChange([...influs, withStamps]);
+    syncToBanco(withStamps);
+  };
+
+  // Edição imediata de qualquer campo pelo perfil (nome, nicho, contato,
+  // redes, métricas, financeiro, contrato, entregas) — sem rascunho, sem
+  // segundo diálogo: cada mudança já salva na hora.
+  const patchInflu = (influId: string, patch: Partial<Influ>) => {
+    const next = influs.map((x) => (x.id === influId ? { ...x, ...patch } : x));
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
+  const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
+    const next = influs.map((x) =>
+      x.id === influId
+        ? pushActivity({ ...x, status, statusUpdatedAt: todayISO() }, `mudou status para ${status}`)
+        : x,
+    );
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
+  // Igual ao transicionamento genérico do `EntregasEditor`, mas também
+  // registra na Atividade — só faz sentido pra um influenciador que já
+  // existe (por isso fica aqui, e não dentro do editor compartilhado).
+  const setConteudoStatusFromResumo = (
+    influId: string,
+    entregaId: string,
+    conteudoStatus: EntregaConteudoStatus,
+  ) => {
+    const next = influs.map((x) => {
+      if (x.id !== influId) return x;
+      const entrega = x.entregas.find((e) => e.id === entregaId);
+      if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
+      if (conteudoStatus === "Postado" && !canPublishEntrega(x.status)) return x;
+      const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+      return pushActivity(
+        {
+          ...x,
+          entregas: x.entregas.map((e) =>
+            e.id === entregaId
+              ? {
+                  ...e,
+                  conteudoStatus,
+                  status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+                  publicadoEm:
+                    conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+                }
+              : e,
+          ),
+        },
+        `mudou status de "${label}" para ${conteudoStatus}`,
+      );
+    });
+    onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const setInfluChecklist = (influId: string, checklist: ChecklistItem[]) => {
     onChange(influs.map((x) => (x.id === influId ? { ...x, checklist } : x)));
+    setViewing((v) => (v?.id === influId ? { ...v, checklist } : v));
   };
 
   // Copia os itens (textos) da checklist de um influ pros demais da
@@ -1376,6 +1418,7 @@ export function InfluencerBoard({
       };
     });
     onChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const sortedInflus = useMemo(() => {
@@ -1528,7 +1571,7 @@ export function InfluencerBoard({
                 <button
                   type="button"
                   onClick={() => {
-                    setInfluDialog({ mode: "new" });
+                    setCreating(true);
                     novoMenu.setOpen(false);
                   }}
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
@@ -1554,7 +1597,7 @@ export function InfluencerBoard({
       {influs.length === 0 ? (
         <button
           type="button"
-          onClick={() => setInfluDialog({ mode: "new" })}
+          onClick={() => setCreating(true)}
           className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-12 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30"
         >
           <Plus className="h-5 w-5" />
@@ -1590,7 +1633,7 @@ export function InfluencerBoard({
                       <InfluCard
                         influ={i}
                         has={has}
-                        onView={() => setInfluDialog({ mode: "edit", data: i })}
+                        onView={() => setViewing(i)}
                         onStatus={(status) => changeStatus(i.id, status)}
                         onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
                       />
@@ -1617,7 +1660,7 @@ export function InfluencerBoard({
                 key={i.id}
                 influ={i}
                 has={has}
-                onView={() => setInfluDialog({ mode: "edit", data: i })}
+                onView={() => setViewing(i)}
                 onStatus={(status) => changeStatus(i.id, status)}
                 onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
               />
@@ -1643,29 +1686,36 @@ export function InfluencerBoard({
       )}
 
       <InfluenciadorDialog
-        open={!!influDialog}
-        onOpenChange={(o) => !o && setInfluDialog(null)}
-        initial={influDialog?.data}
-        live={
-          influDialog?.data ? (influs.find((x) => x.id === influDialog.data!.id) ?? null) : null
-        }
+        open={creating}
+        onOpenChange={setCreating}
         has={has}
         pagGrupos={pagGrupos}
         onSave={(i) => {
-          save(i);
-          setInfluDialog(null);
+          create(i);
+          setCreating(false);
         }}
-        onDelete={() => {
-          if (!influDialog?.data) return;
-          onChange(influs.filter((x) => x.id !== influDialog.data!.id));
-          setInfluDialog(null);
-        }}
-        onSetChecklist={(checklist) =>
-          influDialog?.data && setInfluChecklist(influDialog.data.id, checklist)
-        }
-        onApplyChecklistToAll={applyChecklistToAll}
-        onComment={(text) => influDialog?.data && addComment(influDialog.data.id, text)}
       />
+
+      {viewing && (
+        <InfluencerProfileDialog
+          influ={viewing}
+          has={has}
+          onOpenChange={(o) => !o && setViewing(null)}
+          onRemove={() => {
+            onChange(influs.filter((x) => x.id !== viewing.id));
+            setViewing(null);
+          }}
+          onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
+          onSetConteudoStatus={(entregaId, status) =>
+            setConteudoStatusFromResumo(viewing.id, entregaId, status)
+          }
+          onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
+          onApplyChecklistToAll={applyChecklistToAll}
+          onComment={(text) => addComment(viewing.id, text)}
+          onPatch={(patch) => patchInflu(viewing.id, patch)}
+          pagGrupos={pagGrupos}
+        />
+      )}
 
       <DownloadInflusDialog
         open={downloadOpen}
@@ -1882,12 +1932,6 @@ function MetricStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-/* ============================================================
- * Profile — read-only view opened by clicking a card. Everything
- * collected for this influencer, organized by section with icons;
- * "Editar" jumps into the same wizard used to create/edit.
- * ============================================================ */
 
 /** Checklist livre por influenciador — escreve o que quiser, marca feito, e
  * pode aplicar a mesma lista (desmarcada) a todos os outros influs de uma
@@ -2112,45 +2156,922 @@ function EntregaStatusPill({
   );
 }
 
+/** Lista de entregas editável — composição (tipo/quantidade/datas/anexos/
+ * pagamento/publicação) sempre num `onChange(next)` só, pra poder ser usada
+ * tanto com estado local (criação, ainda sem id) quanto com salvamento
+ * imediato (edição de um influenciador já existente, via `onPatch`).
+ * `onStatusChange`, se passado, é chamado pro pill de etapa em vez do
+ * transicionamento genérico — usado só na edição, pra registrar a mudança
+ * na Atividade (na criação ainda não há o que logar). */
+function EntregasEditor({
+  entregas,
+  onChange,
+  influStatus,
+  pagGrupos,
+  onStatusChange,
+}: {
+  entregas: Entrega[];
+  onChange: (next: Entrega[]) => void;
+  influStatus: InfluStatus;
+  pagGrupos?: PagGrupo[];
+  onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  return (
+    <div className="space-y-3">
+      <FieldLabel
+        title="Entregas"
+        hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
+      />
+      {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
+      <div className="space-y-2">
+        {entregas.map((e) => {
+          const update = (patch: Partial<Entrega>) =>
+            onChange(entregas.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
+          // "Postado" vira status "publicado" (libera link/métricas no
+          // Financeiro), qualquer outra etapa volta a "combinado".
+          const setEtapaGenerico = (conteudoStatus: EntregaConteudoStatus) => {
+            if (conteudoStatus === "Postado" && !canPublishEntrega(influStatus)) return;
+            update({
+              conteudoStatus,
+              status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+              publicadoEm:
+                conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+            });
+          };
+          const published = e.conteudoStatus === "Postado";
+          const isExpanded = expanded.has(e.id);
+          const resumoBits = [
+            e.dataPostagem && new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR"),
+            e.pagamento && pagamentoResumo(e.pagamento),
+            (e.anexos?.length ?? 0) > 0 &&
+              `${e.anexos!.length} anexo${e.anexos!.length === 1 ? "" : "s"}`,
+          ].filter(Boolean);
+          return (
+            <div key={e.id} className="rounded-lg border border-border bg-background">
+              {/* Cabeçalho sempre visível: formato + quantidade + resumo compacto.
+                  Detalhes (data, anexos, pagamento, publicação) só aparecem expandidos —
+                  com 3+ entregas, tudo sempre aberto virava uma parede de campos. */}
+              <div className="flex items-center gap-2 p-2.5">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(e.id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  />
+                  <input
+                    list="entregas-tipos"
+                    value={e.tipo}
+                    onClick={(ev) => ev.stopPropagation()}
+                    onChange={(ev) => update({ tipo: ev.target.value })}
+                    placeholder="Reels, Stories..."
+                    className="w-28 shrink-0 rounded-md bg-transparent px-1 py-1 text-sm font-medium outline-none"
+                  />
+                  {!isExpanded && resumoBits.length > 0 && (
+                    <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                      {resumoBits.join(" · ")}
+                    </span>
+                  )}
+                </button>
+                <div
+                  className="flex shrink-0 items-center rounded-md bg-muted"
+                  onClick={(ev) => ev.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => update({ quantidade: Math.max(1, e.quantidade - 1) })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    −
+                  </button>
+                  <span className="w-7 text-center text-sm font-medium tabular-nums">
+                    {e.quantidade}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => update({ quantidade: e.quantidade + 1 })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    +
+                  </button>
+                </div>
+                {e.conteudoStatus && (
+                  <EntregaStatusPill
+                    value={e.conteudoStatus}
+                    influStatus={influStatus}
+                    onChange={(s) =>
+                      onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(s)
+                    }
+                  />
+                )}
+                <RemoveBtn onClick={() => onChange(entregas.filter((x) => x.id !== e.id))} />
+              </div>
+
+              {isExpanded && (
+                <div className="space-y-3 border-t border-border p-3">
+                  <div className="space-y-1.5">
+                    <EntregaDateField
+                      label="Recebimento do roteiro"
+                      value={e.dataRecebimentoRoteiro}
+                      onChange={(v) => update({ dataRecebimentoRoteiro: v })}
+                    />
+                    <EntregaDateField
+                      label="Recebimento do conteúdo"
+                      value={e.dataRecebimentoConteudo}
+                      onChange={(v) => update({ dataRecebimentoConteudo: v })}
+                    />
+                    <EntregaDateField
+                      label="Postagem"
+                      value={e.dataPostagem}
+                      onChange={(v) => update({ dataPostagem: v })}
+                    />
+                  </div>
+
+                  <EntregaAnexosEditor
+                    anexos={e.anexos ?? []}
+                    onChange={(anexos) => {
+                      // Anexar o roteiro enquanto a entrega ainda está "Aguardando
+                      // roteiro" já avança pra "Aguardando aprovação de roteiro" —
+                      // é o gatilho que manda o roteiro pro link público do
+                      // cliente, sem precisar de um segundo clique pra mudar o
+                      // status à mão.
+                      const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
+                      const conteudoStatus =
+                        ganhouRoteiro && e.conteudoStatus === "Aguardando roteiro"
+                          ? "Aguardando aprovação de roteiro"
+                          : e.conteudoStatus;
+                      update({ anexos, conteudoStatus });
+                    }}
+                  />
+
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      Pagamento combinado
+                    </p>
+                    <PagamentoEditor
+                      value={e.pagamento}
+                      onChange={(pagamento) => update({ pagamento })}
+                      pagGrupos={pagGrupos}
+                    />
+                  </div>
+
+                  {published && (
+                    <div className="space-y-2 border-t border-border pt-2.5">
+                      <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
+                      <input
+                        value={e.url ?? ""}
+                        onChange={(ev) => update({ url: ev.target.value })}
+                        placeholder="Link do conteúdo publicado"
+                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <div>
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+                          Métricas
+                        </p>
+                        <MetricsEditor value={e.metrics} onChange={(m) => update({ metrics: m })} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <datalist id="entregas-tipos">
+        {ENTREGAS_OPTS.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+      <button
+        type="button"
+        onClick={() => {
+          const id = crypto.randomUUID();
+          onChange([
+            ...entregas,
+            { id, tipo: "Reels", quantidade: 1, status: "combinado", conteudoStatus: "Combinado" },
+          ]);
+          setExpanded((s) => new Set(s).add(id));
+        }}
+        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+      >
+        <Plus className="h-3.5 w-3.5" /> Adicionar entrega
+      </button>
+    </div>
+  );
+}
+
+/** Editor de redes sociais — mesmos toggles de plataforma + handle usados
+ * na criação, reaproveitados aqui pra edição imediata de um influenciador
+ * já existente. */
+function RedesEditor({ redes, onChange }: { redes: Rede[]; onChange: (next: Rede[]) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {REDES_OPTS.map((p) => {
+          const active = redes.some((r) => r.plataforma === p);
+          return (
+            <button
+              key={p}
+              type="button"
+              onClick={() =>
+                onChange(
+                  active
+                    ? redes.filter((r) => r.plataforma !== p)
+                    : [...redes, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
+                )
+              }
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                active
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              }`}
+            >
+              {p}
+            </button>
+          );
+        })}
+      </div>
+      {redes.length === 0 ? (
+        <EmptyHint text="Nenhuma rede selecionada." />
+      ) : (
+        <div className="space-y-2">
+          {redes.map((r) => (
+            <div
+              key={r.id}
+              className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
+            >
+              <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
+                {r.plataforma}
+              </span>
+              <span className="text-sm text-muted-foreground">@</span>
+              <input
+                value={r.handle}
+                onChange={(e) =>
+                  onChange(redes.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)))
+                }
+                placeholder="usuario"
+                className="flex-1 bg-transparent text-sm outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Editor de contrato — anexar/substituir/remover, mesmo padrão de upload
+ * (base64) usado na criação, reaproveitado aqui pra edição imediata. */
+function ContratoEditor({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (contrato: string | undefined) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-2">
+      <input
+        ref={ref}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const r = new FileReader();
+          r.onload = () => onChange(String(r.result));
+          r.readAsDataURL(file);
+        }}
+      />
+      {value ? (
+        <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="min-w-0 flex-1 truncate text-xs font-medium">Contrato anexado</p>
+          <button
+            type="button"
+            onClick={() => ref.current?.click()}
+            className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
+          >
+            Substituir
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Remover"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => ref.current?.click()}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-4 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+        >
+          <Upload className="h-4 w-4" /> Anexar contrato
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Botões lado a lado (Métricas, Redes, Pagamentos, Dados bancários,
+ * Contrato) — nenhum aberto por padrão; clicar num abre o painel dele logo
+ * abaixo (e fecha automaticamente se outro for aberto). São os campos mais
+ * raros de mexer — ficam ao alcance de um clique, sem precisar de um
+ * segundo diálogo pra editar. */
+function HiddenSectionsPanel({
+  sections,
+}: {
+  sections: { key: string; icon: React.ReactNode; title: string; content: React.ReactNode }[];
+}) {
+  const [active, setActive] = useState<string | null>(null);
+  const activeSection = sections.find((s) => s.key === active);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {sections.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setActive((a) => (a === s.key ? null : s.key))}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              active === s.key
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {s.icon}
+            {s.title}
+          </button>
+        ))}
+      </div>
+      {activeSection && (
+        <div className="rounded-lg border border-border bg-background p-3">
+          {activeSection.content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Popup de anexos de uma entrega — usado nos cards de linha do tempo do
+ * resumo (visualização compacta, sem precisar expandir o card inteiro só
+ * pra anexar um arquivo). */
+function EntregaAnexosPopup({
+  entregaLabel,
+  anexos,
+  onChange,
+}: {
+  entregaLabel: string;
+  anexos: EntregaAnexo[];
+  onChange: (next: EntregaAnexo[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+      >
+        <Paperclip className="h-3 w-3" /> Anexos{anexos.length > 0 ? ` (${anexos.length})` : ""}
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm border-border bg-background">
+          <DialogTitle className="text-sm font-semibold">Anexos · {entregaLabel}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Anexos da entrega: visualize, adicione ou remova arquivos.
+          </DialogDescription>
+          <EntregaAnexosEditor anexos={anexos} onChange={onChange} />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /* ============================================================
- * Create / edit dialog — steps adapt to `allowedFields`.
+ * Perfil do influenciador — diálogo único de visualização + edição.
+ * Tudo salva imediato (sem botão "Salvar"): cabeçalho e entregas ficam
+ * sempre visíveis; redes, métricas do perfil, financeiro e contrato ficam
+ * num painel de um clique (HiddenSectionsPanel), mas editáveis ali mesmo —
+ * nunca abrem um segundo diálogo.
  * ============================================================ */
 
-/**
- * Diálogo único de perfil/edição — todas as seções (perfil, métricas,
- * entregas, financeiro, contrato, atividade) empilhadas numa página só,
- * rolável, cada uma só aparecendo se o campo correspondente estiver
- * habilitado (via `has`) — sem etapas/abas, tudo visível de cara.
- */
-function InfluenciadorDialog({
-  open,
-  onOpenChange,
-  initial,
-  live,
+function InfluencerProfileDialog({
+  influ,
   has,
-  onSave,
-  onDelete,
+  onOpenChange,
+  onRemove,
+  onSetStatus,
+  onSetConteudoStatus,
   onSetChecklist,
   onApplyChecklistToAll,
   onComment,
+  onPatch,
+  pagGrupos,
+}: {
+  influ: Influ;
+  has: (k: InfluencerFieldKey) => boolean;
+  onOpenChange: (open: boolean) => void;
+  onRemove: () => void;
+  onSetStatus: (status: InfluStatus) => void;
+  onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
+  onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
+  onComment: (text: string) => void;
+  onPatch: (patch: Partial<Influ>) => void;
+  pagGrupos?: PagGrupo[];
+}) {
+  const [commentText, setCommentText] = useState("");
+  const bank = influ.bank ?? {};
+
+  const metricsTotal = influ.entregas.reduce(
+    (acc, e) => {
+      acc.views += e.metrics?.views ?? 0;
+      acc.likes += e.metrics?.likes ?? 0;
+      acc.comments += e.metrics?.comments ?? 0;
+      acc.shares += e.metrics?.shares ?? 0;
+      acc.saves += e.metrics?.saves ?? 0;
+      acc.reach += e.metrics?.reach ?? 0;
+      return acc;
+    },
+    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, reach: 0 },
+  );
+  const hasMetrics = Object.values(metricsTotal).some((v) => v > 0);
+  const reliability = computeReliability(influ.entregas);
+
+  const hasExtras =
+    has("redes") || has("metricas") || has("pagamentos") || has("bancario") || has("contrato");
+
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [draft, setDraft] = useState({
+    nome: influ.nome,
+    nicho: influ.nicho ?? "",
+    telefone: influ.telefone ?? "",
+    email: influ.email ?? "",
+  });
+  const startEditing = () => {
+    setDraft({
+      nome: influ.nome,
+      nicho: influ.nicho ?? "",
+      telefone: influ.telefone ?? "",
+      email: influ.email ?? "",
+    });
+    setEditingHeader(true);
+  };
+  const saveHeader = () => {
+    onPatch({
+      nome: draft.nome,
+      nicho: draft.nicho || undefined,
+      telefone: draft.telefone || undefined,
+      email: draft.email || undefined,
+    });
+    setEditingHeader(false);
+  };
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
+        <DialogDescription className="sr-only">
+          Informações completas do influenciador.
+        </DialogDescription>
+
+        {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
+        <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
+          <div className="flex items-start gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
+              {influ.foto ? (
+                <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
+              )}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2 pt-1">
+              {editingHeader ? (
+                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      value={draft.nome}
+                      onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
+                      placeholder="Nome"
+                      autoFocus
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.nicho}
+                      onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
+                      placeholder="Nicho"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.telefone}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, telefone: formatPhoneBR(e.target.value) }))
+                      }
+                      placeholder="Telefone"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <input
+                      value={draft.email}
+                      onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                      placeholder="E-mail"
+                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingHeader(false)}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveHeader}
+                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group/name flex flex-wrap items-center gap-2">
+                  <p className="truncate text-lg font-semibold text-foreground">
+                    {influ.nome || "Sem nome"}
+                  </p>
+                  {influ.nicho && (
+                    <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+                      {influ.nicho}
+                    </span>
+                  )}
+                  {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
+                    aria-label="Editar nome, nicho e contato"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {has("redes") &&
+                  influ.redes.map((r) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm"
+                    >
+                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                      {r.handle ? `@${r.handle}` : r.plataforma}
+                      {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
+                    </span>
+                  ))}
+                {influ.telefone && !editingHeader && (
+                  <a
+                    href={`tel:${influ.telefone.replace(/\D/g, "")}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                    {formatPhoneBR(influ.telefone)}
+                  </a>
+                )}
+                {influ.email && !editingHeader && (
+                  <a
+                    href={`mailto:${influ.email}`}
+                    className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
+                  >
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{influ.email}</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
+          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
+            {has("entregas") && (
+              <EntregasEditor
+                entregas={influ.entregas}
+                onChange={(next) => onPatch({ entregas: next })}
+                influStatus={influ.status}
+                pagGrupos={pagGrupos}
+                onStatusChange={onSetConteudoStatus}
+              />
+            )}
+
+            <ChecklistSection
+              checklist={influ.checklist ?? []}
+              onChange={onSetChecklist}
+              onApplyToAll={onApplyChecklistToAll}
+            />
+
+            {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, editáveis ali mesmo,
+                sem precisar de um segundo diálogo. */}
+            <HiddenSectionsPanel
+              sections={[
+                ...(has("redes")
+                  ? [
+                      {
+                        key: "redes",
+                        icon: <AtSign className="h-3.5 w-3.5" />,
+                        title: "Redes sociais",
+                        content: (
+                          <RedesEditor
+                            redes={influ.redes}
+                            onChange={(redes) => onPatch({ redes })}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("metricas")
+                  ? [
+                      {
+                        key: "metricas-perfil",
+                        icon: <BarChart3 className="h-3.5 w-3.5" />,
+                        title: "Métricas do perfil",
+                        content: (
+                          <ProfileMetricsEditor
+                            redes={influ.redes}
+                            onChangeRedes={(redes) => onPatch({ redes })}
+                            value={influ.profileMetrics}
+                            onChange={(profileMetrics) => onPatch({ profileMetrics })}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("entregas") && (hasMetrics || reliability.total > 0)
+                  ? [
+                      {
+                        key: "metricas-entregas",
+                        icon: <BarChart3 className="h-3.5 w-3.5" />,
+                        title: "Métricas das entregas",
+                        content: (
+                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
+                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
+                            {metricsTotal.views > 0 && (
+                              <MetricStat
+                                label="Visualizações"
+                                value={metricsTotal.views.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.reach > 0 && (
+                              <MetricStat
+                                label="Alcance"
+                                value={metricsTotal.reach.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.likes > 0 && (
+                              <MetricStat
+                                label="Curtidas"
+                                value={metricsTotal.likes.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.comments > 0 && (
+                              <MetricStat
+                                label="Comentários"
+                                value={metricsTotal.comments.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.shares > 0 && (
+                              <MetricStat
+                                label="Compart."
+                                value={metricsTotal.shares.toLocaleString("pt-BR")}
+                              />
+                            )}
+                            {metricsTotal.saves > 0 && (
+                              <MetricStat
+                                label="Salvos"
+                                value={metricsTotal.saves.toLocaleString("pt-BR")}
+                              />
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("pagamentos")
+                  ? [
+                      {
+                        key: "pagamentos",
+                        icon: <Coins className="h-3.5 w-3.5" />,
+                        title: "Pagamentos",
+                        content: (
+                          <PagamentosList
+                            entregas={influ.entregas}
+                            onSetAprovacao={(entregaId, aprovacao) =>
+                              onPatch({
+                                entregas: influ.entregas.map((x) =>
+                                  x.id === entregaId && x.pagamento
+                                    ? {
+                                        ...x,
+                                        pagamento: {
+                                          ...x.pagamento,
+                                          aprovacao,
+                                          data:
+                                            x.pagamento.data ||
+                                            (aprovacao === "aceito"
+                                              ? todayISO()
+                                              : x.pagamento.data),
+                                        },
+                                      }
+                                    : x,
+                                ),
+                              })
+                            }
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(has("bancario")
+                  ? [
+                      {
+                        key: "bancario",
+                        icon: <Landmark className="h-3.5 w-3.5" />,
+                        title: "Dados bancários",
+                        content: <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} />,
+                      },
+                    ]
+                  : []),
+                ...(has("contrato")
+                  ? [
+                      {
+                        key: "contrato",
+                        icon: <FileText className="h-3.5 w-3.5" />,
+                        title: "Contrato",
+                        content: (
+                          <ContratoEditor
+                            value={influ.contrato}
+                            onChange={(contrato) => onPatch({ contrato })}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+
+            {!has("entregas") && !hasExtras && (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma informação adicional configurada para este influenciador.
+              </p>
+            )}
+          </div>
+
+          <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+              <p className="text-sm font-semibold">Atividade</p>
+              <span className="text-[10px] text-muted-foreground">
+                {(influ.activity?.length ?? 0) + (influ.comments?.length ?? 0)}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {(influ.comments?.length ?? 0) + (influ.activity?.length ?? 0) === 0 ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Nenhuma atividade ou comentário ainda.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {[
+                    ...(influ.activity ?? []).map((a) => ({ kind: "activity" as const, item: a })),
+                    ...(influ.comments ?? []).map((c) => ({ kind: "comment" as const, item: c })),
+                  ]
+                    .sort(
+                      (a, b) =>
+                        new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
+                    )
+                    .map((e) => (
+                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
+                        <span
+                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
+                        >
+                          {e.item.initials}
+                        </span>
+                        {e.kind === "activity" ? (
+                          <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                            <span className="font-medium text-foreground">{e.item.author}</span>{" "}
+                            <span className="text-muted-foreground">{e.item.action}</span>
+                            <div className="text-[10px] text-muted-foreground/70">
+                              {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                            <div className="mb-0.5 flex items-baseline gap-1.5">
+                              <span className="text-xs font-medium">{e.item.author}</span>
+                              <span className="text-[10px] text-muted-foreground/70">
+                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                              {linkifyText(e.item.text)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-border bg-background p-3">
+              <textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    if (commentText.trim()) {
+                      onComment(commentText);
+                      setCommentText("");
+                    }
+                  }
+                }}
+                rows={2}
+                placeholder="Escreva um comentário..."
+                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+              />
+              <div className="mt-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!commentText.trim()) return;
+                    onComment(commentText);
+                    setCommentText("");
+                  }}
+                  disabled={!commentText.trim()}
+                  className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                >
+                  Comentar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between border-t border-border bg-muted/30 px-6 py-3 sm:justify-between">
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remover
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ============================================================
+ * Diálogo de criação — só pra novo influenciador (editar um já
+ * existente abre o perfil acima, nunca este formulário).
+ * ============================================================ */
+function InfluenciadorDialog({
+  open,
+  onOpenChange,
+  has,
+  onSave,
   pagGrupos,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  initial?: Influ;
-  /** Versão sempre atualizada de `initial` (comments/activity/checklist mudam
-   * em tempo real com o dialog aberto, sem precisar fechar e reabrir). */
-  live?: Influ | null;
   has: (k: InfluencerFieldKey) => boolean;
   onSave: (i: Influ) => void;
-  onDelete?: () => void;
-  onSetChecklist: (checklist: ChecklistItem[]) => void;
-  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
-  onComment: (text: string) => void;
   pagGrupos?: PagGrupo[];
 }) {
-  const { confirm, confirmDialog } = useConfirm();
-  const [commentText, setCommentText] = useState("");
   const [foto, setFoto] = useState<string | undefined>();
   const [nome, setNome] = useState("");
   const [nicho, setNicho] = useState("");
@@ -2159,81 +3080,33 @@ function InfluenciadorDialog({
   const [redes, setRedes] = useState<Rede[]>([]);
   const [profileMetrics, setProfileMetrics] = useState<ProfileMetrics>({});
   const [entregas, setEntregas] = useState<Entrega[]>([]);
-  // Cada entrega vira um card recolhido por padrão (só cabeçalho: formato +
-  // quantidade + resumo) — expandir só quando for mexer em data/anexos/
-  // pagamento/publicação, senão 3+ entregas deixavam a etapa gigantesca e
-  // poluída de olhar.
-  const [expandedEntregas, setExpandedEntregas] = useState<Set<string>>(new Set());
-  const toggleEntregaExpanded = (id: string) =>
-    setExpandedEntregas((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   const [contrato, setContrato] = useState<string | undefined>();
-  const [contratoNome, setContratoNome] = useState<string>("");
   const [status, setStatus] = useState<InfluStatus>("Lista");
   const [bank, setBank] = useState<BankInfo>({});
   const [saving, setSaving] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
-  const contratoRef = useRef<HTMLInputElement>(null);
-
-  // Checklist/comentários/atividade são log/colaborativo — salvam na hora
-  // (via `onSetChecklist`/`onComment`), não fazem parte do rascunho local do
-  // resto do formulário. Lê sempre a versão mais fresca (`live`), pra
-  // refletir na hora enquanto o diálogo continua aberto.
-  const liveChecklist = live?.checklist ?? initial?.checklist ?? [];
-  const liveActivity = live?.activity ?? initial?.activity ?? [];
-  const liveComments = live?.comments ?? initial?.comments ?? [];
 
   useEffect(() => {
     if (!open) return;
     setSaving(false);
-    setCommentText("");
-    setExpandedEntregas(new Set());
-    if (initial) {
-      setFoto(initial.foto);
-      setNome(initial.nome);
-      setNicho(initial.nicho ?? "");
-      setTelefone(initial.telefone ?? "");
-      setEmail(initial.email ?? "");
-      setRedes(initial.redes);
-      setProfileMetrics(initial.profileMetrics ?? {});
-      setEntregas(initial.entregas);
-      setContrato(initial.contrato);
-      setContratoNome(initial.contrato ? "Contrato anexado" : "");
-      setStatus(initial.status);
-      setBank(initial.bank ?? {});
-    } else {
-      setFoto(undefined);
-      setNome("");
-      setNicho("");
-      setTelefone("");
-      setEmail("");
-      setRedes([]);
-      setProfileMetrics({});
-      setEntregas([]);
-      setContrato(undefined);
-      setContratoNome("");
-      setStatus("Lista");
-      setBank({});
-    }
-  }, [open, initial]);
-
-  const readFile = (file: File | undefined, cb: (data: string, name: string) => void) => {
-    if (!file) return;
-    const r = new FileReader();
-    r.onload = () => cb(String(r.result), file.name);
-    r.readAsDataURL(file);
-  };
+    setFoto(undefined);
+    setNome("");
+    setNicho("");
+    setTelefone("");
+    setEmail("");
+    setRedes([]);
+    setProfileMetrics({});
+    setEntregas([]);
+    setContrato(undefined);
+    setStatus("Lista");
+    setBank({});
+  }, [open]);
 
   const submit = () => {
     if (saving || !nome.trim()) return;
     setSaving(true);
-    const finalStatus = advanceStatusFromEntregas(status, entregas);
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      id: crypto.randomUUID(),
       foto,
       nome: nome.trim(),
       nicho: nicho || undefined,
@@ -2243,8 +3116,8 @@ function InfluenciadorDialog({
       profileMetrics,
       entregas,
       contrato,
-      status: finalStatus,
-      statusUpdatedAt: finalStatus === initial?.status ? initial?.statusUpdatedAt : todayISO(),
+      status: advanceStatusFromEntregas(status, entregas),
+      statusUpdatedAt: todayISO(),
       bank,
     });
   };
@@ -2253,36 +3126,11 @@ function InfluenciadorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
         <div className="border-b border-border px-6 py-4">
-          {initial ? (
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-                {foto ? (
-                  <img src={foto} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="truncate text-base font-semibold">
-                  {nome || "Editar influenciador"}
-                </DialogTitle>
-                <div className="mt-0.5">
-                  <InfluStatusPill value={status} onChange={setStatus} />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <DialogTitle className="text-base font-semibold">Novo influenciador</DialogTitle>
-          )}
-          <DialogDescription className="sr-only">
-            {initial ? `Editar perfil de ${initial.nome}` : "Cadastrar novo influenciador"}
-          </DialogDescription>
+          <DialogTitle className="text-base font-semibold">Novo influenciador</DialogTitle>
+          <DialogDescription className="sr-only">Cadastrar novo influenciador</DialogDescription>
         </div>
 
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
-          {/* Tudo numa página só, rolável — antes tinha etapas separadas por
-              clique, mas isso escondia justamente o que era mais útil de ver
-              de cara (entregas, atividade/comentários) atrás de navegação. */}
           <section className="space-y-5">
             <FieldLabel title="Foto e nome" hint="Comece pela identificação do influenciador." />
             <div className="flex flex-col items-center gap-3">
@@ -2308,7 +3156,13 @@ function InfluenciadorDialog({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => readFile(e.target.files?.[0], (d) => setFoto(d))}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const r = new FileReader();
+                  r.onload = () => setFoto(String(r.result));
+                  r.readAsDataURL(file);
+                }}
               />
               <button
                 type="button"
@@ -2377,60 +3231,9 @@ function InfluenciadorDialog({
               <div className="space-y-4 border-t border-border pt-5">
                 <FieldLabel
                   title="Redes sociais"
-                  hint="Selecione as plataformas e adicione o handle. Seguidores e demais métricas ficam na etapa Métricas."
+                  hint="Selecione as plataformas e adicione o handle. Seguidores e demais métricas ficam em Métricas."
                 />
-                <div className="flex flex-wrap gap-1.5">
-                  {REDES_OPTS.map((p) => {
-                    const active = redes.some((r) => r.plataforma === p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() =>
-                          setRedes((rs) =>
-                            active
-                              ? rs.filter((r) => r.plataforma !== p)
-                              : [...rs, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
-                          )
-                        }
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                          active
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-border bg-background text-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
-                </div>
-                {redes.length === 0 ? (
-                  <EmptyHint text="Nenhuma rede selecionada." />
-                ) : (
-                  <div className="space-y-2">
-                    {redes.map((r) => (
-                      <div
-                        key={r.id}
-                        className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
-                      >
-                        <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
-                          {r.plataforma}
-                        </span>
-                        <span className="text-sm text-muted-foreground">@</span>
-                        <input
-                          value={r.handle}
-                          onChange={(e) =>
-                            setRedes((rs) =>
-                              rs.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)),
-                            )
-                          }
-                          placeholder="usuario"
-                          className="flex-1 bg-transparent text-sm outline-none"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <RedesEditor redes={redes} onChange={setRedes} />
               </div>
             )}
           </section>
@@ -2451,190 +3254,13 @@ function InfluenciadorDialog({
           )}
 
           {has("entregas") && (
-            <section className="space-y-3 border-t border-border pt-6">
-              <FieldLabel
-                title="Entregas"
-                hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
+            <section className="border-t border-border pt-6">
+              <EntregasEditor
+                entregas={entregas}
+                onChange={setEntregas}
+                influStatus={status}
+                pagGrupos={pagGrupos}
               />
-              {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
-              <div className="space-y-2">
-                {entregas.map((e) => {
-                  const update = (patch: Partial<Entrega>) =>
-                    setEntregas((es) => es.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
-                  // Igual à antiga `setConteudoStatus` (agora só rascunho local, salvo
-                  // junto do resto no botão Salvar): "Postado" vira status "publicado"
-                  // (libera link/métricas), qualquer outra etapa volta a "combinado".
-                  const setEtapa = (conteudoStatus: EntregaConteudoStatus) => {
-                    if (conteudoStatus === "Postado" && !canPublishEntrega(status)) return;
-                    update({
-                      conteudoStatus,
-                      status: conteudoStatus === "Postado" ? "publicado" : "combinado",
-                      publicadoEm:
-                        conteudoStatus === "Postado"
-                          ? (e.publicadoEm ?? todayISO())
-                          : e.publicadoEm,
-                    });
-                  };
-                  const published = e.conteudoStatus === "Postado";
-                  const expanded = expandedEntregas.has(e.id);
-                  const resumoBits = [
-                    e.dataPostagem &&
-                      new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR"),
-                    e.pagamento && pagamentoResumo(e.pagamento),
-                    (e.anexos?.length ?? 0) > 0 &&
-                      `${e.anexos!.length} anexo${e.anexos!.length === 1 ? "" : "s"}`,
-                  ].filter(Boolean);
-                  return (
-                    <div key={e.id} className="rounded-lg border border-border bg-background">
-                      {/* Cabeçalho sempre visível: formato + quantidade + resumo compacto.
-                          Detalhes (data, anexos, pagamento, publicação) só aparecem expandidos —
-                          com 3+ entregas, tudo sempre aberto virava uma parede de campos. */}
-                      <div className="flex items-center gap-2 p-2.5">
-                        <button
-                          type="button"
-                          onClick={() => toggleEntregaExpanded(e.id)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-                          />
-                          <input
-                            list="entregas-tipos"
-                            value={e.tipo}
-                            onClick={(ev) => ev.stopPropagation()}
-                            onChange={(ev) => update({ tipo: ev.target.value })}
-                            placeholder="Reels, Stories..."
-                            className="w-28 shrink-0 rounded-md bg-transparent px-1 py-1 text-sm font-medium outline-none"
-                          />
-                          {!expanded && resumoBits.length > 0 && (
-                            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                              {resumoBits.join(" · ")}
-                            </span>
-                          )}
-                        </button>
-                        <div
-                          className="flex shrink-0 items-center rounded-md bg-muted"
-                          onClick={(ev) => ev.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => update({ quantidade: Math.max(1, e.quantidade - 1) })}
-                            className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                          >
-                            −
-                          </button>
-                          <span className="w-7 text-center text-sm font-medium tabular-nums">
-                            {e.quantidade}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => update({ quantidade: e.quantidade + 1 })}
-                            className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                          >
-                            +
-                          </button>
-                        </div>
-                        {e.conteudoStatus && (
-                          <EntregaStatusPill
-                            value={e.conteudoStatus}
-                            influStatus={status}
-                            onChange={setEtapa}
-                          />
-                        )}
-                        <RemoveBtn
-                          onClick={() => setEntregas((es) => es.filter((x) => x.id !== e.id))}
-                        />
-                      </div>
-
-                      {expanded && (
-                        <div className="space-y-3 border-t border-border p-3">
-                          <div className="space-y-1.5">
-                            <EntregaDateField
-                              label="Recebimento do roteiro"
-                              value={e.dataRecebimentoRoteiro}
-                              onChange={(v) => update({ dataRecebimentoRoteiro: v })}
-                            />
-                            <EntregaDateField
-                              label="Recebimento do conteúdo"
-                              value={e.dataRecebimentoConteudo}
-                              onChange={(v) => update({ dataRecebimentoConteudo: v })}
-                            />
-                            <EntregaDateField
-                              label="Postagem"
-                              value={e.dataPostagem}
-                              onChange={(v) => update({ dataPostagem: v })}
-                            />
-                          </div>
-
-                          <EntregaAnexosEditor
-                            anexos={e.anexos ?? []}
-                            onChange={(anexos) => update({ anexos })}
-                          />
-
-                          <div className="space-y-1.5">
-                            <p className="text-[11px] font-medium text-muted-foreground">
-                              Pagamento combinado
-                            </p>
-                            <PagamentoEditor
-                              value={e.pagamento}
-                              onChange={(pagamento) => update({ pagamento })}
-                              pagGrupos={pagGrupos}
-                            />
-                          </div>
-
-                          {published && (
-                            <div className="space-y-2 border-t border-border pt-2.5">
-                              <p className="text-[11px] font-medium text-muted-foreground">
-                                Publicação
-                              </p>
-                              <input
-                                value={e.url ?? ""}
-                                onChange={(ev) => update({ url: ev.target.value })}
-                                placeholder="Link do conteúdo publicado"
-                                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-                              />
-                              <div>
-                                <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                                  Métricas
-                                </p>
-                                <MetricsEditor
-                                  value={e.metrics}
-                                  onChange={(m) => update({ metrics: m })}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <datalist id="entregas-tipos">
-                {ENTREGAS_OPTS.map((o) => (
-                  <option key={o} value={o} />
-                ))}
-              </datalist>
-              <button
-                type="button"
-                onClick={() => {
-                  const id = crypto.randomUUID();
-                  setEntregas((es) => [
-                    ...es,
-                    {
-                      id,
-                      tipo: "Reels",
-                      quantidade: 1,
-                      status: "combinado",
-                      conteudoStatus: "Combinado",
-                    },
-                  ]);
-                  setExpandedEntregas((s) => new Set(s).add(id));
-                }}
-                className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" /> Adicionar entrega
-              </button>
             </section>
           )}
 
@@ -2687,162 +3313,32 @@ function InfluenciadorDialog({
           {has("contrato") && (
             <section className="space-y-3 border-t border-border pt-6">
               <FieldLabel title="Contrato assinado" hint="Anexe PDF, imagem ou documento." />
-              <input
-                ref={contratoRef}
-                type="file"
-                className="hidden"
-                onChange={(e) =>
-                  readFile(e.target.files?.[0], (d, n) => {
-                    setContrato(d);
-                    setContratoNome(n);
-                  })
-                }
-              />
-              {contrato ? (
-                <div className="flex items-center gap-3 rounded-md border border-border bg-background p-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{contratoNome || "Contrato"}</p>
-                    <p className="text-xs text-muted-foreground">Anexado</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => contratoRef.current?.click()}
-                    className="rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
-                  >
-                    Substituir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setContrato(undefined);
-                      setContratoNome("");
-                    }}
-                    className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Remover"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => contratoRef.current?.click()}
-                  className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-transparent px-3 py-10 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                >
-                  <Upload className="h-5 w-5" />
-                  <span>Clique para anexar o contrato</span>
-                </button>
-              )}
+              <ContratoEditor value={contrato} onChange={setContrato} />
             </section>
           )}
 
-          {initial && (
-            <section className="space-y-4 border-t border-border pt-6">
-              <FieldLabel
-                title="Checklist"
-                hint="Itens livres de acompanhamento — salvam na hora, sem precisar do botão Salvar."
-              />
-              <ChecklistSection
-                checklist={liveChecklist}
-                onChange={onSetChecklist}
-                onApplyToAll={onApplyChecklistToAll}
-              />
-
-              <div className="border-t border-border pt-4">
-                <FieldLabel title="Comentários e atividade" />
-                <div className="mt-2 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
-                  {liveActivity.length + liveComments.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      Nenhuma atividade ou comentário ainda.
-                    </p>
-                  ) : (
-                    [
-                      ...liveActivity.map((a) => ({ kind: "activity" as const, item: a })),
-                      ...liveComments.map((c) => ({ kind: "comment" as const, item: c })),
-                    ]
-                      .sort(
-                        (a, b) =>
-                          new Date(a.item.createdAt).getTime() -
-                          new Date(b.item.createdAt).getTime(),
-                      )
-                      .map((e) => (
-                        <div key={e.item.id} className="flex min-w-0 items-start gap-2">
-                          <span
-                            className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
-                          >
-                            {e.item.initials}
-                          </span>
-                          {e.kind === "activity" ? (
-                            <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                              <span className="font-medium text-foreground">{e.item.author}</span>{" "}
-                              <span className="text-muted-foreground">{e.item.action}</span>
-                              <div className="text-[10px] text-muted-foreground/70">
-                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
-                              <div className="mb-0.5 flex items-baseline gap-1.5">
-                                <span className="text-xs font-medium">{e.item.author}</span>
-                                <span className="text-[10px] text-muted-foreground/70">
-                                  {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              </div>
-                              <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                                {linkifyText(e.item.text)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                  )}
-                </div>
-                <div className="mt-2">
-                  <textarea
-                    value={commentText}
-                    onChange={(ev) => setCommentText(ev.target.value)}
-                    onKeyDown={(ev) => {
-                      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
-                        ev.preventDefault();
-                        if (commentText.trim()) {
-                          onComment(commentText);
-                          setCommentText("");
-                        }
-                      }
-                    }}
-                    rows={2}
-                    placeholder="Escreva um comentário..."
-                    className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
-                  />
-                  <div className="mt-1 flex justify-end">
+          {has("status") && (
+            <section className="space-y-3 border-t border-border pt-6">
+              <FieldLabel title="Status inicial" hint="Onde este influenciador começa no fluxo." />
+              <div className="flex flex-col gap-1.5">
+                {INFLU_STATUSES.map((s) => {
+                  const active = status === s;
+                  return (
                     <button
+                      key={s}
                       type="button"
-                      onClick={() => {
-                        if (commentText.trim()) {
-                          onComment(commentText);
-                          setCommentText("");
-                        }
-                      }}
-                      disabled={!commentText.trim()}
-                      className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      onClick={() => setStatus(s)}
+                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                        active
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-background text-foreground hover:bg-muted"
+                      }`}
                     >
-                      Comentar
+                      <span>{s}</span>
+                      {active && <CheckCircle2 className="h-4 w-4" />}
                     </button>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -2856,30 +3352,15 @@ function InfluenciadorDialog({
           >
             Cancelar
           </button>
-          <div className="flex items-center gap-2">
-            {initial && onDelete && (
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await confirm(`Remover ${initial.nome} desta lista?`);
-                  if (ok) onDelete();
-                }}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Excluir
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!nome.trim() || saving}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {saving ? "Salvando..." : initial ? "Salvar" : "Salvar influenciador"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!nome.trim() || saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? "Salvando..." : "Salvar influenciador"}
+          </button>
         </div>
-        {confirmDialog}
       </DialogContent>
     </Dialog>
   );
