@@ -38,6 +38,7 @@ import {
   LayoutList,
   Loader2,
   Mail,
+  MessageSquare,
   Package,
   Paperclip,
   Pencil,
@@ -1263,7 +1264,6 @@ export function InfluencerBoard({
   const [influDialog, setInfluDialog] = useState<{ mode: "new" | "edit"; data?: Influ } | null>(
     null,
   );
-  const [viewing, setViewing] = useState<Influ | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"lista" | "kanban">("lista");
@@ -1332,7 +1332,6 @@ export function InfluencerBoard({
         : x,
     );
     onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const save = (i: Influ) => {
@@ -1358,123 +1357,8 @@ export function InfluencerBoard({
     }
   };
 
-  const setAprovacao = (influId: string, entregaId: string, aprovacao: AprovacaoPagamento) => {
-    const next = influs.map((x) => {
-      if (x.id !== influId) return x;
-      return {
-        ...x,
-        updatedAt: new Date().toISOString(),
-        entregas: x.entregas.map((e) =>
-          e.id === entregaId && e.pagamento
-            ? {
-                ...e,
-                pagamento: {
-                  ...e.pagamento,
-                  aprovacao,
-                  data:
-                    e.pagamento.data || (aprovacao === "aceito" ? todayISO() : e.pagamento.data),
-                },
-              }
-            : e,
-        ),
-      };
-    });
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
-  };
-
-  // O status geral da entrega (orçado/combinado/publicado) não tem mais um
-  // controle manual próprio — ele é derivado do status individual (etapa de
-  // produção). "Postado" vira "publicado" (libera link/métricas e entra no
-  // Financeiro); qualquer outra etapa volta a ser "combinado". A trava de só
-  // publicar a partir de "Aprovado" (ver `canPublishEntrega`) continua valendo.
-  const setConteudoStatus = (
-    influId: string,
-    entregaId: string,
-    conteudoStatus: EntregaConteudoStatus,
-  ) => {
-    const next = influs.map((x) => {
-      if (x.id !== influId) return x;
-      const entrega = x.entregas.find((e) => e.id === entregaId);
-      if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
-      if (conteudoStatus === "Postado" && !canPublishEntrega(x.status)) return x;
-      const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
-      return pushActivity(
-        {
-          ...x,
-          entregas: x.entregas.map((e) =>
-            e.id === entregaId
-              ? {
-                  ...e,
-                  conteudoStatus,
-                  status: conteudoStatus === "Postado" ? "publicado" : "combinado",
-                  publicadoEm:
-                    conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
-                }
-              : e,
-          ),
-        },
-        `mudou status de "${label}" para ${conteudoStatus}`,
-      );
-    });
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
-  };
-
-  // Deixa anexar (ou remover) arquivo de uma entrega direto no resumo, sem
-  // precisar abrir o formulário de edição inteiro.
-  const setEntregaAnexos = (influId: string, entregaId: string, anexos: EntregaAnexo[]) => {
-    const next = influs.map((x) =>
-      x.id !== influId
-        ? x
-        : {
-            ...x,
-            entregas: x.entregas.map((e) => {
-              if (e.id !== entregaId) return e;
-              // Anexar o roteiro enquanto a entrega ainda está "Aguardando
-              // roteiro" já avança pra "Aguardando aprovação de roteiro" —
-              // é o gatilho que manda o roteiro pro link público do cliente,
-              // sem precisar de um segundo clique pra mudar o status à mão.
-              const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
-              const conteudoStatus =
-                ganhouRoteiro && e.conteudoStatus === "Aguardando roteiro"
-                  ? "Aguardando aprovação de roteiro"
-                  : e.conteudoStatus;
-              return { ...e, anexos, conteudoStatus };
-            }),
-          },
-    );
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
-  };
-
-  // Igual a `changeStatus` (usado pelo kanban), mas também atualiza `viewing`
-  // pra refletir na hora no cabeçalho do resumo, que fica com seu próprio
-  // snapshot do influenciador.
-  const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
-    const next = influs.map((x) =>
-      x.id === influId
-        ? pushActivity({ ...x, status, statusUpdatedAt: todayISO() }, `mudou status para ${status}`)
-        : x,
-    );
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
-  };
-
   const setInfluChecklist = (influId: string, checklist: ChecklistItem[]) => {
-    const next = influs.map((x) => (x.id === influId ? { ...x, checklist } : x));
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
-  };
-
-  // Edição inline dos campos de identidade direto no resumo (nome, nicho,
-  // contato, redes) — antes só dava pra mudar isso fechando o resumo e
-  // abrindo o wizard de edição à parte; agora clicar no influ já abre tudo
-  // pronto pra editar, sem a etapa extra.
-  const patchInflu = (influId: string, patch: Partial<Influ>) => {
-    const next = influs.map((x) => (x.id === influId ? { ...x, ...patch } : x));
-    onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+    onChange(influs.map((x) => (x.id === influId ? { ...x, checklist } : x)));
   };
 
   // Copia os itens (textos) da checklist de um influ pros demais da
@@ -1493,7 +1377,6 @@ export function InfluencerBoard({
       };
     });
     onChange(next);
-    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const sortedInflus = useMemo(() => {
@@ -1708,7 +1591,7 @@ export function InfluencerBoard({
                       <InfluCard
                         influ={i}
                         has={has}
-                        onView={() => setViewing(i)}
+                        onView={() => setInfluDialog({ mode: "edit", data: i })}
                         onStatus={(status) => changeStatus(i.id, status)}
                         onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
                       />
@@ -1735,7 +1618,7 @@ export function InfluencerBoard({
                 key={i.id}
                 influ={i}
                 has={has}
-                onView={() => setViewing(i)}
+                onView={() => setInfluDialog({ mode: "edit", data: i })}
                 onStatus={(status) => changeStatus(i.id, status)}
                 onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
               />
@@ -1760,42 +1643,29 @@ export function InfluencerBoard({
         </div>
       )}
 
-      {viewing && (
-        <InfluencerProfileDialog
-          influ={viewing}
-          has={has}
-          onOpenChange={(o) => !o && setViewing(null)}
-          onEdit={() => {
-            setInfluDialog({ mode: "edit", data: viewing });
-            setViewing(null);
-          }}
-          onRemove={() => {
-            onChange(influs.filter((x) => x.id !== viewing.id));
-            setViewing(null);
-          }}
-          onSetAprovacao={(entregaId, aprovacao) => setAprovacao(viewing.id, entregaId, aprovacao)}
-          onSetConteudoStatus={(entregaId, status) =>
-            setConteudoStatus(viewing.id, entregaId, status)
-          }
-          onSetAnexos={(entregaId, anexos) => setEntregaAnexos(viewing.id, entregaId, anexos)}
-          onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
-          onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
-          onApplyChecklistToAll={(checklist) => applyChecklistToAll(checklist)}
-          onComment={(text) => addComment(viewing.id, text)}
-          onPatch={(patch) => patchInflu(viewing.id, patch)}
-        />
-      )}
-
       <InfluenciadorDialog
         open={!!influDialog}
         onOpenChange={(o) => !o && setInfluDialog(null)}
         initial={influDialog?.data}
+        live={
+          influDialog?.data ? (influs.find((x) => x.id === influDialog.data!.id) ?? null) : null
+        }
         has={has}
         pagGrupos={pagGrupos}
         onSave={(i) => {
           save(i);
           setInfluDialog(null);
         }}
+        onDelete={() => {
+          if (!influDialog?.data) return;
+          onChange(influs.filter((x) => x.id !== influDialog.data!.id));
+          setInfluDialog(null);
+        }}
+        onSetChecklist={(checklist) =>
+          influDialog?.data && setInfluChecklist(influDialog.data.id, checklist)
+        }
+        onApplyChecklistToAll={applyChecklistToAll}
+        onComment={(text) => influDialog?.data && addComment(influDialog.data.id, text)}
       />
 
       <DownloadInflusDialog
@@ -2138,44 +2008,6 @@ function ChecklistSection({
   );
 }
 
-/** Botões lado a lado (Métricas, Pagamentos, Dados bancários, Contrato) —
- * nenhum aberto por padrão; clicar num abre o painel dele logo abaixo (e
- * fecha automaticamente se outro for aberto). */
-function HiddenSectionsPanel({
-  sections,
-}: {
-  sections: { key: string; icon: React.ReactNode; title: string; content: React.ReactNode }[];
-}) {
-  const [active, setActive] = useState<string | null>(null);
-  const activeSection = sections.find((s) => s.key === active);
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {sections.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setActive((a) => (a === s.key ? null : s.key))}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              active === s.key
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {s.icon}
-            {s.title}
-          </button>
-        ))}
-      </div>
-      {activeSection && (
-        <div className="rounded-lg border border-border bg-background p-3">
-          {activeSection.content}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Pill do status individual de uma entrega — dropdown customizado (não um
  * `<select>` nativo, que renderia como uma caixa cinza do navegador). */
 /** Status individual da entrega, no resumo — abre um popup (não um menu
@@ -2281,620 +2113,6 @@ function EntregaStatusPill({
   );
 }
 
-/** Botão compacto de "Adicionar anexo" pro card de entrega no resumo — abre
- * o mesmo menu de categoria do editor, mas sem precisar sair do resumo pra
- * anexar roteiro/gravação/conteúdo publicado. */
-/** Botão "Anexos" do card de entrega no resumo — abre um popup (não um menu
- * suspenso, que ficava cortado dentro do card) mostrando todos os anexos
- * daquela entrega e permitindo adicionar novos escolhendo a categoria. */
-function EntregaAnexosPopup({
-  entregaLabel,
-  anexos,
-  onChange,
-}: {
-  entregaLabel: string;
-  anexos: EntregaAnexo[];
-  onChange: (next: EntregaAnexo[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground"
-      >
-        <Paperclip className="h-3 w-3" /> Anexos{anexos.length > 0 ? ` (${anexos.length})` : ""}
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm border-border bg-background">
-          <DialogTitle className="text-sm font-semibold">Anexos · {entregaLabel}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Anexos da entrega: visualize, adicione ou remova arquivos.
-          </DialogDescription>
-          <EntregaAnexosEditor anexos={anexos} onChange={onChange} />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-function InfluencerProfileDialog({
-  influ,
-  has,
-  onOpenChange,
-  onEdit,
-  onRemove,
-  onSetAprovacao,
-  onSetConteudoStatus,
-  onSetAnexos,
-  onSetStatus,
-  onSetChecklist,
-  onApplyChecklistToAll,
-  onComment,
-  onPatch,
-}: {
-  influ: Influ;
-  has: (k: InfluencerFieldKey) => boolean;
-  onOpenChange: (open: boolean) => void;
-  onEdit: () => void;
-  onRemove: () => void;
-  onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
-  onSetConteudoStatus: (entregaId: string, status: EntregaConteudoStatus) => void;
-  onSetAnexos: (entregaId: string, anexos: EntregaAnexo[]) => void;
-  onSetStatus: (status: InfluStatus) => void;
-  onSetChecklist: (checklist: ChecklistItem[]) => void;
-  onPatch: (patch: Partial<Influ>) => void;
-  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
-  onComment: (text: string) => void;
-}) {
-  const [commentText, setCommentText] = useState("");
-  const bank = influ.bank ?? {};
-  const hasBank = Object.values(bank).some((v) => v && String(v).trim());
-
-  const metricsTotal = influ.entregas.reduce(
-    (acc, e) => {
-      acc.views += e.metrics?.views ?? 0;
-      acc.likes += e.metrics?.likes ?? 0;
-      acc.comments += e.metrics?.comments ?? 0;
-      acc.shares += e.metrics?.shares ?? 0;
-      acc.saves += e.metrics?.saves ?? 0;
-      acc.reach += e.metrics?.reach ?? 0;
-      return acc;
-    },
-    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, reach: 0 },
-  );
-  const hasMetrics = Object.values(metricsTotal).some((v) => v > 0);
-  const reliability = computeReliability(influ.entregas);
-  const pm = influ.profileMetrics;
-  const hasProfileMetrics = Boolean(
-    pm?.porRede && Object.values(pm.porRede).some((rm) => hasRedeMetrics(rm)),
-  );
-
-  const hasExtras = has("pagamentos") || has("bancario") || has("contrato") || has("metricas");
-
-  const [editingHeader, setEditingHeader] = useState(false);
-  const [draft, setDraft] = useState({
-    nome: influ.nome,
-    nicho: influ.nicho ?? "",
-    telefone: influ.telefone ?? "",
-    email: influ.email ?? "",
-  });
-  const startEditing = () => {
-    setDraft({
-      nome: influ.nome,
-      nicho: influ.nicho ?? "",
-      telefone: influ.telefone ?? "",
-      email: influ.email ?? "",
-    });
-    setEditingHeader(true);
-  };
-  const saveHeader = () => {
-    onPatch({
-      nome: draft.nome,
-      nicho: draft.nicho || undefined,
-      telefone: draft.telefone || undefined,
-      email: draft.email || undefined,
-    });
-    setEditingHeader(false);
-  };
-
-  return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-        <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
-        <DialogDescription className="sr-only">
-          Informações completas do influenciador.
-        </DialogDescription>
-
-        {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
-        <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
-              {influ.foto ? (
-                <img src={influ.foto} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-              )}
-            </div>
-            <div className="min-w-0 flex-1 space-y-2 pt-1">
-              {editingHeader ? (
-                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <input
-                      value={draft.nome}
-                      onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
-                      placeholder="Nome"
-                      autoFocus
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <input
-                      value={draft.nicho}
-                      onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
-                      placeholder="Nicho"
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <input
-                      value={draft.telefone}
-                      onChange={(e) => setDraft((d) => ({ ...d, telefone: e.target.value }))}
-                      placeholder="Telefone"
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <input
-                      value={draft.email}
-                      onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                      placeholder="E-mail"
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingHeader(false)}
-                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveHeader}
-                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
-                    >
-                      Salvar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="group/name flex flex-wrap items-center gap-2">
-                  <p className="truncate text-lg font-semibold text-foreground">
-                    {influ.nome || "Sem nome"}
-                  </p>
-                  {influ.nicho && (
-                    <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
-                      {influ.nicho}
-                    </span>
-                  )}
-                  {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
-                  <button
-                    type="button"
-                    onClick={startEditing}
-                    className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
-                    aria-label="Editar nome, nicho e contato"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {has("redes") &&
-                  influ.redes.map((r) => (
-                    <span
-                      key={r.id}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm"
-                    >
-                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                      {r.handle ? `@${r.handle}` : r.plataforma}
-                      {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                    </span>
-                  ))}
-                {influ.telefone && !editingHeader && (
-                  <a
-                    href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
-                  >
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                    {formatPhoneBR(influ.telefone)}
-                  </a>
-                )}
-                {influ.email && !editingHeader && (
-                  <a
-                    href={`mailto:${influ.email}`}
-                    className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
-                  >
-                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{influ.email}</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
-            {/* MÉTRICAS DO PERFIL — sempre visível quando preenchida, uma rede por bloco */}
-            {has("metricas") && hasProfileMetrics && pm?.porRede && (
-              <section className="space-y-4">
-                <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <BarChart3 className="h-4 w-4" /> Métricas do perfil
-                </h4>
-                <div className="space-y-4">
-                  {influ.redes
-                    .filter((r) => hasRedeMetrics(pm.porRede?.[r.id]))
-                    .map((r) => {
-                      const rm = pm.porRede![r.id]!;
-                      return (
-                        <div key={r.id} className="space-y-3 rounded-xl border border-border p-4">
-                          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                            {r.handle ? `@${r.handle}` : r.plataforma}
-                          </p>
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-5">
-                            {r.seguidores ? (
-                              <MetricStat
-                                label="Seguidores"
-                                value={formatSeguidores(r.seguidores)}
-                              />
-                            ) : null}
-                            {rm.interacoes ? (
-                              <MetricStat
-                                label="Interações"
-                                value={rm.interacoes.toLocaleString("pt-BR")}
-                              />
-                            ) : null}
-                            {rm.visualizacoes ? (
-                              <MetricStat
-                                label="Visualizações"
-                                value={rm.visualizacoes.toLocaleString("pt-BR")}
-                              />
-                            ) : null}
-                            {rm.taxaInteracao ? (
-                              <MetricStat
-                                label="Taxa de interação"
-                                value={`${rm.taxaInteracao}%`}
-                              />
-                            ) : null}
-                            {rm.taxaAtencaoInicial ? (
-                              <MetricStat
-                                label="Atenção inicial"
-                                value={`${rm.taxaAtencaoInicial}%`}
-                              />
-                            ) : null}
-                          </div>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <DemographicChart title="Gênero" entries={rm.genero} chartType="pie" />
-                            <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
-                            <DemographicChart title="Países" entries={rm.paises} />
-                            <DemographicChart title="Cidades" entries={rm.cidades} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </section>
-            )}
-
-            {/* ENTREGAS — conteúdo principal, sempre visível */}
-            {has("entregas") &&
-              (influ.entregas.length > 0 ? (
-                <div className="-mx-1 overflow-x-auto overflow-y-visible px-1 pb-2">
-                  <div className="flex min-w-max gap-5 border-t-2 border-border pt-7">
-                    {influ.entregas.map((e) => {
-                      return (
-                        <div key={e.id} className="relative w-64 shrink-0">
-                          <span className="absolute -top-[31px] left-1/2 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-background bg-foreground" />
-                          <div className="flex h-28 flex-col rounded-lg border border-border bg-background p-2.5 shadow-sm">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                                {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                              </p>
-                              <EntregaStatusPill
-                                value={e.conteudoStatus ?? "Combinado"}
-                                influStatus={influ.status}
-                                onChange={(s) => onSetConteudoStatus(e.id, s)}
-                              />
-                            </div>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {e.quantidade}×
-                              {e.dataPostagem &&
-                                ` · ${new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR")}`}
-                            </p>
-                            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-1.5">
-                              {metricasPendentes(e) && (
-                                <span
-                                  title="Publicado há 15+ dias sem métricas preenchidas"
-                                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-                                >
-                                  Métricas pendentes
-                                </span>
-                              )}
-                              {e.url && (
-                                <a
-                                  href={e.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground underline underline-offset-2"
-                                >
-                                  <ExternalLink className="h-3 w-3" /> Ver publicação
-                                </a>
-                              )}
-                              <EntregaAnexosPopup
-                                entregaLabel={e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                                anexos={e.anexos ?? []}
-                                onChange={(anexos) => onSetAnexos(e.id, anexos)}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">Nenhuma entrega combinada ainda.</p>
-              ))}
-
-            <ChecklistSection
-              checklist={influ.checklist ?? []}
-              onChange={onSetChecklist}
-              onApplyToAll={onApplyChecklistToAll}
-            />
-
-            {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, conteúdo oculto até clicar */}
-            <HiddenSectionsPanel
-              sections={[
-                ...(has("entregas") && (hasMetrics || reliability.total > 0)
-                  ? [
-                      {
-                        key: "metricas",
-                        icon: <BarChart3 className="h-3.5 w-3.5" />,
-                        title: "Métricas",
-                        content: (
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
-                            {metricsTotal.views > 0 && (
-                              <MetricStat
-                                label="Visualizações"
-                                value={metricsTotal.views.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.reach > 0 && (
-                              <MetricStat
-                                label="Alcance"
-                                value={metricsTotal.reach.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.likes > 0 && (
-                              <MetricStat
-                                label="Curtidas"
-                                value={metricsTotal.likes.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.comments > 0 && (
-                              <MetricStat
-                                label="Comentários"
-                                value={metricsTotal.comments.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.shares > 0 && (
-                              <MetricStat
-                                label="Compart."
-                                value={metricsTotal.shares.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.saves > 0 && (
-                              <MetricStat
-                                label="Salvos"
-                                value={metricsTotal.saves.toLocaleString("pt-BR")}
-                              />
-                            )}
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("pagamentos")
-                  ? [
-                      {
-                        key: "pagamentos",
-                        icon: <Coins className="h-3.5 w-3.5" />,
-                        title: "Pagamentos",
-                        content: (
-                          <PagamentosList
-                            entregas={influ.entregas}
-                            onSetAprovacao={onSetAprovacao}
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("bancario") && hasBank
-                  ? [
-                      {
-                        key: "bancario",
-                        icon: <Landmark className="h-3.5 w-3.5" />,
-                        title: "Dados bancários",
-                        content: (
-                          <dl className="space-y-1 text-xs">
-                            {bank.titular && <MetaRow label="Titular" value={bank.titular} />}
-                            {bank.cpfCnpj && <MetaRow label="CPF/CNPJ" value={bank.cpfCnpj} />}
-                            {bank.banco && <MetaRow label="Banco" value={bank.banco} />}
-                            {(bank.agencia || bank.conta) && (
-                              <MetaRow
-                                label="Ag./Conta"
-                                value={[bank.agencia, bank.conta].filter(Boolean).join(" / ")}
-                              />
-                            )}
-                            {bank.pixChave && (
-                              <MetaRow
-                                label={`Pix${bank.pixTipo ? ` (${bank.pixTipo})` : ""}`}
-                                value={bank.pixChave}
-                              />
-                            )}
-                          </dl>
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("contrato") && influ.contrato
-                  ? [
-                      {
-                        key: "contrato",
-                        icon: <FileText className="h-3.5 w-3.5" />,
-                        title: "Contrato",
-                        content: (
-                          <a
-                            href={influ.contrato}
-                            download
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted"
-                          >
-                            <Download className="h-3.5 w-3.5" /> Baixar contrato assinado
-                          </a>
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-
-            {!has("entregas") && !hasExtras && (
-              <p className="text-xs text-muted-foreground">
-                Nenhuma informação adicional configurada para este influenciador.
-              </p>
-            )}
-          </div>
-
-          <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
-            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-              <p className="text-sm font-semibold">Atividade</p>
-              <span className="text-[10px] text-muted-foreground">
-                {(influ.activity?.length ?? 0) + (influ.comments?.length ?? 0)}
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              {(influ.comments?.length ?? 0) + (influ.activity?.length ?? 0) === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Nenhuma atividade ou comentário ainda.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {[
-                    ...(influ.activity ?? []).map((a) => ({ kind: "activity" as const, item: a })),
-                    ...(influ.comments ?? []).map((c) => ({ kind: "comment" as const, item: c })),
-                  ]
-                    .sort(
-                      (a, b) =>
-                        new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
-                    )
-                    .map((e) => (
-                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
-                        <span
-                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
-                        >
-                          {e.item.initials}
-                        </span>
-                        {e.kind === "activity" ? (
-                          <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                            <span className="font-medium text-foreground">{e.item.author}</span>{" "}
-                            <span className="text-muted-foreground">{e.item.action}</span>
-                            <div className="text-[10px] text-muted-foreground/70">
-                              {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
-                            <div className="mb-0.5 flex items-baseline gap-1.5">
-                              <span className="text-xs font-medium">{e.item.author}</span>
-                              <span className="text-[10px] text-muted-foreground/70">
-                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            </div>
-                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                              {linkifyText(e.item.text)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-            <div className="border-t border-border bg-background p-3">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    if (commentText.trim()) {
-                      onComment(commentText);
-                      setCommentText("");
-                    }
-                  }
-                }}
-                rows={2}
-                placeholder="Escreva um comentário..."
-                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
-              />
-              <div className="mt-1 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!commentText.trim()) return;
-                    onComment(commentText);
-                    setCommentText("");
-                  }}
-                  disabled={!commentText.trim()}
-                  className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                >
-                  Comentar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="flex-row items-center justify-between border-t border-border bg-muted/30 px-6 py-3 sm:justify-between">
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Remover
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Redes, métricas, financeiro e contrato
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* ============================================================
  * Create / edit dialog — steps adapt to `allowedFields`.
  * ============================================================ */
@@ -2908,23 +2126,37 @@ function InfluencerProfileDialog({
  * campo individual estiver habilitado — mantém a mesma configuração por
  * campanha/projeto de antes, só com menos cliques pra navegar.
  */
-type StepKey = "perfil" | "metricas" | "entregas" | "financeiro" | "contrato";
+type StepKey = "perfil" | "metricas" | "entregas" | "financeiro" | "contrato" | "atividade";
 
 function InfluenciadorDialog({
   open,
   onOpenChange,
   initial,
+  live,
   has,
   onSave,
+  onDelete,
+  onSetChecklist,
+  onApplyChecklistToAll,
+  onComment,
   pagGrupos,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial?: Influ;
+  /** Versão sempre atualizada de `initial` (comments/activity/checklist mudam
+   * em tempo real com o dialog aberto, sem precisar fechar e reabrir). */
+  live?: Influ | null;
   has: (k: InfluencerFieldKey) => boolean;
   onSave: (i: Influ) => void;
+  onDelete?: () => void;
+  onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
+  onComment: (text: string) => void;
   pagGrupos?: PagGrupo[];
 }) {
+  const { confirm, confirmDialog } = useConfirm();
+  const [commentText, setCommentText] = useState("");
   const [foto, setFoto] = useState<string | undefined>();
   const [nome, setNome] = useState("");
   const [nicho, setNicho] = useState("");
@@ -2954,6 +2186,14 @@ function InfluenciadorDialog({
   const fotoRef = useRef<HTMLInputElement>(null);
   const contratoRef = useRef<HTMLInputElement>(null);
 
+  // Checklist/comentários/atividade são log/colaborativo — salvam na hora
+  // (via `onSetChecklist`/`onComment`), não fazem parte do rascunho local do
+  // resto do formulário. Lê sempre a versão mais fresca (`live`), pra
+  // refletir na hora enquanto o diálogo continua aberto.
+  const liveChecklist = live?.checklist ?? initial?.checklist ?? [];
+  const liveActivity = live?.activity ?? initial?.activity ?? [];
+  const liveComments = live?.comments ?? initial?.comments ?? [];
+
   const steps = useMemo(() => {
     const s: { key: StepKey; label: string; icon: typeof User }[] = [
       { key: "perfil", label: "Perfil", icon: User },
@@ -2962,15 +2202,16 @@ function InfluenciadorDialog({
     if (has("entregas")) s.push({ key: "entregas", label: "Entregas", icon: Package });
     if (has("pagamentos") || has("bancario"))
       s.push({ key: "financeiro", label: "Financeiro", icon: Coins });
-    if (has("contrato") || has("status"))
-      s.push({ key: "contrato", label: "Contrato", icon: FileText });
+    if (has("contrato")) s.push({ key: "contrato", label: "Contrato", icon: FileText });
+    if (initial) s.push({ key: "atividade", label: "Atividade", icon: MessageSquare });
     return s;
-  }, [has]);
+  }, [has, initial]);
 
   useEffect(() => {
     if (!open) return;
     setStep(0);
     setSaving(false);
+    setCommentText("");
     setExpandedEntregas(new Set());
     if (initial) {
       setFoto(initial.foto);
@@ -3029,17 +2270,34 @@ function InfluenciadorDialog({
     });
   };
 
-  const isLast = step === steps.length - 1;
-  const canNext = steps[step]?.key === "perfil" ? nome.trim().length > 0 : true;
   const current = steps[step]?.key ?? "perfil";
+  const canReach = nome.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
         <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">
-            {initial ? "Editar influenciador" : "Novo influenciador"}
-          </DialogTitle>
+          {initial ? (
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                {foto ? (
+                  <img src={foto} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="truncate text-base font-semibold">
+                  {nome || "Editar influenciador"}
+                </DialogTitle>
+                <div className="mt-0.5">
+                  <InfluStatusPill value={status} onChange={setStatus} />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <DialogTitle className="mb-3 text-base font-semibold">Novo influenciador</DialogTitle>
+          )}
           <DialogDescription className="sr-only">
             Etapa {step + 1} de {steps.length} · {steps[step]?.label}
           </DialogDescription>
@@ -3047,7 +2305,7 @@ function InfluenciadorDialog({
           <StepIndicator
             steps={steps}
             currentStep={step}
-            isReachable={(i) => i <= step || (i === 1 && canNext)}
+            isReachable={() => canReach}
             onStepClick={setStep}
           />
         </div>
@@ -3235,6 +2493,20 @@ function InfluenciadorDialog({
                 {entregas.map((e) => {
                   const update = (patch: Partial<Entrega>) =>
                     setEntregas((es) => es.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
+                  // Igual à antiga `setConteudoStatus` (agora só rascunho local, salvo
+                  // junto do resto no botão Salvar): "Postado" vira status "publicado"
+                  // (libera link/métricas), qualquer outra etapa volta a "combinado".
+                  const setEtapa = (conteudoStatus: EntregaConteudoStatus) => {
+                    if (conteudoStatus === "Postado" && !canPublishEntrega(status)) return;
+                    update({
+                      conteudoStatus,
+                      status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+                      publicadoEm:
+                        conteudoStatus === "Postado"
+                          ? (e.publicadoEm ?? todayISO())
+                          : e.publicadoEm,
+                    });
+                  };
                   const published = e.conteudoStatus === "Postado";
                   const expanded = expandedEntregas.has(e.id);
                   const resumoBits = [
@@ -3294,6 +2566,13 @@ function InfluenciadorDialog({
                             +
                           </button>
                         </div>
+                        {e.conteudoStatus && (
+                          <EntregaStatusPill
+                            value={e.conteudoStatus}
+                            influStatus={status}
+                            onChange={setEtapa}
+                          />
+                        )}
                         <RemoveBtn
                           onClick={() => setEntregas((es) => es.filter((x) => x.id !== e.id))}
                         />
@@ -3374,7 +2653,13 @@ function InfluenciadorDialog({
                   const id = crypto.randomUUID();
                   setEntregas((es) => [
                     ...es,
-                    { id, tipo: "Reels", quantidade: 1, status: "combinado" },
+                    {
+                      id,
+                      tipo: "Reels",
+                      quantidade: 1,
+                      status: "combinado",
+                      conteudoStatus: "Combinado",
+                    },
                   ]);
                   setExpandedEntregas((s) => new Set(s).add(id));
                 }}
@@ -3487,34 +2772,114 @@ function InfluenciadorDialog({
                   )}
                 </div>
               )}
+            </div>
+          )}
 
-              {has("status") && (
-                <div
-                  className={`space-y-3 ${has("contrato") ? "border-t border-border pt-5" : ""}`}
-                >
-                  <FieldLabel title="Status atual" hint="Onde este influenciador está no fluxo." />
-                  <div className="flex flex-col gap-1.5">
-                    {INFLU_STATUSES.map((s) => {
-                      const active = status === s;
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setStatus(s)}
-                          className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                            active
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border bg-background text-foreground hover:bg-muted"
-                          }`}
-                        >
-                          <span>{s}</span>
-                          {active && <CheckCircle2 className="h-4 w-4" />}
-                        </button>
-                      );
-                    })}
+          {current === "atividade" && initial && (
+            <div className="space-y-4">
+              <FieldLabel
+                title="Checklist"
+                hint="Itens livres de acompanhamento — salvam na hora, sem precisar do botão Salvar."
+              />
+              <ChecklistSection
+                checklist={liveChecklist}
+                onChange={onSetChecklist}
+                onApplyToAll={onApplyChecklistToAll}
+              />
+
+              <div className="border-t border-border pt-4">
+                <FieldLabel title="Comentários e atividade" />
+                <div className="mt-2 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+                  {liveActivity.length + liveComments.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      Nenhuma atividade ou comentário ainda.
+                    </p>
+                  ) : (
+                    [
+                      ...liveActivity.map((a) => ({ kind: "activity" as const, item: a })),
+                      ...liveComments.map((c) => ({ kind: "comment" as const, item: c })),
+                    ]
+                      .sort(
+                        (a, b) =>
+                          new Date(a.item.createdAt).getTime() -
+                          new Date(b.item.createdAt).getTime(),
+                      )
+                      .map((e) => (
+                        <div key={e.item.id} className="flex min-w-0 items-start gap-2">
+                          <span
+                            className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
+                          >
+                            {e.item.initials}
+                          </span>
+                          {e.kind === "activity" ? (
+                            <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                              <span className="font-medium text-foreground">{e.item.author}</span>{" "}
+                              <span className="text-muted-foreground">{e.item.action}</span>
+                              <div className="text-[10px] text-muted-foreground/70">
+                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                              <div className="mb-0.5 flex items-baseline gap-1.5">
+                                <span className="text-xs font-medium">{e.item.author}</span>
+                                <span className="text-[10px] text-muted-foreground/70">
+                                  {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                              <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                                {linkifyText(e.item.text)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                  )}
+                </div>
+                <div className="mt-2">
+                  <textarea
+                    value={commentText}
+                    onChange={(ev) => setCommentText(ev.target.value)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+                        ev.preventDefault();
+                        if (commentText.trim()) {
+                          onComment(commentText);
+                          setCommentText("");
+                        }
+                      }
+                    }}
+                    rows={2}
+                    placeholder="Escreva um comentário..."
+                    className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+                  />
+                  <div className="mt-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (commentText.trim()) {
+                          onComment(commentText);
+                          setCommentText("");
+                        }
+                      }}
+                      disabled={!commentText.trim()}
+                      className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Comentar
+                    </button>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -3522,16 +2887,24 @@ function InfluenciadorDialog({
         <div className="flex items-center justify-between gap-2 border-t border-border bg-background px-6 py-3">
           <button
             type="button"
-            onClick={() => (step === 0 ? onOpenChange(false) : setStep(step - 1))}
+            onClick={() => onOpenChange(false)}
             className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
-            {step === 0 ? "Cancelar" : "Voltar"}
+            Cancelar
           </button>
           <div className="flex items-center gap-2">
-            {/* Salvar fica disponível em qualquer etapa (não só na última) —
-                antes, editar um campo cedo (ex.: telefone na etapa Perfil) e
-                fechar o diálogo sem passar por todas as etapas perdia a
-                alteração silenciosamente. */}
+            {initial && onDelete && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirm(`Remover ${initial.nome} desta lista?`);
+                  if (ok) onDelete();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Excluir
+              </button>
+            )}
             <button
               type="button"
               onClick={submit}
@@ -3540,18 +2913,9 @@ function InfluenciadorDialog({
             >
               {saving ? "Salvando..." : initial ? "Salvar" : "Salvar influenciador"}
             </button>
-            {!isLast && (
-              <button
-                type="button"
-                onClick={() => setStep(step + 1)}
-                disabled={!canNext}
-                className="rounded-md border border-border px-4 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Próximo
-              </button>
-            )}
           </div>
         </div>
+        {confirmDialog}
       </DialogContent>
     </Dialog>
   );
