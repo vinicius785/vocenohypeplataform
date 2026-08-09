@@ -2151,6 +2151,11 @@ function EntregaStatusPill({
  * `onStatusChange`, se passado, é chamado pro pill de etapa em vez do
  * transicionamento genérico — usado só na edição, pra registrar a mudança
  * na Atividade (na criação ainda não há o que logar). */
+/** Tabela de entregas — uma linha por entrega, com tipo/quantidade/status/
+ * pagamento/anexos sempre visíveis, sem precisar expandir nada só pra ler.
+ * Clicar numa linha abre o painel de edição completo (datas, anexos,
+ * pagamento, publicação) LOGO ABAIXO da tabela — a lista nunca some, só
+ * ganha um bloco extra embaixo enquanto uma linha está selecionada. */
 function EntregasEditor({
   entregas,
   onChange,
@@ -2164,26 +2169,34 @@ function EntregasEditor({
   influStatus: InfluStatus;
   pagGrupos?: PagGrupo[];
   onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
-  /** Mostra o badge + Aceitar/Recusar do pagamento junto do `PagamentoEditor`
-   * de cada entrega, em vez de precisar de uma lista de Pagamentos à parte. */
+  /** Mostra o badge + Aceitar/Recusar do pagamento no painel de edição, em
+   * vez de precisar de uma lista de Pagamentos à parte. */
   showAprovacao?: boolean;
 }) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const toggleExpanded = (id: string) =>
-    setExpanded((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = entregas.find((e) => e.id === selectedId) ?? null;
   const totalAceitoValor = showAprovacao ? totalAceito(entregas) : 0;
+
+  const update = (id: string, patch: Partial<Entrega>) =>
+    onChange(entregas.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  // "Postado" vira status "publicado" (libera link/métricas no Financeiro),
+  // qualquer outra etapa volta a "combinado".
+  const setEtapaGenerico = (e: Entrega, conteudoStatus: EntregaConteudoStatus) => {
+    if (conteudoStatus === "Postado" && !canPublishEntrega(influStatus)) return;
+    update(e.id, {
+      conteudoStatus,
+      status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+      publicadoEm: conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+    });
+  };
 
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between gap-2">
         <FieldLabel
           title="Entregas"
-          hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
+          hint="Clique numa linha pra editar datas, anexos, pagamento e publicação."
         />
         {totalAceitoValor > 0 && (
           <span className="shrink-0 text-xs font-semibold text-foreground">
@@ -2191,224 +2204,123 @@ function EntregasEditor({
           </span>
         )}
       </div>
-      {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
-      <div className="space-y-2">
-        {entregas.map((e) => {
-          const update = (patch: Partial<Entrega>) =>
-            onChange(entregas.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
-          // "Postado" vira status "publicado" (libera link/métricas no
-          // Financeiro), qualquer outra etapa volta a "combinado".
-          const setEtapaGenerico = (conteudoStatus: EntregaConteudoStatus) => {
-            if (conteudoStatus === "Postado" && !canPublishEntrega(influStatus)) return;
-            update({
-              conteudoStatus,
-              status: conteudoStatus === "Postado" ? "publicado" : "combinado",
-              publicadoEm:
-                conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
-            });
-          };
-          const published = e.conteudoStatus === "Postado";
-          const isExpanded = expanded.has(e.id);
-          const resumoBits = [
-            e.dataPostagem && new Date(e.dataPostagem + "T00:00:00").toLocaleDateString("pt-BR"),
-            e.pagamento && pagamentoResumo(e.pagamento),
-            (e.anexos?.length ?? 0) > 0 &&
-              `${e.anexos!.length} anexo${e.anexos!.length === 1 ? "" : "s"}`,
-          ].filter(Boolean);
-          return (
-            <div key={e.id} className="rounded-lg border border-border bg-background">
-              {/* Cabeçalho sempre visível: formato + quantidade + resumo compacto.
-                  Detalhes (data, anexos, pagamento, publicação) só aparecem expandidos —
-                  com 3+ entregas, tudo sempre aberto virava uma parede de campos. */}
-              <div className="flex items-center gap-2 p-2.5">
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(e.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                  <input
-                    list="entregas-tipos"
-                    value={e.tipo}
-                    onClick={(ev) => ev.stopPropagation()}
-                    onChange={(ev) => update({ tipo: ev.target.value })}
-                    placeholder="Reels, Stories..."
-                    className="w-28 shrink-0 rounded-md bg-transparent px-1 py-1 text-sm font-medium outline-none"
-                  />
-                  {!isExpanded && resumoBits.length > 0 && (
-                    <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                      {resumoBits.join(" · ")}
-                    </span>
-                  )}
-                  {!isExpanded && showAprovacao && e.pagamento && (
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                    >
-                      {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                    </span>
-                  )}
-                </button>
-                <div
-                  className="flex shrink-0 items-center rounded-md bg-muted"
-                  onClick={(ev) => ev.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => update({ quantidade: Math.max(1, e.quantidade - 1) })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+
+      {entregas.length === 0 ? (
+        <EmptyHint text="Nenhuma entrega adicionada." />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[520px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <th className="px-3 py-2 font-semibold">Tipo</th>
+                <th className="px-2 py-2 text-center font-semibold">Qtd</th>
+                <th className="px-2 py-2 font-semibold">Status</th>
+                {showAprovacao && <th className="px-2 py-2 font-semibold">Pagamento</th>}
+                <th className="px-2 py-2 text-center font-semibold">Anexos</th>
+                <th className="w-8 px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {entregas.map((e) => {
+                const isSelected = e.id === selectedId;
+                return (
+                  <tr
+                    key={e.id}
+                    onClick={() => setSelectedId((id) => (id === e.id ? null : e.id))}
+                    className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
+                      isSelected ? "bg-muted/60" : "hover:bg-muted/30"
+                    }`}
                   >
-                    −
-                  </button>
-                  <span className="w-7 text-center text-sm font-medium tabular-nums">
-                    {e.quantidade}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => update({ quantidade: e.quantidade + 1 })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    +
-                  </button>
-                </div>
-                {e.conteudoStatus && (
-                  <EntregaStatusPill
-                    value={e.conteudoStatus}
-                    influStatus={influStatus}
-                    onChange={(s) =>
-                      onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(s)
-                    }
-                  />
-                )}
-                <RemoveBtn onClick={() => onChange(entregas.filter((x) => x.id !== e.id))} />
-              </div>
-
-              {isExpanded && (
-                <div className="space-y-3 border-t border-border p-3">
-                  <div className="space-y-1.5">
-                    <EntregaDateField
-                      label="Recebimento do roteiro"
-                      value={e.dataRecebimentoRoteiro}
-                      onChange={(v) => update({ dataRecebimentoRoteiro: v })}
-                    />
-                    <EntregaDateField
-                      label="Recebimento do conteúdo"
-                      value={e.dataRecebimentoConteudo}
-                      onChange={(v) => update({ dataRecebimentoConteudo: v })}
-                    />
-                    <EntregaDateField
-                      label="Postagem"
-                      value={e.dataPostagem}
-                      onChange={(v) => update({ dataPostagem: v })}
-                    />
-                  </div>
-
-                  <EntregaAnexosEditor
-                    anexos={e.anexos ?? []}
-                    onChange={(anexos) => {
-                      // Anexar o roteiro enquanto a entrega ainda está "Aguardando
-                      // roteiro" já avança pra "Aguardando aprovação de roteiro" —
-                      // é o gatilho que manda o roteiro pro link público do
-                      // cliente, sem precisar de um segundo clique pra mudar o
-                      // status à mão.
-                      const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
-                      const conteudoStatus =
-                        ganhouRoteiro && e.conteudoStatus === "Aguardando roteiro"
-                          ? "Aguardando aprovação de roteiro"
-                          : e.conteudoStatus;
-                      update({ anexos, conteudoStatus });
-                    }}
-                  />
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        Pagamento combinado
-                      </p>
-                      {showAprovacao && e.pagamento && (
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                        >
-                          {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                        </span>
-                      )}
-                    </div>
-                    <PagamentoEditor
-                      value={e.pagamento}
-                      onChange={(pagamento) => update({ pagamento })}
-                      pagGrupos={pagGrupos}
-                    />
-                    {showAprovacao &&
-                      e.pagamento &&
-                      (e.pagamento.aprovacao === "pendente" ? (
-                        <div className="flex gap-1.5 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              update({
-                                pagamento: {
-                                  ...e.pagamento!,
-                                  aprovacao: "aceito",
-                                  data: e.pagamento!.data || todayISO(),
-                                },
-                              })
-                            }
-                            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
-                          >
-                            Aceitar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              update({ pagamento: { ...e.pagamento!, aprovacao: "recusado" } })
-                            }
-                            className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
-                          >
-                            Recusar
-                          </button>
-                        </div>
-                      ) : (
+                    <td className="px-3 py-2">
+                      <input
+                        list="entregas-tipos"
+                        value={e.tipo}
+                        onClick={(ev) => ev.stopPropagation()}
+                        onChange={(ev) => update(e.id, { tipo: ev.target.value })}
+                        placeholder="Reels, Stories..."
+                        className="w-full min-w-[110px] rounded-md bg-transparent px-1 py-1 font-medium outline-none focus:bg-background focus:ring-1 focus:ring-ring"
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <div
+                        className="mx-auto flex w-fit shrink-0 items-center rounded-md bg-muted"
+                        onClick={(ev) => ev.stopPropagation()}
+                      >
                         <button
                           type="button"
                           onClick={() =>
-                            update({ pagamento: { ...e.pagamento!, aprovacao: "pendente" } })
+                            update(e.id, { quantidade: Math.max(1, e.quantidade - 1) })
                           }
-                          className="pt-0.5 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                          className="h-6 w-6 text-sm text-muted-foreground hover:text-foreground"
                         >
-                          Marcar como pendente
+                          −
                         </button>
-                      ))}
-                  </div>
-
-                  {published && (
-                    <div className="space-y-2 border-t border-border pt-2.5">
-                      <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
-                      <input
-                        value={e.url ?? ""}
-                        onChange={(ev) => update({ url: ev.target.value })}
-                        placeholder="Link do conteúdo publicado"
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
-                      />
-                      <div>
-                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                          Métricas
-                        </p>
-                        <MetricsEditor value={e.metrics} onChange={(m) => update({ metrics: m })} />
+                        <span className="w-6 text-center text-xs font-medium tabular-nums">
+                          {e.quantidade}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => update(e.id, { quantidade: e.quantidade + 1 })}
+                          className="h-6 w-6 text-sm text-muted-foreground hover:text-foreground"
+                        >
+                          +
+                        </button>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    </td>
+                    <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
+                      {e.conteudoStatus && (
+                        <EntregaStatusPill
+                          value={e.conteudoStatus}
+                          influStatus={influStatus}
+                          onChange={(s) =>
+                            onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
+                          }
+                        />
+                      )}
+                    </td>
+                    {showAprovacao && (
+                      <td className="px-2 py-2">
+                        {e.pagamento ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11px] text-muted-foreground">
+                              {pagamentoResumo(e.pagamento)}
+                            </span>
+                            <span
+                              className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
+                            >
+                              {APROVACAO_LABEL[e.pagamento.aprovacao]}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+                    <td className="px-2 py-2 text-center text-[11px] text-muted-foreground">
+                      {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
+                    </td>
+                    <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
+                      <RemoveBtn
+                        onClick={() => {
+                          onChange(entregas.filter((x) => x.id !== e.id));
+                          if (isSelected) setSelectedId(null);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <datalist id="entregas-tipos">
         {ENTREGAS_OPTS.map((o) => (
           <option key={o} value={o} />
         ))}
       </datalist>
+
       <button
         type="button"
         onClick={() => {
@@ -2417,12 +2329,145 @@ function EntregasEditor({
             ...entregas,
             { id, tipo: "Reels", quantidade: 1, status: "combinado", conteudoStatus: "Combinado" },
           ]);
-          setExpanded((s) => new Set(s).add(id));
+          setSelectedId(id);
         }}
         className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
       >
         <Plus className="h-3.5 w-3.5" /> Adicionar entrega
       </button>
+
+      {selected && (
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-foreground">
+              Editando · {selected.titulo ? `${selected.tipo} · ${selected.titulo}` : selected.tipo}
+            </p>
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Fechar edição"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            <EntregaDateField
+              label="Recebimento do roteiro"
+              value={selected.dataRecebimentoRoteiro}
+              onChange={(v) => update(selected.id, { dataRecebimentoRoteiro: v })}
+            />
+            <EntregaDateField
+              label="Recebimento do conteúdo"
+              value={selected.dataRecebimentoConteudo}
+              onChange={(v) => update(selected.id, { dataRecebimentoConteudo: v })}
+            />
+            <EntregaDateField
+              label="Postagem"
+              value={selected.dataPostagem}
+              onChange={(v) => update(selected.id, { dataPostagem: v })}
+            />
+          </div>
+
+          <EntregaAnexosEditor
+            anexos={selected.anexos ?? []}
+            onChange={(anexos) => {
+              // Anexar o roteiro enquanto a entrega ainda está "Aguardando
+              // roteiro" já avança pra "Aguardando aprovação de roteiro" — é
+              // o gatilho que manda o roteiro pro link público do cliente,
+              // sem precisar de um segundo clique pra mudar o status à mão.
+              const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
+              const conteudoStatus =
+                ganhouRoteiro && selected.conteudoStatus === "Aguardando roteiro"
+                  ? "Aguardando aprovação de roteiro"
+                  : selected.conteudoStatus;
+              update(selected.id, { anexos, conteudoStatus });
+            }}
+          />
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-muted-foreground">Pagamento combinado</p>
+              {showAprovacao && selected.pagamento && (
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[selected.pagamento.aprovacao]}`}
+                >
+                  {APROVACAO_LABEL[selected.pagamento.aprovacao]}
+                </span>
+              )}
+            </div>
+            <PagamentoEditor
+              value={selected.pagamento}
+              onChange={(pagamento) => update(selected.id, { pagamento })}
+              pagGrupos={pagGrupos}
+            />
+            {showAprovacao &&
+              selected.pagamento &&
+              (selected.pagamento.aprovacao === "pendente" ? (
+                <div className="flex gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update(selected.id, {
+                        pagamento: {
+                          ...selected.pagamento!,
+                          aprovacao: "aceito",
+                          data: selected.pagamento!.data || todayISO(),
+                        },
+                      })
+                    }
+                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+                  >
+                    Aceitar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      update(selected.id, {
+                        pagamento: { ...selected.pagamento!, aprovacao: "recusado" },
+                      })
+                    }
+                    className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+                  >
+                    Recusar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    update(selected.id, {
+                      pagamento: { ...selected.pagamento!, aprovacao: "pendente" },
+                    })
+                  }
+                  className="pt-0.5 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Marcar como pendente
+                </button>
+              ))}
+          </div>
+
+          {selected.conteudoStatus === "Postado" && (
+            <div className="space-y-2 border-t border-border pt-2.5">
+              <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
+              <input
+                value={selected.url ?? ""}
+                onChange={(ev) => update(selected.id, { url: ev.target.value })}
+                placeholder="Link do conteúdo publicado"
+                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-muted-foreground">Métricas</p>
+                <MetricsEditor
+                  value={selected.metrics}
+                  onChange={(m) => update(selected.id, { metrics: m })}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
