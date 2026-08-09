@@ -32,7 +32,6 @@ import {
   FileVideo,
   Film,
   Instagram,
-  Landmark,
   Linkedin,
   LayoutList,
   Loader2,
@@ -1922,17 +1921,6 @@ function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function MetricStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
 /** Checklist livre por influenciador — escreve o que quiser, marca feito, e
  * pode aplicar a mesma lista (desmarcada) a todos os outros influs de uma
  * vez, pra não recriar item por item em cada um. */
@@ -2169,12 +2157,16 @@ function EntregasEditor({
   influStatus,
   pagGrupos,
   onStatusChange,
+  showAprovacao = false,
 }: {
   entregas: Entrega[];
   onChange: (next: Entrega[]) => void;
   influStatus: InfluStatus;
   pagGrupos?: PagGrupo[];
   onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
+  /** Mostra o badge + Aceitar/Recusar do pagamento junto do `PagamentoEditor`
+   * de cada entrega, em vez de precisar de uma lista de Pagamentos à parte. */
+  showAprovacao?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (id: string) =>
@@ -2184,13 +2176,21 @@ function EntregasEditor({
       else next.add(id);
       return next;
     });
+  const totalAceitoValor = showAprovacao ? totalAceito(entregas) : 0;
 
   return (
     <div className="space-y-3">
-      <FieldLabel
-        title="Entregas"
-        hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
-      />
+      <div className="flex items-baseline justify-between gap-2">
+        <FieldLabel
+          title="Entregas"
+          hint="Combine o formato e a quantidade, e acompanhe a etapa de produção de cada uma."
+        />
+        {totalAceitoValor > 0 && (
+          <span className="shrink-0 text-xs font-semibold text-foreground">
+            Total aceito {fmtBRL(totalAceitoValor)}
+          </span>
+        )}
+      </div>
       {entregas.length === 0 && <EmptyHint text="Nenhuma entrega adicionada." />}
       <div className="space-y-2">
         {entregas.map((e) => {
@@ -2240,6 +2240,13 @@ function EntregasEditor({
                   {!isExpanded && resumoBits.length > 0 && (
                     <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                       {resumoBits.join(" · ")}
+                    </span>
+                  )}
+                  {!isExpanded && showAprovacao && e.pagamento && (
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
+                    >
+                      {APROVACAO_LABEL[e.pagamento.aprovacao]}
                     </span>
                   )}
                 </button>
@@ -2315,14 +2322,63 @@ function EntregasEditor({
                   />
 
                   <div className="space-y-1.5">
-                    <p className="text-[11px] font-medium text-muted-foreground">
-                      Pagamento combinado
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        Pagamento combinado
+                      </p>
+                      {showAprovacao && e.pagamento && (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
+                        >
+                          {APROVACAO_LABEL[e.pagamento.aprovacao]}
+                        </span>
+                      )}
+                    </div>
                     <PagamentoEditor
                       value={e.pagamento}
                       onChange={(pagamento) => update({ pagamento })}
                       pagGrupos={pagGrupos}
                     />
+                    {showAprovacao &&
+                      e.pagamento &&
+                      (e.pagamento.aprovacao === "pendente" ? (
+                        <div className="flex gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              update({
+                                pagamento: {
+                                  ...e.pagamento!,
+                                  aprovacao: "aceito",
+                                  data: e.pagamento!.data || todayISO(),
+                                },
+                              })
+                            }
+                            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+                          >
+                            Aceitar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              update({ pagamento: { ...e.pagamento!, aprovacao: "recusado" } })
+                            }
+                            className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            update({ pagamento: { ...e.pagamento!, aprovacao: "pendente" } })
+                          }
+                          className="pt-0.5 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                        >
+                          Marcar como pendente
+                        </button>
+                      ))}
                   </div>
 
                   {published && (
@@ -2490,46 +2546,6 @@ function ContratoEditor({
   );
 }
 
-/** Botões lado a lado (Métricas, Redes, Pagamentos, Dados bancários,
- * Contrato) — nenhum aberto por padrão; clicar num abre o painel dele logo
- * abaixo (e fecha automaticamente se outro for aberto). São os campos mais
- * raros de mexer — ficam ao alcance de um clique, sem precisar de um
- * segundo diálogo pra editar. */
-function HiddenSectionsPanel({
-  sections,
-}: {
-  sections: { key: string; icon: React.ReactNode; title: string; content: React.ReactNode }[];
-}) {
-  const [active, setActive] = useState<string | null>(null);
-  const activeSection = sections.find((s) => s.key === active);
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {sections.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setActive((a) => (a === s.key ? null : s.key))}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              active === s.key
-                ? "border-foreground bg-foreground text-background"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {s.icon}
-            {s.title}
-          </button>
-        ))}
-      </div>
-      {activeSection && (
-        <div className="rounded-lg border border-border bg-background p-3">
-          {activeSection.content}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** Popup de anexos de uma entrega — usado nos cards de linha do tempo do
  * resumo (visualização compacta, sem precisar expandir o card inteiro só
  * pra anexar um arquivo). */
@@ -2567,10 +2583,9 @@ function EntregaAnexosPopup({
 
 /* ============================================================
  * Perfil do influenciador — diálogo único de visualização + edição.
- * Tudo salva imediato (sem botão "Salvar"): cabeçalho e entregas ficam
- * sempre visíveis; redes, métricas do perfil, financeiro e contrato ficam
- * num painel de um clique (HiddenSectionsPanel), mas editáveis ali mesmo —
- * nunca abrem um segundo diálogo.
+ * Tudo salva imediato (sem botão "Salvar") e toda seção fica sempre
+ * visível, empilhada por ordem de importância — nada fica atrás de um
+ * clique pra revelar, e nunca abre um segundo diálogo.
  * ============================================================ */
 
 function InfluencerProfileDialog({
@@ -2600,24 +2615,6 @@ function InfluencerProfileDialog({
 }) {
   const [commentText, setCommentText] = useState("");
   const bank = influ.bank ?? {};
-
-  const metricsTotal = influ.entregas.reduce(
-    (acc, e) => {
-      acc.views += e.metrics?.views ?? 0;
-      acc.likes += e.metrics?.likes ?? 0;
-      acc.comments += e.metrics?.comments ?? 0;
-      acc.shares += e.metrics?.shares ?? 0;
-      acc.saves += e.metrics?.saves ?? 0;
-      acc.reach += e.metrics?.reach ?? 0;
-      return acc;
-    },
-    { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, reach: 0 },
-  );
-  const hasMetrics = Object.values(metricsTotal).some((v) => v > 0);
-  const reliability = computeReliability(influ.entregas);
-
-  const hasExtras =
-    has("redes") || has("metricas") || has("pagamentos") || has("bancario") || has("contrato");
 
   const [editingHeader, setEditingHeader] = useState(false);
   const [draft, setDraft] = useState({
@@ -2777,168 +2774,58 @@ function InfluencerProfileDialog({
                 influStatus={influ.status}
                 pagGrupos={pagGrupos}
                 onStatusChange={onSetConteudoStatus}
+                showAprovacao={has("pagamentos")}
               />
             )}
 
-            <ChecklistSection
-              checklist={influ.checklist ?? []}
-              onChange={onSetChecklist}
-              onApplyToAll={onApplyChecklistToAll}
-            />
-
-            {/* SEÇÕES SECUNDÁRIAS — botões lado a lado, editáveis ali mesmo,
-                sem precisar de um segundo diálogo. */}
-            <HiddenSectionsPanel
-              sections={[
-                ...(has("redes")
-                  ? [
-                      {
-                        key: "redes",
-                        icon: <AtSign className="h-3.5 w-3.5" />,
-                        title: "Redes sociais",
-                        content: (
-                          <RedesEditor
-                            redes={influ.redes}
-                            onChange={(redes) => onPatch({ redes })}
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("metricas")
-                  ? [
-                      {
-                        key: "metricas-perfil",
-                        icon: <BarChart3 className="h-3.5 w-3.5" />,
-                        title: "Métricas do perfil",
-                        content: (
-                          <ProfileMetricsEditor
-                            redes={influ.redes}
-                            onChangeRedes={(redes) => onPatch({ redes })}
-                            value={influ.profileMetrics}
-                            onChange={(profileMetrics) => onPatch({ profileMetrics })}
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("entregas") && (hasMetrics || reliability.total > 0)
-                  ? [
-                      {
-                        key: "metricas-entregas",
-                        icon: <BarChart3 className="h-3.5 w-3.5" />,
-                        title: "Métricas das entregas",
-                        content: (
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-4">
-                            <MetricStat label="Confiabilidade" value={`${reliability.score}%`} />
-                            {metricsTotal.views > 0 && (
-                              <MetricStat
-                                label="Visualizações"
-                                value={metricsTotal.views.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.reach > 0 && (
-                              <MetricStat
-                                label="Alcance"
-                                value={metricsTotal.reach.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.likes > 0 && (
-                              <MetricStat
-                                label="Curtidas"
-                                value={metricsTotal.likes.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.comments > 0 && (
-                              <MetricStat
-                                label="Comentários"
-                                value={metricsTotal.comments.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.shares > 0 && (
-                              <MetricStat
-                                label="Compart."
-                                value={metricsTotal.shares.toLocaleString("pt-BR")}
-                              />
-                            )}
-                            {metricsTotal.saves > 0 && (
-                              <MetricStat
-                                label="Salvos"
-                                value={metricsTotal.saves.toLocaleString("pt-BR")}
-                              />
-                            )}
-                          </div>
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("pagamentos")
-                  ? [
-                      {
-                        key: "pagamentos",
-                        icon: <Coins className="h-3.5 w-3.5" />,
-                        title: "Pagamentos",
-                        content: (
-                          <PagamentosList
-                            entregas={influ.entregas}
-                            onSetAprovacao={(entregaId, aprovacao) =>
-                              onPatch({
-                                entregas: influ.entregas.map((x) =>
-                                  x.id === entregaId && x.pagamento
-                                    ? {
-                                        ...x,
-                                        pagamento: {
-                                          ...x.pagamento,
-                                          aprovacao,
-                                          data:
-                                            x.pagamento.data ||
-                                            (aprovacao === "aceito"
-                                              ? todayISO()
-                                              : x.pagamento.data),
-                                        },
-                                      }
-                                    : x,
-                                ),
-                              })
-                            }
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-                ...(has("bancario")
-                  ? [
-                      {
-                        key: "bancario",
-                        icon: <Landmark className="h-3.5 w-3.5" />,
-                        title: "Dados bancários",
-                        content: <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} />,
-                      },
-                    ]
-                  : []),
-                ...(has("contrato")
-                  ? [
-                      {
-                        key: "contrato",
-                        icon: <FileText className="h-3.5 w-3.5" />,
-                        title: "Contrato",
-                        content: (
-                          <ContratoEditor
-                            value={influ.contrato}
-                            onChange={(contrato) => onPatch({ contrato })}
-                          />
-                        ),
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-
-            {!has("entregas") && !hasExtras && (
-              <p className="text-xs text-muted-foreground">
-                Nenhuma informação adicional configurada para este influenciador.
-              </p>
+            {has("redes") && (
+              <div className="space-y-3 border-t border-border pt-6">
+                <FieldLabel title="Redes sociais" />
+                <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
+              </div>
             )}
+
+            {has("metricas") && (
+              <div className="space-y-3 border-t border-border pt-6">
+                <FieldLabel title="Métricas do perfil" hint="Por rede social." />
+                <ProfileMetricsEditor
+                  redes={influ.redes}
+                  onChangeRedes={(redes) => onPatch({ redes })}
+                  value={influ.profileMetrics}
+                  onChange={(profileMetrics) => onPatch({ profileMetrics })}
+                />
+              </div>
+            )}
+
+            {(has("bancario") || has("contrato")) && (
+              <div
+                className={`grid grid-cols-1 gap-6 border-t border-border pt-6 ${has("bancario") && has("contrato") ? "sm:grid-cols-2" : ""}`}
+              >
+                {has("bancario") && (
+                  <div className="space-y-3">
+                    <FieldLabel title="Dados bancários" />
+                    <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
+                  </div>
+                )}
+                {has("contrato") && (
+                  <div className="space-y-3">
+                    <FieldLabel title="Contrato" />
+                    <ContratoEditor
+                      value={influ.contrato}
+                      onChange={(contrato) => onPatch({ contrato })}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="border-t border-border pt-6">
+              <ChecklistSection
+                checklist={influ.checklist ?? []}
+                onChange={onSetChecklist}
+                onApplyToAll={onApplyChecklistToAll}
+              />
+            </div>
           </div>
 
           <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
@@ -3260,53 +3147,18 @@ function InfluenciadorDialog({
                 onChange={setEntregas}
                 influStatus={status}
                 pagGrupos={pagGrupos}
+                showAprovacao={has("pagamentos")}
               />
             </section>
           )}
 
-          {(has("pagamentos") || has("bancario")) && (
-            <section className="space-y-6 border-t border-border pt-6">
-              {has("pagamentos") && (
-                <div className="space-y-3">
-                  <FieldLabel
-                    title="Pagamentos"
-                    hint="Aceite ou recuse os orçamentos combinados em cada entrega. Só o que estiver Aceito conta no Financeiro."
-                  />
-                  <PagamentosList
-                    entregas={entregas}
-                    onSetAprovacao={(entregaId, aprovacao) =>
-                      setEntregas((es) =>
-                        es.map((x) =>
-                          x.id === entregaId && x.pagamento
-                            ? {
-                                ...x,
-                                pagamento: {
-                                  ...x.pagamento,
-                                  aprovacao,
-                                  data:
-                                    x.pagamento.data ||
-                                    (aprovacao === "aceito" ? todayISO() : x.pagamento.data),
-                                },
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-              )}
-
-              {has("bancario") && (
-                <div
-                  className={`space-y-3 ${has("pagamentos") ? "border-t border-border pt-5" : ""}`}
-                >
-                  <FieldLabel
-                    title="Dados bancários"
-                    hint="Para transferência ou PIX ao influenciador."
-                  />
-                  <BankFields value={bank} onChange={setBank} />
-                </div>
-              )}
+          {has("bancario") && (
+            <section className="space-y-3 border-t border-border pt-6">
+              <FieldLabel
+                title="Dados bancários"
+                hint="Para transferência ou PIX ao influenciador."
+              />
+              <BankFields value={bank} onChange={setBank} />
             </section>
           )}
 
@@ -3684,81 +3536,8 @@ function PagamentoEditor({
         className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
       />
       <p className="text-[10px] text-muted-foreground">
-        Some para a aba Pagamentos como <b>Pendente</b> — só vira despesa no Financeiro depois de
-        aceito.
-      </p>
-    </div>
-  );
-}
-
-function PagamentosList({
-  entregas,
-  onSetAprovacao,
-}: {
-  entregas: Entrega[];
-  onSetAprovacao: (entregaId: string, aprovacao: AprovacaoPagamento) => void;
-}) {
-  const comPagamento = entregas.filter((e) => e.pagamento);
-  const total = totalAceito(entregas);
-
-  if (comPagamento.length === 0) {
-    return <EmptyHint text="Nenhum pagamento combinado ainda — adicione um na etapa Entregas." />;
-  }
-
-  return (
-    <div className="space-y-2">
-      <ul className="space-y-2">
-        {comPagamento.map((e) => {
-          const p = e.pagamento!;
-          return (
-            <li
-              key={e.id}
-              className="space-y-1.5 rounded-md border border-border bg-background p-2.5 text-xs"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <span className="font-medium text-foreground">{e.tipo}</span>
-                  <span className="ml-1.5 text-muted-foreground">{pagamentoResumo(p)}</span>
-                </div>
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[p.aprovacao]}`}
-                >
-                  {APROVACAO_LABEL[p.aprovacao]}
-                </span>
-              </div>
-              {p.data && <p className="text-[11px] text-muted-foreground">{fmtDate(p.data)}</p>}
-              {p.aprovacao === "pendente" ? (
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onSetAprovacao(e.id, "aceito")}
-                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
-                  >
-                    Aceitar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onSetAprovacao(e.id, "recusado")}
-                    className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
-                  >
-                    Recusar
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onSetAprovacao(e.id, "pendente")}
-                  className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                >
-                  Marcar como pendente
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-right text-xs font-semibold text-foreground">
-        Total aceito {fmtBRL(total)}
+        Some como <b>Pendente</b> — só vira despesa no Financeiro depois de aceito (Aceitar/Recusar
+        fica logo abaixo, quando a etapa Entregas tem esse campo habilitado).
       </p>
     </div>
   );
