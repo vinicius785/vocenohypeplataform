@@ -30,10 +30,13 @@ import {
   ExternalLink,
   Facebook,
   FileText,
+  FileVideo,
+  Film,
   Instagram,
   Landmark,
   Linkedin,
   LayoutList,
+  Loader2,
   Mail,
   Package,
   Paperclip,
@@ -59,6 +62,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import type { PagGrupo } from "@/components/VincularCampanhaDialog";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -3920,6 +3924,64 @@ const ENTREGA_ANEXO_TONE: Record<EntregaAnexoCategoria, string> = {
   "Conteúdo publicado": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   Outro: "bg-muted text-muted-foreground",
 };
+const ENTREGA_ANEXO_ICON: Record<EntregaAnexoCategoria, typeof FileText> = {
+  Roteiro: FileText,
+  Gravação: Film,
+  "Conteúdo publicado": Upload,
+  Outro: Paperclip,
+};
+function isImageName(nome: string): boolean {
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
+}
+function isVideoName(nome: string): boolean {
+  return /\.(mp4|mov|webm|avi|mkv)$/i.test(nome);
+}
+
+/** Sobe o arquivo pro bucket `entrega-anexos` (Storage) e devolve uma URL
+ * assinada válida por ~1 ano — antes o arquivo virava um data: URL (base64)
+ * embutido direto na linha JSONB, o que falhava silenciosamente pra
+ * arquivos maiores (vídeos): o anexo nunca era salvo de fato. Mesmo padrão
+ * já usado em `uploadChatAttachment` (chat-store.ts). */
+async function uploadEntregaAnexo(file: File): Promise<string | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return null;
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+  const { error } = await supabase.storage.from("entrega-anexos").upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) {
+    console.warn("[entrega-anexos] upload failed", error);
+    return null;
+  }
+  const { data: signed } = await supabase.storage
+    .from("entrega-anexos")
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
+  return signed?.signedUrl ?? null;
+}
+
+/** Miniatura do anexo — imagem de verdade quando dá, ícone por tipo de
+ * arquivo nos outros casos (vídeo, documento) — antes era só um nome de
+ * arquivo sublinhado, difícil de saber de relance o que era cada anexo. */
+function AnexoThumb({ nome, url }: { nome: string; url: string }) {
+  if (isImageName(nome)) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-md border border-border object-cover"
+      />
+    );
+  }
+  const Icon = isVideoName(nome) ? FileVideo : FileText;
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+      <Icon className="h-4 w-4" />
+    </div>
+  );
+}
 
 function EntregaAnexosEditor({
   anexos,
@@ -3930,91 +3992,110 @@ function EntregaAnexosEditor({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingCategoria = useRef<EntregaAnexoCategoria>("Roteiro");
-  const addMenu = useDropdown();
+  const [uploading, setUploading] = useState<EntregaAnexoCategoria | null>(null);
+  const [error, setError] = useState("");
 
-  const pickCategoria = (c: EntregaAnexoCategoria) => {
+  const pick = (c: EntregaAnexoCategoria) => {
     pendingCategoria.current = c;
-    addMenu.setOpen(false);
     fileRef.current?.click();
   };
 
+  const handleFile = async (file: File) => {
+    setError("");
+    setUploading(pendingCategoria.current);
+    try {
+      const url = await uploadEntregaAnexo(file);
+      if (!url) {
+        setError("Falha ao subir o arquivo. Tente de novo.");
+        return;
+      }
+      onChange([
+        ...anexos,
+        { id: crypto.randomUUID(), categoria: pendingCategoria.current, nome: file.name, url },
+      ]);
+    } finally {
+      setUploading(null);
+    }
+  };
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
-        <div ref={addMenu.ref} className="relative">
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const r = new FileReader();
-              r.onload = () =>
-                onChange([
-                  ...anexos,
-                  {
-                    id: crypto.randomUUID(),
-                    categoria: pendingCategoria.current,
-                    nome: file.name,
-                    url: String(r.result),
-                  },
-                ]);
-              r.readAsDataURL(file);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => addMenu.setOpen((o) => !o)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-          >
-            <Paperclip className="h-3 w-3" /> Adicionar anexo
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          {addMenu.open && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-border bg-popover p-1 shadow-md">
-              {ENTREGA_ANEXO_CATEGORIAS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => pickCategoria(c)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${ENTREGA_ANEXO_TONE[c]}`} />
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+    <div className="space-y-2.5">
+      <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
+
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (fileRef.current) fileRef.current.value = "";
+          if (file) void handleFile(file);
+        }}
+      />
+
+      {/* Um botão visual por categoria, em vez de um menu genérico — dá
+          pra ver de cara o que já tem roteiro/gravação/conteúdo anexado. */}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        {ENTREGA_ANEXO_CATEGORIAS.map((c) => {
+          const Icon = ENTREGA_ANEXO_ICON[c];
+          const count = anexos.filter((a) => a.categoria === c).length;
+          const isUploadingThis = uploading === c;
+          return (
+            <button
+              key={c}
+              type="button"
+              disabled={uploading !== null}
+              onClick={() => pick(c)}
+              className={`flex flex-col items-center gap-1 rounded-lg border border-dashed px-2 py-2.5 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                count > 0
+                  ? "border-border bg-muted/30 hover:border-foreground/30"
+                  : "border-border hover:border-foreground/30 hover:bg-muted/20"
+              }`}
+            >
+              {isUploadingThis ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="text-[10px] font-medium leading-tight text-foreground">{c}</span>
+              {count > 0 && (
+                <span className="text-[10px] tabular-nums text-muted-foreground">{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+
       {anexos.length > 0 ? (
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {anexos.map((a) => (
             <li
               key={a.id}
-              className="flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1"
+              className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
             >
-              <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-              >
-                {a.categoria}
-              </span>
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                download={a.nome}
-                className="min-w-0 flex-1 truncate text-xs text-foreground underline underline-offset-2"
-              >
-                {a.nome}
-              </a>
+              <AnexoThumb nome={a.nome} url={a.url} />
+              <div className="min-w-0 flex-1">
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download={a.nome}
+                  className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {a.nome}
+                </a>
+                <span
+                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+                >
+                  {a.categoria}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                className="shrink-0 text-muted-foreground hover:text-destructive"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                 aria-label="Remover anexo"
               >
                 <X className="h-3.5 w-3.5" />

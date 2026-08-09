@@ -1353,78 +1353,96 @@ function ClientPortalPage() {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {contentFeed.slice(0, 12).map((item) => (
-                        <div
-                          key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
-                          className="rounded-xl border border-border bg-background p-4"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                            className="flex w-full items-center gap-3 text-left"
+                      {contentFeed.slice(0, 12).map((item) => {
+                        // O link do post pode vir do campo "url" (texto
+                        // manual) OU de um anexo categoria "Conteúdo
+                        // publicado" (upload feito na entrega) — antes só o
+                        // primeiro era considerado, e o conteúdo anexado
+                        // sumia do feed do portal.
+                        const conteudoAnexos = (item.entrega.anexos ?? []).filter(
+                          (a) => a.categoria === "Conteúdo publicado",
+                        );
+                        const links = item.entrega.url
+                          ? [{ id: "url", nome: "Ver publicação", url: item.entrega.url }]
+                          : conteudoAnexos.map((a) => ({ id: a.id, nome: a.nome, url: a.url }));
+                        return (
+                          <div
+                            key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
+                            className="rounded-xl border border-border bg-background p-4"
                           >
-                            <Avatar className="h-10 w-10 shrink-0">
-                              {item.inf.foto && (
-                                <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
-                              )}
-                              <AvatarFallback className="text-sm font-semibold">
-                                {initialsOf(item.inf.nome)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-foreground">
-                                {item.inf.nome}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {item.campanhaNome}
-                                {item.entrega.publicadoEm
-                                  ? ` · ${fmtDate(item.entrega.publicadoEm)}`
-                                  : item.entrega.dataPostagem
-                                    ? ` · ${fmtDate(item.entrega.dataPostagem)}`
-                                    : ""}
-                              </p>
-                            </div>
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
-                              {item.entrega.tipo}
-                            </Badge>
-                          </button>
-
-                          {(item.entrega.metrics || item.entrega.url) && (
-                            <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-                              <div className="flex flex-wrap gap-4">
-                                {item.entrega.metrics?.views ? (
-                                  <MetricStat
-                                    label="Views"
-                                    value={item.entrega.metrics.views.toLocaleString("pt-BR")}
-                                  />
-                                ) : null}
-                                {item.entrega.metrics?.likes ? (
-                                  <MetricStat
-                                    label="Curtidas"
-                                    value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
-                                  />
-                                ) : null}
-                                {item.entrega.metrics?.reach ? (
-                                  <MetricStat
-                                    label="Alcance"
-                                    value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
-                                  />
-                                ) : null}
+                            <button
+                              type="button"
+                              onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                              className="flex w-full items-center gap-3 text-left"
+                            >
+                              <Avatar className="h-10 w-10 shrink-0">
+                                {item.inf.foto && (
+                                  <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
+                                )}
+                                <AvatarFallback className="text-sm font-semibold">
+                                  {initialsOf(item.inf.nome)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {item.inf.nome}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {item.campanhaNome}
+                                  {item.entrega.publicadoEm
+                                    ? ` · ${fmtDate(item.entrega.publicadoEm)}`
+                                    : item.entrega.dataPostagem
+                                      ? ` · ${fmtDate(item.entrega.dataPostagem)}`
+                                      : ""}
+                                </p>
                               </div>
-                              {item.entrega.url && (
-                                <a
-                                  href={item.entrega.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
-                                >
-                                  <ExternalLink className="h-3 w-3" /> Ver publicação
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                              <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                {item.entrega.tipo}
+                              </Badge>
+                            </button>
+
+                            {(item.entrega.metrics || links.length > 0) && (
+                              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                                <div className="flex flex-wrap gap-4">
+                                  {item.entrega.metrics?.views ? (
+                                    <MetricStat
+                                      label="Views"
+                                      value={item.entrega.metrics.views.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                  {item.entrega.metrics?.likes ? (
+                                    <MetricStat
+                                      label="Curtidas"
+                                      value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                  {item.entrega.metrics?.reach ? (
+                                    <MetricStat
+                                      label="Alcance"
+                                      value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
+                                    />
+                                  ) : null}
+                                </div>
+                                {links.length > 0 && (
+                                  <div className="flex flex-wrap gap-3">
+                                    {links.map((link) => (
+                                      <a
+                                        key={link.id}
+                                        href={link.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
+                                      >
+                                        <ExternalLink className="h-3 w-3" /> {link.nome}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </section>

@@ -1,6 +1,7 @@
 {
-  "version": "1.80.0",
+  "version": "1.81.0",
   "notes": [
+    "Corrige anexos de entrega (roteiro/gravação/conteúdo) que sumiam sem aviso: antes eram salvos como base64 dentro do próprio registro, o que falhava silenciosamente em arquivos maiores (vídeos) — agora sobem de verdade pro Storage. Editor de anexos também ficou bem mais visual: um botão por categoria (Roteiro/Gravação/Conteúdo/Outro) com contador, miniatura de imagem ou ícone por tipo de arquivo, e aviso claro se o upload falhar. Isso também corrige o \"Últimos conteúdos\" do portal do cliente, que não estava linkando pro anexo quando não havia um link de post preenchido à parte.",
     "Agora dá pra publicar artigos do Marketing direto no portal do cliente: no editor de artigo, escolha pra quais clientes ele deve aparecer (\"Publicar no portal de quais clientes\") — só aparece quando o status estiver \"Publicado\". No portal, novo item \"Artigos\" na barra lateral com a lista e leitura completa.",
     "Deixa o portal do cliente mais fiel ao formato LinkedIn: cartão de perfil com banner + foto do cliente e mini estatísticas, menu lateral em formato de \"páginas\" (ícone + contador), widgets de Novidades/Campanhas com o título dentro da mesma caixa da lista, e remove os cards de KPI do topo do Início.",
     "A tela Início do portal do cliente ganha estrutura tipo LinkedIn: barra lateral com o cliente e navegação, centro com feed dos últimos conteúdos publicados (com métricas e link pro post), e uma coluna à direita com Novidades pendentes e a lista de campanhas.",
