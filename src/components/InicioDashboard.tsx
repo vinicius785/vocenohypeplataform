@@ -52,7 +52,8 @@ import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/li
 import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
-import { computeMemberScores, type MemberScore } from "@/lib/score";
+import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
+import { todayZipKey } from "@/lib/zip-game";
 
 type DashTask = {
   id: string;
@@ -243,7 +244,7 @@ export function InicioDashboard() {
   const [newPersonal, setNewPersonal] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [zipOpen, setZipOpen] = useState(false);
-  const [monthLeader, setMonthLeader] = useState<MemberScore | null>(null);
+  const [monthLeader, setMonthLeader] = useState<ZipMonthLeader | null>(null);
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
@@ -275,22 +276,6 @@ export function InicioDashboard() {
       setTasks(loadAllTasks(campanhaNameMap, getMe().name));
       setMeetings(loadMeetings());
       setPersonal(loadPersonal());
-
-      const now = new Date();
-      const monthFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const campanhaGroups = Array.from(getAllCampanhaTarefas()).map(([id, tasks]) => ({
-        id,
-        name: "Campanha",
-        tasks,
-      }));
-      const scores = computeMemberScores(
-        loadProjetos(),
-        loadMeetings(),
-        loadMembers(),
-        { from: monthFrom },
-        campanhaGroups,
-      );
-      setMonthLeader(scores.find((s) => s.score > 0) ?? null);
     };
     refresh();
     window.addEventListener("storage", refresh);
@@ -309,8 +294,17 @@ export function InicioDashboard() {
       unsubProjetos();
       unsubCampanhaTarefas();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campanhaNameMap]);
+
+  // "Líder do mês" do box "Jogos do dia" — quem mais venceu o Zip do dia
+  // este mês (mais dias com o tempo mais rápido). Atualiza sozinho quando
+  // alguém bate um novo recorde hoje (realtime no `date_key` de hoje, que é
+  // o único que pode mudar o líder do mês em tempo real).
+  useEffect(() => {
+    const refreshZipLeader = () => void getZipMonthLeader().then(setMonthLeader);
+    refreshZipLeader();
+    return subscribeZipLeaderboard(todayZipKey(), refreshZipLeader);
+  }, []);
 
   // Mantém o resumo aberto em sincronia com atualizações (confirmar,
   // recusar, sugerir horário, etc.) feitas dentro do próprio diálogo.
@@ -875,14 +869,20 @@ export function InicioDashboard() {
               <Trophy className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Líder do mês</p>
+              <p className="text-sm font-medium text-foreground">Líder do mês · Zip</p>
               {monthLeader ? (
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{monthLeader.member.name}</span> ·{" "}
-                  {monthLeader.score} pts
+                  <span className="font-medium text-foreground">
+                    {monthLeader.userId === getMe().id
+                      ? "Você"
+                      : (loadMembers().find((m) => m.id === monthLeader.userId)?.name ?? "Alguém")}
+                  </span>{" "}
+                  · {monthLeader.wins} {monthLeader.wins === 1 ? "dia vencido" : "dias vencidos"}
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">Sem pontuação este mês ainda.</p>
+                <p className="text-xs text-muted-foreground">
+                  Ninguém venceu o Zip este mês ainda.
+                </p>
               )}
             </div>
           </div>

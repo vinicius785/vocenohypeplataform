@@ -66,6 +66,41 @@ export async function listZipLeaderboard(dateKey: string): Promise<ZipResult[]> 
   return (data ?? []).map(mapRow);
 }
 
+export type ZipMonthLeader = { userId: string; wins: number };
+
+/** "Líder do mês" do Zip — quem venceu (tempo mais rápido) mais dias dentro
+ * do mês corrente. Calcula em cima das mesmas linhas de `zip_daily_results`
+ * (sem tabela/agregação nova): busca tudo do mês já ordenado por tempo, e
+ * como o primeiro resultado de cada `date_key` nessa ordem é sempre o mais
+ * rápido daquele dia, o primeiro `user_id` visto por data é o vencedor dela. */
+export async function getZipMonthLeader(): Promise<ZipMonthLeader | null> {
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const { data, error } = await supabase
+    .from("zip_daily_results")
+    .select("user_id, date_key, time_ms")
+    .gte("date_key", `${monthPrefix}-01`)
+    .lte("date_key", `${monthPrefix}-31`)
+    .order("time_ms", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const winnerByDate = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!winnerByDate.has(row.date_key)) winnerByDate.set(row.date_key, row.user_id);
+  }
+
+  const wins = new Map<string, number>();
+  for (const userId of winnerByDate.values()) {
+    wins.set(userId, (wins.get(userId) ?? 0) + 1);
+  }
+
+  let leader: ZipMonthLeader | null = null;
+  for (const [userId, count] of wins) {
+    if (!leader || count > leader.wins) leader = { userId, wins: count };
+  }
+  return leader;
+}
+
 export function subscribeZipLeaderboard(dateKey: string, onChange: () => void): () => void {
   const channel = supabase
     .channel(`zip-leaderboard-${dateKey}`)
