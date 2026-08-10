@@ -344,6 +344,28 @@ function CampanhaDetail({
     null | "documentos" | "calendario" | "composicao" | "direitos"
   >(null);
 
+  // Mesmo link (por cliente, não por campanha — um cliente pode ter várias
+  // campanhas atrás do mesmo portal) já usado em ClientesSection; fica
+  // também aqui pra não precisar sair da campanha pra copiar o link.
+  const clientes = useClientes();
+  const setClientes = clientesStore.set;
+  const fullCliente = clientes.find((cl) => cl.id === cliente.id);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyClientLink = () => {
+    if (!fullCliente) return;
+    let token = fullCliente.publicToken;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      setClientes((prev) =>
+        prev.map((cl) => (cl.id === fullCliente.id ? { ...cl, publicToken: token } : cl)),
+      );
+    }
+    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
       {/* BACK */}
@@ -393,6 +415,15 @@ function CampanhaDetail({
             </select>
           </div>
         )}
+        <button
+          type="button"
+          onClick={copyClientLink}
+          disabled={!fullCliente}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+          {linkCopied ? "Link copiado!" : "Link do cliente"}
+        </button>
       </header>
 
       {/* BRIEFING */}
