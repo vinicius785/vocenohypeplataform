@@ -303,7 +303,7 @@ export function InicioDashboard() {
   useEffect(() => {
     const refreshZipLeader = () => void getZipMonthLeader().then(setMonthLeader);
     refreshZipLeader();
-    return subscribeZipLeaderboard(todayZipKey(), refreshZipLeader);
+    return subscribeZipLeaderboard(todayZipKey(), refreshZipLeader, "monthleader");
   }, []);
 
   // Mantém o resumo aberto em sincronia com atualizações (confirmar,

@@ -101,9 +101,19 @@ export async function getZipMonthLeader(): Promise<ZipMonthLeader | null> {
   return leader;
 }
 
-export function subscribeZipLeaderboard(dateKey: string, onChange: () => void): () => void {
+/** `channelKey` distingue quem está assinando (ex.: o próprio jogo vs. o
+ * card "Líder do mês" do dashboard) — `supabase.channel(topic)` devolve o
+ * MESMO objeto de canal pra tópicos iguais, e chamar `.on()` de novo num
+ * canal que outro assinante já colocou pra "joined" derruba a página inteira
+ * (`RealtimeChannel.on()` lança exceção nesse caso). Tópicos distintos por
+ * assinante evitam essa colisão sem duplicar dado nenhum. */
+export function subscribeZipLeaderboard(
+  dateKey: string,
+  onChange: () => void,
+  channelKey = "leaderboard",
+): () => void {
   const channel = supabase
-    .channel(`zip-leaderboard-${dateKey}`)
+    .channel(`zip-${channelKey}-${dateKey}`)
     .on(
       "postgres_changes",
       {
