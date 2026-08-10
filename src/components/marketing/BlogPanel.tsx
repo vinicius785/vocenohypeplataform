@@ -316,6 +316,23 @@ function BlogEditor({
   const team = useMemo(() => loadTeamMembers(), []);
   const clientes = useClientes();
   const portalSectionRef = useRef<HTMLDivElement>(null);
+  // "Destino" é escolha única (Site OU Mural OU Portal do cliente) — Portal
+  // não é gravado como um `audience` à parte (o campo continua "site"/
+  // "mural" por baixo, pro webhook do Make), é derivado de ter
+  // `portalClienteIds` marcado. Estado de UI próprio porque, ao escolher
+  // "Portal" agora, ainda não há cliente marcado (senão a re-renderização
+  // cairia de volta pra "site").
+  const [destino, setDestino] = useState<"site" | "mural" | "portal">(() =>
+    focusPortal
+      ? "portal"
+      : (post.portalClienteIds?.length ?? 0) > 0
+        ? "portal"
+        : (post.audience ?? "site"),
+  );
+  useEffect(() => {
+    setDestino((post.portalClienteIds?.length ?? 0) > 0 ? "portal" : (post.audience ?? "site"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.id]);
   useEffect(() => {
     if (!focusPortal) return;
     portalSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -549,58 +566,72 @@ function BlogEditor({
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Destino</span>
             <select
-              value={p.audience ?? "site"}
-              onChange={(e) => patchImmediate({ audience: e.target.value as "site" | "mural" })}
+              value={destino}
+              onChange={(e) => {
+                const v = e.target.value as "site" | "mural" | "portal";
+                setDestino(v);
+                if (v === "portal") {
+                  // Mantém `audience` como "site" por baixo (webhook do Make
+                  // continua funcionando se algum dia isso for combinado de
+                  // novo); só passa a mostrar o seletor de clientes abaixo.
+                  patchImmediate({ audience: "site" });
+                } else {
+                  patchImmediate({ audience: v, portalClienteIds: [] });
+                }
+              }}
               className={inputCls}
             >
               <option value="site">Artigo do site</option>
               <option value="mural">Mural de novidades (time interno)</option>
+              <option value="portal">Portal do cliente</option>
             </select>
           </label>
 
-          <div
-            ref={portalSectionRef}
-            className={`space-y-1.5 rounded-md transition-shadow ${focusPortal ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""}`}
-          >
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Publicar no portal de quais clientes
-            </span>
-            {clientes.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground">
-                Cadastre clientes na aba Clientes pra poder selecionar.
-              </p>
-            ) : (
-              <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
-                {clientes.map((c) => {
-                  const checked = p.portalClienteIds?.includes(c.id) ?? false;
-                  return (
-                    <label
-                      key={c.id}
-                      className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const prev = p.portalClienteIds ?? [];
-                          const next = e.target.checked
-                            ? [...prev, c.id]
-                            : prev.filter((id) => id !== c.id);
-                          patchImmediate({ portalClienteIds: next });
-                        }}
-                      />
-                      {c.empresa}
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-            {(p.portalClienteIds?.length ?? 0) > 0 && p.status !== "publicado" && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                Só aparece no portal quando o status for &quot;Publicado&quot;.
-              </p>
-            )}
-          </div>
+          {destino === "portal" && (
+            <div
+              ref={portalSectionRef}
+              className={`space-y-1.5 rounded-md transition-shadow ${focusPortal ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""}`}
+            >
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Quais clientes veem esse artigo
+              </span>
+              {clientes.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  Cadastre clientes na aba Clientes pra poder selecionar.
+                </p>
+              ) : (
+                <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
+                  {clientes.map((c) => {
+                    const checked = p.portalClienteIds?.includes(c.id) ?? false;
+                    return (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const prev = p.portalClienteIds ?? [];
+                            const next = e.target.checked
+                              ? [...prev, c.id]
+                              : prev.filter((id) => id !== c.id);
+                            patchImmediate({ portalClienteIds: next });
+                          }}
+                        />
+                        {c.empresa}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {(p.portalClienteIds?.length ?? 0) > 0 && p.status !== "publicado" && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                  Só aparece no portal quando o status for &quot;Publicado&quot;.
+                </p>
+              )}
+            </div>
+          )}
 
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Status</span>

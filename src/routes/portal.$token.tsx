@@ -908,7 +908,6 @@ function ClientPortalPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
-  const [showArtigos, setShowArtigos] = useState(false);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
   const [ws, setWs] = useState<Workspace>({ nome: "Você no Hype", logo: "" });
 
@@ -1085,11 +1084,10 @@ function ClientPortalPage() {
               onClick={() => {
                 setActiveCampanhaId(null);
                 setViewingId(null);
-                setShowArtigos(false);
                 setReadingArticleId(null);
               }}
               className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
-                activeCampanhaId === null && !showArtigos ? "bg-muted" : "hover:bg-muted/60"
+                activeCampanhaId === null && !readingArticleId ? "bg-muted" : "hover:bg-muted/60"
               }`}
             >
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
@@ -1103,26 +1101,6 @@ function ClientPortalPage() {
               )}
             </button>
 
-            {data.artigos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCampanhaId(null);
-                  setViewingId(null);
-                  setShowArtigos(true);
-                  setReadingArticleId(null);
-                }}
-                className={`flex w-full items-center gap-2.5 border-t border-border px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
-                  showArtigos ? "bg-muted" : "hover:bg-muted/60"
-                }`}
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
-                  <Newspaper className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-foreground">Artigos</span>
-              </button>
-            )}
-
             <p className="border-t border-border px-3.5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Campanhas
             </p>
@@ -1135,11 +1113,12 @@ function ClientPortalPage() {
                   onClick={() => {
                     setActiveCampanhaId(c.id);
                     setViewingId(null);
-                    setShowArtigos(false);
                     setReadingArticleId(null);
                   }}
                   className={`flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
-                    activeCampanhaId === c.id && !showArtigos ? "bg-muted" : "hover:bg-muted/60"
+                    activeCampanhaId === c.id && !readingArticleId
+                      ? "bg-muted"
+                      : "hover:bg-muted/60"
                   }`}
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
@@ -1162,101 +1141,47 @@ function ClientPortalPage() {
 
         {/* CONTEÚDO PRINCIPAL */}
         <main className="min-w-0 flex-1 p-6">
-          {showArtigos ? (
+          {readingArticleId ? (
             (() => {
               const reading = data.artigos.find((a) => a.id === readingArticleId) ?? null;
-              if (reading) {
-                return (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setReadingArticleId(null)}
-                      className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" /> Voltar pra artigos
-                    </button>
-                    <article className="mx-auto max-w-2xl">
-                      {reading.cover && (
-                        <img
-                          src={reading.cover}
-                          alt=""
-                          className="mb-4 aspect-video w-full rounded-xl object-cover"
-                        />
-                      )}
-                      {reading.category && (
-                        <Badge variant="secondary" className="mb-2">
-                          {reading.category}
-                        </Badge>
-                      )}
-                      <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                        {reading.title}
-                      </h1>
-                      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {reading.authorName && <span>{reading.authorName}</span>}
-                        {reading.authorName && reading.publishDate && <span>·</span>}
-                        {reading.publishDate && <span>{fmtDate(reading.publishDate)}</span>}
-                      </div>
-                      <div
-                        className={`mt-6 ${MARKDOWN_LITE_CLASSES}`}
-                        dangerouslySetInnerHTML={{
-                          __html: renderMarkdownLite(reading.content ?? reading.excerpt ?? ""),
-                        }}
-                      />
-                    </article>
-                  </div>
-                );
-              }
+              if (!reading) return null;
               return (
-                <div className="mx-auto max-w-3xl">
-                  <h1 className="mb-5 flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
-                    <Newspaper className="h-5 w-5" /> Artigos
-                  </h1>
-                  {data.artigos.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">
-                      Nenhum artigo publicado ainda.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {data.artigos.map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => setReadingArticleId(a.id)}
-                          className="flex flex-col overflow-hidden rounded-xl border border-border bg-background text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                          {a.cover ? (
-                            <img
-                              src={a.cover}
-                              alt=""
-                              className="aspect-video w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex aspect-video w-full items-center justify-center bg-muted">
-                              <Newspaper className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 space-y-1.5 p-4">
-                            {a.category && (
-                              <Badge variant="secondary" className="text-[10px]">
-                                {a.category}
-                              </Badge>
-                            )}
-                            <p className="text-sm font-semibold text-foreground">{a.title}</p>
-                            {a.excerpt && (
-                              <p className="line-clamp-2 text-xs text-muted-foreground">
-                                {a.excerpt}
-                              </p>
-                            )}
-                            {a.publishDate && (
-                              <p className="pt-1 text-[11px] text-muted-foreground">
-                                {fmtDate(a.publishDate)}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setReadingArticleId(null)}
+                    className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+                  </button>
+                  <article className="mx-auto max-w-2xl">
+                    {reading.cover && (
+                      <img
+                        src={reading.cover}
+                        alt=""
+                        className="mb-4 aspect-video w-full rounded-xl object-cover"
+                      />
+                    )}
+                    {reading.category && (
+                      <Badge variant="secondary" className="mb-2">
+                        {reading.category}
+                      </Badge>
+                    )}
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                      {reading.title}
+                    </h1>
+                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {reading.authorName && <span>{reading.authorName}</span>}
+                      {reading.authorName && reading.publishDate && <span>·</span>}
+                      {reading.publishDate && <span>{fmtDate(reading.publishDate)}</span>}
                     </div>
-                  )}
+                    <div
+                      className={`mt-6 ${MARKDOWN_LITE_CLASSES}`}
+                      dangerouslySetInnerHTML={{
+                        __html: renderMarkdownLite(reading.content ?? reading.excerpt ?? ""),
+                      }}
+                    />
+                  </article>
                 </div>
               );
             })()
@@ -1343,109 +1268,159 @@ function ClientPortalPage() {
               {/* Estrutura tipo LinkedIn: centro = feed do conteúdo mais
                   recente, direita = novidades pendentes + campanhas. */}
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <section className="min-w-0 space-y-3">
-                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <PlayCircle className="h-4 w-4" /> Últimos conteúdos
-                  </h2>
-                  {contentFeed.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-                      Nenhum conteúdo publicado ainda.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {contentFeed.slice(0, 12).map((item) => {
-                        // O link do post pode vir do campo "url" (texto
-                        // manual) OU de um anexo categoria "Conteúdo
-                        // publicado" (upload feito na entrega) — antes só o
-                        // primeiro era considerado, e o conteúdo anexado
-                        // sumia do feed do portal.
-                        const conteudoAnexos = (item.entrega.anexos ?? []).filter(
-                          (a) => a.categoria === "Conteúdo publicado",
-                        );
-                        const links = item.entrega.url
-                          ? [{ id: "url", nome: "Ver publicação", url: item.entrega.url }]
-                          : conteudoAnexos.map((a) => ({ id: a.id, nome: a.nome, url: a.url }));
-                        return (
-                          <div
-                            key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
-                            className="rounded-xl border border-border bg-background p-4"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                              className="flex w-full items-center gap-3 text-left"
+                <div className="min-w-0 space-y-6">
+                  <section className="space-y-3">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <PlayCircle className="h-4 w-4" /> Últimos conteúdos
+                    </h2>
+                    {contentFeed.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+                        Nenhum conteúdo publicado ainda.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {contentFeed.slice(0, 12).map((item) => {
+                          // O link do post pode vir do campo "url" (texto
+                          // manual) OU de um anexo categoria "Conteúdo
+                          // publicado" (upload feito na entrega) — antes só o
+                          // primeiro era considerado, e o conteúdo anexado
+                          // sumia do feed do portal.
+                          const conteudoAnexos = (item.entrega.anexos ?? []).filter(
+                            (a) => a.categoria === "Conteúdo publicado",
+                          );
+                          const links = item.entrega.url
+                            ? [{ id: "url", nome: "Ver publicação", url: item.entrega.url }]
+                            : conteudoAnexos.map((a) => ({ id: a.id, nome: a.nome, url: a.url }));
+                          return (
+                            <div
+                              key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
+                              className="rounded-xl border border-border bg-background p-4"
                             >
-                              <Avatar className="h-10 w-10 shrink-0">
-                                {item.inf.foto && (
-                                  <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
-                                )}
-                                <AvatarFallback className="text-sm font-semibold">
-                                  {initialsOf(item.inf.nome)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                  {item.inf.nome}
-                                </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {item.campanhaNome}
-                                  {item.entrega.publicadoEm
-                                    ? ` · ${fmtDate(item.entrega.publicadoEm)}`
-                                    : item.entrega.dataPostagem
-                                      ? ` · ${fmtDate(item.entrega.dataPostagem)}`
-                                      : ""}
-                                </p>
-                              </div>
-                              <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                {item.entrega.tipo}
-                              </Badge>
-                            </button>
-
-                            {(item.entrega.metrics || links.length > 0) && (
-                              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                                <div className="flex flex-wrap gap-4">
-                                  {item.entrega.metrics?.views ? (
-                                    <MetricStat
-                                      label="Views"
-                                      value={item.entrega.metrics.views.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
-                                  {item.entrega.metrics?.likes ? (
-                                    <MetricStat
-                                      label="Curtidas"
-                                      value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
-                                  {item.entrega.metrics?.reach ? (
-                                    <MetricStat
-                                      label="Alcance"
-                                      value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
-                                    />
-                                  ) : null}
+                              <button
+                                type="button"
+                                onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                                className="flex w-full items-center gap-3 text-left"
+                              >
+                                <Avatar className="h-10 w-10 shrink-0">
+                                  {item.inf.foto && (
+                                    <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
+                                  )}
+                                  <AvatarFallback className="text-sm font-semibold">
+                                    {initialsOf(item.inf.nome)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-semibold text-foreground">
+                                    {item.inf.nome}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {item.campanhaNome}
+                                    {item.entrega.publicadoEm
+                                      ? ` · ${fmtDate(item.entrega.publicadoEm)}`
+                                      : item.entrega.dataPostagem
+                                        ? ` · ${fmtDate(item.entrega.dataPostagem)}`
+                                        : ""}
+                                  </p>
                                 </div>
-                                {links.length > 0 && (
-                                  <div className="flex flex-wrap gap-3">
-                                    {links.map((link) => (
-                                      <a
-                                        key={link.id}
-                                        href={link.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
-                                      >
-                                        <ExternalLink className="h-3 w-3" /> {link.nome}
-                                      </a>
-                                    ))}
+                                <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                  {item.entrega.tipo}
+                                </Badge>
+                              </button>
+
+                              {(item.entrega.metrics || links.length > 0) && (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                                  <div className="flex flex-wrap gap-4">
+                                    {item.entrega.metrics?.views ? (
+                                      <MetricStat
+                                        label="Views"
+                                        value={item.entrega.metrics.views.toLocaleString("pt-BR")}
+                                      />
+                                    ) : null}
+                                    {item.entrega.metrics?.likes ? (
+                                      <MetricStat
+                                        label="Curtidas"
+                                        value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
+                                      />
+                                    ) : null}
+                                    {item.entrega.metrics?.reach ? (
+                                      <MetricStat
+                                        label="Alcance"
+                                        value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
+                                      />
+                                    ) : null}
                                   </div>
-                                )}
+                                  {links.length > 0 && (
+                                    <div className="flex flex-wrap gap-3">
+                                      {links.map((link) => (
+                                        <a
+                                          key={link.id}
+                                          href={link.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
+                                        >
+                                          <ExternalLink className="h-3 w-3" /> {link.nome}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+
+                  {data.artigos.length > 0 && (
+                    <section className="space-y-3">
+                      <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Newspaper className="h-4 w-4" /> Artigos
+                      </h2>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {data.artigos.slice(0, 4).map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => setReadingArticleId(a.id)}
+                            className="flex flex-col overflow-hidden rounded-xl border border-border bg-background text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+                          >
+                            {a.cover ? (
+                              <img
+                                src={a.cover}
+                                alt=""
+                                className="aspect-video w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex aspect-video w-full items-center justify-center bg-muted">
+                                <Newspaper className="h-6 w-6 text-muted-foreground" />
                               </div>
                             )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                            <div className="flex-1 space-y-1.5 p-4">
+                              {a.category && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {a.category}
+                                </Badge>
+                              )}
+                              <p className="text-sm font-semibold text-foreground">{a.title}</p>
+                              {a.excerpt && (
+                                <p className="line-clamp-2 text-xs text-muted-foreground">
+                                  {a.excerpt}
+                                </p>
+                              )}
+                              {a.publishDate && (
+                                <p className="pt-1 text-[11px] text-muted-foreground">
+                                  {fmtDate(a.publishDate)}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   )}
-                </section>
+                </div>
 
                 <aside className="space-y-3">
                   {/* Widget "Novidades" — título dentro da mesma caixa da
