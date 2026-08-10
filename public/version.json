@@ -1,6 +1,7 @@
 {
-  "version": "1.86.0",
+  "version": "1.86.1",
   "notes": [
+    "\"Novo artigo\" (Marketing) ganha uma 3ª opção \"Portal do cliente\" na tela de destino — antes só existia como um campo escondido dentro do editor, difícil de achar. Escolher essa opção já cria o artigo e leva direto pra lista de clientes pra marcar (continua podendo combinar com Site ou Mural).",
     "Botão \"Link do cliente\" agora também aparece no topo da página da campanha (antes só existia dentro do cadastro do cliente, em Clientes) — copia o mesmo link do portal, sem precisar sair da campanha pra achar o cliente.",
     "Corrige o Zip do dia não abrindo (caía na tela de erro genérica ao clicar): o card \"Líder do mês\" e o próprio jogo assinavam o mesmo canal de tempo real do Supabase pro mesmo dia — como os dois usavam o mesmo nome de canal, o segundo a se inscrever (o jogo, ao abrir) tentava registrar um listener num canal que o outro já tinha deixado \"assinado\", o que o Supabase rejeita com uma exceção. Cada assinante agora usa um canal com nome próprio.",
     "Corrige o \"Líder do mês\" do box Jogos do dia: estava calculando pontuação de tarefas/reuniões (nada a ver com o Zip, e ainda dava pra alguém aparecer como líder por estar apenas marcado como responsável numa tarefa que outra pessoa concluiu). Agora reflete o Zip de verdade — quem venceu (tempo mais rápido) mais dias este mês.",

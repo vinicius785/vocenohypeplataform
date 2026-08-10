@@ -117,11 +117,16 @@ export function BlogPanel({
   const posts = project.blog ?? [];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [audiencePick, setAudiencePick] = useState(false);
+  const [focusPortalOnOpen, setFocusPortalOnOpen] = useState(false);
 
   const setPosts = (next: BlogPost[]) => update({ blog: next });
   const notifyBlog = useServerFn(notifyBlogEvent);
 
-  const create = (audience: "site" | "mural") => {
+  // "Portal do cliente" não é um destino à parte de Site/Mural (dá pra
+  // combinar com qualquer um dos dois) — por isso cria como "site" e só
+  // sinaliza pro editor rolar/destacar a lista de clientes, em vez de
+  // guardar um terceiro valor de `audience` que não existe no tipo.
+  const create = (audience: "site" | "mural", focusPortal = false) => {
     const p: BlogPost = {
       id: crypto.randomUUID(),
       title: "Novo artigo",
@@ -131,6 +136,7 @@ export function BlogPanel({
     setPosts([p, ...posts]);
     setEditingId(p.id);
     setAudiencePick(false);
+    setFocusPortalOnOpen(focusPortal);
   };
 
   const remove = (id: string) => {
@@ -194,6 +200,7 @@ export function BlogPanel({
         onChange={(patch) => change(editing.id, patch)}
         onClose={() => setEditingId(null)}
         onDelete={() => remove(editing.id)}
+        focusPortal={focusPortalOnOpen}
       />
     );
   }
@@ -294,14 +301,25 @@ function BlogEditor({
   onChange,
   onClose,
   onDelete,
+  focusPortal,
 }: {
   post: BlogPost;
   onChange: (patch: Partial<BlogPost>) => void;
   onClose: () => void;
   onDelete: () => void;
+  /** Veio de "Novo artigo" → "Portal do cliente" — rola até a lista de
+   * clientes e destaca ela, já que aqui não é um "Destino" à parte (é
+   * combinável com Site/Mural), então precisa chamar atenção pra onde
+   * marcar de fato os clientes. */
+  focusPortal?: boolean;
 }) {
   const team = useMemo(() => loadTeamMembers(), []);
   const clientes = useClientes();
+  const portalSectionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focusPortal) return;
+    portalSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusPortal]);
   const [draft, setDraft] = useState(post);
   const [savedTick, setSavedTick] = useState(0);
   const debounceRef = useRef<number | null>(null);
@@ -540,7 +558,10 @@ function BlogEditor({
             </select>
           </label>
 
-          <div className="space-y-1.5">
+          <div
+            ref={portalSectionRef}
+            className={`space-y-1.5 rounded-md transition-shadow ${focusPortal ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""}`}
+          >
             <span className="text-[11px] font-medium text-muted-foreground">
               Publicar no portal de quais clientes
             </span>
@@ -617,7 +638,7 @@ function AudienceDialog({
   onPick,
   onClose,
 }: {
-  onPick: (a: "site" | "mural") => void;
+  onPick: (a: "site" | "mural", focusPortal?: boolean) => void;
   onClose: () => void;
 }) {
   return (
@@ -627,13 +648,14 @@ function AudienceDialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-border bg-background p-5 shadow-lg"
+        className="w-full max-w-lg rounded-xl border border-border bg-background p-5 shadow-lg"
       >
         <h3 className="text-sm font-semibold">Qual o destino do artigo?</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Escolha onde este artigo será publicado.
+          Escolha onde este artigo será publicado. Portal do cliente pode ser combinado com qualquer
+          um dos outros — dá pra marcar os clientes depois, dentro do editor.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             onClick={() => onPick("site")}
             className="rounded-lg border border-border p-4 text-left hover:border-foreground hover:bg-muted/50"
@@ -650,6 +672,15 @@ function AudienceDialog({
             <div className="text-sm font-semibold">Mural de novidades</div>
             <div className="mt-1 text-[11px] text-muted-foreground">
               Comunicado interno exibido na aba Início.
+            </div>
+          </button>
+          <button
+            onClick={() => onPick("site", true)}
+            className="rounded-lg border border-border p-4 text-left hover:border-foreground hover:bg-muted/50"
+          >
+            <div className="text-sm font-semibold">Portal do cliente</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              Aparece no portal dos clientes que você escolher.
             </div>
           </button>
         </div>
