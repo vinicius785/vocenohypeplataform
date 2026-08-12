@@ -1,6 +1,7 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "notes": [
+    "Novo, em Ferramentas adicionais da campanha: \"Resumo de reprovações (IA)\" — a partir dos motivos que o cliente escreveu ao reprovar influenciadores, gera um resumo dos padrões em comum e uma sugestão pro time de curadoria. Só aparece quando há pelo menos um reprovado. \"Ocultar reprovados\" (visão de influenciadores) agora fica dentro do menu Visualização, em vez de um botão solto.",
     "Novo, na visão Kanban de influenciadores (dentro de uma campanha): coluna \"Reprovado\" reúne quem o cliente reprovou, separado de \"Enviado para aprovação\" — antes ficavam misturados na mesma coluna. Novo também: botão \"Ocultar reprovados\" no cabeçalho (aparece só quando há algum), pra sumir com eles da tela toda (lista, kanban e carrossel) quando não for o momento de olhar pra isso.",
     "Novo: influenciador aprovado ou reprovado pelo cliente agora ganha um ícone (verde/vermelho) na própria foto no portal do cliente, igual já existia internamente. Campanhas com pelo menos um influenciador reprovado ganham uma aba \"Reprovados\", com a contagem e o perfil de cada um.",
     "Corrige de vez o influenciador de campanha \"sumindo e voltando\" ao excluir: o fix anterior só cobria exclusão recusada com erro explícito, mas o Supabase também recusa silenciosamente (RLS bloqueando sem gerar erro nenhum, só 0 linhas afetadas) — esse caso passava batido, o item continuava no banco e voltava sozinho pouco depois. Agora qualquer exclusão que não afete nenhuma linha também é tratada como falha, com o item voltando na hora e um alerta explicando.",
