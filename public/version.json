@@ -1,5 +1,5 @@
 {
-  "version": "2.3.1",
+  "version": "1.103.1",
   "notes": [
     "Remove por enquanto o \"Resumo de reprovações (IA)\" (Ferramentas adicionais da campanha) — dependia de uma chave de IA que ainda não foi configurada. Volta quando o provedor de IA for decidido.",
     "Novo, em Ferramentas adicionais da campanha: \"Resumo de reprovações (IA)\" — a partir dos motivos que o cliente escreveu ao reprovar influenciadores, gera um resumo dos padrões em comum e uma sugestão pro time de curadoria. Só aparece quando há pelo menos um reprovado. \"Ocultar reprovados\" (visão de influenciadores) agora fica dentro do menu Visualização, em vez de um botão solto.",
