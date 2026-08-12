@@ -47,10 +47,16 @@ export type ManualEntry = {
   invoice?: InvoiceFile;
 };
 
-type InfluPersisted = { id: string; nome: string; entregas?: Entrega[]; bank?: BankInfo };
+type InfluPersisted = {
+  id: string;
+  nome: string;
+  entregas?: Entrega[];
+  pagamento?: PagamentoEntrega;
+  bank?: BankInfo;
+};
 
-function pagamentoDescription(p: PagamentoEntrega, entregaTipo: string, nome: string): string {
-  if (p.tipos.includes("Valor")) return `Pagamento a ${nome} — ${entregaTipo}`;
+function pagamentoDescription(p: PagamentoEntrega, nome: string): string {
+  if (p.tipos.includes("Valor")) return `Pagamento a ${nome}`;
   if (p.tipos.includes("Comissão")) {
     const cfg = p.config.Comissão ?? {};
     return `Comissão a ${nome} (${cfg.comissaoPct || "0"}% sobre ${cfg.comissaoSobre || "vendas"})`;
@@ -305,40 +311,37 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
         }
       })();
       for (const inf of influs) {
-        for (const e of inf.entregas ?? []) {
-          const p = normalizePagamento(e.pagamento);
-          // Só vira despesa real no Financeiro depois que o orçamento é aceito —
-          // combinado (pendente) ou recusado não entram no caixa.
-          if (!p || p.aprovacao !== "aceito") continue;
-          const amount = pagamentoCashValue(p);
-          const nome = inf.nome || "influenciador";
-          const outroCriterios = p.tipos.includes("Outro")
-            ? p.config.Outro?.outroCriterios
-            : undefined;
-          out.push({
-            id: `inf:${camp.id}:${inf.id}:${e.id}`,
-            date: p.data || e.publicadoEm || todayISO(),
-            description: pagamentoDescription(p, e.tipo, nome),
-            category: "Influenciadores",
-            amount,
-            kind: "despesa",
-            source: "influenciador",
-            clienteId: c.id,
-            clienteNome: c.empresa,
-            campanhaId: camp.id,
-            campanhaNome: camp.nome,
-            meta: `${c.empresa} · ${camp.nome}${outroCriterios ? ` · ${outroCriterios}` : ""}`,
-            editable: false,
-            bank: inf.bank,
-            influencerName: inf.nome,
-          });
-        }
+        const p = normalizePagamento(inf.pagamento);
+        // Só vira despesa real no Financeiro depois que o pagamento é aceito —
+        // combinado (pendente) ou recusado não entram no caixa.
+        if (!p || p.aprovacao !== "aceito") continue;
+        const amount = pagamentoCashValue(p);
+        const nome = inf.nome || "influenciador";
+        const outroCriterios = p.tipos.includes("Outro")
+          ? p.config.Outro?.outroCriterios
+          : undefined;
+        out.push({
+          id: `inf:${camp.id}:${inf.id}`,
+          date: p.data || todayISO(),
+          description: pagamentoDescription(p, nome),
+          category: "Influenciadores",
+          amount,
+          kind: "despesa",
+          source: "influenciador",
+          clienteId: c.id,
+          clienteNome: c.empresa,
+          campanhaId: camp.id,
+          campanhaNome: camp.nome,
+          meta: `${c.empresa} · ${camp.nome}${outroCriterios ? ` · ${outroCriterios}` : ""}`,
+          editable: false,
+          bank: inf.bank,
+          influencerName: inf.nome,
+        });
       }
-      // Nota: o "Outro" configurado num grupo de pagamento da campanha (aqui,
-      // na criação/edição) é só uma orientação para o time sobre como pagar
-      // — não é lançado automaticamente no Financeiro. Só vira despesa real
-      // quando efetivamente aceito por entrega (loop acima, com aprovacao
-      // === "aceito"), igual aos outros tipos de pagamento.
+      // Nota: o "Outro" configurado no pagamento da campanha (na criação/
+      // edição) é só uma orientação para o time sobre como pagar — não é
+      // lançado automaticamente no Financeiro. Só vira despesa real quando
+      // efetivamente aceito no pagamento do influenciador (loop acima).
     }
   }
 

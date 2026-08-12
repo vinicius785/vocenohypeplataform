@@ -1,6 +1,7 @@
 {
-  "version": "1.93.0",
+  "version": "1.94.0",
   "notes": [
+    "Simplifica pagamento aos influenciadores: remove os \"grupos de pagamento\" da criação/edição de campanha (voltou a ser um único tipo de pagamento + prazo, como era antes) e remove o pagamento por entrega individual — agora é um valor único por influenciador, cobrindo todas as entregas dele, editado numa seção \"Pagamento\" só (com Aceitar/Recusar), em vez de um valor configurado entrega por entrega. O orçamento da campanha e o lançamento no Financeiro passam a refletir esse valor único.",
     "Novo: itens do sino \"Reprovou X\" (aprovação/reprovação de influenciador pelo cliente) agora mostram o nome do CLIENTE em destaque, em vez do influenciador — mais fácil bater o olho e saber quem precisa de atenção.",
     "Novo: cronograma manual da campanha ganha opção \"Repete todo mês\" pra clientes recorrentes — item cadastrado uma vez (ex: \"dia 5, envio do relatório de métricas\") aparece automaticamente todo mês no calendário da campanha e no portal do cliente, sem precisar recriar mês a mês.",
     "Novo: o campo \"Briefing personalizado\" do influenciador agora também pode ser preenchido/editado direto pelo portal do cliente (antes só o time editava internamente; o cliente só via em modo leitura) — salva automaticamente ao sair do campo.",

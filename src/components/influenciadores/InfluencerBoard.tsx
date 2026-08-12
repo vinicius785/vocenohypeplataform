@@ -63,7 +63,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
-import type { PagGrupo } from "@/components/VincularCampanhaDialog";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
 import { formatSeguidores } from "@/lib/format";
@@ -232,13 +231,11 @@ export type PagamentoConfigEntrega = {
   outroCriterios?: string;
 };
 /**
- * Um pagamento de entrega pode combinar mais de um tipo (ex: "Valor" +
- * "Por Hora", vindos de um grupo de pagamento da campanha) — por isso
- * `tipos` é uma lista, com a config de cada tipo guardada separadamente.
+ * Um pagamento pode combinar mais de um tipo (ex: "Valor" + "Por Hora") —
+ * por isso `tipos` é uma lista, com a config de cada tipo guardada
+ * separadamente. Um único pagamento cobre todas as entregas do influ.
  */
 export type PagamentoEntrega = {
-  grupoId?: string;
-  grupoNome?: string;
   tipos: PagTipoEntrega[];
   config: Record<string, PagamentoConfigEntrega>;
   aprovacao: AprovacaoPagamento;
@@ -288,11 +285,10 @@ export function pagamentoResumo(p?: PagamentoEntrega | LegacyPagamentoEntrega): 
     })
     .join(" + ");
 }
-/** Soma em dinheiro dos pagamentos já aceitos entre as entregas do influenciador. */
-export function totalAceito(entregas: Entrega[]): number {
-  return entregas
-    .filter((e) => e.pagamento?.aprovacao === "aceito")
-    .reduce((s, e) => s + pagamentoCashValue(e.pagamento), 0);
+/** Valor em dinheiro do pagamento do influenciador, só quando já aceito. */
+export function totalAceito(pagamento?: PagamentoEntrega): number {
+  if (pagamento?.aprovacao !== "aceito") return 0;
+  return pagamentoCashValue(pagamento);
 }
 
 /** Etapa 4 do funil de aprovação: 15 dias após a postagem, o time precisa
@@ -443,7 +439,6 @@ export type Entrega = {
   arquivoNome?: string;
   publicadoEm?: string;
   metrics?: PostMetrics;
-  pagamento?: PagamentoEntrega;
   /** Preenchido quando o cliente reprova o roteiro pelo link público —
    * limpo assim que ele aprova (ou reenvia e aprova de novo). */
   roteiroReprovacao?: ClienteVeredito;
@@ -589,6 +584,9 @@ export type Influ = {
    * quanto no portal do cliente (diferente de `comments`/`activity`, que
    * ficam só internos). */
   observacoes?: string;
+  /** Pagamento único cobrindo TODAS as entregas do influenciador — não é
+   * mais configurado por entrega individual. */
+  pagamento?: PagamentoEntrega;
 };
 
 /**
@@ -608,7 +606,9 @@ export function normalizeInflus(list: unknown): Influ[] {
       conteudos?: Array<Record<string, unknown>>;
       valores?: Array<{ id: string; valor: string; quando: string }>;
     };
-    const entregas: Entrega[] = (r.entregas ?? []).map((e) => {
+    const entregasComPagamentoLegado: Array<Entrega & { pagamento?: PagamentoEntrega }> =
+      r.entregas ?? [];
+    const entregas: Entrega[] = entregasComPagamentoLegado.map((e) => {
       const anexos = [...(e.anexos ?? [])];
       if (e.roteiro) {
         anexos.push({
@@ -636,6 +636,7 @@ export function normalizeInflus(list: unknown): Influ[] {
         roteiro: undefined,
         roteiroNome: undefined,
         arquivoNome: undefined,
+        pagamento: undefined,
       };
     });
     for (const c of r.conteudos ?? []) {
@@ -651,22 +652,44 @@ export function normalizeInflus(list: unknown): Influ[] {
         metrics: c.metrics as PostMetrics | undefined,
       });
     }
-    for (const v of r.valores ?? []) {
-      entregas.push({
-        id: v.id ?? crypto.randomUUID(),
-        tipo: "Pagamento avulso",
-        quantidade: 1,
-        status: "publicado",
-        pagamento: {
+    // Pagamento passou a ser um valor único por influenciador (não mais por
+    // entrega) — quem já tinha valores em `valores` (avulsos, pré-entrega) ou
+    // em `entregas[].pagamento` (pré-unificação) tem esse histórico somado
+    // aqui num único `pagamento`, preservando o total já refletido no
+    // Financeiro, em vez de perder o dado na migração.
+    let pagamento = r.pagamento;
+    if (!pagamento) {
+      const legado = [
+        ...(r.valores ?? []).map((v) => ({
+          valor: parseMoney(v.valor),
+          aceito: true,
+          data: v.quando,
+        })),
+        ...entregasComPagamentoLegado
+          .filter((e) => e.pagamento)
+          .map((e) => ({
+            valor: pagamentoCashValue(e.pagamento),
+            aceito: e.pagamento?.aprovacao === "aceito",
+            data: e.pagamento?.data,
+          })),
+      ];
+      const totalAceitoLegado = legado.filter((x) => x.aceito).reduce((s, x) => s + x.valor, 0);
+      if (totalAceitoLegado > 0) {
+        const lastData = legado
+          .map((x) => x.data)
+          .filter((d): d is string => !!d)
+          .sort()
+          .pop();
+        pagamento = {
           tipos: ["Valor"],
-          config: { Valor: { valor: v.valor as string | undefined } },
+          config: { Valor: { valor: String(totalAceitoLegado) } },
           aprovacao: "aceito",
-          data: v.quando as string | undefined,
-        },
-      });
+          data: lastData,
+        };
+      }
     }
     const { conteudos: _drop, valores: _drop2, ...rest } = r;
-    return { ...rest, entregas };
+    return { ...rest, entregas, pagamento };
   });
 }
 
@@ -1255,7 +1278,6 @@ export function InfluencerBoard({
   exportName,
   allowedFields,
   headerExtra,
-  pagGrupos,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1266,8 +1288,6 @@ export function InfluencerBoard({
    * dialog opens — the dropdown used to auto-close on any click inside it, which unmounted this
    * button (and destroyed its own dialog-open state) before its dialog ever got to render. */
   headerExtra?: (closeMenu: () => void) => ReactNode;
-  /** Grupos de pagamento configurados na campanha (ver VincularCampanhaDialog) — quando presentes, o editor de pagamento por entrega deixa escolher um grupo pronto em vez de preencher tudo do zero. */
-  pagGrupos?: PagGrupo[];
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
@@ -1709,7 +1729,6 @@ export function InfluencerBoard({
         open={creating}
         onOpenChange={setCreating}
         has={has}
-        pagGrupos={pagGrupos}
         onSave={(i) => {
           create(i);
           setCreating(false);
@@ -1733,7 +1752,6 @@ export function InfluencerBoard({
           onApplyChecklistToAll={applyChecklistToAll}
           onComment={(text) => addComment(viewing.id, text)}
           onPatch={(patch) => patchInflu(viewing.id, patch)}
-          pagGrupos={pagGrupos}
         />
       )}
 
@@ -1798,7 +1816,7 @@ function InfluCard({
         ? { status: "reprovado", motivo: influ.clienteReprovacao.motivo }
         : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-  const totalPago = totalAceito(influ.entregas);
+  const totalPago = totalAceito(influ.pagamento);
   const nPublicadas = influ.entregas.filter((e) => e.status === "publicado").length;
   const entregasStr =
     influ.entregas.length === 0
@@ -2181,22 +2199,15 @@ function EntregasEditor({
   entregas,
   onChange,
   influStatus,
-  pagGrupos,
   onStatusChange,
-  showAprovacao = false,
 }: {
   entregas: Entrega[];
   onChange: (next: Entrega[]) => void;
   influStatus: InfluStatus;
-  pagGrupos?: PagGrupo[];
   onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
-  /** Mostra o badge + Aceitar/Recusar do pagamento no painel de edição, em
-   * vez de precisar de uma lista de Pagamentos à parte. */
-  showAprovacao?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entregas.find((e) => e.id === selectedId) ?? null;
-  const totalAceitoValor = showAprovacao ? totalAceito(entregas) : 0;
 
   const update = (id: string, patch: Partial<Entrega>) =>
     onChange(entregas.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -2217,13 +2228,8 @@ function EntregasEditor({
       <div className="flex items-baseline justify-between gap-2">
         <FieldLabel
           title="Entregas"
-          hint="Clique numa linha pra editar datas, anexos, pagamento e publicação."
+          hint="Clique numa linha pra editar datas, anexos e publicação."
         />
-        {totalAceitoValor > 0 && (
-          <span className="shrink-0 text-xs font-semibold text-foreground">
-            Total aceito {fmtBRL(totalAceitoValor)}
-          </span>
-        )}
       </div>
 
       {entregas.length === 0 ? (
@@ -2236,7 +2242,6 @@ function EntregasEditor({
                 <th className="px-3 py-2 font-semibold">Tipo</th>
                 <th className="px-2 py-2 text-center font-semibold">Qtd</th>
                 <th className="px-2 py-2 font-semibold">Status</th>
-                {showAprovacao && <th className="px-2 py-2 font-semibold">Pagamento</th>}
                 <th className="px-2 py-2 text-center font-semibold">Anexos</th>
                 <th className="w-8 px-2 py-2" />
               </tr>
@@ -2299,24 +2304,6 @@ function EntregasEditor({
                         />
                       )}
                     </td>
-                    {showAprovacao && (
-                      <td className="px-2 py-2">
-                        {e.pagamento ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[11px] text-muted-foreground">
-                              {pagamentoResumo(e.pagamento)}
-                            </span>
-                            <span
-                              className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[e.pagamento.aprovacao]}`}
-                            >
-                              {APROVACAO_LABEL[e.pagamento.aprovacao]}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    )}
                     <td className="px-2 py-2 text-center text-[11px] text-muted-foreground">
                       {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
                     </td>
@@ -2407,68 +2394,6 @@ function EntregasEditor({
             }}
           />
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-medium text-muted-foreground">Pagamento combinado</p>
-              {showAprovacao && selected.pagamento && (
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[selected.pagamento.aprovacao]}`}
-                >
-                  {APROVACAO_LABEL[selected.pagamento.aprovacao]}
-                </span>
-              )}
-            </div>
-            <PagamentoEditor
-              value={selected.pagamento}
-              onChange={(pagamento) => update(selected.id, { pagamento })}
-              pagGrupos={pagGrupos}
-            />
-            {showAprovacao &&
-              selected.pagamento &&
-              (selected.pagamento.aprovacao === "pendente" ? (
-                <div className="flex gap-1.5 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      update(selected.id, {
-                        pagamento: {
-                          ...selected.pagamento!,
-                          aprovacao: "aceito",
-                          data: selected.pagamento!.data || todayISO(),
-                        },
-                      })
-                    }
-                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
-                  >
-                    Aceitar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      update(selected.id, {
-                        pagamento: { ...selected.pagamento!, aprovacao: "recusado" },
-                      })
-                    }
-                    className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
-                  >
-                    Recusar
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() =>
-                    update(selected.id, {
-                      pagamento: { ...selected.pagamento!, aprovacao: "pendente" },
-                    })
-                  }
-                  className="pt-0.5 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                >
-                  Marcar como pendente
-                </button>
-              ))}
-          </div>
-
           {selected.conteudoStatus === "Postado" && (
             <div className="space-y-2 border-t border-border pt-2.5">
               <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
@@ -2489,6 +2414,61 @@ function EntregasEditor({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Pagamento único do influenciador, cobrindo todas as entregas dele (não é
+ * mais configurado por entrega individual). */
+function PagamentoInfluSection({
+  value,
+  onChange,
+}: {
+  value?: PagamentoEntrega;
+  onChange: (p: PagamentoEntrega | undefined) => void;
+}) {
+  return (
+    <div className="space-y-1.5 border-t border-border pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel title="Pagamento" hint="Valor combinado, cobrindo todas as entregas." />
+        {value && (
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[value.aprovacao]}`}
+          >
+            {APROVACAO_LABEL[value.aprovacao]}
+          </span>
+        )}
+      </div>
+      <PagamentoEditor value={value} onChange={onChange} />
+      {value &&
+        (value.aprovacao === "pendente" ? (
+          <div className="flex gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                onChange({ ...value, aprovacao: "aceito", data: value.data || todayISO() })
+              }
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+            >
+              Aceitar
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ ...value, aprovacao: "recusado" })}
+              className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+            >
+              Recusar
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onChange({ ...value, aprovacao: "pendente" })}
+            className="pt-0.5 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            Marcar como pendente
+          </button>
+        ))}
     </div>
   );
 }
@@ -2665,7 +2645,6 @@ function InfluencerProfileDialog({
   onApplyChecklistToAll,
   onComment,
   onPatch,
-  pagGrupos,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -2677,7 +2656,6 @@ function InfluencerProfileDialog({
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
   onPatch: (patch: Partial<Influ>) => void;
-  pagGrupos?: PagGrupo[];
 }) {
   const [commentText, setCommentText] = useState("");
   const bank = influ.bank ?? {};
@@ -2866,9 +2844,14 @@ function InfluencerProfileDialog({
                 entregas={influ.entregas}
                 onChange={(next) => onPatch({ entregas: next })}
                 influStatus={influ.status}
-                pagGrupos={pagGrupos}
                 onStatusChange={onSetConteudoStatus}
-                showAprovacao={has("pagamentos")}
+              />
+            )}
+
+            {has("pagamentos") && (
+              <PagamentoInfluSection
+                value={influ.pagamento}
+                onChange={(pagamento) => onPatch({ pagamento })}
               />
             )}
 
@@ -3072,13 +3055,11 @@ function InfluenciadorDialog({
   onOpenChange,
   has,
   onSave,
-  pagGrupos,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   has: (k: InfluencerFieldKey) => boolean;
   onSave: (i: Influ) => void;
-  pagGrupos?: PagGrupo[];
 }) {
   const [foto, setFoto] = useState<string | undefined>();
   const [nome, setNome] = useState("");
@@ -3088,6 +3069,7 @@ function InfluenciadorDialog({
   const [redes, setRedes] = useState<Rede[]>([]);
   const [profileMetrics, setProfileMetrics] = useState<ProfileMetrics>({});
   const [entregas, setEntregas] = useState<Entrega[]>([]);
+  const [pagamento, setPagamento] = useState<PagamentoEntrega | undefined>();
   const [contrato, setContrato] = useState<string | undefined>();
   const [status, setStatus] = useState<InfluStatus>("Lista");
   const [bank, setBank] = useState<BankInfo>({});
@@ -3105,6 +3087,7 @@ function InfluenciadorDialog({
     setRedes([]);
     setProfileMetrics({});
     setEntregas([]);
+    setPagamento(undefined);
     setContrato(undefined);
     setStatus("Lista");
     setBank({});
@@ -3123,6 +3106,7 @@ function InfluenciadorDialog({
       redes,
       profileMetrics,
       entregas,
+      pagamento,
       contrato,
       status: advanceStatusFromEntregas(status, entregas),
       statusUpdatedAt: todayISO(),
@@ -3263,13 +3247,13 @@ function InfluenciadorDialog({
 
           {has("entregas") && (
             <section className="border-t border-border pt-6">
-              <EntregasEditor
-                entregas={entregas}
-                onChange={setEntregas}
-                influStatus={status}
-                pagGrupos={pagGrupos}
-                showAprovacao={has("pagamentos")}
-              />
+              <EntregasEditor entregas={entregas} onChange={setEntregas} influStatus={status} />
+            </section>
+          )}
+
+          {has("pagamentos") && (
+            <section>
+              <PagamentoInfluSection value={pagamento} onChange={setPagamento} />
             </section>
           )}
 
@@ -3511,11 +3495,9 @@ function RemoveBtn({ onClick }: { onClick: () => void }) {
 function PagamentoEditor({
   value,
   onChange,
-  pagGrupos,
 }: {
   value?: PagamentoEntrega;
   onChange: (p: PagamentoEntrega | undefined) => void;
-  pagGrupos?: PagGrupo[];
 }) {
   const norm = normalizePagamento(value);
   if (!norm) {
@@ -3533,18 +3515,9 @@ function PagamentoEditor({
   const toggleTipo = (t: PagTipoEntrega) =>
     update({
       tipos: norm.tipos.includes(t) ? norm.tipos.filter((x) => x !== t) : [...norm.tipos, t],
-      grupoId: undefined,
-      grupoNome: undefined,
     });
   const updateConfig = (t: PagTipoEntrega, patch: Partial<PagamentoConfigEntrega>) =>
     update({ config: { ...norm.config, [t]: { ...(norm.config[t] ?? {}), ...patch } } });
-  const applyGrupo = (g: PagGrupo) =>
-    update({
-      tipos: g.tipos as unknown as PagTipoEntrega[],
-      config: g.config,
-      grupoId: g.id,
-      grupoNome: g.nome,
-    });
 
   return (
     <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
@@ -3574,26 +3547,6 @@ function PagamentoEditor({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-
-      {pagGrupos && pagGrupos.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] text-muted-foreground">Grupo:</span>
-          {pagGrupos.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => applyGrupo(g)}
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                norm.grupoId === g.id
-                  ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
-                  : "bg-background text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {g.nome}
-            </button>
-          ))}
-        </div>
-      )}
 
       {norm.tipos.includes("Valor") && (
         <div className="flex items-center gap-1 rounded-md border border-border bg-background px-2">
@@ -3685,7 +3638,7 @@ function PagamentoEditor({
       />
       <p className="text-[10px] text-muted-foreground">
         Some como <b>Pendente</b> — só vira despesa no Financeiro depois de aceito (Aceitar/Recusar
-        fica logo abaixo, quando a etapa Entregas tem esse campo habilitado).
+        fica logo abaixo, quando esse campo estiver habilitado).
       </p>
     </div>
   );
@@ -4139,7 +4092,7 @@ function DownloadInflusDialog({
         if (has("redes")) row.push(i.redes.map((r) => `${r.plataforma}:${r.handle}`).join(" | "));
         if (has("entregas"))
           row.push(i.entregas.map((e) => `${e.quantidade}x ${e.tipo} (${e.status})`).join(" | "));
-        if (has("pagamentos")) row.push(totalAceito(i.entregas).toString());
+        if (has("pagamentos")) row.push(totalAceito(i.pagamento).toString());
         if (has("contrato")) row.push(i.contrato ?? "");
         if (has("status")) row.push(i.status);
         return row;

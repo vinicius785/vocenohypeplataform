@@ -86,13 +86,6 @@ export type PublicoAlvo = {
 
 const emptyPublicoAlvo: PublicoAlvo = { generos: [] };
 
-export type PagGrupo = {
-  id: string;
-  nome: string;
-  tipos: PagTipo[];
-  config: Record<PagTipo, PagamentoConfig>;
-};
-
 export type Campaign = {
   id: string;
   nome: string;
@@ -104,7 +97,8 @@ export type Campaign = {
   linhas: InfluLinha[];
   valorCliente: string;
   orcamento: string;
-  pagGrupos: PagGrupo[];
+  pagTipos: PagTipo[];
+  pagConfig: Record<PagTipo, PagamentoConfig>;
   prazoPag: string;
   pagClienteTipo?: PagClienteTipo;
   pagClienteDataUnica?: string;
@@ -131,33 +125,6 @@ const emptyPagConfig: Record<PagTipo, PagamentoConfig> = {
   Permuta: {},
   Outro: {},
 };
-
-/**
- * Campanhas criadas antes dos grupos de pagamento guardavam só um bloco
- * achatado (`pagTipos`/`pagConfig`, sem nome). Em vez de migrar o dado salvo,
- * normalizamos na leitura: quem já tem `pagGrupos` usa direto, quem só tem o
- * formato antigo vira um único "Grupo 1" transparente para quem consome.
- */
-export function normalizeCampaignPagGrupos(c: {
-  pagGrupos?: PagGrupo[];
-  pagTipos?: PagTipo[];
-  pagConfig?: Record<PagTipo, PagamentoConfig>;
-}): PagGrupo[] {
-  if (c.pagGrupos?.length) return c.pagGrupos;
-  if (c.pagTipos?.length) {
-    return [
-      { id: "legacy", nome: "Grupo 1", tipos: c.pagTipos, config: c.pagConfig ?? emptyPagConfig },
-    ];
-  }
-  return [];
-}
-
-const newPagGrupo = (n: number): PagGrupo => ({
-  id: crypto.randomUUID(),
-  nome: `Grupo ${n}`,
-  tipos: [],
-  config: emptyPagConfig,
-});
 
 const inputCls =
   "w-full rounded-lg border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20";
@@ -235,7 +202,8 @@ export function VincularCampanhaDialog({
   const [linhas, setLinhas] = useState<InfluLinha[]>([newLinha()]);
   const [valorCliente, setValorCliente] = useState("");
   const [orcamento, setOrcamento] = useState("");
-  const [pagGrupos, setPagGrupos] = useState<PagGrupo[]>([]);
+  const [pagTipos, setPagTipos] = useState<PagTipo[]>([]);
+  const [pagConfig, setPagConfig] = useState<Record<PagTipo, PagamentoConfig>>(emptyPagConfig);
   const [prazoPag, setPrazoPag] = useState("");
   const [pagClienteTipo, setPagClienteTipo] = useState<PagClienteTipo | "">("");
   const [pagClienteDataUnica, setPagClienteDataUnica] = useState("");
@@ -267,7 +235,8 @@ export function VincularCampanhaDialog({
       setLinhas(initial.linhas.length ? initial.linhas : [newLinha()]);
       setValorCliente(initial.valorCliente);
       setOrcamento(initial.orcamento);
-      setPagGrupos(normalizeCampaignPagGrupos(initial));
+      setPagTipos(initial.pagTipos ?? []);
+      setPagConfig(initial.pagConfig ?? emptyPagConfig);
       setPrazoPag(initial.prazoPag);
       setPagClienteTipo(initial.pagClienteTipo ?? "");
       setPagClienteDataUnica(initial.pagClienteDataUnica ?? "");
@@ -296,7 +265,8 @@ export function VincularCampanhaDialog({
       setLinhas([newLinha()]);
       setValorCliente("");
       setOrcamento("");
-      setPagGrupos([]);
+      setPagTipos([]);
+      setPagConfig(emptyPagConfig);
       setPrazoPag("");
       setPagClienteTipo("");
       setPagClienteDataUnica("");
@@ -319,26 +289,10 @@ export function VincularCampanhaDialog({
     ]);
   const removeLinha = (id: string) => setLinhas((l) => l.filter((x) => x.id !== id));
 
-  const addGrupo = () => setPagGrupos((g) => [...g, newPagGrupo(g.length + 1)]);
-  const removeGrupo = (id: string) => setPagGrupos((g) => g.filter((x) => x.id !== id));
-  const renameGrupo = (id: string, nome: string) =>
-    setPagGrupos((g) => g.map((x) => (x.id === id ? { ...x, nome } : x)));
-  const toggleGrupoTipo = (id: string, t: PagTipo) =>
-    setPagGrupos((g) =>
-      g.map((x) =>
-        x.id === id
-          ? { ...x, tipos: x.tipos.includes(t) ? x.tipos.filter((y) => y !== t) : [...x.tipos, t] }
-          : x,
-      ),
-    );
-  const updateGrupoConfig = (id: string, t: PagTipo, patch: Partial<PagamentoConfig>) =>
-    setPagGrupos((g) =>
-      g.map((x) =>
-        x.id === id
-          ? { ...x, config: { ...x.config, [t]: { ...(x.config[t] ?? {}), ...patch } } }
-          : x,
-      ),
-    );
+  const toggleTipo = (t: PagTipo) =>
+    setPagTipos((tipos) => (tipos.includes(t) ? tipos.filter((y) => y !== t) : [...tipos, t]));
+  const updateConfig = (t: PagTipo, patch: Partial<PagamentoConfig>) =>
+    setPagConfig((c) => ({ ...c, [t]: { ...(c[t] ?? {}), ...patch } }));
 
   const toggleUsoImagem = (u: string) =>
     setDireitosImagem((d) => ({
@@ -382,7 +336,8 @@ export function VincularCampanhaDialog({
       linhas,
       valorCliente,
       orcamento,
-      pagGrupos,
+      pagTipos,
+      pagConfig,
       prazoPag,
       pagClienteTipo: pagClienteTipo || undefined,
       pagClienteDataUnica: pagClienteDataUnica || undefined,
@@ -935,243 +890,181 @@ export function VincularCampanhaDialog({
                 title="Pagamento aos influenciadores"
                 description="Tipo de remuneração e prazo de pagamento."
               >
-                <div className="space-y-4">
-                  {pagGrupos.map((grupo) => (
-                    <div
-                      key={grupo.id}
-                      className="space-y-3 rounded-lg border border-border bg-card p-4"
-                    >
-                      <div className="flex items-center gap-2">
+                <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+                  <Field label="Tipos de pagamento">
+                    <div className="flex flex-wrap gap-2">
+                      {PAGAMENTOS.map((p) => {
+                        const active = pagTipos.includes(p);
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => toggleTipo(p)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              active
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border bg-card text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+
+                  {pagTipos.includes("Valor") && (
+                    <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
+                      <Field label="Valor">
                         <input
-                          value={grupo.nome}
-                          onChange={(e) => renameGrupo(grupo.id, e.target.value)}
-                          placeholder="Nome do grupo"
-                          className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-ring"
+                          value={(pagConfig.Valor ?? {}).valor ?? ""}
+                          onChange={(e) => updateConfig("Valor", { valor: e.target.value })}
+                          placeholder="R$ 0,00"
+                          className={inputCls}
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeGrupo(grupo.id)}
-                          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                          aria-label="Remover grupo"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <Field label="Tipos de pagamento">
-                        <div className="flex flex-wrap gap-2">
-                          {PAGAMENTOS.map((p) => {
-                            const active = grupo.tipos.includes(p);
-                            return (
-                              <button
-                                key={p}
-                                type="button"
-                                onClick={() => toggleGrupoTipo(grupo.id, p)}
-                                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                                  active
-                                    ? "border-foreground bg-foreground text-background"
-                                    : "border-border bg-card text-foreground hover:bg-muted"
-                                }`}
-                              >
-                                {p}
-                              </button>
-                            );
-                          })}
-                        </div>
                       </Field>
+                    </div>
+                  )}
 
-                      {grupo.tipos.includes("Valor") && (
-                        <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
-                          <Field label="Valor">
-                            <input
-                              value={(grupo.config.Valor ?? {}).valor ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Valor", { valor: e.target.value })
-                              }
-                              placeholder="R$ 0,00"
-                              className={inputCls}
-                            />
-                          </Field>
-                        </div>
-                      )}
+                  {pagTipos.includes("Por Hora") && (
+                    <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
+                      <Field label="Valor por hora">
+                        <input
+                          value={(pagConfig["Por Hora"] ?? {}).porHoraValor ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Por Hora", { porHoraValor: e.target.value })
+                          }
+                          placeholder="R$ 0,00"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Detalhes">
+                        <textarea
+                          value={(pagConfig["Por Hora"] ?? {}).porHoraDescricao ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Por Hora", { porHoraDescricao: e.target.value })
+                          }
+                          rows={2}
+                          placeholder="Ex: quantidade de horas estimada, escopo do trabalho..."
+                          className={`${inputCls} resize-none`}
+                        />
+                      </Field>
+                    </div>
+                  )}
 
-                      {grupo.tipos.includes("Por Hora") && (
-                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-                          <Field label="Valor por hora">
-                            <input
-                              value={(grupo.config["Por Hora"] ?? {}).porHoraValor ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Por Hora", {
-                                  porHoraValor: e.target.value,
-                                })
-                              }
-                              placeholder="R$ 0,00"
-                              className={inputCls}
-                            />
-                          </Field>
-                          <Field label="Detalhes">
-                            <textarea
-                              value={(grupo.config["Por Hora"] ?? {}).porHoraDescricao ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Por Hora", {
-                                  porHoraDescricao: e.target.value,
-                                })
-                              }
-                              rows={2}
-                              placeholder="Ex: quantidade de horas estimada, escopo do trabalho..."
-                              className={`${inputCls} resize-none`}
-                            />
-                          </Field>
-                        </div>
-                      )}
+                  {pagTipos.includes("Comissão") && (
+                    <div className="grid grid-cols-1 gap-4 rounded-lg border border-border/70 bg-muted/30 p-4 sm:grid-cols-2">
+                      <Field label="Comissão (%)">
+                        <input
+                          value={(pagConfig.Comissão ?? {}).comissaoPct ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Comissão", { comissaoPct: e.target.value })
+                          }
+                          placeholder="Ex: 10%"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Sobre o que">
+                        <input
+                          value={(pagConfig.Comissão ?? {}).comissaoSobre ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Comissão", { comissaoSobre: e.target.value })
+                          }
+                          placeholder="Ex: vendas via cupom"
+                          className={inputCls}
+                        />
+                      </Field>
+                    </div>
+                  )}
 
-                      {grupo.tipos.includes("Comissão") && (
-                        <div className="grid grid-cols-1 gap-4 rounded-lg border border-border/70 bg-muted/30 p-4 sm:grid-cols-2">
-                          <Field label="Comissão (%)">
-                            <input
-                              value={(grupo.config.Comissão ?? {}).comissaoPct ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Comissão", {
-                                  comissaoPct: e.target.value,
-                                })
-                              }
-                              placeholder="Ex: 10%"
-                              className={inputCls}
+                  {pagTipos.includes("Permuta") && (
+                    <div className="space-y-4 rounded-lg border border-border/70 bg-muted/30 p-4">
+                      <Field label="Descrição da permuta">
+                        <textarea
+                          value={(pagConfig.Permuta ?? {}).permutaDescricao ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Permuta", { permutaDescricao: e.target.value })
+                          }
+                          rows={2}
+                          placeholder="O que será entregue em troca"
+                          className={`${inputCls} resize-none`}
+                        />
+                      </Field>
+                      <div className="flex items-center gap-3">
+                        {(pagConfig.Permuta ?? {}).permutaFoto ? (
+                          <div className="relative">
+                            <img
+                              src={(pagConfig.Permuta ?? {}).permutaFoto}
+                              alt=""
+                              className="h-16 w-16 rounded-lg object-cover"
                             />
-                          </Field>
-                          <Field label="Sobre o que">
-                            <input
-                              value={(grupo.config.Comissão ?? {}).comissaoSobre ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Comissão", {
-                                  comissaoSobre: e.target.value,
-                                })
-                              }
-                              placeholder="Ex: vendas via cupom"
-                              className={inputCls}
-                            />
-                          </Field>
-                        </div>
-                      )}
-
-                      {grupo.tipos.includes("Permuta") && (
-                        <div className="space-y-4 rounded-lg border border-border/70 bg-muted/30 p-4">
-                          <Field label="Descrição da permuta">
-                            <textarea
-                              value={(grupo.config.Permuta ?? {}).permutaDescricao ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Permuta", {
-                                  permutaDescricao: e.target.value,
-                                })
-                              }
-                              rows={2}
-                              placeholder="O que será entregue em troca"
-                              className={`${inputCls} resize-none`}
-                            />
-                          </Field>
-                          <div className="flex items-center gap-3">
-                            {(grupo.config.Permuta ?? {}).permutaFoto ? (
-                              <div className="relative">
-                                <img
-                                  src={(grupo.config.Permuta ?? {}).permutaFoto}
-                                  alt=""
-                                  className="h-16 w-16 rounded-lg object-cover"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateGrupoConfig(grupo.id, "Permuta", {
-                                      permutaFoto: undefined,
-                                    })
-                                  }
-                                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            ) : null}
                             <button
                               type="button"
-                              onClick={() => permutaRef.current?.click()}
-                              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-muted"
+                              onClick={() => updateConfig("Permuta", { permutaFoto: undefined })}
+                              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
                             >
-                              <Paperclip className="h-3.5 w-3.5" />
-                              {(grupo.config.Permuta ?? {}).permutaFoto
-                                ? "Trocar foto"
-                                : "Anexar foto"}
+                              <X className="h-3 w-3" />
                             </button>
-                            <input
-                              ref={permutaRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) =>
-                                onFile(e.target.files?.[0], (data) =>
-                                  updateGrupoConfig(grupo.id, "Permuta", { permutaFoto: data }),
-                                )
-                              }
-                            />
                           </div>
-                        </div>
-                      )}
-
-                      {grupo.tipos.includes("Outro") && (
-                        <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/70 bg-muted/30 p-4 md:grid-cols-2">
-                          <Field label="Descrição">
-                            <input
-                              value={(grupo.config.Outro ?? {}).outroDescricao ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Outro", {
-                                  outroDescricao: e.target.value,
-                                })
-                              }
-                              placeholder="Ex: Bônus por meta, cachê fixo..."
-                              className={inputCls}
-                            />
-                          </Field>
-                          <Field label="Valor">
-                            <input
-                              value={(grupo.config.Outro ?? {}).outroValor ?? ""}
-                              onChange={(e) =>
-                                updateGrupoConfig(grupo.id, "Outro", {
-                                  outroValor: e.target.value,
-                                })
-                              }
-                              placeholder="R$ 0,00"
-                              className={inputCls}
-                            />
-                          </Field>
-                          <div className="md:col-span-2">
-                            <Field label="Critérios de pagamento">
-                              <textarea
-                                value={(grupo.config.Outro ?? {}).outroCriterios ?? ""}
-                                onChange={(e) =>
-                                  updateGrupoConfig(grupo.id, "Outro", {
-                                    outroCriterios: e.target.value,
-                                  })
-                                }
-                                placeholder="Explique quando e como esse pagamento deve ser feito..."
-                                rows={3}
-                                className={`${inputCls} resize-y`}
-                              />
-                            </Field>
-                          </div>
-                          <p className="text-xs text-muted-foreground md:col-span-2">
-                            Isso é só uma orientação para o time — vira despesa real no Financeiro
-                            apenas quando aceito numa entrega do influenciador.
-                          </p>
-                        </div>
-                      )}
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => permutaRef.current?.click()}
+                          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-muted"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {(pagConfig.Permuta ?? {}).permutaFoto ? "Trocar foto" : "Anexar foto"}
+                        </button>
+                        <input
+                          ref={permutaRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) =>
+                            onFile(e.target.files?.[0], (data) =>
+                              updateConfig("Permuta", { permutaFoto: data }),
+                            )
+                          }
+                        />
+                      </div>
                     </div>
-                  ))}
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={addGrupo}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Adicionar grupo
-                  </button>
+                  {pagTipos.includes("Outro") && (
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-border/70 bg-muted/30 p-4 md:grid-cols-2">
+                      <Field label="Descrição">
+                        <input
+                          value={(pagConfig.Outro ?? {}).outroDescricao ?? ""}
+                          onChange={(e) =>
+                            updateConfig("Outro", { outroDescricao: e.target.value })
+                          }
+                          placeholder="Ex: Bônus por meta, cachê fixo..."
+                          className={inputCls}
+                        />
+                      </Field>
+                      <Field label="Valor">
+                        <input
+                          value={(pagConfig.Outro ?? {}).outroValor ?? ""}
+                          onChange={(e) => updateConfig("Outro", { outroValor: e.target.value })}
+                          placeholder="R$ 0,00"
+                          className={inputCls}
+                        />
+                      </Field>
+                      <div className="md:col-span-2">
+                        <Field label="Critérios de pagamento">
+                          <textarea
+                            value={(pagConfig.Outro ?? {}).outroCriterios ?? ""}
+                            onChange={(e) =>
+                              updateConfig("Outro", { outroCriterios: e.target.value })
+                            }
+                            placeholder="Explique quando e como esse pagamento deve ser feito..."
+                            rows={3}
+                            className={`${inputCls} resize-y`}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Field label="Prazo de pagamento">

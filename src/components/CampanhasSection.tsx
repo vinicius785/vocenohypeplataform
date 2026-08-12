@@ -24,12 +24,7 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import FlowingMenu from "@/components/FlowingMenu";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
-import {
-  type Campaign,
-  type PagTipo,
-  type PagamentoConfig,
-  normalizeCampaignPagGrupos,
-} from "./VincularCampanhaDialog";
+import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
 import { SectionHeader } from "./SectionHeader";
 import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
@@ -333,7 +328,7 @@ function CampanhaDetail({
 
   // Budget
   const orcamento = parseMoney(c.orcamento);
-  const gasto = visibleInflus.reduce((sum, i) => sum + totalAceito(i.entregas), 0);
+  const gasto = visibleInflus.reduce((sum, i) => sum + totalAceito(i.pagamento), 0);
   const disponivel = Math.max(0, orcamento - gasto);
   const pctGasto = orcamento > 0 ? Math.min(100, (gasto / orcamento) * 100) : 0;
   const overBudget = orcamento > 0 && gasto > orcamento;
@@ -537,12 +532,7 @@ function CampanhaDetail({
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
-      <InfluencerBoard
-        influs={visibleInflus}
-        onChange={persistVisibleInflus}
-        exportName={c.nome}
-        pagGrupos={normalizeCampaignPagGrupos(c)}
-      />
+      <InfluencerBoard influs={visibleInflus} onChange={persistVisibleInflus} exportName={c.nome} />
 
       <GaleriaConteudosSection influs={visibleInflus} />
 
@@ -608,27 +598,20 @@ function CampanhaDetail({
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                 Formas de pagamento
               </h3>
-              {normalizeCampaignPagGrupos(c).length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {normalizeCampaignPagGrupos(c).map((grupo) => (
-                    <div key={grupo.id}>
-                      <p className="text-[11px] font-medium text-muted-foreground">{grupo.nome}</p>
-                      <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
-                        {grupo.tipos.map((t) => {
-                          const resumo = pagTipoResumo(t, grupo.config[t] ?? {});
-                          return (
-                            <span
-                              key={t}
-                              className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
-                            >
-                              <span className="font-medium">{t}</span>
-                              {resumo && <span className="text-muted-foreground"> · {resumo}</span>}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+              {(c.pagTipos?.length ?? 0) > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+                  {c.pagTipos.map((t) => {
+                    const resumo = pagTipoResumo(t, c.pagConfig?.[t] ?? {});
+                    return (
+                      <span
+                        key={t}
+                        className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                      >
+                        <span className="font-medium">{t}</span>
+                        {resumo && <span className="text-muted-foreground"> · {resumo}</span>}
+                      </span>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">—</p>
@@ -771,8 +754,8 @@ function CampaignCalendar({
     for (const i of influs) {
       for (const e of i.entregas) {
         add(e.dataPostagem, { label: `Postagem · ${i.nome} (${e.tipo})`, tone: "postagem" });
-        add(e.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
       }
+      add(i.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
     }
     // Itens recorrentes (só faz sentido em cliente recorrente) repetem no
     // mesmo dia-do-mês da data âncora, todo mês — a ocorrência mostrada no
