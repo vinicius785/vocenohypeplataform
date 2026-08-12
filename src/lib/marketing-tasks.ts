@@ -153,6 +153,11 @@ function saveStandalone(list: MktStandalone[]) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+export function onStandaloneChange(cb: () => void): () => void {
+  window.addEventListener(EVENT, cb);
+  return () => window.removeEventListener(EVENT, cb);
+}
+
 export function createStandalone(input: {
   title: string;
   status: MktColumn;

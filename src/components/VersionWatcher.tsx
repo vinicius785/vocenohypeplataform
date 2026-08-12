@@ -10,7 +10,7 @@ const CHECK_INTERVAL_MS = 5 * 60_000;
  * resto quem quiser vê em Configurações. */
 const MAX_NOTES = 3;
 
-type VersionInfo = { version?: string; notes?: string[] };
+type VersionInfo = { version?: string; notes?: string[]; notesVC?: string[] };
 
 /**
  * `public/version.json` é atualizado manualmente junto com APP_VERSION a
@@ -18,8 +18,13 @@ type VersionInfo = { version?: string; notes?: string[] };
  * versão. Comparar contra ele (em vez de só confiar no bundle já carregado)
  * é o único jeito de notificar quem já está com a aba aberta que saiu uma
  * versão nova — sem isso a pessoa só percebe dando F5 por acaso.
+ *
+ * `notes` traz TODAS as mudanças (uso interno/VI). `notesVC` é o mesmo
+ * changelog filtrado só pras mudanças que o cliente percebe no portal —
+ * usado quando `scope="vc"`, pra não mostrar pro cliente itens internos
+ * (jogos, financeiro, layout de tela que ele nunca vê, etc).
  */
-export function VersionWatcher() {
+export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -47,6 +52,7 @@ export function VersionWatcher() {
   }, []);
 
   const outdated = !!info?.version && info.version !== APP_VERSION;
+  const notes = scope === "vc" ? info?.notesVC : info?.notes;
   if (!outdated || dismissed) return null;
 
   return (
@@ -74,9 +80,9 @@ export function VersionWatcher() {
       </div>
 
       <div className="min-h-0 overflow-y-auto px-4 py-3">
-        {info.notes && info.notes.length > 0 ? (
+        {notes && notes.length > 0 ? (
           <ul className="space-y-1.5">
-            {info.notes.slice(0, MAX_NOTES).map((note, i) => (
+            {notes.slice(0, MAX_NOTES).map((note, i) => (
               <li key={i} className="flex gap-2 text-xs text-muted-foreground">
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
                 <span className="leading-relaxed">{note}</span>

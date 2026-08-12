@@ -13,6 +13,7 @@ import {
   createStandalone,
   updateStandalone,
   removeStandalone,
+  onStandaloneChange,
   type MktRequest,
   type MktStandalone,
 } from "@/lib/marketing-tasks";
@@ -119,6 +120,19 @@ export function MarketingSection() {
     [],
   );
   useEffect(() => onCampanhaTarefasChange(() => setTick((t) => t + 1)), []);
+  // Tarefas "avulsas" do Marketing (não vinculadas a projeto/campanha) vivem
+  // só no localStorage (`marketing-tasks.ts`), sem sincronização em tempo
+  // real como as outras — sem esse listener, criar/editar/excluir uma
+  // salvava certinho, mas a tela só refletia depois de um F5 (parecia que
+  // "não criava").
+  useEffect(
+    () =>
+      onStandaloneChange(() => {
+        setStandalones(loadStandalone());
+        setTick((t) => t + 1);
+      }),
+    [],
+  );
 
   const { tasks, meta } = useMemo(() => resolveTasks(reqs, standalones), [reqs, standalones, tick]);
 

@@ -602,6 +602,18 @@ export function TaskDialog({
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const assigneePickerRef = useRef<HTMLDivElement>(null);
+  // Sem isso, o dropdown de responsáveis só fechava clicando de novo no
+  // próprio botão — clicar em qualquer outro campo do formulário (Prazo,
+  // Prioridade etc.) ficava bloqueado por ele, sem fechar nada.
+  useEffect(() => {
+    if (!assigneePickerOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (!assigneePickerRef.current?.contains(e.target as Node)) setAssigneePickerOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [assigneePickerOpen]);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -1005,7 +1017,7 @@ export function TaskDialog({
               </Field>
 
               <Field label="Responsáveis" icon={<User className="h-3.5 w-3.5" />}>
-                <div className="relative w-full">
+                <div className="relative w-full" ref={assigneePickerRef}>
                   <button
                     type="button"
                     onClick={() => setAssigneePickerOpen((v) => !v)}

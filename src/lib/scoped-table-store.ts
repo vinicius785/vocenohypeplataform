@@ -125,12 +125,15 @@ export function createScopedArrayStore<T extends { id: string }>(
               data: item,
               updated_at: new Date().toISOString(),
             } as never)
-            .then(({ error }) => {
-              if (!error) return;
-              console.warn(`[${table}] upsert failed`, error);
+            .select("id")
+            .then(({ data, error }) => {
+              if (!error && (data?.length ?? 0) > 0) return;
+              console.warn(`[${table}] upsert failed`, error ?? "0 rows affected (RLS?)");
               void import("sonner").then(({ toast }) => {
                 toast.error("Não foi possível salvar", {
-                  description: error.message || "Verifique sua conexão e tente de novo.",
+                  description:
+                    error?.message ||
+                    "Você pode não ter permissão pra essa ação. Verifique sua conexão e tente de novo.",
                 });
               });
             });
@@ -142,13 +145,16 @@ export function createScopedArrayStore<T extends { id: string }>(
             .from(table)
             .delete()
             .eq("id", id)
-            .then(({ error }) => {
-              if (!error) return;
-              console.warn(`[${table}] delete failed`, error);
-              // Sem isso, uma exclusão recusada pelo servidor (RLS, rede)
-              // some da tela na hora (update otimista) e só reaparece
-              // minutos depois no próximo resync — sem nenhuma explicação
-              // do porquê. Devolve o item na hora e avisa com um toast.
+            // `.select("id")` é o único jeito de saber se a exclusão pegou
+            // alguma linha: RLS bloqueando não gera `error` nenhum — o
+            // Postgrest responde 200 com 0 linhas afetadas, então sem isso
+            // essa falha passava batido, o item continuava no banco, e
+            // reaparecia sozinho no próximo resync/realtime (sumia e voltava
+            // sem explicação nenhuma).
+            .select("id")
+            .then(({ data, error }) => {
+              if (!error && (data?.length ?? 0) > 0) return;
+              console.warn(`[${table}] delete failed`, error ?? "0 rows affected (RLS?)");
               const removed = prevById.get(id);
               if (removed) {
                 const current = cache.get(parentId) ?? [];
@@ -159,7 +165,9 @@ export function createScopedArrayStore<T extends { id: string }>(
               }
               void import("sonner").then(({ toast }) => {
                 toast.error("Não foi possível excluir", {
-                  description: error.message || "Verifique sua conexão e tente de novo.",
+                  description:
+                    error?.message ||
+                    "Você pode não ter permissão pra essa ação. Verifique sua conexão e tente de novo.",
                 });
               });
             });

@@ -1428,7 +1428,7 @@ function ClientPortalPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <TopBar ws={ws} lang={lang} onLangChange={setLang} />
       <PortalBugReportButton token={token} lang={lang} />
-      <VersionWatcher />
+      <VersionWatcher scope="vc" />
 
       <div className="flex flex-1 flex-col md:flex-row">
         {/* SIDEBAR — cartão de perfil do cliente + cartão de navegação,
