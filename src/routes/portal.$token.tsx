@@ -49,6 +49,7 @@ import {
 } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
+import { t, usePortalLang, PORTAL_LANGS, type PortalLang } from "@/lib/portal-i18n";
 
 /**
  * Portal do cliente (`/portal/$token`) — um link só, com TODAS as campanhas
@@ -182,12 +183,12 @@ function entregasSummary(entregas: PublicEntrega[]): string {
 
 /** Um influenciador "precisa de você agora" se a seleção está aguardando
  * decisão, ou alguma entrega está aguardando aprovação de roteiro/conteúdo. */
-function pendingReason(inf: PublicInfluencer): string | null {
-  if (inf.status === "Enviado para aprovação") return "Aguardando sua aprovação";
+function pendingReason(inf: PublicInfluencer, lang: PortalLang): string | null {
+  if (inf.status === "Enviado para aprovação") return t(lang, "pendingInflu");
   const roteiro = inf.entregas.some((e) => e.conteudoStatus === "Aguardando aprovação de roteiro");
-  if (roteiro) return "Roteiro aguardando aprovação";
+  if (roteiro) return t(lang, "pendingRoteiro");
   const conteudo = inf.entregas.some((e) => e.conteudoStatus === "Aprovação conteúdo");
-  if (conteudo) return "Conteúdo aguardando aprovação";
+  if (conteudo) return t(lang, "pendingConteudo");
   return null;
 }
 
@@ -200,7 +201,17 @@ function initialsOf(name: string): string {
     .join("");
 }
 
-function TopBar({ ws }: { ws: Workspace }) {
+function TopBar({
+  ws,
+  lang,
+  onLangChange,
+}: {
+  ws: Workspace;
+  lang: PortalLang;
+  onLangChange: (l: PortalLang) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = PORTAL_LANGS.find((l) => l.code === lang) ?? PORTAL_LANGS[0];
   return (
     <header className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-background px-5">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-foreground text-background">
@@ -211,6 +222,43 @@ function TopBar({ ws }: { ws: Workspace }) {
         )}
       </div>
       <span className="text-sm font-semibold text-foreground">{ws.nome}</span>
+
+      <div className="relative ml-auto">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-sm hover:bg-muted"
+          aria-label="Idioma"
+        >
+          <span className="text-base leading-none">{current.flag}</span>
+          <span className="hidden text-xs font-medium text-foreground sm:inline">
+            {current.label}
+          </span>
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <div className="absolute right-0 z-20 mt-1.5 w-40 overflow-hidden rounded-lg border border-border bg-popover shadow-md">
+              {PORTAL_LANGS.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => {
+                    onLangChange(l.code);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted ${
+                    l.code === lang ? "bg-muted font-medium" : ""
+                  }`}
+                >
+                  <span className="text-base leading-none">{l.flag}</span>
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </header>
   );
 }
@@ -401,10 +449,10 @@ function hasEntregaMetrics(m?: PostMetrics): boolean {
 
 /** Aviso persistente de reprovação (do influ ou de uma entrega), até o
  * time reenviar e o cliente decidir de novo. */
-function ReprovacaoBanner({ v }: { v: Veredito }) {
+function ReprovacaoBanner({ v, lang }: { v: Veredito; lang: PortalLang }) {
   return (
     <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-400">
-      <p className="font-medium">Você reprovou — aguardando reenvio do time</p>
+      <p className="font-medium">{t(lang, "reprovouAviso")}</p>
       <p className="mt-0.5">{v.motivo}</p>
     </div>
   );
@@ -416,6 +464,7 @@ function ApproveRejectBar({
   busy,
   rejecting,
   motivo,
+  lang,
   setRejecting,
   setMotivo,
   onApprove,
@@ -424,6 +473,7 @@ function ApproveRejectBar({
   busy: boolean;
   rejecting: boolean;
   motivo: string;
+  lang: PortalLang;
   setRejecting: (v: boolean) => void;
   setMotivo: (v: string) => void;
   onApprove: () => void;
@@ -435,7 +485,7 @@ function ApproveRejectBar({
         <textarea
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Motivo da reprovação (obrigatório)"
+          placeholder={t(lang, "motivoPlaceholder")}
           autoFocus
           className="h-16 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
         />
@@ -449,7 +499,7 @@ function ApproveRejectBar({
               setMotivo("");
             }}
           >
-            Cancelar
+            {t(lang, "cancelar")}
           </Button>
           <Button
             variant="destructive"
@@ -458,7 +508,7 @@ function ApproveRejectBar({
             onClick={onConfirmReject}
             disabled={!motivo.trim() || busy}
           >
-            Confirmar reprovação
+            {t(lang, "confirmarReprovacao")}
           </Button>
         </div>
       </div>
@@ -468,7 +518,7 @@ function ApproveRejectBar({
     <div className="flex gap-1.5">
       <Button size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={onApprove} disabled={busy}>
         <CheckCircle2 className="h-3 w-3" />
-        Aprovar
+        {t(lang, "aprovar")}
       </Button>
       <Button
         variant="outline"
@@ -478,7 +528,7 @@ function ApproveRejectBar({
         disabled={busy}
       >
         <XCircle className="h-3 w-3" />
-        Reprovar
+        {t(lang, "reprovar")}
       </Button>
     </div>
   );
@@ -486,8 +536,16 @@ function ApproveRejectBar({
 
 /** Selo de estágio no fim de cada linha da lista — âmbar+ponto quando
  * precisa de ação do cliente agora, neutro (Badge outline) nos demais. */
-function StatusBadge({ inf, className = "" }: { inf: PublicInfluencer; className?: string }) {
-  const pending = pendingReason(inf);
+function StatusBadge({
+  inf,
+  lang,
+  className = "",
+}: {
+  inf: PublicInfluencer;
+  lang: PortalLang;
+  className?: string;
+}) {
+  const pending = pendingReason(inf, lang);
   if (pending) {
     return (
       <Badge
@@ -507,7 +565,15 @@ function StatusBadge({ inf, className = "" }: { inf: PublicInfluencer; className
 
 /** Card de galeria — usado na lista de influenciadores de uma campanha
  * (foto grande em destaque, em vez da lista de linhas). */
-function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen: () => void }) {
+function InfluencerGalleryCard({
+  inf,
+  onOpen,
+  lang,
+}: {
+  inf: PublicInfluencer;
+  onOpen: () => void;
+  lang: PortalLang;
+}) {
   return (
     <button
       type="button"
@@ -527,7 +593,7 @@ function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen:
       {inf.entregas.length > 0 && (
         <p className="truncate text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
       )}
-      <StatusBadge inf={inf} className="px-2 py-0 text-[10px]" />
+      <StatusBadge inf={inf} lang={lang} className="px-2 py-0 text-[10px]" />
     </button>
   );
 }
@@ -536,11 +602,13 @@ function InfluencerGalleryCard({ inf, onOpen }: { inf: PublicInfluencer; onOpen:
  * (com botão Voltar), em vez de abrir um modal por cima da página. */
 function InfluencerDetail({
   inf,
+  lang,
   onBack,
   onRespondInflu,
   onRespondEntrega,
 }: {
   inf: PublicInfluencer;
+  lang: PortalLang;
   onBack: () => void;
   onRespondInflu: (status: "aprovado" | "reprovado", motivo?: string) => Promise<void>;
   onRespondEntrega: (
@@ -599,7 +667,7 @@ function InfluencerDetail({
         onClick={onBack}
         className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Voltar pra lista
+        <ArrowLeft className="h-3.5 w-3.5" /> {t(lang, "backToList")}
       </button>
 
       <div className="flex items-start gap-3.5 rounded-xl border border-border bg-background p-4">
@@ -611,11 +679,11 @@ function InfluencerDetail({
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-foreground">{inf.nome}</h2>
             {inf.nicho && <Badge variant="secondary">{inf.nicho}</Badge>}
-            <StatusBadge inf={inf} />
+            <StatusBadge inf={inf} lang={lang} />
           </div>
           <div className="flex flex-wrap gap-1.5">
             {inf.redes.length === 0 ? (
-              <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
+              <span className="text-xs text-muted-foreground">{t(lang, "noRedes")}</span>
             ) : (
               inf.redes.map((r, i) => {
                 const url = profileUrl(r.plataforma, r.handle);
@@ -646,12 +714,13 @@ function InfluencerDetail({
         {influPending && (
           <section className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="text-sm font-semibold text-foreground">
-              Aprovar {inf.nome} pra essa campanha?
+              {t(lang, "approveInfluTitle", { name: inf.nome })}
             </p>
             <ApproveRejectBar
               busy={busyKey === "influ"}
               rejecting={rejectingKey === "influ"}
               motivo={motivo}
+              lang={lang}
               setRejecting={(v) => {
                 setRejectingKey(v ? "influ" : null);
                 setMotivo("");
@@ -662,12 +731,15 @@ function InfluencerDetail({
             />
           </section>
         )}
-        {!influPending && inf.clienteReprovacao && <ReprovacaoBanner v={inf.clienteReprovacao} />}
+        {!influPending && inf.clienteReprovacao && (
+          <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
+        )}
 
         {inf.entregas.length > 0 && (
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Users className="h-4 w-4" /> Entregas ({inf.entregas.length})
+              <Users className="h-4 w-4" />{" "}
+              {t(lang, "entregasHeader", { count: inf.entregas.length })}
             </h3>
             <ul className="space-y-3">
               {inf.entregas.map((e) => {
@@ -720,6 +792,7 @@ function InfluencerDetail({
                           busy={busyKey === `roteiro:${e.id}`}
                           rejecting={rejectingKey === `roteiro:${e.id}`}
                           motivo={motivo}
+                          lang={lang}
                           setRejecting={(v) => {
                             setRejectingKey(v ? `roteiro:${e.id}` : null);
                             setMotivo("");
@@ -732,7 +805,7 @@ function InfluencerDetail({
                     )}
                     {!roteiroPendente && e.roteiroReprovacao && (
                       <div className="mt-2.5">
-                        <ReprovacaoBanner v={e.roteiroReprovacao} />
+                        <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
                       </div>
                     )}
 
@@ -757,6 +830,7 @@ function InfluencerDetail({
                           busy={busyKey === `conteudo:${e.id}`}
                           rejecting={rejectingKey === `conteudo:${e.id}`}
                           motivo={motivo}
+                          lang={lang}
                           setRejecting={(v) => {
                             setRejectingKey(v ? `conteudo:${e.id}` : null);
                             setMotivo("");
@@ -769,7 +843,7 @@ function InfluencerDetail({
                     )}
                     {!conteudoPendente && e.conteudoReprovacao && (
                       <div className="mt-2.5">
-                        <ReprovacaoBanner v={e.conteudoReprovacao} />
+                        <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
                       </div>
                     )}
                   </li>
@@ -782,7 +856,7 @@ function InfluencerDetail({
         {redesComMetrics.length > 0 && (
           <section className="space-y-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <BarChart3 className="h-4 w-4" /> Métricas do perfil
+              <BarChart3 className="h-4 w-4" /> {t(lang, "metricasPerfil")}
             </h3>
             <div className="space-y-4">
               {redesComMetrics.map((r) => {
@@ -798,32 +872,45 @@ function InfluencerDetail({
                     </p>
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
                       {r.seguidores ? (
-                        <MetricStat label="Seguidores" value={formatSeguidores(r.seguidores)} />
+                        <MetricStat
+                          label={t(lang, "seguidores")}
+                          value={formatSeguidores(r.seguidores)}
+                        />
                       ) : null}
                       {rm.interacoes ? (
                         <MetricStat
-                          label="Interações"
+                          label={t(lang, "interacoes")}
                           value={rm.interacoes.toLocaleString("pt-BR")}
                         />
                       ) : null}
                       {rm.visualizacoes ? (
                         <MetricStat
-                          label="Visualizações"
+                          label={t(lang, "visualizacoes")}
                           value={rm.visualizacoes.toLocaleString("pt-BR")}
                         />
                       ) : null}
                       {rm.taxaInteracao ? (
-                        <MetricStat label="Taxa de interação" value={`${rm.taxaInteracao}%`} />
+                        <MetricStat
+                          label={t(lang, "taxaInteracao")}
+                          value={`${rm.taxaInteracao}%`}
+                        />
                       ) : null}
                       {rm.taxaAtencaoInicial ? (
-                        <MetricStat label="Atenção inicial" value={`${rm.taxaAtencaoInicial}%`} />
+                        <MetricStat
+                          label={t(lang, "atencaoInicial")}
+                          value={`${rm.taxaAtencaoInicial}%`}
+                        />
                       ) : null}
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <DemographicChart title="Gênero" entries={rm.genero} chartType="pie" />
-                      <DemographicChart title="Faixa etária" entries={rm.faixaEtaria} />
-                      <DemographicChart title="Países" entries={rm.paises} />
-                      <DemographicChart title="Cidades" entries={rm.cidades} />
+                      <DemographicChart
+                        title={t(lang, "genero")}
+                        entries={rm.genero}
+                        chartType="pie"
+                      />
+                      <DemographicChart title={t(lang, "faixaEtaria")} entries={rm.faixaEtaria} />
+                      <DemographicChart title={t(lang, "paises")} entries={rm.paises} />
+                      <DemographicChart title={t(lang, "cidades")} entries={rm.cidades} />
                     </div>
                   </div>
                 );
@@ -835,7 +922,7 @@ function InfluencerDetail({
         {entregasComMetrics.length > 0 && (
           <section className="space-y-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Users className="h-4 w-4" /> Métricas das entregas
+              <Users className="h-4 w-4" /> {t(lang, "metricasEntregas")}
             </h3>
             <div className="space-y-3">
               {entregasComMetrics.map((e) => (
@@ -845,31 +932,40 @@ function InfluencerDetail({
                   </p>
                   <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
                     {e.metrics?.views ? (
-                      <MetricStat label="Views" value={e.metrics.views.toLocaleString("pt-BR")} />
+                      <MetricStat
+                        label={t(lang, "views")}
+                        value={e.metrics.views.toLocaleString("pt-BR")}
+                      />
                     ) : null}
                     {e.metrics?.reach ? (
-                      <MetricStat label="Alcance" value={e.metrics.reach.toLocaleString("pt-BR")} />
+                      <MetricStat
+                        label={t(lang, "alcance")}
+                        value={e.metrics.reach.toLocaleString("pt-BR")}
+                      />
                     ) : null}
                     {e.metrics?.likes ? (
                       <MetricStat
-                        label="Curtidas"
+                        label={t(lang, "curtidas")}
                         value={e.metrics.likes.toLocaleString("pt-BR")}
                       />
                     ) : null}
                     {e.metrics?.comments ? (
                       <MetricStat
-                        label="Coment."
+                        label={t(lang, "comentarios")}
                         value={e.metrics.comments.toLocaleString("pt-BR")}
                       />
                     ) : null}
                     {e.metrics?.shares ? (
                       <MetricStat
-                        label="Compart."
+                        label={t(lang, "compartilhamentos")}
                         value={e.metrics.shares.toLocaleString("pt-BR")}
                       />
                     ) : null}
                     {e.metrics?.saves ? (
-                      <MetricStat label="Salvos" value={e.metrics.saves.toLocaleString("pt-BR")} />
+                      <MetricStat
+                        label={t(lang, "salvos")}
+                        value={e.metrics.saves.toLocaleString("pt-BR")}
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -879,7 +975,7 @@ function InfluencerDetail({
         )}
 
         {semNadaAlem && !influPending && (
-          <p className="text-sm text-muted-foreground">Nenhuma métrica cadastrada ainda.</p>
+          <p className="text-sm text-muted-foreground">{t(lang, "noMetrics")}</p>
         )}
       </div>
     </div>
@@ -910,6 +1006,7 @@ function ClientPortalPage() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
   const [ws, setWs] = useState<Workspace>({ nome: "Você no Hype", logo: "" });
+  const [lang, setLang] = usePortalLang();
 
   useEffect(() => {
     void fetchWorkspace().then(setWs);
@@ -933,9 +1030,9 @@ function ClientPortalPage() {
   if (status === "loading") {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <TopBar ws={ws} />
+        <TopBar ws={ws} lang={lang} onLangChange={setLang} />
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Carregando...</p>
+          <p className="text-sm text-muted-foreground">{t(lang, "loading")}</p>
         </div>
       </div>
     );
@@ -944,13 +1041,11 @@ function ClientPortalPage() {
   if (status === "notfound" || !data) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <TopBar ws={ws} />
+        <TopBar ws={ws} lang={lang} onLangChange={setLang} />
         <div className="flex flex-1 items-center justify-center p-6">
           <div className="max-w-sm text-center">
-            <h1 className="text-lg font-semibold text-foreground">Link não encontrado</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Esse link não existe mais ou é inválido.
-            </p>
+            <h1 className="text-lg font-semibold text-foreground">{t(lang, "notFoundTitle")}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t(lang, "notFoundBody")}</p>
           </div>
         </div>
       </div>
@@ -962,12 +1057,12 @@ function ClientPortalPage() {
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
   const totalInflus = allInfluencers.length;
-  const totalAguardando = allInfluencers.filter((i) => pendingReason(i)).length;
+  const totalAguardando = allInfluencers.filter((i) => pendingReason(i, lang)).length;
 
   const feed: PendingFeedItem[] = data.campanhas.flatMap((c) =>
     c.influencers
       .map((inf) => {
-        const reason = pendingReason(inf);
+        const reason = pendingReason(inf, lang);
         return reason ? { campanhaId: c.id, campanhaNome: c.nome, inf, reason } : null;
       })
       .filter((x): x is PendingFeedItem => x !== null),
@@ -1034,7 +1129,7 @@ function ClientPortalPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <TopBar ws={ws} />
+      <TopBar ws={ws} lang={lang} onLangChange={setLang} />
 
       <div className="flex flex-1 flex-col md:flex-row">
         {/* SIDEBAR — cartão de perfil do cliente + cartão de navegação,
@@ -1059,20 +1154,22 @@ function ClientPortalPage() {
               <p className="mt-2 truncate text-sm font-semibold text-foreground">
                 {data.clienteNome}
               </p>
-              <p className="text-xs text-muted-foreground">Portal do cliente</p>
+              <p className="text-xs text-muted-foreground">{t(lang, "portalSubtitle")}</p>
 
               <div className="mt-3 flex items-center gap-4 border-t border-border pt-3">
                 <div>
                   <p className="text-sm font-semibold tabular-nums text-foreground">
                     {data.campanhas.length}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Campanhas</p>
+                  <p className="text-[11px] text-muted-foreground">{t(lang, "statCampanhas")}</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums text-foreground">
                     {totalInflus}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Influenciadores</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t(lang, "statInfluenciadores")}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1093,7 +1190,9 @@ function ClientPortalPage() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
                 <LayoutGrid className="h-3.5 w-3.5" />
               </span>
-              <span className="min-w-0 flex-1 truncate text-foreground">Início</span>
+              <span className="min-w-0 flex-1 truncate text-foreground">
+                {t(lang, "navInicio")}
+              </span>
               {totalAguardando > 0 && (
                 <span className="ml-auto inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
                   {totalAguardando}
@@ -1102,10 +1201,10 @@ function ClientPortalPage() {
             </button>
 
             <p className="border-t border-border px-3.5 pb-1.5 pt-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Campanhas
+              {t(lang, "statCampanhas")}
             </p>
             {data.campanhas.map((c) => {
-              const aguardandoAqui = c.influencers.filter((i) => pendingReason(i)).length;
+              const aguardandoAqui = c.influencers.filter((i) => pendingReason(i, lang)).length;
               return (
                 <button
                   key={c.id}
@@ -1134,7 +1233,9 @@ function ClientPortalPage() {
               );
             })}
             {data.campanhas.length === 0 && (
-              <p className="px-3.5 py-2.5 text-xs text-muted-foreground">Nenhuma campanha ainda.</p>
+              <p className="px-3.5 py-2.5 text-xs text-muted-foreground">
+                {t(lang, "navNoCampanhas")}
+              </p>
             )}
           </nav>
         </aside>
@@ -1152,7 +1253,7 @@ function ClientPortalPage() {
                     onClick={() => setReadingArticleId(null)}
                     className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+                    <ArrowLeft className="h-3.5 w-3.5" /> {t(lang, "back")}
                   </button>
                   <article className="mx-auto max-w-2xl">
                     {reading.cover && (
@@ -1189,6 +1290,7 @@ function ClientPortalPage() {
             viewing ? (
               <InfluencerDetail
                 inf={viewing}
+                lang={lang}
                 onBack={() => setViewingId(null)}
                 onRespondInflu={respondInflu!}
                 onRespondEntrega={respondEntrega!}
@@ -1201,32 +1303,36 @@ function ClientPortalPage() {
                   </h1>
                   {activeCampanha.prazo && (
                     <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(activeCampanha.prazo)}
+                      <Calendar className="h-3.5 w-3.5" /> {t(lang, "prazo")}{" "}
+                      {fmtDate(activeCampanha.prazo)}
                     </p>
                   )}
                 </div>
 
                 <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {activeCampanha.planejado > 0 && (
-                    <KpiCard label="Planejado" value={activeCampanha.planejado.toString()} />
+                    <KpiCard
+                      label={t(lang, "planejado")}
+                      value={activeCampanha.planejado.toString()}
+                    />
                   )}
                   <KpiCard
-                    label="Influenciadores"
+                    label={t(lang, "statInfluenciadores")}
                     value={activeCampanha.influencers.length.toString()}
                   />
                   <KpiCard
-                    label="Aguardando você"
+                    label={t(lang, "aguardandoVoce")}
                     value={activeCampanha.influencers
-                      .filter((i) => pendingReason(i))
+                      .filter((i) => pendingReason(i, lang))
                       .length.toString()}
                     tone={
-                      activeCampanha.influencers.some((i) => pendingReason(i))
+                      activeCampanha.influencers.some((i) => pendingReason(i, lang))
                         ? "warning"
                         : "default"
                     }
                   />
                   <KpiCard
-                    label="Postados"
+                    label={t(lang, "postados")}
                     value={activeCampanha.influencers
                       .reduce(
                         (s, i) => s + i.entregas.filter((e) => e.status === "publicado").length,
@@ -1237,11 +1343,11 @@ function ClientPortalPage() {
                 </div>
 
                 <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Users className="h-4 w-4" /> Influenciadores
+                  <Users className="h-4 w-4" /> {t(lang, "influenciadoresHeader")}
                 </h2>
                 {activeCampanha.influencers.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">
-                    Nenhum influenciador enviado pra aprovação ainda.
+                    {t(lang, "semInfluenciadores")}
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -1249,6 +1355,7 @@ function ClientPortalPage() {
                       <InfluencerGalleryCard
                         key={inf.id}
                         inf={inf}
+                        lang={lang}
                         onOpen={() => setViewingId(inf.id)}
                       />
                     ))}
@@ -1259,10 +1366,10 @@ function ClientPortalPage() {
           ) : (
             <>
               <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5" /> Visão geral
+                <Sparkles className="h-3.5 w-3.5" /> {t(lang, "visaoGeral")}
               </div>
               <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
-                Olá, {data.clienteNome}
+                {t(lang, "ola", { name: data.clienteNome })}
               </h1>
 
               {/* Estrutura tipo LinkedIn: centro = feed do conteúdo mais
@@ -1271,11 +1378,11 @@ function ClientPortalPage() {
                 <div className="min-w-0 space-y-6">
                   <section className="space-y-3">
                     <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <PlayCircle className="h-4 w-4" /> Últimos conteúdos
+                      <PlayCircle className="h-4 w-4" /> {t(lang, "ultimosConteudos")}
                     </h2>
                     {contentFeed.length === 0 ? (
                       <p className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-                        Nenhum conteúdo publicado ainda.
+                        {t(lang, "semConteudo")}
                       </p>
                     ) : (
                       <div className="space-y-3">
@@ -1289,7 +1396,7 @@ function ClientPortalPage() {
                             (a) => a.categoria === "Conteúdo publicado",
                           );
                           const links = item.entrega.url
-                            ? [{ id: "url", nome: "Ver publicação", url: item.entrega.url }]
+                            ? [{ id: "url", nome: t(lang, "verPublicacao"), url: item.entrega.url }]
                             : conteudoAnexos.map((a) => ({ id: a.id, nome: a.nome, url: a.url }));
                           return (
                             <div
@@ -1332,19 +1439,19 @@ function ClientPortalPage() {
                                   <div className="flex flex-wrap gap-4">
                                     {item.entrega.metrics?.views ? (
                                       <MetricStat
-                                        label="Views"
+                                        label={t(lang, "views")}
                                         value={item.entrega.metrics.views.toLocaleString("pt-BR")}
                                       />
                                     ) : null}
                                     {item.entrega.metrics?.likes ? (
                                       <MetricStat
-                                        label="Curtidas"
+                                        label={t(lang, "curtidas")}
                                         value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
                                       />
                                     ) : null}
                                     {item.entrega.metrics?.reach ? (
                                       <MetricStat
-                                        label="Alcance"
+                                        label={t(lang, "alcance")}
                                         value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
                                       />
                                     ) : null}
@@ -1376,41 +1483,38 @@ function ClientPortalPage() {
                   {data.artigos.length > 0 && (
                     <section className="space-y-3">
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <Newspaper className="h-4 w-4" /> Artigos
+                        <Newspaper className="h-4 w-4" /> {t(lang, "artigos")}
                       </h2>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                         {data.artigos.slice(0, 4).map((a) => (
                           <button
                             key={a.id}
                             type="button"
                             onClick={() => setReadingArticleId(a.id)}
-                            className="flex flex-col overflow-hidden rounded-xl border border-border bg-background text-left transition-all hover:-translate-y-0.5 hover:shadow-md"
+                            className="flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-background p-2 text-left transition-colors hover:bg-muted/40"
                           >
                             {a.cover ? (
                               <img
                                 src={a.cover}
                                 alt=""
-                                className="aspect-video w-full object-cover"
+                                className="h-12 w-12 shrink-0 rounded-md object-cover"
                               />
                             ) : (
-                              <div className="flex aspect-video w-full items-center justify-center bg-muted">
-                                <Newspaper className="h-6 w-6 text-muted-foreground" />
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted">
+                                <Newspaper className="h-4 w-4 text-muted-foreground" />
                               </div>
                             )}
-                            <div className="flex-1 space-y-1.5 p-4">
+                            <div className="min-w-0 flex-1 space-y-0.5">
                               {a.category && (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge variant="secondary" className="text-[9px]">
                                   {a.category}
                                 </Badge>
                               )}
-                              <p className="text-sm font-semibold text-foreground">{a.title}</p>
-                              {a.excerpt && (
-                                <p className="line-clamp-2 text-xs text-muted-foreground">
-                                  {a.excerpt}
-                                </p>
-                              )}
+                              <p className="truncate text-xs font-semibold text-foreground">
+                                {a.title}
+                              </p>
                               {a.publishDate && (
-                                <p className="pt-1 text-[11px] text-muted-foreground">
+                                <p className="text-[10px] text-muted-foreground">
                                   {fmtDate(a.publishDate)}
                                 </p>
                               )}
@@ -1427,11 +1531,11 @@ function ClientPortalPage() {
                       lista, igual o módulo de notícias do LinkedIn. */}
                   <section className="overflow-hidden rounded-xl border border-border bg-background">
                     <h2 className="flex items-center gap-2 border-b border-border px-3.5 py-3 text-sm font-semibold text-foreground">
-                      <Clock className="h-4 w-4" /> Novidades
+                      <Clock className="h-4 w-4" /> {t(lang, "novidades")}
                     </h2>
                     {feed.length === 0 ? (
                       <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
-                        Tudo em dia por aqui.
+                        {t(lang, "tudoEmDia")}
                       </p>
                     ) : (
                       <div className="divide-y divide-border">
@@ -1466,17 +1570,17 @@ function ClientPortalPage() {
 
                   <section className="overflow-hidden rounded-xl border border-border bg-background">
                     <h2 className="flex items-center gap-2 border-b border-border px-3.5 py-3 text-sm font-semibold text-foreground">
-                      <Megaphone className="h-4 w-4" /> Campanhas
+                      <Megaphone className="h-4 w-4" /> {t(lang, "statCampanhas")}
                     </h2>
                     {data.campanhas.length === 0 ? (
                       <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
-                        Nenhuma campanha ainda.
+                        {t(lang, "navNoCampanhas")}
                       </p>
                     ) : (
                       <div className="divide-y divide-border">
                         {data.campanhas.map((c) => {
                           const aguardandoAqui = c.influencers.filter((i) =>
-                            pendingReason(i),
+                            pendingReason(i, lang),
                           ).length;
                           return (
                             <button
@@ -1490,11 +1594,11 @@ function ClientPortalPage() {
                                   {c.nome}
                                 </p>
                                 <p className="truncate text-[11px] text-muted-foreground">
-                                  {c.influencers.length} influenciadores
+                                  {t(lang, "influenciadoresCount", { n: c.influencers.length })}
                                   {aguardandoAqui > 0 && (
                                     <span className="text-amber-700 dark:text-amber-400">
                                       {" "}
-                                      · {aguardandoAqui} aguardando você
+                                      · {t(lang, "aguardandoVoceInline", { n: aguardandoAqui })}
                                     </span>
                                   )}
                                 </p>

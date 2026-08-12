@@ -1,6 +1,8 @@
 {
-  "version": "1.87.0",
+  "version": "1.88.0",
   "notes": [
+    "Portal do cliente ganha seletor de idioma (Português, Español, English) no canto superior direito, com bandeira — traduz todos os textos fixos da interface (menu, botões, KPIs, etapas de aprovação). Nomes de campanha, artigos e status internos do funil continuam no idioma original em que foram escritos. A escolha fica salva no navegador do cliente.",
+    "Portal do cliente: cards de artigo na tela de Início ficam bem mais compactos (miniatura pequena ao lado do título, em vez de card grande com capa em destaque).",
     "Portal do cliente: artigos agora aparecem direto na tela de Início, logo abaixo de \"Últimos conteúdos\" — antes ficavam numa aba \"Artigos\" à parte no menu lateral, que foi removida.",
     "\"Destino\" do artigo (Marketing) vira escolha única — Site, Mural ou Portal do cliente — em vez de Portal ser um campo à parte que só aparecia depois de escolher Site/Mural na tela inicial de \"Novo artigo\". Selecionar Portal do cliente já mostra a lista de clientes pra marcar.",
     "Botão \"Link do cliente\" agora também aparece no topo da página da campanha (antes só existia dentro do cadastro do cliente, em Clientes) — copia o mesmo link do portal, sem precisar sair da campanha pra achar o cliente.",

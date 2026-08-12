@@ -1,0 +1,238 @@
+import { useEffect, useState } from "react";
+
+/**
+ * Tradução da interface fixa do portal do cliente (`/portal/$token`) — nunca
+ * do conteúdo digitado pelo time (nome de campanha, artigos, briefings,
+ * status internos do funil como "Enviado para aprovação"), que continua no
+ * idioma original em que foi escrito. Sem lib de i18n — é só um dicionário
+ * simples, já que o portal é uma única página com um conjunto pequeno e
+ * fixo de textos.
+ */
+export type PortalLang = "pt-BR" | "es" | "en-US";
+
+export const PORTAL_LANGS: { code: PortalLang; label: string; flag: string }[] = [
+  { code: "pt-BR", label: "Português", flag: "🇧🇷" },
+  { code: "es", label: "Español", flag: "🇪🇸" },
+  { code: "en-US", label: "English", flag: "🇺🇸" },
+];
+
+const STORAGE_KEY = "portal:lang";
+
+type Dict = Record<string, string>;
+
+const pt: Dict = {
+  loading: "Carregando...",
+  notFoundTitle: "Link não encontrado",
+  notFoundBody: "Esse link não existe mais ou é inválido.",
+  portalSubtitle: "Portal do cliente",
+  statCampanhas: "Campanhas",
+  statInfluenciadores: "Influenciadores",
+  navInicio: "Início",
+  navNoCampanhas: "Nenhuma campanha ainda.",
+  back: "Voltar",
+  backToList: "Voltar pra lista",
+  noRedes: "Sem redes cadastradas",
+  approveInfluTitle: "Aprovar {name} pra essa campanha?",
+  entregasHeader: "Entregas ({count})",
+  metricasPerfil: "Métricas do perfil",
+  metricasEntregas: "Métricas das entregas",
+  noMetrics: "Nenhuma métrica cadastrada ainda.",
+  seguidores: "Seguidores",
+  interacoes: "Interações",
+  visualizacoes: "Visualizações",
+  taxaInteracao: "Taxa de interação",
+  atencaoInicial: "Atenção inicial",
+  genero: "Gênero",
+  faixaEtaria: "Faixa etária",
+  paises: "Países",
+  cidades: "Cidades",
+  views: "Views",
+  alcance: "Alcance",
+  curtidas: "Curtidas",
+  comentarios: "Coment.",
+  compartilhamentos: "Compart.",
+  salvos: "Salvos",
+  cancelar: "Cancelar",
+  confirmarReprovacao: "Confirmar reprovação",
+  aprovar: "Aprovar",
+  reprovar: "Reprovar",
+  motivoPlaceholder: "Motivo da reprovação (obrigatório)",
+  reprovouAviso: "Você reprovou — aguardando reenvio do time",
+  planejado: "Planejado",
+  aguardandoVoce: "Aguardando você",
+  postados: "Postados",
+  influenciadoresHeader: "Influenciadores",
+  prazo: "Prazo",
+  semInfluenciadores: "Nenhum influenciador enviado pra aprovação ainda.",
+  visaoGeral: "Visão geral",
+  ola: "Olá, {name}",
+  ultimosConteudos: "Últimos conteúdos",
+  semConteudo: "Nenhum conteúdo publicado ainda.",
+  verPublicacao: "Ver publicação",
+  artigos: "Artigos",
+  novidades: "Novidades",
+  tudoEmDia: "Tudo em dia por aqui.",
+  influenciadoresCount: "{n} influenciadores",
+  aguardandoVoceInline: "{n} aguardando você",
+  pendingInflu: "Aguardando sua aprovação",
+  pendingRoteiro: "Roteiro aguardando aprovação",
+  pendingConteudo: "Conteúdo aguardando aprovação",
+};
+
+const es: Dict = {
+  loading: "Cargando...",
+  notFoundTitle: "Enlace no encontrado",
+  notFoundBody: "Este enlace ya no existe o no es válido.",
+  portalSubtitle: "Portal del cliente",
+  statCampanhas: "Campañas",
+  statInfluenciadores: "Influencers",
+  navInicio: "Inicio",
+  navNoCampanhas: "Todavía no hay campañas.",
+  back: "Volver",
+  backToList: "Volver a la lista",
+  noRedes: "Sin redes registradas",
+  approveInfluTitle: "¿Aprobar a {name} para esta campaña?",
+  entregasHeader: "Entregas ({count})",
+  metricasPerfil: "Métricas del perfil",
+  metricasEntregas: "Métricas de las entregas",
+  noMetrics: "Todavía no hay métricas registradas.",
+  seguidores: "Seguidores",
+  interacoes: "Interacciones",
+  visualizacoes: "Visualizaciones",
+  taxaInteracao: "Tasa de interacción",
+  atencaoInicial: "Atención inicial",
+  genero: "Género",
+  faixaEtaria: "Rango de edad",
+  paises: "Países",
+  cidades: "Ciudades",
+  views: "Vistas",
+  alcance: "Alcance",
+  curtidas: "Me gusta",
+  comentarios: "Coment.",
+  compartilhamentos: "Compart.",
+  salvos: "Guardados",
+  cancelar: "Cancelar",
+  confirmarReprovacao: "Confirmar rechazo",
+  aprovar: "Aprobar",
+  reprovar: "Rechazar",
+  motivoPlaceholder: "Motivo del rechazo (obligatorio)",
+  reprovouAviso: "Rechazaste — esperando el reenvío del equipo",
+  planejado: "Planificado",
+  aguardandoVoce: "Esperando tu revisión",
+  postados: "Publicados",
+  influenciadoresHeader: "Influencers",
+  prazo: "Plazo",
+  semInfluenciadores: "Todavía no hay influencers enviados para aprobación.",
+  visaoGeral: "Resumen general",
+  ola: "Hola, {name}",
+  ultimosConteudos: "Últimos contenidos",
+  semConteudo: "Todavía no hay contenido publicado.",
+  verPublicacao: "Ver publicación",
+  artigos: "Artículos",
+  novidades: "Novedades",
+  tudoEmDia: "Todo al día por aquí.",
+  influenciadoresCount: "{n} influencers",
+  aguardandoVoceInline: "{n} esperando tu revisión",
+  pendingInflu: "Esperando tu aprobación",
+  pendingRoteiro: "Guion esperando aprobación",
+  pendingConteudo: "Contenido esperando aprobación",
+};
+
+const en: Dict = {
+  loading: "Loading...",
+  notFoundTitle: "Link not found",
+  notFoundBody: "This link no longer exists or is invalid.",
+  portalSubtitle: "Client portal",
+  statCampanhas: "Campaigns",
+  statInfluenciadores: "Influencers",
+  navInicio: "Home",
+  navNoCampanhas: "No campaigns yet.",
+  back: "Back",
+  backToList: "Back to list",
+  noRedes: "No social profiles registered",
+  approveInfluTitle: "Approve {name} for this campaign?",
+  entregasHeader: "Deliverables ({count})",
+  metricasPerfil: "Profile metrics",
+  metricasEntregas: "Deliverable metrics",
+  noMetrics: "No metrics registered yet.",
+  seguidores: "Followers",
+  interacoes: "Interactions",
+  visualizacoes: "Views",
+  taxaInteracao: "Interaction rate",
+  atencaoInicial: "Initial attention",
+  genero: "Gender",
+  faixaEtaria: "Age range",
+  paises: "Countries",
+  cidades: "Cities",
+  views: "Views",
+  alcance: "Reach",
+  curtidas: "Likes",
+  comentarios: "Comments",
+  compartilhamentos: "Shares",
+  salvos: "Saves",
+  cancelar: "Cancel",
+  confirmarReprovacao: "Confirm rejection",
+  aprovar: "Approve",
+  reprovar: "Reject",
+  motivoPlaceholder: "Reason for rejection (required)",
+  reprovouAviso: "You rejected this — waiting for the team to resend",
+  planejado: "Planned",
+  aguardandoVoce: "Waiting on you",
+  postados: "Posted",
+  influenciadoresHeader: "Influencers",
+  prazo: "Deadline",
+  semInfluenciadores: "No influencers sent for approval yet.",
+  visaoGeral: "Overview",
+  ola: "Hi, {name}",
+  ultimosConteudos: "Latest content",
+  semConteudo: "No content published yet.",
+  verPublicacao: "View post",
+  artigos: "Articles",
+  novidades: "Updates",
+  tudoEmDia: "All caught up here.",
+  influenciadoresCount: "{n} influencers",
+  aguardandoVoceInline: "{n} waiting on you",
+  pendingInflu: "Waiting for your approval",
+  pendingRoteiro: "Script waiting for approval",
+  pendingConteudo: "Content waiting for approval",
+};
+
+const DICTS: Record<PortalLang, Dict> = { "pt-BR": pt, es, "en-US": en };
+
+export function t(lang: PortalLang, key: keyof typeof pt, vars?: Record<string, string | number>) {
+  let str = DICTS[lang][key] ?? DICTS["pt-BR"][key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) str = str.replaceAll(`{${k}}`, String(v));
+  }
+  return str;
+}
+
+/** Idioma escolhido pelo cliente no portal — fica só no navegador dele
+ * (não é preferência de conta, é por link/dispositivo), com fallback pro
+ * idioma do navegador na primeira visita. */
+export function usePortalLang(): [PortalLang, (l: PortalLang) => void] {
+  const [lang, setLangState] = useState<PortalLang>("pt-BR");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) as PortalLang | null;
+      if (saved && DICTS[saved]) {
+        setLangState(saved);
+        return;
+      }
+      const nav = navigator.language || "";
+      if (nav.startsWith("es")) setLangState("es");
+      else if (nav.startsWith("en")) setLangState("en-US");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const setLang = (l: PortalLang) => {
+    setLangState(l);
+    try {
+      localStorage.setItem(STORAGE_KEY, l);
+    } catch {
+      /* ignore */
+    }
+  };
+  return [lang, setLang];
+}
