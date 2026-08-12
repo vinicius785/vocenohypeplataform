@@ -1,6 +1,7 @@
 {
-  "version": "1.107.1",
+  "version": "1.108.0",
   "notes": [
+    "Novo: \"Baixar lista\" de influenciadores (dentro de uma campanha) ganha opção PDF, além de CSV/JSON — mostra nome, nicho, status, redes com seguidores, métricas de perfil e entregas de cada influenciador selecionado, pronto pra imprimir ou salvar como PDF.",
     "Ajusta a seção \"Histórico\" do perfil do influenciador no portal do cliente pra ficar abaixo de Briefing e Observações, e limpa o log de atividade interno acumulado em testes (afetava o que aparecia nesse histórico).",
     "Novo: perfil do influenciador no portal do cliente ganha uma seção \"Histórico\", com a data de quando foi adicionado à campanha e cada mudança de etapa (enviado pra aprovação, aprovado, postado etc), numa linha do tempo.",
     "Redes sociais no Banco de influenciadores agora são clicáveis, abrindo o perfil real (Instagram, TikTok, YouTube, X, LinkedIn ou Facebook) numa nova aba.",

@@ -4229,6 +4229,96 @@ function BankPickerDialog({
  * Download influenciadores dialog
  * ============================================================ */
 
+/** Resume as métricas de perfil já preenchidas (por rede) de um influ, uma
+ * linha por rede com dado — usado no PDF de exportação. */
+function metricsLinesFor(influ: Influ): string[] {
+  const lines: string[] = [];
+  for (const r of influ.redes) {
+    const m = influ.profileMetrics?.porRede?.[r.id];
+    if (!m) continue;
+    const bits: string[] = [];
+    if (m.interacoes) bits.push(`${m.interacoes.toLocaleString("pt-BR")} interações`);
+    if (m.visualizacoes) bits.push(`${m.visualizacoes.toLocaleString("pt-BR")} visualizações`);
+    if (m.taxaInteracao) bits.push(`${m.taxaInteracao}% taxa de interação`);
+    if (m.taxaAtencaoInicial) bits.push(`${m.taxaAtencaoInicial}% atenção inicial`);
+    if (bits.length) lines.push(`${r.plataforma}: ${bits.join(", ")}`);
+  }
+  return lines;
+}
+
+/** Gera um PDF da lista de influenciadores (nome, redes, métricas,
+ * entregas, status) abrindo uma página HTML pronta pra imprimir — o
+ * usuário salva como PDF pelo diálogo de impressão do navegador, mesmo
+ * padrão já usado no media kit do Banco de influenciadores. */
+function openPdfExport(
+  rows: Influ[],
+  exportName: string,
+  has: (k: InfluencerFieldKey) => boolean,
+): void {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const win = window.open("", "_blank");
+  if (!win) return;
+  const title = exportName || "Influenciadores";
+  win.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${esc(title)} — Influenciadores</title>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #111; padding: 32px; max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #777; font-size: 12px; margin-bottom: 24px; }
+  .card { border: 1px solid #e5e5e5; border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; page-break-inside: avoid; }
+  .card h2 { font-size: 16px; margin: 0 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: #555; margin-bottom: 6px; }
+  .row b { color: #111; }
+  .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #999; margin-top: 8px; }
+  ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
+  li { margin-bottom: 2px; }
+  .badge { display: inline-block; background: #f2f2f2; border-radius: 999px; padding: 2px 8px; font-size: 11px; margin-right: 4px; }
+  @media print { body { padding: 0; } .card { break-inside: avoid; } }
+</style></head>
+<body>
+  <h1>${esc(title)}</h1>
+  <p class="sub">${rows.length} influenciador${rows.length === 1 ? "" : "es"} · gerado em ${new Date().toLocaleDateString("pt-BR")}</p>
+  ${rows
+    .map((i) => {
+      const metricsLines = has("metricas") ? metricsLinesFor(i) : [];
+      return `<div class="card">
+        <h2>${esc(i.nome || "Sem nome")}</h2>
+        <div class="row">
+          ${i.nicho ? `<span class="badge">${esc(i.nicho)}</span>` : ""}
+          ${has("status") ? `<span>Status: <b>${esc(i.status)}</b></span>` : ""}
+          ${has("pagamentos") ? `<span>Valor total: <b>${fmtBRL(totalAceito(i.pagamento))}</b></span>` : ""}
+        </div>
+        ${
+          has("redes") && i.redes.length > 0
+            ? `<div class="section-label">Redes</div><ul>${i.redes
+                .map(
+                  (r) =>
+                    `<li>${esc(r.plataforma)}${r.handle ? ` — ${esc(r.handle)}` : ""}${r.seguidores ? ` (${formatSeguidores(r.seguidores)} seguidores)` : ""}</li>`,
+                )
+                .join("")}</ul>`
+            : ""
+        }
+        ${
+          metricsLines.length > 0
+            ? `<div class="section-label">Métricas</div><ul>${metricsLines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`
+            : ""
+        }
+        ${
+          has("entregas") && i.entregas.length > 0
+            ? `<div class="section-label">Entregas</div><ul>${i.entregas
+                .map((e) => `<li>${e.quantidade}× ${esc(e.tipo)} — ${esc(e.status)}</li>`)
+                .join("")}</ul>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("")}
+</body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
 function DownloadInflusDialog({
   open,
   onOpenChange,
@@ -4243,7 +4333,7 @@ function DownloadInflusDialog({
   has: (k: InfluencerFieldKey) => boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [format, setFormat] = useState<"csv" | "json">("csv");
+  const [format, setFormat] = useState<"csv" | "json" | "pdf">("csv");
 
   useEffect(() => {
     if (open) setSelected(new Set(influs.map((i) => i.id)));
@@ -4265,6 +4355,12 @@ function DownloadInflusDialog({
     if (rows.length === 0) return;
     const safeName = (exportName || "influenciadores").replace(/[^a-z0-9-_]+/gi, "_");
     const stamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "pdf") {
+      openPdfExport(rows, exportName, has);
+      onOpenChange(false);
+      return;
+    }
 
     if (format === "json") {
       const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
@@ -4335,11 +4431,12 @@ function DownloadInflusDialog({
             <span className="text-muted-foreground">Formato:</span>
             <select
               value={format}
-              onChange={(e) => setFormat(e.target.value as "csv" | "json")}
+              onChange={(e) => setFormat(e.target.value as "csv" | "json" | "pdf")}
               className="h-8 rounded-md border border-border bg-background px-2 text-xs"
             >
               <option value="csv">CSV (Excel)</option>
               <option value="json">JSON</option>
+              <option value="pdf">PDF</option>
             </select>
           </label>
           <div className="flex gap-2">
