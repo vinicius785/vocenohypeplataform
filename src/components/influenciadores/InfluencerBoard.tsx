@@ -345,7 +345,12 @@ export const APPROVAL_SLA_DAYS = 3;
 
 /** Se o influenciador está "Enviado para aprovação" há mais dias que o SLA, retorna há quantos dias. */
 export function approvalSlaOverdueDays(influ: Influ): number | null {
-  if (influ.status !== "Enviado para aprovação" || !influ.statusUpdatedAt) return null;
+  if (
+    influ.status !== "Enviado para aprovação" ||
+    influ.clienteReprovacao ||
+    !influ.statusUpdatedAt
+  )
+    return null;
   const days = Math.floor(
     (Date.parse(todayISO()) - Date.parse(influ.statusUpdatedAt)) / (24 * 60 * 60 * 1000),
   );
@@ -1353,7 +1358,15 @@ export function InfluencerBoard({
   const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
     const next = influs.map((x) =>
       x.id === influId
-        ? pushActivity({ ...x, status, statusUpdatedAt: todayISO() }, `mudou status para ${status}`)
+        ? pushActivity(
+            // Mudar o status manualmente é o sinal de que o time mexeu na
+            // seleção depois de uma reprovação do cliente — limpa
+            // `clienteReprovacao` junto, senão não existe outro jeito de
+            // reabrir a aprovação pro cliente decidir de novo (o selo de
+            // reprovado ficaria preso pra sempre).
+            { ...x, status, statusUpdatedAt: todayISO(), clienteReprovacao: undefined },
+            `mudou status para ${status}`,
+          )
         : x,
     );
     onChange(next);
@@ -2660,6 +2673,7 @@ function InfluencerProfileDialog({
 }) {
   const [commentText, setCommentText] = useState("");
   const bank = influ.bank ?? {};
+  const fotoRef = useRef<HTMLInputElement>(null);
 
   const [editingHeader, setEditingHeader] = useState(false);
   const [draft, setDraft] = useState({
@@ -2698,13 +2712,34 @@ function InfluencerProfileDialog({
         {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
         <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background">
+            <button
+              type="button"
+              onClick={() => fotoRef.current?.click()}
+              aria-label="Trocar foto"
+              className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background"
+            >
               {influ.foto ? (
                 <img src={influ.foto} alt="" className="h-full w-full object-cover" />
               ) : (
                 <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
               )}
-            </div>
+              <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
+                <Camera className="h-5 w-5" />
+              </span>
+            </button>
+            <input
+              ref={fotoRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const r = new FileReader();
+                r.onload = () => onPatch({ foto: String(r.result) });
+                r.readAsDataURL(file);
+              }}
+            />
             <div className="min-w-0 flex-1 space-y-2 pt-1">
               {editingHeader ? (
                 <div className="space-y-2 rounded-lg border border-border bg-background p-3">
@@ -2716,12 +2751,18 @@ function InfluencerProfileDialog({
                       autoFocus
                       className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <input
+                    <select
                       value={draft.nicho}
                       onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
-                      placeholder="Nicho"
                       className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
+                    >
+                      <option value="">Selecione um nicho</option>
+                      {NICHOS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       value={draft.telefone}
                       onChange={(e) =>

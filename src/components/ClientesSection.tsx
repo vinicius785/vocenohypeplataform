@@ -333,7 +333,7 @@ export function ClientesSection() {
       </div>
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="max-w-lg gap-0 overflow-hidden border-border bg-card p-0">
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden border-border bg-card p-0">
           {selected && (
             <>
               <div className="border-b border-border/60 px-8 pt-8 pb-6">
@@ -353,6 +353,8 @@ export function ClientesSection() {
                       {selected.responsavel || "Sem responsável"}
                     </DialogDescription>
                   </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => copyClientLink(selected)}
@@ -497,7 +499,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className="text-xs font-semibold uppercase tracking-tight text-muted-foreground">
         {label}
       </span>
-      <span className="text-sm text-foreground text-right">{value}</span>
+      <span className="min-w-0 max-w-[60%] break-words text-right text-sm text-foreground">
+        {value}
+      </span>
     </div>
   );
 }

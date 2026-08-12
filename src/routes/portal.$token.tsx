@@ -184,7 +184,8 @@ function entregasSummary(entregas: PublicEntrega[]): string {
 /** Um influenciador "precisa de você agora" se a seleção está aguardando
  * decisão, ou alguma entrega está aguardando aprovação de roteiro/conteúdo. */
 function pendingReason(inf: PublicInfluencer, lang: PortalLang): string | null {
-  if (inf.status === "Enviado para aprovação") return t(lang, "pendingInflu");
+  if (inf.status === "Enviado para aprovação" && !inf.clienteReprovacao)
+    return t(lang, "pendingInflu");
   const roteiro = inf.entregas.some((e) => e.conteudoStatus === "Aguardando aprovação de roteiro");
   if (roteiro) return t(lang, "pendingRoteiro");
   const conteudo = inf.entregas.some((e) => e.conteudoStatus === "Aprovação conteúdo");
@@ -627,7 +628,12 @@ function InfluencerDetail({
     hasRedeMetrics(inf.profileMetrics?.porRede?.[r.id ?? r.plataforma]),
   );
   const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
-  const influPending = inf.status === "Enviado para aprovação";
+  // `status` não avança quando o cliente reprova (fica em "Enviado para
+  // aprovação" de propósito, pronto pro time reenviar depois de ajustar) —
+  // por isso "pendente" também precisa checar que ainda não veio uma
+  // reprovação, senão a barra de Aprovar/Reprovar nunca some e o aviso de
+  // reprovado nunca aparece depois que o cliente reprova.
+  const influPending = inf.status === "Enviado para aprovação" && !inf.clienteReprovacao;
 
   const runInflu = async (status: "aprovado" | "reprovado") => {
     setBusyKey("influ");
