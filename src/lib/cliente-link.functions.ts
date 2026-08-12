@@ -77,6 +77,8 @@ const EntregaPublic = z.object({
   conteudoReprovacao: ClienteVeredito.optional(),
 });
 
+const StatusHistoryEntry = z.object({ status: z.string(), at: z.string() });
+
 const InfluencerPublic = z.object({
   id: z.string(),
   nome: z.string(),
@@ -93,7 +95,24 @@ const InfluencerPublic = z.object({
   profileMetrics: z
     .object({ porRede: z.record(z.string(), RedeMetricsPublic).optional() })
     .optional(),
+  criadoEm: z.string().optional(),
+  historico: z.array(StatusHistoryEntry).optional(),
 });
+
+/** Extrai as mudanças de status do log interno de atividade (`activity`,
+ * nunca exposto cru pro portal) — é o único lugar que guarda quando cada
+ * etapa aconteceu, já que `statusUpdatedAt` só reflete a mudança mais
+ * recente. Isso alimenta o histórico "enviado pra aprovação em / aprovado
+ * em / etc" mostrado ao cliente. */
+function statusHistoryFor(influ: Influ): { status: string; at: string }[] {
+  return (influ.activity ?? [])
+    .map((a) => {
+      const m = /^mudou status para (.+)$/.exec(a.action);
+      return m ? { status: m[1], at: a.createdAt } : null;
+    })
+    .filter((x): x is { status: string; at: string } => !!x)
+    .sort((a, b) => a.at.localeCompare(b.at));
+}
 
 /** Projeta um `Influ` interno (que carrega telefone/email/contrato/bank/
  * comments/activity/checklist/pagamento por entrega) pro subconjunto seguro
@@ -132,6 +151,8 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
       conteudoReprovacao: e.conteudoReprovacao,
     })),
     profileMetrics: influ.profileMetrics,
+    criadoEm: influ.createdAt,
+    historico: statusHistoryFor(influ),
   };
 }
 

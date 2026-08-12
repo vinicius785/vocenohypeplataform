@@ -1,6 +1,8 @@
 {
-  "version": "1.106.0",
+  "version": "1.107.0",
   "notes": [
+    "Novo: perfil do influenciador no portal do cliente ganha uma seção \"Histórico\", com a data de quando foi adicionado à campanha e cada mudança de etapa (enviado pra aprovação, aprovado, postado etc), numa linha do tempo.",
+    "Redes sociais no Banco de influenciadores agora são clicáveis, abrindo o perfil real (Instagram, TikTok, YouTube, X, LinkedIn ou Facebook) numa nova aba.",
     "Enriquece o cálculo de Confiabilidade do influenciador: além do prazo de entrega (como já era), agora também considera etapas intermediárias atrasadas (roteiro/gravação entregues depois da data de postagem combinada) e reprovações abertas do cliente (seleção, roteiro ou conteúdo) — com prioridade pros últimos 12 meses de atividade, caindo pro histórico completo só quando não há amostra recente suficiente. O card de perfil no Banco de influenciadores agora detalha esses dois sinais novos.",
     "Rebranding do Banco de influenciadores: novos filtros (rede social, seguidores, cidade, confiabilidade mínima, com botão \"Limpar filtros\"), paginação (30 por página), cards mostrando seguidores totais e cidade, e o perfil de cada influenciador ganhou banner, KPIs (seguidores/campanhas/confiabilidade/publicações), confiabilidade como barra visual (no prazo/atrasada/vencida) e desempenho agregado (views, alcance, curtidas etc) com gráfico de views por campanha.",
     "Novo: links dentro da descrição de uma tarefa agora ficam clicáveis (abrem em nova aba) quando você não está editando o texto — clique em qualquer parte não-link pra voltar a editar.",
@@ -75,6 +77,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Novo: perfil do influenciador ganha uma seção \"Histórico\" com a data de quando foi adicionado e cada mudança de etapa da campanha.",
     "Novo: influenciador aprovado ou reprovado ganha um ícone na foto, e campanhas com reprovados ganham uma aba \"Reprovados\" com a contagem e o perfil de cada um.",
     "Corrige a logo da Você no Hype sumindo da barra fixa do portal do cliente.",
     "O aviso de \"nova versão disponível\" no portal do cliente agora só mostra atualizações que o cliente realmente percebe ali.",

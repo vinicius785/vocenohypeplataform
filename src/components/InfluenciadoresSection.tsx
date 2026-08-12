@@ -58,6 +58,34 @@ function totalSeguidores(redes: Rede[]): number {
   return redes.reduce((sum, r) => sum + (Number(r.seguidores?.replace(/\D/g, "")) || 0), 0);
 }
 
+/** Monta a URL do perfil a partir da plataforma + @handle — se o handle já
+ * for um link (o time às vezes cola a URL inteira ali), usa ele direto. */
+function redeUrl(plataforma: string, handle: string): string | null {
+  const raw = handle.trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const h = raw.replace(/^@/, "");
+  if (!h) return null;
+  switch (plataforma) {
+    case "Instagram":
+      return `https://instagram.com/${h}`;
+    case "TikTok":
+      return `https://tiktok.com/@${h}`;
+    case "YouTube":
+      return h.startsWith("channel/") || h.startsWith("@")
+        ? `https://youtube.com/${h}`
+        : `https://youtube.com/@${h}`;
+    case "X":
+      return `https://x.com/${h}`;
+    case "LinkedIn":
+      return h.includes("/") ? `https://linkedin.com/${h}` : `https://linkedin.com/in/${h}`;
+    case "Facebook":
+      return `https://facebook.com/${h}`;
+    default:
+      return null;
+  }
+}
+
 const SEGUIDORES_BUCKETS = [
   { value: "10000", label: "10 mil+" },
   { value: "50000", label: "50 mil+" },
@@ -375,17 +403,35 @@ export function InfluenciadoresSection() {
                 {detail.redes.length === 0 ? (
                   <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
                 ) : (
-                  detail.redes.map((r) => (
-                    <span
-                      key={r.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
-                    >
-                      <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
-                      {r.plataforma}
-                      {r.handle ? ` · ${r.handle}` : ""}
-                      {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                    </span>
-                  ))
+                  detail.redes.map((r) => {
+                    const url = r.handle ? redeUrl(r.plataforma, r.handle) : null;
+                    const content = (
+                      <>
+                        <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
+                        {r.plataforma}
+                        {r.handle ? ` · ${r.handle}` : ""}
+                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
+                      </>
+                    );
+                    return url ? (
+                      <a
+                        key={r.id}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground transition-colors hover:bg-foreground hover:text-background"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
+                      >
+                        {content}
+                      </span>
+                    );
+                  })
                 )}
               </div>
             </div>
