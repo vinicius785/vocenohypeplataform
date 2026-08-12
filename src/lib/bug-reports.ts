@@ -2,8 +2,9 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type BugReport = {
   id: string;
-  reporterId: string;
+  reporterId: string | null;
   reporterName: string;
+  clientLabel: string | null;
   description: string;
   screenshotPath: string | null;
   pageContext: string | null;
@@ -12,8 +13,9 @@ export type BugReport = {
 
 function mapRow(row: {
   id: string;
-  reporter_id: string;
+  reporter_id: string | null;
   reporter_name: string;
+  client_label: string | null;
   description: string;
   screenshot_path: string | null;
   page_context: string | null;
@@ -23,6 +25,7 @@ function mapRow(row: {
     id: row.id,
     reporterId: row.reporter_id,
     reporterName: row.reporter_name,
+    clientLabel: row.client_label,
     description: row.description,
     screenshotPath: row.screenshot_path,
     pageContext: row.page_context,

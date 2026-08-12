@@ -42,6 +42,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
+import { PortalBugReportButton } from "@/components/PortalBugReportButton";
 import {
   getClienteLinkData,
   respondCampanhaInflu,
@@ -1163,6 +1164,7 @@ function ClientPortalPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TopBar ws={ws} lang={lang} onLangChange={setLang} />
+      <PortalBugReportButton token={token} lang={lang} />
 
       <div className="flex flex-1 flex-col md:flex-row">
         {/* SIDEBAR — cartão de perfil do cliente + cartão de navegação,

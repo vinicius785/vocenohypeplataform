@@ -35,29 +35,32 @@ export type Database = {
       };
       bug_reports: {
         Row: {
+          client_label: string | null;
           created_at: string;
           description: string;
           id: string;
           page_context: string | null;
-          reporter_id: string;
+          reporter_id: string | null;
           reporter_name: string;
           screenshot_path: string | null;
         };
         Insert: {
+          client_label?: string | null;
           created_at?: string;
           description: string;
           id?: string;
           page_context?: string | null;
-          reporter_id: string;
+          reporter_id?: string | null;
           reporter_name?: string;
           screenshot_path?: string | null;
         };
         Update: {
+          client_label?: string | null;
           created_at?: string;
           description?: string;
           id?: string;
           page_context?: string | null;
-          reporter_id?: string;
+          reporter_id?: string | null;
           reporter_name?: string;
           screenshot_path?: string | null;
         };

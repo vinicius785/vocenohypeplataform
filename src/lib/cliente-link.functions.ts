@@ -303,3 +303,52 @@ export const respondCampanhaEntrega = createServerFn({ method: "POST" })
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });
+
+const SubmitPortalBugReportInput = z.object({
+  token: z.string().min(1),
+  description: z.string().trim().min(1).max(4000),
+  pageContext: z.string().max(500).optional(),
+  /** Data URL (`data:image/...;base64,...`) do print anexado, opcional. */
+  screenshotDataUrl: z.string().max(8_000_000).optional(),
+});
+
+/** Versão do botão "Encontrou um bug?" pro portal público, sem sessão —
+ * usa o client de service-role pra contornar RLS (que exige `auth.uid()`)
+ * com segurança, só no servidor. `client_label` guarda de qual cliente/token
+ * veio, já que não há usuário autenticado. */
+export const submitPortalBugReport = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => SubmitPortalBugReportInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let screenshotPath: string | null = null;
+    if (data.screenshotDataUrl) {
+      const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(data.screenshotDataUrl);
+      if (match) {
+        const contentType = match[1];
+        const ext = contentType.split("/")[1] ?? "png";
+        const buffer = Buffer.from(match[2], "base64");
+        const path = `portal/${data.token}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from("bug-reports")
+          .upload(path, buffer, { contentType });
+        if (uploadError) throw new Error(uploadError.message);
+        screenshotPath = path;
+      }
+    }
+
+    const { error } = await supabaseAdmin.from("bug_reports").insert({
+      reporter_id: null,
+      reporter_name: "",
+      client_label: `Portal · ${found.cliente.empresa}`,
+      description: data.description.trim(),
+      screenshot_path: screenshotPath,
+      page_context: data.pageContext ?? null,
+    });
+    if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });
