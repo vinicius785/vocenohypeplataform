@@ -109,12 +109,6 @@ export type Campaign = {
   pagClienteRecorrenteInicio?: string; // data inicial da recorrência
   direitosImagem?: DireitosImagem;
   publicoAlvo?: PublicoAlvo;
-  reprovacaoResumoIA?: {
-    resumo: string;
-    sugestao: string;
-    geradoEm: string;
-    baseadoEm: string[]; // ids dos influs cujo motivo entrou no resumo, pra saber se ficou desatualizado
-  };
 };
 
 const newLinha = (): InfluLinha => ({

@@ -16,7 +16,6 @@ import {
   Megaphone,
   Paperclip,
   ShieldCheck,
-  Sparkles,
   Trash2,
   User,
   Wallet,
@@ -62,7 +61,6 @@ import {
   deleteCampanhaScopedData,
   type CronogramaItem,
 } from "@/lib/campanha-scoped-store";
-import { gerarResumoReprovacoes } from "@/lib/campanha-ia.functions";
 
 export { BankFields, type BankInfo };
 
@@ -317,7 +315,6 @@ function CampanhaDetail({
     [influs, monthFilter, isRecorrente],
   );
   const persistVisibleInflus = (next: Influ[]) => persistInflus([...hiddenInflus, ...next]);
-  const reprovados = visibleInflus.filter((i) => i.clienteReprovacao);
 
   // Approval metrics
   const enviados = visibleInflus.filter((i) => i.status !== "Lista").length;
@@ -355,35 +352,8 @@ function CampanhaDetail({
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
   const [openPanel, setOpenPanel] = useState<
-    null | "documentos" | "calendario" | "composicao" | "direitos" | "reprovacoesIA"
+    null | "documentos" | "calendario" | "composicao" | "direitos"
   >(null);
-
-  const gerarResumoReprovacoesFn = useServerFn(gerarResumoReprovacoes);
-  const [gerandoResumo, setGerandoResumo] = useState(false);
-  const [erroResumo, setErroResumo] = useState<string | null>(null);
-  const gerarResumo = () => {
-    setGerandoResumo(true);
-    setErroResumo(null);
-    gerarResumoReprovacoesFn({ data: { campanhaId: c.id } })
-      .then((resumo) => {
-        setClientes((prev) =>
-          prev.map((cl) =>
-            cl.id !== cliente.id
-              ? cl
-              : {
-                  ...cl,
-                  campanhas: (cl.campanhas ?? []).map((camp) =>
-                    camp.id === c.id ? { ...camp, reprovacaoResumoIA: resumo } : camp,
-                  ),
-                },
-          ),
-        );
-      })
-      .catch((err: unknown) =>
-        setErroResumo(err instanceof Error ? err.message : "Falha ao gerar resumo."),
-      )
-      .finally(() => setGerandoResumo(false));
-  };
 
   // Mesmo link (por cliente, não por campanha — um cliente pode ter várias
   // campanhas atrás do mesmo portal) já usado em ClientesSection; fica
@@ -551,14 +521,6 @@ function CampanhaDetail({
             active={c.direitosImagem?.permitido}
             onClick={() => setOpenPanel("direitos")}
           />
-          {reprovados.length > 0 && (
-            <FeatureButton
-              icon={Sparkles}
-              label="Resumo de reprovações (IA)"
-              count={reprovados.length}
-              onClick={() => setOpenPanel("reprovacoesIA")}
-            />
-          )}
         </div>
       </section>
 
@@ -708,69 +670,6 @@ function CampanhaDetail({
               Nenhum direito de uso de imagem definido para esta campanha.
             </p>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openPanel === "reprovacoesIA"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="max-w-lg border-border bg-card">
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <Sparkles className="h-4 w-4" /> Resumo de reprovações (IA)
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Resumo gerado por IA a partir dos motivos de reprovação escritos pelo cliente.
-          </DialogDescription>
-          <div className="space-y-4 text-sm">
-            {c.reprovacaoResumoIA ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Resumo
-                  </p>
-                  <p className="mt-1 text-foreground">{c.reprovacaoResumoIA.resumo}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Sugestão
-                  </p>
-                  <p className="mt-1 text-foreground">{c.reprovacaoResumoIA.sugestao}</p>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Gerado em{" "}
-                  {new Date(c.reprovacaoResumoIA.geradoEm).toLocaleString("pt-BR", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}{" "}
-                  · com base em {c.reprovacaoResumoIA.baseadoEm.length} reprovaç
-                  {c.reprovacaoResumoIA.baseadoEm.length === 1 ? "ão" : "ões"}
-                  {reprovados.some((i) => !c.reprovacaoResumoIA!.baseadoEm.includes(i.id)) && (
-                    <span className="text-amber-600 dark:text-amber-400">
-                      {" "}
-                      · há reprovações novas desde então
-                    </span>
-                  )}
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Gere um resumo dos motivos de reprovação ({reprovados.length}) e uma sugestão pro
-                time, a partir do que o cliente escreveu.
-              </p>
-            )}
-            {erroResumo && <p className="text-sm text-destructive">{erroResumo}</p>}
-            <button
-              type="button"
-              onClick={gerarResumo}
-              disabled={gerandoResumo}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {gerandoResumo
-                ? "Gerando..."
-                : c.reprovacaoResumoIA
-                  ? "Gerar de novo"
-                  : "Gerar resumo"}
-            </button>
-          </div>
         </DialogContent>
       </Dialog>
     </div>
