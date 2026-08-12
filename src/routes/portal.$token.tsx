@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,6 +21,7 @@ import {
   Calendar,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock,
   ExternalLink,
@@ -31,10 +32,12 @@ import {
   LayoutGrid,
   Megaphone,
   Newspaper,
+  Paperclip,
   PlayCircle,
   Sparkles,
   Twitter,
   Users,
+  X,
   XCircle,
   Youtube,
 } from "lucide-react";
@@ -48,6 +51,8 @@ import {
   respondCampanhaInflu,
   respondCampanhaEntrega,
   updateInfluBriefing,
+  updateInfluObservacoes,
+  updateInfluBriefingAnexo,
 } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
@@ -146,6 +151,8 @@ type PublicInfluencer = {
   status: string;
   clienteReprovacao?: Veredito;
   briefingPersonalizado?: string;
+  briefingAnexoNome?: string;
+  briefingAnexoUrl?: string;
   observacoes?: string;
   redes: { id?: string; plataforma: string; handle: string; seguidores?: string }[];
   entregas: PublicEntrega[];
@@ -620,6 +627,8 @@ function InfluencerDetail({
   onRespondInflu,
   onRespondEntrega,
   onSaveBriefing,
+  onSaveObservacoes,
+  onSaveBriefingAnexo,
 }: {
   inf: PublicInfluencer;
   lang: PortalLang;
@@ -632,16 +641,24 @@ function InfluencerDetail({
     motivo?: string,
   ) => Promise<void>;
   onSaveBriefing: (briefingPersonalizado: string) => Promise<void>;
+  onSaveObservacoes: (observacoes: string) => Promise<void>;
+  onSaveBriefingAnexo: (file: { nome: string; dataUrl: string } | null) => Promise<void>;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [rejectingKey, setRejectingKey] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [metricsOpen, setMetricsOpen] = useState(false);
   const [briefingDraft, setBriefingDraft] = useState(inf.briefingPersonalizado ?? "");
   const [briefingSaving, setBriefingSaving] = useState(false);
+  const [observacoesDraft, setObservacoesDraft] = useState(inf.observacoes ?? "");
+  const [observacoesSaving, setObservacoesSaving] = useState(false);
+  const [anexoUploading, setAnexoUploading] = useState(false);
+  const anexoInputRef = useRef<HTMLInputElement>(null);
   useEffect(
     () => setBriefingDraft(inf.briefingPersonalizado ?? ""),
     [inf.id, inf.briefingPersonalizado],
   );
+  useEffect(() => setObservacoesDraft(inf.observacoes ?? ""), [inf.id, inf.observacoes]);
   const saveBriefing = async () => {
     if (briefingDraft === (inf.briefingPersonalizado ?? "")) return;
     setBriefingSaving(true);
@@ -649,6 +666,29 @@ function InfluencerDetail({
       await onSaveBriefing(briefingDraft);
     } finally {
       setBriefingSaving(false);
+    }
+  };
+  const saveObservacoes = async () => {
+    if (observacoesDraft === (inf.observacoes ?? "")) return;
+    setObservacoesSaving(true);
+    try {
+      await onSaveObservacoes(observacoesDraft);
+    } finally {
+      setObservacoesSaving(false);
+    }
+  };
+  const uploadAnexo = async (file: File) => {
+    setAnexoUploading(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      });
+      await onSaveBriefingAnexo({ nome: file.name, dataUrl });
+    } finally {
+      setAnexoUploading(false);
     }
   };
 
@@ -695,6 +735,14 @@ function InfluencerDetail({
     }
   };
 
+  // Timeline: mais cedo primeiro; entregas sem data planejada ficam no fim.
+  const entregasOrdenadas = [...inf.entregas].sort((a, b) => {
+    if (!a.dataPostagem && !b.dataPostagem) return 0;
+    if (!a.dataPostagem) return 1;
+    if (!b.dataPostagem) return -1;
+    return a.dataPostagem.localeCompare(b.dataPostagem);
+  });
+
   return (
     <div>
       <button
@@ -705,18 +753,95 @@ function InfluencerDetail({
         <ArrowLeft className="h-3.5 w-3.5" /> {t(lang, "backToList")}
       </button>
 
-      <div className="flex items-start gap-3.5 rounded-xl border border-border bg-background p-4">
-        <Avatar className="h-14 w-14 shrink-0">
-          {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-          <AvatarFallback className="text-sm font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-foreground">{inf.nome}</h2>
-            {inf.nicho && <Badge variant="secondary">{inf.nicho}</Badge>}
-            <StatusBadge inf={inf} lang={lang} />
+      {/* HERO — foto/nome em destaque, com aprovar/reprovar direto no cabeçalho
+          quando pendente, mesmo efeito de elevação sutil usado nos cards da
+          plataforma interna (hover -translate-y + shadow). */}
+      <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+        <div
+          className="h-16 sm:h-20"
+          style={{
+            background: "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
+          }}
+        />
+        <div className="px-5 pb-5">
+          <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-end sm:text-left">
+            <Avatar className="-mt-10 h-20 w-20 shrink-0 ring-4 ring-background sm:h-24 sm:w-24">
+              {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
+              <AvatarFallback className="text-xl font-semibold">
+                {initialsOf(inf.nome)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 pb-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <h2 className="text-xl font-semibold text-foreground">{inf.nome}</h2>
+                {inf.nicho && <Badge variant="secondary">{inf.nicho}</Badge>}
+                <StatusBadge inf={inf} lang={lang} />
+              </div>
+            </div>
+            {influPending && !rejectingKey && (
+              <div className="flex shrink-0 gap-2 pb-1">
+                <Button
+                  size="sm"
+                  disabled={busyKey === "influ"}
+                  onClick={() => void runInflu("aprovado")}
+                  className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {t(lang, "aprovar")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busyKey === "influ"}
+                  onClick={() => setRejectingKey("influ")}
+                  className="gap-1.5 bg-rose-600 text-white hover:bg-rose-700"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  {t(lang, "reprovar")}
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+
+          {influPending && rejectingKey === "influ" && (
+            <div className="mt-3 space-y-1.5 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder={t(lang, "motivoPlaceholder")}
+                autoFocus
+                className="h-16 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex justify-end gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  onClick={() => {
+                    setRejectingKey(null);
+                    setMotivo("");
+                  }}
+                >
+                  {t(lang, "cancelar")}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-7 gap-1 bg-rose-600 px-2.5 text-xs text-white hover:bg-rose-700"
+                  onClick={() => void runInflu("reprovado")}
+                  disabled={!motivo.trim() || busyKey === "influ"}
+                >
+                  {t(lang, "confirmarReprovacao")}
+                </Button>
+              </div>
+            </div>
+          )}
+          {!influPending && inf.clienteReprovacao && (
+            <div className="mt-3">
+              <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
+            </div>
+          )}
+
+          {/* Redes + toggle de métricas */}
+          <div className="mt-4 flex flex-wrap items-center gap-1.5">
             {inf.redes.length === 0 ? (
               <span className="text-xs text-muted-foreground">{t(lang, "noRedes")}</span>
             ) : (
@@ -741,37 +866,283 @@ function InfluencerDetail({
                 );
               })
             )}
+            {!semNadaAlem && (
+              <button
+                type="button"
+                onClick={() => setMetricsOpen((o) => !o)}
+                className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                {t(lang, metricsOpen ? "fecharMetricas" : "abrirMetricas")}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${metricsOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            )}
+          </div>
+
+          {/* Métricas — expande/recolhe, sem sumir a hero de cima. */}
+          <div
+            className={`grid transition-all duration-300 ease-out ${metricsOpen ? "mt-4 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+          >
+            <div className="min-h-0 space-y-4 overflow-hidden">
+              {redesComMetrics.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t(lang, "metricasPerfil")}
+                  </p>
+                  {redesComMetrics.map((r) => {
+                    const rm = inf.profileMetrics!.porRede![r.id ?? r.plataforma]!;
+                    return (
+                      <div
+                        key={r.id ?? r.plataforma}
+                        className="space-y-4 rounded-xl border border-border bg-muted/20 p-4"
+                      >
+                        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                          {r.handle ? `@${r.handle}` : r.plataforma}
+                        </p>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+                          {r.seguidores ? (
+                            <MetricStat
+                              label={t(lang, "seguidores")}
+                              value={formatSeguidores(r.seguidores)}
+                            />
+                          ) : null}
+                          {rm.interacoes ? (
+                            <MetricStat
+                              label={t(lang, "interacoes")}
+                              value={rm.interacoes.toLocaleString("pt-BR")}
+                            />
+                          ) : null}
+                          {rm.visualizacoes ? (
+                            <MetricStat
+                              label={t(lang, "visualizacoes")}
+                              value={rm.visualizacoes.toLocaleString("pt-BR")}
+                            />
+                          ) : null}
+                          {rm.taxaInteracao ? (
+                            <MetricStat
+                              label={t(lang, "taxaInteracao")}
+                              value={`${rm.taxaInteracao}%`}
+                            />
+                          ) : null}
+                          {rm.taxaAtencaoInicial ? (
+                            <MetricStat
+                              label={t(lang, "atencaoInicial")}
+                              value={`${rm.taxaAtencaoInicial}%`}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <DemographicChart
+                            title={t(lang, "genero")}
+                            entries={rm.genero}
+                            chartType="pie"
+                          />
+                          <DemographicChart
+                            title={t(lang, "faixaEtaria")}
+                            entries={rm.faixaEtaria}
+                          />
+                          <DemographicChart title={t(lang, "paises")} entries={rm.paises} />
+                          <DemographicChart title={t(lang, "cidades")} entries={rm.cidades} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {entregasComMetrics.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t(lang, "metricasEntregas")}
+                  </p>
+                  {entregasComMetrics.map((e) => (
+                    <div key={e.id} className="rounded-xl border border-border bg-muted/20 p-4">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {e.tipo}
+                      </p>
+                      <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+                        {e.metrics?.views ? (
+                          <MetricStat
+                            label={t(lang, "views")}
+                            value={e.metrics.views.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {e.metrics?.reach ? (
+                          <MetricStat
+                            label={t(lang, "alcance")}
+                            value={e.metrics.reach.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {e.metrics?.likes ? (
+                          <MetricStat
+                            label={t(lang, "curtidas")}
+                            value={e.metrics.likes.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {e.metrics?.comments ? (
+                          <MetricStat
+                            label={t(lang, "comentarios")}
+                            value={e.metrics.comments.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {e.metrics?.shares ? (
+                          <MetricStat
+                            label={t(lang, "compartilhamentos")}
+                            value={e.metrics.shares.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                        {e.metrics?.saves ? (
+                          <MetricStat
+                            label={t(lang, "salvos")}
+                            value={e.metrics.saves.toLocaleString("pt-BR")}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6 space-y-7">
-        {influPending && (
-          <section className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-            <p className="text-sm font-semibold text-foreground">
-              {t(lang, "approveInfluTitle", { name: inf.nome })}
-            </p>
-            <ApproveRejectBar
-              busy={busyKey === "influ"}
-              rejecting={rejectingKey === "influ"}
-              motivo={motivo}
-              lang={lang}
-              setRejecting={(v) => {
-                setRejectingKey(v ? "influ" : null);
-                setMotivo("");
-              }}
-              setMotivo={setMotivo}
-              onApprove={() => void runInflu("aprovado")}
-              onConfirmReject={() => void runInflu("reprovado")}
-            />
+      <div className="mt-6 space-y-6">
+        {/* ENTREGAS — linha do tempo */}
+        {entregasOrdenadas.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Clock className="h-4 w-4" />{" "}
+              {t(lang, "entregasHeader", { count: inf.entregas.length })}
+            </h3>
+            <ol className="relative ml-1.5 space-y-5 border-l-2 border-border pl-5">
+              {entregasOrdenadas.map((e) => {
+                const roteiroPendente = e.conteudoStatus === "Aguardando aprovação de roteiro";
+                const conteudoPendente = e.conteudoStatus === "Aprovação conteúdo";
+                const publicado = e.status === "publicado";
+                const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
+                const conteudoAnexos = (e.anexos ?? []).filter(
+                  (a) => a.categoria === "Conteúdo publicado",
+                );
+                const dotTone = publicado
+                  ? "bg-emerald-500"
+                  : roteiroPendente || conteudoPendente
+                    ? "bg-amber-500"
+                    : "bg-muted-foreground/50";
+                return (
+                  <li key={e.id} className="relative">
+                    <span
+                      className={`absolute -left-[26px] top-1 h-3 w-3 rounded-full ring-4 ring-background ${dotTone}`}
+                    />
+                    <div className="rounded-lg border border-border bg-background p-3 text-xs shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
+                          {e.tipo}
+                          {e.conteudoStatus && (
+                            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
+                              {e.conteudoStatus}
+                            </Badge>
+                          )}
+                        </span>
+                        {e.dataPostagem && (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
+                          </span>
+                        )}
+                      </div>
+
+                      {roteiroPendente && (
+                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+                          {roteiroAnexos.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {roteiroAnexos.map((a) => (
+                                <a
+                                  key={a.id}
+                                  href={a.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                                >
+                                  <FileText className="h-3 w-3" /> {a.nome}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          <ApproveRejectBar
+                            busy={busyKey === `roteiro:${e.id}`}
+                            rejecting={rejectingKey === `roteiro:${e.id}`}
+                            motivo={motivo}
+                            lang={lang}
+                            setRejecting={(v) => {
+                              setRejectingKey(v ? `roteiro:${e.id}` : null);
+                              setMotivo("");
+                            }}
+                            setMotivo={setMotivo}
+                            onApprove={() => void runEntrega(e.id, "roteiro", "aprovado")}
+                            onConfirmReject={() => void runEntrega(e.id, "roteiro", "reprovado")}
+                          />
+                        </div>
+                      )}
+                      {!roteiroPendente && e.roteiroReprovacao && (
+                        <div className="mt-2.5">
+                          <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
+                        </div>
+                      )}
+
+                      {conteudoPendente && (
+                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+                          {conteudoAnexos.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {conteudoAnexos.map((a) => (
+                                <a
+                                  key={a.id}
+                                  href={a.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                                >
+                                  <FileText className="h-3 w-3" /> {a.nome}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          <ApproveRejectBar
+                            busy={busyKey === `conteudo:${e.id}`}
+                            rejecting={rejectingKey === `conteudo:${e.id}`}
+                            motivo={motivo}
+                            lang={lang}
+                            setRejecting={(v) => {
+                              setRejectingKey(v ? `conteudo:${e.id}` : null);
+                              setMotivo("");
+                            }}
+                            setMotivo={setMotivo}
+                            onApprove={() => void runEntrega(e.id, "conteudo", "aprovado")}
+                            onConfirmReject={() => void runEntrega(e.id, "conteudo", "reprovado")}
+                          />
+                        </div>
+                      )}
+                      {!conteudoPendente && e.conteudoReprovacao && (
+                        <div className="mt-2.5">
+                          <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           </section>
         )}
-        {!influPending && inf.clienteReprovacao && (
-          <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
-        )}
 
+        <div className="border-t border-border" />
+
+        {/* BRIEFING + OBSERVAÇÕES */}
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">{t(lang, "briefingHeader")}</h3>
               {briefingSaving && (
@@ -786,257 +1157,70 @@ function InfluencerDetail({
               rows={4}
               className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
             />
+            {inf.briefingAnexoUrl ? (
+              <div className="flex items-center gap-2 text-xs">
+                <a
+                  href={inf.briefingAnexoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                >
+                  <Paperclip className="h-3 w-3" /> {inf.briefingAnexoNome || "Anexo"}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void onSaveBriefingAnexo(null)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Remover anexo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={anexoUploading}
+                  onClick={() => anexoInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
+                >
+                  <Paperclip className="h-3 w-3" />
+                  {anexoUploading ? t(lang, "enviando") : t(lang, "anexarArquivo")}
+                </button>
+                <input
+                  ref={anexoInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadAnexo(file);
+                  }}
+                />
+              </>
+            )}
           </div>
-          {inf.observacoes && (
-            <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
+            <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">
                 {t(lang, "observacoesHeader")}
               </h3>
-              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{inf.observacoes}</p>
+              {observacoesSaving && (
+                <span className="text-[10px] text-muted-foreground">{t(lang, "saving")}</span>
+              )}
             </div>
-          )}
+            <textarea
+              value={observacoesDraft}
+              onChange={(e) => setObservacoesDraft(e.target.value)}
+              onBlur={() => void saveObservacoes()}
+              placeholder={t(lang, "observacoesPlaceholder")}
+              rows={4}
+              className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
+          </div>
         </section>
 
-        {inf.entregas.length > 0 && (
-          <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Users className="h-4 w-4" />{" "}
-              {t(lang, "entregasHeader", { count: inf.entregas.length })}
-            </h3>
-            <ul className="space-y-3">
-              {inf.entregas.map((e) => {
-                const roteiroPendente = e.conteudoStatus === "Aguardando aprovação de roteiro";
-                const conteudoPendente = e.conteudoStatus === "Aprovação conteúdo";
-                const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
-                const conteudoAnexos = (e.anexos ?? []).filter(
-                  (a) => a.categoria === "Conteúdo publicado",
-                );
-                return (
-                  <li
-                    key={e.id}
-                    className="rounded-md border border-border bg-background px-3 py-2.5 text-xs"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-foreground">
-                        {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
-                        {e.tipo}
-                        {e.conteudoStatus && (
-                          <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
-                            {e.conteudoStatus}
-                          </Badge>
-                        )}
-                      </span>
-                      {e.dataPostagem && (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
-                        </span>
-                      )}
-                    </div>
-
-                    {roteiroPendente && (
-                      <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
-                        {roteiroAnexos.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {roteiroAnexos.map((a) => (
-                              <a
-                                key={a.id}
-                                href={a.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                              >
-                                <FileText className="h-3 w-3" /> {a.nome}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        <ApproveRejectBar
-                          busy={busyKey === `roteiro:${e.id}`}
-                          rejecting={rejectingKey === `roteiro:${e.id}`}
-                          motivo={motivo}
-                          lang={lang}
-                          setRejecting={(v) => {
-                            setRejectingKey(v ? `roteiro:${e.id}` : null);
-                            setMotivo("");
-                          }}
-                          setMotivo={setMotivo}
-                          onApprove={() => void runEntrega(e.id, "roteiro", "aprovado")}
-                          onConfirmReject={() => void runEntrega(e.id, "roteiro", "reprovado")}
-                        />
-                      </div>
-                    )}
-                    {!roteiroPendente && e.roteiroReprovacao && (
-                      <div className="mt-2.5">
-                        <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
-                      </div>
-                    )}
-
-                    {conteudoPendente && (
-                      <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
-                        {conteudoAnexos.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {conteudoAnexos.map((a) => (
-                              <a
-                                key={a.id}
-                                href={a.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                              >
-                                <FileText className="h-3 w-3" /> {a.nome}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        <ApproveRejectBar
-                          busy={busyKey === `conteudo:${e.id}`}
-                          rejecting={rejectingKey === `conteudo:${e.id}`}
-                          motivo={motivo}
-                          lang={lang}
-                          setRejecting={(v) => {
-                            setRejectingKey(v ? `conteudo:${e.id}` : null);
-                            setMotivo("");
-                          }}
-                          setMotivo={setMotivo}
-                          onApprove={() => void runEntrega(e.id, "conteudo", "aprovado")}
-                          onConfirmReject={() => void runEntrega(e.id, "conteudo", "reprovado")}
-                        />
-                      </div>
-                    )}
-                    {!conteudoPendente && e.conteudoReprovacao && (
-                      <div className="mt-2.5">
-                        <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
-
-        {redesComMetrics.length > 0 && (
-          <section className="space-y-4">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <BarChart3 className="h-4 w-4" /> {t(lang, "metricasPerfil")}
-            </h3>
-            <div className="space-y-4">
-              {redesComMetrics.map((r) => {
-                const rm = inf.profileMetrics!.porRede![r.id ?? r.plataforma]!;
-                return (
-                  <div
-                    key={r.id ?? r.plataforma}
-                    className="space-y-4 rounded-xl border border-border bg-background p-4"
-                  >
-                    <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                      {r.handle ? `@${r.handle}` : r.plataforma}
-                    </p>
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-                      {r.seguidores ? (
-                        <MetricStat
-                          label={t(lang, "seguidores")}
-                          value={formatSeguidores(r.seguidores)}
-                        />
-                      ) : null}
-                      {rm.interacoes ? (
-                        <MetricStat
-                          label={t(lang, "interacoes")}
-                          value={rm.interacoes.toLocaleString("pt-BR")}
-                        />
-                      ) : null}
-                      {rm.visualizacoes ? (
-                        <MetricStat
-                          label={t(lang, "visualizacoes")}
-                          value={rm.visualizacoes.toLocaleString("pt-BR")}
-                        />
-                      ) : null}
-                      {rm.taxaInteracao ? (
-                        <MetricStat
-                          label={t(lang, "taxaInteracao")}
-                          value={`${rm.taxaInteracao}%`}
-                        />
-                      ) : null}
-                      {rm.taxaAtencaoInicial ? (
-                        <MetricStat
-                          label={t(lang, "atencaoInicial")}
-                          value={`${rm.taxaAtencaoInicial}%`}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <DemographicChart
-                        title={t(lang, "genero")}
-                        entries={rm.genero}
-                        chartType="pie"
-                      />
-                      <DemographicChart title={t(lang, "faixaEtaria")} entries={rm.faixaEtaria} />
-                      <DemographicChart title={t(lang, "paises")} entries={rm.paises} />
-                      <DemographicChart title={t(lang, "cidades")} entries={rm.cidades} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {entregasComMetrics.length > 0 && (
-          <section className="space-y-4">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Users className="h-4 w-4" /> {t(lang, "metricasEntregas")}
-            </h3>
-            <div className="space-y-3">
-              {entregasComMetrics.map((e) => (
-                <div key={e.id} className="rounded-xl border border-border bg-background p-4">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {e.tipo}
-                  </p>
-                  <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-                    {e.metrics?.views ? (
-                      <MetricStat
-                        label={t(lang, "views")}
-                        value={e.metrics.views.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.reach ? (
-                      <MetricStat
-                        label={t(lang, "alcance")}
-                        value={e.metrics.reach.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.likes ? (
-                      <MetricStat
-                        label={t(lang, "curtidas")}
-                        value={e.metrics.likes.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.comments ? (
-                      <MetricStat
-                        label={t(lang, "comentarios")}
-                        value={e.metrics.comments.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.shares ? (
-                      <MetricStat
-                        label={t(lang, "compartilhamentos")}
-                        value={e.metrics.shares.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                    {e.metrics?.saves ? (
-                      <MetricStat
-                        label={t(lang, "salvos")}
-                        value={e.metrics.saves.toLocaleString("pt-BR")}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {semNadaAlem && !influPending && (
+        {semNadaAlem && !metricsOpen && inf.entregas.length === 0 && (
           <p className="text-sm text-muted-foreground">{t(lang, "noMetrics")}</p>
         )}
       </div>
@@ -1063,6 +1247,8 @@ function ClientPortalPage() {
   const respondInfluFn = useServerFn(respondCampanhaInflu);
   const respondEntregaFn = useServerFn(respondCampanhaEntrega);
   const updateBriefingFn = useServerFn(updateInfluBriefing);
+  const updateObservacoesFn = useServerFn(updateInfluObservacoes);
+  const updateBriefingAnexoFn = useServerFn(updateInfluBriefingAnexo);
   const [data, setData] = useState<ClienteLinkData | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
@@ -1199,6 +1385,24 @@ function ClientPortalPage() {
             influencerId: viewing.id,
             briefingPersonalizado,
           },
+        });
+        load();
+      }
+    : undefined;
+
+  const saveObservacoes = viewing
+    ? async (observacoes: string) => {
+        await updateObservacoesFn({
+          data: { token, campanhaId: activeCampanha!.id, influencerId: viewing.id, observacoes },
+        });
+        load();
+      }
+    : undefined;
+
+  const saveBriefingAnexo = viewing
+    ? async (file: { nome: string; dataUrl: string } | null) => {
+        await updateBriefingAnexoFn({
+          data: { token, campanhaId: activeCampanha!.id, influencerId: viewing.id, file },
         });
         load();
       }
@@ -1373,6 +1577,8 @@ function ClientPortalPage() {
                 onRespondInflu={respondInflu!}
                 onRespondEntrega={respondEntrega!}
                 onSaveBriefing={saveBriefing!}
+                onSaveObservacoes={saveObservacoes!}
+                onSaveBriefingAnexo={saveBriefingAnexo!}
               />
             ) : (
               <>

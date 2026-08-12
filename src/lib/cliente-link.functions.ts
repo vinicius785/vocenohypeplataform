@@ -84,6 +84,8 @@ const InfluencerPublic = z.object({
   status: z.string(),
   clienteReprovacao: ClienteVeredito.optional(),
   briefingPersonalizado: z.string().optional(),
+  briefingAnexoNome: z.string().optional(),
+  briefingAnexoUrl: z.string().optional(),
   observacoes: z.string().optional(),
   redes: z.array(RedePublic),
   entregas: z.array(EntregaPublic),
@@ -104,6 +106,8 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
     status: influ.status,
     clienteReprovacao: influ.clienteReprovacao,
     briefingPersonalizado: influ.briefingPersonalizado,
+    briefingAnexoNome: influ.briefingAnexoNome,
+    briefingAnexoUrl: influ.briefingAnexoUrl,
     observacoes: influ.observacoes,
     redes: influ.redes.map((r) => ({
       id: r.id,
@@ -343,6 +347,84 @@ export const updateInfluBriefing = createServerFn({ method: "POST" })
     const next: Influ = {
       ...influ,
       briefingPersonalizado: data.briefingPersonalizado || undefined,
+    };
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true };
+  });
+
+const UpdateInfluObservacoesInput = z.object({
+  token: z.string().min(1),
+  campanhaId: z.string().min(1),
+  influencerId: z.string().min(1),
+  observacoes: z.string().trim().max(4000),
+});
+
+/** Público, sem auth — mesma ideia de `updateInfluBriefing`, mas pro campo
+ * de observações. */
+export const updateInfluObservacoes = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => UpdateInfluObservacoesInput.parse(raw))
+  .handler(async ({ data }) => {
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const next: Influ = { ...influ, observacoes: data.observacoes || undefined };
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true };
+  });
+
+const UpdateInfluBriefingAnexoInput = z.object({
+  token: z.string().min(1),
+  campanhaId: z.string().min(1),
+  influencerId: z.string().min(1),
+  /** null remove o anexo atual. */
+  file: z
+    .object({
+      nome: z.string().min(1),
+      /** Data URL (`data:...;base64,...`) do arquivo. */
+      dataUrl: z.string().min(1).max(8_000_000),
+    })
+    .nullable(),
+});
+
+/** Público, sem auth — permite o cliente anexar (ou remover) um arquivo no
+ * briefing personalizado direto pelo portal. Sobe pro mesmo bucket
+ * `entrega-anexos` usado internamente, prefixado por `portal/{token}/...`
+ * (service-role contorna a RLS do bucket, que só libera pra `authenticated`). */
+export const updateInfluBriefingAnexo = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => UpdateInfluBriefingAnexoInput.parse(raw))
+  .handler(async ({ data }) => {
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    if (!data.file) {
+      const next: Influ = {
+        ...influ,
+        briefingAnexoNome: undefined,
+        briefingAnexoUrl: undefined,
+      };
+      await saveInfluRow(data.campanhaId, data.influencerId, next);
+      return { ok: true };
+    }
+
+    const match = /^data:([^;]+);base64,(.+)$/.exec(data.file.dataUrl);
+    if (!match) throw new Error("Arquivo inválido.");
+    const contentType = match[1];
+    const buffer = Buffer.from(match[2], "base64");
+    const safeName = data.file.nome.replace(/[^\w.-]+/g, "_");
+    const path = `portal/${data.token}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("entrega-anexos")
+      .upload(path, buffer, { contentType });
+    if (uploadError) throw new Error(uploadError.message);
+    const { data: signed } = await supabaseAdmin.storage
+      .from("entrega-anexos")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (!signed) throw new Error("Não foi possível gerar o link do anexo.");
+
+    const next: Influ = {
+      ...influ,
+      briefingAnexoNome: data.file.nome,
+      briefingAnexoUrl: signed.signedUrl,
     };
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };

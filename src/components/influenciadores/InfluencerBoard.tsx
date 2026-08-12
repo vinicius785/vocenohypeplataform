@@ -580,6 +580,10 @@ export type Influ = {
    * geral da campanha, em `Campaign.briefing`) — mostrado no portal do
    * cliente, no perfil do influenciador. */
   briefingPersonalizado?: string;
+  /** Anexo único do briefing personalizado (pode ser adicionado pelo time
+   * ou pelo cliente, pelo portal). */
+  briefingAnexoNome?: string;
+  briefingAnexoUrl?: string;
   /** Observação livre sobre o influenciador — visível tanto internamente
    * quanto no portal do cliente (diferente de `comments`/`activity`, que
    * ficam só internos). */
@@ -2870,6 +2874,35 @@ function InfluencerProfileDialog({
                   onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
                   placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
                 />
+                {influ.briefingAnexoUrl ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <a
+                      href={influ.briefingAnexoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                    >
+                      <Paperclip className="h-3 w-3" />
+                      {influ.briefingAnexoNome || "Anexo"}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <BriefingAnexoUploadButton
+                    onUpload={(nome, url) =>
+                      onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                    }
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <FieldLabel
@@ -3350,6 +3383,44 @@ function AutoSaveTextarea({
       rows={3}
       className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
     />
+  );
+}
+
+/** Botão "Anexar arquivo" pro briefing personalizado — sobe pro Storage
+ * (bucket `entrega-anexos`, mesmo usado pelos anexos de entrega) em vez de
+ * base64 embutido no jsonb, que falha silenciosamente em arquivos maiores. */
+function BriefingAnexoUploadButton({
+  onUpload,
+}: {
+  onUpload: (nome: string, url: string) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        disabled={uploading}
+        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
+      >
+        <Paperclip className="h-3 w-3" /> {uploading ? "Enviando..." : "Anexar arquivo"}
+      </button>
+      <input
+        ref={ref}
+        type="file"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          setUploading(true);
+          const url = await uploadEntregaAnexo(file);
+          setUploading(false);
+          if (url) onUpload(file.name, url);
+        }}
+      />
+    </>
   );
 }
 
