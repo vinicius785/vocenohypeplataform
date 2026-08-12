@@ -1,6 +1,7 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "notes": [
+    "Novo: influenciador aprovado ou reprovado pelo cliente agora ganha um ícone (verde/vermelho) na própria foto no portal do cliente, igual já existia internamente. Campanhas com pelo menos um influenciador reprovado ganham uma aba \"Reprovados\", com a contagem e o perfil de cada um.",
     "Corrige de vez o influenciador de campanha \"sumindo e voltando\" ao excluir: o fix anterior só cobria exclusão recusada com erro explícito, mas o Supabase também recusa silenciosamente (RLS bloqueando sem gerar erro nenhum, só 0 linhas afetadas) — esse caso passava batido, o item continuava no banco e voltava sozinho pouco depois. Agora qualquer exclusão que não afete nenhuma linha também é tratada como falha, com o item voltando na hora e um alerta explicando.",
     "Corrige criação de tarefa \"avulsa\" no Marketing (não vinculada a projeto/campanha) parecendo não salvar: a tarefa era salva certinho, mas a tela não tinha como saber que precisava atualizar, então só aparecia depois de um F5. Corrige também o dropdown de responsáveis do formulário de tarefa não fechando ao clicar em outro campo, o que bloqueava o preenchimento do resto do formulário.",
     "Corrige a logo da Você no Hype sumindo da barra fixa do portal do cliente: ao mover o carregamento inicial da página pro servidor (SSR), o código que busca o nome/logo do workspace tentava gravar num cache que só existe no navegador — no servidor isso falhava silenciosamente, e a página caía pro nome padrão sem logo nenhuma.",
@@ -68,6 +69,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Novo: influenciador aprovado ou reprovado ganha um ícone na foto, e campanhas com reprovados ganham uma aba \"Reprovados\" com a contagem e o perfil de cada um.",
     "Corrige a logo da Você no Hype sumindo da barra fixa do portal do cliente.",
     "O aviso de \"nova versão disponível\" no portal do cliente agora só mostra atualizações que o cliente realmente percebe ali.",
     "Corrige o aviso de \"nova versão disponível\" ficando gigante, com dezenas de tópicos antigos acumulados — agora mostra só as 3 atualizações mais recentes, com o card limitado à altura da tela e rolagem interna se precisar. O aviso também passa a aparecer no portal do cliente (antes só existia na plataforma interna).",

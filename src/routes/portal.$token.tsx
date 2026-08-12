@@ -231,6 +231,16 @@ function pendingReason(inf: PublicInfluencer, lang: PortalLang): string | null {
   return null;
 }
 
+/** Mesma lógica do ícone de aprovação/reprovação sobre a foto usado
+ * internamente (InfluCard, na VI): o portal só mostra influs que já
+ * passaram de "Enviado para aprovação", então status diferente disso já
+ * significa aprovado; senão, reprovado se o cliente já reprovou. */
+function influApproval(inf: PublicInfluencer): "aprovado" | "reprovado" | null {
+  if (inf.status !== "Enviado para aprovação") return "aprovado";
+  if (inf.clienteReprovacao) return "reprovado";
+  return null;
+}
+
 function initialsOf(name: string): string {
   return name
     .trim()
@@ -613,16 +623,35 @@ function InfluencerGalleryCard({
   onOpen: () => void;
   lang: PortalLang;
 }) {
+  const approval = influApproval(inf);
   return (
     <button
       type="button"
       onClick={onOpen}
       className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-4 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
     >
-      <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border transition-all group-hover:ring-foreground/30">
-        {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-        <AvatarFallback className="text-base font-semibold">{initialsOf(inf.nome)}</AvatarFallback>
-      </Avatar>
+      <div className="relative h-16 w-16 shrink-0">
+        <Avatar className="h-16 w-16 ring-1 ring-border transition-all group-hover:ring-foreground/30">
+          {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
+          <AvatarFallback className="text-base font-semibold">
+            {initialsOf(inf.nome)}
+          </AvatarFallback>
+        </Avatar>
+        {approval && (
+          <span
+            title={approval === "reprovado" ? inf.clienteReprovacao?.motivo : undefined}
+            className={`absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background ${
+              approval === "aprovado" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+            }`}
+          >
+            {approval === "aprovado" ? (
+              <CheckCircle2 className="h-3 w-3" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+          </span>
+        )}
+      </div>
       <p className="truncate text-sm font-semibold text-foreground">{inf.nome}</p>
       {inf.nicho && (
         <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
@@ -1274,10 +1303,12 @@ function ClientPortalPage() {
     loaderData.clienteData ? "ready" : "notfound",
   );
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
+  const [influTab, setInfluTab] = useState<"todos" | "reprovados">("todos");
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
   const [ws, setWs] = useState<Workspace>(loaderData.ws);
   const [lang, setLang] = usePortalLang();
+  useEffect(() => setInfluTab("todos"), [activeCampanhaId]);
 
   // Recarrega os dados depois de uma ação do cliente (aprovar/reprovar,
   // salvar briefing, etc) — o carregamento inicial já veio pronto do
@@ -1318,6 +1349,7 @@ function ClientPortalPage() {
   }
 
   const activeCampanha = data.campanhas.find((c) => c.id === activeCampanhaId) ?? null;
+  const reprovados = activeCampanha?.influencers.filter((i) => i.clienteReprovacao) ?? [];
   const viewing = activeCampanha?.influencers.find((i) => i.id === viewingId) ?? null;
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
@@ -1647,23 +1679,59 @@ function ClientPortalPage() {
                   />
                 </div>
 
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Users className="h-4 w-4" /> {t(lang, "influenciadoresHeader")}
-                </h2>
-                {activeCampanha.influencers.length === 0 ? (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Users className="h-4 w-4" /> {t(lang, "influenciadoresHeader")}
+                  </h2>
+                  {reprovados.length > 0 && (
+                    <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setInfluTab("todos")}
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                          influTab === "todos"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {t(lang, "abaTodos")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInfluTab("reprovados")}
+                        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                          influTab === "reprovados"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {t(lang, "abaReprovados")}
+                        <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                          {reprovados.length}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {(influTab === "reprovados" ? reprovados : activeCampanha.influencers).length ===
+                0 ? (
                   <p className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">
-                    {t(lang, "semInfluenciadores")}
+                    {influTab === "reprovados"
+                      ? t(lang, "semReprovados")
+                      : t(lang, "semInfluenciadores")}
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {activeCampanha.influencers.map((inf) => (
-                      <InfluencerGalleryCard
-                        key={inf.id}
-                        inf={inf}
-                        lang={lang}
-                        onOpen={() => setViewingId(inf.id)}
-                      />
-                    ))}
+                    {(influTab === "reprovados" ? reprovados : activeCampanha.influencers).map(
+                      (inf) => (
+                        <InfluencerGalleryCard
+                          key={inf.id}
+                          inf={inf}
+                          lang={lang}
+                          onOpen={() => setViewingId(inf.id)}
+                        />
+                      ),
+                    )}
                   </div>
                 )}
 

@@ -106,6 +106,9 @@ const pt: Dict = {
   pendingInflu: "Aguardando sua aprovação",
   pendingRoteiro: "Roteiro aguardando aprovação",
   pendingConteudo: "Conteúdo aguardando aprovação",
+  abaTodos: "Todos",
+  abaReprovados: "Reprovados",
+  semReprovados: "Nenhum influenciador reprovado nesta campanha.",
 };
 
 const es: Dict = {
@@ -194,6 +197,9 @@ const es: Dict = {
   pendingInflu: "Esperando tu aprobación",
   pendingRoteiro: "Guion esperando aprobación",
   pendingConteudo: "Contenido esperando aprobación",
+  abaTodos: "Todos",
+  abaReprovados: "Rechazados",
+  semReprovados: "Ningún influencer rechazado en esta campaña.",
 };
 
 const en: Dict = {
@@ -282,6 +288,9 @@ const en: Dict = {
   pendingInflu: "Waiting for your approval",
   pendingRoteiro: "Script waiting for approval",
   pendingConteudo: "Content waiting for approval",
+  abaTodos: "All",
+  abaReprovados: "Rejected",
+  semReprovados: "No rejected influencers in this campaign.",
 };
 
 const DICTS: Record<PortalLang, Dict> = { "pt-BR": pt, es, "en-US": en };
