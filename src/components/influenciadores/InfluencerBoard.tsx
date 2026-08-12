@@ -626,9 +626,14 @@ export function normalizeInflus(list: unknown): Influ[] {
           url: e.url,
         });
       }
+      const status = e.status ?? "combinado";
       return {
         ...e,
-        status: e.status ?? "combinado",
+        status,
+        // Entregas de antes da etapa de produção existir (ou migradas de
+        // `conteudos`) não tinham esse campo — sem isso a pill de status
+        // some da tabela e não dá pra editar a etapa dessa entrega.
+        conteudoStatus: e.conteudoStatus ?? (status === "publicado" ? "Postado" : "Combinado"),
         anexos,
         // Quando `url` era o próprio anexo (arquivoNome setado), o link vira
         // o anexo acima — não faz mais sentido manter os dois.
@@ -2294,15 +2299,13 @@ function EntregasEditor({
                       </div>
                     </td>
                     <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
-                      {e.conteudoStatus && (
-                        <EntregaStatusPill
-                          value={e.conteudoStatus}
-                          influStatus={influStatus}
-                          onChange={(s) =>
-                            onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
-                          }
-                        />
-                      )}
+                      <EntregaStatusPill
+                        value={e.conteudoStatus ?? "Combinado"}
+                        influStatus={influStatus}
+                        onChange={(s) =>
+                          onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
+                        }
+                      />
                     </td>
                     <td className="px-2 py-2 text-center text-[11px] text-muted-foreground">
                       {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
