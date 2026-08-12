@@ -1,6 +1,7 @@
 {
-  "version": "1.104.0",
+  "version": "1.105.0",
   "notes": [
+    "Rebranding do Banco de influenciadores: novos filtros (rede social, seguidores, cidade, confiabilidade mínima, com botão \"Limpar filtros\"), paginação (30 por página), cards mostrando seguidores totais e cidade, e o perfil de cada influenciador ganhou banner, KPIs (seguidores/campanhas/confiabilidade/publicações), confiabilidade como barra visual (no prazo/atrasada/vencida) e desempenho agregado (views, alcance, curtidas etc) com gráfico de views por campanha.",
     "Novo: links dentro da descrição de uma tarefa agora ficam clicáveis (abrem em nova aba) quando você não está editando o texto — clique em qualquer parte não-link pra voltar a editar.",
     "Remove por enquanto o \"Resumo de reprovações (IA)\" (Ferramentas adicionais da campanha) — dependia de uma chave de IA que ainda não foi configurada. Volta quando o provedor de IA for decidido.",
     "Novo, em Ferramentas adicionais da campanha: \"Resumo de reprovações (IA)\" — a partir dos motivos que o cliente escreveu ao reprovar influenciadores, gera um resumo dos padrões em comum e uma sugestão pro time de curadoria. Só aparece quando há pelo menos um reprovado. \"Ocultar reprovados\" (visão de influenciadores) agora fica dentro do menu Visualização, em vez de um botão solto.",
