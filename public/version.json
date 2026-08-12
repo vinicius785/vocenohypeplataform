@@ -1,6 +1,7 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "notes": [
+    "Novo, na visão Kanban de influenciadores (dentro de uma campanha): coluna \"Reprovado\" reúne quem o cliente reprovou, separado de \"Enviado para aprovação\" — antes ficavam misturados na mesma coluna. Novo também: botão \"Ocultar reprovados\" no cabeçalho (aparece só quando há algum), pra sumir com eles da tela toda (lista, kanban e carrossel) quando não for o momento de olhar pra isso.",
     "Novo: influenciador aprovado ou reprovado pelo cliente agora ganha um ícone (verde/vermelho) na própria foto no portal do cliente, igual já existia internamente. Campanhas com pelo menos um influenciador reprovado ganham uma aba \"Reprovados\", com a contagem e o perfil de cada um.",
     "Corrige de vez o influenciador de campanha \"sumindo e voltando\" ao excluir: o fix anterior só cobria exclusão recusada com erro explícito, mas o Supabase também recusa silenciosamente (RLS bloqueando sem gerar erro nenhum, só 0 linhas afetadas) — esse caso passava batido, o item continuava no banco e voltava sozinho pouco depois. Agora qualquer exclusão que não afete nenhuma linha também é tratada como falha, com o item voltando na hora e um alerta explicando.",
     "Corrige criação de tarefa \"avulsa\" no Marketing (não vinculada a projeto/campanha) parecendo não salvar: a tarefa era salva certinho, mas a tela não tinha como saber que precisava atualizar, então só aparecia depois de um F5. Corrige também o dropdown de responsáveis do formulário de tarefa não fechando ao clicar em outro campo, o que bloqueava o preenchimento do resto do formulário.",

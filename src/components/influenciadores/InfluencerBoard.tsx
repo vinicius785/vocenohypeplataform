@@ -1313,6 +1313,7 @@ export function InfluencerBoard({
   const novoMenu = useDropdown();
   const viewMenu = useDropdown();
   const [query, setQuery] = useState("");
+  const [hideReprovados, setHideReprovados] = useState(false);
   const carRef = useRef<HTMLDivElement>(null);
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
@@ -1499,11 +1500,15 @@ export function InfluencerBoard({
     }
   }, [influs, sortBy]);
 
+  const reprovadosCount = influs.filter((i) => i.clienteReprovacao).length;
+
   const filteredInflus = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return sortedInflus;
-    return sortedInflus.filter((i) => i.nome.toLowerCase().includes(q));
-  }, [sortedInflus, query]);
+    let list = sortedInflus;
+    if (hideReprovados) list = list.filter((i) => !i.clienteReprovacao);
+    if (!q) return list;
+    return list.filter((i) => i.nome.toLowerCase().includes(q));
+  }, [sortedInflus, query, hideReprovados]);
 
   return (
     <section className="space-y-4">
@@ -1528,6 +1533,24 @@ export function InfluencerBoard({
               className="h-8 w-44 rounded-md border border-border bg-background pl-8 pr-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
             />
           </div>
+          {reprovadosCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setHideReprovados((v) => !v)}
+              aria-pressed={hideReprovados}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                hideReprovados
+                  ? "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              }`}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              Ocultar reprovados
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+                {reprovadosCount}
+              </span>
+            </button>
+          )}
           <div ref={viewMenu.ref} className="relative">
             <button
               type="button"
@@ -1665,23 +1688,41 @@ export function InfluencerBoard({
         </button>
       ) : viewMode === "kanban" ? (
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3">
-          {INFLU_STATUSES.map((col) => {
-            const items = filteredInflus.filter((i) => i.status === col);
+          {/* "Reprovado" não é um status real (o time só reenvia mudando o
+           * status de verdade, o que já limpa `clienteReprovacao` — ver
+           * `changeStatus`), mas junta quem foi reprovado numa coluna só,
+           * puxada pra fora da coluna "Enviado para aprovação" pra não
+           * ficar escondido junto com quem só está aguardando. */}
+          {(
+            [
+              ...INFLU_STATUSES.flatMap((s) =>
+                s === "Enviado para aprovação" ? [s, "__reprovado__" as const] : [s],
+              ),
+            ] as const
+          ).map((col) => {
+            const isReprovadoCol = col === "__reprovado__";
+            const items = isReprovadoCol
+              ? filteredInflus.filter((i) => i.clienteReprovacao)
+              : filteredInflus.filter((i) => i.status === col && !i.clienteReprovacao);
             return (
               <div
                 key={col}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
-                  if (dragId) changeStatus(dragId, col);
+                  if (dragId && !isReprovadoCol) changeStatus(dragId, col);
                   setDragId(null);
                 }}
                 className="flex w-[312px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <span
-                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${INFLU_STATUS_TONE[col]}`}
+                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                      isReprovadoCol
+                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+                        : INFLU_STATUS_TONE[col]
+                    }`}
                   >
-                    {col}
+                    {isReprovadoCol ? "Reprovado" : col}
                   </span>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
                     {items.length}
