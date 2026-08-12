@@ -592,6 +592,8 @@ export function TaskDialog({
   const members = useTeamMembers();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [descEditing, setDescEditing] = useState(false);
+  const descRef = useRef<HTMLTextAreaElement>(null);
   const [status, setStatus] = useState<TaskStatus>("Aberto");
   const [priority, setPriority] = useState<TaskPriority>("Normal");
   const [dueDate, setDueDate] = useState<string>("");
@@ -660,6 +662,7 @@ export function TaskDialog({
     if (!open) return;
     setTitle(initial?.title ?? "");
     setDescription(initial?.description ?? "");
+    setDescEditing(false);
     setStatus(initial?.status ?? defaultStatus ?? "Aberto");
     setPriority(initial?.priority ?? "Normal");
     setDueDate(initial?.dueDate ?? "");
@@ -1195,13 +1198,40 @@ export function TaskDialog({
             </div>
 
             <div className="px-8 py-4">
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Escreva algo, adicione detalhes, links…"
-                rows={10}
-                className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
-              />
+              {descEditing ? (
+                <textarea
+                  ref={descRef}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onBlur={() => setDescEditing(false)}
+                  placeholder="Escreva algo, adicione detalhes, links…"
+                  rows={10}
+                  className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                />
+              ) : description ? (
+                // Links viram clicáveis só na visualização — o textarea de edição
+                // continua sendo texto puro, senão editar o link vira um problema.
+                <div
+                  onClick={() => {
+                    setDescEditing(true);
+                    setTimeout(() => descRef.current?.focus(), 0);
+                  }}
+                  className="min-h-[220px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                >
+                  {linkifyText(description, "task-desc")}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDescEditing(true);
+                    setTimeout(() => descRef.current?.focus(), 0);
+                  }}
+                  className="min-h-[220px] w-full text-left text-sm text-muted-foreground/70"
+                >
+                  Escreva algo, adicione detalhes, links…
+                </button>
+              )}
             </div>
 
             <div className="space-y-0 px-8 pb-2">
