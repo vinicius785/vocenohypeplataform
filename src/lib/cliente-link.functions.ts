@@ -174,6 +174,7 @@ const CronogramaItemPublic = z.object({
   date: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  recurring: z.boolean().optional(),
 });
 
 const TokenInput = z.object({ token: z.string().min(1) });

@@ -156,6 +156,7 @@ type PublicCronogramaItem = {
   date: string;
   title: string;
   description?: string;
+  recurring?: boolean;
 };
 type PublicCampanha = {
   id: string;
@@ -1451,7 +1452,11 @@ function ClientPortalPage() {
                           <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-muted-foreground">
-                              {fmtDate(item.date)}
+                              {item.recurring
+                                ? t(lang, "cronogramaMonthlyDay", {
+                                    day: String(Number(item.date.slice(8, 10))),
+                                  })
+                                : fmtDate(item.date)}
                             </p>
                             <p className="text-sm text-foreground">{item.title}</p>
                             {item.description && (

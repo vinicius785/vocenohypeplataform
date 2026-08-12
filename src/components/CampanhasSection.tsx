@@ -571,6 +571,7 @@ function CampanhaDetail({
             influs={visibleInflus}
             cronograma={cronograma}
             onCronogramaChange={persistCronograma}
+            isRecorrente={isRecorrente}
           />
         </DialogContent>
       </Dialog>
@@ -743,12 +744,20 @@ function CampaignCalendar({
   influs,
   cronograma,
   onCronogramaChange,
+  isRecorrente,
 }: {
   campanha: Campaign;
   influs: Influ[];
   cronograma: CronogramaItem[];
   onCronogramaChange: (next: CronogramaItem[]) => void;
+  isRecorrente: boolean;
 }) {
+  const initialCursor = useMemo(() => {
+    const first = c.dataInicio ?? c.prazo;
+    return first ? new Date(first + "T00:00:00") : new Date();
+  }, [c.dataInicio, c.prazo]);
+  const [cursor, setCursor] = useState(initialCursor);
+
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     const add = (date: string | undefined, ev: CalendarEvent) => {
@@ -765,17 +774,30 @@ function CampaignCalendar({
         add(e.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
       }
     }
+    // Itens recorrentes (só faz sentido em cliente recorrente) repetem no
+    // mesmo dia-do-mês da data âncora, todo mês — a ocorrência mostrada no
+    // grid é sempre a do mês que está sendo visualizado (cursor), não a
+    // data âncora original.
     for (const item of cronograma) {
-      add(item.date, { label: item.title, tone: "manual" });
+      if (item.recurring) {
+        const day = Number(item.date.slice(8, 10));
+        const daysInCursorMonth = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth() + 1,
+          0,
+        ).getDate();
+        const occurrence = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth(),
+          Math.min(day, daysInCursorMonth),
+        );
+        add(toISODate(occurrence), { label: item.title, tone: "manual" });
+      } else {
+        add(item.date, { label: item.title, tone: "manual" });
+      }
     }
     return map;
-  }, [c.dataInicio, c.prazo, influs, cronograma]);
-
-  const initialCursor = useMemo(() => {
-    const first = c.dataInicio ?? c.prazo;
-    return first ? new Date(first + "T00:00:00") : new Date();
-  }, [c.dataInicio, c.prazo]);
-  const [cursor, setCursor] = useState(initialCursor);
+  }, [c.dataInicio, c.prazo, influs, cronograma, cursor]);
 
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = first.getDay();
@@ -905,7 +927,11 @@ function CampaignCalendar({
         <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
       )}
 
-      <CronogramaManualSection cronograma={cronograma} onChange={onCronogramaChange} />
+      <CronogramaManualSection
+        cronograma={cronograma}
+        onChange={onCronogramaChange}
+        isRecorrente={isRecorrente}
+      />
     </div>
   );
 }
@@ -916,13 +942,16 @@ function CampaignCalendar({
 function CronogramaManualSection({
   cronograma,
   onChange,
+  isRecorrente,
 }: {
   cronograma: CronogramaItem[];
   onChange: (next: CronogramaItem[]) => void;
+  isRecorrente: boolean;
 }) {
   const [date, setDate] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [recurring, setRecurring] = useState(false);
 
   const add = () => {
     const t = title.trim();
@@ -930,12 +959,19 @@ function CronogramaManualSection({
     onChange(
       [
         ...cronograma,
-        { id: crypto.randomUUID(), date, title: t, description: description.trim() || undefined },
+        {
+          id: crypto.randomUUID(),
+          date,
+          title: t,
+          description: description.trim() || undefined,
+          recurring: isRecorrente && recurring ? true : undefined,
+        },
       ].sort((a, b) => a.date.localeCompare(b.date)),
     );
     setDate("");
     setTitle("");
     setDescription("");
+    setRecurring(false);
   };
 
   const remove = (id: string) => onChange(cronograma.filter((i) => i.id !== id));
@@ -985,6 +1021,17 @@ function CronogramaManualSection({
         >
           Adicionar
         </button>
+        {isRecorrente && (
+          <label className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={recurring}
+              onChange={(e) => setRecurring(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-border"
+            />
+            Repete todo mês (dia {date ? Number(date.slice(8, 10)) : "—"})
+          </label>
+        )}
       </div>
 
       {cronograma.length === 0 ? (
@@ -995,7 +1042,11 @@ function CronogramaManualSection({
             <li key={item.id} className="flex items-start gap-3 px-3 py-2.5">
               <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">{fmtDate(item.date)}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {item.recurring
+                    ? `Todo dia ${Number(item.date.slice(8, 10))}`
+                    : fmtDate(item.date)}
+                </p>
                 <p className="truncate text-sm text-foreground">{item.title}</p>
                 {item.description && (
                   <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>

@@ -13,12 +13,17 @@ export type CampaignDoc = {
 
 /** Item do cronograma da campanha — setado manualmente pelo time (não
  * derivado das entregas dos influenciadores), mostrado internamente e no
- * portal do cliente. */
+ * portal do cliente. `date` é sempre uma data âncora (usada tal como está
+ * pra itens únicos); quando `recurring` é true (só faz sentido pra clientes
+ * recorrentes), o item se repete todo mês no dia-do-mês de `date` — ex: "dia
+ * 5, envio do relatório de métricas" — em vez de precisar recriar o item
+ * campanha a campanha/mês a mês. */
 export type CronogramaItem = {
   id: string;
   date: string;
   title: string;
   description?: string;
+  recurring?: boolean;
 };
 
 const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "campanha_id");

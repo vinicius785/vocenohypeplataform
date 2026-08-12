@@ -67,7 +67,7 @@ import {
   type ChatChannel,
 } from "@/lib/chat-store";
 
-import { useClientes } from "@/lib/clientes-store";
+import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
@@ -1130,14 +1130,20 @@ type ClienteActionItem = {
   influId: string;
   campanhaId: string;
   nome: string;
+  title: string;
   action: string;
   at: string;
 };
 
+/** Título (quem aparece em negrito no sino) e subtítulo da notificação.
+ * Reprovações são o caso que mais importa pegar rápido — usa o nome do
+ * CLIENTE como título (em vez do influenciador) pra bater o olho e ver quem
+ * precisa de atenção, sem precisar abrir a notificação. */
 function describeClientAction(
   nome: string,
   action: NonNullable<Influ["lastClientAction"]>,
-): string {
+  empresa?: string,
+): { title: string; subtitle: string } {
   const verbo = action.status === "aprovado" ? "aprovou" : "reprovou";
   const alvo =
     action.kind === "influ"
@@ -1145,7 +1151,10 @@ function describeClientAction(
       : action.kind === "roteiro"
         ? "o roteiro"
         : "o conteúdo";
-  return `${nome} — ${verbo} ${alvo}`;
+  if (action.status === "reprovado" && empresa) {
+    return { title: empresa, subtitle: `Reprovou ${alvo} de ${nome}` };
+  }
+  return { title: nome, subtitle: `${verbo} ${alvo}` };
 }
 
 /** Assina `campanha_influenciadores` (a mesma tabela que o link público
@@ -1153,12 +1162,14 @@ function describeClientAction(
  * (aprovar/reprovar em qualquer das 3 etapas) numa notificação na aba
  * "Outros" do sino, com toast em tempo real se a aba estiver visível —
  * mesmo padrão de `useIncomingMessageNotifier` pras mensagens de chat. */
-function useCampanhaAprovacaoNotifier(): {
+function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
   items: ClienteActionItem[];
   dismiss: (keys: string[]) => void;
 } {
   const [items, setItems] = useState<ClienteActionItem[]>([]);
   const seenRef = useRef<Set<string>>(new Set());
+  const clientesRef = useRef(clientes);
+  clientesRef.current = clientes;
 
   useEffect(() => {
     try {
@@ -1168,6 +1179,9 @@ function useCampanhaAprovacaoNotifier(): {
       /* ignore */
     }
 
+    const empresaDaCampanha = (campanhaId: string): string | undefined =>
+      clientesRef.current.find((c) => c.campanhas?.some((camp) => camp.id === campanhaId))?.empresa;
+
     const toItem = (row: {
       id: string;
       campanha_id: string;
@@ -1176,12 +1190,18 @@ function useCampanhaAprovacaoNotifier(): {
       const action = row.data.lastClientAction;
       if (!action) return null;
       const key = `${row.id}:${action.at}`;
+      const { title, subtitle } = describeClientAction(
+        row.data.nome,
+        action,
+        empresaDaCampanha(row.campanha_id),
+      );
       return {
         key,
         influId: row.id,
         campanhaId: row.campanha_id,
         nome: row.data.nome,
-        action: describeClientAction(row.data.nome, action),
+        title,
+        action: subtitle,
         at: action.at,
       };
     };
@@ -1208,6 +1228,7 @@ function useCampanhaAprovacaoNotifier(): {
                     influId: row.id,
                     campanhaId: row.campanha_id,
                     nome: row.data.nome,
+                    title: row.data.nome,
                     action: `Métricas do post (${e.tipo}) pendentes há 15+ dias`,
                     at: e.publicadoEm ?? "",
                   };
@@ -1235,7 +1256,7 @@ function useCampanhaAprovacaoNotifier(): {
 
           if (document.visibilityState === "visible") {
             void import("sonner").then(({ toast }) => {
-              toast(item.nome, {
+              toast(item.title, {
                 description: item.action,
                 action: {
                   label: "Abrir",
@@ -1278,10 +1299,11 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   useEffect(() => onMeetingsChange(() => force((n) => n + 1)), []);
-  const { items: outrosItems, dismiss: dismissOutrosItems } = useCampanhaAprovacaoNotifier();
+  const clientes = useClientes();
+  const { items: outrosItems, dismiss: dismissOutrosItems } =
+    useCampanhaAprovacaoNotifier(clientes);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<BellTab>("tarefas");
-  const clientes = useClientes();
   const me = getMe();
   const active = useActiveConvo();
   const messages = loadMessages();
@@ -1732,11 +1754,11 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                       key={it.key}
                       icon={<Users className="h-4 w-4" />}
                       iconTone={
-                        it.action.includes("reprovou")
+                        it.action.toLowerCase().includes("reprovou")
                           ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
                           : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                       }
-                      title={it.nome}
+                      title={it.title}
                       subtitle={it.action}
                       onClick={() => {
                         dismissOutrosItems([it.key]);
