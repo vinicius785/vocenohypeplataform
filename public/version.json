@@ -1,6 +1,7 @@
 {
-  "version": "1.97.0",
+  "version": "1.98.0",
   "notes": [
+    "Corrige o aviso de \"nova versão disponível\" ficando gigante, com dezenas de tópicos antigos acumulados — agora mostra só as 3 atualizações mais recentes, com o card limitado à altura da tela e rolagem interna se precisar. O aviso também passa a aparecer no portal do cliente (antes só existia na plataforma interna).",
     "Corrige o portal do cliente não abrindo em navegadores embutidos mais fracos (ex: o navegador interno do Telegram) ou em conexões ruins: a página dependia 100% do JavaScript carregar no aparelho do cliente antes de mostrar qualquer coisa, então quem tivesse dificuldade de rede ou um app de mensagem mais restrito ficava numa tela em branco pra sempre, sem nenhum erro. Agora o servidor já manda a página pronta (nome do cliente, campanhas, conteúdo) — funciona mesmo se o JavaScript demorar ou falhar pra carregar depois.",
     "Novo: botão \"Nova solicitação\" dentro de cada campanha no portal do cliente — o cliente descreve um pedido (com anexo opcional) e ele já entra automaticamente como uma Tarefa no board interno daquela campanha, marcada com a tag \"Cliente\" pra fácil identificação. O time é avisado na hora pelo sino de notificações, com botão \"Abrir\" que já leva direto pra tarefa.",
     "Redesenha o perfil de influenciador no portal do cliente: cartão de destaque com foto e nome grandes (aprovar/reprovar direto ali, em verde/vermelho), redes sociais com botão \"Abrir métricas\" que expande as métricas do perfil, entregas em formato de linha do tempo, e Briefing (agora com anexo, subido pelo próprio cliente) e Observações (agora também editável pelo cliente) lado a lado, separados por uma divisória.",

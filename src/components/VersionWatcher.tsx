@@ -4,6 +4,12 @@ import { APP_VERSION } from "./ConfiguracoesSection";
 
 const CHECK_INTERVAL_MS = 5 * 60_000;
 
+/** `notes` em `version.json` é um changelog cumulativo (dezenas de itens
+ * acumulados desde sempre, mais novo primeiro) — mostrar a lista inteira
+ * lota o aviso com tópicos antigos. Só as N mais recentes cabem aqui; o
+ * resto quem quiser vê em Configurações. */
+const MAX_NOTES = 3;
+
 type VersionInfo = { version?: string; notes?: string[] };
 
 /**
@@ -44,8 +50,8 @@ export function VersionWatcher() {
   if (!outdated || dismissed) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[200] w-full max-w-sm overflow-hidden rounded-xl border border-border bg-background shadow-xl">
-      <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-sky-500/15 to-violet-500/15 px-4 py-3">
+    <div className="fixed bottom-4 right-4 z-[200] flex max-h-[80vh] w-full max-w-sm flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+      <div className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-sky-500/15 to-violet-500/15 px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background text-sky-600 shadow-sm dark:text-sky-400">
             <Sparkles className="h-4 w-4" />
@@ -67,10 +73,10 @@ export function VersionWatcher() {
         </button>
       </div>
 
-      <div className="px-4 py-3">
+      <div className="min-h-0 overflow-y-auto px-4 py-3">
         {info.notes && info.notes.length > 0 ? (
           <ul className="space-y-1.5">
-            {info.notes.map((note, i) => (
+            {info.notes.slice(0, MAX_NOTES).map((note, i) => (
               <li key={i} className="flex gap-2 text-xs text-muted-foreground">
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
                 <span className="leading-relaxed">{note}</span>
@@ -82,11 +88,13 @@ export function VersionWatcher() {
             Atualize a página para pegar as últimas mudanças.
           </p>
         )}
+      </div>
 
+      <div className="shrink-0 px-4 pb-4">
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-xs font-medium text-background hover:opacity-90"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-foreground px-3 py-2 text-xs font-medium text-background hover:opacity-90"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar página
         </button>
