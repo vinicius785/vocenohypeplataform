@@ -4,6 +4,7 @@ import type { Cliente } from "@/lib/clientes-store";
 import { INFLU_STATUSES, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
 import type { BlogPost, Project } from "@/lib/projetos";
+import type { Task } from "@/components/tasks/TaskBoard";
 
 /**
  * Portal público fixo do CLIENTE (`/portal/$token`) — um único link mostra
@@ -427,6 +428,75 @@ export const updateInfluBriefingAnexo = createServerFn({ method: "POST" })
       briefingAnexoUrl: signed.signedUrl,
     };
     await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true };
+  });
+
+const SubmitClientDemandInput = z.object({
+  token: z.string().min(1),
+  campanhaId: z.string().min(1),
+  titulo: z.string().trim().min(1).max(200),
+  descricao: z.string().trim().max(4000).optional(),
+  /** Anexo único, opcional. */
+  file: z
+    .object({
+      nome: z.string().min(1),
+      /** Data URL (`data:...;base64,...`) do arquivo. */
+      dataUrl: z.string().min(1).max(8_000_000),
+    })
+    .optional(),
+});
+
+/** Público, sem auth — o cliente abre uma demanda pro time direto de dentro
+ * de uma campanha no portal. Vira uma Tarefa normal em `campanha_tarefas`
+ * (mesma tabela/board que o time já usa) marcada com a tag "Cliente", em
+ * vez de uma entidade separada — aparece sozinha no board por realtime,
+ * sem precisar de nenhuma UI nova ali. */
+export const submitClientDemand = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => SubmitClientDemandInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    if (!found.cliente.campanhas?.some((c) => c.id === data.campanhaId)) {
+      throw new Error("Campanha não encontrada neste link.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let attachments: Task["attachments"];
+    if (data.file) {
+      const match = /^data:([^;]+);base64,(.+)$/.exec(data.file.dataUrl);
+      if (!match) throw new Error("Arquivo inválido.");
+      const contentType = match[1];
+      const buffer = Buffer.from(match[2], "base64");
+      const safeName = data.file.nome.replace(/[^\w.-]+/g, "_");
+      const path = `portal/${data.token}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("entrega-anexos")
+        .upload(path, buffer, { contentType });
+      if (uploadError) throw new Error(uploadError.message);
+      const { data: signed } = await supabaseAdmin.storage
+        .from("entrega-anexos")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (!signed) throw new Error("Não foi possível gerar o link do anexo.");
+      attachments = [{ id: crypto.randomUUID(), name: data.file.nome, url: signed.signedUrl }];
+    }
+
+    const task: Task = {
+      id: crypto.randomUUID(),
+      title: data.titulo,
+      description: `Solicitado por ${found.cliente.empresa} pelo portal.${data.descricao ? `\n\n${data.descricao}` : ""}`,
+      status: "Aberto",
+      priority: "Normal",
+      tags: ["Cliente"],
+      attachments,
+      createdAt: new Date().toISOString(),
+    };
+
+    const { error } = await supabaseAdmin
+      .from("campanha_tarefas")
+      .insert({ campanha_id: data.campanhaId, data: task });
+    if (error) throw new Error(error.message);
+
     return { ok: true };
   });
 

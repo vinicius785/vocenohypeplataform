@@ -32,6 +32,7 @@ import {
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
 import { SidebarProfile } from "./ConfiguracoesSection";
@@ -1295,13 +1296,132 @@ function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
   return { items, dismiss };
 }
 
+type ClientDemandItem = {
+  key: string;
+  campanhaId: string;
+  taskId: string;
+  title: string;
+  action: string;
+  at: string;
+};
+
+/** Assina `campanha_tarefas` (mesma tabela do board de Tarefas) e transforma
+ * toda tarefa nova marcada com a tag "Cliente" (criada pelo cliente pelo
+ * botão "Nova solicitação" no portal, ver `submitClientDemand` em
+ * cliente-link.functions.ts) numa notificação no sino, com toast em tempo
+ * real — mesmo padrão de `useCampanhaAprovacaoNotifier`. */
+function useClientDemandNotifier(clientes: Cliente[]): {
+  items: ClientDemandItem[];
+  dismiss: (keys: string[]) => void;
+} {
+  const [items, setItems] = useState<ClientDemandItem[]>([]);
+  const seenRef = useRef<Set<string>>(new Set());
+  const clientesRef = useRef(clientes);
+  clientesRef.current = clientes;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("notif:seenDemandasCliente");
+      if (raw) seenRef.current = new Set(JSON.parse(raw) as string[]);
+    } catch {
+      /* ignore */
+    }
+
+    const empresaDaCampanha = (campanhaId: string): string | undefined =>
+      clientesRef.current.find((c) => c.campanhas?.some((camp) => camp.id === campanhaId))?.empresa;
+
+    const toItem = (row: {
+      id: string;
+      campanha_id: string;
+      data: Task;
+    }): ClientDemandItem | null => {
+      if (!row.data.tags?.includes("Cliente")) return null;
+      const key = `demand:${row.id}`;
+      const empresa = empresaDaCampanha(row.campanha_id);
+      return {
+        key,
+        campanhaId: row.campanha_id,
+        taskId: row.id,
+        title: empresa ? `${empresa} — Nova solicitação` : "Nova solicitação",
+        action: row.data.title,
+        at: row.data.createdAt,
+      };
+    };
+
+    void supabase
+      .from("campanha_tarefas")
+      .select("id, campanha_id, data")
+      .then(({ data: rows }) => {
+        const typedRows = (rows ?? []) as { id: string; campanha_id: string; data: Task }[];
+        const demandItems = typedRows
+          .map(toItem)
+          .filter((x): x is ClientDemandItem => x !== null && !seenRef.current.has(x.key));
+        setItems(demandItems.sort((a, b) => (a.at < b.at ? 1 : -1)));
+      });
+
+    const channel = supabase
+      .channel("rt-campanha-tarefas-demand-notify")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "campanha_tarefas" },
+        (payload) => {
+          const newRow = payload.new as { id: string; campanha_id: string; data: Task } | null;
+          if (!newRow) return;
+          const item = toItem(newRow);
+          if (!item || seenRef.current.has(item.key)) return;
+          setItems((prev) => [item, ...prev.filter((x) => x.key !== item.key)]);
+
+          if (document.visibilityState === "visible") {
+            void import("sonner").then(({ toast }) => {
+              toast(item.title, {
+                description: item.action,
+                action: {
+                  label: "Abrir",
+                  onClick: () => {
+                    try {
+                      sessionStorage.setItem(
+                        OPEN_CAMPANHA_TASK_KEY,
+                        JSON.stringify({ campanhaId: item.campanhaId, taskId: item.taskId }),
+                      );
+                    } catch {
+                      /* ignore */
+                    }
+                    window.dispatchEvent(new CustomEvent("nav:section", { detail: "campanhas" }));
+                  },
+                },
+              });
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const dismiss = (keys: string[]) => {
+    for (const k of keys) seenRef.current.add(k);
+    localStorage.setItem("notif:seenDemandasCliente", JSON.stringify(Array.from(seenRef.current)));
+    setItems((prev) => prev.filter((x) => !keys.includes(x.key)));
+  };
+
+  return { items, dismiss };
+}
+
 function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   useEffect(() => onMeetingsChange(() => force((n) => n + 1)), []);
   const clientes = useClientes();
-  const { items: outrosItems, dismiss: dismissOutrosItems } =
+  const { items: aprovacaoItems, dismiss: dismissAprovacaoItems } =
     useCampanhaAprovacaoNotifier(clientes);
+  const { items: demandItems, dismiss: dismissDemandItems } = useClientDemandNotifier(clientes);
+  const outrosItems = [...aprovacaoItems, ...demandItems].sort((a, b) => (a.at < b.at ? 1 : -1));
+  const dismissOutrosItems = (keys: string[]) => {
+    dismissAprovacaoItems(keys);
+    dismissDemandItems(keys);
+  };
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<BellTab>("tarefas");
   const me = getMe();
@@ -1765,7 +1885,10 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                         try {
                           sessionStorage.setItem(
                             OPEN_CAMPANHA_TASK_KEY,
-                            JSON.stringify({ campanhaId: it.campanhaId }),
+                            JSON.stringify({
+                              campanhaId: it.campanhaId,
+                              taskId: "taskId" in it ? it.taskId : undefined,
+                            }),
                           );
                         } catch {
                           /* ignore */

@@ -1,6 +1,7 @@
 {
-  "version": "1.95.0",
+  "version": "1.96.0",
   "notes": [
+    "Novo: botão \"Nova solicitação\" dentro de cada campanha no portal do cliente — o cliente descreve um pedido (com anexo opcional) e ele já entra automaticamente como uma Tarefa no board interno daquela campanha, marcada com a tag \"Cliente\" pra fácil identificação. O time é avisado na hora pelo sino de notificações, com botão \"Abrir\" que já leva direto pra tarefa.",
     "Redesenha o perfil de influenciador no portal do cliente: cartão de destaque com foto e nome grandes (aprovar/reprovar direto ali, em verde/vermelho), redes sociais com botão \"Abrir métricas\" que expande as métricas do perfil, entregas em formato de linha do tempo, e Briefing (agora com anexo, subido pelo próprio cliente) e Observações (agora também editável pelo cliente) lado a lado, separados por uma divisória.",
     "Corrige a pill de status (etapa de produção) sumindo da tabela de Entregas pra qualquer entrega que não tivesse esse campo preenchido (ex: entregas antigas, migradas de antes dessa etapa existir) — sem a pill, não tinha como mudar o status daquela entrega. Agora sempre aparece, com \"Combinado\" (ou \"Postado\", se já publicada) como valor inicial pras entregas antigas.",
     "Simplifica pagamento aos influenciadores: remove os \"grupos de pagamento\" da criação/edição de campanha (voltou a ser um único tipo de pagamento + prazo, como era antes) e remove o pagamento por entrega individual — agora é um valor único por influenciador, cobrindo todas as entregas dele, editado numa seção \"Pagamento\" só (com Aceitar/Recusar), em vez de um valor configurado entrega por entrega. O orçamento da campanha e o lançamento no Financeiro passam a refletir esse valor único.",

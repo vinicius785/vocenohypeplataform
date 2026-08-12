@@ -46,6 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
 import { PortalBugReportButton } from "@/components/PortalBugReportButton";
+import { PortalDemandButton } from "@/components/PortalDemandButton";
 import {
   getClienteLinkData,
   respondCampanhaInflu,
@@ -1582,16 +1583,19 @@ function ClientPortalPage() {
               />
             ) : (
               <>
-                <div className="mb-5">
-                  <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                    {activeCampanha.nome}
-                  </h1>
-                  {activeCampanha.prazo && (
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" /> {t(lang, "prazo")}{" "}
-                      {fmtDate(activeCampanha.prazo)}
-                    </p>
-                  )}
+                <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                      {activeCampanha.nome}
+                    </h1>
+                    {activeCampanha.prazo && (
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" /> {t(lang, "prazo")}{" "}
+                        {fmtDate(activeCampanha.prazo)}
+                      </p>
+                    )}
+                  </div>
+                  <PortalDemandButton token={token} campanhaId={activeCampanha.id} lang={lang} />
                 </div>
 
                 <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
