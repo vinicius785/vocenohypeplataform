@@ -250,6 +250,7 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           planejado,
           influencers,
           cronograma,
+          relatorioMetricas: c.relatorioMetricas,
         };
       }),
     );

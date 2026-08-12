@@ -14,6 +14,7 @@ import {
   Check,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
 
 const TIPOS = ["Digital", "Celebridade", "Local", "Nicho", "Embaixador"] as const;
 const TAMANHOS = ["Nano", "Micro", "Médio", "Macro", "Mega"] as const;
@@ -108,6 +109,7 @@ export type Campaign = {
   pagClienteRecorrenteDia?: number; // dia do mês (1-31)
   pagClienteRecorrenteInicio?: string; // data inicial da recorrência
   direitosImagem?: DireitosImagem;
+  relatorioMetricas?: MetricasRelatorio;
   publicoAlvo?: PublicoAlvo;
 };
 

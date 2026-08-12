@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  FileBarChart,
   FileText,
   FolderOpen,
   ImageIcon,
@@ -37,6 +38,7 @@ import {
   normalizeInflus,
   totalAceito,
   canPublishEntrega,
+  computeMetricasRelatorio,
   type Influ,
   type InfluStatus,
   type BankInfo,
@@ -315,6 +317,26 @@ function CampanhaDetail({
     [influs, monthFilter, isRecorrente],
   );
   const persistVisibleInflus = (next: Influ[]) => persistInflus([...hiddenInflus, ...next]);
+  // Só oferece "Gerar relatório" quando já existe alguma entrega publicada
+  // com métrica preenchida — senão o relatório sairia vazio.
+  const relatorioDisponivel = computeMetricasRelatorio(visibleInflus) !== null;
+  const gerarRelatorio = () => {
+    const relatorio = computeMetricasRelatorio(visibleInflus);
+    if (!relatorio) return;
+    setClientes((prev) =>
+      prev.map((cl) =>
+        cl.id !== cliente.id
+          ? cl
+          : {
+              ...cl,
+              campanhas: (cl.campanhas ?? []).map((camp) =>
+                camp.id === c.id ? { ...camp, relatorioMetricas: relatorio } : camp,
+              ),
+            },
+      ),
+    );
+    setOpenPanel("relatorio");
+  };
 
   // Approval metrics
   const enviados = visibleInflus.filter((i) => i.status !== "Lista").length;
@@ -352,7 +374,7 @@ function CampanhaDetail({
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
   const [openPanel, setOpenPanel] = useState<
-    null | "documentos" | "calendario" | "composicao" | "direitos"
+    null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorio"
   >(null);
 
   // Mesmo link (por cliente, não por campanha — um cliente pode ter várias
@@ -521,6 +543,14 @@ function CampanhaDetail({
             active={c.direitosImagem?.permitido}
             onClick={() => setOpenPanel("direitos")}
           />
+          {(relatorioDisponivel || c.relatorioMetricas) && (
+            <FeatureButton
+              icon={FileBarChart}
+              label="Relatório de métricas"
+              active={!!c.relatorioMetricas}
+              onClick={() => setOpenPanel("relatorio")}
+            />
+          )}
         </div>
       </section>
 
@@ -670,6 +700,146 @@ function CampanhaDetail({
               Nenhum direito de uso de imagem definido para esta campanha.
             </p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openPanel === "relatorio"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col border-border bg-card">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <FileBarChart className="h-4 w-4" /> Relatório de métricas
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Métricas das entregas publicadas desta campanha, por influenciador, com destaque pro
+            melhor conteúdo.
+          </DialogDescription>
+
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
+            {c.relatorioMetricas ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Gerado em{" "}
+                  {new Date(c.relatorioMetricas.geradoEm).toLocaleString("pt-BR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}{" "}
+                  · {c.relatorioMetricas.totalPublicadas} publicação
+                  {c.relatorioMetricas.totalPublicadas === 1 ? "" : "ões"}
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {(
+                    [
+                      { key: "views", label: "Views" },
+                      { key: "reach", label: "Alcance" },
+                      { key: "likes", label: "Curtidas" },
+                      { key: "comments", label: "Comentários" },
+                      { key: "shares", label: "Compart." },
+                      { key: "saves", label: "Salvos" },
+                    ] as const
+                  ).map((m) => (
+                    <div key={m.key} className="rounded-lg border border-border p-2.5 text-center">
+                      <div className="text-base font-semibold text-foreground">
+                        {(c.relatorioMetricas!.totais[m.key] ?? 0) > 0
+                          ? c.relatorioMetricas!.totais[m.key]!.toLocaleString("pt-BR")
+                          : "—"}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {m.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {c.relatorioMetricas.melhorConteudo && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      🏆 Melhor conteúdo
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {c.relatorioMetricas.melhorConteudo.influNome} —{" "}
+                      {c.relatorioMetricas.melhorConteudo.tipo}
+                      {c.relatorioMetricas.melhorConteudo.titulo
+                        ? ` · ${c.relatorioMetricas.melhorConteudo.titulo}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {(c.relatorioMetricas.melhorConteudo.metrics.views ?? 0).toLocaleString(
+                        "pt-BR",
+                      )}{" "}
+                      views ·{" "}
+                      {(c.relatorioMetricas.melhorConteudo.metrics.likes ?? 0).toLocaleString(
+                        "pt-BR",
+                      )}{" "}
+                      curtidas
+                      {c.relatorioMetricas.melhorConteudo.url && (
+                        <>
+                          {" · "}
+                          <a
+                            href={c.relatorioMetricas.melhorConteudo.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            ver post
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Por influenciador
+                  </p>
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {c.relatorioMetricas.porInflu.map((p) => (
+                      <li key={p.influId} className="flex items-center gap-3 px-3 py-2.5">
+                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
+                          {p.foto ? (
+                            <img src={p.foto} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-muted-foreground">
+                              {p.nome.charAt(0).toUpperCase() || "?"}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{p.nome}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {p.publicadas} publicação{p.publicadas === 1 ? "" : "ões"}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right text-xs text-muted-foreground">
+                          <div className="font-semibold text-foreground">
+                            {(p.totais.views ?? 0).toLocaleString("pt-BR")} views
+                          </div>
+                          <div>{(p.totais.likes ?? 0).toLocaleString("pt-BR")} curtidas</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum relatório gerado ainda. Clique em "Gerar relatório" pra reunir as métricas
+                das entregas já publicadas, separadas por influenciador.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4 shrink-0">
+            <button
+              type="button"
+              onClick={gerarRelatorio}
+              disabled={!relatorioDisponivel}
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+            >
+              <FileBarChart className="h-3.5 w-3.5" />
+              {c.relatorioMetricas ? "Atualizar relatório" : "Gerar relatório"}
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

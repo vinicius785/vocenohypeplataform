@@ -60,6 +60,7 @@ import {
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { t, usePortalLang, PORTAL_LANGS, type PortalLang } from "@/lib/portal-i18n";
+import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
 
 /**
  * Portal do cliente (`/portal/$token`) — um link só, com TODAS as campanhas
@@ -201,6 +202,7 @@ type PublicCampanha = {
   planejado: number;
   influencers: PublicInfluencer[];
   cronograma: PublicCronogramaItem[];
+  relatorioMetricas?: MetricasRelatorio;
 };
 type PublicArticle = {
   id: string;
@@ -1784,6 +1786,124 @@ function ClientPortalPage() {
                       />
                     ))}
                   </div>
+                )}
+
+                {activeCampanha.relatorioMetricas && (
+                  <>
+                    <h2 className="mb-3 mt-8 flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <BarChart3 className="h-4 w-4" /> {t(lang, "relatorioHeader")}
+                    </h2>
+                    <div className="rounded-xl border border-border bg-background p-4">
+                      <p className="text-xs text-muted-foreground">
+                        {t(lang, "relatorioGeradoEm")}{" "}
+                        {new Date(activeCampanha.relatorioMetricas.geradoEm).toLocaleDateString(
+                          lang === "en-US" ? "en-US" : lang === "es" ? "es-ES" : "pt-BR",
+                        )}{" "}
+                        · {activeCampanha.relatorioMetricas.totalPublicadas}{" "}
+                        {t(lang, "relatorioPublicacoes")}
+                      </p>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                        {(
+                          [
+                            { key: "views", label: t(lang, "views") },
+                            { key: "reach", label: t(lang, "alcance") },
+                            { key: "likes", label: t(lang, "curtidas") },
+                            { key: "comments", label: t(lang, "comentarios") },
+                            { key: "shares", label: t(lang, "compartilhamentos") },
+                            { key: "saves", label: t(lang, "salvos") },
+                          ] as const
+                        ).map((m) => (
+                          <div
+                            key={m.key}
+                            className="rounded-lg border border-border p-2.5 text-center"
+                          >
+                            <div className="text-base font-semibold text-foreground">
+                              {(activeCampanha.relatorioMetricas!.totais[m.key] ?? 0) > 0
+                                ? activeCampanha.relatorioMetricas!.totais[m.key]!.toLocaleString(
+                                    "pt-BR",
+                                  )
+                                : "—"}
+                            </div>
+                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {m.label}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {activeCampanha.relatorioMetricas.melhorConteudo && (
+                        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                            🏆 {t(lang, "relatorioMelhorConteudo")}
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-foreground">
+                            {activeCampanha.relatorioMetricas.melhorConteudo.influNome} —{" "}
+                            {activeCampanha.relatorioMetricas.melhorConteudo.tipo}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {(
+                              activeCampanha.relatorioMetricas.melhorConteudo.metrics.views ?? 0
+                            ).toLocaleString("pt-BR")}{" "}
+                            {t(lang, "views").toLowerCase()} ·{" "}
+                            {(
+                              activeCampanha.relatorioMetricas.melhorConteudo.metrics.likes ?? 0
+                            ).toLocaleString("pt-BR")}{" "}
+                            {t(lang, "curtidas").toLowerCase()}
+                            {activeCampanha.relatorioMetricas.melhorConteudo.url && (
+                              <>
+                                {" · "}
+                                <a
+                                  href={activeCampanha.relatorioMetricas.melhorConteudo.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline underline-offset-2 hover:text-foreground"
+                                >
+                                  {t(lang, "relatorioVerPost")}
+                                </a>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      )}
+
+                      <p className="mb-1.5 mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {t(lang, "relatorioPorInflu")}
+                      </p>
+                      <ul className="divide-y divide-border rounded-lg border border-border">
+                        {activeCampanha.relatorioMetricas.porInflu.map((p) => (
+                          <li key={p.influId} className="flex items-center gap-3 px-3 py-2.5">
+                            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
+                              {p.foto ? (
+                                <img src={p.foto} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-muted-foreground">
+                                  {p.nome.charAt(0).toUpperCase() || "?"}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {p.nome}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {p.publicadas} {t(lang, "relatorioPublicacoes")}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right text-xs text-muted-foreground">
+                              <div className="font-semibold text-foreground">
+                                {(p.totais.views ?? 0).toLocaleString("pt-BR")} {t(lang, "views")}
+                              </div>
+                              <div>
+                                {(p.totais.likes ?? 0).toLocaleString("pt-BR")}{" "}
+                                {t(lang, "curtidas")}
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
                 )}
 
                 {activeCampanha.cronograma.length > 0 && (
