@@ -1,6 +1,7 @@
 {
-  "version": "1.98.0",
+  "version": "1.99.0",
   "notes": [
+    "Corrige exclusão de influenciador de campanha \"sumindo e voltando depois\": quando o servidor recusava a exclusão (RLS, rede), o item já tinha sumido da tela pelo update otimista e só reaparecia minutos depois no resync, sem nenhum aviso do porquê. Agora, se a exclusão falhar, o item volta na hora com um alerta explicando o motivo. Também adiciona uma confirmação antes de excluir (antes era instantâneo, sem chance de desfazer).",
     "Corrige o aviso de \"nova versão disponível\" ficando gigante, com dezenas de tópicos antigos acumulados — agora mostra só as 3 atualizações mais recentes, com o card limitado à altura da tela e rolagem interna se precisar. O aviso também passa a aparecer no portal do cliente (antes só existia na plataforma interna).",
     "Corrige o portal do cliente não abrindo em navegadores embutidos mais fracos (ex: o navegador interno do Telegram) ou em conexões ruins: a página dependia 100% do JavaScript carregar no aparelho do cliente antes de mostrar qualquer coisa, então quem tivesse dificuldade de rede ou um app de mensagem mais restrito ficava numa tela em branco pra sempre, sem nenhum erro. Agora o servidor já manda a página pronta (nome do cliente, campanhas, conteúdo) — funciona mesmo se o JavaScript demorar ou falhar pra carregar depois.",
     "Novo: botão \"Nova solicitação\" dentro de cada campanha no portal do cliente — o cliente descreve um pedido (com anexo opcional) e ele já entra automaticamente como uma Tarefa no board interno daquela campanha, marcada com a tag \"Cliente\" pra fácil identificação. O time é avisado na hora pelo sino de notificações, com botão \"Abrir\" que já leva direto pra tarefa.",

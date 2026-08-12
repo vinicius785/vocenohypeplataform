@@ -1300,6 +1300,7 @@ export function InfluencerBoard({
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
+  const { confirm, confirmDialog } = useConfirm();
 
   const [creating, setCreating] = useState(false);
   const [viewing, setViewing] = useState<Influ | null>(null);
@@ -1346,6 +1347,16 @@ export function InfluencerBoard({
           : x,
       ),
     );
+
+  const removeInflu = async (influId: string): Promise<boolean> => {
+    const alvo = influs.find((x) => x.id === influId);
+    const ok = await confirm(
+      `Excluir "${alvo?.nome || "este influenciador"}" desta campanha? Isso remove o perfil, entregas e histórico dele daqui.`,
+    );
+    if (!ok) return false;
+    onChange(influs.filter((x) => x.id !== influId));
+    return true;
+  };
 
   const addComment = (influId: string, text: string) => {
     const trimmed = text.trim();
@@ -1684,7 +1695,7 @@ export function InfluencerBoard({
                         has={has}
                         onView={() => setViewing(i)}
                         onStatus={(status) => changeStatus(i.id, status)}
-                        onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
+                        onRemove={() => void removeInflu(i.id)}
                       />
                     </div>
                   ))}
@@ -1711,7 +1722,7 @@ export function InfluencerBoard({
                 has={has}
                 onView={() => setViewing(i)}
                 onStatus={(status) => changeStatus(i.id, status)}
-                onRemove={() => onChange(influs.filter((x) => x.id !== i.id))}
+                onRemove={() => void removeInflu(i.id)}
               />
             ))}
           </div>
@@ -1749,9 +1760,8 @@ export function InfluencerBoard({
           influ={viewing}
           has={has}
           onOpenChange={(o) => !o && setViewing(null)}
-          onRemove={() => {
-            onChange(influs.filter((x) => x.id !== viewing.id));
-            setViewing(null);
+          onRemove={async () => {
+            if (await removeInflu(viewing.id)) setViewing(null);
           }}
           onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
           onSetConteudoStatus={(entregaId, status) =>
@@ -1794,6 +1804,7 @@ export function InfluencerBoard({
           setBankPickerOpen(false);
         }}
       />
+      {confirmDialog}
     </section>
   );
 }

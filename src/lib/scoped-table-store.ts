@@ -126,7 +126,13 @@ export function createScopedArrayStore<T extends { id: string }>(
               updated_at: new Date().toISOString(),
             } as never)
             .then(({ error }) => {
-              if (error) console.warn(`[${table}] upsert failed`, error);
+              if (!error) return;
+              console.warn(`[${table}] upsert failed`, error);
+              void import("sonner").then(({ toast }) => {
+                toast.error("Não foi possível salvar", {
+                  description: error.message || "Verifique sua conexão e tente de novo.",
+                });
+              });
             });
         }
       }
@@ -137,7 +143,25 @@ export function createScopedArrayStore<T extends { id: string }>(
             .delete()
             .eq("id", id)
             .then(({ error }) => {
-              if (error) console.warn(`[${table}] delete failed`, error);
+              if (!error) return;
+              console.warn(`[${table}] delete failed`, error);
+              // Sem isso, uma exclusão recusada pelo servidor (RLS, rede)
+              // some da tela na hora (update otimista) e só reaparece
+              // minutos depois no próximo resync — sem nenhuma explicação
+              // do porquê. Devolve o item na hora e avisa com um toast.
+              const removed = prevById.get(id);
+              if (removed) {
+                const current = cache.get(parentId) ?? [];
+                if (!current.some((x) => x.id === id)) {
+                  cache.set(parentId, [...current, removed]);
+                  emit();
+                }
+              }
+              void import("sonner").then(({ toast }) => {
+                toast.error("Não foi possível excluir", {
+                  description: error.message || "Verifique sua conexão e tente de novo.",
+                });
+              });
             });
         }
       }
