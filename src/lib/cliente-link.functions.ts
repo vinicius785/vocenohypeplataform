@@ -83,6 +83,8 @@ const InfluencerPublic = z.object({
   foto: z.string().optional(),
   status: z.string(),
   clienteReprovacao: ClienteVeredito.optional(),
+  briefingPersonalizado: z.string().optional(),
+  observacoes: z.string().optional(),
   redes: z.array(RedePublic),
   entregas: z.array(EntregaPublic),
   profileMetrics: z
@@ -101,6 +103,8 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
     foto: influ.foto,
     status: influ.status,
     clienteReprovacao: influ.clienteReprovacao,
+    briefingPersonalizado: influ.briefingPersonalizado,
+    observacoes: influ.observacoes,
     redes: influ.redes.map((r) => ({
       id: r.id,
       plataforma: r.plataforma,

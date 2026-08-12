@@ -143,6 +143,8 @@ type PublicInfluencer = {
   foto?: string;
   status: string;
   clienteReprovacao?: Veredito;
+  briefingPersonalizado?: string;
+  observacoes?: string;
   redes: { id?: string; plataforma: string; handle: string; seguidores?: string }[];
   entregas: PublicEntrega[];
   profileMetrics?: { porRede?: Record<string, RedeMetrics> };
@@ -739,6 +741,31 @@ function InfluencerDetail({
         )}
         {!influPending && inf.clienteReprovacao && (
           <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
+        )}
+
+        {(inf.briefingPersonalizado || inf.observacoes) && (
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {inf.briefingPersonalizado && (
+              <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t(lang, "briefingHeader")}
+                </h3>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {inf.briefingPersonalizado}
+                </p>
+              </div>
+            )}
+            {inf.observacoes && (
+              <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t(lang, "observacoesHeader")}
+                </h3>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  {inf.observacoes}
+                </p>
+              </div>
+            )}
+          </section>
         )}
 
         {inf.entregas.length > 0 && (

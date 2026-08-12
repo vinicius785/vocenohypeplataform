@@ -581,6 +581,14 @@ export type Influ = {
     status: "aprovado" | "reprovado";
     at: string;
   };
+  /** Instruções específicas pra este influenciador (diferente do briefing
+   * geral da campanha, em `Campaign.briefing`) — mostrado no portal do
+   * cliente, no perfil do influenciador. */
+  briefingPersonalizado?: string;
+  /** Observação livre sobre o influenciador — visível tanto internamente
+   * quanto no portal do cliente (diferente de `comments`/`activity`, que
+   * ficam só internos). */
+  observacoes?: string;
 };
 
 /**
@@ -2864,6 +2872,33 @@ function InfluencerProfileDialog({
               />
             )}
 
+            <div className="grid grid-cols-1 gap-6 border-t border-border pt-6 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <FieldLabel
+                  title="Briefing personalizado"
+                  hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
+                />
+                <AutoSaveTextarea
+                  key={influ.id}
+                  value={influ.briefingPersonalizado ?? ""}
+                  onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+                  placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+                />
+              </div>
+              <div className="space-y-1.5">
+                <FieldLabel
+                  title="Observações"
+                  hint="Nota livre — visível pro time e também no portal do cliente."
+                />
+                <AutoSaveTextarea
+                  key={influ.id}
+                  value={influ.observacoes ?? ""}
+                  onSave={(v) => onPatch({ observacoes: v || undefined })}
+                  placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+                />
+              </div>
+            </div>
+
             {has("redes") && (
               <div className="space-y-3 border-t border-border pt-6">
                 <FieldLabel title="Redes sociais" />
@@ -3301,6 +3336,33 @@ function InfluenciadorDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Textarea com estado local, salvando só ao sair do campo (blur) — evita
+ * gravar (e sincronizar com o Supabase) a cada tecla digitada num texto
+ * livre, sem precisar de debounce. */
+function AutoSaveTextarea({
+  value,
+  onSave,
+  placeholder,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <textarea
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== value) onSave(draft);
+      }}
+      placeholder={placeholder}
+      rows={3}
+      className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+    />
   );
 }
 
