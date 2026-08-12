@@ -1,6 +1,7 @@
 {
-  "version": "1.96.0",
+  "version": "1.97.0",
   "notes": [
+    "Corrige o portal do cliente não abrindo em navegadores embutidos mais fracos (ex: o navegador interno do Telegram) ou em conexões ruins: a página dependia 100% do JavaScript carregar no aparelho do cliente antes de mostrar qualquer coisa, então quem tivesse dificuldade de rede ou um app de mensagem mais restrito ficava numa tela em branco pra sempre, sem nenhum erro. Agora o servidor já manda a página pronta (nome do cliente, campanhas, conteúdo) — funciona mesmo se o JavaScript demorar ou falhar pra carregar depois.",
     "Novo: botão \"Nova solicitação\" dentro de cada campanha no portal do cliente — o cliente descreve um pedido (com anexo opcional) e ele já entra automaticamente como uma Tarefa no board interno daquela campanha, marcada com a tag \"Cliente\" pra fácil identificação. O time é avisado na hora pelo sino de notificações, com botão \"Abrir\" que já leva direto pra tarefa.",
     "Redesenha o perfil de influenciador no portal do cliente: cartão de destaque com foto e nome grandes (aprovar/reprovar direto ali, em verde/vermelho), redes sociais com botão \"Abrir métricas\" que expande as métricas do perfil, entregas em formato de linha do tempo, e Briefing (agora com anexo, subido pelo próprio cliente) e Observações (agora também editável pelo cliente) lado a lado, separados por uma divisória.",
     "Corrige a pill de status (etapa de produção) sumindo da tabela de Entregas pra qualquer entrega que não tivesse esse campo preenchido (ex: entregas antigas, migradas de antes dessa etapa existir) — sem a pill, não tinha como mudar o status daquela entrega. Agora sempre aparece, com \"Combinado\" (ou \"Postado\", se já publicada) como valor inicial pras entregas antigas.",

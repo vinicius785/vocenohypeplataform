@@ -102,10 +102,27 @@ function fmtDate(iso: string): string {
 }
 
 export const Route = createFileRoute("/portal/$token")({
-  ssr: false,
   component: ClientPortalPage,
-  head: () => ({
-    meta: [{ title: "Portal do cliente · Hype" }, { name: "robots", content: "noindex, nofollow" }],
+  // Carrega os dados da campanha (e o workspace, pro cabeçalho) no servidor
+  // antes de mandar qualquer HTML — antes esta rota era `ssr: false` e
+  // dependia 100% do JS carregar no navegador do cliente pra mostrar
+  // qualquer coisa, o que trava em navegadores embutidos mais fracos (ex:
+  // o navegador interno do Telegram) ou em conexões ruins: a pessoa fica
+  // numa tela em branco pra sempre, sem nenhum erro. Com loader, o servidor
+  // já manda o conteúdo pronto — funciona mesmo se o JS demorar ou falhar
+  // pra hidratar.
+  loader: async ({ params }) => {
+    const [clienteData, ws] = await Promise.all([
+      getClienteLinkData({ data: { token: params.token } }).catch(() => null),
+      fetchWorkspace().catch(() => ({ nome: "Você no Hype", logo: "" })),
+    ]);
+    return { clienteData: clienteData as ClienteLinkData | null, ws };
+  },
+  head: ({ loaderData }) => ({
+    meta: [
+      { title: `${loaderData?.clienteData?.clienteNome || "Portal"} · Hype` },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
   }),
 });
 
@@ -1244,24 +1261,26 @@ type ContentFeedItem = {
 
 function ClientPortalPage() {
   const { token } = Route.useParams();
+  const loaderData = Route.useLoaderData();
   const getDataFn = useServerFn(getClienteLinkData);
   const respondInfluFn = useServerFn(respondCampanhaInflu);
   const respondEntregaFn = useServerFn(respondCampanhaEntrega);
   const updateBriefingFn = useServerFn(updateInfluBriefing);
   const updateObservacoesFn = useServerFn(updateInfluObservacoes);
   const updateBriefingAnexoFn = useServerFn(updateInfluBriefingAnexo);
-  const [data, setData] = useState<ClienteLinkData | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
+  const [data, setData] = useState<ClienteLinkData | null>(loaderData.clienteData);
+  const [status, setStatus] = useState<"loading" | "ready" | "notfound">(
+    loaderData.clienteData ? "ready" : "notfound",
+  );
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
-  const [ws, setWs] = useState<Workspace>({ nome: "Você no Hype", logo: "" });
+  const [ws, setWs] = useState<Workspace>(loaderData.ws);
   const [lang, setLang] = usePortalLang();
 
-  useEffect(() => {
-    void fetchWorkspace().then(setWs);
-  }, []);
-
+  // Recarrega os dados depois de uma ação do cliente (aprovar/reprovar,
+  // salvar briefing, etc) — o carregamento inicial já veio pronto do
+  // servidor via `loader`, isso aqui só refresca em resposta a mutações.
   const load = () => {
     getDataFn({ data: { token } })
       .then((row) => {
@@ -1271,11 +1290,6 @@ function ClientPortalPage() {
       })
       .catch(() => setStatus("notfound"));
   };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
 
   if (status === "loading") {
     return (
