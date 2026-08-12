@@ -1,6 +1,7 @@
 {
-  "version": "1.105.0",
+  "version": "1.106.0",
   "notes": [
+    "Enriquece o cálculo de Confiabilidade do influenciador: além do prazo de entrega (como já era), agora também considera etapas intermediárias atrasadas (roteiro/gravação entregues depois da data de postagem combinada) e reprovações abertas do cliente (seleção, roteiro ou conteúdo) — com prioridade pros últimos 12 meses de atividade, caindo pro histórico completo só quando não há amostra recente suficiente. O card de perfil no Banco de influenciadores agora detalha esses dois sinais novos.",
     "Rebranding do Banco de influenciadores: novos filtros (rede social, seguidores, cidade, confiabilidade mínima, com botão \"Limpar filtros\"), paginação (30 por página), cards mostrando seguidores totais e cidade, e o perfil de cada influenciador ganhou banner, KPIs (seguidores/campanhas/confiabilidade/publicações), confiabilidade como barra visual (no prazo/atrasada/vencida) e desempenho agregado (views, alcance, curtidas etc) com gráfico de views por campanha.",
     "Novo: links dentro da descrição de uma tarefa agora ficam clicáveis (abrem em nova aba) quando você não está editando o texto — clique em qualquer parte não-link pra voltar a editar.",
     "Remove por enquanto o \"Resumo de reprovações (IA)\" (Ferramentas adicionais da campanha) — dependia de uma chave de IA que ainda não foi configurada. Volta quando o provedor de IA for decidido.",

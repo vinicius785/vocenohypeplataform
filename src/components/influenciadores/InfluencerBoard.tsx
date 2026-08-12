@@ -307,21 +307,60 @@ export type ReliabilityStats = {
   onTime: number;
   late: number;
   overdue: number;
+  /** Entregas cuja etapa intermediária (roteiro ou gravação) chegou depois
+   * da data de postagem combinada — sinal de atraso mesmo quando o post
+   * final saiu no prazo (ficou em cima da hora pro time). */
+  etapasAtrasadas: number;
+  /** Reprovações abertas agora (seleção, roteiro ou conteúdo) — sinal do
+   * momento, não histórico: o campo é limpo assim que o time reenvia e o
+   * cliente aprova, então não dá pra somar reprovações passadas já
+   * resolvidas com os dados que o cadastro guarda hoje. */
+  reprovacoesAbertas: number;
 };
 
+const RECENCY_WINDOW_MONTHS = 12;
+const MIN_RECENT_SAMPLE = 3;
+
 /**
- * Score de confiabilidade — baseado no histórico real de entregas
- * (across todas as campanhas): quanto o influenciador cumpriu o prazo
- * combinado. Considera só entregas além de "orçado" (ou seja, já
- * combinadas); publicadas no prazo pontuam bem, publicadas depois da
- * data combinada ou ainda pendentes com prazo vencido pesam contra.
+ * Score de confiabilidade — baseado no histórico real de entregas (across
+ * todas as campanhas). Prioriza os últimos 12 meses (se houver pelo menos
+ * 3 entregas nesse período); com menos que isso, usa o histórico inteiro
+ * pra não deixar a nota vazia/injusta por falta de amostra recente.
+ *
+ * Penaliza, em ordem de peso: prazo vencido sem publicar (1.5x), publicado
+ * depois do combinado (1x), etapa intermediária (roteiro/gravação) que
+ * chegou depois do prazo de postagem mesmo o post saindo no prazo (0.75x),
+ * e reprovações abertas agora (5 pontos cada, até 20 pontos).
  */
-export function computeReliability(entregas: Entrega[]): ReliabilityStats {
-  const relevant = entregas.filter((e) => e.status !== "orcado");
+export function computeReliability(
+  influs: Pick<Influ, "entregas" | "clienteReprovacao">[],
+): ReliabilityStats {
   const today = todayISO();
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - RECENCY_WINDOW_MONTHS);
+  const cutoffISO = cutoff.toISOString().slice(0, 10);
+
+  let reprovacoesAbertas = 0;
+  const allEntregas: Entrega[] = [];
+  for (const influ of influs) {
+    if (influ.clienteReprovacao) reprovacoesAbertas += 1;
+    for (const e of influ.entregas) {
+      if (e.roteiroReprovacao || e.conteudoReprovacao) reprovacoesAbertas += 1;
+      allEntregas.push(e);
+    }
+  }
+
+  const recent = allEntregas.filter((e) => {
+    const ref = e.publicadoEm || e.dataPostagem;
+    return ref && ref >= cutoffISO;
+  });
+  const sample = recent.length >= MIN_RECENT_SAMPLE ? recent : allEntregas;
+  const relevant = sample.filter((e) => e.status !== "orcado");
+
   let onTime = 0;
   let late = 0;
   let overdue = 0;
+  let etapasAtrasadas = 0;
   for (const e of relevant) {
     if (e.status === "publicado") {
       if (e.dataPostagem && e.publicadoEm && e.publicadoEm > e.dataPostagem) late += 1;
@@ -329,11 +368,31 @@ export function computeReliability(entregas: Entrega[]): ReliabilityStats {
     } else if (e.status === "combinado" && e.dataPostagem && e.dataPostagem < today) {
       overdue += 1;
     }
+    if (
+      e.dataPostagem &&
+      ((e.dataRecebimentoRoteiro && e.dataRecebimentoRoteiro > e.dataPostagem) ||
+        (e.dataRecebimentoConteudo && e.dataRecebimentoConteudo > e.dataPostagem))
+    ) {
+      etapasAtrasadas += 1;
+    }
   }
+
   const total = relevant.length;
-  if (total === 0) return { score: 100, total: 0, onTime: 0, late: 0, overdue: 0 };
-  const penalty = ((late + overdue * 1.5) / total) * 100;
-  return { score: Math.max(0, Math.round(100 - penalty)), total, onTime, late, overdue };
+  if (total === 0) {
+    return {
+      score: 100,
+      total: 0,
+      onTime: 0,
+      late: 0,
+      overdue: 0,
+      etapasAtrasadas: 0,
+      reprovacoesAbertas,
+    };
+  }
+  const deliveryPenalty = ((late + overdue * 1.5 + etapasAtrasadas * 0.75) / total) * 100;
+  const reprovacaoPenalty = Math.min(20, reprovacoesAbertas * 5);
+  const score = Math.max(0, Math.round(100 - deliveryPenalty - reprovacaoPenalty));
+  return { score, total, onTime, late, overdue, etapasAtrasadas, reprovacoesAbertas };
 }
 
 /** Prazo (dias) que consideramos razoável para um cliente responder uma solicitação de aprovação. */

@@ -161,7 +161,7 @@ export function InfluenciadoresSection() {
   const reliabilityById = useMemo(() => {
     const map = new Map<string, ReliabilityStats>();
     for (const i of list) {
-      map.set(i.id, computeReliability(historyFor(i.nome).flatMap((h) => h.influ.entregas)));
+      map.set(i.id, computeReliability(historyFor(i.nome).map((h) => h.influ)));
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,7 +295,7 @@ export function InfluenciadoresSection() {
 
   if (detail) {
     const history = historyFor(detail.nome);
-    const reliability = computeReliability(history.flatMap((h) => h.influ.entregas));
+    const reliability = computeReliability(history.map((h) => h.influ));
     const seguidores = totalSeguidores(detail.redes);
 
     // Desempenho agregado (mesmo cálculo do media kit) + por campanha, pra
@@ -482,8 +482,9 @@ export function InfluenciadoresSection() {
               <span className="text-lg font-semibold text-foreground">{reliability.score}%</span>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              % de entregas cumpridas no prazo combinado, considerando as {reliability.total}{" "}
-              entregas já contratadas em todas as campanhas.
+              Baseado nas {reliability.total} entregas mais recentes (últimos 12 meses, ou todo o
+              histórico se ainda não há amostra suficiente): prazo cumprido, etapas intermediárias
+              (roteiro/gravação) em dia e reprovações abertas do cliente.
             </p>
             <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
               {reliability.onTime > 0 && (
@@ -525,6 +526,28 @@ export function InfluenciadoresSection() {
                 {reliability.overdue} vencida{reliability.overdue === 1 ? "" : "s"}
               </span>
             </div>
+            {(reliability.etapasAtrasadas > 0 || reliability.reprovacoesAbertas > 0) && (
+              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
+                {reliability.etapasAtrasadas > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                    {reliability.etapasAtrasadas} etapa
+                    {reliability.etapasAtrasadas === 1 ? "" : "s"} intermediária
+                    {reliability.etapasAtrasadas === 1 ? "" : "s"} atrasada
+                    {reliability.etapasAtrasadas === 1 ? "" : "s"}
+                  </span>
+                )}
+                {reliability.reprovacoesAbertas > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-700 dark:text-rose-400"
+                    title="Reprovações ainda não resolvidas (o time reenvia e o cliente aprova de novo pra limpar)"
+                  >
+                    {reliability.reprovacoesAbertas} reprovaç
+                    {reliability.reprovacoesAbertas === 1 ? "ão" : "ões"} aberta
+                    {reliability.reprovacoesAbertas === 1 ? "" : "s"} agora
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -858,7 +881,7 @@ export function InfluenciadoresSection() {
                                   ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                                   : "bg-rose-500/10 text-rose-700 dark:text-rose-400"
                             }`}
-                            title="Confiabilidade: % de entregas cumpridas no prazo combinado"
+                            title="Confiabilidade: prazo cumprido, etapas intermediárias em dia e reprovações abertas (últimos 12 meses)"
                           >
                             {reliability.score}% confiável
                           </span>
