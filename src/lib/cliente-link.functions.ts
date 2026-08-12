@@ -324,6 +324,29 @@ export const respondCampanhaEntrega = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const UpdateInfluBriefingInput = z.object({
+  token: z.string().min(1),
+  campanhaId: z.string().min(1),
+  influencerId: z.string().min(1),
+  briefingPersonalizado: z.string().trim().max(4000),
+});
+
+/** Público, sem auth — permite o cliente preencher/editar o briefing
+ * personalizado do influenciador direto pelo portal (o time também pode
+ * editar o mesmo campo internamente, em `InfluencerProfileDialog`). */
+export const updateInfluBriefing = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => UpdateInfluBriefingInput.parse(raw))
+  .handler(async ({ data }) => {
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const next: Influ = {
+      ...influ,
+      briefingPersonalizado: data.briefingPersonalizado || undefined,
+    };
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true };
+  });
+
 const SubmitPortalBugReportInput = z.object({
   token: z.string().min(1),
   description: z.string().trim().min(1).max(4000),

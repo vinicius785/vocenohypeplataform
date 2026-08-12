@@ -47,6 +47,7 @@ import {
   getClienteLinkData,
   respondCampanhaInflu,
   respondCampanhaEntrega,
+  updateInfluBriefing,
 } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
@@ -617,6 +618,7 @@ function InfluencerDetail({
   onBack,
   onRespondInflu,
   onRespondEntrega,
+  onSaveBriefing,
 }: {
   inf: PublicInfluencer;
   lang: PortalLang;
@@ -628,10 +630,26 @@ function InfluencerDetail({
     status: "aprovado" | "reprovado",
     motivo?: string,
   ) => Promise<void>;
+  onSaveBriefing: (briefingPersonalizado: string) => Promise<void>;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [rejectingKey, setRejectingKey] = useState<string | null>(null);
   const [motivo, setMotivo] = useState("");
+  const [briefingDraft, setBriefingDraft] = useState(inf.briefingPersonalizado ?? "");
+  const [briefingSaving, setBriefingSaving] = useState(false);
+  useEffect(
+    () => setBriefingDraft(inf.briefingPersonalizado ?? ""),
+    [inf.id, inf.briefingPersonalizado],
+  );
+  const saveBriefing = async () => {
+    if (briefingDraft === (inf.briefingPersonalizado ?? "")) return;
+    setBriefingSaving(true);
+    try {
+      await onSaveBriefing(briefingDraft);
+    } finally {
+      setBriefingSaving(false);
+    }
+  };
 
   const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
   const redesComMetrics = inf.redes.filter((r) =>
@@ -751,30 +769,32 @@ function InfluencerDetail({
           <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
         )}
 
-        {(inf.briefingPersonalizado || inf.observacoes) && (
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {inf.briefingPersonalizado && (
-              <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {t(lang, "briefingHeader")}
-                </h3>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {inf.briefingPersonalizado}
-                </p>
-              </div>
-            )}
-            {inf.observacoes && (
-              <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
-                <h3 className="text-sm font-semibold text-foreground">
-                  {t(lang, "observacoesHeader")}
-                </h3>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {inf.observacoes}
-                </p>
-              </div>
-            )}
-          </section>
-        )}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-foreground">{t(lang, "briefingHeader")}</h3>
+              {briefingSaving && (
+                <span className="text-[10px] text-muted-foreground">{t(lang, "saving")}</span>
+              )}
+            </div>
+            <textarea
+              value={briefingDraft}
+              onChange={(e) => setBriefingDraft(e.target.value)}
+              onBlur={() => void saveBriefing()}
+              placeholder={t(lang, "briefingPlaceholder")}
+              rows={4}
+              className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          {inf.observacoes && (
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-4">
+              <h3 className="text-sm font-semibold text-foreground">
+                {t(lang, "observacoesHeader")}
+              </h3>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{inf.observacoes}</p>
+            </div>
+          )}
+        </section>
 
         {inf.entregas.length > 0 && (
           <section className="space-y-3">
@@ -1041,6 +1061,7 @@ function ClientPortalPage() {
   const getDataFn = useServerFn(getClienteLinkData);
   const respondInfluFn = useServerFn(respondCampanhaInflu);
   const respondEntregaFn = useServerFn(respondCampanhaEntrega);
+  const updateBriefingFn = useServerFn(updateInfluBriefing);
   const [data, setData] = useState<ClienteLinkData | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
@@ -1162,6 +1183,20 @@ function ClientPortalPage() {
             kind,
             status: respStatus,
             motivo,
+          },
+        });
+        load();
+      }
+    : undefined;
+
+  const saveBriefing = viewing
+    ? async (briefingPersonalizado: string) => {
+        await updateBriefingFn({
+          data: {
+            token,
+            campanhaId: activeCampanha!.id,
+            influencerId: viewing.id,
+            briefingPersonalizado,
           },
         });
         load();
@@ -1336,6 +1371,7 @@ function ClientPortalPage() {
                 onBack={() => setViewingId(null)}
                 onRespondInflu={respondInflu!}
                 onRespondEntrega={respondEntrega!}
+                onSaveBriefing={saveBriefing!}
               />
             ) : (
               <>
