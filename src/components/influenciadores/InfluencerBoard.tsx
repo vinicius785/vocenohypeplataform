@@ -1533,24 +1533,6 @@ export function InfluencerBoard({
               className="h-8 w-44 rounded-md border border-border bg-background pl-8 pr-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
             />
           </div>
-          {reprovadosCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setHideReprovados((v) => !v)}
-              aria-pressed={hideReprovados}
-              className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                hideReprovados
-                  ? "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              }`}
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              Ocultar reprovados
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
-                {reprovadosCount}
-              </span>
-            </button>
-          )}
           <div ref={viewMenu.ref} className="relative">
             <button
               type="button"
@@ -1588,6 +1570,28 @@ export function InfluencerBoard({
                 >
                   <Columns3 className="h-3.5 w-3.5" /> Kanban
                 </button>
+                {reprovadosCount > 0 && (
+                  <>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      type="button"
+                      onClick={() => setHideReprovados((v) => !v)}
+                      aria-pressed={hideReprovados}
+                      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium hover:bg-muted ${
+                        hideReprovados
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Ocultar reprovados
+                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold">
+                        {reprovadosCount}
+                      </span>
+                      {hideReprovados && <Check className="h-3.5 w-3.5 shrink-0" />}
+                    </button>
+                  </>
+                )}
                 <div className="my-1 border-t border-border" />
                 <p className="px-2 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Ordenar por
