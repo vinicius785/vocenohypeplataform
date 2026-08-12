@@ -1350,6 +1350,7 @@ function ClientPortalPage() {
 
   const activeCampanha = data.campanhas.find((c) => c.id === activeCampanhaId) ?? null;
   const reprovados = activeCampanha?.influencers.filter((i) => i.clienteReprovacao) ?? [];
+  const ativos = activeCampanha?.influencers.filter((i) => !i.clienteReprovacao) ?? [];
   const viewing = activeCampanha?.influencers.find((i) => i.id === viewingId) ?? null;
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
@@ -1713,8 +1714,7 @@ function ClientPortalPage() {
                     </div>
                   )}
                 </div>
-                {(influTab === "reprovados" ? reprovados : activeCampanha.influencers).length ===
-                0 ? (
+                {(influTab === "reprovados" ? reprovados : ativos).length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">
                     {influTab === "reprovados"
                       ? t(lang, "semReprovados")
@@ -1722,16 +1722,14 @@ function ClientPortalPage() {
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {(influTab === "reprovados" ? reprovados : activeCampanha.influencers).map(
-                      (inf) => (
-                        <InfluencerGalleryCard
-                          key={inf.id}
-                          inf={inf}
-                          lang={lang}
-                          onOpen={() => setViewingId(inf.id)}
-                        />
-                      ),
-                    )}
+                    {(influTab === "reprovados" ? reprovados : ativos).map((inf) => (
+                      <InfluencerGalleryCard
+                        key={inf.id}
+                        inf={inf}
+                        lang={lang}
+                        onOpen={() => setViewingId(inf.id)}
+                      />
+                    ))}
                   </div>
                 )}
 
