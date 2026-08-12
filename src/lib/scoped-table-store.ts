@@ -4,6 +4,7 @@ export type ScopedTable =
   | "campanha_influenciadores"
   | "campanha_tarefas"
   | "campanha_documentos"
+  | "campanha_cronograma"
   | "projeto_influenciadores";
 
 /**

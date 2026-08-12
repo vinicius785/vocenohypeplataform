@@ -169,6 +169,13 @@ async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof A
   return artigos;
 }
 
+const CronogramaItemPublic = z.object({
+  id: z.string(),
+  date: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+});
+
 const TokenInput = z.object({ token: z.string().min(1) });
 
 /** Público — sem auth. Usado pela página `/portal/$token`. Retorna TODAS
@@ -196,6 +203,18 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           .filter((r) => INFLU_STATUSES.indexOf(r.data.status) >= enviadoIdx)
           .map((r) => toPublicInfluencer(r.data));
         const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
+
+        const { data: cronogramaRows, error: cronogramaError } = await supabaseAdmin
+          .from("campanha_cronograma")
+          .select("data")
+          .eq("campanha_id", c.id);
+        if (cronogramaError) throw new Error(cronogramaError.message);
+        const cronograma = (
+          (cronogramaRows ?? []) as { data: z.infer<typeof CronogramaItemPublic> }[]
+        )
+          .map((r) => r.data)
+          .sort((a, b) => a.date.localeCompare(b.date));
+
         return {
           id: c.id,
           nome: c.nome,
@@ -203,6 +222,7 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           dataInicio: c.dataInicio,
           planejado,
           influencers,
+          cronograma,
         };
       }),
     );

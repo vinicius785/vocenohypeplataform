@@ -60,7 +60,11 @@ import {
   loadCampanhaDocs,
   saveCampanhaDocs,
   onCampanhaDocsChange,
+  loadCampanhaCronograma,
+  saveCampanhaCronograma,
+  onCampanhaCronogramaChange,
   deleteCampanhaScopedData,
+  type CronogramaItem,
 } from "@/lib/campanha-scoped-store";
 
 export { BankFields, type BankInfo };
@@ -289,6 +293,18 @@ function CampanhaDetail({
     saveCampanhaDocs(c.id, next);
   };
   useEffect(() => onCampanhaDocsChange(() => setDocs(loadCampanhaDocs(c.id))), [c.id]);
+
+  const [cronograma, setCronograma] = useState<CronogramaItem[]>(() =>
+    loadCampanhaCronograma(c.id),
+  );
+  const persistCronograma = (next: CronogramaItem[]) => {
+    setCronograma(next);
+    saveCampanhaCronograma(c.id, next);
+  };
+  useEffect(
+    () => onCampanhaCronogramaChange(() => setCronograma(loadCampanhaCronograma(c.id))),
+    [c.id],
+  );
 
   // Só os influenciadores/tarefas criados dentro do mês selecionado (campanha
   // recorrente). Passamos esse subconjunto pros componentes filhos, mas ao
@@ -550,7 +566,12 @@ function CampanhaDetail({
           <DialogDescription className="sr-only">
             Datas e prazos importantes da campanha.
           </DialogDescription>
-          <CampaignCalendar campanha={c} influs={visibleInflus} />
+          <CampaignCalendar
+            campanha={c}
+            influs={visibleInflus}
+            cronograma={cronograma}
+            onCronogramaChange={persistCronograma}
+          />
         </DialogContent>
       </Dialog>
 
@@ -708,13 +729,26 @@ function toISODate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type CalendarEvent = { label: string; tone: "inicio" | "prazo" | "postagem" | "pagamento" };
+type CalendarEvent = {
+  label: string;
+  tone: "inicio" | "prazo" | "postagem" | "pagamento" | "manual";
+};
 
 /**
  * Mini calendário mensal com os marcos da campanha: início, prazo, e a
  * data de postagem/pagamento de cada entrega de cada influenciador.
  */
-function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs: Influ[] }) {
+function CampaignCalendar({
+  campanha: c,
+  influs,
+  cronograma,
+  onCronogramaChange,
+}: {
+  campanha: Campaign;
+  influs: Influ[];
+  cronograma: CronogramaItem[];
+  onCronogramaChange: (next: CronogramaItem[]) => void;
+}) {
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     const add = (date: string | undefined, ev: CalendarEvent) => {
@@ -731,8 +765,11 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
         add(e.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
       }
     }
+    for (const item of cronograma) {
+      add(item.date, { label: item.title, tone: "manual" });
+    }
     return map;
-  }, [c.dataInicio, c.prazo, influs]);
+  }, [c.dataInicio, c.prazo, influs, cronograma]);
 
   const initialCursor = useMemo(() => {
     const first = c.dataInicio ?? c.prazo;
@@ -759,6 +796,7 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
     prazo: "bg-amber-500",
     postagem: "bg-violet-500",
     pagamento: "bg-emerald-500",
+    manual: "bg-rose-500",
   };
 
   const sortedUpcoming = useMemo(
@@ -865,6 +903,115 @@ function CampaignCalendar({ campanha: c, influs }: { campanha: Campaign; influs:
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
+      )}
+
+      <CronogramaManualSection cronograma={cronograma} onChange={onCronogramaChange} />
+    </div>
+  );
+}
+
+/** Cronograma manual — setado pelo time (data + título + descrição livre),
+ * em vez de derivado das entregas dos influenciadores. Mostrado aqui e no
+ * portal do cliente. */
+function CronogramaManualSection({
+  cronograma,
+  onChange,
+}: {
+  cronograma: CronogramaItem[];
+  onChange: (next: CronogramaItem[]) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+
+  const add = () => {
+    const t = title.trim();
+    if (!date || !t) return;
+    onChange(
+      [
+        ...cronograma,
+        { id: crypto.randomUUID(), date, title: t, description: description.trim() || undefined },
+      ].sort((a, b) => a.date.localeCompare(b.date)),
+    );
+    setDate("");
+    setTitle("");
+    setDescription("");
+  };
+
+  const remove = (id: string) => onChange(cronograma.filter((i) => i.id !== id));
+
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Cronograma manual
+      </h3>
+
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-background p-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-medium uppercase text-muted-foreground">Data</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="flex min-w-[160px] flex-1 flex-col gap-1">
+          <label className="text-[10px] font-medium uppercase text-muted-foreground">Título</label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ex: Gravação do vídeo"
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div className="flex min-w-[160px] flex-1 flex-col gap-1">
+          <label className="text-[10px] font-medium uppercase text-muted-foreground">
+            Descrição (opcional)
+          </label>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="Detalhes adicionais"
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={add}
+          disabled={!date || !title.trim()}
+          className="h-9 rounded-md bg-foreground px-3 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Adicionar
+        </button>
+      </div>
+
+      {cronograma.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nenhum item de cronograma adicionado.</p>
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border bg-background">
+          {cronograma.map((item) => (
+            <li key={item.id} className="flex items-start gap-3 px-3 py-2.5">
+              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-muted-foreground">{fmtDate(item.date)}</p>
+                <p className="truncate text-sm text-foreground">{item.title}</p>
+                {item.description && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => remove(item.id)}
+                aria-label="Remover"
+                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

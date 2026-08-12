@@ -93,6 +93,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      campanha_cronograma: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       campanha_influenciadores: {
         Row: {
           campanha_id: string;

@@ -150,6 +150,12 @@ type PublicInfluencer = {
   entregas: PublicEntrega[];
   profileMetrics?: { porRede?: Record<string, RedeMetrics> };
 };
+type PublicCronogramaItem = {
+  id: string;
+  date: string;
+  title: string;
+  description?: string;
+};
 type PublicCampanha = {
   id: string;
   nome: string;
@@ -157,6 +163,7 @@ type PublicCampanha = {
   dataInicio?: string;
   planejado: number;
   influencers: PublicInfluencer[];
+  cronograma: PublicCronogramaItem[];
 };
 type PublicArticle = {
   id: string;
@@ -1395,6 +1402,32 @@ function ClientPortalPage() {
                       />
                     ))}
                   </div>
+                )}
+
+                {activeCampanha.cronograma.length > 0 && (
+                  <>
+                    <h2 className="mb-3 mt-8 flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Calendar className="h-4 w-4" /> {t(lang, "cronogramaHeader")}
+                    </h2>
+                    <ul className="divide-y divide-border rounded-xl border border-border bg-background">
+                      {activeCampanha.cronograma.map((item) => (
+                        <li key={item.id} className="flex items-start gap-3 px-4 py-3">
+                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {fmtDate(item.date)}
+                            </p>
+                            <p className="text-sm text-foreground">{item.title}</p>
+                            {item.description && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </>
             )

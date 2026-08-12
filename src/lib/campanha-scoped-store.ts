@@ -11,18 +11,38 @@ export type CampaignDoc = {
   criadoEm: string;
 };
 
+/** Item do cronograma da campanha — setado manualmente pelo time (não
+ * derivado das entregas dos influenciadores), mostrado internamente e no
+ * portal do cliente. */
+export type CronogramaItem = {
+  id: string;
+  date: string;
+  title: string;
+  description?: string;
+};
+
 const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "campanha_id");
 const tarefasStore = createScopedArrayStore<Task>("campanha_tarefas", "campanha_id");
 const docsStore = createScopedArrayStore<CampaignDoc>("campanha_documentos", "campanha_id");
+const cronogramaStore = createScopedArrayStore<CronogramaItem>(
+  "campanha_cronograma",
+  "campanha_id",
+);
 
 let resyncStarted = false;
 
 export async function initCampanhaScopedSync(): Promise<void> {
-  await Promise.all([influsStore.init(), tarefasStore.init(), docsStore.init()]);
+  await Promise.all([
+    influsStore.init(),
+    tarefasStore.init(),
+    docsStore.init(),
+    cronogramaStore.init(),
+  ]);
   influsStore.subscribeRealtime();
   tarefasStore.subscribeRealtime();
   docsStore.subscribeRealtime();
-  // Segunda trava além do realtime: re-busca essas 3 tabelas do zero de
+  cronogramaStore.subscribeRealtime();
+  // Segunda trava além do realtime: re-busca essas tabelas do zero de
   // tempos em tempos, corrigindo qualquer drift que um evento perdido ou
   // mal aplicado (ex: DELETE sem a coluna do parent, antes de
   // REPLICA IDENTITY FULL) tenha deixado como "fantasma" no cache.
@@ -32,6 +52,7 @@ export async function initCampanhaScopedSync(): Promise<void> {
       void influsStore.resync();
       void tarefasStore.resync();
       void docsStore.resync();
+      void cronogramaStore.resync();
     }, 5 * 60_000);
   }
 }
@@ -76,14 +97,25 @@ export function onCampanhaDocsChange(cb: () => void): () => void {
   return docsStore.subscribe(cb);
 }
 
-/** Apaga tudo que estava escopado a uma campanha (influs/tarefas/docs) —
- * chamar sempre que a campanha em si for excluída. Sem isso essas linhas
- * ficam orfãs no banco (a campanha nem existe mais em `clientes.data`, mas
- * a tarefa/influ/doc continua lá) e reaparecem em telas que agregam
- * "tudo de todas as campanhas" (ex: "Meu trabalho" no Início), sem jeito
- * de acessar ou excluir pela UI normal. */
+export function loadCampanhaCronograma(campanhaId: string): CronogramaItem[] {
+  return cronogramaStore.get(campanhaId);
+}
+export function saveCampanhaCronograma(campanhaId: string, list: CronogramaItem[]) {
+  cronogramaStore.set(campanhaId, () => list);
+}
+export function onCampanhaCronogramaChange(cb: () => void): () => void {
+  return cronogramaStore.subscribe(cb);
+}
+
+/** Apaga tudo que estava escopado a uma campanha (influs/tarefas/docs/
+ * cronograma) — chamar sempre que a campanha em si for excluída. Sem isso
+ * essas linhas ficam orfãs no banco (a campanha nem existe mais em
+ * `clientes.data`, mas a tarefa/influ/doc/item de cronograma continua lá) e
+ * reaparecem em telas que agregam "tudo de todas as campanhas" (ex: "Meu
+ * trabalho" no Início), sem jeito de acessar ou excluir pela UI normal. */
 export function deleteCampanhaScopedData(campanhaId: string) {
   influsStore.set(campanhaId, () => []);
   tarefasStore.set(campanhaId, () => []);
   docsStore.set(campanhaId, () => []);
+  cronogramaStore.set(campanhaId, () => []);
 }
