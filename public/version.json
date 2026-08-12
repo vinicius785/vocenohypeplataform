@@ -1,6 +1,7 @@
 {
-  "version": "1.107.0",
+  "version": "1.107.1",
   "notes": [
+    "Ajusta a seção \"Histórico\" do perfil do influenciador no portal do cliente pra ficar abaixo de Briefing e Observações, e limpa o log de atividade interno acumulado em testes (afetava o que aparecia nesse histórico).",
     "Novo: perfil do influenciador no portal do cliente ganha uma seção \"Histórico\", com a data de quando foi adicionado à campanha e cada mudança de etapa (enviado pra aprovação, aprovado, postado etc), numa linha do tempo.",
     "Redes sociais no Banco de influenciadores agora são clicáveis, abrindo o perfil real (Instagram, TikTok, YouTube, X, LinkedIn ou Facebook) numa nova aba.",
     "Enriquece o cálculo de Confiabilidade do influenciador: além do prazo de entrega (como já era), agora também considera etapas intermediárias atrasadas (roteiro/gravação entregues depois da data de postagem combinada) e reprovações abertas do cliente (seleção, roteiro ou conteúdo) — com prioridade pros últimos 12 meses de atividade, caindo pro histórico completo só quando não há amostra recente suficiente. O card de perfil no Banco de influenciadores agora detalha esses dois sinais novos.",

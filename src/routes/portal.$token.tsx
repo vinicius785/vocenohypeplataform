@@ -1195,50 +1195,6 @@ function InfluencerDetail({
           </section>
         )}
 
-        {(() => {
-          type TimelineItem = { label: string; at: string; tone?: "reprovado" };
-          const items: TimelineItem[] = [];
-          if (inf.criadoEm) items.push({ label: t(lang, "adicionadoCampanha"), at: inf.criadoEm });
-          for (const h of inf.historico ?? []) items.push({ label: h.status, at: h.at });
-          if (inf.clienteReprovacao) {
-            items.push({
-              label: t(lang, "reprovadoEm"),
-              at: inf.clienteReprovacao.respondedAt,
-              tone: "reprovado",
-            });
-          }
-          items.sort((a, b) => a.at.localeCompare(b.at));
-          if (items.length === 0) return null;
-          return (
-            <section>
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <History className="h-4 w-4" /> {t(lang, "historicoHeader")}
-              </h3>
-              <ol className="space-y-2.5 border-l border-border pl-4">
-                {items.map((it, i) => (
-                  <li key={i} className="relative text-sm">
-                    <span
-                      className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full ${
-                        it.tone === "reprovado" ? "bg-rose-500" : "bg-foreground/40"
-                      }`}
-                    />
-                    <span
-                      className={
-                        it.tone === "reprovado"
-                          ? "font-medium text-rose-600 dark:text-rose-400"
-                          : "font-medium text-foreground"
-                      }
-                    >
-                      {it.label}
-                    </span>
-                    <span className="ml-2 text-xs text-muted-foreground">{fmtDateTime(it.at)}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          );
-        })()}
-
         <div className="border-t border-border" />
 
         {/* BRIEFING + OBSERVAÇÕES */}
@@ -1320,6 +1276,50 @@ function InfluencerDetail({
             />
           </div>
         </section>
+
+        {(() => {
+          type TimelineItem = { label: string; at: string; tone?: "reprovado" };
+          const items: TimelineItem[] = [];
+          if (inf.criadoEm) items.push({ label: t(lang, "adicionadoCampanha"), at: inf.criadoEm });
+          for (const h of inf.historico ?? []) items.push({ label: h.status, at: h.at });
+          if (inf.clienteReprovacao) {
+            items.push({
+              label: t(lang, "reprovadoEm"),
+              at: inf.clienteReprovacao.respondedAt,
+              tone: "reprovado",
+            });
+          }
+          items.sort((a, b) => a.at.localeCompare(b.at));
+          if (items.length === 0) return null;
+          return (
+            <section>
+              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <History className="h-4 w-4" /> {t(lang, "historicoHeader")}
+              </h3>
+              <ol className="space-y-2.5 border-l border-border pl-4">
+                {items.map((it, i) => (
+                  <li key={i} className="relative text-sm">
+                    <span
+                      className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full ${
+                        it.tone === "reprovado" ? "bg-rose-500" : "bg-foreground/40"
+                      }`}
+                    />
+                    <span
+                      className={
+                        it.tone === "reprovado"
+                          ? "font-medium text-rose-600 dark:text-rose-400"
+                          : "font-medium text-foreground"
+                      }
+                    >
+                      {it.label}
+                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">{fmtDateTime(it.at)}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          );
+        })()}
 
         {semNadaAlem && !metricsOpen && inf.entregas.length === 0 && (
           <p className="text-sm text-muted-foreground">{t(lang, "noMetrics")}</p>
