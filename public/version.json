@@ -1,6 +1,7 @@
 {
-  "version": "1.116.1",
+  "version": "1.117.0",
   "notes": [
+    "Refaz o design do formulário de criar/editar campanha: indicador de etapas agora é uma barra de progresso com círculos numerados conectados (em vez de abas apertadas), títulos e botões no mesmo padrão visual do resto da plataforma (tipografia fina, botões em pílula), diálogo mais largo pra respirar melhor. A etapa de Briefing agora avisa que esse texto também aparece no Link de inscrição da campanha.",
     "O botão \"Solicitar para o Marketing\" (numa tarefa de Campanha/Projeto) agora dá um feedback visual ao clicar: fica verde com um check e \"Solicitado!\" por um instante, confirmando que o pedido foi feito.",
     "Novo: ícone de atenção no item \"Financeiro\" do menu lateral quando há despesas vencidas (data já passou e ainda não foi marcada como paga) — mesmo critério já usado na tela de Financeiro pra destacar essas linhas em vermelho.",
     "Novo: \"Link de inscrição\" da campanha (botão no topo, ao lado de \"Link do cliente\") — um link público onde o influenciador se candidata sozinho: vê o briefing, prazo e prazo de pagamento da campanha, e preenche nome, telefone, e-mail, nicho, redes sociais (com seguidores), uma mensagem e opcionalmente um mídia kit. Ao enviar, entra automaticamente na campanha numa nova coluna \"Inscrições\" do Kanban, antes de \"Lista\", pro time revisar e decidir se avança.",

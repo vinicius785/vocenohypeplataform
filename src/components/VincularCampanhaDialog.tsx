@@ -12,6 +12,7 @@ import {
   Link2,
   Target,
   Check,
+  UserPlus,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
@@ -146,28 +147,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Section({
-  icon: Icon,
   title,
   description,
   children,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border border-border/70 bg-background p-5">
-      <div className="flex items-start gap-2.5">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
-          <Icon className="h-3.5 w-3.5" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
-        </div>
+    <section className="space-y-5">
+      <div>
+        <h3 className="text-2xl font-light tracking-tighter text-foreground">{title}</h3>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      <div className="space-y-4 pl-[38px]">{children}</div>
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }
@@ -362,11 +356,13 @@ export function VincularCampanhaDialog({
     onOpenChange(false);
   };
 
+  const stepIndex = STEPS.findIndex((s) => s.key === step);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-card p-0">
-        <div className="border-b border-border/60 px-8 pt-8 pb-6">
-          <DialogTitle className="text-xl font-semibold">
+      <DialogContent className="flex max-h-[88vh] max-w-3xl flex-col gap-0 overflow-hidden border-border bg-card p-0">
+        <div className="px-8 pt-7 pb-5">
+          <DialogTitle className="text-2xl font-light tracking-tighter">
             {initial ? "Editar campanha" : "Vincular campanha"}
           </DialogTitle>
           <DialogDescription className="mt-1 text-sm text-muted-foreground">
@@ -378,38 +374,55 @@ export function VincularCampanhaDialog({
           </DialogDescription>
         </div>
 
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-border/60 px-8 py-3 [scrollbar-width:thin]">
-          {STEPS.map((s, i) => {
-            const active = step === s.key;
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setStep(s.key)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                  active
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] ${
-                    active ? "bg-background/20" : "bg-muted-foreground/15"
-                  }`}
-                >
-                  {i + 1}
-                </span>
-                <s.icon className="h-3.5 w-3.5" />
-                {s.label}
-              </button>
-            );
-          })}
+        <div className="border-b border-border/60 px-8 pb-6">
+          <div className="flex items-center">
+            {STEPS.map((s, i) => {
+              const active = i === stepIndex;
+              const done = i < stepIndex;
+              const isLast = i === STEPS.length - 1;
+              return (
+                <div key={s.key} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
+                  <button
+                    type="button"
+                    onClick={() => setStep(s.key)}
+                    aria-label={s.label}
+                    title={s.label}
+                    className="group flex shrink-0 flex-col items-center gap-1.5"
+                  >
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium transition-colors ${
+                        active
+                          ? "bg-foreground text-background"
+                          : done
+                            ? "bg-foreground/80 text-background"
+                            : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/20"
+                      }`}
+                    >
+                      {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                    </span>
+                    <span
+                      className={`hidden text-[10px] font-medium sm:block ${
+                        active ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {s.label}
+                    </span>
+                  </button>
+                  {!isLast && (
+                    <div
+                      className={`mx-2 h-px flex-1 transition-colors ${done ? "bg-foreground/80" : "bg-border"}`}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-8">
             {step === "info" && (
-              <Section icon={FileText} title="Informações da campanha">
+              <Section title="Informações da campanha">
                 <Field label="Nome da campanha">
                   <input
                     value={nome}
@@ -419,6 +432,11 @@ export function VincularCampanhaDialog({
                   />
                 </Field>
                 <Field label="Briefing da campanha">
+                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    <UserPlus className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Esse texto também aparece no Link de inscrição, pra influenciadores que quiserem
+                    se candidatar direto pra esta campanha.
+                  </div>
                   <textarea
                     value={briefing}
                     onChange={(e) => setBriefing(e.target.value)}
@@ -537,11 +555,7 @@ export function VincularCampanhaDialog({
             )}
 
             {step === "publico" && (
-              <Section
-                icon={Target}
-                title="Público-alvo"
-                description="Para quem essa campanha é direcionada."
-              >
+              <Section title="Público-alvo" description="Para quem essa campanha é direcionada.">
                 <Field label="Segmentação / interesses">
                   <input
                     value={publicoAlvo.segmentacao ?? ""}
@@ -599,7 +613,7 @@ export function VincularCampanhaDialog({
                           key={g}
                           type="button"
                           onClick={() => toggleGenero(g)}
-                          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                             active
                               ? "border-foreground bg-foreground text-background"
                               : "border-border bg-card text-foreground hover:bg-muted"
@@ -617,7 +631,6 @@ export function VincularCampanhaDialog({
 
             {step === "influs" && (
               <Section
-                icon={Users}
                 title="Influenciadores"
                 description="Selecione o tipo, tamanho, quantidade e quantos enviar por linha."
               >
@@ -699,7 +712,6 @@ export function VincularCampanhaDialog({
 
             {step === "pagCliente" && (
               <Section
-                icon={Wallet}
                 title="Valores e pagamento do cliente"
                 description="Quanto o cliente paga e de que forma."
               >
@@ -731,7 +743,7 @@ export function VincularCampanhaDialog({
                           key={t}
                           type="button"
                           onClick={() => setPagClienteTipo(active ? "" : t)}
-                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                             active
                               ? "border-foreground bg-foreground text-background"
                               : "border-border bg-card text-foreground hover:bg-muted"
@@ -891,7 +903,6 @@ export function VincularCampanhaDialog({
 
             {step === "pagInflu" && (
               <Section
-                icon={Coins}
                 title="Pagamento aos influenciadores"
                 description="Tipo de remuneração e prazo de pagamento."
               >
@@ -905,7 +916,7 @@ export function VincularCampanhaDialog({
                             key={p}
                             type="button"
                             onClick={() => toggleTipo(p)}
-                            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                               active
                                 ? "border-foreground bg-foreground text-background"
                                 : "border-border bg-card text-foreground hover:bg-muted"
@@ -1081,7 +1092,7 @@ export function VincularCampanhaDialog({
                           key={p}
                           type="button"
                           onClick={() => setPrazoPag(p)}
-                          className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                          className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                             active
                               ? "border-foreground bg-foreground text-background"
                               : "border-border bg-card text-foreground hover:bg-muted"
@@ -1098,7 +1109,6 @@ export function VincularCampanhaDialog({
 
             {step === "direitos" && (
               <Section
-                icon={ShieldCheck}
                 title="Direitos de imagem"
                 description="Defina se e como o cliente pode reutilizar o conteúdo dos influenciadores."
               >
@@ -1125,7 +1135,7 @@ export function VincularCampanhaDialog({
                               key={u}
                               type="button"
                               onClick={() => toggleUsoImagem(u)}
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                                 active
                                   ? "border-foreground bg-foreground text-background"
                                   : "border-border bg-card text-foreground hover:bg-muted"
@@ -1206,32 +1216,32 @@ export function VincularCampanhaDialog({
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               Cancelar
             </button>
             <div className="flex items-center gap-2">
-              {step !== STEPS[0].key && (
+              {stepIndex > 0 && (
                 <button
                   type="button"
-                  onClick={() => setStep(STEPS[STEPS.findIndex((s) => s.key === step) - 1].key)}
-                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+                  onClick={() => setStep(STEPS[stepIndex - 1].key)}
+                  className="rounded-full border-2 border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
                 >
                   Voltar
                 </button>
               )}
-              {step !== STEPS[STEPS.length - 1].key ? (
+              {stepIndex < STEPS.length - 1 ? (
                 <button
                   type="button"
-                  onClick={() => setStep(STEPS[STEPS.findIndex((s) => s.key === step) + 1].key)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3.5 py-2 text-xs font-medium text-background hover:opacity-90"
+                  onClick={() => setStep(STEPS[stepIndex + 1].key)}
+                  className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background hover:bg-transparent hover:text-foreground"
                 >
                   Próximo
                 </button>
               ) : (
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3.5 py-2 text-xs font-medium text-background hover:opacity-90"
+                  className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background hover:bg-transparent hover:text-foreground"
                 >
                   {initial ? "Salvar alterações" : "Vincular campanha"}
                 </button>
