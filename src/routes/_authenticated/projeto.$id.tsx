@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
   LayoutPanelTop,
 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
+import { BackButton } from "@/components/BackButton";
 import { MarketingSection } from "@/components/MarketingSection";
 import {
   TaskBoard,
@@ -137,14 +138,9 @@ function ProjetoPage() {
       <AppShell active="projetos" onSelect={goToSection}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <p className="text-sm text-muted-foreground">Projeto não encontrado.</p>
-          <Link
-            to="/time"
-            search={{ section: "projetos" }}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Voltar
-          </Link>
+          <BackButton
+            onClick={() => void navigate({ to: "/time", search: { section: "projetos" } })}
+          />
         </div>
       </AppShell>
     );

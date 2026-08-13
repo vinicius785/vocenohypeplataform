@@ -5,7 +5,6 @@ import {
   Search,
   Trash2,
   X,
-  ArrowLeft,
   MapPin,
   History,
   FileBadge2,
@@ -28,6 +27,7 @@ import {
   YAxis,
 } from "recharts";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { BackButton } from "./BackButton";
 import { useClientes } from "@/lib/clientes-store";
 import { formatSeguidores } from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
@@ -359,13 +359,7 @@ export function InfluenciadoresSection() {
 
     return (
       <div>
-        <button
-          type="button"
-          onClick={() => setDetail(null)}
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Voltar
-        </button>
+        <BackButton onClick={() => setDetail(null)} className="mb-4" />
 
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div

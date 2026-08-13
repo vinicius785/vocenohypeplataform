@@ -1,6 +1,7 @@
 {
-  "version": "1.111.0",
+  "version": "1.112.0",
   "notes": [
+    "Padroniza todos os botões \"Voltar\" (VI e VC) com um novo visual: pílula com ícone de seta que expande ao passar o mouse — antes cada tela tinha um link de texto simples e diferente.",
     "Rebranding dos cards de Metas: visual minimalista e monocromático, cantos bem arredondados, foto e nome do responsável no topo, número do progresso em destaque, barra de progresso e botão principal em pílula — grade de cards em vez de lista.",
     "Ajusta as áreas da Metas pra Marketing, Operação, Influenciadores e Comercial (antes eram Comercial/Financeiro/Campanhas/Projetos/Time/Geral), e redesenha o box de progresso das metas numéricas, mais visual e alinhado à identidade da plataforma.",
     "Novo: aba \"Metas\" (menu Estrutura) — metas do time por área (Comercial, Financeiro, Campanhas, Projetos, Time, Geral), numéricas (com barra de progresso) ou de feito/não-feito, com responsável, prazo, status automático (em andamento/concluída/atrasada) e histórico de atualizações de progresso.",
@@ -83,6 +84,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Padroniza os botões \"Voltar\" com um novo visual: pílula com ícone de seta que expande ao passar o mouse.",
     "Novo: campanhas com métricas de entregas publicadas ganham um \"Relatório de métricas\" — totais, destaque do melhor conteúdo e desempenho por influenciador.",
     "Novo: perfil do influenciador ganha uma seção \"Histórico\" com a data de quando foi adicionado e cada mudança de etapa da campanha.",
     "Novo: influenciador aprovado ou reprovado ganha um ícone na foto, e campanhas com reprovados ganham uma aba \"Reprovados\" com a contagem e o perfil de cada um.",

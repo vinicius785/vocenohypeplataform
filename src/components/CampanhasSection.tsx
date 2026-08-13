@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import FlowingMenu from "@/components/FlowingMenu";
+import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
 import { SectionHeader } from "./SectionHeader";
@@ -402,13 +403,7 @@ function CampanhaDetail({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
       {/* BACK */}
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> Voltar
-      </button>
+      <BackButton onClick={onBack} />
 
       {/* HEADER — foto em destaque + nome campanha + cliente */}
       <header className="flex items-center gap-5">

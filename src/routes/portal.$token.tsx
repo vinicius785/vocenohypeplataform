@@ -15,7 +15,6 @@ import {
   YAxis,
 } from "recharts";
 import {
-  ArrowLeft,
   AtSign,
   BarChart3,
   Calendar,
@@ -47,6 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
 import { PortalBugReportButton } from "@/components/PortalBugReportButton";
+import { BackButton } from "@/components/BackButton";
 import { VersionWatcher } from "@/components/VersionWatcher";
 import { PortalDemandButton } from "@/components/PortalDemandButton";
 import {
@@ -804,13 +804,7 @@ function InfluencerDetail({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> {t(lang, "backToList")}
-      </button>
+      <BackButton onClick={onBack} label={t(lang, "backToList")} className="mb-4" />
 
       {/* HERO — foto/nome em destaque, com aprovar/reprovar direto no cabeçalho
           quando pendente, mesmo efeito de elevação sutil usado nos cards da
@@ -1635,13 +1629,11 @@ function ClientPortalPage() {
               if (!reading) return null;
               return (
                 <div>
-                  <button
-                    type="button"
+                  <BackButton
                     onClick={() => setReadingArticleId(null)}
-                    className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" /> {t(lang, "back")}
-                  </button>
+                    label={t(lang, "back")}
+                    className="mb-4"
+                  />
                   <article className="mx-auto max-w-2xl">
                     {reading.cover && (
                       <img
