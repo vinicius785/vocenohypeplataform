@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Trash2,
   User,
+  UserPlus,
   Wallet,
   X,
 } from "lucide-react";
@@ -340,7 +341,9 @@ function CampanhaDetail({
   };
 
   // Approval metrics
-  const enviados = visibleInflus.filter((i) => i.status !== "Lista").length;
+  const enviados = visibleInflus.filter(
+    (i) => i.status !== "Lista" && i.status !== "Inscrições",
+  ).length;
   // Qualquer status a partir de "Aprovado" (Aguardando roteiro, Em gravação,
   // ..., Pago) já passou pela aprovação — continua contando como aprovado.
   const aprovados = visibleInflus.filter((i) => canPublishEntrega(i.status)).length;
@@ -400,6 +403,34 @@ function CampanhaDetail({
     });
   };
 
+  // Link público de inscrição — permite o influenciador se candidatar
+  // direto pra esta campanha (entra em "Inscrições" no board), diferente
+  // do link do cliente acima (que é por Cliente, não por Campanha).
+  const [signupLinkCopied, setSignupLinkCopied] = useState(false);
+  const copySignupLink = () => {
+    if (!fullCliente) return;
+    let token = c.signupToken;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      setClientes((prev) =>
+        prev.map((cl) =>
+          cl.id !== fullCliente.id
+            ? cl
+            : {
+                ...cl,
+                campanhas: (cl.campanhas ?? []).map((camp) =>
+                  camp.id === c.id ? { ...camp, signupToken: token } : camp,
+                ),
+              },
+        ),
+      );
+    }
+    void navigator.clipboard.writeText(`${window.location.origin}/inscricao/${token}`).then(() => {
+      setSignupLinkCopied(true);
+      setTimeout(() => setSignupLinkCopied(false), 1500);
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
       {/* BACK */}
@@ -451,6 +482,19 @@ function CampanhaDetail({
         >
           {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
           {linkCopied ? "Link copiado!" : "Link do cliente"}
+        </button>
+        <button
+          type="button"
+          onClick={copySignupLink}
+          disabled={!fullCliente}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {signupLinkCopied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <UserPlus className="h-3.5 w-3.5" />
+          )}
+          {signupLinkCopied ? "Link copiado!" : "Link de inscrição"}
         </button>
       </header>
 

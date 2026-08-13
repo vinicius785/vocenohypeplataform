@@ -1,0 +1,127 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import type { Cliente } from "@/lib/clientes-store";
+import type { Campaign } from "@/components/VincularCampanhaDialog";
+import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+
+/**
+ * Link público de INSCRIÇÃO de influenciadores numa campanha
+ * (`/inscricao/$token`) — diferente do portal do cliente: aqui o token mora
+ * na `Campaign` (`signupToken`), não no `Cliente`, porque cada campanha tem
+ * seu próprio link de inscrição. Público/sem-auth, sempre via service-role
+ * (nem `clientes` nem `campanha_influenciadores` têm policy `anon`).
+ */
+
+async function findCampanhaBySignupToken(
+  token: string,
+): Promise<{ clienteId: string; cliente: Cliente; campanha: Campaign } | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
+  if (error) throw new Error(error.message);
+  for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
+    const campanha = row.data.campanhas?.find((c) => c.signupToken === token);
+    if (campanha) return { clienteId: row.id, cliente: row.data, campanha };
+  }
+  return null;
+}
+
+const TokenInput = z.object({ token: z.string().min(1) });
+
+export const getInscricaoCampanhaData = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => TokenInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findCampanhaBySignupToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { fetchWorkspace } = await import("@/lib/workspace-store");
+    const ws = await fetchWorkspace().catch(() => ({ nome: "Você no Hype", logo: "" }));
+    return {
+      clienteNome: found.cliente.empresa,
+      campanha: {
+        id: found.campanha.id,
+        nome: found.campanha.nome,
+        briefing: found.campanha.briefing,
+        briefingLinks: found.campanha.briefingLinks ?? [],
+        prazo: found.campanha.prazo,
+        prazoPag: found.campanha.prazoPag,
+      },
+      ws,
+    };
+  });
+
+const RedeInput = z.object({
+  plataforma: z.string().min(1),
+  handle: z.string().min(1),
+  seguidores: z.string().optional(),
+});
+
+const SubmitInscricaoInput = z.object({
+  token: z.string().min(1),
+  nome: z.string().min(1),
+  telefone: z.string().min(1),
+  email: z.string().email(),
+  nicho: z.string().optional(),
+  redes: z.array(RedeInput).default([]),
+  mensagem: z.string().optional(),
+  anexo: z
+    .object({ nome: z.string().min(1), dataUrl: z.string().min(1).max(8_000_000) })
+    .nullable()
+    .optional(),
+});
+
+export const submitInscricaoCampanha = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => SubmitInscricaoInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findCampanhaBySignupToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let anexoUrl: string | undefined;
+    if (data.anexo) {
+      const match = /^data:([^;]+);base64,(.+)$/.exec(data.anexo.dataUrl);
+      if (!match) throw new Error("Arquivo inválido.");
+      const contentType = match[1];
+      const buffer = Buffer.from(match[2], "base64");
+      const safeName = data.anexo.nome.replace(/[^\w.-]+/g, "_");
+      const path = `inscricao/${data.token}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("entrega-anexos")
+        .upload(path, buffer, { contentType });
+      if (uploadError) throw new Error(uploadError.message);
+      const { data: signed } = await supabaseAdmin.storage
+        .from("entrega-anexos")
+        .createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (!signed) throw new Error("Não foi possível gerar o link do anexo.");
+      anexoUrl = signed.signedUrl;
+    }
+
+    const now = new Date().toISOString();
+    const observacoesPartes = [
+      data.mensagem?.trim(),
+      anexoUrl ? `Mídia kit enviado na inscrição (${data.anexo!.nome}): ${anexoUrl}` : undefined,
+    ].filter((s): s is string => Boolean(s));
+    const influ: Influ = {
+      id: crypto.randomUUID(),
+      nome: data.nome.trim(),
+      telefone: data.telefone.trim(),
+      email: data.email.trim(),
+      nicho: data.nicho?.trim() || undefined,
+      redes: data.redes.map((r) => ({
+        id: crypto.randomUUID(),
+        plataforma: r.plataforma,
+        handle: r.handle.trim(),
+        seguidores: r.seguidores?.trim() || undefined,
+      })),
+      entregas: [],
+      status: "Inscrições",
+      statusUpdatedAt: now,
+      observacoes: observacoesPartes.length > 0 ? observacoesPartes.join("\n\n") : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const { error } = await supabaseAdmin
+      .from("campanha_influenciadores")
+      .insert({ campanha_id: found.campanha.id, data: influ });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

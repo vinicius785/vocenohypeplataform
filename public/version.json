@@ -1,6 +1,7 @@
 {
-  "version": "1.114.0",
+  "version": "1.115.0",
   "notes": [
+    "Novo: \"Link de inscrição\" da campanha (botão no topo, ao lado de \"Link do cliente\") — um link público onde o influenciador se candidata sozinho: vê o briefing, prazo e prazo de pagamento da campanha, e preenche nome, telefone, e-mail, nicho, redes sociais (com seguidores), uma mensagem e opcionalmente um mídia kit. Ao enviar, entra automaticamente na campanha numa nova coluna \"Inscrições\" do Kanban, antes de \"Lista\", pro time revisar e decidir se avança.",
     "Redesenha o topo da página de um Projeto: remove a capa gigante (proporção 5:1) que dominava a tela, trocando por um cabeçalho compacto (ícone/foto pequena + nome + descrição), no mesmo padrão já usado na página de Campanha. O botão \"Voltar\" também passa a seguir o padrão novo (pílula com seta).",
     "Diminui o tamanho dos botões \"Voltar\" novos (tinham ficado grandes demais) e aplica em todos os títulos (VI e VC) o mesmo estilo tipográfico mais fino e compacto que já era usado nos cards de Metas.",
     "Padroniza todos os botões \"Voltar\" (VI e VC) com um novo visual: pílula com ícone de seta que expande ao passar o mouse — antes cada tela tinha um link de texto simples e diferente.",

@@ -623,6 +623,7 @@ export type BankInfo = {
 };
 
 export const INFLU_STATUSES = [
+  "Inscrições",
   "Lista",
   "Enviado para aprovação",
   "Aprovado",
@@ -657,6 +658,7 @@ export function advanceStatusFromEntregas(status: InfluStatus, entregas: Entrega
 }
 
 export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
+  Inscrições: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   Lista: "bg-muted text-muted-foreground",
   "Enviado para aprovação": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   Aprovado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
@@ -671,6 +673,7 @@ export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
 /** Contorno colorido (por status) do botão que abre o popup — mesmo
  * espírito do `ENTREGA_CONTEUDO_BORDER`, para o status geral do influ. */
 export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
+  Inscrições: "border-blue-500",
   Lista: "border-muted-foreground/40",
   "Enviado para aprovação": "border-amber-500",
   Aprovado: "border-emerald-500",
@@ -863,7 +866,7 @@ export function normalizeInflus(list: unknown): Influ[] {
   });
 }
 
-const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
+export const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
   YouTube: Youtube,

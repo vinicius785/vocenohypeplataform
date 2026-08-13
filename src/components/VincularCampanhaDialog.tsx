@@ -111,6 +111,9 @@ export type Campaign = {
   direitosImagem?: DireitosImagem;
   relatorioMetricas?: MetricasRelatorio;
   publicoAlvo?: PublicoAlvo;
+  /** Token do link público de inscrição de influenciadores nesta campanha
+   * (diferente do publicToken do Cliente, que é o portal do cliente). */
+  signupToken?: string;
 };
 
 const newLinha = (): InfluLinha => ({

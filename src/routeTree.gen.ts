@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
+import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const PortalTokenRoute = PortalTokenRouteImport.update({
   id: '/portal/$token',
   path: '/portal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
+  id: '/inscricao/$token',
+  path: '/inscricao/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTimeRoute = AuthenticatedTimeRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
+  '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
+    | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
@@ -103,6 +113,7 @@ export interface FileRouteTypes {
     | '/'
     | '/primeiro-acesso'
     | '/time'
+    | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
     | '/api/google/oauth-callback'
@@ -113,6 +124,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
+    | '/inscricao/$token'
     | '/portal/$token'
     | '/_authenticated/projeto/$id'
     | '/api/google/oauth-callback'
@@ -122,6 +134,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  InscricaoTokenRoute: typeof InscricaoTokenRoute
   PortalTokenRoute: typeof PortalTokenRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/portal/$token'
       fullPath: '/portal/$token'
       preLoaderRoute: typeof PortalTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inscricao/$token': {
+      id: '/inscricao/$token'
+      path: '/inscricao/$token'
+      fullPath: '/inscricao/$token'
+      preLoaderRoute: typeof InscricaoTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/time': {
@@ -206,6 +226,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  InscricaoTokenRoute: InscricaoTokenRoute,
   PortalTokenRoute: PortalTokenRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
