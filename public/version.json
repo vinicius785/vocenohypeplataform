@@ -1,6 +1,7 @@
 {
-  "version": "1.117.0",
+  "version": "1.117.1",
   "notes": [
+    "Aumenta o formulário de criar/editar campanha (mais largo e mais alto), pra respirar melhor.",
     "Refaz o design do formulário de criar/editar campanha: indicador de etapas agora é uma barra de progresso com círculos numerados conectados (em vez de abas apertadas), títulos e botões no mesmo padrão visual do resto da plataforma (tipografia fina, botões em pílula), diálogo mais largo pra respirar melhor. A etapa de Briefing agora avisa que esse texto também aparece no Link de inscrição da campanha.",
     "O botão \"Solicitar para o Marketing\" (numa tarefa de Campanha/Projeto) agora dá um feedback visual ao clicar: fica verde com um check e \"Solicitado!\" por um instante, confirmando que o pedido foi feito.",
     "Novo: ícone de atenção no item \"Financeiro\" do menu lateral quando há despesas vencidas (data já passou e ainda não foi marcada como paga) — mesmo critério já usado na tela de Financeiro pra destacar essas linhas em vermelho.",
