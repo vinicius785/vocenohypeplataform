@@ -39,12 +39,10 @@ const STATUS_TONE: Record<MetaStatus, string> = {
   cancelada: "bg-muted text-muted-foreground",
 };
 const AREA_TONE: Record<MetaArea, string> = {
+  Marketing: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  Operação: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  Influenciadores: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
   Comercial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  Financeiro: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Campanhas: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  Projetos: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  Time: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-  Geral: "bg-muted text-muted-foreground",
 };
 
 function initialsOf(name: string): string {
@@ -408,26 +406,47 @@ export function MetasSection() {
                   </div>
 
                   {meta.tipo === "numerica" && (
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span>
-                          {(meta.valorAtual ?? 0).toLocaleString("pt-BR")}
-                          {meta.unidade ? ` ${meta.unidade}` : ""} de{" "}
-                          {(meta.valorAlvo ?? 0).toLocaleString("pt-BR")}
-                          {meta.unidade ? ` ${meta.unidade}` : ""}
-                        </span>
-                        <span>{progresso}%</span>
-                      </div>
-                      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full rounded-full ${
+                    <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3">
+                      <div className="flex items-end justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Progresso
+                          </p>
+                          <p className="mt-0.5 text-sm text-foreground">
+                            <span className="text-lg font-semibold tabular-nums">
+                              {(meta.valorAtual ?? 0).toLocaleString("pt-BR")}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {" "}
+                              / {(meta.valorAlvo ?? 0).toLocaleString("pt-BR")}
+                              {meta.unidade ? ` ${meta.unidade}` : ""}
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 text-2xl font-semibold tabular-nums ${
                             status === "concluida"
-                              ? "bg-emerald-500"
+                              ? "text-emerald-600 dark:text-emerald-400"
                               : status === "atrasada"
-                                ? "bg-rose-500"
-                                : "bg-sky-500"
+                                ? "text-rose-600 dark:text-rose-400"
+                                : "text-foreground"
                           }`}
-                          style={{ width: `${progresso}%` }}
+                        >
+                          {progresso}%
+                        </span>
+                      </div>
+                      <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full transition-[width] duration-300"
+                          style={{
+                            width: `${progresso}%`,
+                            background:
+                              status === "concluida"
+                                ? "var(--chart-2)"
+                                : status === "atrasada"
+                                  ? "var(--chart-5)"
+                                  : "var(--chart-1)",
+                          }}
                         />
                       </div>
                     </div>
@@ -511,7 +530,7 @@ function MetaDialog({
 }) {
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [area, setArea] = useState<MetaArea>("Geral");
+  const [area, setArea] = useState<MetaArea>("Marketing");
   const [tipo, setTipo] = useState<"numerica" | "binaria">("numerica");
   const [valorAlvo, setValorAlvo] = useState("");
   const [valorAtual, setValorAtual] = useState("");
@@ -523,7 +542,7 @@ function MetaDialog({
     if (!open) return;
     setTitulo(initial?.titulo ?? "");
     setDescricao(initial?.descricao ?? "");
-    setArea(initial?.area ?? "Geral");
+    setArea(initial?.area ?? "Marketing");
     setTipo(initial?.tipo ?? "numerica");
     setValorAlvo(initial?.valorAlvo != null ? String(initial.valorAlvo) : "");
     setValorAtual(initial?.valorAtual != null ? String(initial.valorAtual) : "");

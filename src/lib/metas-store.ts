@@ -1,13 +1,6 @@
 import { createTableArrayStore } from "./table-array-store";
 
-export const META_AREAS = [
-  "Comercial",
-  "Financeiro",
-  "Campanhas",
-  "Projetos",
-  "Time",
-  "Geral",
-] as const;
+export const META_AREAS = ["Marketing", "Operação", "Influenciadores", "Comercial"] as const;
 export type MetaArea = (typeof META_AREAS)[number];
 
 export type MetaAtualizacao = {
