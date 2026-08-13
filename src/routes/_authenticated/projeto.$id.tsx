@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Plus,
   X,
   Map,
@@ -150,43 +149,31 @@ function ProjetoPage() {
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
-      <div className="-m-8">
-        {/* Hero */}
-        <div className="relative aspect-[5/1] w-full bg-muted">
-          {project.cover ? (
-            <>
+      <div className="mx-auto w-full max-w-6xl space-y-6">
+        <BackButton onClick={() => goToSection("projetos")} label="Projetos" />
+
+        {/* Header — foto/ícone + nome + descrição */}
+        <header className="flex items-center gap-5">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted ring-1 ring-border">
+            {project.cover ? (
               <img src={project.cover} alt={project.name} className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-            </>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <ImageIcon className="h-8 w-8 text-muted-foreground" />
-            </div>
-          )}
-          <button
-            onClick={() => goToSection("projetos")}
-            className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-md bg-background/95 px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-background"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Projetos
-          </button>
-          <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-6 pb-5">
-            <h1
-              className={`text-3xl font-semibold tracking-tight ${project.cover ? "text-white" : "text-foreground"}`}
-            >
+            ) : (
+              <ImageIcon className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-3xl font-semibold tracking-tight text-foreground">
               {project.name}
             </h1>
             {project.description && (
-              <p
-                className={`mt-1 max-w-2xl text-sm ${project.cover ? "text-white/90" : "text-muted-foreground"}`}
-              >
+              <p className="mt-1 max-w-2xl truncate text-sm text-muted-foreground">
                 {project.description}
               </p>
             )}
           </div>
-        </div>
+        </header>
 
-        <div className="mx-auto max-w-6xl px-6 py-6">
+        <div>
           {availableTabs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nenhuma funcionalidade habilitada para este projeto.
