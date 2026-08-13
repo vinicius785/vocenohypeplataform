@@ -652,10 +652,16 @@ export function TaskDialog({
       setMktRequested(isRequested(mktScope.kind, mktScope.id, initial.id)),
     );
   }, [mktScope?.kind, mktScope?.id, initial, open]);
+  const [justRequested, setJustRequested] = useState(false);
   const toggleMarketing = () => {
     if (!mktScope || !initial) return;
-    if (mktRequested) removeRequest(mktScope.kind, mktScope.id, initial.id);
-    else requestForMarketing(mktScope.kind, mktScope.id, initial.id);
+    if (mktRequested) {
+      removeRequest(mktScope.kind, mktScope.id, initial.id);
+    } else {
+      requestForMarketing(mktScope.kind, mktScope.id, initial.id);
+      setJustRequested(true);
+      setTimeout(() => setJustRequested(false), 1400);
+    }
   };
 
   useEffect(() => {
@@ -1620,9 +1626,25 @@ export function TaskDialog({
               <button
                 type="button"
                 onClick={toggleMarketing}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium ${mktRequested ? "bg-muted text-foreground hover:bg-muted/70" : "border border-border text-foreground hover:bg-muted"}`}
+                disabled={justRequested}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-300 ${
+                  justRequested
+                    ? "scale-105 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    : mktRequested
+                      ? "bg-muted text-foreground hover:bg-muted/70"
+                      : "border border-border text-foreground hover:bg-muted"
+                }`}
               >
-                {mktRequested ? "Remover do Marketing" : "Solicitar para o Marketing"}
+                {justRequested ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 animate-in zoom-in duration-300" />
+                    Solicitado!
+                  </>
+                ) : mktRequested ? (
+                  "Remover do Marketing"
+                ) : (
+                  "Solicitar para o Marketing"
+                )}
               </button>
             )}
             <button
