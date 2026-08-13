@@ -29,6 +29,7 @@ import {
   CheckSquare,
   CalendarClock,
   Timer,
+  AlertTriangle,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -73,6 +74,7 @@ import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
+import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 
 export type SectionKey =
@@ -170,6 +172,24 @@ function useHasPendingMeetingRequests(): boolean {
   );
 }
 
+/** Tem alguma despesa vencida (data já passou e ainda não foi marcada como
+ * paga)? Usado pro ícone de atenção do item "Financeiro" no menu. */
+function useHasOverdueDespesas(): boolean {
+  const entries = useFinanceiroEntries();
+  const [paidTick, setPaidTick] = useState(0);
+  useEffect(() => {
+    const onStorage = () => setPaidTick((t) => t + 1);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  return useMemo(() => {
+    void paidTick;
+    const paid = loadPaid();
+    const today = todayISO();
+    return entries.some((e) => e.kind === "despesa" && !paid[e.id] && e.date < today);
+  }, [entries, paidTick]);
+}
+
 const SEEN_LEADS_KEY = "notif:seenLeadIds";
 function readSeenLeadIds(): Set<string> {
   try {
@@ -265,6 +285,7 @@ export function AppShell({
   useIncomingMessageNotifier();
   const hasUnreadChat = useHasUnreadChat();
   const hasPendingMeetings = useHasPendingMeetingRequests();
+  const hasOverdueDespesas = useHasOverdueDespesas();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
   const access = useMyAccess();
 
@@ -349,6 +370,8 @@ export function AppShell({
                     ((item.key === "chat" && hasUnreadChat) ||
                       (item.key === "comercial" && unseenLeads > 0) ||
                       (item.key === "reunioes" && hasPendingMeetings));
+                  const showOverdueWarning =
+                    allowed && item.key === "financeiro" && hasOverdueDespesas;
                   return (
                     <li key={item.key}>
                       <button
@@ -362,9 +385,11 @@ export function AppShell({
                         title={
                           !allowed
                             ? "Sem permissão para acessar esta seção"
-                            : !showFull
-                              ? item.label
-                              : undefined
+                            : showOverdueWarning
+                              ? "Há despesas vencidas"
+                              : !showFull
+                                ? item.label
+                                : undefined
                         }
                         className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
                           !showFull ? "justify-center" : ""
@@ -379,6 +404,9 @@ export function AppShell({
                           {showDot && !showFull && (
                             <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive" />
                           )}
+                          {showOverdueWarning && !showFull && (
+                            <AlertTriangle className="absolute -right-1.5 -top-1.5 h-3 w-3 fill-amber-500 text-background" />
+                          )}
                           {!allowed && (
                             <Lock className="absolute -right-1 -top-1 h-2.5 w-2.5 text-muted-foreground/60" />
                           )}
@@ -388,6 +416,9 @@ export function AppShell({
                             {item.label}
                             {showDot && (
                               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                            )}
+                            {showOverdueWarning && (
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 fill-amber-500 text-background" />
                             )}
                           </span>
                         )}
