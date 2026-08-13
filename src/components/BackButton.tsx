@@ -18,12 +18,12 @@ export function BackButton({
     <button
       type="button"
       onClick={onClick}
-      className={`group relative h-14 w-48 rounded-2xl border border-border bg-card text-center text-xl font-semibold text-foreground ${className}`}
+      className={`group relative h-9 w-28 rounded-xl border border-border bg-card text-center text-sm font-semibold text-foreground ${className}`}
     >
-      <div className="absolute left-1 top-[4px] z-10 flex h-12 w-1/4 items-center justify-center rounded-xl bg-foreground duration-500 group-hover:w-[184px]">
-        <ArrowLeft className="h-5 w-5 shrink-0 text-background" />
+      <div className="absolute left-1 top-[3px] z-10 flex h-7 w-1/4 items-center justify-center rounded-lg bg-foreground duration-500 group-hover:w-[104px]">
+        <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-background" />
       </div>
-      <p className="translate-x-2">{label}</p>
+      <p className="translate-x-1.5">{label}</p>
     </button>
   );
 }

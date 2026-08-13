@@ -142,6 +142,21 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+}
+
+/* Tratamento tipográfico padrão dos títulos em toda a plataforma (VI e VC):
+ * peso mais fino e letras mais juntas, igual ao que já era usado nos cards
+ * de Metas. Fica fora de @layer (CSS "não-camadado") de propósito — nesse
+ * caso ele já vence qualquer utilitário do Tailwind (font-semibold,
+ * font-bold etc, que vivem na camada "utilities"), sem precisar editar
+ * className em cada um dos componentes que usam h1-h4 pela plataforma. */
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 300;
+  letter-spacing: -0.02em;
 }
 
 /* Barra de rolagem personalizada, aplicada globalmente (não só num container
