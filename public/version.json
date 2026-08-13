@@ -1,6 +1,7 @@
 {
-  "version": "1.117.2",
+  "version": "1.118.0",
   "notes": [
+    "Novo, no projeto Marketing: aba \"AEO Monitor\" — biblioteca de 33 prompts (categorias Brand Direct, Share of Voice e Intenção de Compra, PT/EN) pra acompanhar se a VNH é citada pelo ChatGPT, Perplexity, Gemini e Claude. Preencha uma rodada quinzenal por IA (citada?, posição, descrição, fonte, concorrentes, nota de narrativa e print), e veja o Dashboard (visibility score, evolução por período, prompts zero) e o Relatório automático comparando a rodada atual com a anterior, com recomendação automática.",
     "Corrige os títulos das etapas do formulário de campanha (\"Pagamento aos influenciadores\", \"Direitos de imagem\") se sobrepondo no indicador de progresso.",
     "Aumenta o formulário de criar/editar campanha (mais largo e mais alto), pra respirar melhor.",
     "Refaz o design do formulário de criar/editar campanha: indicador de etapas agora é uma barra de progresso com círculos numerados conectados (em vez de abas apertadas), títulos e botões no mesmo padrão visual do resto da plataforma (tipografia fina, botões em pílula), diálogo mais largo pra respirar melhor. A etapa de Briefing agora avisa que esse texto também aparece no Link de inscrição da campanha.",

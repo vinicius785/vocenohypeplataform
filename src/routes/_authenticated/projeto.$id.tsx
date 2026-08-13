@@ -15,6 +15,7 @@ import {
   Newspaper,
   LayoutList,
   LayoutPanelTop,
+  Radar,
 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { BackButton } from "@/components/BackButton";
@@ -40,6 +41,7 @@ import {
 import { EditorialPanel } from "@/components/marketing/EditorialPanel";
 import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
+import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
 import { formatIsoDate } from "@/lib/utils";
 import {
   InfluencerBoard,
@@ -68,6 +70,7 @@ const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   calendario_editorial: CalendarDays,
   trafego_pago: Megaphone,
   blog: Newspaper,
+  aeo_monitor: Radar,
 };
 
 function renderPanel(
@@ -95,6 +98,7 @@ function renderPanel(
   if (k === "calendario_editorial") return <EditorialPanel project={project} update={update} />;
   if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
   if (k === "blog") return <BlogPanel project={project} update={update} />;
+  if (k === "aeo_monitor") return <AeoMonitorPanel />;
   return <SectionPanel project={project} update={update} featureKey={k} />;
 }
 

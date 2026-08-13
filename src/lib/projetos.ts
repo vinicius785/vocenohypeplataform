@@ -8,7 +8,8 @@ export type FeatureKey =
   | "documentos"
   | "calendario_editorial"
   | "trafego_pago"
-  | "blog";
+  | "blog"
+  | "aeo_monitor";
 
 export const FEATURES: {
   key: FeatureKey;
@@ -56,6 +57,12 @@ export const FEATURES: {
     key: "blog",
     label: "Blog",
     hint: "Pauta e publicação de artigos e conteúdos longos.",
+    group: "marketing",
+  },
+  {
+    key: "aeo_monitor",
+    label: "AEO Monitor",
+    hint: "Biblioteca de prompts e monitoramento de citação da marca em IAs (ChatGPT, Perplexity, Gemini, Claude).",
     group: "marketing",
   },
 ];

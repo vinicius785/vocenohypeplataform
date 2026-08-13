@@ -7,7 +7,9 @@ export type ArrayStoreTable =
   | "financeiro_lancamentos"
   | "banco_influenciadores"
   | "marketing_tasks"
-  | "metas";
+  | "metas"
+  | "aeo_prompts"
+  | "aeo_respostas";
 
 /**
  * Backs a "list of entities" module (clientes, projetos, reunioes, ...) with

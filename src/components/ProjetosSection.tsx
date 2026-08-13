@@ -18,6 +18,7 @@ import {
   Newspaper,
   LayoutList,
   LayoutPanelTop,
+  Radar,
 } from "lucide-react";
 import {
   FEATURES,
@@ -43,6 +44,7 @@ const FEATURE_ICONS: Record<FeatureKey, React.ComponentType<{ className?: string
   calendario_editorial: CalendarDays,
   trafego_pago: Megaphone,
   blog: Newspaper,
+  aeo_monitor: Radar,
 };
 
 export function ProjetosSection() {
