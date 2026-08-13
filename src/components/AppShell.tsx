@@ -30,6 +30,8 @@ import {
   CalendarClock,
   Timer,
   AlertTriangle,
+  ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -72,6 +74,12 @@ import {
 
 import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
@@ -136,8 +144,15 @@ const groups: NavGroup[] = [
 
 /** Existe alguma mensagem não lida (fora da conversa aberta agora) em
  * qualquer canal/DM? Usado só pra bolinha do item "Chat" no menu — os
- * detalhes (por conversa) ficam no sino de notificações. */
-function useHasUnreadChat(): boolean {
+ * detalhes (por conversa) ficam no sino de notificações.
+ *
+ * `chatSectionOpen` (true só quando a seção Chat está de fato aberta na
+ * tela) é o que decide se a conversa "ativa" conta como lida — `activeId`
+ * vem do localStorage e nunca é limpo ao sair do Chat/fechar a aba, então
+ * sem essa checagem a última conversa aberta ficava permanentemente "lida"
+ * pra sempre (mesmo com o usuário em outra seção ou dias depois), fazendo
+ * mensagens novas nela nunca acenderem a bolinha de notificação. */
+function useHasUnreadChat(chatSectionOpen: boolean): boolean {
   const [tick, setTick] = useState(0);
   useEffect(() => subscribeChat(() => setTick((t) => t + 1)), []);
   const activeId = useActiveConvo();
@@ -147,11 +162,11 @@ function useHasUnreadChat(): boolean {
     const lastRead = loadLastRead();
     for (const m of loadMessages()) {
       if (m.authorId === me.id) continue;
-      if (m.convoId === activeId) continue;
+      if (chatSectionOpen && m.convoId === activeId) continue;
       if (m.createdAt > (lastRead[m.convoId] ?? 0)) return true;
     }
     return false;
-  }, [tick, activeId]);
+  }, [tick, activeId, chatSectionOpen]);
 }
 
 /** Tem alguma reunião onde eu ainda não confirmei nem recusei? Usado pra
@@ -283,7 +298,7 @@ export function AppShell({
   );
   useEffect(() => subscribeWorkspace(() => setWs(loadWorkspace())), []);
   useIncomingMessageNotifier();
-  const hasUnreadChat = useHasUnreadChat();
+  const hasUnreadChat = useHasUnreadChat(active === "chat");
   const hasPendingMeetings = useHasPendingMeetingRequests();
   const hasOverdueDespesas = useHasOverdueDespesas();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
@@ -637,10 +652,66 @@ function GlobalSearch({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   );
 }
 
+const CHAT_COLLAPSED_KEY = "chat:collapsedSections";
+function loadCollapsedSections(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(CHAT_COLLAPSED_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Cabeçalho de seção clicável (recolhe/expande) — cada lista (Canais,
+ * Campanhas, Projetos, Mensagens diretas) pode ser escondida quando o
+ * usuário não usa aquele tipo de conversa, evitando que o menu cresça sem
+ * limite conforme o workspace ganha mais canais/campanhas/projetos. */
+function ChatSectionHeader({
+  label,
+  collapsed,
+  onToggle,
+  action,
+}: {
+  label: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-1 flex items-center justify-between px-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown
+          className={`h-2.5 w-2.5 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`}
+        />
+        {label}
+      </button>
+      {action}
+    </div>
+  );
+}
+
 function ChatSubNav({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   const clientes = useClientes();
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
+    loadCollapsedSections(),
+  );
+  const toggleSection = (key: string) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(CHAT_COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   const me = getMe();
   const members = loadMembers();
@@ -726,161 +797,183 @@ function ChatSubNav({ onSelect }: { onSelect: (key: SectionKey) => void }) {
     }`;
 
   return (
-    <div className="ml-2 mt-1 space-y-3 border-l border-border pl-2">
+    <div className="ml-2 mt-1 space-y-2.5 border-l border-border pl-2">
       <div>
-        <div className="mb-1 flex items-center justify-between px-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Canais
-          </span>
-          <button
-            onClick={() => setShowCreate(true)}
-            aria-label="Novo canal"
-            className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </div>
-        <ul className="space-y-0.5">
-          {channels
-            .filter((c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(me.id))
-            .map((c) => (
-              <li
-                key={c.id}
-                draggable
-                onDragStart={() => setDragId(c.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (dragId) reorderChannel(dragId, c.id);
-                  setDragId(null);
-                }}
-                onDragEnd={() => setDragId(null)}
-                className={`group flex items-center ${dragId === c.id ? "opacity-40" : ""}`}
-              >
-                <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
-                  {c.photo ? (
-                    <img src={c.photo} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
-                  ) : c.private ? (
-                    <Lock className="h-3 w-3 shrink-0" />
-                  ) : (
-                    <Hash className="h-3 w-3 shrink-0" />
-                  )}
-                  <span
-                    className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
-                  >
-                    {c.name}
-                  </span>
-                  {c.private && c.photo && (
-                    <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  )}
-                  <UnreadBadge count={unread(c.id)} />
-                </button>
-                <button
-                  onClick={(e) => editChannel(c, e)}
-                  aria-label="Editar canal"
-                  className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+        <ChatSectionHeader
+          label="Canais"
+          collapsed={!!collapsed.canais}
+          onToggle={() => toggleSection("canais")}
+          action={
+            <button
+              onClick={() => setShowCreate(true)}
+              aria-label="Novo canal"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          }
+        />
+        {!collapsed.canais && (
+          <ul className="space-y-0.5">
+            {channels
+              .filter(
+                (c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(me.id),
+              )
+              .map((c) => (
+                <li
+                  key={c.id}
+                  draggable
+                  onDragStart={() => setDragId(c.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragId) reorderChannel(dragId, c.id);
+                    setDragId(null);
+                  }}
+                  onDragEnd={() => setDragId(null)}
+                  className={`group flex items-center ${dragId === c.id ? "opacity-40" : ""}`}
                 >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={(e) => deleteChannel(c.id, e)}
-                  aria-label="Excluir canal"
-                  className="ml-0.5 rounded p-1 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </li>
-            ))}
-        </ul>
+                  <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
+                    {c.photo ? (
+                      <img src={c.photo} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
+                    ) : c.private ? (
+                      <Lock className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <Hash className="h-3 w-3 shrink-0" />
+                    )}
+                    <span
+                      className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
+                    >
+                      {c.name}
+                    </span>
+                    <UnreadBadge count={unread(c.id)} />
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Mais opções do canal"
+                        className="ml-0.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                      >
+                        <MoreHorizontal className="h-3 w-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-36">
+                      <DropdownMenuItem onClick={(e) => editChannel(c, e)}>
+                        <Pencil className="h-3.5 w-3.5" /> Editar canal
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => deleteChannel(c.id, e)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Excluir canal
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
+              ))}
+          </ul>
+        )}
       </div>
 
       {campaigns.length > 0 && (
         <div>
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Campanhas
-          </div>
-          <ul className="space-y-0.5">
-            {campaigns.map((c) => (
-              <li key={c.id} className="flex items-center">
-                <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
-                  <Hash className="h-3 w-3 shrink-0" />
-                  <span
-                    className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
-                  >
-                    {c.name}
-                  </span>
-                  <UnreadBadge count={unread(c.id)} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ChatSectionHeader
+            label="Campanhas"
+            collapsed={!!collapsed.campanhas}
+            onToggle={() => toggleSection("campanhas")}
+          />
+          {!collapsed.campanhas && (
+            <ul className="space-y-0.5">
+              {campaigns.map((c) => (
+                <li key={c.id} className="flex items-center">
+                  <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
+                    <Hash className="h-3 w-3 shrink-0" />
+                    <span
+                      className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
+                    >
+                      {c.name}
+                    </span>
+                    <UnreadBadge count={unread(c.id)} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       {projects.length > 0 && (
         <div>
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Projetos
-          </div>
-          <ul className="space-y-0.5">
-            {projects.map((p) => (
-              <li key={p.id} className="flex items-center">
-                <button onClick={() => go(p.id)} className={itemCls(activeId === p.id)}>
-                  <Hash className="h-3 w-3 shrink-0" />
-                  <span
-                    className={`truncate ${unread(p.id) ? "font-semibold text-foreground" : ""}`}
-                  >
-                    {p.name}
-                  </span>
-                  <UnreadBadge count={unread(p.id)} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ChatSectionHeader
+            label="Projetos"
+            collapsed={!!collapsed.projetos}
+            onToggle={() => toggleSection("projetos")}
+          />
+          {!collapsed.projetos && (
+            <ul className="space-y-0.5">
+              {projects.map((p) => (
+                <li key={p.id} className="flex items-center">
+                  <button onClick={() => go(p.id)} className={itemCls(activeId === p.id)}>
+                    <Hash className="h-3 w-3 shrink-0" />
+                    <span
+                      className={`truncate ${unread(p.id) ? "font-semibold text-foreground" : ""}`}
+                    >
+                      {p.name}
+                    </span>
+                    <UnreadBadge count={unread(p.id)} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       <div>
-        <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Mensagens diretas
-        </div>
-        {otherMembers.length === 0 ? (
-          <p className="px-2 py-1 text-[11px] text-muted-foreground">
-            Adicione membros na aba Time.
-          </p>
-        ) : (
-          <ul className="space-y-0.5">
-            {otherMembers.map((m) => {
-              const id = dmId(me.id, m.id);
-              const status = getStatus(m.id);
-              return (
-                <li key={m.id} className="flex items-center">
-                  <button onClick={() => go(id)} className={itemCls(activeId === id)}>
-                    <span className="relative h-5 w-5 shrink-0">
-                      {m.photo ? (
-                        <img src={m.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
-                      ) : (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-foreground">
-                          {m.name.slice(0, 1).toUpperCase()}
-                        </span>
-                      )}
+        <ChatSectionHeader
+          label="Mensagens diretas"
+          collapsed={!!collapsed.dms}
+          onToggle={() => toggleSection("dms")}
+        />
+        {!collapsed.dms &&
+          (otherMembers.length === 0 ? (
+            <p className="px-2 py-1 text-[11px] text-muted-foreground">
+              Adicione membros na aba Time.
+            </p>
+          ) : (
+            <ul className="space-y-0.5">
+              {otherMembers.map((m) => {
+                const id = dmId(me.id, m.id);
+                const status = getStatus(m.id);
+                return (
+                  <li key={m.id} className="flex items-center">
+                    <button onClick={() => go(id)} className={itemCls(activeId === id)}>
+                      <span className="relative h-5 w-5 shrink-0">
+                        {m.photo ? (
+                          <img src={m.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-foreground">
+                            {m.name.slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <span
+                          title={STATUS_LABEL[status]}
+                          className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
+                        />
+                      </span>
                       <span
-                        title={STATUS_LABEL[status]}
-                        className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
-                      />
-                    </span>
-                    <span
-                      className={`truncate ${unread(id) ? "font-semibold text-foreground" : ""}`}
-                    >
-                      {m.name}
-                    </span>
-                    <UnreadBadge count={unread(id)} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                        className={`truncate ${unread(id) ? "font-semibold text-foreground" : ""}`}
+                      >
+                        {m.name}
+                      </span>
+                      <UnreadBadge count={unread(id)} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ))}
       </div>
       {showCreate && (
         <CreateChannelModal

@@ -1,6 +1,8 @@
 {
-  "version": "1.118.0",
+  "version": "1.119.0",
   "notes": [
+    "Corrige um bug de notificação do Chat: quando a última conversa aberta ficava \"esquecida\" como ativa (ex: o usuário saiu do Chat, fechou a aba ou passou dias sem abrir), mensagens novas nela nunca acendiam a bolinha de notificação — o app achava que ela ainda estava sendo vista. Agora a conversa só conta como \"vista\" enquanto a seção Chat está realmente aberta na tela.",
+    "Revisa o menu do Chat na barra lateral: cada lista (Canais, Campanhas, Projetos, Mensagens diretas) agora pode ser recolhida/expandida, os botões de editar/excluir canal viraram um único menu \"⋯\" (antes ficavam sempre visíveis lado a lado), e removeu um ícone de cadeado duplicado que aparecia em canais privados com foto.",
     "Novo, no projeto Marketing: aba \"AEO Monitor\" — biblioteca de 33 prompts (categorias Brand Direct, Share of Voice e Intenção de Compra, PT/EN) pra acompanhar se a VNH é citada pelo ChatGPT, Perplexity, Gemini e Claude. Preencha uma rodada quinzenal por IA (citada?, posição, descrição, fonte, concorrentes, nota de narrativa e print), e veja o Dashboard (visibility score, evolução por período, prompts zero) e o Relatório automático comparando a rodada atual com a anterior, com recomendação automática.",
     "Corrige os títulos das etapas do formulário de campanha (\"Pagamento aos influenciadores\", \"Direitos de imagem\") se sobrepondo no indicador de progresso.",
     "Aumenta o formulário de criar/editar campanha (mais largo e mais alto), pra respirar melhor.",
