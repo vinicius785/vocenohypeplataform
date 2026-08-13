@@ -629,6 +629,93 @@ export function getUnreadCount(convoId: string, messages: ChatMessage[], meId: s
   return n;
 }
 
+/** Mensagem mais recente de cada conversa — pra prévia e ordenação por
+ * recência da lista de conversas. */
+export function getLastMessageByConvo(messages: ChatMessage[]): Map<string, ChatMessage> {
+  const map = new Map<string, ChatMessage>();
+  for (const m of messages) {
+    const cur = map.get(m.convoId);
+    if (!cur || m.createdAt > cur.createdAt) map.set(m.convoId, m);
+  }
+  return map;
+}
+
+export type ChatListItem = {
+  id: string;
+  name: string;
+  photo?: string;
+  kind: "channel" | "campanha" | "projeto" | "dm";
+  private?: boolean;
+  status?: MemberStatus;
+  lastMessage?: ChatMessage;
+  unread: number;
+};
+
+/** Monta a lista unificada de conversas (canais + campanhas + projetos +
+ * DMs) com prévia da última mensagem e contagem de não-lidas — única fonte
+ * dessa lógica, usada pela lista de conversas do Chat. Não ordena: quem
+ * chama decide o agrupamento/ordenação (ex: diretas primeiro, canais
+ * depois). */
+export function buildChatList(args: {
+  channels: ChatChannel[];
+  campaignChannels: CampaignChannel[];
+  projectChannels: { id: string; name: string }[];
+  members: ChatMember[];
+  messages: ChatMessage[];
+  meId: string;
+}): ChatListItem[] {
+  const { channels, campaignChannels, projectChannels, members, messages, meId } = args;
+  const lastMessageByConvo = getLastMessageByConvo(messages);
+  const visibleChannels = channels.filter(
+    (c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(meId),
+  );
+  return [
+    ...visibleChannels.map(
+      (c): ChatListItem => ({
+        id: c.id,
+        name: c.name,
+        photo: c.photo,
+        kind: "channel",
+        private: c.private,
+        lastMessage: lastMessageByConvo.get(c.id),
+        unread: getUnreadCount(c.id, messages, meId),
+      }),
+    ),
+    ...campaignChannels.map(
+      (c): ChatListItem => ({
+        id: c.id,
+        name: c.name,
+        kind: "campanha",
+        lastMessage: lastMessageByConvo.get(c.id),
+        unread: getUnreadCount(c.id, messages, meId),
+      }),
+    ),
+    ...projectChannels.map(
+      (p): ChatListItem => ({
+        id: p.id,
+        name: p.name,
+        kind: "projeto",
+        lastMessage: lastMessageByConvo.get(p.id),
+        unread: getUnreadCount(p.id, messages, meId),
+      }),
+    ),
+    ...members
+      .filter((m) => m.id !== meId)
+      .map((m): ChatListItem => {
+        const id = dmId(meId, m.id);
+        return {
+          id,
+          name: m.name,
+          photo: m.photo,
+          kind: "dm",
+          status: getStatus(m.id),
+          lastMessage: lastMessageByConvo.get(id),
+          unread: getUnreadCount(id, messages, meId),
+        };
+      }),
+  ];
+}
+
 // ---------- Status ----------
 /** Muda o status escolhido pela pessoa (online/away/offline manual). */
 export async function setStatus(id: string, s: MemberStatus) {

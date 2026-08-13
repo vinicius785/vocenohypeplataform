@@ -19,19 +19,13 @@ import {
   Sun,
   PanelLeft,
   Menu,
-  Hash,
-  Plus,
   Lock,
-  Trash2,
-  Pencil,
   X,
   AtSign,
   CheckSquare,
   CalendarClock,
   Timer,
   AlertTriangle,
-  ChevronDown,
-  MoreHorizontal,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -40,7 +34,6 @@ import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
 import { SidebarProfile } from "./ConfiguracoesSection";
-import { CreateChannelModal } from "./CreateChannelModal";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
@@ -50,36 +43,19 @@ import {
   getMe,
   loadMembers,
   loadChannels,
-  createChannel,
-  updateChannel,
-  deleteChannel as deleteChannelDb,
-  reorderChannels,
   loadMessages,
   loadCampaignChannels,
   loadProjectChannels,
   setActive as setActiveConvo,
   useActiveConvo,
   subscribeChat,
-  dmId,
-  getStatus,
-  STATUS_COLOR,
-  STATUS_LABEL,
-  getUnreadCount,
   loadLastRead,
   markRead,
   getActive,
   playNotifSound,
-  type ChatChannel,
 } from "@/lib/chat-store";
 
 import { useClientes, type Cliente } from "@/lib/clientes-store";
-import { useConfirm } from "@/hooks/use-confirm";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
@@ -396,11 +372,6 @@ export function AppShell({
                           if (!allowed) return;
                           onSelect(item.key);
                           if (item.key === "comercial") void markLeadsSeen();
-                          // Clicar em "Chat" sempre abre a central de
-                          // conversas, não a última conversa deixada aberta
-                          // (que ficava "presa" indefinidamente, já que
-                          // chat:active só muda quando uma conversa é aberta).
-                          if (item.key === "chat") setActiveConvo("");
                         }}
                         title={
                           !allowed
@@ -443,9 +414,6 @@ export function AppShell({
                           </span>
                         )}
                       </button>
-                      {item.key === "chat" && isActive && showFull && (
-                        <ChatSubNav onSelect={onSelect} />
-                      )}
                     </li>
                   );
                 })}
@@ -654,356 +622,6 @@ function GlobalSearch({ onSelect }: { onSelect: (key: SectionKey) => void }) {
         </>
       )}
     </div>
-  );
-}
-
-const CHAT_COLLAPSED_KEY = "chat:collapsedSections";
-function loadCollapsedSections(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(CHAT_COLLAPSED_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Cabeçalho de seção clicável (recolhe/expande) — cada lista (Canais,
- * Campanhas, Projetos, Mensagens diretas) pode ser escondida quando o
- * usuário não usa aquele tipo de conversa, evitando que o menu cresça sem
- * limite conforme o workspace ganha mais canais/campanhas/projetos. */
-function ChatSectionHeader({
-  label,
-  collapsed,
-  onToggle,
-  action,
-}: {
-  label: string;
-  collapsed: boolean;
-  onToggle: () => void;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="mb-1 flex items-center justify-between px-1">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-      >
-        <ChevronDown
-          className={`h-2.5 w-2.5 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`}
-        />
-        {label}
-      </button>
-      {action}
-    </div>
-  );
-}
-
-function ChatSubNav({ onSelect }: { onSelect: (key: SectionKey) => void }) {
-  const [, force] = useState(0);
-  useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
-  const clientes = useClientes();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() =>
-    loadCollapsedSections(),
-  );
-  const toggleSection = (key: string) => {
-    setCollapsed((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      try {
-        localStorage.setItem(CHAT_COLLAPSED_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
-
-  const me = getMe();
-  const members = loadMembers();
-  const otherMembers = members.filter((m) => m.id !== me.id);
-  const channels = loadChannels();
-  const campaigns = loadCampaignChannels(clientes);
-  const projects = loadProjectChannels();
-  const activeId = useActiveConvo();
-  const allMessages = loadMessages();
-  const unread = (id: string) => (id === activeId ? 0 : getUnreadCount(id, allMessages, me.id));
-
-  const go = (id: string) => {
-    setActiveConvo(id);
-    onSelect("chat");
-  };
-
-  const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing] = useState<ChatChannel | null>(null);
-  const { confirm, confirmDialog } = useConfirm();
-
-  const handleCreateChannel = async (payload: {
-    name: string;
-    photo?: string;
-    private: boolean;
-    allowedMemberIds?: string[];
-  }) => {
-    if (editing) {
-      await updateChannel(editing.id, {
-        name: payload.name,
-        photo: payload.photo,
-        private: payload.private,
-        allowedMemberIds: payload.allowedMemberIds,
-      });
-      setEditing(null);
-      setShowCreate(false);
-      return;
-    }
-    if (channels.some((c) => c.name === payload.name)) return;
-    const ch = await createChannel({
-      name: payload.name,
-      private: payload.private,
-      photo: payload.photo,
-      allowedMemberIds: payload.allowedMemberIds,
-    });
-    setShowCreate(false);
-    if (ch) go(ch.id);
-  };
-
-  const editChannel = (c: ChatChannel, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditing(c);
-    setShowCreate(true);
-  };
-
-  const deleteChannel = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const ok = await confirm("Excluir este canal e todas as suas mensagens?");
-    if (!ok) return;
-    await deleteChannelDb(id);
-    if (activeId === id) {
-      const remaining = channels.filter((c) => c.id !== id);
-      setActiveConvo(remaining[0]?.id ?? "");
-    }
-  };
-
-  const [dragId, setDragId] = useState<string | null>(null);
-  const reorderChannel = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-    const list = [...channels];
-    const from = list.findIndex((c) => c.id === fromId);
-    const to = list.findIndex((c) => c.id === toId);
-    if (from < 0 || to < 0) return;
-    const [moved] = list.splice(from, 1);
-    list.splice(to, 0, moved);
-    void reorderChannels(list.map((c) => c.id));
-  };
-
-  const itemCls = (isActive: boolean) =>
-    `flex flex-1 items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
-      isActive
-        ? "bg-foreground/10 font-medium text-foreground"
-        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-    }`;
-
-  return (
-    <div className="ml-2 mt-1 space-y-2.5 border-l border-border pl-2">
-      <div>
-        <ChatSectionHeader
-          label="Canais"
-          collapsed={!!collapsed.canais}
-          onToggle={() => toggleSection("canais")}
-          action={
-            <button
-              onClick={() => setShowCreate(true)}
-              aria-label="Novo canal"
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
-          }
-        />
-        {!collapsed.canais && (
-          <ul className="space-y-0.5">
-            {channels
-              .filter(
-                (c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(me.id),
-              )
-              .map((c) => (
-                <li
-                  key={c.id}
-                  draggable
-                  onDragStart={() => setDragId(c.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragId) reorderChannel(dragId, c.id);
-                    setDragId(null);
-                  }}
-                  onDragEnd={() => setDragId(null)}
-                  className={`group flex items-center ${dragId === c.id ? "opacity-40" : ""}`}
-                >
-                  <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
-                    {c.photo ? (
-                      <img src={c.photo} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
-                    ) : c.private ? (
-                      <Lock className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <Hash className="h-3 w-3 shrink-0" />
-                    )}
-                    <span
-                      className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
-                    >
-                      {c.name}
-                    </span>
-                    <UnreadBadge count={unread(c.id)} />
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label="Mais opções do canal"
-                        className="ml-0.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
-                      >
-                        <MoreHorizontal className="h-3 w-3" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-36">
-                      <DropdownMenuItem onClick={(e) => editChannel(c, e)}>
-                        <Pencil className="h-3.5 w-3.5" /> Editar canal
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={(e) => deleteChannel(c.id, e)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Excluir canal
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </li>
-              ))}
-          </ul>
-        )}
-      </div>
-
-      {campaigns.length > 0 && (
-        <div>
-          <ChatSectionHeader
-            label="Campanhas"
-            collapsed={!!collapsed.campanhas}
-            onToggle={() => toggleSection("campanhas")}
-          />
-          {!collapsed.campanhas && (
-            <ul className="space-y-0.5">
-              {campaigns.map((c) => (
-                <li key={c.id} className="flex items-center">
-                  <button onClick={() => go(c.id)} className={itemCls(activeId === c.id)}>
-                    <Hash className="h-3 w-3 shrink-0" />
-                    <span
-                      className={`truncate ${unread(c.id) ? "font-semibold text-foreground" : ""}`}
-                    >
-                      {c.name}
-                    </span>
-                    <UnreadBadge count={unread(c.id)} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {projects.length > 0 && (
-        <div>
-          <ChatSectionHeader
-            label="Projetos"
-            collapsed={!!collapsed.projetos}
-            onToggle={() => toggleSection("projetos")}
-          />
-          {!collapsed.projetos && (
-            <ul className="space-y-0.5">
-              {projects.map((p) => (
-                <li key={p.id} className="flex items-center">
-                  <button onClick={() => go(p.id)} className={itemCls(activeId === p.id)}>
-                    <Hash className="h-3 w-3 shrink-0" />
-                    <span
-                      className={`truncate ${unread(p.id) ? "font-semibold text-foreground" : ""}`}
-                    >
-                      {p.name}
-                    </span>
-                    <UnreadBadge count={unread(p.id)} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      <div>
-        <ChatSectionHeader
-          label="Mensagens diretas"
-          collapsed={!!collapsed.dms}
-          onToggle={() => toggleSection("dms")}
-        />
-        {!collapsed.dms &&
-          (otherMembers.length === 0 ? (
-            <p className="px-2 py-1 text-[11px] text-muted-foreground">
-              Adicione membros na aba Time.
-            </p>
-          ) : (
-            <ul className="space-y-0.5">
-              {otherMembers.map((m) => {
-                const id = dmId(me.id, m.id);
-                const status = getStatus(m.id);
-                return (
-                  <li key={m.id} className="flex items-center">
-                    <button onClick={() => go(id)} className={itemCls(activeId === id)}>
-                      <span className="relative h-5 w-5 shrink-0">
-                        {m.photo ? (
-                          <img src={m.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
-                        ) : (
-                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold text-foreground">
-                            {m.name.slice(0, 1).toUpperCase()}
-                          </span>
-                        )}
-                        <span
-                          title={STATUS_LABEL[status]}
-                          className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
-                        />
-                      </span>
-                      <span
-                        className={`truncate ${unread(id) ? "font-semibold text-foreground" : ""}`}
-                      >
-                        {m.name}
-                      </span>
-                      <UnreadBadge count={unread(id)} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ))}
-      </div>
-      {showCreate && (
-        <CreateChannelModal
-          members={members}
-          meId={me.id}
-          existingNames={channels.map((c) => c.name)}
-          initial={editing}
-          onCreate={handleCreateChannel}
-          onClose={() => {
-            setShowCreate(false);
-            setEditing(null);
-          }}
-        />
-      )}
-      {confirmDialog}
-    </div>
-  );
-}
-
-function UnreadBadge({ count }: { count: number }) {
-  if (!count) return null;
-  return (
-    <span className="ml-auto inline-flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
-      {count > 99 ? "99+" : count}
-    </span>
   );
 }
 

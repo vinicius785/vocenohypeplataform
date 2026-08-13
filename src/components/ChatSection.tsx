@@ -21,6 +21,9 @@ import {
   Square,
   Play,
   Pause,
+  Plus,
+  MoreHorizontal,
+  MessageSquare,
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import {
@@ -46,13 +49,17 @@ import {
   broadcastTyping,
   getTypingUsers,
   getOtherReadAt,
-  getUnreadCount,
+  buildChatList,
+  createChannel,
+  updateChannel,
+  deleteChannel as deleteChannelDb,
   REACTION_EMOJIS,
   type ChatMember,
   type ChatMention,
   type ChatAttachment,
   type ChatChannel,
   type CampaignChannel,
+  type ChatListItem,
 } from "@/lib/chat-store";
 
 import { useClientes } from "@/lib/clientes-store";
@@ -64,6 +71,13 @@ import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-s
 import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
+import { CreateChannelModal } from "@/components/CreateChannelModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatIsoDate } from "@/lib/utils";
 
 type ChatTaskInfo = {
@@ -258,315 +272,413 @@ export function ChatSection() {
   }, [members, me.id, activeChannel, activeCampaign, activeProject]);
   const canStartChannelCall = !isDm && (!!activeChannel || !!activeCampaign || !!activeProject);
 
-  if (!activeId) {
-    return (
-      <ChatHub
-        channels={channels}
-        campaignChannels={campaignChannels}
-        projectChannels={projectChannels}
-        members={members}
-        messages={messages}
-        meId={me.id}
-        onOpen={(id) => {
-          setActiveConvo(id);
-        }}
-      />
-    );
-  }
-
   return (
-    <div className="mx-auto flex h-[calc(100vh-9rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-3">
-        {activeChannel ? (
-          <>
-            {activeChannel.private ? (
-              <Lock className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Hash className="h-4 w-4 text-muted-foreground" />
-            )}
-            <h2 className="text-sm font-semibold">{activeChannel.name}</h2>
-            <span className="ml-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Users className="h-3 w-3" /> {members.length}
-            </span>
-          </>
-        ) : activeCampaign ? (
-          <>
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">{activeCampaign.name}</h2>
-            <span className="text-[11px] text-muted-foreground">
-              campanha · {activeCampaign.empresa}
-            </span>
-          </>
-        ) : activeProject ? (
-          <>
-            <Hash className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">{activeProject.name}</h2>
-            <span className="text-[11px] text-muted-foreground">projeto</span>
-          </>
-        ) : activeDmPartner ? (
-          (() => {
-            const status = getStatus(activeDmPartner.id);
-            return (
-              <>
-                <span className="relative h-7 w-7 shrink-0">
-                  {activeDmPartner.photo ? (
-                    <img
-                      src={activeDmPartner.photo}
-                      alt=""
-                      className="h-7 w-7 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                      {activeDmPartner.name.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                  <span
-                    title={STATUS_LABEL[status]}
-                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
-                  />
-                </span>
-                <h2 className="text-sm font-semibold">{activeDmPartner.name}</h2>
-                <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</span>
-              </>
-            );
-          })()
-        ) : (
-          <h2 className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</h2>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {activeId && (
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar no canal..."
-                className="h-8 w-44 rounded-md border border-border bg-background pl-7 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          )}
-          {activeDmPartner && !isSelfDm && (
-            <button
-              onClick={() => {
-                if (callState.status !== "idle") return;
-                void startCall([
-                  {
-                    id: activeDmPartner.id,
-                    name: activeDmPartner.name,
-                    photo: activeDmPartner.photo,
-                  },
-                ]);
-              }}
-              disabled={callState.status !== "idle"}
-              aria-label="Iniciar chamada"
-              title="Iniciar chamada"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted disabled:opacity-50"
-            >
-              <Phone className="h-4 w-4" />
-            </button>
-          )}
-          {canStartChannelCall && (
-            <button
-              onClick={() => {
-                if (callState.status !== "idle") return;
-                setCallPickerOpen(true);
-              }}
-              disabled={callState.status !== "idle" || channelCallCandidates.length === 0}
-              aria-label="Ligar para membro do canal"
-              title={
-                channelCallCandidates.length === 0
-                  ? "Nenhum membro disponível"
-                  : "Ligar para alguém deste canal"
-              }
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted disabled:opacity-50"
-            >
-              <Phone className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </header>
-
-      {searchQuery && (
-        <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
-          {visibleMessages.length} resultado(s) para "{search.trim()}"
-        </div>
-      )}
-
-      <MessageList
-        convoId={activeId}
-        messages={visibleMessages}
-        messagesById={messagesById}
-        meId={me.id}
-        onEdit={updateMessage}
-        onDelete={deleteMessage}
-        onReply={setReplyingTo}
-        onReact={(id, emoji) => void toggleReaction(id, emoji)}
-        allowUserMentions={!isDm}
-        members={members}
-        tasks={tasks}
-        isDm={isDm}
-        otherUserId={activeDmPartner?.id}
-        typingUsers={typingUsers}
-        onOpenTask={openTask}
-      />
-
-      {!isSelfDm && (
-        <Composer
-          key={activeId}
-          convoId={activeId}
-          onSend={sendMessage}
-          allowUserMentions={!isDm}
+    <div className="flex h-[calc(100vh-9rem)] w-full overflow-hidden rounded-lg border border-border bg-background">
+      <div className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r border-border">
+        <ChatConversationList
+          channels={channels}
+          campaignChannels={campaignChannels}
+          projectChannels={projectChannels}
           members={members}
-          tasks={tasks}
-          replyingTo={replyingTo}
-          onCancelReply={() => setReplyingTo(null)}
-          placeholder={
-            activeChannel
-              ? `Mensagem em #${activeChannel.name}`
-              : activeCampaign
-                ? `Mensagem em #${activeCampaign.name}`
-                : activeProject
-                  ? `Mensagem em #${activeProject.name}`
-                  : activeDmPartner
-                    ? `Mensagem para ${activeDmPartner.name}`
-                    : "Mensagem"
-          }
+          messages={messages}
+          meId={me.id}
+          activeId={activeId}
+          onSelectConvo={(id) => setActiveConvo(id)}
         />
-      )}
-      {callPickerOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setCallPickerOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-lg border border-border bg-background shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div>
-                <h3 className="text-sm font-semibold">Ligar para</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Escolha até {MAX_GROUP_PARTICIPANTS} pessoas — mais de uma vira chamada em grupo.
-                </p>
-              </div>
-              <button
-                onClick={() => setCallPickerOpen(false)}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Fechar"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="max-h-80 overflow-auto p-2">
-              {channelCallCandidates.length === 0 ? (
-                <p className="p-3 text-center text-xs text-muted-foreground">
-                  Nenhum membro disponível
-                </p>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          {activeChannel ? (
+            <>
+              {activeChannel.private ? (
+                <Lock className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <ul className="flex flex-col gap-0.5">
-                  {channelCallCandidates.map((m) => {
-                    const s = getStatus(m.id);
-                    const checked = callPickerSelected.has(m.id);
-                    const atLimit = callPickerSelected.size >= MAX_GROUP_PARTICIPANTS && !checked;
-                    return (
-                      <li key={m.id}>
-                        <button
-                          disabled={atLimit}
-                          onClick={() => {
-                            setCallPickerSelected((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(m.id)) next.delete(m.id);
-                              else next.add(m.id);
-                              return next;
-                            });
-                          }}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            readOnly
-                            className="h-4 w-4 rounded border-input"
-                          />
-                          <span className="relative h-8 w-8 shrink-0">
-                            {m.photo ? (
-                              <img
-                                src={m.photo}
-                                alt=""
-                                className="h-8 w-8 rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                                {m.name.slice(0, 1).toUpperCase()}
-                              </span>
-                            )}
-                            <span
-                              className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[s]}`}
-                            />
-                          </span>
-                          <span className="flex-1 truncate">{m.name}</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {STATUS_LABEL[s]}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <Hash className="h-4 w-4 text-muted-foreground" />
               )}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">{activeChannel.name}</h2>
+              <span className="ml-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Users className="h-3 w-3" /> {members.length}
+              </span>
+            </>
+          ) : activeCampaign ? (
+            <>
+              <Hash className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">{activeCampaign.name}</h2>
+              <span className="text-[11px] text-muted-foreground">
+                campanha · {activeCampaign.empresa}
+              </span>
+            </>
+          ) : activeProject ? (
+            <>
+              <Hash className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">{activeProject.name}</h2>
+              <span className="text-[11px] text-muted-foreground">projeto</span>
+            </>
+          ) : activeDmPartner ? (
+            (() => {
+              const status = getStatus(activeDmPartner.id);
+              return (
+                <>
+                  <span className="relative h-7 w-7 shrink-0">
+                    {activeDmPartner.photo ? (
+                      <img
+                        src={activeDmPartner.photo}
+                        alt=""
+                        className="h-7 w-7 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                        {activeDmPartner.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <span
+                      title={STATUS_LABEL[status]}
+                      className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
+                    />
+                  </span>
+                  <h2 className="text-sm font-semibold">{activeDmPartner.name}</h2>
+                  <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</span>
+                </>
+              );
+            })()
+          ) : (
+            <h2 className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</h2>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            {activeId && (
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar no canal..."
+                  className="h-8 w-44 rounded-md border border-border bg-background pl-7 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            )}
+            {activeDmPartner && !isSelfDm && (
               <button
-                onClick={() => setCallPickerOpen(false)}
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                disabled={callPickerSelected.size === 0}
                 onClick={() => {
-                  const chosen = channelCallCandidates.filter((m) => callPickerSelected.has(m.id));
-                  setCallPickerOpen(false);
-                  void startCall(chosen.map((m) => ({ id: m.id, name: m.name, photo: m.photo })));
+                  if (callState.status !== "idle") return;
+                  void startCall([
+                    {
+                      id: activeDmPartner.id,
+                      name: activeDmPartner.name,
+                      photo: activeDmPartner.photo,
+                    },
+                  ]);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={callState.status !== "idle"}
+                aria-label="Iniciar chamada"
+                title="Iniciar chamada"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted disabled:opacity-50"
               >
-                <Phone className="h-3.5 w-3.5" />
-                Ligar {callPickerSelected.size > 0 ? `(${callPickerSelected.size})` : ""}
+                <Phone className="h-4 w-4" />
               </button>
+            )}
+            {canStartChannelCall && (
+              <button
+                onClick={() => {
+                  if (callState.status !== "idle") return;
+                  setCallPickerOpen(true);
+                }}
+                disabled={callState.status !== "idle" || channelCallCandidates.length === 0}
+                aria-label="Ligar para membro do canal"
+                title={
+                  channelCallCandidates.length === 0
+                    ? "Nenhum membro disponível"
+                    : "Ligar para alguém deste canal"
+                }
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted disabled:opacity-50"
+              >
+                <Phone className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </header>
+
+        {!activeId ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+            <MessageSquare className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.5} />
+            <p className="text-sm text-muted-foreground">
+              Selecione uma conversa pra começar a conversar.
+            </p>
+          </div>
+        ) : (
+          <>
+            {searchQuery && (
+              <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
+                {visibleMessages.length} resultado(s) para "{search.trim()}"
+              </div>
+            )}
+
+            <MessageList
+              convoId={activeId}
+              messages={visibleMessages}
+              messagesById={messagesById}
+              meId={me.id}
+              onEdit={updateMessage}
+              onDelete={deleteMessage}
+              onReply={setReplyingTo}
+              onReact={(id, emoji) => void toggleReaction(id, emoji)}
+              allowUserMentions={!isDm}
+              members={members}
+              tasks={tasks}
+              isDm={isDm}
+              otherUserId={activeDmPartner?.id}
+              typingUsers={typingUsers}
+              onOpenTask={openTask}
+            />
+
+            {!isSelfDm && (
+              <Composer
+                key={activeId}
+                convoId={activeId}
+                onSend={sendMessage}
+                allowUserMentions={!isDm}
+                members={members}
+                tasks={tasks}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
+                placeholder={
+                  activeChannel
+                    ? `Mensagem em #${activeChannel.name}`
+                    : activeCampaign
+                      ? `Mensagem em #${activeCampaign.name}`
+                      : activeProject
+                        ? `Mensagem em #${activeProject.name}`
+                        : activeDmPartner
+                          ? `Mensagem para ${activeDmPartner.name}`
+                          : "Mensagem"
+                }
+              />
+            )}
+          </>
+        )}
+        {callPickerOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setCallPickerOpen(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg border border-border bg-background shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Ligar para</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Escolha até {MAX_GROUP_PARTICIPANTS} pessoas — mais de uma vira chamada em
+                    grupo.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setCallPickerOpen(false)}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Fechar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="max-h-80 overflow-auto p-2">
+                {channelCallCandidates.length === 0 ? (
+                  <p className="p-3 text-center text-xs text-muted-foreground">
+                    Nenhum membro disponível
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-0.5">
+                    {channelCallCandidates.map((m) => {
+                      const s = getStatus(m.id);
+                      const checked = callPickerSelected.has(m.id);
+                      const atLimit = callPickerSelected.size >= MAX_GROUP_PARTICIPANTS && !checked;
+                      return (
+                        <li key={m.id}>
+                          <button
+                            disabled={atLimit}
+                            onClick={() => {
+                              setCallPickerSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(m.id)) next.delete(m.id);
+                                else next.add(m.id);
+                                return next;
+                              });
+                            }}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              readOnly
+                              className="h-4 w-4 rounded border-input"
+                            />
+                            <span className="relative h-8 w-8 shrink-0">
+                              {m.photo ? (
+                                <img
+                                  src={m.photo}
+                                  alt=""
+                                  className="h-8 w-8 rounded-full object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                                  {m.name.slice(0, 1).toUpperCase()}
+                                </span>
+                              )}
+                              <span
+                                className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[s]}`}
+                              />
+                            </span>
+                            <span className="flex-1 truncate">{m.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {STATUS_LABEL[s]}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+                <button
+                  onClick={() => setCallPickerOpen(false)}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={callPickerSelected.size === 0}
+                  onClick={() => {
+                    const chosen = channelCallCandidates.filter((m) =>
+                      callPickerSelected.has(m.id),
+                    );
+                    setCallPickerOpen(false);
+                    void startCall(chosen.map((m) => ({ id: m.id, name: m.name, photo: m.photo })));
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  Ligar {callPickerSelected.size > 0 ? `(${callPickerSelected.size})` : ""}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      {confirmDialog}
+        )}
+        {confirmDialog}
+      </div>
     </div>
   );
 }
 
-type HubItem = {
-  id: string;
-  name: string;
-  photo?: string;
-  kind: "channel" | "campanha" | "projeto" | "dm";
-  private?: boolean;
-  status?: ReturnType<typeof getStatus>;
-  lastMessage?: ChatMessage;
-  unread: number;
-};
+/** Uma linha da lista de conversas — usada tanto pras diretas quanto pros
+ * canais/campanhas/projetos, só muda o avatar (foto/inicial vs ícone) e se
+ * tem menu de editar/excluir (só canais). */
+function ChatListRow({
+  item,
+  active,
+  meId,
+  onSelect,
+  onEdit,
+  onDelete,
+}: {
+  item: ChatListItem;
+  active: boolean;
+  meId: string;
+  onSelect: () => void;
+  onEdit?: (e: React.MouseEvent) => void;
+  onDelete?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+        active ? "bg-foreground/10" : "hover:bg-muted/60"
+      }`}
+    >
+      <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="relative h-10 w-10 shrink-0">
+          {item.photo ? (
+            <img src={item.photo} alt="" className="h-10 w-10 rounded-full object-cover" />
+          ) : item.kind === "dm" ? (
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+              {item.name.slice(0, 1).toUpperCase()}
+            </span>
+          ) : (
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              {item.private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+            </span>
+          )}
+          {item.kind === "dm" && item.status && (
+            <span
+              title={STATUS_LABEL[item.status]}
+              className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[item.status]}`}
+            />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-sm ${item.unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}
+          >
+            {item.name}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {item.lastMessage
+              ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${
+                  item.lastMessage.text || (item.lastMessage.attachments?.length ? "Anexo" : "")
+                }`
+              : item.kind === "campanha"
+                ? "Campanha"
+                : item.kind === "projeto"
+                  ? "Projeto"
+                  : "Nenhuma mensagem ainda"}
+          </span>
+        </span>
+      </button>
+      {item.unread > 0 && (
+        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-semibold text-background">
+          {item.unread > 9 ? "9+" : item.unread}
+        </span>
+      )}
+      {onEdit && onDelete && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Mais opções do canal"
+              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" /> Editar canal
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Excluir canal
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
 
-/** Tela inicial do Chat: ao clicar em "Chat" no menu, a pessoa cai aqui —
- * não mais direto na última conversa aberta (que ficava presa
- * indefinidamente, ver `AppShell.tsx`). Mostra todas as conversas com foto
- * grande, prévia da última mensagem e bolha de não-lidas; clicar abre a
- * conversa de verdade (mesmo componente de sempre). */
-function ChatHub({
+/** Lista de conversas do Chat — substitui a antiga central em grade e o
+ * menu lateral separado (canais/campanhas/projetos/DMs) por uma lista só,
+ * dentro da própria aba, estilo WhatsApp Web: diretas por mais recente
+ * primeiro, canais/campanhas/projetos numa seção fixa embaixo (também por
+ * recência). Clicar abre a conversa ao lado, sem sair da tela. */
+function ChatConversationList({
   channels,
   campaignChannels,
   projectChannels,
   members,
   messages,
   meId,
-  onOpen,
+  activeId,
+  onSelectConvo,
 }: {
   channels: ChatChannel[];
   campaignChannels: CampaignChannel[];
@@ -574,165 +686,175 @@ function ChatHub({
   members: ChatMember[];
   messages: ChatMessage[];
   meId: string;
-  onOpen: (id: string) => void;
+  activeId: string;
+  onSelectConvo: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<ChatChannel | null>(null);
+  const { confirm, confirmDialog } = useConfirm();
 
-  const lastMessageByConvo = useMemo(() => {
-    const map = new Map<string, ChatMessage>();
-    for (const m of messages) {
-      const cur = map.get(m.convoId);
-      if (!cur || m.createdAt > cur.createdAt) map.set(m.convoId, m);
-    }
-    return map;
-  }, [messages]);
+  const items = useMemo(
+    () => buildChatList({ channels, campaignChannels, projectChannels, members, messages, meId }),
+    [channels, campaignChannels, projectChannels, members, messages, meId],
+  );
 
-  const items = useMemo<HubItem[]>(() => {
-    const visibleChannels = channels.filter(
-      (c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(meId),
-    );
-    const list: HubItem[] = [
-      ...visibleChannels.map((c) => ({
-        id: c.id,
-        name: c.name,
-        photo: c.photo,
-        kind: "channel" as const,
-        private: c.private,
-        lastMessage: lastMessageByConvo.get(c.id),
-        unread: getUnreadCount(c.id, messages, meId),
-      })),
-      ...campaignChannels.map((c) => ({
-        id: c.id,
-        name: c.name,
-        kind: "campanha" as const,
-        lastMessage: lastMessageByConvo.get(c.id),
-        unread: getUnreadCount(c.id, messages, meId),
-      })),
-      ...projectChannels.map((p) => ({
-        id: p.id,
-        name: p.name,
-        kind: "projeto" as const,
-        lastMessage: lastMessageByConvo.get(p.id),
-        unread: getUnreadCount(p.id, messages, meId),
-      })),
-      ...members
-        .filter((m) => m.id !== meId)
-        .map((m) => {
-          const id = dmId(meId, m.id);
-          return {
-            id,
-            name: m.name,
-            photo: m.photo,
-            kind: "dm" as const,
-            status: getStatus(m.id),
-            lastMessage: lastMessageByConvo.get(id),
-            unread: getUnreadCount(id, messages, meId),
-          };
-        }),
-    ];
-    const q = search.trim().toLowerCase();
-    const filtered = q ? list.filter((i) => i.name.toLowerCase().includes(q)) : list;
-    return filtered.sort(
-      (a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0),
-    );
-  }, [
-    channels,
-    campaignChannels,
-    projectChannels,
-    members,
-    messages,
-    meId,
-    search,
-    lastMessageByConvo,
-  ]);
-
+  const q = search.trim().toLowerCase();
+  const filtered = q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items;
+  const byRecency = (a: ChatListItem, b: ChatListItem) =>
+    (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0);
+  const diretas = filtered.filter((i) => i.kind === "dm").sort(byRecency);
+  const canais = filtered.filter((i) => i.kind !== "dm").sort(byRecency);
   const totalUnread = items.reduce((sum, i) => sum + i.unread, 0);
 
+  const handleCreateChannel = async (payload: {
+    name: string;
+    photo?: string;
+    private: boolean;
+    allowedMemberIds?: string[];
+  }) => {
+    if (editing) {
+      await updateChannel(editing.id, {
+        name: payload.name,
+        photo: payload.photo,
+        private: payload.private,
+        allowedMemberIds: payload.allowedMemberIds,
+      });
+      setEditing(null);
+      setShowCreate(false);
+      return;
+    }
+    if (channels.some((c) => c.name === payload.name)) return;
+    const ch = await createChannel({
+      name: payload.name,
+      private: payload.private,
+      photo: payload.photo,
+      allowedMemberIds: payload.allowedMemberIds,
+    });
+    setShowCreate(false);
+    if (ch) onSelectConvo(ch.id);
+  };
+
+  const editChannel = (c: ChatChannel, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditing(c);
+    setShowCreate(true);
+  };
+
+  const deleteChannelRow = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = await confirm("Excluir este canal e todas as suas mensagens?");
+    if (!ok) return;
+    await deleteChannelDb(id);
+    if (activeId === id) {
+      const remaining = channels.filter((c) => c.id !== id);
+      onSelectConvo(remaining[0]?.id ?? "");
+    }
+  };
+
   return (
-    <div className="mx-auto flex h-[calc(100vh-9rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background">
-      <header className="flex items-center gap-3 border-b border-border px-5 py-4">
+    <>
+      <header className="flex items-center gap-2 border-b border-border px-4 py-3.5">
         <div>
-          <h1 className="text-2xl font-light tracking-tighter text-foreground">Conversas</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-lg font-light tracking-tighter text-foreground">Conversas</h1>
+          <p className="text-[11px] text-muted-foreground">
             {totalUnread > 0
-              ? `${totalUnread} mensagem${totalUnread > 1 ? "ns" : ""} não lida${totalUnread > 1 ? "s" : ""}`
+              ? `${totalUnread} não lida${totalUnread > 1 ? "s" : ""}`
               : "Tudo em dia"}
           </p>
         </div>
-        <div className="relative ml-auto w-56">
+        <button
+          type="button"
+          onClick={() => {
+            setEditing(null);
+            setShowCreate(true);
+          }}
+          aria-label="Novo canal"
+          className="ml-auto rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </header>
+      <div className="border-b border-border px-3 py-2">
+        <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar conversas..."
-            className="h-9 w-full rounded-full border border-border bg-background pl-8 pr-3 text-xs outline-none focus:ring-2 focus:ring-ring"
+            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-      </header>
+      </div>
 
-      <div className="flex-1 overflow-y-auto p-5">
-        {items.length === 0 ? (
+      <div className="flex-1 overflow-y-auto p-2">
+        {filtered.length === 0 ? (
           <p className="p-8 text-center text-xs text-muted-foreground">
             Nenhuma conversa encontrada.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onOpen(item.id)}
-                className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
-              >
-                <span className="relative h-12 w-12 shrink-0">
-                  {item.photo ? (
-                    <img src={item.photo} alt="" className="h-12 w-12 rounded-full object-cover" />
-                  ) : item.kind === "dm" ? (
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
-                      {item.name.slice(0, 1).toUpperCase()}
-                    </span>
-                  ) : (
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      {item.private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
-                    </span>
-                  )}
-                  {item.kind === "dm" && item.status && (
-                    <span
-                      title={STATUS_LABEL[item.status]}
-                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${STATUS_COLOR[item.status]}`}
-                    />
-                  )}
-                  {item.unread > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-semibold text-background">
-                      {item.unread > 9 ? "9+" : item.unread}
-                    </span>
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-sm ${item.unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}
-                  >
-                    {item.name}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {item.lastMessage
-                      ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${
-                          item.lastMessage.text ||
-                          (item.lastMessage.attachments?.length ? "Anexo" : "")
-                        }`
-                      : item.kind === "campanha"
-                        ? "Campanha"
-                        : item.kind === "projeto"
-                          ? "Projeto"
-                          : "Nenhuma mensagem ainda"}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+          <>
+            {diretas.length > 0 && (
+              <div className="mb-2">
+                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Diretas
+                </p>
+                {diretas.map((item) => (
+                  <ChatListRow
+                    key={item.id}
+                    item={item}
+                    active={item.id === activeId}
+                    meId={meId}
+                    onSelect={() => onSelectConvo(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {canais.length > 0 && (
+              <div>
+                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Canais
+                </p>
+                {canais.map((item) => (
+                  <ChatListRow
+                    key={item.id}
+                    item={item}
+                    active={item.id === activeId}
+                    meId={meId}
+                    onSelect={() => onSelectConvo(item.id)}
+                    onEdit={
+                      item.kind === "channel"
+                        ? (e) => {
+                            const c = channels.find((x) => x.id === item.id);
+                            if (c) editChannel(c, e);
+                          }
+                        : undefined
+                    }
+                    onDelete={
+                      item.kind === "channel" ? (e) => deleteChannelRow(item.id, e) : undefined
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
-    </div>
+      {showCreate && (
+        <CreateChannelModal
+          members={members}
+          meId={meId}
+          existingNames={channels.map((c) => c.name)}
+          initial={editing}
+          onCreate={handleCreateChannel}
+          onClose={() => {
+            setShowCreate(false);
+            setEditing(null);
+          }}
+        />
+      )}
+      {confirmDialog}
+    </>
   );
 }
 
