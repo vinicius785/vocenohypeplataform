@@ -1482,6 +1482,20 @@ export function InfluencerBoard({
   const scrollBy = (dir: 1 | -1) =>
     carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
 
+  // Sempre aponta pro `influs` mais recente, mesmo entre dois handlers que
+  // disparam no mesmo tick (ex: blur de um campo + clique em outro logo
+  // em seguida) — sem isso, o segundo handler fechava sobre o `influs` de
+  // props (ainda não re-renderizado com a mudança do primeiro) e
+  // sobrescrevia a edição anterior ao computar `influs.map(...)` a partir
+  // de um array desatualizado. Sintoma: campos "salvando sozinho" um valor
+  // antigo, status/foto/link que parecem reverter sem motivo.
+  const latestInflusRef = useRef(influs);
+  latestInflusRef.current = influs;
+  const applyInflusChange = (next: Influ[]) => {
+    latestInflusRef.current = next;
+    onChange(next);
+  };
+
   const pushActivity = (i: Influ, action: string): Influ => {
     const me = getCurrentAuthor();
     return {
@@ -1502,8 +1516,8 @@ export function InfluencerBoard({
   };
 
   const changeStatus = (influId: string, status: InfluStatus) =>
-    onChange(
-      influs.map((x) =>
+    applyInflusChange(
+      latestInflusRef.current.map((x) =>
         x.id === influId
           ? pushActivity(
               { ...x, status, statusUpdatedAt: todayISO() },
@@ -1514,12 +1528,12 @@ export function InfluencerBoard({
     );
 
   const removeInflu = async (influId: string): Promise<boolean> => {
-    const alvo = influs.find((x) => x.id === influId);
+    const alvo = latestInflusRef.current.find((x) => x.id === influId);
     const ok = await confirm(
       `Excluir "${alvo?.nome || "este influenciador"}" desta campanha? Isso remove o perfil, entregas e histórico dele daqui.`,
     );
     if (!ok) return false;
-    onChange(influs.filter((x) => x.id !== influId));
+    applyInflusChange(latestInflusRef.current.filter((x) => x.id !== influId));
     return true;
   };
 
@@ -1527,7 +1541,7 @@ export function InfluencerBoard({
     const trimmed = text.trim();
     if (!trimmed) return;
     const me = getCurrentAuthor();
-    const next = influs.map((x) =>
+    const next = latestInflusRef.current.map((x) =>
       x.id === influId
         ? {
             ...x,
@@ -1546,7 +1560,7 @@ export function InfluencerBoard({
           }
         : x,
     );
-    onChange(next);
+    applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
@@ -1555,7 +1569,7 @@ export function InfluencerBoard({
   const create = (i: Influ) => {
     const now = new Date().toISOString();
     const withStamps = { ...i, createdAt: now, updatedAt: now };
-    onChange([...influs, withStamps]);
+    applyInflusChange([...latestInflusRef.current, withStamps]);
     syncToBanco(withStamps);
   };
 
@@ -1563,13 +1577,13 @@ export function InfluencerBoard({
   // redes, métricas, financeiro, contrato, entregas) — sem rascunho, sem
   // segundo diálogo: cada mudança já salva na hora.
   const patchInflu = (influId: string, patch: Partial<Influ>) => {
-    const next = influs.map((x) => (x.id === influId ? { ...x, ...patch } : x));
-    onChange(next);
+    const next = latestInflusRef.current.map((x) => (x.id === influId ? { ...x, ...patch } : x));
+    applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
-    const next = influs.map((x) =>
+    const next = latestInflusRef.current.map((x) =>
       x.id === influId
         ? pushActivity(
             // Mudar o status manualmente é o sinal de que o time mexeu na
@@ -1582,7 +1596,7 @@ export function InfluencerBoard({
           )
         : x,
     );
-    onChange(next);
+    applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
@@ -1594,7 +1608,7 @@ export function InfluencerBoard({
     entregaId: string,
     conteudoStatus: EntregaConteudoStatus,
   ) => {
-    const next = influs.map((x) => {
+    const next = latestInflusRef.current.map((x) => {
       if (x.id !== influId) return x;
       const entrega = x.entregas.find((e) => e.id === entregaId);
       if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
@@ -1618,12 +1632,14 @@ export function InfluencerBoard({
         `mudou status de "${label}" para ${conteudoStatus}`,
       );
     });
-    onChange(next);
+    applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
   const setInfluChecklist = (influId: string, checklist: ChecklistItem[]) => {
-    onChange(influs.map((x) => (x.id === influId ? { ...x, checklist } : x)));
+    applyInflusChange(
+      latestInflusRef.current.map((x) => (x.id === influId ? { ...x, checklist } : x)),
+    );
     setViewing((v) => (v?.id === influId ? { ...v, checklist } : v));
   };
 
@@ -1632,7 +1648,7 @@ export function InfluencerBoard({
   // Preserva o "concluído" de itens que o influ já tinha marcado (casando
   // pelo texto), em vez de desmarcar tudo de novo a cada aplicação.
   const applyChecklistToAll = (checklist: ChecklistItem[]) => {
-    const next = influs.map((x) => {
+    const next = latestInflusRef.current.map((x) => {
       const existingByText = new Map((x.checklist ?? []).map((c) => [c.text, c]));
       return {
         ...x,
@@ -1642,7 +1658,7 @@ export function InfluencerBoard({
         ),
       };
     });
-    onChange(next);
+    applyInflusChange(next);
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
@@ -1996,8 +2012,8 @@ export function InfluencerBoard({
         onOpenChange={setBankPickerOpen}
         alreadyAdded={influs.map((i) => i.nome.trim().toLowerCase())}
         onAdd={(picked) => {
-          onChange([
-            ...influs,
+          applyInflusChange([
+            ...latestInflusRef.current,
             ...picked.map(
               (b): Influ => ({
                 id: crypto.randomUUID(),

@@ -1,6 +1,7 @@
 {
-  "version": "1.120.2",
+  "version": "1.120.3",
   "notes": [
+    "Corrige edições no perfil do influenciador se perdendo ou revertendo sozinhas (status voltando ao valor antigo, foto não salvando, etc): duas edições feitas em sequência rápida (ex: sair de um campo de texto e logo clicar em outra coisa) podiam usar uma versão desatualizada dos dados pra salvar, e a segunda edição apagava a primeira sem aviso nenhum. Agora cada edição sempre parte do estado mais recente, mesmo que a tela ainda não tenha atualizado na tela.",
     "Corrige o campo \"Link do conteúdo publicado\" (dentro da entrega de um influenciador) dando erro \"Não foi possível salvar\" e perdendo o que foi digitado — o campo salvava a cada tecla digitada, então editar/colar um link rápido disparava várias gravações ao mesmo tempo, que podiam se atropelar. Agora salva só ao sair do campo, como os outros campos de texto da plataforma.",
     "Corrige as bolhas de mensagem do Chat aparecendo espremidas (largura de um caractere só, texto quebrando letra por letra) — a largura máxima da bolha era uma porcentagem calculada em cima de um contêiner sem largura própria; agora usa um limite fixo.",
     "Refaz o Chat: clicar em \"Chat\" no menu lateral agora abre uma central de conversas (foto grande, prévia da última mensagem, bolha de não-lidas), em vez de reabrir direto a última conversa deixada aberta — clique numa conversa pra entrar nela. Mensagens também ganharam bolhas de verdade (arredondadas, alinhadas à direita quando são suas), no lugar do texto solto de antes.",
