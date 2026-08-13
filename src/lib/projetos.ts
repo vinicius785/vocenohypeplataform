@@ -208,7 +208,9 @@ export type BlogPost = {
   publishDate?: string;
   excerpt?: string;
   content?: string;
-  audience?: "site" | "mural";
+  /** Um artigo pode ir pra mais de um destino ao mesmo tempo (ex: Site +
+   * Mural), por isso é uma lista, não um valor único. */
+  audience?: ("site" | "mural")[];
   /** Ids de `Cliente` cujo portal (`/portal/$token`) deve mostrar este
    * artigo — independente do `audience` acima. Só entra no portal quando
    * `status === "publicado"`. */

@@ -1,6 +1,7 @@
 {
-  "version": "1.122.0",
+  "version": "1.123.0",
   "notes": [
+    "Blog do Marketing: agora dá pra publicar um artigo em mais de um destino ao mesmo tempo (Site, Mural de novidades e Portal do cliente combináveis livremente) — antes era uma escolha única.",
     "Portal do cliente: os \"Últimos conteúdos\" da tela inicial agora aparecem em formato de galeria (fotos em grade), igual à galeria de conteúdos já usada na campanha internamente. Dentro de uma campanha, o perfil de cada influenciador ganha sua própria galeria, só com o conteúdo publicado dele naquela campanha.",
     "O motivo da reprovação de um influenciador ou de uma entrega (roteiro/conteúdo) no portal do cliente agora é opcional — antes era obrigatório preencher pra conseguir reprovar.",
     "Corrige o link de publicação de uma entrega não salvando quando você editava o campo e clicava fora do perfil do influenciador (o clique fechava o diálogo antes do campo terminar de salvar).",

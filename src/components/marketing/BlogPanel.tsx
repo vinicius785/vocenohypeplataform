@@ -107,6 +107,14 @@ const slugify = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
+function destinoLabel(p: Pick<BlogPost, "audience" | "portalClienteIds">): string {
+  const parts: string[] = [];
+  if (p.audience?.includes("site")) parts.push("Site");
+  if (p.audience?.includes("mural")) parts.push("Mural interno");
+  if ((p.portalClienteIds?.length ?? 0) > 0) parts.push("Portal do cliente");
+  return parts.length > 0 ? parts.join(" + ") : "Site";
+}
+
 export function BlogPanel({
   project,
   update,
@@ -123,15 +131,16 @@ export function BlogPanel({
   const notifyBlog = useServerFn(notifyBlogEvent);
 
   // "Portal do cliente" não é um destino à parte de Site/Mural (dá pra
-  // combinar com qualquer um dos dois) — por isso cria como "site" e só
-  // sinaliza pro editor rolar/destacar a lista de clientes, em vez de
-  // guardar um terceiro valor de `audience` que não existe no tipo.
+  // combinar com qualquer um dos dois) — por isso cria com o destino
+  // escolhido em `audience` e só sinaliza pro editor rolar/destacar a
+  // lista de clientes, em vez de guardar um terceiro valor de `audience`
+  // que não existe no tipo.
   const create = (audience: "site" | "mural", focusPortal = false) => {
     const p: BlogPost = {
       id: crypto.randomUUID(),
       title: "Novo artigo",
       status: "rascunho",
-      audience,
+      audience: [audience],
     };
     setPosts([p, ...posts]);
     setEditingId(p.id);
@@ -145,7 +154,7 @@ export function BlogPanel({
     if (editingId === id) setEditingId(null);
     // Só avisa se o artigo já tinha ido pro site — apagar um rascunho que
     // nunca saiu daqui não é um evento que o outro lado precise saber.
-    if (removed && removed.status !== "rascunho" && removed.audience !== "mural") {
+    if (removed && removed.status !== "rascunho" && removed.audience?.includes("site")) {
       void notifyBlog({ data: { action: "delete", id: removed.id } }).catch((err) =>
         console.error("[BlogWebhook] request failed", err),
       );
@@ -165,7 +174,7 @@ export function BlogPanel({
     // Avisa o Make (webhook único de blog, ver src/lib/blog-webhook.ts) sempre
     // que um artigo com destino "Site" for salvo publicado (primeira vez ou
     // edições seguintes) ou passar a arquivado vindo de outro status.
-    if (updated.status === "publicado" && updated.audience !== "mural") {
+    if (updated.status === "publicado" && updated.audience?.includes("site")) {
       void notifyBlog({
         data: {
           action: "upsert",
@@ -183,7 +192,7 @@ export function BlogPanel({
     if (
       updated.status === "arquivado" &&
       previous?.status !== "arquivado" &&
-      updated.audience !== "mural"
+      updated.audience?.includes("site")
     ) {
       void notifyBlog({ data: { action: "archive", id: updated.id } }).catch((err) =>
         console.error("[BlogWebhook] request failed", err),
@@ -250,7 +259,7 @@ export function BlogPanel({
                       {s.label}
                     </span>
                     <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow">
-                      {p.audience === "mural" ? "Mural interno" : "Site"}
+                      {destinoLabel(p)}
                     </span>
                   </div>
                   <div className="p-3">
@@ -316,21 +325,17 @@ function BlogEditor({
   const team = useMemo(() => loadTeamMembers(), []);
   const clientes = useClientes();
   const portalSectionRef = useRef<HTMLDivElement>(null);
-  // "Destino" é escolha única (Site OU Mural OU Portal do cliente) — Portal
-  // não é gravado como um `audience` à parte (o campo continua "site"/
-  // "mural" por baixo, pro webhook do Make), é derivado de ter
-  // `portalClienteIds` marcado. Estado de UI próprio porque, ao escolher
-  // "Portal" agora, ainda não há cliente marcado (senão a re-renderização
-  // cairia de volta pra "site").
-  const [destino, setDestino] = useState<"site" | "mural" | "portal">(() =>
-    focusPortal
-      ? "portal"
-      : (post.portalClienteIds?.length ?? 0) > 0
-        ? "portal"
-        : (post.audience ?? "site"),
+  // "Destino" agora é multi-seleção: Site e Mural são toggles independentes
+  // dentro de `audience` (array); "Portal do cliente" continua sendo um
+  // toggle próprio (derivado de ter `portalClienteIds` marcado), combinável
+  // com qualquer combinação dos outros dois. `portalEnabled` é estado de UI
+  // próprio porque, ao ligar "Portal" agora, ainda não há cliente marcado
+  // (senão a re-renderização desligaria o toggle de volta).
+  const [portalEnabled, setPortalEnabled] = useState(
+    () => focusPortal || (post.portalClienteIds?.length ?? 0) > 0,
   );
   useEffect(() => {
-    setDestino((post.portalClienteIds?.length ?? 0) > 0 ? "portal" : (post.audience ?? "site"));
+    setPortalEnabled((post.portalClienteIds?.length ?? 0) > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
   useEffect(() => {
@@ -563,31 +568,54 @@ function BlogEditor({
             />
           </label>
 
-          <label className="block space-y-1">
+          <div className="block space-y-1.5">
             <span className="text-[11px] font-medium text-muted-foreground">Destino</span>
-            <select
-              value={destino}
-              onChange={(e) => {
-                const v = e.target.value as "site" | "mural" | "portal";
-                setDestino(v);
-                if (v === "portal") {
-                  // Mantém `audience` como "site" por baixo (webhook do Make
-                  // continua funcionando se algum dia isso for combinado de
-                  // novo); só passa a mostrar o seletor de clientes abaixo.
-                  patchImmediate({ audience: "site" });
-                } else {
-                  patchImmediate({ audience: v, portalClienteIds: [] });
-                }
-              }}
-              className={inputCls}
-            >
-              <option value="site">Artigo do site</option>
-              <option value="mural">Mural de novidades (time interno)</option>
-              <option value="portal">Portal do cliente</option>
-            </select>
-          </label>
+            <p className="text-[10px] text-muted-foreground">
+              Pode marcar mais de um ao mesmo tempo.
+            </p>
+            <div className="space-y-1 rounded-md border border-border bg-background p-2">
+              {(
+                [
+                  { key: "site" as const, label: "Site" },
+                  { key: "mural" as const, label: "Mural de novidades (time interno)" },
+                ] satisfies { key: "site" | "mural"; label: string }[]
+              ).map(({ key, label }) => {
+                const checked = p.audience?.includes(key) ?? false;
+                return (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const prev = p.audience ?? [];
+                        const next = e.target.checked
+                          ? [...prev, key]
+                          : prev.filter((a) => a !== key);
+                        patchImmediate({ audience: next });
+                      }}
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+              <label className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted">
+                <input
+                  type="checkbox"
+                  checked={portalEnabled}
+                  onChange={(e) => {
+                    setPortalEnabled(e.target.checked);
+                    if (!e.target.checked) patchImmediate({ portalClienteIds: [] });
+                  }}
+                />
+                Portal do cliente
+              </label>
+            </div>
+          </div>
 
-          {destino === "portal" && (
+          {portalEnabled && (
             <div
               ref={portalSectionRef}
               className={`space-y-1.5 rounded-md transition-shadow ${focusPortal ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : ""}`}

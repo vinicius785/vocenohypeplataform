@@ -1036,7 +1036,7 @@ function MuralNovidades() {
       const all: Array<BlogPost & { projectName: string }> = [];
       for (const pr of projs) {
         for (const b of pr.blog ?? []) {
-          if (b.audience === "mural") all.push({ ...b, projectName: pr.name });
+          if (b.audience?.includes("mural")) all.push({ ...b, projectName: pr.name });
         }
       }
       all.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
