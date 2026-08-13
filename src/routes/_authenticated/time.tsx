@@ -6,6 +6,7 @@ import { ClientesSection } from "@/components/ClientesSection";
 import { CampanhasSection } from "@/components/CampanhasSection";
 import { TimeSection } from "@/components/TimeSection";
 import { InfluenciadoresSection } from "@/components/InfluenciadoresSection";
+import { MetasSection } from "@/components/MetasSection";
 import { ReunioesSection } from "@/components/ReunioesSection";
 import { ProjetosSection } from "@/components/ProjetosSection";
 import { ComercialSection } from "@/components/ComercialSection";
@@ -26,6 +27,7 @@ const VALID: SectionKey[] = [
   "financeiro",
   "time",
   "influenciadores",
+  "metas",
   "chat",
   "configuracoes",
 ];
@@ -52,6 +54,7 @@ const SECTIONS: Record<SectionKey, { title: string; description: string }> = {
 
   time: { title: "Time", description: "Membros, métricas e pontuação do time." },
   influenciadores: { title: "Banco de influenciadores", description: "Catálogo de criadores." },
+  metas: { title: "Metas", description: "Metas do time, com progresso e prazos." },
   chat: { title: "Chat", description: "Conversas do time." },
   configuracoes: { title: "Configurações", description: "Preferências do workspace." },
 };
@@ -97,6 +100,8 @@ function TimePage() {
         <TimeSection />
       ) : active === "influenciadores" ? (
         <InfluenciadoresSection />
+      ) : active === "metas" ? (
+        <MetasSection />
       ) : active === "reunioes" ? (
         <ReunioesSection />
       ) : active === "projetos" ? (

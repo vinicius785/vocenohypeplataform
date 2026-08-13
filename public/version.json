@@ -1,6 +1,7 @@
 {
-  "version": "1.109.0",
+  "version": "1.110.0",
   "notes": [
+    "Novo: aba \"Metas\" (menu Estrutura) — metas do time por área (Comercial, Financeiro, Campanhas, Projetos, Time, Geral), numéricas (com barra de progresso) ou de feito/não-feito, com responsável, prazo, status automático (em andamento/concluída/atrasada) e histórico de atualizações de progresso.",
     "Novo: \"Relatório de métricas\" da campanha (Ferramentas adicionais, VI) — reúne as métricas das entregas já publicadas, separadas por influenciador, com destaque pro conteúdo de melhor desempenho (mais views). Fica salvo na campanha e também aparece pro cliente, na tela da campanha no portal.",
     "Novo: \"Baixar lista\" de influenciadores (dentro de uma campanha) ganha opção PDF, além de CSV/JSON — mostra nome, nicho, status, redes com seguidores, métricas de perfil e entregas de cada influenciador selecionado, pronto pra imprimir ou salvar como PDF.",
     "Ajusta a seção \"Histórico\" do perfil do influenciador no portal do cliente pra ficar abaixo de Briefing e Observações, e limpa o log de atividade interno acumulado em testes (afetava o que aparecia nesse histórico).",

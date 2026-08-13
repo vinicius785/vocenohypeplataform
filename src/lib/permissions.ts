@@ -10,6 +10,7 @@ export type Permission =
   | "financeiro"
   | "time"
   | "influenciadores"
+  | "metas"
   | "chat"
   | "senhas"
   | "configuracoes"
@@ -47,6 +48,7 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     label: "Time & Comunicação",
     items: [
       { key: "time", label: "Time" },
+      { key: "metas", label: "Metas" },
       { key: "chat", label: "Chat" },
     ],
   },

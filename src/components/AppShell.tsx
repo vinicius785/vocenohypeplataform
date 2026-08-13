@@ -10,6 +10,7 @@ import {
   Wallet,
   UserCog,
   Star,
+  Target,
   MessageSquare,
   Settings,
   Search,
@@ -84,6 +85,7 @@ export type SectionKey =
   | "financeiro"
   | "time"
   | "influenciadores"
+  | "metas"
   | "chat"
   | "configuracoes";
 
@@ -121,6 +123,7 @@ const groups: NavGroup[] = [
     items: [
       { key: "time", label: "Time", icon: UserCog },
       { key: "influenciadores", label: "Banco de influenciadores", icon: Star },
+      { key: "metas", label: "Metas", icon: Target },
     ],
   },
   {
