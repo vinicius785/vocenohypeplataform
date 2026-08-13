@@ -1,6 +1,9 @@
 {
-  "version": "1.121.0",
+  "version": "1.121.1",
   "notes": [
+    "Na lista de conversas do Chat, Canais/Campanhas/Projetos viram três seções separadas (antes ficavam misturados), cada uma em ordem alfabética.",
+    "Mensagens de voz ganham controle de velocidade (1x/1,5x/2x), tocando na bolinha ao lado do tempo.",
+    "Ajusta o formato das bolhas de mensagem do Chat pra ficar mais próximo do WhatsApp Web (cantos mais retos, sombra sutil).",
     "Refaz o Chat de novo: as duas listas de conversas separadas (central em grade + menu lateral) viram uma lista só, dentro da própria aba, estilo WhatsApp Web — mensagens diretas por mais recente primeiro, canais/campanhas/projetos numa seção fixa embaixo (também por recência). Clicar numa conversa abre ela ao lado, sem sair da tela. O menu lateral volta a ter só o botão \"Chat\", sem sub-lista.",
     "Corrige edições no perfil do influenciador se perdendo ou revertendo sozinhas (status voltando ao valor antigo, foto não salvando, etc): duas edições feitas em sequência rápida (ex: sair de um campo de texto e logo clicar em outra coisa) podiam usar uma versão desatualizada dos dados pra salvar, e a segunda edição apagava a primeira sem aviso nenhum. Agora cada edição sempre parte do estado mais recente, mesmo que a tela ainda não tenha atualizado na tela.",
     "Corrige o campo \"Link do conteúdo publicado\" (dentro da entrega de um influenciador) dando erro \"Não foi possível salvar\" e perdendo o que foi digitado — o campo salvava a cada tecla digitada, então editar/colar um link rápido disparava várias gravações ao mesmo tempo, que podiam se atropelar. Agora salva só ao sair do campo, como os outros campos de texto da plataforma.",

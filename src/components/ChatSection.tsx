@@ -703,8 +703,11 @@ function ChatConversationList({
   const filtered = q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items;
   const byRecency = (a: ChatListItem, b: ChatListItem) =>
     (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0);
+  const byName = (a: ChatListItem, b: ChatListItem) => a.name.localeCompare(b.name, "pt-BR");
   const diretas = filtered.filter((i) => i.kind === "dm").sort(byRecency);
-  const canais = filtered.filter((i) => i.kind !== "dm").sort(byRecency);
+  const canais = filtered.filter((i) => i.kind === "channel").sort(byName);
+  const campanhas = filtered.filter((i) => i.kind === "campanha").sort(byName);
+  const projetos = filtered.filter((i) => i.kind === "projeto").sort(byName);
   const totalUnread = items.reduce((sum, i) => sum + i.unread, 0);
 
   const handleCreateChannel = async (payload: {
@@ -811,7 +814,7 @@ function ChatConversationList({
               </div>
             )}
             {canais.length > 0 && (
-              <div>
+              <div className="mb-2">
                 <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Canais
                 </p>
@@ -822,17 +825,43 @@ function ChatConversationList({
                     active={item.id === activeId}
                     meId={meId}
                     onSelect={() => onSelectConvo(item.id)}
-                    onEdit={
-                      item.kind === "channel"
-                        ? (e) => {
-                            const c = channels.find((x) => x.id === item.id);
-                            if (c) editChannel(c, e);
-                          }
-                        : undefined
-                    }
-                    onDelete={
-                      item.kind === "channel" ? (e) => deleteChannelRow(item.id, e) : undefined
-                    }
+                    onEdit={(e) => {
+                      const c = channels.find((x) => x.id === item.id);
+                      if (c) editChannel(c, e);
+                    }}
+                    onDelete={(e) => deleteChannelRow(item.id, e)}
+                  />
+                ))}
+              </div>
+            )}
+            {campanhas.length > 0 && (
+              <div className="mb-2">
+                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Campanhas
+                </p>
+                {campanhas.map((item) => (
+                  <ChatListRow
+                    key={item.id}
+                    item={item}
+                    active={item.id === activeId}
+                    meId={meId}
+                    onSelect={() => onSelectConvo(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {projetos.length > 0 && (
+              <div>
+                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Projetos
+                </p>
+                {projetos.map((item) => (
+                  <ChatListRow
+                    key={item.id}
+                    item={item}
+                    active={item.id === activeId}
+                    meId={meId}
+                    onSelect={() => onSelectConvo(item.id)}
                   />
                 ))}
               </div>
@@ -1135,13 +1164,13 @@ function MessageList({
                   <div className={`flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
                     {m.text && (
                       <div
-                        className={`max-w-[420px] rounded-2xl px-3.5 py-2 text-sm ${
+                        className={`max-w-[420px] rounded-lg px-2.5 py-1.5 text-sm shadow-sm ${
                           mine
-                            ? "rounded-tr-sm bg-foreground text-background"
-                            : "rounded-tl-sm bg-muted text-foreground"
+                            ? "rounded-tr-none bg-foreground text-background"
+                            : "rounded-tl-none bg-muted text-foreground"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">
                           {renderText(m.text, m.mentions, taskInfoById, onOpenTask)}
                           {m.editedAt && (
                             <span
@@ -1640,13 +1669,25 @@ function useAudioWaveform(url: string, bars: number): number[] {
 }
 
 /** Player de áudio custom (onda + play/pause), no lugar do `<audio controls>` nativo do navegador. */
+const AUDIO_RATES = [1, 1.5, 2] as const;
+
 function AudioMessagePlayer({ src, compact }: { src: string; compact?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
+  const [rate, setRate] = useState<(typeof AUDIO_RATES)[number]>(1);
   const bars = compact ? 22 : 34;
   const levels = useAudioWaveform(src, bars);
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = rate;
+  }, [rate]);
+
+  const cycleRate = () => {
+    const next = AUDIO_RATES[(AUDIO_RATES.indexOf(rate) + 1) % AUDIO_RATES.length];
+    setRate(next);
+  };
 
   useEffect(() => {
     const el = audioRef.current;
@@ -1686,9 +1727,17 @@ function AudioMessagePlayer({ src, compact }: { src: string; compact?: boolean }
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-full border border-border bg-muted/40 py-1.5 pl-1.5 pr-3 ${compact ? "max-w-[190px]" : "max-w-xs"}`}
+      className={`flex items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1.5 pl-1.5 pr-2.5 ${compact ? "max-w-[220px]" : "max-w-xs"}`}
     >
-      <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        className="hidden"
+        onLoadedMetadata={(e) => {
+          e.currentTarget.playbackRate = rate;
+        }}
+      />
       <button
         type="button"
         onClick={toggle}
@@ -1726,6 +1775,18 @@ function AudioMessagePlayer({ src, compact }: { src: string; compact?: boolean }
       <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
         {fmtAudioTime(playing || current > 0 ? current : duration)}
       </span>
+      <button
+        type="button"
+        onClick={cycleRate}
+        aria-label="Velocidade de reprodução"
+        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${
+          rate !== 1
+            ? "border-foreground bg-foreground text-background"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        {rate}x
+      </button>
     </div>
   );
 }
