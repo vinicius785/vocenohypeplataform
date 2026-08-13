@@ -1,6 +1,7 @@
 {
-  "version": "1.117.1",
+  "version": "1.117.2",
   "notes": [
+    "Corrige os títulos das etapas do formulário de campanha (\"Pagamento aos influenciadores\", \"Direitos de imagem\") se sobrepondo no indicador de progresso.",
     "Aumenta o formulário de criar/editar campanha (mais largo e mais alto), pra respirar melhor.",
     "Refaz o design do formulário de criar/editar campanha: indicador de etapas agora é uma barra de progresso com círculos numerados conectados (em vez de abas apertadas), títulos e botões no mesmo padrão visual do resto da plataforma (tipografia fina, botões em pílula), diálogo mais largo pra respirar melhor. A etapa de Briefing agora avisa que esse texto também aparece no Link de inscrição da campanha.",
     "O botão \"Solicitar para o Marketing\" (numa tarefa de Campanha/Projeto) agora dá um feedback visual ao clicar: fica verde com um check e \"Solicitado!\" por um instante, confirmando que o pedido foi feito.",

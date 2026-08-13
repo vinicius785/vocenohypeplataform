@@ -401,7 +401,7 @@ export function VincularCampanhaDialog({
                       {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
                     </span>
                     <span
-                      className={`hidden text-[10px] font-medium sm:block ${
+                      className={`hidden w-20 text-center text-[10px] font-medium leading-tight sm:block ${
                         active ? "text-foreground" : "text-muted-foreground"
                       }`}
                     >
