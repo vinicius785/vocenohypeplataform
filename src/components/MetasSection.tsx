@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Check,
   TrendingUp,
+  Pencil,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { SectionHeader } from "./SectionHeader";
@@ -31,18 +32,6 @@ const STATUS_LABEL: Record<MetaStatus, string> = {
   concluida: "Concluída",
   atrasada: "Atrasada",
   cancelada: "Cancelada",
-};
-const STATUS_TONE: Record<MetaStatus, string> = {
-  em_andamento: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  concluida: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  atrasada: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-  cancelada: "bg-muted text-muted-foreground",
-};
-const AREA_TONE: Record<MetaArea, string> = {
-  Marketing: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  Operação: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  Influenciadores: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-  Comercial: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
 };
 
 function initialsOf(name: string): string {
@@ -308,7 +297,7 @@ export function MetasSection() {
           )}
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered
             .sort((a, b) => (a.meta.prazo ?? "9999").localeCompare(b.meta.prazo ?? "9999"))
             .map(({ meta, status }) => {
@@ -316,181 +305,157 @@ export function MetasSection() {
               const member = members.find((mm) => mm.name === meta.responsavel);
               const isExpanded = expanded.has(meta.id);
               return (
-                <div key={meta.id} className="rounded-xl border border-border bg-card p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                <div
+                  key={meta.id}
+                  className="flex flex-col overflow-hidden rounded-3xl border border-border bg-card"
+                >
+                  <div className="flex-1 p-6 sm:p-7">
+                    <div className="flex items-start gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
                         <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${AREA_TONE[meta.area]}`}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[11px] font-semibold text-foreground ring-1 ring-border`}
                         >
-                          {meta.area}
+                          {member?.photo ? (
+                            <img src={member.photo} alt="" className="h-full w-full object-cover" />
+                          ) : meta.responsavel ? (
+                            initialsOf(meta.responsavel) || "?"
+                          ) : (
+                            <Target className="h-4 w-4 text-muted-foreground" />
+                          )}
                         </span>
-                        <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_TONE[status]}`}
-                        >
-                          {STATUS_LABEL[status]}
-                        </span>
-                      </div>
-                      <h3 className="mt-1.5 text-sm font-semibold text-foreground">
-                        {meta.titulo}
-                      </h3>
-                      {meta.descricao && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{meta.descricao}</p>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        {meta.responsavel && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span
-                              className={`flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[9px] font-semibold text-white ${member?.photo ? "" : colorFor(meta.responsavel)}`}
-                            >
-                              {member?.photo ? (
-                                <img
-                                  src={member.photo}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                initialsOf(meta.responsavel) || "?"
-                              )}
-                            </span>
-                            {meta.responsavel}
-                          </span>
-                        )}
-                        {meta.prazo && (
-                          <span className="inline-flex items-center gap-1">
-                            <Calendar className="h-3 w-3" /> {fmtDate(meta.prazo)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {meta.tipo === "binaria" ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleConcluida(meta)}
-                          className={`flex h-7 w-7 items-center justify-center rounded-md border ${
-                            meta.concluida
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "border-border text-muted-foreground hover:bg-muted"
-                          }`}
-                          aria-label="Marcar concluída"
-                          title="Marcar concluída"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setUpdateDialog(meta)}
-                          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-muted"
-                        >
-                          <TrendingUp className="h-3 w-3" /> Atualizar
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setDialog({ mode: "edit", data: meta })}
-                        className="rounded-md border border-border px-2 py-1 text-[11px] text-foreground hover:bg-muted"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void remove(meta)}
-                        aria-label="Excluir meta"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {meta.tipo === "numerica" && (
-                    <div className="mt-3 rounded-lg border border-border bg-muted/20 p-3">
-                      <div className="flex items-end justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Progresso
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {meta.responsavel || "Sem responsável"}
                           </p>
-                          <p className="mt-0.5 text-sm text-foreground">
-                            <span className="text-lg font-semibold tabular-nums">
-                              {(meta.valorAtual ?? 0).toLocaleString("pt-BR")}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {" "}
-                              / {(meta.valorAlvo ?? 0).toLocaleString("pt-BR")}
-                              {meta.unidade ? ` ${meta.unidade}` : ""}
-                            </span>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {meta.area} · {STATUS_LABEL[status]}
                           </p>
                         </div>
-                        <span
-                          className={`shrink-0 text-2xl font-semibold tabular-nums ${
-                            status === "concluida"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : status === "atrasada"
-                                ? "text-rose-600 dark:text-rose-400"
-                                : "text-foreground"
-                          }`}
-                        >
-                          {progresso}%
-                        </span>
                       </div>
-                      <div className="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full transition-[width] duration-300"
-                          style={{
-                            width: `${progresso}%`,
-                            background:
-                              status === "concluida"
-                                ? "var(--chart-2)"
-                                : status === "atrasada"
-                                  ? "var(--chart-5)"
-                                  : "var(--chart-1)",
-                          }}
-                        />
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDialog({ mode: "edit", data: meta })}
+                          aria-label="Editar meta"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void remove(meta)}
+                          aria-label="Excluir meta"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
-                  )}
+
+                    <h3 className="mt-5 text-2xl font-light tracking-tighter text-foreground">
+                      {meta.titulo}
+                    </h3>
+                    {meta.descricao && (
+                      <p className="mt-1.5 text-sm text-muted-foreground">{meta.descricao}</p>
+                    )}
+
+                    <div className="mt-6">
+                      {meta.tipo === "numerica" ? (
+                        <p>
+                          <span className="text-5xl font-light tracking-tight text-foreground">
+                            {progresso}%
+                          </span>
+                          <span className="text-base font-medium text-muted-foreground">
+                            {" "}
+                            concluído
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-2xl font-light tracking-tighter text-foreground">
+                          {meta.concluida ? "Concluída" : "Em aberto"}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-foreground transition-[width] duration-300"
+                        style={{ width: `${progresso}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {meta.tipo === "numerica" &&
+                        `${(meta.valorAtual ?? 0).toLocaleString("pt-BR")} / ${(meta.valorAlvo ?? 0).toLocaleString("pt-BR")}${meta.unidade ? ` ${meta.unidade}` : ""}`}
+                      {meta.prazo && (
+                        <span className="inline-flex items-center gap-1">
+                          {meta.tipo === "numerica" && " · "}
+                          <Calendar className="h-3 w-3" /> {fmtDate(meta.prazo)}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex px-6 pb-6 sm:px-7 sm:pb-7">
+                    {meta.tipo === "binaria" ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleConcluida(meta)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-6 py-2.5 text-center text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {meta.concluida ? "Reabrir meta" : "Marcar concluída"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setUpdateDialog(meta)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-6 py-2.5 text-center text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+                      >
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        Atualizar progresso
+                      </button>
+                    )}
+                  </div>
 
                   {(meta.atualizacoes?.length ?? 0) > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => toggleExpanded(meta.id)}
-                      className="mt-3 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                    >
-                      {isExpanded ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
+                    <div className="border-t border-border px-6 py-3 sm:px-7">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(meta.id)}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                        {meta.atualizacoes!.length} atualizaç
+                        {meta.atualizacoes!.length === 1 ? "ão" : "ões"}
+                      </button>
+                      {isExpanded && (
+                        <ul className="mt-2 space-y-1.5">
+                          {[...meta.atualizacoes!].reverse().map((a) => (
+                            <li key={a.id} className="flex items-start gap-2 text-xs">
+                              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-semibold text-foreground">
+                                {a.initials}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-foreground">
+                                  {a.author}
+                                  {a.valor !== undefined
+                                    ? ` atualizou para ${a.valor.toLocaleString("pt-BR")}`
+                                    : ""}
+                                  {a.nota ? ` — ${a.nota}` : ""}
+                                </span>
+                                <span className="ml-1.5 text-muted-foreground">
+                                  {new Date(a.createdAt).toLocaleDateString("pt-BR")}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
                       )}
-                      {meta.atualizacoes!.length} atualizaç
-                      {meta.atualizacoes!.length === 1 ? "ão" : "ões"}
-                    </button>
-                  )}
-                  {isExpanded && (
-                    <ul className="mt-2 space-y-1.5 border-t border-border pt-2.5">
-                      {[...meta.atualizacoes!].reverse().map((a) => (
-                        <li key={a.id} className="flex items-start gap-2 text-xs">
-                          <span
-                            className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white ${a.color}`}
-                          >
-                            {a.initials}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-foreground">
-                              {a.author}
-                              {a.valor !== undefined
-                                ? ` atualizou para ${a.valor.toLocaleString("pt-BR")}`
-                                : ""}
-                              {a.nota ? ` — ${a.nota}` : ""}
-                            </span>
-                            <span className="ml-1.5 text-muted-foreground">
-                              {new Date(a.createdAt).toLocaleDateString("pt-BR")}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
               );

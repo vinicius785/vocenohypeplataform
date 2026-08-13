@@ -1,6 +1,7 @@
 {
-  "version": "1.110.1",
+  "version": "1.111.0",
   "notes": [
+    "Rebranding dos cards de Metas: visual minimalista e monocromático, cantos bem arredondados, foto e nome do responsável no topo, número do progresso em destaque, barra de progresso e botão principal em pílula — grade de cards em vez de lista.",
     "Ajusta as áreas da Metas pra Marketing, Operação, Influenciadores e Comercial (antes eram Comercial/Financeiro/Campanhas/Projetos/Time/Geral), e redesenha o box de progresso das metas numéricas, mais visual e alinhado à identidade da plataforma.",
     "Novo: aba \"Metas\" (menu Estrutura) — metas do time por área (Comercial, Financeiro, Campanhas, Projetos, Time, Geral), numéricas (com barra de progresso) ou de feito/não-feito, com responsável, prazo, status automático (em andamento/concluída/atrasada) e histórico de atualizações de progresso.",
     "Novo: \"Relatório de métricas\" da campanha (Ferramentas adicionais, VI) — reúne as métricas das entregas já publicadas, separadas por influenciador, com destaque pro conteúdo de melhor desempenho (mais views). Fica salvo na campanha e também aparece pro cliente, na tela da campanha no portal.",
