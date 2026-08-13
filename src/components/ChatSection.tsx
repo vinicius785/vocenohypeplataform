@@ -1024,9 +1024,29 @@ function MessageList({
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const prevConvoIdRef = useRef(convoId);
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length]);
+    const switchedConvo = prevConvoIdRef.current !== convoId;
+    prevConvoIdRef.current = convoId;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Trocar de conversa precisa ir direto pro fim, sem animação — e mais
+    // de uma vez, porque avatares/anexos ainda carregando mudam a altura
+    // do conteúdo depois desse primeiro scroll (senão parava "no meio",
+    // antes do conteúdo terminar de renderizar). Mensagem nova na MESMA
+    // conversa continua com scroll suave, de onde já estava.
+    const scroll = () =>
+      el.scrollTo({ top: el.scrollHeight, behavior: switchedConvo ? "auto" : "smooth" });
+    scroll();
+    if (switchedConvo) {
+      const raf = requestAnimationFrame(scroll);
+      const timeout = window.setTimeout(scroll, 150);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.clearTimeout(timeout);
+      };
+    }
+  }, [messages.length, convoId]);
   const jumpToMessage = (id: string) => {
     const el = document.getElementById(`msg-${id}`);
     if (!el) return;

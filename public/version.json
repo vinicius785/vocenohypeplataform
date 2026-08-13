@@ -1,6 +1,7 @@
 {
-  "version": "1.121.1",
+  "version": "1.121.2",
   "notes": [
+    "Corrige o Chat abrindo uma conversa e o scroll parando no meio, em vez de ir direto pra mensagem mais recente — o cálculo da posição final acontecia antes de fotos/anexos terminarem de carregar e mudarem a altura da lista. Agora repete o ajuste algumas vezes logo após trocar de conversa.",
     "Na lista de conversas do Chat, Canais/Campanhas/Projetos viram três seções separadas (antes ficavam misturados), cada uma em ordem alfabética.",
     "Mensagens de voz ganham controle de velocidade (1x/1,5x/2x), tocando na bolinha ao lado do tempo.",
     "Ajusta o formato das bolhas de mensagem do Chat pra ficar mais próximo do WhatsApp Web (cantos mais retos, sombra sutil).",
