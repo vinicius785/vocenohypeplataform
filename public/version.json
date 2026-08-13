@@ -1,6 +1,7 @@
 {
-  "version": "1.120.1",
+  "version": "1.120.2",
   "notes": [
+    "Corrige o campo \"Link do conteúdo publicado\" (dentro da entrega de um influenciador) dando erro \"Não foi possível salvar\" e perdendo o que foi digitado — o campo salvava a cada tecla digitada, então editar/colar um link rápido disparava várias gravações ao mesmo tempo, que podiam se atropelar. Agora salva só ao sair do campo, como os outros campos de texto da plataforma.",
     "Corrige as bolhas de mensagem do Chat aparecendo espremidas (largura de um caractere só, texto quebrando letra por letra) — a largura máxima da bolha era uma porcentagem calculada em cima de um contêiner sem largura própria; agora usa um limite fixo.",
     "Refaz o Chat: clicar em \"Chat\" no menu lateral agora abre uma central de conversas (foto grande, prévia da última mensagem, bolha de não-lidas), em vez de reabrir direto a última conversa deixada aberta — clique numa conversa pra entrar nela. Mensagens também ganharam bolhas de verdade (arredondadas, alinhadas à direita quando são suas), no lugar do texto solto de antes.",
     "Corrige um bug de notificação do Chat: quando a última conversa aberta ficava \"esquecida\" como ativa (ex: o usuário saiu do Chat, fechou a aba ou passou dias sem abrir), mensagens novas nela nunca acendiam a bolinha de notificação — o app achava que ela ainda estava sendo vista. Agora a conversa só conta como \"vista\" enquanto a seção Chat está realmente aberta na tela.",

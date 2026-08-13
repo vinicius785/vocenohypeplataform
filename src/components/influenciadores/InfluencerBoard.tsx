@@ -2624,11 +2624,11 @@ function EntregasEditor({
           {selected.conteudoStatus === "Postado" && (
             <div className="space-y-2 border-t border-border pt-2.5">
               <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
-              <input
+              <AutoSaveInput
+                key={selected.id}
                 value={selected.url ?? ""}
-                onChange={(ev) => update(selected.id, { url: ev.target.value })}
+                onSave={(v) => update(selected.id, { url: v })}
                 placeholder="Link do conteúdo publicado"
-                className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
               />
               <div>
                 <p className="mb-1 text-[11px] font-medium text-muted-foreground">Métricas</p>
@@ -3576,6 +3576,41 @@ function InfluenciadorDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Input de linha única com o mesmo padrão da AutoSaveTextarea abaixo —
+ * estado local, salva só ao sair do campo. Sem isso, cada tecla digitada
+ * (ex: colando/editando um link) disparava um upsert próprio no Supabase;
+ * várias escritas concorrentes para o mesmo campo podiam se atropelar e
+ * fazer a edição "não salvar" (o toast de erro aparecia, ou uma escrita
+ * mais rápida sobrescrevia uma mais lenta com um valor antigo). */
+function AutoSaveInput({
+  value,
+  onSave,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== value) onSave(draft);
+      }}
+      placeholder={placeholder}
+      className={
+        className ??
+        "w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+      }
+    />
   );
 }
 
