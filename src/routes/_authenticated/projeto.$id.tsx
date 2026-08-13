@@ -171,6 +171,34 @@ function ProjetoPage() {
               </p>
             )}
           </div>
+          {availableTabs.length > 0 && (
+            <div className="inline-flex shrink-0 rounded-md border border-border bg-background p-0.5">
+              <button
+                onClick={() => setLayout("tabs")}
+                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  layout === "tabs"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-label="Ver em abas"
+              >
+                <LayoutPanelTop className="h-3.5 w-3.5" />
+                Abas
+              </button>
+              <button
+                onClick={() => setLayout("single")}
+                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  layout === "single"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-label="Ver em página única"
+              >
+                <LayoutList className="h-3.5 w-3.5" />
+                Página única
+              </button>
+            </div>
+          )}
         </header>
 
         <div>
@@ -180,36 +208,6 @@ function ProjetoPage() {
             </p>
           ) : (
             <>
-              {/* Layout toggle */}
-              <div className="mb-4 flex items-center justify-end">
-                <div className="inline-flex rounded-md border border-border bg-background p-0.5">
-                  <button
-                    onClick={() => setLayout("tabs")}
-                    className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                      layout === "tabs"
-                        ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    aria-label="Ver em abas"
-                  >
-                    <LayoutPanelTop className="h-3.5 w-3.5" />
-                    Abas
-                  </button>
-                  <button
-                    onClick={() => setLayout("single")}
-                    className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                      layout === "single"
-                        ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    aria-label="Ver em página única"
-                  >
-                    <LayoutList className="h-3.5 w-3.5" />
-                    Página única
-                  </button>
-                </div>
-              </div>
-
               {layout === "tabs" ? (
                 <>
                   <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
