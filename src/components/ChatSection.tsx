@@ -987,7 +987,7 @@ function MessageList({
                       <button
                         type="button"
                         onClick={() => jumpToMessage(original.id)}
-                        className="mb-1 flex w-full max-w-[75%] items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
+                        className="mb-1 flex w-full max-w-[420px] items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
                       >
                         <Reply className="mt-0.5 h-3 w-3 shrink-0" />
                         <div className="min-w-0">
@@ -1013,7 +1013,7 @@ function MessageList({
                   <div className={`flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
                     {m.text && (
                       <div
-                        className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
+                        className={`max-w-[420px] rounded-2xl px-3.5 py-2 text-sm ${
                           mine
                             ? "rounded-tr-sm bg-foreground text-background"
                             : "rounded-tl-sm bg-muted text-foreground"
