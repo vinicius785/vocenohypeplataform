@@ -240,6 +240,8 @@ export type PagamentoEntrega = {
   config: Record<string, PagamentoConfigEntrega>;
   aprovacao: AprovacaoPagamento;
   data?: string;
+  comprovanteNome?: string;
+  comprovanteUrl?: string;
 };
 /** Formato usado antes dos grupos de pagamento: um único tipo, campos soltos na raiz. */
 type LegacyPagamentoEntrega = PagamentoConfigEntrega & {
@@ -2932,7 +2934,17 @@ function InfluencerProfileDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0"
+        onPointerDownOutside={() => {
+          // Clicar fora fecha o diálogo antes do evento de blur do campo
+          // focado terminar de disparar — o rascunho (ex: link de
+          // publicação em AutoSaveInput) nunca chegava a salvar. Forçar o
+          // blur aqui, síncrono, garante que o salvamento roda antes do
+          // Radix desmontar o diálogo.
+          (document.activeElement as HTMLElement | null)?.blur();
+        }}
+      >
         <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
         <DialogDescription className="sr-only">
           Informações completas do influenciador.
@@ -3981,6 +3993,36 @@ function PagamentoEditor({
         onChange={(e) => update({ data: e.target.value })}
         className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
       />
+
+      <div className="space-y-1">
+        <p className="text-[11px] font-medium text-muted-foreground">Comprovante</p>
+        {norm.comprovanteUrl ? (
+          <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5">
+            <a
+              href={norm.comprovanteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-foreground hover:underline"
+            >
+              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="truncate">{norm.comprovanteNome || "Comprovante"}</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => update({ comprovanteNome: undefined, comprovanteUrl: undefined })}
+              aria-label="Remover comprovante"
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <BriefingAnexoUploadButton
+            onUpload={(nome, url) => update({ comprovanteNome: nome, comprovanteUrl: url })}
+          />
+        )}
+      </div>
+
       <p className="text-[10px] text-muted-foreground">
         Some como <b>Pendente</b> — só vira despesa no Financeiro depois de aceito (Aceitar/Recusar
         fica logo abaixo, quando esse campo estiver habilitado).

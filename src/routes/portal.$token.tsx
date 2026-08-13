@@ -33,6 +33,7 @@ import {
   Megaphone,
   Newspaper,
   Paperclip,
+  ImageIcon,
   PlayCircle,
   Sparkles,
   Twitter,
@@ -108,6 +109,13 @@ function fmtDate(iso: string): string {
  * que só entende datas soltas "YYYY-MM-DD". */
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+/** Mesmo critério usado na galeria de conteúdos da VI — decide se um anexo
+ * pode ser mostrado como thumbnail de imagem ou precisa de um ícone
+ * genérico (vídeo, pdf, etc). */
+function isImageUrl(nome?: string): boolean {
+  return !!nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
 }
 
 export const Route = createFileRoute("/portal/$token")({
@@ -566,7 +574,7 @@ function ApproveRejectBar({
             size="sm"
             className="h-7 px-2.5 text-xs"
             onClick={onConfirmReject}
-            disabled={!motivo.trim() || busy}
+            disabled={busy}
           >
             {t(lang, "confirmarReprovacao")}
           </Button>
@@ -802,6 +810,23 @@ function InfluencerDetail({
     return a.dataPostagem.localeCompare(b.dataPostagem);
   });
 
+  // Galeria: só o conteúdo já publicado deste influenciador, mesmo critério
+  // da galeria da campanha na VI (anexo categoria "Conteúdo publicado", com
+  // o link "url" como alternativa quando não há anexo).
+  const galeriaItems: { entrega: PublicEntrega; nome?: string; url: string }[] = inf.entregas
+    .filter((e) => e.status === "publicado")
+    .flatMap((e) => {
+      const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo publicado");
+      if (publicados.length > 0) {
+        return publicados.map((a) => ({
+          entrega: e,
+          nome: a.nome as string | undefined,
+          url: a.url,
+        }));
+      }
+      return e.url ? [{ entrega: e, nome: undefined as string | undefined, url: e.url }] : [];
+    });
+
   return (
     <div>
       <BackButton onClick={onBack} label={t(lang, "backToList")} className="mb-4" />
@@ -880,7 +905,7 @@ function InfluencerDetail({
                   size="sm"
                   className="h-7 gap-1 bg-rose-600 px-2.5 text-xs text-white hover:bg-rose-700"
                   onClick={() => void runInflu("reprovado")}
-                  disabled={!motivo.trim() || busyKey === "influ"}
+                  disabled={busyKey === "influ"}
                 >
                   {t(lang, "confirmarReprovacao")}
                 </Button>
@@ -1188,6 +1213,47 @@ function InfluencerDetail({
                 );
               })}
             </ol>
+          </section>
+        )}
+
+        {/* GALERIA — só o conteúdo publicado deste influenciador nesta campanha */}
+        {galeriaItems.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <ImageIcon className="h-4 w-4" /> {t(lang, "galeriaHeader")}
+            </h3>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {galeriaItems.map(({ entrega, nome, url }, idx) => {
+                const showImage = isImageUrl(nome);
+                return (
+                  <a
+                    key={`${entrega.id}-${idx}`}
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group overflow-hidden rounded-xl border border-border bg-background transition-colors hover:border-foreground/30"
+                  >
+                    <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
+                      {showImage ? (
+                        <img
+                          src={url}
+                          alt={entrega.titulo ?? entrega.tipo}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+                          <PlayCircle className="h-6 w-6" strokeWidth={1.5} />
+                          <span className="text-[11px]">{entrega.tipo}</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="truncate p-2 text-[11px] text-muted-foreground">
+                      {entrega.titulo || entrega.tipo}
+                    </p>
+                  </a>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -1951,95 +2017,52 @@ function ClientPortalPage() {
                         {t(lang, "semConteudo")}
                       </p>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {contentFeed.slice(0, 12).map((item) => {
-                          // O link do post pode vir do campo "url" (texto
-                          // manual) OU de um anexo categoria "Conteúdo
-                          // publicado" (upload feito na entrega) — antes só o
-                          // primeiro era considerado, e o conteúdo anexado
-                          // sumia do feed do portal.
                           const conteudoAnexos = (item.entrega.anexos ?? []).filter(
                             (a) => a.categoria === "Conteúdo publicado",
                           );
-                          const links = item.entrega.url
-                            ? [{ id: "url", nome: t(lang, "verPublicacao"), url: item.entrega.url }]
-                            : conteudoAnexos.map((a) => ({ id: a.id, nome: a.nome, url: a.url }));
+                          const thumbUrl = conteudoAnexos.find((a) => isImageUrl(a.nome))?.url;
                           return (
-                            <div
+                            <button
                               key={`${item.campanhaId}:${item.inf.id}:${item.entrega.id}`}
-                              className="rounded-xl border border-border bg-background p-4"
+                              type="button"
+                              onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                              className="group overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-foreground/30"
                             >
-                              <button
-                                type="button"
-                                onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                                className="flex w-full items-center gap-3 text-left"
-                              >
-                                <Avatar className="h-10 w-10 shrink-0">
+                              <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted">
+                                {thumbUrl ? (
+                                  <img
+                                    src={thumbUrl}
+                                    alt={item.entrega.titulo ?? item.entrega.tipo}
+                                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+                                    <PlayCircle className="h-6 w-6" strokeWidth={1.5} />
+                                    <span className="text-[11px]">{item.entrega.tipo}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 p-2.5">
+                                <Avatar className="h-6 w-6 shrink-0">
                                   {item.inf.foto && (
                                     <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
                                   )}
-                                  <AvatarFallback className="text-sm font-semibold">
+                                  <AvatarFallback className="text-[10px] font-semibold">
                                     {initialsOf(item.inf.nome)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-semibold text-foreground">
+                                  <p className="truncate text-xs font-medium text-foreground">
                                     {item.inf.nome}
                                   </p>
-                                  <p className="truncate text-xs text-muted-foreground">
+                                  <p className="truncate text-[10px] text-muted-foreground">
                                     {item.campanhaNome}
-                                    {item.entrega.publicadoEm
-                                      ? ` · ${fmtDate(item.entrega.publicadoEm)}`
-                                      : item.entrega.dataPostagem
-                                        ? ` · ${fmtDate(item.entrega.dataPostagem)}`
-                                        : ""}
                                   </p>
                                 </div>
-                                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                  {item.entrega.tipo}
-                                </Badge>
-                              </button>
-
-                              {(item.entrega.metrics || links.length > 0) && (
-                                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                                  <div className="flex flex-wrap gap-4">
-                                    {item.entrega.metrics?.views ? (
-                                      <MetricStat
-                                        label={t(lang, "views")}
-                                        value={item.entrega.metrics.views.toLocaleString("pt-BR")}
-                                      />
-                                    ) : null}
-                                    {item.entrega.metrics?.likes ? (
-                                      <MetricStat
-                                        label={t(lang, "curtidas")}
-                                        value={item.entrega.metrics.likes.toLocaleString("pt-BR")}
-                                      />
-                                    ) : null}
-                                    {item.entrega.metrics?.reach ? (
-                                      <MetricStat
-                                        label={t(lang, "alcance")}
-                                        value={item.entrega.metrics.reach.toLocaleString("pt-BR")}
-                                      />
-                                    ) : null}
-                                  </div>
-                                  {links.length > 0 && (
-                                    <div className="flex flex-wrap gap-3">
-                                      {links.map((link) => (
-                                        <a
-                                          key={link.id}
-                                          href={link.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-foreground underline underline-offset-2"
-                                        >
-                                          <ExternalLink className="h-3 w-3" /> {link.nome}
-                                        </a>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                              </div>
+                            </button>
                           );
                         })}
                       </div>

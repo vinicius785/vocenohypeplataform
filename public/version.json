@@ -1,6 +1,10 @@
 {
-  "version": "1.121.2",
+  "version": "1.122.0",
   "notes": [
+    "Portal do cliente: os \"Últimos conteúdos\" da tela inicial agora aparecem em formato de galeria (fotos em grade), igual à galeria de conteúdos já usada na campanha internamente. Dentro de uma campanha, o perfil de cada influenciador ganha sua própria galeria, só com o conteúdo publicado dele naquela campanha.",
+    "O motivo da reprovação de um influenciador ou de uma entrega (roteiro/conteúdo) no portal do cliente agora é opcional — antes era obrigatório preencher pra conseguir reprovar.",
+    "Corrige o link de publicação de uma entrega não salvando quando você editava o campo e clicava fora do perfil do influenciador (o clique fechava o diálogo antes do campo terminar de salvar).",
+    "Novo: o card de Pagamento do influenciador ganha um campo pra anexar o comprovante de pagamento.",
     "Corrige o Chat abrindo uma conversa e o scroll parando no meio, em vez de ir direto pra mensagem mais recente — o cálculo da posição final acontecia antes de fotos/anexos terminarem de carregar e mudarem a altura da lista. Agora repete o ajuste algumas vezes logo após trocar de conversa.",
     "Na lista de conversas do Chat, Canais/Campanhas/Projetos viram três seções separadas (antes ficavam misturados), cada uma em ordem alfabética.",
     "Mensagens de voz ganham controle de velocidade (1x/1,5x/2x), tocando na bolinha ao lado do tempo.",
@@ -104,6 +108,8 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Os \"Últimos conteúdos\" da tela inicial agora aparecem em formato de galeria (fotos em grade). Dentro de uma campanha, o perfil de cada influenciador ganha sua própria galeria, só com o conteúdo publicado dele ali.",
+    "O motivo da reprovação de um influenciador ou de uma entrega agora é opcional — antes era obrigatório preencher pra conseguir reprovar.",
     "Diminui o tamanho dos botões \"Voltar\" novos e aplica em todos os títulos o mesmo estilo tipográfico mais fino e compacto que já era usado nos cards de Metas (internamente).",
     "Padroniza os botões \"Voltar\" com um novo visual: pílula com ícone de seta que expande ao passar o mouse.",
     "Novo: campanhas com métricas de entregas publicadas ganham um \"Relatório de métricas\" — totais, destaque do melhor conteúdo e desempenho por influenciador.",

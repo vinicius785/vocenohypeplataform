@@ -309,9 +309,6 @@ const RespondInfluInput = z.object({
 export const respondCampanhaInflu = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RespondInfluInput.parse(raw))
   .handler(async ({ data }) => {
-    if (data.status === "reprovado" && !data.motivo?.trim()) {
-      throw new Error("Motivo é obrigatório para reprovar.");
-    }
     await assertCampanhaDoCliente(data.token, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const next = applyInfluApproval(influ, data.status, data.motivo?.trim());
@@ -333,9 +330,6 @@ const RespondEntregaInput = z.object({
 export const respondCampanhaEntrega = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RespondEntregaInput.parse(raw))
   .handler(async ({ data }) => {
-    if (data.status === "reprovado" && !data.motivo?.trim()) {
-      throw new Error("Motivo é obrigatório para reprovar.");
-    }
     await assertCampanhaDoCliente(data.token, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     if (!influ.entregas.some((e) => e.id === data.entregaId)) {
