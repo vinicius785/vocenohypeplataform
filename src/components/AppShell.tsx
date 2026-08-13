@@ -396,6 +396,11 @@ export function AppShell({
                           if (!allowed) return;
                           onSelect(item.key);
                           if (item.key === "comercial") void markLeadsSeen();
+                          // Clicar em "Chat" sempre abre a central de
+                          // conversas, não a última conversa deixada aberta
+                          // (que ficava "presa" indefinidamente, já que
+                          // chat:active só muda quando uma conversa é aberta).
+                          if (item.key === "chat") setActiveConvo("");
                         }}
                         title={
                           !allowed

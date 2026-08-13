@@ -36,6 +36,7 @@ import {
   useActiveConvo,
   subscribeChat,
   markRead,
+  setActive as setActiveConvo,
   loadCampaignChannels,
   loadProjectChannels,
   getStatus,
@@ -45,10 +46,13 @@ import {
   broadcastTyping,
   getTypingUsers,
   getOtherReadAt,
+  getUnreadCount,
   REACTION_EMOJIS,
   type ChatMember,
   type ChatMention,
   type ChatAttachment,
+  type ChatChannel,
+  type CampaignChannel,
 } from "@/lib/chat-store";
 
 import { useClientes } from "@/lib/clientes-store";
@@ -253,6 +257,22 @@ export function ChatSection() {
     return [];
   }, [members, me.id, activeChannel, activeCampaign, activeProject]);
   const canStartChannelCall = !isDm && (!!activeChannel || !!activeCampaign || !!activeProject);
+
+  if (!activeId) {
+    return (
+      <ChatHub
+        channels={channels}
+        campaignChannels={campaignChannels}
+        projectChannels={projectChannels}
+        members={members}
+        messages={messages}
+        meId={me.id}
+        onOpen={(id) => {
+          setActiveConvo(id);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex h-[calc(100vh-9rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background">
@@ -523,6 +543,199 @@ export function ChatSection() {
   );
 }
 
+type HubItem = {
+  id: string;
+  name: string;
+  photo?: string;
+  kind: "channel" | "campanha" | "projeto" | "dm";
+  private?: boolean;
+  status?: ReturnType<typeof getStatus>;
+  lastMessage?: ChatMessage;
+  unread: number;
+};
+
+/** Tela inicial do Chat: ao clicar em "Chat" no menu, a pessoa cai aqui —
+ * não mais direto na última conversa aberta (que ficava presa
+ * indefinidamente, ver `AppShell.tsx`). Mostra todas as conversas com foto
+ * grande, prévia da última mensagem e bolha de não-lidas; clicar abre a
+ * conversa de verdade (mesmo componente de sempre). */
+function ChatHub({
+  channels,
+  campaignChannels,
+  projectChannels,
+  members,
+  messages,
+  meId,
+  onOpen,
+}: {
+  channels: ChatChannel[];
+  campaignChannels: CampaignChannel[];
+  projectChannels: { id: string; name: string }[];
+  members: ChatMember[];
+  messages: ChatMessage[];
+  meId: string;
+  onOpen: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+
+  const lastMessageByConvo = useMemo(() => {
+    const map = new Map<string, ChatMessage>();
+    for (const m of messages) {
+      const cur = map.get(m.convoId);
+      if (!cur || m.createdAt > cur.createdAt) map.set(m.convoId, m);
+    }
+    return map;
+  }, [messages]);
+
+  const items = useMemo<HubItem[]>(() => {
+    const visibleChannels = channels.filter(
+      (c) => !c.private || !c.allowedMemberIds || c.allowedMemberIds.includes(meId),
+    );
+    const list: HubItem[] = [
+      ...visibleChannels.map((c) => ({
+        id: c.id,
+        name: c.name,
+        photo: c.photo,
+        kind: "channel" as const,
+        private: c.private,
+        lastMessage: lastMessageByConvo.get(c.id),
+        unread: getUnreadCount(c.id, messages, meId),
+      })),
+      ...campaignChannels.map((c) => ({
+        id: c.id,
+        name: c.name,
+        kind: "campanha" as const,
+        lastMessage: lastMessageByConvo.get(c.id),
+        unread: getUnreadCount(c.id, messages, meId),
+      })),
+      ...projectChannels.map((p) => ({
+        id: p.id,
+        name: p.name,
+        kind: "projeto" as const,
+        lastMessage: lastMessageByConvo.get(p.id),
+        unread: getUnreadCount(p.id, messages, meId),
+      })),
+      ...members
+        .filter((m) => m.id !== meId)
+        .map((m) => {
+          const id = dmId(meId, m.id);
+          return {
+            id,
+            name: m.name,
+            photo: m.photo,
+            kind: "dm" as const,
+            status: getStatus(m.id),
+            lastMessage: lastMessageByConvo.get(id),
+            unread: getUnreadCount(id, messages, meId),
+          };
+        }),
+    ];
+    const q = search.trim().toLowerCase();
+    const filtered = q ? list.filter((i) => i.name.toLowerCase().includes(q)) : list;
+    return filtered.sort(
+      (a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0),
+    );
+  }, [
+    channels,
+    campaignChannels,
+    projectChannels,
+    members,
+    messages,
+    meId,
+    search,
+    lastMessageByConvo,
+  ]);
+
+  const totalUnread = items.reduce((sum, i) => sum + i.unread, 0);
+
+  return (
+    <div className="mx-auto flex h-[calc(100vh-9rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-background">
+      <header className="flex items-center gap-3 border-b border-border px-5 py-4">
+        <div>
+          <h1 className="text-2xl font-light tracking-tighter text-foreground">Conversas</h1>
+          <p className="text-xs text-muted-foreground">
+            {totalUnread > 0
+              ? `${totalUnread} mensagem${totalUnread > 1 ? "ns" : ""} não lida${totalUnread > 1 ? "s" : ""}`
+              : "Tudo em dia"}
+          </p>
+        </div>
+        <div className="relative ml-auto w-56">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar conversas..."
+            className="h-9 w-full rounded-full border border-border bg-background pl-8 pr-3 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-5">
+        {items.length === 0 ? (
+          <p className="p-8 text-center text-xs text-muted-foreground">
+            Nenhuma conversa encontrada.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onOpen(item.id)}
+                className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+              >
+                <span className="relative h-12 w-12 shrink-0">
+                  {item.photo ? (
+                    <img src={item.photo} alt="" className="h-12 w-12 rounded-full object-cover" />
+                  ) : item.kind === "dm" ? (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-sm font-semibold text-foreground">
+                      {item.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  ) : (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      {item.private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+                    </span>
+                  )}
+                  {item.kind === "dm" && item.status && (
+                    <span
+                      title={STATUS_LABEL[item.status]}
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${STATUS_COLOR[item.status]}`}
+                    />
+                  )}
+                  {item.unread > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-semibold text-background">
+                      {item.unread > 9 ? "9+" : item.unread}
+                    </span>
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`truncate text-sm ${item.unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}
+                  >
+                    {item.name}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {item.lastMessage
+                      ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${
+                          item.lastMessage.text ||
+                          (item.lastMessage.attachments?.length ? "Anexo" : "")
+                        }`
+                      : item.kind === "campanha"
+                        ? "Campanha"
+                        : item.kind === "projeto"
+                          ? "Projeto"
+                          : "Nenhuma mensagem ainda"}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type MentionOption = {
   kind: "task" | "user";
   id: string;
@@ -731,21 +944,21 @@ function MessageList({
             )}
             <div
               id={`msg-${m.id}`}
-              className={`group relative flex gap-3 rounded-md transition-colors duration-500 ${grouped ? "mt-1" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
+              className={`group relative flex gap-2.5 rounded-md transition-colors duration-500 ${mine ? "flex-row-reverse" : ""} ${grouped ? "mt-1" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
             >
               <div className="w-8 shrink-0">
                 {!grouped &&
                   (m.authorPhoto ? (
-                    <img src={m.authorPhoto} alt="" className="h-8 w-8 rounded-md object-cover" />
+                    <img src={m.authorPhoto} alt="" className="h-8 w-8 rounded-full object-cover" />
                   ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-xs font-semibold text-foreground">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                       {m.authorName.slice(0, 1).toUpperCase()}
                     </div>
                   ))}
               </div>
-              <div className="min-w-0 flex-1">
+              <div className={`flex min-w-0 flex-1 flex-col ${mine ? "items-end" : "items-start"}`}>
                 {!grouped && (
-                  <div className="flex items-baseline gap-2">
+                  <div className={`flex items-baseline gap-2 ${mine ? "flex-row-reverse" : ""}`}>
                     <span className="text-xs font-semibold text-foreground">
                       {mine ? "Você" : m.authorName}
                     </span>
@@ -774,7 +987,7 @@ function MessageList({
                       <button
                         type="button"
                         onClick={() => jumpToMessage(original.id)}
-                        className="mb-1 flex w-full items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
+                        className="mb-1 flex w-full max-w-[75%] items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
                       >
                         <Reply className="mt-0.5 h-3 w-3 shrink-0" />
                         <div className="min-w-0">
@@ -797,14 +1010,26 @@ function MessageList({
                     }}
                   />
                 ) : (
-                  <div>
+                  <div className={`flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
                     {m.text && (
-                      <p className="whitespace-pre-wrap break-words text-sm text-foreground">
-                        {renderText(m.text, m.mentions, taskInfoById, onOpenTask)}
-                        {m.editedAt && (
-                          <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>
-                        )}
-                      </p>
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
+                          mine
+                            ? "rounded-tr-sm bg-foreground text-background"
+                            : "rounded-tl-sm bg-muted text-foreground"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap break-words">
+                          {renderText(m.text, m.mentions, taskInfoById, onOpenTask)}
+                          {m.editedAt && (
+                            <span
+                              className={`ml-1 text-[10px] ${mine ? "text-background/70" : "text-muted-foreground"}`}
+                            >
+                              (editado)
+                            </span>
+                          )}
+                        </p>
+                      </div>
                     )}
                     {m.attachments && m.attachments.length > 0 && (
                       <AttachmentList attachments={m.attachments} />
