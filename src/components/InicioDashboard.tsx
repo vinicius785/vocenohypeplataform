@@ -25,10 +25,23 @@ import {
   loadProjetos,
   onProjetosChange,
   getTaskAssignees,
+  loadTeamMembers,
   type BlogPost,
   type Task as ProjTask,
 } from "@/lib/projetos";
-import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
+import {
+  renderMarkdownLite,
+  MARKDOWN_LITE_CLASSES,
+  ArticleEngagement,
+} from "@/components/marketing/BlogPanel";
+import {
+  loadEngagementVI,
+  toggleLikeVI,
+  addCommentVI,
+  initialsOf,
+  colorFor,
+  type BlogEngagement,
+} from "@/lib/blog-engagement";
 import { ZipGameSection } from "@/components/games/ZipGameSection";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -1036,7 +1049,9 @@ function MuralNovidades() {
       const all: Array<BlogPost & { projectName: string }> = [];
       for (const pr of projs) {
         for (const b of pr.blog ?? []) {
-          if (b.audience?.includes("mural")) all.push({ ...b, projectName: pr.name });
+          if (b.status === "publicado" && b.audience?.includes("mural")) {
+            all.push({ ...b, projectName: pr.name });
+          }
         }
       }
       all.sort((a, b) => (b.publishDate ?? "").localeCompare(a.publishDate ?? ""));
@@ -1059,9 +1074,29 @@ function MuralNovidades() {
   };
 
   const [openArticle, setOpenArticle] = useState<(BlogPost & { projectName: string }) | null>(null);
+  const [engagement, setEngagement] = useState<BlogEngagement | null>(null);
+  const team = useMemo(() => loadTeamMembers(), []);
+
+  useEffect(() => {
+    if (!openArticle) {
+      setEngagement(null);
+      return;
+    }
+    let cancelled = false;
+    loadEngagementVI(openArticle.id).then((e) => {
+      if (!cancelled) setEngagement(e);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [openArticle]);
 
   const visibleItems = items.filter((i) => !dismissed.includes(i.id));
   if (visibleItems.length === 0) return null;
+
+  const authorPhoto = openArticle?.authorId
+    ? team.find((m) => m.id === openArticle.authorId)?.photo
+    : undefined;
 
   return (
     <div className="rounded-lg border border-border bg-background">
@@ -1086,7 +1121,8 @@ function MuralNovidades() {
                 <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{p.excerpt}</p>
               )}
               <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                <span>{p.projectName}</span>
+                <span>{p.authorName || "Sem autor"}</span>
+                <span>· {p.projectName}</span>
                 {p.publishDate && <span>· {p.publishDate}</span>}
               </div>
             </button>
@@ -1106,9 +1142,25 @@ function MuralNovidades() {
           {openArticle && (
             <>
               <DialogHeader className="border-b border-border px-6 py-4">
-                <DialogTitle>{openArticle.title}</DialogTitle>
+                <DialogTitle className="font-light tracking-tight">{openArticle.title}</DialogTitle>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{openArticle.projectName}</span>
+                  {authorPhoto ? (
+                    <img
+                      src={authorPhoto}
+                      alt=""
+                      className="h-5 w-5 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(openArticle.authorName || "?")}`}
+                    >
+                      {initialsOf(openArticle.authorName || "") || "?"}
+                    </span>
+                  )}
+                  <span className="font-medium text-foreground">
+                    {openArticle.authorName || "Sem autor"}
+                  </span>
+                  <span>· {openArticle.projectName}</span>
                   {openArticle.publishDate && <span>· {openArticle.publishDate}</span>}
                 </div>
               </DialogHeader>
@@ -1129,6 +1181,30 @@ function MuralNovidades() {
                     __html: renderMarkdownLite(openArticle.content ?? openArticle.excerpt ?? ""),
                   }}
                 />
+                {engagement && (
+                  <ArticleEngagement
+                    likeCount={engagement.likeCount}
+                    likedByMe={engagement.likedByMe}
+                    comments={engagement.comments}
+                    onToggleLike={async () => {
+                      setEngagement((e) =>
+                        e
+                          ? {
+                              ...e,
+                              likedByMe: !e.likedByMe,
+                              likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
+                            }
+                          : e,
+                      );
+                      await toggleLikeVI(openArticle.id);
+                    }}
+                    onAddComment={async (body) => {
+                      await addCommentVI(openArticle.id, body);
+                      const next = await loadEngagementVI(openArticle.id);
+                      setEngagement(next);
+                    }}
+                  />
+                )}
               </div>
             </>
           )}

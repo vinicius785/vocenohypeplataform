@@ -195,7 +195,7 @@ export type Campaign = {
   notes?: string;
 };
 
-export type BlogStatus = "rascunho" | "revisao" | "publicado" | "arquivado";
+export type BlogStatus = "agendado" | "publicado" | "despublicado";
 export type BlogPost = {
   id: string;
   title: string;

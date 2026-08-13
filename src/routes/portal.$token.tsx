@@ -45,7 +45,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { renderMarkdownLite, MARKDOWN_LITE_CLASSES } from "@/components/marketing/BlogPanel";
+import {
+  renderMarkdownLite,
+  MARKDOWN_LITE_CLASSES,
+  ArticleEngagement,
+} from "@/components/marketing/BlogPanel";
+import type { BlogEngagement } from "@/lib/blog-engagement";
 import { PortalBugReportButton } from "@/components/PortalBugReportButton";
 import { BackButton } from "@/components/BackButton";
 import { VersionWatcher } from "@/components/VersionWatcher";
@@ -57,6 +62,9 @@ import {
   updateInfluBriefing,
   updateInfluObservacoes,
   updateInfluBriefingAnexo,
+  loadArtigoEngagement,
+  toggleArtigoLike,
+  addArtigoComentario,
 } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
@@ -1413,6 +1421,9 @@ function ClientPortalPage() {
   const updateBriefingFn = useServerFn(updateInfluBriefing);
   const updateObservacoesFn = useServerFn(updateInfluObservacoes);
   const updateBriefingAnexoFn = useServerFn(updateInfluBriefingAnexo);
+  const loadEngagementFn = useServerFn(loadArtigoEngagement);
+  const toggleLikeFn = useServerFn(toggleArtigoLike);
+  const addComentarioFn = useServerFn(addArtigoComentario);
   const [data, setData] = useState<ClienteLinkData | null>(loaderData.clienteData);
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">(
     loaderData.clienteData ? "ready" : "notfound",
@@ -1421,6 +1432,21 @@ function ClientPortalPage() {
   const [influTab, setInfluTab] = useState<"todos" | "reprovados">("todos");
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
+  const [readingEngagement, setReadingEngagement] = useState<BlogEngagement | null>(null);
+
+  useEffect(() => {
+    if (!readingArticleId) {
+      setReadingEngagement(null);
+      return;
+    }
+    let cancelled = false;
+    loadEngagementFn({ data: { token, postId: readingArticleId } }).then((e) => {
+      if (!cancelled) setReadingEngagement(e);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [readingArticleId, loadEngagementFn, token]);
   const [ws, setWs] = useState<Workspace>(loaderData.ws);
   const [lang, setLang] = usePortalLang();
   useEffect(() => setInfluTab("todos"), [activeCampanhaId]);
@@ -1713,13 +1739,14 @@ function ClientPortalPage() {
                         {reading.category}
                       </Badge>
                     )}
-                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                    <h1 className="text-2xl font-light tracking-tight text-foreground">
                       {reading.title}
                     </h1>
-                    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      {reading.authorName && <span>{reading.authorName}</span>}
-                      {reading.authorName && reading.publishDate && <span>·</span>}
-                      {reading.publishDate && <span>{fmtDate(reading.publishDate)}</span>}
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {reading.authorName || "Sem autor"}
+                      </span>
+                      {reading.publishDate && <span>· {fmtDate(reading.publishDate)}</span>}
                     </div>
                     <div
                       className={`mt-6 ${MARKDOWN_LITE_CLASSES}`}
@@ -1727,6 +1754,33 @@ function ClientPortalPage() {
                         __html: renderMarkdownLite(reading.content ?? reading.excerpt ?? ""),
                       }}
                     />
+                    {readingEngagement && (
+                      <ArticleEngagement
+                        likeCount={readingEngagement.likeCount}
+                        likedByMe={readingEngagement.likedByMe}
+                        comments={readingEngagement.comments}
+                        commentPlaceholder={t(lang, "articleCommentPlaceholder")}
+                        onToggleLike={async () => {
+                          setReadingEngagement((e) =>
+                            e
+                              ? {
+                                  ...e,
+                                  likedByMe: !e.likedByMe,
+                                  likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
+                                }
+                              : e,
+                          );
+                          await toggleLikeFn({ data: { token, postId: reading.id } });
+                        }}
+                        onAddComment={async (body) => {
+                          await addComentarioFn({ data: { token, postId: reading.id, body } });
+                          const next = await loadEngagementFn({
+                            data: { token, postId: reading.id },
+                          });
+                          setReadingEngagement(next);
+                        }}
+                      />
+                    )}
                   </article>
                 </div>
               );

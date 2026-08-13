@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, X, Newspaper, ImageIcon, Calendar, Eye, Check } from "lucide-react";
+import {
+  Plus,
+  X,
+  Newspaper,
+  ImageIcon,
+  Calendar,
+  Eye,
+  Check,
+  Heart,
+  MessageCircle,
+  Send,
+} from "lucide-react";
 import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { loadTeamMembers } from "@/lib/projetos";
 import { CoverUploadField } from "./ImageUploadField";
 import { notifyBlogEvent } from "@/lib/marketing.functions";
 import { useClientes } from "@/lib/clientes-store";
+import type { BlogComment } from "@/lib/blog-engagement";
+import { initialsOf, colorFor } from "@/lib/blog-engagement";
 
 /** Conversor bem simples de markdown pra HTML — só o suficiente pra
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
@@ -77,11 +90,130 @@ export function renderMarkdownLite(md: string): string {
 export const MARKDOWN_LITE_CLASSES =
   "space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:list-decimal [&_li]:ml-5 [&_li]:pl-0.5 [&_p]:my-2 [&_strong]:font-semibold [&_em]:italic";
 
+function fmtRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+/** Bloco de curtir + comentar de um artigo publicado — mesmo visual no
+ * Mural interno (`InicioDashboard.tsx`) e no Portal do cliente
+ * (`portal.$token.tsx`), cada um passando sua própria fonte de dados
+ * (`src/lib/blog-engagement.ts` do lado VI, server functions de
+ * `cliente-link.functions.ts` do lado VC). */
+export function ArticleEngagement({
+  likeCount,
+  likedByMe,
+  comments,
+  onToggleLike,
+  onAddComment,
+  commentPlaceholder = "Escreva um comentário...",
+}: {
+  likeCount: number;
+  likedByMe: boolean;
+  comments: BlogComment[];
+  onToggleLike: () => void;
+  onAddComment: (body: string) => void | Promise<void>;
+  commentPlaceholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await onAddComment(body);
+      setDraft("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-6 space-y-4 border-t border-border pt-5">
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={onToggleLike}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            likedByMe
+              ? "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+              : "border-border text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          <Heart className={`h-3.5 w-3.5 ${likedByMe ? "fill-current" : ""}`} />
+          {likeCount > 0 ? likeCount : "Curtir"}
+        </button>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <MessageCircle className="h-3.5 w-3.5" />
+          {comments.length > 0 ? comments.length : "Comentar"}
+        </span>
+      </div>
+
+      {comments.length > 0 && (
+        <ul className="space-y-3">
+          {comments.map((c) => (
+            <li key={c.id} className="flex gap-2.5">
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${colorFor(c.authorLabel)}`}
+              >
+                {initialsOf(c.authorLabel) || "?"}
+              </span>
+              <div className="min-w-0 flex-1 rounded-xl bg-muted/50 px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold">{c.authorLabel}</span>
+                  {c.authorKind === "cliente" && (
+                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground">
+                      Cliente
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">
+                    {fmtRelative(c.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 whitespace-pre-wrap text-xs text-foreground">{c.body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex items-center gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void submit();
+          }}
+          placeholder={commentPlaceholder}
+          className="h-9 w-full rounded-full border border-border bg-background px-3.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+        />
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={!draft.trim() || sending}
+          aria-label="Enviar comentário"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background hover:opacity-90 disabled:opacity-40"
+        >
+          <Send className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
-  { key: "rascunho", label: "Rascunho", cls: "bg-muted text-foreground" },
   {
-    key: "revisao",
-    label: "Em revisão",
+    key: "agendado",
+    label: "Agendado",
     cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   },
   {
@@ -90,8 +222,8 @@ const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
     cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   },
   {
-    key: "arquivado",
-    label: "Arquivado",
+    key: "despublicado",
+    label: "Despublicado",
     cls: "bg-muted text-muted-foreground",
   },
 ];
@@ -139,7 +271,7 @@ export function BlogPanel({
     const p: BlogPost = {
       id: crypto.randomUUID(),
       title: "Novo artigo",
-      status: "rascunho",
+      status: "agendado",
       audience: [audience],
     };
     setPosts([p, ...posts]);
@@ -152,9 +284,10 @@ export function BlogPanel({
     const removed = posts.find((p) => p.id === id);
     setPosts(posts.filter((p) => p.id !== id));
     if (editingId === id) setEditingId(null);
-    // Só avisa se o artigo já tinha ido pro site — apagar um rascunho que
-    // nunca saiu daqui não é um evento que o outro lado precise saber.
-    if (removed && removed.status !== "rascunho" && removed.audience?.includes("site")) {
+    // Só avisa se o artigo já tinha ido pro site — apagar um artigo ainda
+    // agendado (nunca saiu daqui) não é um evento que o outro lado precise
+    // saber.
+    if (removed && removed.status !== "agendado" && removed.audience?.includes("site")) {
       void notifyBlog({ data: { action: "delete", id: removed.id } }).catch((err) =>
         console.error("[BlogWebhook] request failed", err),
       );
@@ -173,7 +306,7 @@ export function BlogPanel({
     if (!updated) return;
     // Avisa o Make (webhook único de blog, ver src/lib/blog-webhook.ts) sempre
     // que um artigo com destino "Site" for salvo publicado (primeira vez ou
-    // edições seguintes) ou passar a arquivado vindo de outro status.
+    // edições seguintes) ou passar a despublicado vindo de outro status.
     if (updated.status === "publicado" && updated.audience?.includes("site")) {
       void notifyBlog({
         data: {
@@ -190,8 +323,8 @@ export function BlogPanel({
       }).catch((err) => console.error("[BlogWebhook] request failed", err));
     }
     if (
-      updated.status === "arquivado" &&
-      previous?.status !== "arquivado" &&
+      updated.status === "despublicado" &&
+      previous?.status !== "despublicado" &&
       updated.audience?.includes("site")
     ) {
       void notifyBlog({ data: { action: "archive", id: updated.id } }).catch((err) =>
@@ -408,17 +541,21 @@ function BlogEditor({
 
   const p = draft;
   const statusInfo = STATUS.find((s) => s.key === p.status)!;
+  const authorPhoto = p.authorId ? team.find((m) => m.id === p.authorId)?.photo : undefined;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center gap-2">
         <button
           onClick={handleClose}
-          className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+          className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted"
         >
           ← Voltar
         </button>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] ${statusInfo.cls}`}>
+        <span className="text-sm font-light tracking-tight text-foreground">
+          {p.title || "Novo artigo"}
+        </span>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusInfo.cls}`}>
           {statusInfo.label}
         </span>
         <span
@@ -430,15 +567,18 @@ function BlogEditor({
         <div className="ml-auto flex gap-2">
           <button
             onClick={onDelete}
-            className="rounded-md border border-border px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+            className="rounded-full border border-border px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
           >
             Excluir
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr_260px]">
-        <div className="space-y-3 rounded-lg border border-border bg-background p-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr_280px]">
+        <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Conteúdo
+          </p>
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Título</span>
             <input
@@ -479,7 +619,7 @@ function BlogEditor({
           </label>
         </div>
 
-        <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
+        <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             <Eye className="h-3.5 w-3.5" /> Pré-visualização
           </p>
@@ -496,14 +636,22 @@ function BlogEditor({
                 {p.category}
               </span>
             )}
-            <h1 className="text-xl font-bold leading-tight">{p.title || "Sem título"}</h1>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span>{p.authorName || "Sem autor"}</span>
+            <h1 className="text-xl font-light leading-tight tracking-tight">
+              {p.title || "Sem título"}
+            </h1>
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              {authorPhoto ? (
+                <img src={authorPhoto} alt="" className="h-5 w-5 rounded-full object-cover" />
+              ) : (
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(p.authorName || "?")}`}
+                >
+                  {initialsOf(p.authorName || "") || "?"}
+                </span>
+              )}
+              <span className="font-medium text-foreground">{p.authorName || "Sem autor"}</span>
               {p.publishDate && (
-                <>
-                  <span>·</span>
-                  <span>{new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>
-                </>
+                <span>· {new Date(p.publishDate).toLocaleDateString("pt-BR")}</span>
               )}
             </div>
             {p.excerpt && <p className="mt-2 text-sm italic text-muted-foreground">{p.excerpt}</p>}
@@ -518,28 +666,46 @@ function BlogEditor({
           </article>
         </div>
 
-        <aside className="space-y-3 rounded-lg border border-border bg-background p-4">
+        <aside className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Publicação
+          </p>
           <CoverUploadField cover={p.cover} onChange={(cover) => patchImmediate({ cover })} />
 
           <label className="block space-y-1">
             <span className="text-[11px] font-medium text-muted-foreground">Autor (time)</span>
-            <select
-              value={p.authorId ?? ""}
-              onChange={(e) => {
-                const id = e.target.value;
-                const m = team.find((x) => x.id === id);
-                patchImmediate({ authorId: id || undefined, authorName: m?.name });
-              }}
-              className={inputCls}
-            >
-              <option value="">— Nenhum —</option>
-              {team.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                  {m.role ? ` · ${m.role}` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              {authorPhoto ? (
+                <img
+                  src={authorPhoto}
+                  alt=""
+                  className="h-8 w-8 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${colorFor(p.authorName || "?")}`}
+                >
+                  {initialsOf(p.authorName || "") || "?"}
+                </span>
+              )}
+              <select
+                value={p.authorId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const m = team.find((x) => x.id === id);
+                  patchImmediate({ authorId: id || undefined, authorName: m?.name });
+                }}
+                className={inputCls}
+              >
+                <option value="">— Nenhum —</option>
+                {team.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.role ? ` · ${m.role}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             {team.length === 0 && (
               <p className="text-[10px] text-muted-foreground">
                 Cadastre membros na aba Time para vincular autores.

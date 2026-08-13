@@ -195,6 +195,109 @@ async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof A
   return artigos;
 }
 
+const TokenInput = z.object({ token: z.string().min(1) });
+
+const ArtigoEngagementPublic = z.object({
+  likeCount: z.number(),
+  likedByMe: z.boolean(),
+  comments: z.array(
+    z.object({
+      id: z.string(),
+      authorLabel: z.string(),
+      authorKind: z.enum(["team", "cliente"]),
+      body: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
+/** Público, sem auth — curtidas/comentários de um artigo, carregados sob
+ * demanda ao abrir a leitura (não vem junto com `getClienteLinkData`, pra
+ * não inflar o payload da lista de artigos). */
+export const loadArtigoEngagement = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => TokenInput.extend({ postId: z.string().min(1) }).parse(raw))
+  .handler(async ({ data }): Promise<z.infer<typeof ArtigoEngagementPublic>> => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const likerKey = `cliente:${found.clienteId}`;
+    const [likesRes, commentsRes] = await Promise.all([
+      supabaseAdmin.from("blog_likes").select("liker_key").eq("post_id", data.postId),
+      supabaseAdmin
+        .from("blog_comments")
+        .select("id, author_label, author_kind, body, created_at")
+        .eq("post_id", data.postId)
+        .order("created_at", { ascending: true }),
+    ]);
+    if (likesRes.error) throw new Error(likesRes.error.message);
+    if (commentsRes.error) throw new Error(commentsRes.error.message);
+    return {
+      likeCount: likesRes.data.length,
+      likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
+      comments: commentsRes.data.map((r) => ({
+        id: r.id,
+        authorLabel: r.author_label,
+        authorKind: r.author_kind === "cliente" ? ("cliente" as const) : ("team" as const),
+        body: r.body,
+        createdAt: r.created_at,
+      })),
+    };
+  });
+
+/** Público, sem auth — curtir/descurtir um artigo. Identidade é o nome do
+ * cliente do próprio token (sem pedir nada na hora), chaveado por
+ * `cliente:<clienteId>` pra permitir toggle idempotente. */
+export const toggleArtigoLike = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => TokenInput.extend({ postId: z.string().min(1) }).parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const likerKey = `cliente:${found.clienteId}`;
+    const { data: existing, error: findError } = await supabaseAdmin
+      .from("blog_likes")
+      .select("id")
+      .eq("post_id", data.postId)
+      .eq("liker_key", likerKey)
+      .maybeSingle();
+    if (findError) throw new Error(findError.message);
+    if (existing) {
+      const { error } = await supabaseAdmin.from("blog_likes").delete().eq("id", existing.id);
+      if (error) throw new Error(error.message);
+      return { ok: true };
+    }
+    const { error } = await supabaseAdmin.from("blog_likes").insert({
+      post_id: data.postId,
+      liker_key: likerKey,
+      liker_label: found.cliente.empresa,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+const AddArtigoComentarioInput = TokenInput.extend({
+  postId: z.string().min(1),
+  body: z.string().trim().min(1).max(2000),
+});
+
+/** Público, sem auth — comenta num artigo. Autor é sempre o nome da
+ * empresa do cliente do token (`author_kind: "cliente"`). */
+export const addArtigoComentario = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => AddArtigoComentarioInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("blog_comments").insert({
+      post_id: data.postId,
+      author_label: found.cliente.empresa,
+      author_kind: "cliente",
+      body: data.body.trim(),
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 const CronogramaItemPublic = z.object({
   id: z.string(),
   date: z.string(),
@@ -202,8 +305,6 @@ const CronogramaItemPublic = z.object({
   description: z.string().optional(),
   recurring: z.boolean().optional(),
 });
-
-const TokenInput = z.object({ token: z.string().min(1) });
 
 /** Público — sem auth. Usado pela página `/portal/$token`. Retorna TODAS
  * as campanhas do cliente, cada uma já com seus influenciadores. */

@@ -81,6 +81,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      blog_comments: {
+        Row: {
+          author_kind: string;
+          author_label: string;
+          body: string;
+          created_at: string;
+          id: string;
+          post_id: string;
+        };
+        Insert: {
+          author_kind: string;
+          author_label: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          post_id: string;
+        };
+        Update: {
+          author_kind?: string;
+          author_label?: string;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          post_id?: string;
+        };
+        Relationships: [];
+      };
+      blog_likes: {
+        Row: {
+          created_at: string;
+          id: string;
+          liker_key: string;
+          liker_label: string;
+          post_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          liker_key: string;
+          liker_label: string;
+          post_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          liker_key?: string;
+          liker_label?: string;
+          post_id?: string;
+        };
+        Relationships: [];
+      };
       bug_reports: {
         Row: {
           client_label: string | null;
