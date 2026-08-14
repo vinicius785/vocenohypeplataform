@@ -32,6 +32,7 @@ import {
   type Entry,
   type ManualEntry,
   type FinanceiroAnexo,
+  type FinanceiroAnexoCategoria,
   type Kind,
   type Source,
   useFinanceiroEntries,
@@ -558,6 +559,23 @@ export function FinanceiroSection() {
                 }
               : undefined
           }
+          onAnexosChange={
+            viewing.editable
+              ? async (anexos) => {
+                  const m = manual.find((x) => x.id === viewing.id);
+                  if (!m) return;
+                  const next = { ...m, anexos };
+                  try {
+                    await updateManualEntry(next);
+                    setViewing((v) => (v ? { ...v, anexos } : v));
+                  } catch (err) {
+                    setSyncError(
+                      `Não foi possível salvar o anexo: ${err instanceof Error ? err.message : "erro desconhecido"}.`,
+                    );
+                  }
+                }
+              : undefined
+          }
         />
       )}
     </div>
@@ -604,8 +622,6 @@ function EntryDialog({
   // novos anexos sempre vão pro Storage via `anexos`.
   const [invoice] = useState(initial?.invoice);
   const [anexos, setAnexos] = useState<FinanceiroAnexo[]>(initial?.anexos ?? []);
-  const [uploading, setUploading] = useState(false);
-  const anexoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
 
   const campanhas = useMemo(
@@ -617,29 +633,6 @@ function EntryDialog({
     if (!clienteId) setCampanhaId("");
     else if (campanhaId && !campanhas.some((c) => c.id === campanhaId)) setCampanhaId("");
   }, [clienteId, campanhas, campanhaId]);
-
-  const handleAnexoPick = async (file: File | null) => {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Anexo muito grande (máx 10MB).");
-      return;
-    }
-    setUploading(true);
-    setError("");
-    try {
-      const url = await uploadFinanceiroAnexo(file);
-      if (!url) {
-        setError("Falha ao subir o arquivo. Tente de novo.");
-        return;
-      }
-      setAnexos((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), nome: file.name, url, criadoEm: todayISO() },
-      ]);
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -805,66 +798,21 @@ function EntryDialog({
             )}
           </div>
 
-          <div className="rounded-xl border border-border p-3.5">
-            <div className="mb-2.5 flex items-center justify-between">
-              <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                <Paperclip className="h-4 w-4 text-muted-foreground" />
-                Anexos (comprovantes, notas fiscais...)
-              </span>
-              <input
-                ref={anexoInputRef}
-                type="file"
-                accept="application/pdf,image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  if (anexoInputRef.current) anexoInputRef.current.value = "";
-                  void handleAnexoPick(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => anexoInputRef.current?.click()}
-                disabled={uploading}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
-              >
-                {uploading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Paperclip className="h-3 w-3" />
-                )}
-                {uploading ? "Enviando..." : "Anexar"}
-              </button>
+          {invoice && (
+            <div className="rounded-xl border border-border p-3.5">
+              <p className="mb-1.5 text-xs font-semibold text-foreground">
+                Nota fiscal (anexo antigo)
+              </p>
+              <div className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{invoice.name}</span>
+              </div>
             </div>
-            {invoice || anexos.length > 0 ? (
-              <ul className="space-y-1.5">
-                {invoice && (
-                  <li className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{invoice.name}</span>
-                  </li>
-                )}
-                {anexos.map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs"
-                  >
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">{a.nome}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAnexos((prev) => prev.filter((x) => x.id !== a.id))}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      aria-label="Remover anexo"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[11px] text-muted-foreground">PDF ou imagem, até 10MB cada.</p>
-            )}
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FinanceiroAnexoBox categoria="Comprovante" anexos={anexos} onChange={setAnexos} />
+            <FinanceiroAnexoBox categoria="Nota fiscal" anexos={anexos} onChange={setAnexos} />
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
@@ -1176,18 +1124,128 @@ function Section({
   );
 }
 
+/** Box de upload por categoria (Comprovante / Nota fiscal) — usado tanto no
+ * formulário de criar/editar quanto direto nos detalhes do lançamento, sem
+ * precisar entrar em modo de edição pra anexar ou abrir um arquivo. */
+function FinanceiroAnexoBox({
+  categoria,
+  anexos,
+  onChange,
+}: {
+  categoria: FinanceiroAnexoCategoria;
+  anexos: FinanceiroAnexo[];
+  onChange: (next: FinanceiroAnexo[]) => void;
+}) {
+  const items = anexos.filter((a) => a.categoria === categoria);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handlePick = async (file: File | null) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Máx 10MB.");
+      return;
+    }
+    setError("");
+    setUploading(true);
+    try {
+      const url = await uploadFinanceiroAnexo(file);
+      if (!url) {
+        setError("Falha ao subir.");
+        return;
+      }
+      onChange([
+        ...anexos,
+        { id: crypto.randomUUID(), categoria, nome: file.name, url, criadoEm: todayISO() },
+      ]);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border p-3.5">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold text-foreground">{categoria}</span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            if (inputRef.current) inputRef.current.value = "";
+            void handlePick(file);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
+        >
+          {uploading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Paperclip className="h-3 w-3" />
+          )}
+          {uploading ? "Enviando..." : "Adicionar"}
+        </button>
+      </div>
+      {items.length > 0 ? (
+        <ul className="space-y-1.5">
+          {items.map((a) => (
+            <li
+              key={a.id}
+              className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs"
+            >
+              <a
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                download={a.nome}
+                className="inline-flex min-w-0 flex-1 items-center gap-1.5 hover:underline"
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{a.nome}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Remover anexo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">Nenhum arquivo ainda.</p>
+      )}
+      {error && <p className="mt-1 text-[11px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 function EntryDetailsDialog({
   entry,
   paidAt,
   onTogglePaid,
   onClose,
   onEdit,
+  onAnexosChange,
 }: {
   entry: Entry;
   paidAt?: string;
   onTogglePaid?: () => void;
   onClose: () => void;
   onEdit?: () => void;
+  /** Só passado pra lançamentos manuais (editáveis) — permite anexar ou
+   * remover comprovante/nota fiscal direto daqui, sem precisar clicar em
+   * "Editar" primeiro. */
+  onAnexosChange?: (anexos: FinanceiroAnexo[]) => void;
 }) {
   const bankFilled =
     entry.bank && Object.values(entry.bank).some((v) => v && String(v).trim() !== "");
@@ -1344,31 +1402,59 @@ function EntryDetailsDialog({
             </Section>
           )}
 
-          {entryAnexos(entry).length > 0 && (
-            <Section title="Anexos" icon={<Paperclip className="h-4 w-4" />}>
-              <ul className="space-y-1.5">
-                {entryAnexos(entry).map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-xs"
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{a.nome}</span>
-                    </span>
-                    <a
-                      href={a.url}
-                      download={a.nome}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 hover:bg-muted"
+          {onAnexosChange ? (
+            <>
+              {entry.invoice && (
+                <div className="rounded-xl border border-border p-3.5">
+                  <p className="mb-1.5 text-xs font-semibold text-foreground">
+                    Nota fiscal (anexo antigo)
+                  </p>
+                  <div className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{entry.invoice.name}</span>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FinanceiroAnexoBox
+                  categoria="Comprovante"
+                  anexos={entry.anexos ?? []}
+                  onChange={onAnexosChange}
+                />
+                <FinanceiroAnexoBox
+                  categoria="Nota fiscal"
+                  anexos={entry.anexos ?? []}
+                  onChange={onAnexosChange}
+                />
+              </div>
+            </>
+          ) : (
+            entryAnexos(entry).length > 0 && (
+              <Section title="Anexos" icon={<Paperclip className="h-4 w-4" />}>
+                <ul className="space-y-1.5">
+                  {entryAnexos(entry).map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-xs"
                     >
-                      <Download className="h-3 w-3" /> Baixar
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </Section>
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{a.nome}</span>
+                      </span>
+                      <a
+                        href={a.url}
+                        download={a.nome}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 hover:bg-muted"
+                      >
+                        <Download className="h-3 w-3" /> Baixar
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )
           )}
 
           {!entry.editable && (

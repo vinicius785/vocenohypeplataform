@@ -17,7 +17,24 @@ export type Source = "manual" | "influenciador" | "salario" | "campanha";
  * fiscal salva como base64 direto na linha. */
 export type InvoiceFile = { name: string; dataUrl: string };
 
-export type FinanceiroAnexo = { id: string; nome: string; url: string; criadoEm?: string };
+export const FINANCEIRO_ANEXO_CATEGORIAS = ["Comprovante", "Nota fiscal"] as const;
+export type FinanceiroAnexoCategoria = (typeof FINANCEIRO_ANEXO_CATEGORIAS)[number];
+
+export type FinanceiroAnexo = {
+  id: string;
+  categoria: FinanceiroAnexoCategoria;
+  nome: string;
+  url: string;
+  criadoEm?: string;
+};
+
+/** Anexos antigos (pré-categoria) caem em "Comprovante" — não tinham
+ * distinção nenhuma antes, e comprovante é a categoria mais comum. */
+export function legacyFinanceiroAnexoCategoria(raw: string): FinanceiroAnexoCategoria {
+  return (FINANCEIRO_ANEXO_CATEGORIAS as readonly string[]).includes(raw)
+    ? (raw as FinanceiroAnexoCategoria)
+    : "Comprovante";
+}
 
 export type Entry = {
   id: string;
@@ -113,9 +130,20 @@ export function entryAnexos(e: {
   invoice?: InvoiceFile;
   anexos?: FinanceiroAnexo[];
 }): FinanceiroAnexo[] {
-  const anexos = e.anexos ?? [];
+  const anexos = (e.anexos ?? []).map((a) => ({
+    ...a,
+    categoria: legacyFinanceiroAnexoCategoria(a.categoria),
+  }));
   if (!e.invoice) return anexos;
-  return [{ id: "legacy-invoice", nome: e.invoice.name, url: e.invoice.dataUrl }, ...anexos];
+  return [
+    {
+      id: "legacy-invoice",
+      categoria: "Nota fiscal",
+      nome: e.invoice.name,
+      url: e.invoice.dataUrl,
+    },
+    ...anexos,
+  ];
 }
 
 export const PAID_KEY = "financeiro:pagos";
