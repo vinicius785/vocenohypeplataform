@@ -805,6 +805,10 @@ function MeetingDialog({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [repeat, setRepeat] = useState<"none" | "daily" | "weekly" | "monthly">("none");
   const [repeatUntil, setRepeatUntil] = useState("");
+  // Só usado quando repeat === "weekly" — dias da semana em que a reunião se
+  // repete (0 = domingo .. 6 = sábado). Vazio = repete só no dia da semana
+  // da data escolhida (comportamento antigo, "toda terça" por exemplo).
+  const [weekDays, setWeekDays] = useState<number[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -825,7 +829,12 @@ function MeetingDialog({
     setPickerOpen(false);
     setRepeat("none");
     setRepeatUntil("");
+    setWeekDays([]);
   }, [open, initial, defaultDate]);
+
+  const toggleWeekDay = (day: number) => {
+    setWeekDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
 
   const selectedMembers = team.filter((t) => participanteIds.includes(t.id));
   const toggleMember = (id: string) => {
@@ -899,12 +908,24 @@ function MeetingDialog({
       return;
     }
 
-    const dates: string[] = [data];
-    let cursor = data;
-    while (dates.length < MAX_OCCURRENCES) {
-      cursor = nextRepeatDate(cursor, repeat);
-      if (cursor > repeatUntil) break;
-      dates.push(cursor);
+    let dates: string[];
+    if (repeat === "weekly" && weekDays.length > 0) {
+      dates = [];
+      const cursor = parseISODate(data);
+      while (dates.length < MAX_OCCURRENCES) {
+        const iso = toISODate(cursor);
+        if (iso > repeatUntil) break;
+        if (weekDays.includes(cursor.getDay())) dates.push(iso);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else {
+      dates = [data];
+      let cursor = data;
+      while (dates.length < MAX_OCCURRENCES) {
+        cursor = nextRepeatDate(cursor, repeat);
+        if (cursor > repeatUntil) break;
+        dates.push(cursor);
+      }
     }
     onSave(dates.map((d) => ({ id: crypto.randomUUID(), data: d, ...base })));
   };
@@ -996,6 +1017,34 @@ function MeetingDialog({
                       onChange={(e) => setRepeatUntil(e.target.value)}
                       className={`mt-1 ${fieldCls}`}
                     />
+                  </div>
+                )}
+                {repeat === "weekly" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Dias da semana
+                    </label>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {DIAS_LABEL.map((label, i) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => toggleWeekDay(i)}
+                          className={`h-8 w-11 rounded-md border text-xs font-medium ${
+                            weekDays.includes(i)
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {weekDays.length === 0
+                        ? `Sem seleção, repete só toda ${DIAS_LABEL[parseISODate(data).getDay()]}.`
+                        : "Repete nos dias marcados, toda semana."}
+                    </p>
                   </div>
                 )}
               </div>

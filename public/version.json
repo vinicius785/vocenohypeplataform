@@ -1,6 +1,7 @@
 {
-  "version": "1.129.0",
+  "version": "1.130.0",
   "notes": [
+    "Reuniões: na opção \"Repetir\" semanalmente, agora dá pra marcar mais de um dia da semana (ex.: toda segunda, quarta e sexta), em vez de repetir só no mesmo dia da semana da data escolhida.",
     "Reuniões: redesenha o formulário de criar/editar reunião por completo (visual em cards, título grande, seções separadas pra Quando/Time/Convidados externos/Local/Notas).",
     "Novo: dá pra convidar pessoas de fora da empresa numa reunião, com nome e e-mail de verdade — elas recebem o convite do Google Agenda normalmente, com link de videochamada incluso.",
     "Novo (Configurações, só admin): conectar uma conta Google única e compartilhada (ex.: contato@vocenohype.com.br) pra ser a organizadora de TODAS as reuniões da plataforma, em vez de cada reunião sair da conta pessoal de quem criou — garante o mesmo nível de Google Meet em toda reunião.",
