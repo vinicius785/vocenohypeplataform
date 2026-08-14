@@ -28,10 +28,12 @@ import {
   Download,
   ExternalLink,
   Facebook,
+  FileSignature,
   FileText,
   FileVideo,
   Film,
   Instagram,
+  Landmark,
   Linkedin,
   LayoutList,
   Loader2,
@@ -43,6 +45,7 @@ import {
   Phone,
   Plus,
   Search,
+  Share2,
   Trash2,
   Twitter,
   Upload,
@@ -55,7 +58,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -1343,8 +1345,11 @@ function RedeMetricsFields({
   );
 }
 
-/** Métricas do perfil, uma rede social por vez — seleciona a rede (das
- * cadastradas na etapa Perfil) e edita as métricas daquela rede. */
+/** Métricas do perfil — uma card por rede social já cadastrada (não mais um
+ * seletor de pills escondendo as demais), no mesmo estilo visual usado no
+ * Portal do cliente (`portal.$token.tsx`, seção "Métricas do perfil"): ícone
+ * da plataforma + handle no topo do card, métricas gerais e demografia
+ * dentro. Diferença pro VC (que é só leitura): aqui os campos são editáveis. */
 function ProfileMetricsEditor({
   redes,
   onChangeRedes,
@@ -1357,8 +1362,6 @@ function ProfileMetricsEditor({
   onChange: (m: ProfileMetrics) => void;
 }) {
   const porRede = value?.porRede ?? {};
-  const [selected, setSelected] = useState<string | undefined>(redes[0]?.id);
-  const activeId = selected && redes.some((r) => r.id === selected) ? selected : redes[0]?.id;
 
   if (redes.length === 0) {
     return (
@@ -1368,37 +1371,22 @@ function ProfileMetricsEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1.5">
-        {redes.map((r) => {
-          const active = r.id === activeId;
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setSelected(r.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                active
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              }`}
-            >
-              <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-              {r.handle ? `@${r.handle}` : r.plataforma}
-            </button>
-          );
-        })}
-      </div>
-      {activeId && (
-        <RedeMetricsFields
-          key={activeId}
-          seguidores={redes.find((r) => r.id === activeId)?.seguidores}
-          onChangeSeguidores={(seguidores) =>
-            onChangeRedes(redes.map((r) => (r.id === activeId ? { ...r, seguidores } : r)))
-          }
-          value={porRede[activeId]}
-          onChange={(m) => onChange({ ...value, porRede: { ...porRede, [activeId]: m } })}
-        />
-      )}
+      {redes.map((r) => (
+        <div key={r.id} className="space-y-5 rounded-xl border border-border bg-muted/20 p-4">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+            {r.handle ? `@${r.handle}` : r.plataforma}
+          </p>
+          <RedeMetricsFields
+            seguidores={r.seguidores}
+            onChangeSeguidores={(seguidores) =>
+              onChangeRedes(redes.map((x) => (x.id === r.id ? { ...x, seguidores } : x)))
+            }
+            value={porRede[r.id]}
+            onChange={(m) => onChange({ ...value, porRede: { ...porRede, [r.id]: m } })}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -3019,281 +3007,301 @@ function InfluencerProfileDialog({
           Informações completas do influenciador.
         </DialogDescription>
 
-        {/* CABEÇALHO — foto, nome, redes e contato em destaque */}
-        <DialogHeader className="space-y-3 border-b border-border bg-muted/40 px-6 py-6">
-          <div className="flex items-start gap-4">
-            <button
-              type="button"
-              onClick={() => fotoRef.current?.click()}
-              aria-label="Trocar foto"
-              className="group relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background"
-            >
-              {influ.foto ? (
-                <img src={influ.foto} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-              )}
-              <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
-                <Camera className="h-5 w-5" />
-              </span>
-            </button>
-            <input
-              ref={fotoRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const r = new FileReader();
-                r.onload = () => onPatch({ foto: String(r.result) });
-                r.readAsDataURL(file);
-              }}
-            />
-            <div className="min-w-0 flex-1 space-y-2 pt-1">
-              {editingHeader ? (
-                <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <input
-                      value={draft.nome}
-                      onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
-                      placeholder="Nome"
-                      autoFocus
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <select
-                      value={draft.nicho}
-                      onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="">Selecione um nicho</option>
-                      {NICHOS.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      value={draft.telefone}
-                      onChange={(e) =>
-                        setDraft((d) => ({ ...d, telefone: formatPhoneBR(e.target.value) }))
-                      }
-                      placeholder="Telefone"
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <input
-                      value={draft.email}
-                      onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                      placeholder="E-mail"
-                      className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingHeader(false)}
-                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveHeader}
-                      className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
-                    >
-                      Salvar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="group/name flex flex-wrap items-center gap-2">
-                  <p className="truncate text-lg font-semibold text-foreground">
-                    {influ.nome || "Sem nome"}
-                  </p>
-                  {influ.nicho && (
-                    <span className="inline-block rounded-full bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
-                      {influ.nicho}
-                    </span>
-                  )}
-                  {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
-                  <NextActionBadge actor={nextActionForInflu(influ.status)} />
-                  {influ.status === "EM_CURADORIA" && (
-                    <button
-                      type="button"
-                      onClick={onSendToClient}
-                      className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
-                    >
-                      Enviar para cliente
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={startEditing}
-                    className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
-                    aria-label="Editar nome, nicho e contato"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {has("redes") &&
-                  influ.redes.map((r) => (
-                    <span
-                      key={r.id}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm"
-                    >
-                      <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                      {r.handle ? `@${r.handle}` : r.plataforma}
-                      {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                    </span>
-                  ))}
-                {influ.telefone && !editingHeader && (
-                  <a
-                    href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
-                  >
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                    {formatPhoneBR(influ.telefone)}
-                  </a>
+        {/* CABEÇALHO — hero com banner gradiente + avatar sobreposto, mesmo
+            padrão visual já usado no Portal do cliente (portal.$token.tsx). */}
+        <div className="border-b border-border bg-background">
+          <div
+            className="h-16"
+            style={{
+              background: "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
+            }}
+          />
+          <div className="px-6 pb-5">
+            <div className="flex flex-wrap items-end gap-4">
+              <button
+                type="button"
+                onClick={() => fotoRef.current?.click()}
+                aria-label="Trocar foto"
+                className="group relative -mt-10 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-4 ring-background"
+              >
+                {influ.foto ? (
+                  <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
                 )}
-                {influ.email && !editingHeader && (
-                  <a
-                    href={`mailto:${influ.email}`}
-                    className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm hover:bg-background/70"
-                  >
-                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{influ.email}</span>
-                  </a>
+                <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
+                  <Camera className="h-5 w-5" />
+                </span>
+              </button>
+              <input
+                ref={fotoRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const r = new FileReader();
+                  r.onload = () => onPatch({ foto: String(r.result) });
+                  r.readAsDataURL(file);
+                }}
+              />
+              <div className="min-w-0 flex-1 space-y-2 pb-1">
+                {editingHeader ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <input
+                        value={draft.nome}
+                        onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
+                        placeholder="Nome"
+                        autoFocus
+                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <select
+                        value={draft.nicho}
+                        onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
+                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="">Selecione um nicho</option>
+                        {NICHOS.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={draft.telefone}
+                        onChange={(e) =>
+                          setDraft((d) => ({ ...d, telefone: formatPhoneBR(e.target.value) }))
+                        }
+                        placeholder="Telefone"
+                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <input
+                        value={draft.email}
+                        onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                        placeholder="E-mail"
+                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingHeader(false)}
+                        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveHeader}
+                        className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                      >
+                        Salvar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="group/name flex flex-wrap items-center gap-2">
+                    <p className="truncate text-lg font-semibold text-foreground">
+                      {influ.nome || "Sem nome"}
+                    </p>
+                    {influ.nicho && (
+                      <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {influ.nicho}
+                      </span>
+                    )}
+                    {has("status") && (
+                      <InfluStatusPill value={influ.status} onChange={onSetStatus} />
+                    )}
+                    <NextActionBadge actor={nextActionForInflu(influ.status)} />
+                    {influ.status === "EM_CURADORIA" && (
+                      <button
+                        type="button"
+                        onClick={onSendToClient}
+                        className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
+                      >
+                        Enviar para cliente
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={startEditing}
+                      className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
+                      aria-label="Editar nome, nicho e contato"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 )}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {has("redes") &&
+                    influ.redes.map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
+                      >
+                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+                        {r.handle ? `@${r.handle}` : r.plataforma}
+                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
+                      </span>
+                    ))}
+                  {influ.telefone && !editingHeader && (
+                    <a
+                      href={`tel:${influ.telefone.replace(/\D/g, "")}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      {formatPhoneBR(influ.telefone)}
+                    </a>
+                  )}
+                  {influ.email && !editingHeader && (
+                    <a
+                      href={`mailto:${influ.email}`}
+                      className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
+                    >
+                      <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{influ.email}</span>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </DialogHeader>
+        </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-6">
+          <div className="min-h-0 space-y-4 overflow-y-auto bg-muted/20 px-6 py-6">
             {has("entregas") && (
-              <EntregasEditor
-                entregas={influ.entregas}
-                onChange={(next) => onPatch({ entregas: next })}
-                influStatus={influ.status}
-                onStatusChange={onSetConteudoStatus}
-                onSendToClient={onSendEntregaToClient}
-              />
+              // Sem título/ícone próprio aqui — EntregasEditor já renderiza
+              // seu próprio FieldLabel "Entregas" internamente (é
+              // compartilhado com o formulário de novo influenciador).
+              <div className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                <EntregasEditor
+                  entregas={influ.entregas}
+                  onChange={(next) => onPatch({ entregas: next })}
+                  influStatus={influ.status}
+                  onStatusChange={onSetConteudoStatus}
+                  onSendToClient={onSendEntregaToClient}
+                />
+              </div>
             )}
 
             {has("pagamentos") && (
-              <PagamentoInfluSection
-                value={influ.pagamento}
-                onChange={(pagamento) => onPatch({ pagamento })}
-              />
+              // Idem — PagamentoInfluSection já tem seu próprio título.
+              <div className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                <PagamentoInfluSection
+                  value={influ.pagamento}
+                  onChange={(pagamento) => onPatch({ pagamento })}
+                />
+              </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6 border-t border-border pt-6 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <FieldLabel
-                  title="Briefing personalizado"
-                  hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
-                />
-                <AutoSaveTextarea
-                  key={influ.id}
-                  value={influ.briefingPersonalizado ?? ""}
-                  onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-                  placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-                />
-                {influ.briefingAnexoUrl ? (
-                  <div className="flex items-center gap-2 text-xs">
-                    <a
-                      href={influ.briefingAnexoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                      {influ.briefingAnexoNome || "Anexo"}
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                      }
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label="Remover anexo"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <BriefingAnexoUploadButton
-                    onUpload={(nome, url) =>
-                      onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                    }
+            <ProfileSectionCard
+              title="Briefing e observações"
+              icon={<FileText className="h-3.5 w-3.5" />}
+            >
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <FieldLabel
+                    title="Briefing personalizado"
+                    hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
                   />
-                )}
+                  <AutoSaveTextarea
+                    key={influ.id}
+                    value={influ.briefingPersonalizado ?? ""}
+                    onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+                    placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+                  />
+                  {influ.briefingAnexoUrl ? (
+                    <div className="flex items-center gap-2 text-xs">
+                      <a
+                        href={influ.briefingAnexoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        {influ.briefingAnexoNome || "Anexo"}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                        }
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Remover anexo"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <BriefingAnexoUploadButton
+                      onUpload={(nome, url) =>
+                        onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                      }
+                    />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabel
+                    title="Observações"
+                    hint="Nota livre — visível pro time e também no portal do cliente."
+                  />
+                  <AutoSaveTextarea
+                    key={influ.id}
+                    value={influ.observacoes ?? ""}
+                    onSave={(v) => onPatch({ observacoes: v || undefined })}
+                    placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+                  />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <FieldLabel
-                  title="Observações"
-                  hint="Nota livre — visível pro time e também no portal do cliente."
-                />
-                <AutoSaveTextarea
-                  key={influ.id}
-                  value={influ.observacoes ?? ""}
-                  onSave={(v) => onPatch({ observacoes: v || undefined })}
-                  placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-                />
-              </div>
-            </div>
+            </ProfileSectionCard>
 
             {has("redes") && (
-              <div className="space-y-3 border-t border-border pt-6">
-                <FieldLabel title="Redes sociais" />
+              <ProfileSectionCard title="Redes sociais" icon={<Share2 className="h-3.5 w-3.5" />}>
                 <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
-              </div>
+              </ProfileSectionCard>
             )}
 
             {has("metricas") && (
-              <div className="space-y-3 border-t border-border pt-6">
-                <FieldLabel title="Métricas do perfil" hint="Por rede social." />
+              <ProfileSectionCard
+                title="Métricas do perfil"
+                hint="Por rede social."
+                icon={<BarChart3 className="h-3.5 w-3.5" />}
+              >
                 <ProfileMetricsEditor
                   redes={influ.redes}
                   onChangeRedes={(redes) => onPatch({ redes })}
                   value={influ.profileMetrics}
                   onChange={(profileMetrics) => onPatch({ profileMetrics })}
                 />
-              </div>
+              </ProfileSectionCard>
             )}
 
-            {(has("bancario") || has("contrato")) && (
-              <div
-                className={`grid grid-cols-1 gap-6 border-t border-border pt-6 ${has("bancario") && has("contrato") ? "sm:grid-cols-2" : ""}`}
+            {has("bancario") && (
+              <ProfileSectionCard
+                title="Dados bancários"
+                icon={<Landmark className="h-3.5 w-3.5" />}
               >
-                {has("bancario") && (
-                  <div className="space-y-3">
-                    <FieldLabel title="Dados bancários" />
-                    <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
-                  </div>
-                )}
-                {has("contrato") && (
-                  <div className="space-y-3">
-                    <FieldLabel title="Contrato" />
-                    <ContratoEditor
-                      value={influ.contrato}
-                      onChange={(contrato) => onPatch({ contrato })}
-                    />
-                  </div>
-                )}
-              </div>
+                <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
+              </ProfileSectionCard>
             )}
 
-            <div className="border-t border-border pt-6">
-              <ChecklistSection
-                checklist={influ.checklist ?? []}
-                onChange={onSetChecklist}
-                onApplyToAll={onApplyChecklistToAll}
-              />
-            </div>
+            {has("contrato") && (
+              <ProfileSectionCard title="Contrato" icon={<FileSignature className="h-3.5 w-3.5" />}>
+                <ContratoEditor
+                  value={influ.contrato}
+                  onChange={(contrato) => onPatch({ contrato })}
+                />
+              </ProfileSectionCard>
+            )}
+
+            <ChecklistSection
+              checklist={influ.checklist ?? []}
+              onChange={onSetChecklist}
+              onApplyToAll={onApplyChecklistToAll}
+            />
           </div>
 
           <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
@@ -3792,6 +3800,39 @@ function FieldLabel({ title, hint }: { title: string; hint?: string }) {
     <div>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** Moldura em card reutilizada por toda seção do perfil do influenciador
+ * (Entregas, Pagamento, Redes, Métricas etc) — ícone em badge + título,
+ * substituindo o antigo empilhamento de seções separadas só por
+ * `border-t`, sem hierarquia visual nenhuma entre elas. */
+function ProfileSectionCard({
+  title,
+  hint,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  icon: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-background p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            {icon}
+          </span>
+          <FieldLabel title={title} hint={hint} />
+        </div>
+        {action}
+      </div>
+      {children}
     </div>
   );
 }
