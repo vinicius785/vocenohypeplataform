@@ -2664,17 +2664,16 @@ function PagamentoInfluSection({
   onChange: (p: PagamentoEntrega | undefined) => void;
 }) {
   return (
-    <div className="space-y-1.5 border-t border-border pt-4">
-      <div className="flex items-center justify-between gap-2">
-        <FieldLabel title="Pagamento" hint="Valor combinado, cobrindo todas as entregas." />
-        {value && (
+    <div className="space-y-1.5">
+      {value && (
+        <div className="flex justify-end">
           <span
             className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${APROVACAO_TONE[value.aprovacao]}`}
           >
             {APROVACAO_LABEL[value.aprovacao]}
           </span>
-        )}
-      </div>
+        </div>
+      )}
       <PagamentoEditor value={value} onChange={onChange} />
       {value &&
         (value.aprovacao === "pendente" ? (
@@ -3648,12 +3647,16 @@ function InfluencerProfileDialog({
             <TabsContent value="financeiro" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 {has("pagamentos") && (
-                  <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+                  <ProfileSectionCard
+                    title="Pagamento"
+                    hint="Valor combinado, cobrindo todas as entregas."
+                    icon={<Coins className="h-3.5 w-3.5" />}
+                  >
                     <PagamentoInfluSection
                       value={influ.pagamento}
                       onChange={(pagamento) => onPatch({ pagamento })}
                     />
-                  </div>
+                  </ProfileSectionCard>
                 )}
 
                 {has("bancario") && (
@@ -4001,7 +4004,8 @@ function InfluenciadorDialog({
           )}
 
           {has("pagamentos") && (
-            <section>
+            <section className="space-y-1.5 border-t border-border pt-6">
+              <FieldLabel title="Pagamento" hint="Valor combinado, cobrindo todas as entregas." />
               <PagamentoInfluSection value={pagamento} onChange={setPagamento} />
             </section>
           )}
