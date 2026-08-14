@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /**
  * Tradução da interface fixa do portal do cliente (`/portal/$token`) — nunca
  * do conteúdo digitado pelo time (nome de campanha, artigos, briefings,
- * status internos do funil como "Enviado para aprovação"), que continua no
+ * status internos do funil como "Enviado ao cliente"), que continua no
  * idioma original em que foi escrito. Sem lib de i18n — é só um dicionário
  * simples, já que o portal é uma única página com um conjunto pequeno e
  * fixo de textos.

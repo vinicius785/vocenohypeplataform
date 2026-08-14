@@ -1,5 +1,4 @@
 import type { Influ, Entrega, ClienteVeredito } from "@/components/influenciadores/InfluencerBoard";
-import { INFLU_STATUSES } from "@/components/influenciadores/InfluencerBoard";
 
 /**
  * Transições de estado disparadas pelo cliente através do link público da
@@ -25,7 +24,9 @@ function stamp(motivo?: string): ClienteVeredito | undefined {
   return motivo !== undefined ? { motivo, respondedAt: new Date().toISOString() } : undefined;
 }
 
-/** Etapa 1 — aprovar/reprovar a seleção do influenciador pra campanha. */
+/** Etapa 1 — aprovar/reprovar a seleção do influenciador pra campanha.
+ * Reprovar agora move o status pra RECUSADO de verdade (não só uma flag
+ * ao lado) — `clienteReprovacao` continua guardando o motivo. */
 export function applyInfluApproval(
   influ: Influ,
   status: "aprovado" | "reprovado",
@@ -35,7 +36,7 @@ export function applyInfluApproval(
   if (status === "aprovado") {
     return {
       ...influ,
-      status: "Aprovado",
+      status: "APROVADO",
       clienteReprovacao: undefined,
       lastClientAction: { kind: "influ", status: "aprovado", at },
       activity: [...(influ.activity ?? []), clientActivity("aprovou a seleção pra campanha")],
@@ -44,6 +45,7 @@ export function applyInfluApproval(
   }
   return {
     ...influ,
+    status: "RECUSADO",
     clienteReprovacao: stamp(motivo ?? ""),
     lastClientAction: { kind: "influ", status: "reprovado", at },
     activity: [
@@ -54,7 +56,9 @@ export function applyInfluApproval(
   };
 }
 
-/** Etapas 2 e 3 — aprovar/reprovar o roteiro ou o conteúdo de uma entrega. */
+/** Etapas 2 e 3 — aprovar/reprovar o roteiro ou o conteúdo de uma entrega.
+ * "Ajustes solicitados" volta a entrega pra EM_PRODUCAO automaticamente —
+ * não fica parada esperando outra ação além do time refazer e reenviar. */
 export function applyEntregaApproval(
   influ: Influ,
   entregaId: string,
@@ -67,18 +71,28 @@ export function applyEntregaApproval(
     if (e.id !== entregaId) return e;
     if (kind === "roteiro") {
       return status === "aprovado"
-        ? { ...e, conteudoStatus: "Roteiro aprovado", roteiroReprovacao: undefined }
-        : { ...e, conteudoStatus: "Aguardando roteiro", roteiroReprovacao: stamp(motivo ?? "") };
+        ? { ...e, conteudoStatus: "APROVADA", etapa: "roteiro", roteiroReprovacao: undefined }
+        : {
+            ...e,
+            conteudoStatus: "EM_PRODUCAO",
+            etapa: "roteiro",
+            roteiroReprovacao: stamp(motivo ?? ""),
+          };
     }
     return status === "aprovado"
-      ? { ...e, conteudoStatus: "Conteúdo aprovado", conteudoReprovacao: undefined }
-      : { ...e, conteudoStatus: "Em gravação", conteudoReprovacao: stamp(motivo ?? "") };
+      ? { ...e, conteudoStatus: "APROVADA", etapa: "conteudo", conteudoReprovacao: undefined }
+      : {
+          ...e,
+          conteudoStatus: "EM_PRODUCAO",
+          etapa: "conteudo",
+          conteudoReprovacao: stamp(motivo ?? ""),
+        };
   });
   const label = kind === "roteiro" ? "o roteiro" : "o conteúdo";
   const action =
     status === "aprovado"
       ? `aprovou ${label} de uma entrega`
-      : `reprovou ${label} de uma entrega — ${motivo ?? "sem motivo"}`;
+      : `solicitou ajustes em ${label} de uma entrega — ${motivo ?? "sem motivo"}`;
   return {
     ...influ,
     entregas,
@@ -88,8 +102,7 @@ export function applyEntregaApproval(
   };
 }
 
-/** Índice do status do influ na esteira interna — usado pra saber se a
- * seleção já passou da etapa "aguardando aprovação do cliente". */
+/** Perfil enviado ao cliente, aguardando a resposta dele. */
 export function influApprovalPending(influ: Influ): boolean {
-  return influ.status === "Enviado para aprovação";
+  return influ.status === "ENVIADO_AO_CLIENTE";
 }

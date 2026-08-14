@@ -342,15 +342,12 @@ function CampanhaDetail({
 
   // Approval metrics
   const enviados = visibleInflus.filter(
-    (i) => i.status !== "Lista" && i.status !== "Inscrições",
+    (i) => i.status !== "EM_CURADORIA" && i.status !== "INSCRITO",
   ).length;
-  // Qualquer status a partir de "Aprovado" (Aguardando roteiro, Em gravação,
-  // ..., Pago) já passou pela aprovação — continua contando como aprovado.
+  // Qualquer status a partir de "Aprovado" (em produção, concluído) já
+  // passou pela aprovação — continua contando como aprovado.
   const aprovados = visibleInflus.filter((i) => canPublishEntrega(i.status)).length;
-  // KPI reflete só a coluna "Enviado para aprovação" — antes também contava
-  // "Aprovação de conteúdo" (etapa seguinte, já aprovado como influenciador),
-  // o que inflava o número em relação ao que a coluna realmente mostra.
-  const emAprovacao = visibleInflus.filter((i) => i.status === "Enviado para aprovação").length;
+  const emAprovacao = visibleInflus.filter((i) => i.status === "ENVIADO_AO_CLIENTE").length;
 
   // Budget
   const orcamento = parseMoney(c.orcamento);
@@ -404,7 +401,7 @@ function CampanhaDetail({
   };
 
   // Link público de inscrição — permite o influenciador se candidatar
-  // direto pra esta campanha (entra em "Inscrições" no board), diferente
+  // direto pra esta campanha (entra em "Inscrito" no board), diferente
   // do link do cliente acima (que é por Cliente, não por Campanha).
   const [signupLinkCopied, setSignupLinkCopied] = useState(false);
   const copySignupLink = () => {

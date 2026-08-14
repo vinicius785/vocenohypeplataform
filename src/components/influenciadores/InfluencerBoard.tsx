@@ -502,13 +502,9 @@ export function computeMetricasRelatorio(influs: Influ[]): MetricasRelatorio | n
 /** Prazo (dias) que consideramos razoável para um cliente responder uma solicitação de aprovação. */
 export const APPROVAL_SLA_DAYS = 3;
 
-/** Se o influenciador está "Enviado para aprovação" há mais dias que o SLA, retorna há quantos dias. */
+/** Se o influenciador está "Enviado ao cliente" há mais dias que o SLA, retorna há quantos dias. */
 export function approvalSlaOverdueDays(influ: Influ): number | null {
-  if (
-    influ.status !== "Enviado para aprovação" ||
-    influ.clienteReprovacao ||
-    !influ.statusUpdatedAt
-  )
+  if (influ.status !== "ENVIADO_AO_CLIENTE" || influ.clienteReprovacao || !influ.statusUpdatedAt)
     return null;
   const days = Math.floor(
     (Date.parse(todayISO()) - Date.parse(influ.statusUpdatedAt)) / (24 * 60 * 60 * 1000),
@@ -529,40 +525,50 @@ export function approvalSlaOverdueDays(influ: Influ): number | null {
  * influenciador e — só a partir desse momento — vira uma despesa real
  * no Financeiro (ver financeiro-entries.ts).
  */
-export const ENTREGA_CONTEUDO_STATUSES = [
-  "Combinado",
-  "Aguardando roteiro",
-  "Aguardando aprovação de roteiro",
-  "Roteiro aprovado",
-  "Em gravação",
-  "Aprovação conteúdo",
-  "Conteúdo aprovado",
-  "Postado",
-] as const;
-export type EntregaConteudoStatus = (typeof ENTREGA_CONTEUDO_STATUSES)[number];
-export const ENTREGA_CONTEUDO_TONE: Record<EntregaConteudoStatus, string> = {
-  Combinado: "bg-muted text-muted-foreground",
-  "Aguardando roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  "Aguardando aprovação de roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  "Roteiro aprovado": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  "Em gravação": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  "Aprovação conteúdo": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  "Conteúdo aprovado": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
-  Postado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+// Status de perfil (Influ) e de entrega vivem em src/lib/campanha-status.ts —
+// fonte única, compartilhada com o portal do cliente e as server functions.
+// Importados (e reexportados) aqui com os nomes antigos de entrega
+// (ENTREGA_CONTEUDO_*) só pra não precisar renomear as dezenas de usos já
+// existentes neste arquivo.
+import {
+  INFLU_STATUSES,
+  INFLU_KANBAN_ORDER,
+  INFLU_STATUS_LABEL,
+  INFLU_STATUS_TONE,
+  INFLU_STATUS_BORDER,
+  ENTREGA_STATUSES as ENTREGA_CONTEUDO_STATUSES,
+  ENTREGA_STATUS_LABEL as ENTREGA_CONTEUDO_LABEL,
+  ENTREGA_STATUS_TONE as ENTREGA_CONTEUDO_TONE,
+  ENTREGA_STATUS_BORDER as ENTREGA_CONTEUDO_BORDER,
+  nextActionForInflu,
+  nextActionForEntrega,
+  NEXT_ACTOR_LABEL,
+  canTransitionInflu,
+  canTransitionEntrega,
+  legacyInfluStatus,
+  legacyEntregaStatus,
+  type InfluStatus,
+  type EntregaStatus as EntregaConteudoStatus,
+  type EntregaEtapa,
+  type NextActor,
+} from "@/lib/campanha-status";
+export {
+  INFLU_STATUSES,
+  INFLU_KANBAN_ORDER,
+  INFLU_STATUS_LABEL,
+  INFLU_STATUS_TONE,
+  INFLU_STATUS_BORDER,
+  ENTREGA_CONTEUDO_STATUSES,
+  ENTREGA_CONTEUDO_LABEL,
+  ENTREGA_CONTEUDO_TONE,
+  ENTREGA_CONTEUDO_BORDER,
+  nextActionForInflu,
+  nextActionForEntrega,
+  NEXT_ACTOR_LABEL,
+  canTransitionInflu,
+  canTransitionEntrega,
 };
-/** Contorno colorido (por status) do botão que abre o popup de status —
- * fundo neutro (preto/branco conforme o tema) + texto legível, em vez do
- * preenchimento tingido do badge, que era usado só dentro do popup/listas. */
-export const ENTREGA_CONTEUDO_BORDER: Record<EntregaConteudoStatus, string> = {
-  Combinado: "border-muted-foreground/40",
-  "Aguardando roteiro": "border-amber-500",
-  "Aguardando aprovação de roteiro": "border-amber-500",
-  "Roteiro aprovado": "border-sky-500",
-  "Em gravação": "border-violet-500",
-  "Aprovação conteúdo": "border-orange-500",
-  "Conteúdo aprovado": "border-teal-500",
-  Postado: "border-emerald-500",
-};
+export type { InfluStatus, EntregaConteudoStatus, EntregaEtapa, NextActor };
 
 export const ENTREGA_ANEXO_CATEGORIAS = [
   "Roteiro",
@@ -584,8 +590,13 @@ export type Entrega = {
   titulo?: string;
   quantidade: number;
   status: "orcado" | "combinado" | "publicado";
-  /** Etapa de produção do conteúdo — independente do status de orçamento/publicação acima. */
+  /** Status de produção/aprovação da entrega — independente do status de
+   * orçamento/publicação acima. Ver src/lib/campanha-status.ts. */
   conteudoStatus?: EntregaConteudoStatus;
+  /** Qual etapa este status se refere a — roteiro ou conteúdo final. Não
+   * existe status separado por etapa: o MESMO fluxo (COMBINADA..PUBLICADA)
+   * se repete pra cada etapa, diferenciado só por este campo. */
+  etapa?: EntregaEtapa;
   dataPostagem?: string; // data planejada (ou realizada) para a postagem
   dataRecebimentoRoteiro?: string; // quando o roteiro foi recebido do influenciador
   dataRecebimentoConteudo?: string; // quando a gravação/conteúdo foi recebido do influenciador
@@ -624,69 +635,24 @@ export type BankInfo = {
   pixChave?: string;
 };
 
-export const INFLU_STATUSES = [
-  "Inscrições",
-  "Lista",
-  "Enviado para aprovação",
-  "Aprovado",
-  "Aguardando roteiro",
-  "Aprovação de roteiro",
-  "Em gravação",
-  "Aprovação de conteúdo",
-  "Conteúdo aprovado",
-  "Postado",
-  "Pago",
-] as const;
-export type InfluStatus = (typeof INFLU_STATUSES)[number];
-
 /**
- * O status do influenciador (fluxo geral) e o status de cada entrega
- * (orçado/combinado/publicado) são dois controles separados que
- * costumavam ficar dessincronizados. Para unificar sem perder a
- * granularidade por entrega: (1) publicar uma entrega só é permitido a
+ * O status do influenciador (fluxo geral) e o status de cada entrega são
+ * dois controles separados. (1) publicar uma entrega só é permitido a
  * partir de "Aprovado" em diante — evita marcar conteúdo no ar antes da
- * aprovação; (2) quando todas as entregas ficam "publicado", o status
- * geral avança automaticamente para "Postado" (ver `advanceStatusFromEntregas`).
+ * aprovação do perfil; (2) quando todas as entregas ficam publicadas, o
+ * status geral avança automaticamente para "Concluído" (ver
+ * `advanceStatusFromEntregas`).
  */
 export function canPublishEntrega(status: InfluStatus): boolean {
-  return INFLU_STATUSES.indexOf(status) >= INFLU_STATUSES.indexOf("Aprovado");
+  return status === "APROVADO" || status === "EM_PRODUCAO" || status === "CONCLUIDO";
 }
 export function advanceStatusFromEntregas(status: InfluStatus, entregas: Entrega[]): InfluStatus {
   const allPublished = entregas.length > 0 && entregas.every((e) => e.status === "publicado");
-  if (allPublished && INFLU_STATUSES.indexOf(status) < INFLU_STATUSES.indexOf("Postado")) {
-    return "Postado";
+  if (allPublished && (status === "APROVADO" || status === "EM_PRODUCAO")) {
+    return "CONCLUIDO";
   }
   return status;
 }
-
-export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
-  Inscrições: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  Lista: "bg-muted text-muted-foreground",
-  "Enviado para aprovação": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  Aprovado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  "Aguardando roteiro": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  "Aprovação de roteiro": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  "Em gravação": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  "Aprovação de conteúdo": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  "Conteúdo aprovado": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Postado: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  Pago: "bg-foreground text-background",
-};
-/** Contorno colorido (por status) do botão que abre o popup — mesmo
- * espírito do `ENTREGA_CONTEUDO_BORDER`, para o status geral do influ. */
-export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
-  Inscrições: "border-blue-500",
-  Lista: "border-muted-foreground/40",
-  "Enviado para aprovação": "border-amber-500",
-  Aprovado: "border-emerald-500",
-  "Aguardando roteiro": "border-orange-500",
-  "Aprovação de roteiro": "border-amber-500",
-  "Em gravação": "border-sky-500",
-  "Aprovação de conteúdo": "border-amber-500",
-  "Conteúdo aprovado": "border-emerald-500",
-  Postado: "border-violet-500",
-  Pago: "border-foreground",
-};
 
 export const NICHOS = [
   "Moda",
@@ -729,8 +695,8 @@ export type Influ = {
    * ser aplicado de um influ pros outros todos da campanha de uma vez. */
   checklist?: ChecklistItem[];
   /** Preenchido quando o cliente reprova a seleção deste influ pelo link
-   * público — o `status` não muda (fica em "Enviado para aprovação"),
-   * só ganha esse aviso pro time ver e reenviar depois de ajustar. */
+   * público (`status` vira RECUSADO junto) — motivo fica aqui pro time ver
+   * antes de reenviar (mudar o status manualmente já limpa este campo). */
   clienteReprovacao?: ClienteVeredito;
   /** Carimbo da última ação do cliente (em qualquer etapa — seleção,
    * roteiro ou conteúdo de alguma entrega), pro sino de notificações do
@@ -797,13 +763,18 @@ export function normalizeInflus(list: unknown): Influ[] {
         });
       }
       const status = e.status ?? "combinado";
+      // Traduz status antigos (8 valores, com roteiro/conteúdo misturados)
+      // pro novo modelo (6 valores + `etapa` à parte) — dado antigo nunca é
+      // reescrito no banco, só traduzido aqui, toda vez que é lido.
+      const { status: conteudoStatus, etapa } = legacyEntregaStatus(
+        e.conteudoStatus ?? (status === "publicado" ? "Postado" : "Combinado"),
+        e.etapa,
+      );
       return {
         ...e,
         status,
-        // Entregas de antes da etapa de produção existir (ou migradas de
-        // `conteudos`) não tinham esse campo — sem isso a pill de status
-        // some da tabela e não dá pra editar a etapa dessa entrega.
-        conteudoStatus: e.conteudoStatus ?? (status === "publicado" ? "Postado" : "Combinado"),
+        conteudoStatus,
+        etapa,
         anexos,
         // Quando `url` era o próprio anexo (arquivoNome setado), o link vira
         // o anexo acima — não faz mais sentido manter os dois.
@@ -864,7 +835,13 @@ export function normalizeInflus(list: unknown): Influ[] {
       }
     }
     const { conteudos: _drop, valores: _drop2, ...rest } = r;
-    return { ...rest, entregas, pagamento };
+    const allEntregasPublicadas =
+      entregas.length > 0 && entregas.every((e) => e.status === "publicado");
+    const status = legacyInfluStatus(rest.status, {
+      hasReprovacao: !!rest.clienteReprovacao,
+      allEntregasPublicadas,
+    });
+    return { ...rest, status, entregas, pagamento };
   });
 }
 
@@ -1523,11 +1500,48 @@ export function InfluencerBoard({
         x.id === influId
           ? pushActivity(
               { ...x, status, statusUpdatedAt: todayISO() },
-              `mudou status para ${status}`,
+              `mudou status para ${INFLU_STATUS_LABEL[status]}`,
             )
           : x,
       ),
     );
+
+  /** Ação universal "Enviar para cliente" (perfil) — só sai de EM_CURADORIA,
+   * registra quem/quando no histórico e disponibiliza o perfil no portal. */
+  const sendInfluToClient = (influId: string) => {
+    applyInflusChange(
+      latestInflusRef.current.map((x) =>
+        x.id === influId && x.status === "EM_CURADORIA"
+          ? pushActivity(
+              { ...x, status: "ENVIADO_AO_CLIENTE", statusUpdatedAt: todayISO() },
+              "enviou o perfil para aprovação do cliente",
+            )
+          : x,
+      ),
+    );
+  };
+
+  /** Idem, pra uma entrega (roteiro ou conteúdo, conforme `etapa` dela) —
+   * só sai de EM_PRODUCAO. */
+  const sendEntregaToClient = (influId: string, entregaId: string) => {
+    applyInflusChange(
+      latestInflusRef.current.map((x) => {
+        if (x.id !== influId) return x;
+        const entrega = x.entregas.find((e) => e.id === entregaId);
+        if (!entrega || entrega.conteudoStatus !== "EM_PRODUCAO") return x;
+        const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+        return pushActivity(
+          {
+            ...x,
+            entregas: x.entregas.map((e) =>
+              e.id === entregaId ? { ...e, conteudoStatus: "AGUARDANDO_APROVACAO" } : e,
+            ),
+          },
+          `enviou "${label}" (${entrega.etapa === "conteudo" ? "conteúdo" : "roteiro"}) para aprovação do cliente`,
+        );
+      }),
+    );
+  };
 
   const removeInflu = async (influId: string): Promise<boolean> => {
     const alvo = latestInflusRef.current.find((x) => x.id === influId);
@@ -1594,7 +1608,7 @@ export function InfluencerBoard({
             // reabrir a aprovação pro cliente decidir de novo (o selo de
             // reprovado ficaria preso pra sempre).
             { ...x, status, statusUpdatedAt: todayISO(), clienteReprovacao: undefined },
-            `mudou status para ${status}`,
+            `mudou status para ${INFLU_STATUS_LABEL[status]}`,
           )
         : x,
     );
@@ -1614,7 +1628,7 @@ export function InfluencerBoard({
       if (x.id !== influId) return x;
       const entrega = x.entregas.find((e) => e.id === entregaId);
       if (!entrega || entrega.conteudoStatus === conteudoStatus) return x;
-      if (conteudoStatus === "Postado" && !canPublishEntrega(x.status)) return x;
+      if (conteudoStatus === "PUBLICADA" && !canPublishEntrega(x.status)) return x;
       const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
       return pushActivity(
         {
@@ -1624,14 +1638,14 @@ export function InfluencerBoard({
               ? {
                   ...e,
                   conteudoStatus,
-                  status: conteudoStatus === "Postado" ? "publicado" : "combinado",
+                  status: conteudoStatus === "PUBLICADA" ? "publicado" : "combinado",
                   publicadoEm:
-                    conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+                    conteudoStatus === "PUBLICADA" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
                 }
               : e,
           ),
         },
-        `mudou status de "${label}" para ${conteudoStatus}`,
+        `mudou status de "${label}" para ${ENTREGA_CONTEUDO_LABEL[conteudoStatus]}`,
       );
     });
     applyInflusChange(next);
@@ -1874,41 +1888,26 @@ export function InfluencerBoard({
         </button>
       ) : viewMode === "kanban" ? (
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3">
-          {/* "Reprovado" não é um status real (o time só reenvia mudando o
-           * status de verdade, o que já limpa `clienteReprovacao` — ver
-           * `changeStatus`), mas junta quem foi reprovado numa coluna só,
-           * puxada pra fora da coluna "Enviado para aprovação" pra não
-           * ficar escondido junto com quem só está aguardando. */}
-          {(
-            [
-              ...INFLU_STATUSES.flatMap((s) =>
-                s === "Enviado para aprovação" ? [s, "__reprovado__" as const] : [s],
-              ),
-            ] as const
-          ).map((col) => {
-            const isReprovadoCol = col === "__reprovado__";
-            const items = isReprovadoCol
-              ? filteredInflus.filter((i) => i.clienteReprovacao)
-              : filteredInflus.filter((i) => i.status === col && !i.clienteReprovacao);
+          {/* RECUSADO fica fora da ordem linear do funil (`INFLU_KANBAN_ORDER`),
+           * puxado pra uma coluna própria no fim — é um estado terminal
+           * alternativo, não mais uma etapa do meio do caminho. */}
+          {[...INFLU_KANBAN_ORDER, "RECUSADO" as const].map((col) => {
+            const items = filteredInflus.filter((i) => i.status === col);
             return (
               <div
                 key={col}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
-                  if (dragId && !isReprovadoCol) changeStatus(dragId, col);
+                  if (dragId) changeStatus(dragId, col);
                   setDragId(null);
                 }}
                 className="flex w-[312px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <span
-                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
-                      isReprovadoCol
-                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
-                        : INFLU_STATUS_TONE[col]
-                    }`}
+                    className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${INFLU_STATUS_TONE[col]}`}
                   >
-                    {isReprovadoCol ? "Reprovado" : col}
+                    {INFLU_STATUS_LABEL[col]}
                   </span>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
                     {items.length}
@@ -1994,6 +1993,8 @@ export function InfluencerBoard({
           onSetConteudoStatus={(entregaId, status) =>
             setConteudoStatusFromResumo(viewing.id, entregaId, status)
           }
+          onSendToClient={() => sendInfluToClient(viewing.id)}
+          onSendEntregaToClient={(entregaId) => sendEntregaToClient(viewing.id, entregaId)}
           onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
           onApplyChecklistToAll={applyChecklistToAll}
           onComment={(text) => addComment(viewing.id, text)}
@@ -2024,7 +2025,7 @@ export function InfluencerBoard({
                 nicho: b.nicho,
                 redes: b.redes,
                 entregas: [],
-                status: "Lista",
+                status: "EM_CURADORIA",
               }),
             ),
           ]);
@@ -2057,10 +2058,10 @@ function InfluCard({
   // direto do status/veredito do influ, sem depender de uma tabela à
   // parte (o link público agora escreve nesses mesmos campos).
   const approval: { status: "aprovado" | "reprovado"; motivo?: string } | undefined =
-    INFLU_STATUSES.indexOf(influ.status) > INFLU_STATUSES.indexOf("Enviado para aprovação")
+    influ.status === "APROVADO" || influ.status === "EM_PRODUCAO" || influ.status === "CONCLUIDO"
       ? { status: "aprovado" }
-      : influ.clienteReprovacao
-        ? { status: "reprovado", motivo: influ.clienteReprovacao.motivo }
+      : influ.status === "RECUSADO" || influ.clienteReprovacao
+        ? { status: "reprovado", motivo: influ.clienteReprovacao?.motivo }
         : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const totalPago = totalAceito(influ.pagamento);
@@ -2139,11 +2140,14 @@ function InfluCard({
             >
               {INFLU_STATUSES.map((s) => (
                 <option key={s} value={s} className="bg-background text-foreground">
-                  {s}
+                  {INFLU_STATUS_LABEL[s]}
                 </option>
               ))}
             </select>
             <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rotate-90 opacity-70" />
+          </div>
+          <div className="mt-1.5">
+            <NextActionBadge actor={nextActionForInflu(influ.status)} />
           </div>
           {(() => {
             const overdueDays = approvalSlaOverdueDays(influ);
@@ -2346,7 +2350,7 @@ function InfluStatusPill({
         onClick={() => setOpen(true)}
         className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${INFLU_STATUS_TONE[value]}`}
       >
-        {value}
+        {INFLU_STATUS_LABEL[value]}
         <ChevronDown className="h-2.5 w-2.5" />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -2356,24 +2360,47 @@ function InfluStatusPill({
             Escolha o status geral deste influenciador no fluxo da campanha.
           </DialogDescription>
           <div className="max-h-80 space-y-1.5 overflow-y-auto">
-            {INFLU_STATUSES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  onChange(s);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-md border-2 bg-background px-2.5 py-2 text-left text-sm font-semibold text-foreground hover:bg-muted ${INFLU_STATUS_BORDER[s]}`}
-              >
-                {s}
-                {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
-              </button>
-            ))}
+            {INFLU_STATUSES.map((s) => {
+              const disabled = !canTransitionInflu(value, s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    onChange(s);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md border-2 bg-background px-2.5 py-2 text-left text-sm font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${INFLU_STATUS_BORDER[s]}`}
+                >
+                  {INFLU_STATUS_LABEL[s]}
+                  {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
+                </button>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Badge visual de "quem precisa agir" — pra bater o olho numa lista e já
+ * saber onde está o gargalo (Hype/Cliente/Influenciador). */
+function NextActionBadge({ actor }: { actor: NextActor }) {
+  if (!actor) return null;
+  const tone: Record<Exclude<NextActor, null>, string> = {
+    hype: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    cliente: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+    influenciador: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone[actor]}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {NEXT_ACTOR_LABEL[actor]}
+    </span>
   );
 }
 
@@ -2394,31 +2421,32 @@ function EntregaStatusPill({
         onClick={() => setOpen(true)}
         className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[value]}`}
       >
-        {value}
+        {ENTREGA_CONTEUDO_LABEL[value]}
         <ChevronDown className="h-2.5 w-2.5" />
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xs border-border bg-background">
-          <DialogTitle className="text-sm font-semibold">Etapa da entrega</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">Status da entrega</DialogTitle>
           <DialogDescription className="sr-only">
-            Escolha a etapa de produção desta entrega.
+            Escolha o status de produção/aprovação desta entrega.
           </DialogDescription>
           <div className="space-y-1.5">
             {ENTREGA_CONTEUDO_STATUSES.map((s) => {
-              const disabled = s === "Postado" && !canPublishEntrega(influStatus);
+              const publishBlocked = s === "PUBLICADA" && !canPublishEntrega(influStatus);
+              const disabled = publishBlocked || !canTransitionEntrega(value, s);
               return (
                 <button
                   key={s}
                   type="button"
                   disabled={disabled}
-                  title={disabled ? "Disponível a partir de 'Aprovado'" : undefined}
+                  title={publishBlocked ? "Disponível a partir de 'Aprovado'" : undefined}
                   onClick={() => {
                     onChange(s);
                     setOpen(false);
                   }}
                   className={`flex w-full items-center gap-2 rounded-md border-2 bg-background px-2.5 py-2 text-left text-sm font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 ${ENTREGA_CONTEUDO_BORDER[s]}`}
                 >
-                  {s}
+                  {ENTREGA_CONTEUDO_LABEL[s]}
                   {s === value && <Check className="ml-auto h-3.5 w-3.5" />}
                 </button>
               );
@@ -2447,11 +2475,13 @@ function EntregasEditor({
   onChange,
   influStatus,
   onStatusChange,
+  onSendToClient,
 }: {
   entregas: Entrega[];
   onChange: (next: Entrega[]) => void;
   influStatus: InfluStatus;
   onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
+  onSendToClient?: (entregaId: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entregas.find((e) => e.id === selectedId) ?? null;
@@ -2459,14 +2489,14 @@ function EntregasEditor({
   const update = (id: string, patch: Partial<Entrega>) =>
     onChange(entregas.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
-  // "Postado" vira status "publicado" (libera link/métricas no Financeiro),
-  // qualquer outra etapa volta a "combinado".
+  // "PUBLICADA" vira status "publicado" (libera link/métricas no Financeiro),
+  // qualquer outro status volta a "combinado".
   const setEtapaGenerico = (e: Entrega, conteudoStatus: EntregaConteudoStatus) => {
-    if (conteudoStatus === "Postado" && !canPublishEntrega(influStatus)) return;
+    if (conteudoStatus === "PUBLICADA" && !canPublishEntrega(influStatus)) return;
     update(e.id, {
       conteudoStatus,
-      status: conteudoStatus === "Postado" ? "publicado" : "combinado",
-      publicadoEm: conteudoStatus === "Postado" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+      status: conteudoStatus === "PUBLICADA" ? "publicado" : "combinado",
+      publicadoEm: conteudoStatus === "PUBLICADA" ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
     });
   };
 
@@ -2542,7 +2572,7 @@ function EntregasEditor({
                     </td>
                     <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
                       <EntregaStatusPill
-                        value={e.conteudoStatus ?? "Combinado"}
+                        value={e.conteudoStatus ?? "COMBINADA"}
                         influStatus={influStatus}
                         onChange={(s) =>
                           onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
@@ -2580,7 +2610,14 @@ function EntregasEditor({
           const id = crypto.randomUUID();
           onChange([
             ...entregas,
-            { id, tipo: "Reels", quantidade: 1, status: "combinado", conteudoStatus: "Combinado" },
+            {
+              id,
+              tipo: "Reels",
+              quantidade: 1,
+              status: "combinado",
+              conteudoStatus: "COMBINADA",
+              etapa: "roteiro",
+            },
           ]);
           setSelectedId(id);
         }}
@@ -2595,14 +2632,25 @@ function EntregasEditor({
             <p className="text-xs font-semibold text-foreground">
               Editando · {selected.titulo ? `${selected.tipo} · ${selected.titulo}` : selected.tipo}
             </p>
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Fechar edição"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onSendToClient && selected.conteudoStatus === "EM_PRODUCAO" && (
+                <button
+                  type="button"
+                  onClick={() => onSendToClient(selected.id)}
+                  className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
+                >
+                  Enviar para cliente
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Fechar edição"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -2625,21 +2673,10 @@ function EntregasEditor({
 
           <EntregaAnexosEditor
             anexos={selected.anexos ?? []}
-            onChange={(anexos) => {
-              // Anexar o roteiro enquanto a entrega ainda está "Aguardando
-              // roteiro" já avança pra "Aguardando aprovação de roteiro" — é
-              // o gatilho que manda o roteiro pro link público do cliente,
-              // sem precisar de um segundo clique pra mudar o status à mão.
-              const ganhouRoteiro = anexos.some((a) => a.categoria === "Roteiro");
-              const conteudoStatus =
-                ganhouRoteiro && selected.conteudoStatus === "Aguardando roteiro"
-                  ? "Aguardando aprovação de roteiro"
-                  : selected.conteudoStatus;
-              update(selected.id, { anexos, conteudoStatus });
-            }}
+            onChange={(anexos) => update(selected.id, { anexos })}
           />
 
-          {selected.conteudoStatus === "Postado" && (
+          {selected.conteudoStatus === "PUBLICADA" && (
             <div className="space-y-2 border-t border-border pt-2.5">
               <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
               <AutoSaveInput
@@ -2890,6 +2927,8 @@ function InfluencerProfileDialog({
   onApplyChecklistToAll,
   onComment,
   onPatch,
+  onSendToClient,
+  onSendEntregaToClient,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -2901,6 +2940,8 @@ function InfluencerProfileDialog({
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
   onPatch: (patch: Partial<Influ>) => void;
+  onSendToClient: () => void;
+  onSendEntregaToClient: (entregaId: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
   const bank = influ.bank ?? {};
@@ -3047,6 +3088,16 @@ function InfluencerProfileDialog({
                     </span>
                   )}
                   {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
+                  <NextActionBadge actor={nextActionForInflu(influ.status)} />
+                  {influ.status === "EM_CURADORIA" && (
+                    <button
+                      type="button"
+                      onClick={onSendToClient}
+                      className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
+                    >
+                      Enviar para cliente
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={startEditing}
@@ -3100,6 +3151,7 @@ function InfluencerProfileDialog({
                 onChange={(next) => onPatch({ entregas: next })}
                 influStatus={influ.status}
                 onStatusChange={onSetConteudoStatus}
+                onSendToClient={onSendEntregaToClient}
               />
             )}
 
@@ -3355,7 +3407,7 @@ function InfluenciadorDialog({
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [pagamento, setPagamento] = useState<PagamentoEntrega | undefined>();
   const [contrato, setContrato] = useState<string | undefined>();
-  const [status, setStatus] = useState<InfluStatus>("Lista");
+  const [status, setStatus] = useState<InfluStatus>("EM_CURADORIA");
   const [bank, setBank] = useState<BankInfo>({});
   const [saving, setSaving] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
@@ -3373,7 +3425,7 @@ function InfluenciadorDialog({
     setEntregas([]);
     setPagamento(undefined);
     setContrato(undefined);
-    setStatus("Lista");
+    setStatus("EM_CURADORIA");
     setBank({});
   }, [open]);
 

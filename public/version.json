@@ -1,6 +1,7 @@
 {
-  "version": "1.133.1",
+  "version": "1.134.0",
   "notes": [
+    "Refaz o status de influenciadores e entregas nas campanhas: status do influenciador (Inscrito, Em curadoria, Enviado ao cliente, Aprovado, Em produção, Concluído, Recusado) agora é separado do status de cada entrega/conteúdo (Combinada, Em produção, Aguardando aprovação, Ajustes solicitados, Aprovada, Publicada) — antes os dois ficavam misturados numa lista só de 11 status. Novo botão \"Enviar para cliente\" no perfil e em cada entrega (aparece quando está pronto pra ir pro cliente) avança o status sozinho, sem precisar escolher manualmente \"Aguardando aprovação\". Cada card/perfil agora mostra também quem precisa agir a seguir (você, o cliente ou o influenciador). \"Recusado\" volta a ser um status de verdade (não só um aviso ao lado), pra ficar claro quando um influenciador foi reprovado pelo cliente. Campanhas e influenciadores já existentes continuam funcionando normalmente — o status antigo de cada um é convertido automaticamente pro novo formato ao abrir.",
     "Corrige o botão de voltar no perfil do influenciador (Portal do cliente) mostrando \"Voltar pra lista\" em vez de só \"Voltar\", fora do padrão usado no resto da plataforma.",
     "Refaz o visual das mensagens do Chat, no estilo do ClickUp: sem mais balões coloridos flutuando pra direita/esquerda, mensagem em texto simples alinhado à esquerda com nome e hora em cima. Corrige também o card de tarefa mencionada (@tarefa) aparecendo bugado/sobreposto ao texto — agora vem como um bloco próprio, separado, abaixo da mensagem.",
     "Redesenha a aba Integrações (Configurações): cards agrupados por categoria (Calendário / Automação) lado a lado, em vez de uma lista solta um embaixo do outro.",
@@ -125,6 +126,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Simplifica os status que você vê no portal: perfis agora mostram Em análise / Aguardando sua aprovação / Aprovado / Recusado, e entregas mostram Em produção / Aguardando sua aprovação / Ajustes solicitados / Aprovado / Publicado — sem mais termos internos do time.",
     "Corrige o botão de voltar no perfil do influenciador mostrando \"Voltar pra lista\" em vez de só \"Voltar\", padronizado com o resto da plataforma.",
     "Corrige o espaçamento do texto dos artigos, que estava apertado — agora respira mais.",
     "Redesenha a tela de leitura de artigos no formato usado em redes como o LinkedIn: capa em destaque e um cartão de comentários fixo ao lado.",

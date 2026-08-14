@@ -112,7 +112,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
         seguidores: r.seguidores?.trim() || undefined,
       })),
       entregas: [],
-      status: "Inscrições",
+      status: "INSCRITO",
       statusUpdatedAt: now,
       observacoes: observacoesPartes.length > 0 ? observacoesPartes.join("\n\n") : undefined,
       createdAt: now,

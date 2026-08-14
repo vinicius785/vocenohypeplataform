@@ -174,6 +174,8 @@ type PublicEntrega = {
   quantidade: number;
   status: "orcado" | "combinado" | "publicado";
   conteudoStatus?: string;
+  etapa?: "roteiro" | "conteudo";
+  statusCliente: string;
   dataPostagem?: string;
   publicadoEm?: string;
   url?: string;
@@ -188,6 +190,7 @@ type PublicInfluencer = {
   nicho?: string;
   foto?: string;
   status: string;
+  statusCliente: string;
   clienteReprovacao?: Veredito;
   briefingPersonalizado?: string;
   briefingAnexoNome?: string;
@@ -245,23 +248,24 @@ function entregasSummary(entregas: PublicEntrega[]): string {
 /** Um influenciador "precisa de você agora" se a seleção está aguardando
  * decisão, ou alguma entrega está aguardando aprovação de roteiro/conteúdo. */
 function pendingReason(inf: PublicInfluencer, lang: PortalLang): string | null {
-  if (inf.status === "Enviado para aprovação" && !inf.clienteReprovacao)
-    return t(lang, "pendingInflu");
-  const roteiro = inf.entregas.some((e) => e.conteudoStatus === "Aguardando aprovação de roteiro");
+  if (inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao) return t(lang, "pendingInflu");
+  const roteiro = inf.entregas.some(
+    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro",
+  );
   if (roteiro) return t(lang, "pendingRoteiro");
-  const conteudo = inf.entregas.some((e) => e.conteudoStatus === "Aprovação conteúdo");
+  const conteudo = inf.entregas.some(
+    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo",
+  );
   if (conteudo) return t(lang, "pendingConteudo");
   return null;
 }
 
 /** Mesma lógica do ícone de aprovação/reprovação sobre a foto usado
- * internamente (InfluCard, na VI): o portal só mostra influs que já
- * passaram de "Enviado para aprovação", então status diferente disso já
- * significa aprovado; senão, reprovado se o cliente já reprovou. */
+ * internamente (InfluCard, na VI). */
 function influApproval(inf: PublicInfluencer): "aprovado" | "reprovado" | null {
-  if (inf.status !== "Enviado para aprovação") return "aprovado";
-  if (inf.clienteReprovacao) return "reprovado";
-  return null;
+  if (inf.status === "RECUSADO") return "reprovado";
+  if (inf.status === "ENVIADO_AO_CLIENTE") return inf.clienteReprovacao ? "reprovado" : null;
+  return "aprovado";
 }
 
 function initialsOf(name: string): string {
@@ -630,7 +634,7 @@ function StatusBadge({
   }
   return (
     <Badge variant="outline" className={`text-muted-foreground ${className}`}>
-      {inf.status}
+      {inf.statusCliente}
     </Badge>
   );
 }
@@ -768,12 +772,7 @@ function InfluencerDetail({
     hasRedeMetrics(inf.profileMetrics?.porRede?.[r.id ?? r.plataforma]),
   );
   const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
-  // `status` não avança quando o cliente reprova (fica em "Enviado para
-  // aprovação" de propósito, pronto pro time reenviar depois de ajustar) —
-  // por isso "pendente" também precisa checar que ainda não veio uma
-  // reprovação, senão a barra de Aprovar/Reprovar nunca some e o aviso de
-  // reprovado nunca aparece depois que o cliente reprova.
-  const influPending = inf.status === "Enviado para aprovação" && !inf.clienteReprovacao;
+  const influPending = inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao;
 
   const runInflu = async (status: "aprovado" | "reprovado") => {
     setBusyKey("influ");
@@ -1102,8 +1101,10 @@ function InfluencerDetail({
             </h3>
             <ol className="relative ml-1.5 space-y-5 border-l-2 border-border pl-5">
               {entregasOrdenadas.map((e) => {
-                const roteiroPendente = e.conteudoStatus === "Aguardando aprovação de roteiro";
-                const conteudoPendente = e.conteudoStatus === "Aprovação conteúdo";
+                const roteiroPendente =
+                  e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro";
+                const conteudoPendente =
+                  e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo";
                 const publicado = e.status === "publicado";
                 const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
                 const conteudoAnexos = (e.anexos ?? []).filter(
@@ -1126,7 +1127,7 @@ function InfluencerDetail({
                           {e.tipo}
                           {e.conteudoStatus && (
                             <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
-                              {e.conteudoStatus}
+                              {e.statusCliente}
                             </Badge>
                           )}
                         </span>

@@ -1,10 +1,35 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
-import { INFLU_STATUSES, type Influ } from "@/components/influenciadores/InfluencerBoard";
+import type { Influ, Entrega } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
+import {
+  legacyInfluStatus,
+  legacyEntregaStatus,
+  INFLU_STATUS_LABEL_CLIENTE,
+  ENTREGA_STATUS_LABEL_CLIENTE,
+} from "@/lib/campanha-status";
 import type { BlogPost, Project } from "@/lib/projetos";
 import type { Task } from "@/components/tasks/TaskBoard";
+
+/** Status "prontos pra ver" pelo cliente — INSCRITO/EM_CURADORIA são
+ * planejamento interno, ainda não decidido/comunicado. */
+const VISIBLE_TO_CLIENT = new Set([
+  "ENVIADO_AO_CLIENTE",
+  "APROVADO",
+  "EM_PRODUCAO",
+  "CONCLUIDO",
+  "RECUSADO",
+]);
+
+function normalizedInfluStatus(influ: Influ) {
+  const allEntregasPublicadas =
+    influ.entregas.length > 0 && influ.entregas.every((e) => e.status === "publicado");
+  return legacyInfluStatus(influ.status, {
+    hasReprovacao: !!influ.clienteReprovacao,
+    allEntregasPublicadas,
+  });
+}
 
 /**
  * Portal público fixo do CLIENTE (`/portal/$token`) — um único link mostra
@@ -57,6 +82,9 @@ const EntregaPublic = z.object({
   quantidade: z.number(),
   status: z.enum(["orcado", "combinado", "publicado"]),
   conteudoStatus: z.string().optional(),
+  etapa: z.enum(["roteiro", "conteudo"]).optional(),
+  /** Rótulo já simplificado pro cliente ("Aguardando sua aprovação" etc). */
+  statusCliente: z.string(),
   dataPostagem: z.string().optional(),
   publicadoEm: z.string().optional(),
   url: z.string().optional(),
@@ -85,6 +113,8 @@ const InfluencerPublic = z.object({
   nicho: z.string().optional(),
   foto: z.string().optional(),
   status: z.string(),
+  /** Rótulo já simplificado pro cliente ("Aguardando sua aprovação" etc). */
+  statusCliente: z.string(),
   clienteReprovacao: ClienteVeredito.optional(),
   briefingPersonalizado: z.string().optional(),
   briefingAnexoNome: z.string().optional(),
@@ -117,13 +147,36 @@ function statusHistoryFor(influ: Influ): { status: string; at: string }[] {
 /** Projeta um `Influ` interno (que carrega telefone/email/contrato/bank/
  * comments/activity/checklist/pagamento por entrega) pro subconjunto seguro
  * de mostrar num link público — nunca o objeto cru. */
+function toPublicEntrega(e: Entrega): z.infer<typeof EntregaPublic> {
+  const { status: entregaStatus, etapa } = legacyEntregaStatus(e.conteudoStatus, e.etapa);
+  return {
+    id: e.id,
+    tipo: e.tipo,
+    titulo: e.titulo,
+    quantidade: e.quantidade,
+    status: e.status,
+    conteudoStatus: entregaStatus,
+    etapa,
+    statusCliente: ENTREGA_STATUS_LABEL_CLIENTE[entregaStatus],
+    dataPostagem: e.dataPostagem,
+    publicadoEm: e.publicadoEm,
+    url: e.url,
+    anexos: e.anexos,
+    metrics: e.metrics,
+    roteiroReprovacao: e.roteiroReprovacao,
+    conteudoReprovacao: e.conteudoReprovacao,
+  };
+}
+
 function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
+  const status = normalizedInfluStatus(influ);
   return {
     id: influ.id,
     nome: influ.nome,
     nicho: influ.nicho,
     foto: influ.foto,
-    status: influ.status,
+    status,
+    statusCliente: INFLU_STATUS_LABEL_CLIENTE[status],
     clienteReprovacao: influ.clienteReprovacao,
     briefingPersonalizado: influ.briefingPersonalizado,
     briefingAnexoNome: influ.briefingAnexoNome,
@@ -135,21 +188,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
       handle: r.handle,
       seguidores: r.seguidores,
     })),
-    entregas: influ.entregas.map((e) => ({
-      id: e.id,
-      tipo: e.tipo,
-      titulo: e.titulo,
-      quantidade: e.quantidade,
-      status: e.status,
-      conteudoStatus: e.conteudoStatus,
-      dataPostagem: e.dataPostagem,
-      publicadoEm: e.publicadoEm,
-      url: e.url,
-      anexos: e.anexos,
-      metrics: e.metrics,
-      roteiroReprovacao: e.roteiroReprovacao,
-      conteudoReprovacao: e.conteudoReprovacao,
-    })),
+    entregas: influ.entregas.map(toPublicEntrega),
     profileMetrics: influ.profileMetrics,
     criadoEm: influ.createdAt,
     historico: statusHistoryFor(influ),
@@ -315,7 +354,6 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
     if (!found) throw new Error("Link não encontrado.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const campanhas = found.cliente.campanhas ?? [];
-    const enviadoIdx = INFLU_STATUSES.indexOf("Enviado para aprovação");
 
     const campanhasComInflus = await Promise.all(
       campanhas.map(async (c) => {
@@ -325,10 +363,10 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           .eq("campanha_id", c.id);
         if (error) throw new Error(error.message);
         // Só mostra pro cliente influenciadores que o time já enviou pra
-        // aprovação (ou mais adiante no funil) — "Lista" é planejamento
-        // interno, ainda não decidido/comunicado.
+        // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
+        // planejamento interno, ainda não decidido/comunicado.
         const influencers = ((rows ?? []) as { data: Influ }[])
-          .filter((r) => INFLU_STATUSES.indexOf(r.data.status) >= enviadoIdx)
+          .filter((r) => VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)))
           .map((r) => toPublicInfluencer(r.data));
         const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
 
