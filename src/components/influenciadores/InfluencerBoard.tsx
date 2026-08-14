@@ -543,6 +543,7 @@ import {
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
+  ENTREGA_ETAPA_LABEL,
   canTransitionInflu,
   canTransitionEntrega,
   legacyInfluStatus,
@@ -565,6 +566,7 @@ export {
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
+  ENTREGA_ETAPA_LABEL,
   canTransitionInflu,
   canTransitionEntrega,
 };
@@ -2065,11 +2067,6 @@ function InfluCard({
         : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const totalPago = totalAceito(influ.pagamento);
-  const nPublicadas = influ.entregas.filter((e) => e.status === "publicado").length;
-  const entregasStr =
-    influ.entregas.length === 0
-      ? "—"
-      : `${influ.entregas.length} · ${nPublicadas} publicada${nPublicadas === 1 ? "" : "s"}`;
 
   return (
     <article
@@ -2161,9 +2158,40 @@ function InfluCard({
         </div>
       )}
 
-      {(has("entregas") || has("pagamentos") || (has("contrato") && influ.contrato)) && (
+      {has("entregas") && influ.entregas.length > 0 && (
+        <div className="space-y-1 border-t border-border/60 bg-muted/20 px-4 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Entregas ({influ.entregas.length})
+          </p>
+          <ul className="max-h-32 space-y-1 overflow-y-auto pr-0.5">
+            {influ.entregas.map((e) => {
+              const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo;
+              const status = e.conteudoStatus ?? "COMBINADA";
+              return (
+                <li key={e.id} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 flex-1 truncate text-foreground/80">
+                    {e.quantidade}x {label}
+                    {e.etapa && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {ENTREGA_ETAPA_LABEL[e.etapa]}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[status]}`}
+                  >
+                    {ENTREGA_CONTEUDO_LABEL[status]}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {(has("pagamentos") || (has("contrato") && influ.contrato)) && (
         <dl className="space-y-1 border-t border-border/60 bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
-          {has("entregas") && <MetaRow label="Entregas" value={entregasStr} />}
           {has("pagamentos") && (
             <MetaRow label="Valor" value={totalPago > 0 ? fmtBRL(totalPago) : "—"} />
           )}

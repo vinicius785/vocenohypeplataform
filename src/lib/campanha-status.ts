@@ -97,6 +97,11 @@ export type EntregaStatus = (typeof ENTREGA_STATUSES)[number];
 
 export type EntregaEtapa = "roteiro" | "conteudo";
 
+export const ENTREGA_ETAPA_LABEL: Record<EntregaEtapa, string> = {
+  roteiro: "Roteiro",
+  conteudo: "Conteúdo",
+};
+
 export const ENTREGA_STATUS_LABEL: Record<EntregaStatus, string> = {
   COMBINADA: "Combinada",
   EM_PRODUCAO: "Em produção",
@@ -140,7 +145,7 @@ export const ENTREGA_STATUS_BORDER: Record<EntregaStatus, string> = {
 export type NextActor = "hype" | "cliente" | "influenciador" | null;
 
 export const NEXT_ACTOR_LABEL: Record<Exclude<NextActor, null>, string> = {
-  hype: "Você (Hype)",
+  hype: "VNH",
   cliente: "Cliente",
   influenciador: "Influenciador",
 };
