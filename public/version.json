@@ -1,6 +1,7 @@
 {
-  "version": "1.135.0",
+  "version": "1.135.1",
   "notes": [
+    "Corrige o Simulador de Proposta (Comercial) fechando sozinho junto com o formulário da oportunidade ao clicar em qualquer campo dentro dele (select de tier/formato, quantidade, preço final) — o clique borbulhava até o fundo do formulário de lead, que fecha ao detectar clique fora.",
     "Novo: Simulador de Proposta, dentro de uma oportunidade do Comercial — monta o pacote de influenciadores por Tier de audiência (Nano, Micro, Macro, Mega etc.) e Formato de entrega, calcula o custo total e aplica os percentuais fixos da agência (imposto, comissão, bonificação, margem) pra chegar no preço final a propor, igual à planilha de precificação que o time já usava. Preço calculado continua editável por cima. Ao usar como valor do negócio e depois converter o lead em cliente, esse valor já pré-preenche o orçamento na hora de montar a campanha (também editável).",
     "Novo (Configurações → Precificação, só admin): tela pra definir os 4 percentuais fixos da agência (imposto, comissão, bonificação, margem) e a tabela de custo médio por Tier×Formato usada pelo Simulador de Proposta.",
     "Novo: cada influenciador do Banco de Influenciadores ganha um campo \"Tier\" (faixa de audiência), com sugestão automática a partir dos seguidores cadastrados.",
