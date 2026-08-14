@@ -833,7 +833,7 @@ function InfluencerDetail({
 
   return (
     <div>
-      <BackButton onClick={onBack} label={t(lang, "backToList")} className="mb-4" />
+      <BackButton onClick={onBack} label={t(lang, "back")} className="mb-4" />
 
       {/* HERO — foto/nome em destaque, com aprovar/reprovar direto no cabeçalho
           quando pendente, mesmo efeito de elevação sutil usado nos cards da

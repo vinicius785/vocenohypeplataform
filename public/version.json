@@ -1,6 +1,7 @@
 {
-  "version": "1.133.0",
+  "version": "1.133.1",
   "notes": [
+    "Corrige o botão de voltar no perfil do influenciador (Portal do cliente) mostrando \"Voltar pra lista\" em vez de só \"Voltar\", fora do padrão usado no resto da plataforma.",
     "Refaz o visual das mensagens do Chat, no estilo do ClickUp: sem mais balões coloridos flutuando pra direita/esquerda, mensagem em texto simples alinhado à esquerda com nome e hora em cima. Corrige também o card de tarefa mencionada (@tarefa) aparecendo bugado/sobreposto ao texto — agora vem como um bloco próprio, separado, abaixo da mensagem.",
     "Redesenha a aba Integrações (Configurações): cards agrupados por categoria (Calendário / Automação) lado a lado, em vez de uma lista solta um embaixo do outro.",
     "Reuniões: na opção \"Repetir\" diariamente, agora pergunta se é só dias de semana ou se inclui sábado e domingo também.",
@@ -124,6 +125,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Corrige o botão de voltar no perfil do influenciador mostrando \"Voltar pra lista\" em vez de só \"Voltar\", padronizado com o resto da plataforma.",
     "Corrige o espaçamento do texto dos artigos, que estava apertado — agora respira mais.",
     "Redesenha a tela de leitura de artigos no formato usado em redes como o LinkedIn: capa em destaque e um cartão de comentários fixo ao lado.",
     "Agora dá pra curtir e comentar nos artigos publicados no seu portal.",
