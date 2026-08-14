@@ -3145,9 +3145,13 @@ function EntregaDetailSheet({
 function InfluVisaoGeralTab({
   influ,
   onGoToTab,
+  onSetChecklist,
+  onApplyChecklistToAll,
 }: {
   influ: Influ;
   onGoToTab: (tab: string) => void;
+  onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {
   const entregas = influ.entregas;
   const publicadas = entregas.filter((e) => e.conteudoStatus === "PUBLICADA").length;
@@ -3255,6 +3259,12 @@ function InfluVisaoGeralTab({
           </span>
         </button>
       </div>
+
+      <ChecklistSection
+        checklist={influ.checklist ?? []}
+        onChange={onSetChecklist}
+        onApplyToAll={onApplyChecklistToAll}
+      />
     </div>
   );
 }
@@ -3518,11 +3528,15 @@ function InfluencerProfileDialog({
               <TabsTrigger value="briefing">Briefing</TabsTrigger>
               <TabsTrigger value="metricas">Métricas</TabsTrigger>
               <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-              <TabsTrigger value="checklist">Checklist</TabsTrigger>
             </TabsList>
 
             <TabsContent value="visao-geral" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <InfluVisaoGeralTab influ={influ} onGoToTab={setActiveTab} />
+              <InfluVisaoGeralTab
+                influ={influ}
+                onGoToTab={setActiveTab}
+                onSetChecklist={onSetChecklist}
+                onApplyChecklistToAll={onApplyChecklistToAll}
+              />
             </TabsContent>
 
             <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
@@ -3634,14 +3648,6 @@ function InfluencerProfileDialog({
                   />
                 </ProfileSectionCard>
               )}
-            </TabsContent>
-
-            <TabsContent value="checklist" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <ChecklistSection
-                checklist={influ.checklist ?? []}
-                onChange={onSetChecklist}
-                onApplyToAll={onApplyChecklistToAll}
-              />
             </TabsContent>
 
             <TabsContent value="financeiro" className="mt-0 flex-1 overflow-y-auto px-7 py-6">

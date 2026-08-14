@@ -1,6 +1,7 @@
 {
-  "version": "1.139.3",
+  "version": "1.139.4",
   "notes": [
+    "Perfil de influenciador: Checklist deixa de ser uma aba própria e passa a fazer parte da \"Visão geral\", junto com o resumo de entregas e a próxima ação.",
     "Corrige o card \"Pagamento\" na aba Financeiro do perfil de influenciador: tinha uma linha sem sentido no topo (sobra de quando a seção ficava empilhada solta) e não tinha ícone, diferente dos cards vizinhos (Dados bancários, Contrato).",
     "Perfil de influenciador: remove o degradê colorido do topo do cabeçalho e achata o tom cinza dos cards (Redes sociais, Briefing, Métricas etc.), do fundo atrás das abas e do painel de Atividade — tudo passa a usar o mesmo fundo neutro do resto da plataforma, separado só por borda fina.",
     "Reestrutura entregas e perfil de influenciador (fase 3): a aba \"Perfil\" (que agrupava Redes, Métricas, Briefing e Checklist tudo junto) vira 4 abas próprias — Perfil (só redes sociais), Briefing, Métricas e Checklist — cada uma mais enxuta e fácil de achar.",
