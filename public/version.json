@@ -1,6 +1,8 @@
 {
-  "version": "1.127.0",
+  "version": "1.128.0",
   "notes": [
+    "Corrige o espaçamento do texto dos artigos (Mural e Portal), que estava apertado — parágrafos e títulos agora respiram mais, mais parecido com o LinkedIn.",
+    "Corrige o \"projeto de origem\" do artigo aparecendo colado no nome do autor no Mural interno, dando a impressão de ser o cargo da pessoa (ex.: \"Fulano · Marketing\") — agora aparece separado, junto da categoria.",
     "Redesenha a leitura de artigos (Mural interno e Portal do cliente) no formato usado em redes como o LinkedIn: capa em destaque com legenda \"Por: autor\", e um cartão de comentários fixo ao lado (resumo de reações, Gostei/Comentar, lista de comentários) — mesma estrutura nos dois lugares.",
     "Otimização de performance: cada seção da plataforma (Início, Chat, Financeiro, etc.) agora carrega seu próprio código só quando você abre ela, em vez de tudo junto de uma vez — deixa o primeiro carregamento bem mais rápido. Também corrige o indicador de cronômetro ativo no topo, que recarregava todos os projetos a cada segundo só pra atualizar o relógio.",
     "Corrige o Chat não sendo responsivo no mobile: agora, em telas pequenas, mostra a lista de conversas OU a conversa aberta em tela cheia (nunca as duas colunas espremidas), com um botão de voltar pra sair da conversa — igual ao WhatsApp no celular.",
@@ -115,6 +117,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Corrige o espaçamento do texto dos artigos, que estava apertado — agora respira mais.",
     "Redesenha a tela de leitura de artigos no formato usado em redes como o LinkedIn: capa em destaque e um cartão de comentários fixo ao lado.",
     "Agora dá pra curtir e comentar nos artigos publicados no seu portal.",
     "Os \"Últimos conteúdos\" da tela inicial agora aparecem em formato de galeria (fotos em grade). Dentro de uma campanha, o perfil de cada influenciador ganha sua própria galeria, só com o conteúdo publicado dele ali.",

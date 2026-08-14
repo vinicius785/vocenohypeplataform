@@ -88,7 +88,7 @@ export function renderMarkdownLite(md: string): string {
  * define como cada tag HTML gerada aparece: espaçamento de parágrafo,
  * marcador de lista (bolinha vs. número), tamanho de título, etc. */
 export const MARKDOWN_LITE_CLASSES =
-  "space-y-2 text-sm leading-relaxed text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:my-2 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:list-decimal [&_li]:ml-5 [&_li]:pl-0.5 [&_p]:my-2 [&_strong]:font-semibold [&_em]:italic";
+  "text-[15px] leading-[1.75] text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_h1]:mb-3 [&_h1]:mt-8 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mb-2.5 [&_h2]:mt-7 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:text-sm [&_h3]:font-semibold [&_ul]:my-4 [&_ul]:list-disc [&_ol]:my-4 [&_ol]:list-decimal [&_li]:ml-5 [&_li]:mb-2 [&_li]:pl-1 [&_p]:my-4 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_strong]:font-semibold [&_em]:italic";
 
 function fmtRelative(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -280,10 +280,20 @@ export function ArticleReader({
             <p className="mt-2 text-center text-[11px] text-muted-foreground">Por: {authorLabel}</p>
           </>
         )}
-        {category && (
-          <span className="mt-4 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {category}
-          </span>
+        {(category || metaExtra) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {category && (
+              <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {category}
+              </span>
+            )}
+            {/* Contexto do artigo (ex.: projeto de onde ele veio) — separado
+             * da linha de autor de propósito, senão parece cargo da pessoa
+             * ("Fulano · Marketing" lia como se "Marketing" fosse o cargo). */}
+            {metaExtra && (
+              <span className="text-[11px] text-muted-foreground">Publicado em {metaExtra}</span>
+            )}
+          </div>
         )}
         <h1 className="mt-2 text-2xl font-light leading-tight tracking-tight text-foreground">
           {title}
@@ -299,7 +309,6 @@ export function ArticleReader({
             </span>
           )}
           <span className="font-medium text-foreground">{authorLabel}</span>
-          {metaExtra && <span>· {metaExtra}</span>}
           {dateLabel && <span>· {dateLabel}</span>}
         </div>
         <div
