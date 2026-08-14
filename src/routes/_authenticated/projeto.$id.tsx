@@ -52,6 +52,7 @@ import {
   loadProjetoInflus,
   saveProjetoInflus,
   onProjetoInflusChange,
+  saveProjetoTarefas,
 } from "@/lib/projeto-scoped-store";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
@@ -126,7 +127,13 @@ function ProjetoPage() {
     if (!project) return;
     const next = { ...project, ...patch };
     setProject(next);
-    upsertProjeto(next);
+    // Tarefas são gravadas à parte (projeto_tarefas, per-row) em vez de
+    // dentro do upsert do projeto inteiro — evita que uma edição de tarefa
+    // sobrescreva, com dados desatualizados, tarefas que outra aba/pessoa
+    // acabou de criar/editar no mesmo projeto (ver projeto-scoped-store.ts).
+    const { tasks, ...rest } = patch;
+    if (tasks) saveProjetoTarefas(id, tasks as unknown as BoardTask[]);
+    if (Object.keys(rest).length > 0) upsertProjeto(next);
   };
 
   const goToSection = (key: SectionKey) => {

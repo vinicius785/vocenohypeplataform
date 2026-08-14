@@ -5,7 +5,8 @@ export type ScopedTable =
   | "campanha_tarefas"
   | "campanha_documentos"
   | "campanha_cronograma"
-  | "projeto_influenciadores";
+  | "projeto_influenciadores"
+  | "projeto_tarefas";
 
 /**
  * Same rationale as table-array-store.ts, but for entities scoped by a

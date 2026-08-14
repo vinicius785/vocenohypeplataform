@@ -1,5 +1,6 @@
 import type { InfluencerFieldKey } from "@/components/influenciadores/InfluencerBoard";
 import { createTableArrayStore } from "./table-array-store";
+import { loadProjetoTarefas, onProjetoTarefasChange } from "./projeto-scoped-store";
 
 export type FeatureKey =
   | "roadmap"
@@ -248,18 +249,38 @@ export function initProjetosSync(): Promise<void> {
 // `projetosStore.get()` retorna sempre a mesma referência até o store
 // realmente mudar (ver table-array-store.ts) — cacheia o resultado mapeado
 // por identidade pra chamadas repetidas de `loadProjetos()` (ex.: em vários
-// componentes/efeitos no mesmo ciclo) não remapearem tudo à toa.
+// componentes/efeitos no mesmo ciclo) não remapearem tudo à toa. As tarefas
+// vêm de um store à parte (projeto_tarefas, per-row — ver
+// projeto-scoped-store.ts), cujo cache é mutado in-place (não troca de
+// referência), por isso um contador de versão à parte também invalida esse
+// cache quando só as tarefas mudam.
+let tarefasVersion = 0;
+onProjetoTarefasChange(() => {
+  tarefasVersion++;
+});
+
 let cachedRawProjetos: Project[] | null = null;
+let cachedTarefasVersion = -1;
 let cachedMappedProjetos: Project[] = [];
 
 export function loadProjetos(): Project[] {
   const raw = projetosStore.get();
-  if (raw === cachedRawProjetos) return cachedMappedProjetos;
+  if (raw === cachedRawProjetos && tarefasVersion === cachedTarefasVersion) {
+    return cachedMappedProjetos;
+  }
   cachedRawProjetos = raw;
+  cachedTarefasVersion = tarefasVersion;
   cachedMappedProjetos = raw.map((p) => ({
     ...p,
     milestones: p.milestones ?? [],
-    tasks: (p.tasks ?? []).map((t) => ({ ...t, status: normalizeKanbanStatus(t.status) })),
+    // Tarefas de projeto viviam dentro do JSONB do projeto inteiro
+    // (`p.tasks`) — cada edição regravava o array completo junto com o
+    // resto do projeto, e duas edições concorrentes em tarefas diferentes
+    // podiam se apagar uma à outra silenciosamente (last-write-wins de
+    // array inteiro). Agora a fonte de verdade é `projeto_tarefas`
+    // (per-row, como campanha_tarefas) — `p.tasks` no banco vira dado
+    // morto, ignorado aqui de propósito.
+    tasks: loadProjetoTarefas(p.id).map((t) => ({ ...t, status: normalizeKanbanStatus(t.status) })),
     docs: p.docs ?? [],
   }));
   return cachedMappedProjetos;
@@ -271,8 +292,10 @@ export function saveProjetos(list: Project[]) {
 
 export function onProjetosChange(callback: () => void): () => void {
   const unsubscribe = projetosStore.subscribe(callback);
+  const unsubscribeTarefas = onProjetoTarefasChange(callback);
   return () => {
     unsubscribe();
+    unsubscribeTarefas();
   };
 }
 
