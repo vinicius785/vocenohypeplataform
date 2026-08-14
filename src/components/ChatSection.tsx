@@ -933,7 +933,7 @@ function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: st
     <button
       type="button"
       onClick={() => onOpen(task.id)}
-      className="my-1 flex w-full max-w-xs flex-col gap-1 rounded-lg border border-border bg-muted/30 px-2.5 py-2 text-left text-xs hover:border-foreground/30 hover:bg-muted/50"
+      className="flex w-full max-w-[420px] flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left text-xs hover:border-foreground/30 hover:bg-muted/50"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate font-medium text-foreground">{task.label}</span>
@@ -958,12 +958,11 @@ function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: st
   );
 }
 
-function renderText(
-  text: string,
-  mentions: ChatMention[] | undefined,
-  taskInfoById?: Map<string, ChatTaskInfo>,
-  onOpenTask?: (id: string) => void,
-) {
+/** Texto da mensagem com @menções inline (pessoa OU tarefa) — sempre um
+ * badge de texto simples, nunca um bloco maior aqui dentro, pra não quebrar
+ * o fluxo do parágrafo. Cards de tarefa mencionada aparecem à parte, como
+ * blocos abaixo do texto (ver `taskMentionsOf`), no estilo ClickUp. */
+function renderText(text: string, mentions: ChatMention[] | undefined) {
   const parts: (string | ChatMention)[] = !mentions || mentions.length === 0 ? [text] : [text];
   if (mentions && mentions.length > 0) {
     for (const m of mentions) {
@@ -982,12 +981,6 @@ function renderText(
   }
   return parts.map((p, i) => {
     if (typeof p === "string") return <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>;
-    if (p.kind === "task") {
-      const task = taskInfoById?.get(p.id);
-      if (task && onOpenTask) {
-        return <TaskMentionCard key={i} task={task} onOpen={onOpenTask} />;
-      }
-    }
     return (
       <span
         key={i}
@@ -1001,6 +994,25 @@ function renderText(
       </span>
     );
   });
+}
+
+/** Tarefas mencionadas numa mensagem, sem repetir a mesma tarefa duas vezes
+ * (@menção pode aparecer mais de uma vez no texto). */
+function taskMentionsOf(
+  mentions: ChatMention[] | undefined,
+  taskInfoById: Map<string, ChatTaskInfo>,
+): ChatTaskInfo[] {
+  if (!mentions || mentions.length === 0) return [];
+  const seen = new Set<string>();
+  const out: ChatTaskInfo[] = [];
+  for (const m of mentions) {
+    if (m.kind !== "task" || seen.has(m.id)) continue;
+    const task = taskInfoById.get(m.id);
+    if (!task) continue;
+    seen.add(m.id);
+    out.push(task);
+  }
+  return out;
 }
 
 function MessageList({
@@ -1132,7 +1144,7 @@ function MessageList({
             )}
             <div
               id={`msg-${m.id}`}
-              className={`group relative flex gap-2.5 rounded-md transition-colors duration-500 ${mine ? "flex-row-reverse" : ""} ${grouped ? "mt-1" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
+              className={`group relative flex gap-2.5 rounded-md px-2 py-0.5 transition-colors duration-500 hover:bg-muted/30 ${grouped ? "mt-0.5" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
             >
               <div className="w-8 shrink-0">
                 {!grouped &&
@@ -1144,9 +1156,9 @@ function MessageList({
                     </div>
                   ))}
               </div>
-              <div className={`flex min-w-0 flex-1 flex-col ${mine ? "items-end" : "items-start"}`}>
+              <div className="flex min-w-0 flex-1 flex-col items-start">
                 {!grouped && (
-                  <div className={`flex items-baseline gap-2 ${mine ? "flex-row-reverse" : ""}`}>
+                  <div className="flex items-baseline gap-2">
                     <span className="text-xs font-semibold text-foreground">
                       {mine ? "Você" : m.authorName}
                     </span>
@@ -1198,27 +1210,19 @@ function MessageList({
                     }}
                   />
                 ) : (
-                  <div className={`flex flex-col gap-1 ${mine ? "items-end" : "items-start"}`}>
+                  <div className="flex w-full flex-col items-start gap-1.5">
                     {m.text && (
-                      <div
-                        className={`max-w-[420px] rounded-lg px-2.5 py-1.5 text-sm shadow-sm ${
-                          mine
-                            ? "rounded-tr-none bg-foreground text-background"
-                            : "rounded-tl-none bg-muted text-foreground"
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap break-words leading-relaxed">
-                          {renderText(m.text, m.mentions, taskInfoById, onOpenTask)}
-                          {m.editedAt && (
-                            <span
-                              className={`ml-1 text-[10px] ${mine ? "text-background/70" : "text-muted-foreground"}`}
-                            >
-                              (editado)
-                            </span>
-                          )}
-                        </p>
-                      </div>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                        {renderText(m.text, m.mentions)}
+                        {m.editedAt && (
+                          <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>
+                        )}
+                      </p>
                     )}
+                    {onOpenTask &&
+                      taskMentionsOf(m.mentions, taskInfoById).map((task) => (
+                        <TaskMentionCard key={task.id} task={task} onOpen={onOpenTask} />
+                      ))}
                     {m.attachments && m.attachments.length > 0 && (
                       <AttachmentList attachments={m.attachments} />
                     )}
@@ -1248,7 +1252,7 @@ function MessageList({
                 )}
               </div>
               {!editing && (
-                <div className="absolute right-0 top-0 hidden items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm group-hover:flex">
+                <div className="absolute right-2 top-0 hidden items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm group-hover:flex">
                   <div className="relative">
                     <button
                       onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}

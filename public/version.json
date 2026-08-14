@@ -1,6 +1,7 @@
 {
-  "version": "1.132.0",
+  "version": "1.133.0",
   "notes": [
+    "Refaz o visual das mensagens do Chat, no estilo do ClickUp: sem mais balões coloridos flutuando pra direita/esquerda, mensagem em texto simples alinhado à esquerda com nome e hora em cima. Corrige também o card de tarefa mencionada (@tarefa) aparecendo bugado/sobreposto ao texto — agora vem como um bloco próprio, separado, abaixo da mensagem.",
     "Redesenha a aba Integrações (Configurações): cards agrupados por categoria (Calendário / Automação) lado a lado, em vez de uma lista solta um embaixo do outro.",
     "Reuniões: na opção \"Repetir\" diariamente, agora pergunta se é só dias de semana ou se inclui sábado e domingo também.",
     "Reuniões: na opção \"Repetir\" semanalmente, agora dá pra marcar mais de um dia da semana (ex.: toda segunda, quarta e sexta), em vez de repetir só no mesmo dia da semana da data escolhida.",
