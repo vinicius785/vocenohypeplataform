@@ -24,6 +24,8 @@ import {
   Webhook,
   RefreshCw,
   Check,
+  CalendarDays,
+  Zap,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -86,7 +88,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.131.0";
+export const APP_VERSION = "1.132.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -520,23 +522,39 @@ function DadosTab() {
  * seção a seção (não trava a aba inteira).
  * ============================================================ */
 
-function IntegracoesSectionHeader({
-  eyebrow,
+function IntegracoesCategoria({
+  icon,
   title,
   description,
+  badge,
+  children,
 }: {
-  eyebrow: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
+  badge?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-        {eyebrow}
-      </p>
-      <h2 className="mt-0.5 text-sm font-semibold text-foreground">{title}</h2>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </div>
+    <section className="space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground/5 text-foreground">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+            {badge && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {badge}
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -557,64 +575,44 @@ function IntegracoesTab() {
   }, []);
 
   return (
-    <div className="max-w-2xl space-y-8">
-      <section className="space-y-3">
-        <IntegracoesSectionHeader
-          eyebrow="Pessoal · disponível pra todo o time"
-          title="Calendário"
-          description="Conecte sua própria conta Google — suas reuniões da plataforma passam a aparecer no seu Google Agenda."
-        />
-        <GoogleCalendarCard />
-      </section>
+    <div className="max-w-4xl space-y-10">
+      <IntegracoesCategoria
+        icon={<CalendarDays className="h-5 w-5" />}
+        title="Calendário"
+        description="Sincronização das reuniões da plataforma com o Google Agenda."
+      >
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <GoogleCalendarCard />
+          {isAdmin === false ? (
+            <AdminOnlyNotice />
+          ) : isAdmin === null ? (
+            <IntegrationCardSkeleton />
+          ) : (
+            <SharedGoogleCalendarCard />
+          )}
+        </div>
+      </IntegracoesCategoria>
 
-      <div className="border-t border-border" />
-
-      <section className="space-y-3">
-        <IntegracoesSectionHeader
-          eyebrow="Administradores"
-          title="Calendário compartilhado"
-          description="A conta que passa a ser a organizadora de TODAS as reuniões da plataforma (link de Meet, convite por e-mail, inclusive pra gente de fora)."
-        />
+      <IntegracoesCategoria
+        icon={<Zap className="h-5 w-5" />}
+        title="Automação"
+        description="Troca de dados com ferramentas externas (Make, Zapier, Typeform, Slack...)."
+        badge="Administradores"
+      >
         {isAdmin === false ? (
           <AdminOnlyNotice />
         ) : isAdmin === null ? (
-          <IntegrationCardSkeleton />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <IntegrationCardSkeleton />
+            <IntegrationCardSkeleton />
+          </div>
         ) : (
-          <SharedGoogleCalendarCard />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <LeadsWebhookCard />
+            <OutgoingWebhooksCard />
+          </div>
         )}
-      </section>
-
-      <div className="border-t border-border" />
-
-      <section className="space-y-3">
-        <IntegracoesSectionHeader
-          eyebrow="Administradores"
-          title="Entrada"
-          description="Recebe dados de fora pra dentro da plataforma (ex: Make, Typeform)."
-        />
-        {isAdmin === false ? (
-          <AdminOnlyNotice />
-        ) : isAdmin === null ? (
-          <IntegrationCardSkeleton />
-        ) : (
-          <LeadsWebhookCard />
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <IntegracoesSectionHeader
-          eyebrow="Administradores"
-          title="Saída"
-          description="Avisa outros sistemas quando algo acontece aqui dentro (ex: Zapier, Make, Slack)."
-        />
-        {isAdmin === false ? (
-          <AdminOnlyNotice />
-        ) : isAdmin === null ? (
-          <IntegrationCardSkeleton />
-        ) : (
-          <OutgoingWebhooksCard />
-        )}
-      </section>
+      </IntegracoesCategoria>
     </div>
   );
 }
