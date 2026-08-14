@@ -2427,7 +2427,7 @@ function NextActionBadge({ actor }: { actor: NextActor }) {
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone[actor]}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {NEXT_ACTOR_LABEL[actor]}
+      Próxima ação: {NEXT_ACTOR_LABEL[actor]}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 {
-  "version": "1.134.1",
+  "version": "1.134.2",
   "notes": [
+    "Etiqueta de próxima ação (kanban de influenciadores) agora vem com o rótulo completo \"Próxima ação: Cliente/VNH/Influenciador\", em vez de só o nome sozinho.",
     "Renomeia o rótulo \"Você (Hype)\" da etiqueta de próxima ação (kanban de influenciadores) para \"VNH\", e o card de influenciador (visão resumida, antes de abrir o perfil) agora lista cada entrega com seu status individual (etapa, quantidade e pill de status), em vez de só um resumo \"X entregas · Y publicadas\".",
     "Refaz o status de influenciadores e entregas nas campanhas: status do influenciador (Inscrito, Em curadoria, Enviado ao cliente, Aprovado, Em produção, Concluído, Recusado) agora é separado do status de cada entrega/conteúdo (Combinada, Em produção, Aguardando aprovação, Ajustes solicitados, Aprovada, Publicada) — antes os dois ficavam misturados numa lista só de 11 status. Novo botão \"Enviar para cliente\" no perfil e em cada entrega (aparece quando está pronto pra ir pro cliente) avança o status sozinho, sem precisar escolher manualmente \"Aguardando aprovação\". Cada card/perfil agora mostra também quem precisa agir a seguir (você, o cliente ou o influenciador). \"Recusado\" volta a ser um status de verdade (não só um aviso ao lado), pra ficar claro quando um influenciador foi reprovado pelo cliente. Campanhas e influenciadores já existentes continuam funcionando normalmente — o status antigo de cada um é convertido automaticamente pro novo formato ao abrir.",
     "Corrige o botão de voltar no perfil do influenciador (Portal do cliente) mostrando \"Voltar pra lista\" em vez de só \"Voltar\", fora do padrão usado no resto da plataforma.",
