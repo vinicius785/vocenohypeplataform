@@ -32,16 +32,21 @@ import {
   LayoutGrid,
   Megaphone,
   Newspaper,
-  Paperclip,
   ImageIcon,
   PlayCircle,
   Sparkles,
   Twitter,
+  Upload,
   Users,
   X,
   XCircle,
   Youtube,
 } from "lucide-react";
+import {
+  ENTREGA_ETAPA_LABEL,
+  ENTREGA_STATUS_TONE,
+  type EntregaStatus,
+} from "@/lib/campanha-status";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -521,6 +526,37 @@ function hasRedeMetrics(m?: RedeMetrics): boolean {
 
 function hasEntregaMetrics(m?: PostMetrics): boolean {
   return Boolean(m && Object.values(m).some((v) => v));
+}
+
+/** Chip de anexo (roteiro/conteúdo) — reaproveitado nos cards de entrega e
+ * no card de briefing, no lugar de um link solto sublinhado. */
+function AnexoChip({ nome, url, onRemove }: { nome?: string; url: string; onRemove?: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 py-1 pl-1 pr-2 text-xs">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 font-medium text-foreground hover:text-foreground/80"
+      >
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
+          <FileText className="h-3 w-3" />
+        </span>
+        <span className="max-w-[180px] truncate">{nome || "Anexo"}</span>
+        <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
+      </a>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 text-muted-foreground hover:text-destructive"
+          aria-label="Remover anexo"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </span>
+  );
 }
 
 /** Aviso persistente de reprovação (do influ ou de uma entrega), até o
@@ -1092,66 +1128,73 @@ function InfluencerDetail({
       </div>
 
       <div className="mt-6 space-y-6">
-        {/* ENTREGAS — linha do tempo */}
+        {/* ENTREGAS — cards organizados por entrega, com status e ação inline */}
         {entregasOrdenadas.length > 0 && (
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Clock className="h-4 w-4" />{" "}
               {t(lang, "entregasHeader", { count: inf.entregas.length })}
             </h3>
-            <ol className="relative ml-1.5 space-y-5 border-l-2 border-border pl-5">
+            <div className="space-y-2.5">
               {entregasOrdenadas.map((e) => {
                 const roteiroPendente =
                   e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro";
                 const conteudoPendente =
                   e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo";
                 const publicado = e.status === "publicado";
+                const pendente = roteiroPendente || conteudoPendente;
                 const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
                 const conteudoAnexos = (e.anexos ?? []).filter(
                   (a) => a.categoria === "Conteúdo publicado",
                 );
-                const dotTone = publicado
+                const barTone = publicado
                   ? "bg-emerald-500"
-                  : roteiroPendente || conteudoPendente
+                  : pendente
                     ? "bg-amber-500"
-                    : "bg-muted-foreground/50";
+                    : "bg-border";
+                const pillTone = e.conteudoStatus
+                  ? (ENTREGA_STATUS_TONE[e.conteudoStatus as EntregaStatus] ??
+                    "bg-muted text-muted-foreground")
+                  : "bg-muted text-muted-foreground";
                 return (
-                  <li key={e.id} className="relative">
-                    <span
-                      className={`absolute -left-[26px] top-1 h-3 w-3 rounded-full ring-4 ring-background ${dotTone}`}
-                    />
-                    <div className="rounded-lg border border-border bg-background p-3 text-xs shadow-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium text-foreground">
-                          {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
-                          {e.tipo}
-                          {e.conteudoStatus && (
-                            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px]">
-                              {e.statusCliente}
-                            </Badge>
-                          )}
-                        </span>
-                        {e.dataPostagem && (
-                          <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
+                  <div
+                    key={e.id}
+                    className="flex overflow-hidden rounded-xl border border-border bg-background shadow-sm"
+                  >
+                    <span className={`w-1 shrink-0 ${barTone}`} />
+                    <div className="min-w-0 flex-1 p-3.5 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <span className="font-medium text-foreground">
+                            {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
+                            {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
                           </span>
-                        )}
+                          {e.etapa && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {ENTREGA_ETAPA_LABEL[e.etapa]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {e.dataPostagem && (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                              <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pillTone}`}
+                          >
+                            {e.statusCliente}
+                          </span>
+                        </div>
                       </div>
 
                       {roteiroPendente && (
-                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+                        <div className="mt-3 space-y-2 border-t border-border pt-3">
                           {roteiroAnexos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {roteiroAnexos.map((a) => (
-                                <a
-                                  key={a.id}
-                                  href={a.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                                >
-                                  <FileText className="h-3 w-3" /> {a.nome}
-                                </a>
+                                <AnexoChip key={a.id} nome={a.nome} url={a.url} />
                               ))}
                             </div>
                           )}
@@ -1171,25 +1214,17 @@ function InfluencerDetail({
                         </div>
                       )}
                       {!roteiroPendente && e.roteiroReprovacao && (
-                        <div className="mt-2.5">
+                        <div className="mt-3">
                           <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
                         </div>
                       )}
 
                       {conteudoPendente && (
-                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+                        <div className="mt-3 space-y-2 border-t border-border pt-3">
                           {conteudoAnexos.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {conteudoAnexos.map((a) => (
-                                <a
-                                  key={a.id}
-                                  href={a.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                                >
-                                  <FileText className="h-3 w-3" /> {a.nome}
-                                </a>
+                                <AnexoChip key={a.id} nome={a.nome} url={a.url} />
                               ))}
                             </div>
                           )}
@@ -1209,15 +1244,15 @@ function InfluencerDetail({
                         </div>
                       )}
                       {!conteudoPendente && e.conteudoReprovacao && (
-                        <div className="mt-2.5">
+                        <div className="mt-3">
                           <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
                         </div>
                       )}
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ol>
+            </div>
           </section>
         )}
 
@@ -1266,81 +1301,88 @@ function InfluencerDetail({
 
         {/* BRIEFING + OBSERVAÇÕES */}
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-foreground">{t(lang, "briefingHeader")}</h3>
-              {briefingSaving && (
-                <span className="text-[10px] text-muted-foreground">{t(lang, "saving")}</span>
-              )}
-            </div>
-            <textarea
-              value={briefingDraft}
-              onChange={(e) => setBriefingDraft(e.target.value)}
-              onBlur={() => void saveBriefing()}
-              placeholder={t(lang, "briefingPlaceholder")}
-              rows={4}
-              className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            />
-            {inf.briefingAnexoUrl ? (
-              <div className="flex items-center gap-2 text-xs">
-                <a
-                  href={inf.briefingAnexoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                >
-                  <Paperclip className="h-3 w-3" /> {inf.briefingAnexoNome || "Anexo"}
-                </a>
-                <button
-                  type="button"
-                  onClick={() => void onSaveBriefingAnexo(null)}
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+          <div className="flex flex-col rounded-2xl border border-border bg-background shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                  <FileText className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t(lang, "briefingHeader")}
+                </h3>
               </div>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={anexoUploading}
-                  onClick={() => anexoInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:opacity-50"
-                >
-                  <Paperclip className="h-3 w-3" />
-                  {anexoUploading ? t(lang, "enviando") : t(lang, "anexarArquivo")}
-                </button>
-                <input
-                  ref={anexoInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (file) void uploadAnexo(file);
-                  }}
-                />
-              </>
-            )}
-          </div>
-          <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-foreground">
-                {t(lang, "observacoesHeader")}
-              </h3>
-              {observacoesSaving && (
-                <span className="text-[10px] text-muted-foreground">{t(lang, "saving")}</span>
+              {briefingSaving && (
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  {t(lang, "saving")}
+                </span>
               )}
             </div>
-            <textarea
-              value={observacoesDraft}
-              onChange={(e) => setObservacoesDraft(e.target.value)}
-              onBlur={() => void saveObservacoes()}
-              placeholder={t(lang, "observacoesPlaceholder")}
-              rows={4}
-              className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-            />
+            <div className="flex flex-1 flex-col gap-3 p-4">
+              <textarea
+                value={briefingDraft}
+                onChange={(e) => setBriefingDraft(e.target.value)}
+                onBlur={() => void saveBriefing()}
+                placeholder={t(lang, "briefingPlaceholder")}
+                rows={5}
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring"
+              />
+              {inf.briefingAnexoUrl ? (
+                <AnexoChip
+                  nome={inf.briefingAnexoNome}
+                  url={inf.briefingAnexoUrl}
+                  onRemove={() => void onSaveBriefingAnexo(null)}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={anexoUploading}
+                    onClick={() => anexoInputRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted/30 hover:text-foreground disabled:opacity-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    {anexoUploading ? t(lang, "enviando") : t(lang, "anexarArquivo")}
+                  </button>
+                  <input
+                    ref={anexoInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadAnexo(file);
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col rounded-2xl border border-border bg-background shadow-sm">
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                  <Sparkles className="h-3.5 w-3.5" />
+                </span>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t(lang, "observacoesHeader")}
+                </h3>
+              </div>
+              {observacoesSaving && (
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  {t(lang, "saving")}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-1 flex-col p-4">
+              <textarea
+                value={observacoesDraft}
+                onChange={(e) => setObservacoesDraft(e.target.value)}
+                onBlur={() => void saveObservacoes()}
+                placeholder={t(lang, "observacoesPlaceholder")}
+                rows={5}
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring"
+              />
+            </div>
           </div>
         </section>
 
@@ -1359,7 +1401,7 @@ function InfluencerDetail({
           items.sort((a, b) => a.at.localeCompare(b.at));
           if (items.length === 0) return null;
           return (
-            <section>
+            <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
               <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-foreground">
                 <History className="h-4 w-4" /> {t(lang, "historicoHeader")}
               </h3>
