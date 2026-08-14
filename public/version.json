@@ -1,6 +1,7 @@
 {
-  "version": "1.139.1",
+  "version": "1.139.2",
   "notes": [
+    "Perfil de influenciador: remove o degradê colorido do topo do cabeçalho e achata o tom cinza dos cards (Redes sociais, Briefing, Métricas etc.), do fundo atrás das abas e do painel de Atividade — tudo passa a usar o mesmo fundo neutro do resto da plataforma, separado só por borda fina.",
     "Reestrutura entregas e perfil de influenciador (fase 3): a aba \"Perfil\" (que agrupava Redes, Métricas, Briefing e Checklist tudo junto) vira 4 abas próprias — Perfil (só redes sociais), Briefing, Métricas e Checklist — cada uma mais enxuta e fácil de achar.",
     "Reestrutura entregas e perfil de influenciador (fase 2): anexos de entrega agora guardam versão (v1, v2, v3...) quando reenviados na mesma categoria — nunca sobrescreve um arquivo anterior, o histórico completo fica visível.",
     "Reestrutura entregas e perfil de influenciador (fase 1): cada entrega ganha uma view própria (painel lateral) com cronograma, progresso por etapa, arquivos, aprovação e histórico, em vez de expandir dentro da tabela. Etapa da entrega passa a ter 4 valores (Roteiro → Gravação → Conteúdo → Publicação), antes só 2. Perfil do influenciador ganha abas (Visão geral / Entregas / Perfil / Financeiro), com uma aba \"Visão geral\" nova mostrando resumo de entregas, próxima ação em destaque e status de briefing/contrato/pagamento — o painel de Atividade/Comentários continua fixo do lado, como antes. Status do influenciador agora é calculado a partir do status de cada entrega individual (antes usava um campo legado). Nenhum dado existente foi perdido — só reorganizado.",

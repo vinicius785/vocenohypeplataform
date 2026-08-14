@@ -3166,7 +3166,7 @@ function InfluVisaoGeralTab({
   return (
     <div className="space-y-5">
       {/* Resumo + próxima ação em destaque */}
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">
@@ -3184,7 +3184,7 @@ function InfluVisaoGeralTab({
       </div>
 
       {/* Entregas por tipo — resumo compacto, sem abrir detalhes aqui */}
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
           <FieldLabel title="Entregas" hint="Resumo por tipo." />
           <button
@@ -3218,7 +3218,7 @@ function InfluVisaoGeralTab({
         <button
           type="button"
           onClick={() => onGoToTab("briefing")}
-          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
         >
           <span>Briefing</span>
           {influ.briefingPersonalizado || influ.briefingAnexoUrl ? (
@@ -3230,7 +3230,7 @@ function InfluVisaoGeralTab({
         <button
           type="button"
           onClick={() => onGoToTab("financeiro")}
-          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
         >
           <span>Contrato</span>
           {influ.contrato ? (
@@ -3242,7 +3242,7 @@ function InfluVisaoGeralTab({
         <button
           type="button"
           onClick={() => onGoToTab("financeiro")}
-          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
         >
           <span>Pagamento</span>
           <span
@@ -3343,23 +3343,18 @@ function InfluencerProfileDialog({
           Informações completas do influenciador.
         </DialogDescription>
 
-        {/* CABEÇALHO — banner + avatar grande sobreposto; status/próxima
-            ação numa linha própria abaixo do nome (não espremidos junto),
-            contato como chips com contraste de verdade contra o card. */}
-        <div className="shrink-0 border-b border-border bg-card">
-          <div
-            className="h-24"
-            style={{
-              background: "linear-gradient(120deg, var(--chart-1), var(--chart-2), var(--chart-3))",
-            }}
-          />
-          <div className="px-7 pb-6">
+        {/* CABEÇALHO — avatar grande + nome; status/próxima ação numa linha
+            própria abaixo do nome (não espremidos junto), contato como
+            chips com contraste de verdade contra o card. Sem banner/degradê
+            no topo — fundo plano, no mesmo tom do resto da plataforma. */}
+        <div className="shrink-0 border-b border-border bg-background">
+          <div className="px-7 pt-6 pb-6">
             <div className="flex flex-wrap items-start gap-5">
               <button
                 type="button"
                 onClick={() => fotoRef.current?.click()}
                 aria-label="Trocar foto"
-                className="group relative -mt-12 flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted shadow-md ring-4 ring-card"
+                className="group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted shadow-sm"
               >
                 {influ.foto ? (
                   <img src={influ.foto} alt="" className="h-full w-full object-cover" />
@@ -3515,7 +3510,7 @@ function InfluencerProfileDialog({
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
-            className="flex min-h-0 flex-col overflow-hidden bg-muted/40"
+            className="flex min-h-0 flex-col overflow-hidden"
           >
             <TabsList className="mx-7 mt-4 w-fit shrink-0">
               <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
@@ -3533,7 +3528,7 @@ function InfluencerProfileDialog({
 
             <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
               {has("entregas") && (
-                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
                   <EntregasEditor
                     entregas={influ.entregas}
                     onChange={(next) => onPatch({ entregas: next })}
@@ -3653,7 +3648,7 @@ function InfluencerProfileDialog({
             <TabsContent value="financeiro" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 {has("pagamentos") && (
-                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
                     <PagamentoInfluSection
                       value={influ.pagamento}
                       onChange={(pagamento) => onPatch({ pagamento })}
@@ -3686,7 +3681,7 @@ function InfluencerProfileDialog({
             </TabsContent>
           </Tabs>
 
-          <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
+          <div className="flex min-h-0 flex-col border-l border-border">
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
               <p className="text-sm font-semibold">Atividade</p>
               <span className="text-[10px] text-muted-foreground">
@@ -4210,7 +4205,7 @@ function ProfileSectionCard({
 }) {
   return (
     <div
-      className={`space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm ${span === "full" ? "sm:col-span-2" : ""}`}
+      className={`space-y-3 rounded-xl border border-border bg-background p-4 shadow-sm ${span === "full" ? "sm:col-span-2" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
