@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
   AtSign,
   BarChart3,
   Calendar,
@@ -2114,6 +2115,52 @@ function ClientPortalPage() {
               <h1 className="mb-6 text-2xl font-semibold tracking-tight text-foreground">
                 {t(lang, "ola", { name: data.clienteNome })}
               </h1>
+
+              {/* Hub central de "Ações pendentes" — reúne tudo que precisa
+                  de aprovação em QUALQUER campanha num lugar só, sem o
+                  cliente precisar abrir campanha por campanha pra achar o
+                  que falta revisar. */}
+              {feed.length > 0 && (
+                <section className="mb-6 space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      {t(lang, "acoesPendentes")}
+                    </h2>
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      {t(lang, "acoesPendentesCount", { n: feed.length })}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {feed.map((item) => (
+                      <button
+                        key={`${item.campanhaId}:${item.inf.id}`}
+                        type="button"
+                        onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                        className="flex items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:border-amber-500/50"
+                      >
+                        <Avatar className="h-8 w-8 shrink-0">
+                          {item.inf.foto && <AvatarImage src={item.inf.foto} alt={item.inf.nome} />}
+                          <AvatarFallback className="text-xs font-semibold">
+                            {initialsOf(item.inf.nome)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-foreground">
+                            {item.inf.nome}
+                          </p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {item.campanhaNome} · {item.reason}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[11px] font-semibold text-foreground underline underline-offset-2">
+                          {t(lang, "revisar")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Estrutura tipo LinkedIn: centro = feed do conteúdo mais
                   recente, direita = novidades pendentes + campanhas. */}

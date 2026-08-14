@@ -95,12 +95,22 @@ export const ENTREGA_STATUSES = [
 ] as const;
 export type EntregaStatus = (typeof ENTREGA_STATUSES)[number];
 
-export type EntregaEtapa = "roteiro" | "conteudo";
+export type EntregaEtapa = "roteiro" | "gravacao" | "conteudo" | "publicacao";
 
 export const ENTREGA_ETAPA_LABEL: Record<EntregaEtapa, string> = {
   roteiro: "Roteiro",
+  gravacao: "Gravação",
   conteudo: "Conteúdo",
+  publicacao: "Publicação",
 };
+
+/** Ordem de progressão da etapa — usada pra renderizar o checklist ✓/●/○. */
+export const ENTREGA_ETAPA_ORDER: EntregaEtapa[] = [
+  "roteiro",
+  "gravacao",
+  "conteudo",
+  "publicacao",
+];
 
 export const ENTREGA_STATUS_LABEL: Record<EntregaStatus, string> = {
   COMBINADA: "Combinada",
@@ -254,6 +264,16 @@ const LEGACY_ENTREGA_MAP: Record<string, { status: EntregaStatus; etapa: Entrega
   "Conteúdo aprovado": { status: "APROVADA", etapa: "conteudo" },
   Postado: { status: "PUBLICADA", etapa: "conteudo" },
 };
+
+/** Traduz uma etapa antiga (só "roteiro"/"conteudo" existiam antes) ou
+ * ausente pro novo enum de 4 valores — não sobrescreve nada no banco, só
+ * normaliza na leitura. Qualquer valor já válido passa direto. */
+export function legacyEntregaEtapa(raw: string | undefined): EntregaEtapa {
+  if (raw && (ENTREGA_ETAPA_ORDER as readonly string[]).includes(raw)) {
+    return raw as EntregaEtapa;
+  }
+  return "roteiro";
+}
 
 export function legacyEntregaStatus(
   raw: string | undefined,

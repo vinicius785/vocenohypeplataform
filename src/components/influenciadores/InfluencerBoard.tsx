@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Circle,
+  CircleDot,
   Coins,
   Columns3,
   Download,
@@ -62,6 +64,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
@@ -546,10 +550,12 @@ import {
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
   ENTREGA_ETAPA_LABEL,
+  ENTREGA_ETAPA_ORDER,
   canTransitionInflu,
   canTransitionEntrega,
   legacyInfluStatus,
   legacyEntregaStatus,
+  legacyEntregaEtapa,
   type InfluStatus,
   type EntregaStatus as EntregaConteudoStatus,
   type EntregaEtapa,
@@ -569,6 +575,7 @@ export {
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
   ENTREGA_ETAPA_LABEL,
+  ENTREGA_ETAPA_ORDER,
   canTransitionInflu,
   canTransitionEntrega,
 };
@@ -586,6 +593,12 @@ export type EntregaAnexo = {
   categoria: EntregaAnexoCategoria;
   nome: string;
   url: string;
+  /** Nº de versão dentro da mesma categoria (1, 2, 3...) — nunca
+   * sobrescreve um anexo anterior, cada novo upload na mesma categoria
+   * ganha o próximo número, preservando o histórico completo. Ausente em
+   * anexos antigos (pré-versionamento); tratado como v1 na exibição. */
+  versao?: number;
+  criadoEm?: string;
 };
 
 export type Entrega = {
@@ -650,11 +663,30 @@ export type BankInfo = {
 export function canPublishEntrega(status: InfluStatus): boolean {
   return status === "APROVADO" || status === "EM_PRODUCAO" || status === "CONCLUIDO";
 }
+/**
+ * Deriva o status geral do influenciador a partir do status de cada
+ * entrega individual (uma entrega já em produção/aprovação puxa o influ
+ * pra EM_PRODUCAO; todas publicadas fecham em CONCLUIDO) — só avança a
+ * partir de APROVADO/EM_PRODUCAO, nunca sobrescreve RECUSADO/INSCRITO/etc.
+ */
 export function advanceStatusFromEntregas(status: InfluStatus, entregas: Entrega[]): InfluStatus {
-  const allPublished = entregas.length > 0 && entregas.every((e) => e.status === "publicado");
-  if (allPublished && (status === "APROVADO" || status === "EM_PRODUCAO")) {
-    return "CONCLUIDO";
-  }
+  if (status !== "APROVADO" && status !== "EM_PRODUCAO") return status;
+  if (entregas.length === 0) return status;
+
+  const allPublished = entregas.every((e) => e.conteudoStatus === "PUBLICADA");
+  if (allPublished) return "CONCLUIDO";
+
+  const IN_PROGRESS_STATUSES = new Set<EntregaConteudoStatus>([
+    "EM_PRODUCAO",
+    "AGUARDANDO_APROVACAO",
+    "AJUSTES_SOLICITADOS",
+    "APROVADA",
+  ]);
+  const anyInProgress = entregas.some(
+    (e) => e.conteudoStatus && IN_PROGRESS_STATUSES.has(e.conteudoStatus),
+  );
+  if (anyInProgress) return "EM_PRODUCAO";
+
   return status;
 }
 
@@ -2474,28 +2506,23 @@ function EntregaStatusPill({
   );
 }
 
-/** Lista de entregas editável — composição (tipo/quantidade/datas/anexos/
- * pagamento/publicação) sempre num `onChange(next)` só, pra poder ser usada
- * tanto com estado local (criação, ainda sem id) quanto com salvamento
- * imediato (edição de um influenciador já existente, via `onPatch`).
- * `onStatusChange`, se passado, é chamado pro pill de etapa em vez do
- * transicionamento genérico — usado só na edição, pra registrar a mudança
- * na Atividade (na criação ainda não há o que logar). */
-/** Tabela de entregas — uma linha por entrega, com tipo/quantidade/status/
- * pagamento/anexos sempre visíveis, sem precisar expandir nada só pra ler.
- * Clicar numa linha abre o painel de edição completo (datas, anexos,
- * pagamento, publicação) LOGO ABAIXO da tabela — a lista nunca some, só
- * ganha um bloco extra embaixo enquanto uma linha está selecionada. */
+/** Lista-resumo de entregas — uma linha por entrega, com tipo/quantidade/
+ * status/etapa/anexos sempre visíveis, sem precisar abrir nada só pra ler.
+ * Clicar numa linha abre a view dedicada da entrega (`EntregaDetailSheet`)
+ * num painel lateral, em vez de expandir inline — cada entrega tem sua
+ * própria tela (cronograma, progresso, arquivos, aprovação, histórico). */
 function EntregasEditor({
   entregas,
   onChange,
   influStatus,
+  influActivity = [],
   onStatusChange,
   onSendToClient,
 }: {
   entregas: Entrega[];
   onChange: (next: Entrega[]) => void;
   influStatus: InfluStatus;
+  influActivity?: InfluActivity[];
   onStatusChange?: (entregaId: string, status: EntregaConteudoStatus) => void;
   onSendToClient?: (entregaId: string) => void;
 }) {
@@ -2519,96 +2546,59 @@ function EntregasEditor({
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between gap-2">
-        <FieldLabel
-          title="Entregas"
-          hint="Clique numa linha pra editar datas, anexos e publicação."
-        />
+        <FieldLabel title="Entregas" hint="Clique numa linha pra abrir a entrega." />
       </div>
 
       {entregas.length === 0 ? (
         <EmptyHint text="Nenhuma entrega adicionada." />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[520px] border-collapse text-sm">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Tipo</th>
                 <th className="px-2 py-3 text-center font-semibold">Qtd</th>
                 <th className="px-2 py-3 font-semibold">Status</th>
+                <th className="px-2 py-3 font-semibold">Etapa</th>
                 <th className="px-2 py-3 text-center font-semibold">Anexos</th>
                 <th className="w-8 px-2 py-3" />
               </tr>
             </thead>
             <tbody>
-              {entregas.map((e) => {
-                const isSelected = e.id === selectedId;
-                return (
-                  <tr
-                    key={e.id}
-                    onClick={() => setSelectedId((id) => (id === e.id ? null : e.id))}
-                    className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
-                      isSelected ? "bg-muted/60" : "hover:bg-muted/30"
-                    }`}
-                  >
-                    <td className="px-4 py-2.5">
-                      <input
-                        list="entregas-tipos"
-                        value={e.tipo}
-                        onClick={(ev) => ev.stopPropagation()}
-                        onChange={(ev) => update(e.id, { tipo: ev.target.value })}
-                        placeholder="Reels, Stories..."
-                        className="w-full min-w-[110px] rounded-md bg-transparent px-1.5 py-1.5 font-medium outline-none focus:bg-background focus:ring-1 focus:ring-ring"
-                      />
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <div
-                        className="mx-auto flex w-fit shrink-0 items-center rounded-md bg-muted"
-                        onClick={(ev) => ev.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            update(e.id, { quantidade: Math.max(1, e.quantidade - 1) })
-                          }
-                          className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                        >
-                          −
-                        </button>
-                        <span className="w-7 text-center text-xs font-medium tabular-nums">
-                          {e.quantidade}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => update(e.id, { quantidade: e.quantidade + 1 })}
-                          className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
-                      <EntregaStatusPill
-                        value={e.conteudoStatus ?? "COMBINADA"}
-                        influStatus={influStatus}
-                        onChange={(s) =>
-                          onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
-                        }
-                      />
-                    </td>
-                    <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground">
-                      {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
-                    </td>
-                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
-                      <RemoveBtn
-                        onClick={() => {
-                          onChange(entregas.filter((x) => x.id !== e.id));
-                          if (isSelected) setSelectedId(null);
-                        }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+              {entregas.map((e) => (
+                <tr
+                  key={e.id}
+                  onClick={() => setSelectedId(e.id)}
+                  className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/30"
+                >
+                  <td className="px-4 py-2.5">
+                    <p className="font-medium text-foreground">
+                      {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
+                    </p>
+                  </td>
+                  <td className="px-2 py-2.5 text-center text-xs tabular-nums text-muted-foreground">
+                    {e.quantidade}
+                  </td>
+                  <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                    <EntregaStatusPill
+                      value={e.conteudoStatus ?? "COMBINADA"}
+                      influStatus={influStatus}
+                      onChange={(s) =>
+                        onStatusChange ? onStatusChange(e.id, s) : setEtapaGenerico(e, s)
+                      }
+                    />
+                  </td>
+                  <td className="px-2 py-2.5 text-xs text-muted-foreground">
+                    {ENTREGA_ETAPA_LABEL[legacyEntregaEtapa(e.etapa)]}
+                  </td>
+                  <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground">
+                    {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
+                  </td>
+                  <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                    <RemoveBtn onClick={() => onChange(entregas.filter((x) => x.id !== e.id))} />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -2643,74 +2633,22 @@ function EntregasEditor({
       </button>
 
       {selected && (
-        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-foreground">
-              Editando · {selected.titulo ? `${selected.tipo} · ${selected.titulo}` : selected.tipo}
-            </p>
-            <div className="flex items-center gap-2">
-              {onSendToClient && selected.conteudoStatus === "EM_PRODUCAO" && (
-                <button
-                  type="button"
-                  onClick={() => onSendToClient(selected.id)}
-                  className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
-                >
-                  Enviar para cliente
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Fechar edição"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <EntregaDateField
-              label="Recebimento do roteiro"
-              value={selected.dataRecebimentoRoteiro}
-              onChange={(v) => update(selected.id, { dataRecebimentoRoteiro: v })}
-            />
-            <EntregaDateField
-              label="Recebimento do conteúdo"
-              value={selected.dataRecebimentoConteudo}
-              onChange={(v) => update(selected.id, { dataRecebimentoConteudo: v })}
-            />
-            <EntregaDateField
-              label="Postagem"
-              value={selected.dataPostagem}
-              onChange={(v) => update(selected.id, { dataPostagem: v })}
-            />
-          </div>
-
-          <EntregaAnexosEditor
-            anexos={selected.anexos ?? []}
-            onChange={(anexos) => update(selected.id, { anexos })}
-          />
-
-          {selected.conteudoStatus === "PUBLICADA" && (
-            <div className="space-y-2 border-t border-border pt-2.5">
-              <p className="text-[11px] font-medium text-muted-foreground">Publicação</p>
-              <AutoSaveInput
-                key={selected.id}
-                value={selected.url ?? ""}
-                onSave={(v) => update(selected.id, { url: v })}
-                placeholder="Link do conteúdo publicado"
-              />
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-muted-foreground">Métricas</p>
-                <MetricsEditor
-                  value={selected.metrics}
-                  onChange={(m) => update(selected.id, { metrics: m })}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        <EntregaDetailSheet
+          entrega={selected}
+          influStatus={influStatus}
+          influActivity={influActivity}
+          open={!!selected}
+          onOpenChange={(open) => !open && setSelectedId(null)}
+          onChange={(patch) => update(selected.id, patch)}
+          onStatusChange={(s) =>
+            onStatusChange ? onStatusChange(selected.id, s) : setEtapaGenerico(selected, s)
+          }
+          onSendToClient={() => onSendToClient?.(selected.id)}
+          onRemove={() => {
+            onChange(entregas.filter((x) => x.id !== selected.id));
+            setSelectedId(null);
+          }}
+        />
       )}
     </div>
   );
@@ -2925,6 +2863,403 @@ function EntregaAnexosPopup({
   );
 }
 
+/** Calcula "Atrasado"/"No prazo" pra uma data planejada — só um rótulo
+ * derivado, nunca vira campo/status novo (ver seção 7 da spec: datas e
+ * status são eixos separados). */
+function prazoLabel(dateISO?: string): { text: string; late: boolean } | null {
+  if (!dateISO) return null;
+  const d = new Date(dateISO);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date(todayISO());
+  return d < today ? { text: "Atrasado", late: true } : { text: "No prazo", late: false };
+}
+
+/** View dedicada de uma entrega — cabeçalho, cronograma, progresso por
+ * etapa, arquivos, aprovação e histórico. Abre num Sheet lateral ao
+ * clicar numa linha de `EntregasEditor`, em vez de expandir inline. */
+function EntregaDetailSheet({
+  entrega,
+  influStatus,
+  influActivity,
+  open,
+  onOpenChange,
+  onChange,
+  onStatusChange,
+  onSendToClient,
+  onRemove,
+}: {
+  entrega: Entrega;
+  influStatus: InfluStatus;
+  influActivity: InfluActivity[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (patch: Partial<Entrega>) => void;
+  onStatusChange: (status: EntregaConteudoStatus) => void;
+  onSendToClient: () => void;
+  onRemove: () => void;
+}) {
+  const status = entrega.conteudoStatus ?? "COMBINADA";
+  const etapa = legacyEntregaEtapa(entrega.etapa);
+  const etapaIndex = ENTREGA_ETAPA_ORDER.indexOf(etapa);
+  const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+
+  // Heurística simples: entradas de atividade que citam o tipo/título da
+  // entrega (não há `entregaId` no log ainda, então filtra por texto).
+  const historico = influActivity
+    .filter((a) => a.action.toLowerCase().includes(entrega.tipo.toLowerCase()))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const reprovacao =
+    etapa === "roteiro" || etapa === "gravacao"
+      ? entrega.roteiroReprovacao
+      : entrega.conteudoReprovacao;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+      >
+        <SheetTitle className="sr-only">Entrega · {label}</SheetTitle>
+        <SheetDescription className="sr-only">
+          Detalhes de cronograma, progresso, arquivos, aprovação e histórico desta entrega.
+        </SheetDescription>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {/* Cabeçalho */}
+          <div className="space-y-3 border-b border-border pb-4">
+            <p className="text-lg font-bold text-foreground">{label}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                list="entregas-tipos"
+                value={entrega.tipo}
+                onChange={(ev) => onChange({ tipo: ev.target.value })}
+                placeholder="Tipo (Reels, Stories...)"
+                className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                value={entrega.titulo ?? ""}
+                onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
+                placeholder="Título (opcional)"
+                className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex shrink-0 items-center rounded-md bg-muted">
+                <button
+                  type="button"
+                  onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
+                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  −
+                </button>
+                <span className="w-7 text-center text-xs font-medium tabular-nums">
+                  {entrega.quantidade}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
+                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <EntregaStatusPill
+                value={status}
+                influStatus={influStatus}
+                onChange={onStatusChange}
+              />
+              <select
+                value={etapa}
+                onChange={(ev) => onChange({ etapa: ev.target.value as EntregaEtapa })}
+                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground outline-none"
+              >
+                {ENTREGA_ETAPA_ORDER.map((e) => (
+                  <option key={e} value={e}>
+                    Etapa: {ENTREGA_ETAPA_LABEL[e]}
+                  </option>
+                ))}
+              </select>
+              <NextActionBadge actor={nextActionForEntrega(status)} />
+            </div>
+          </div>
+
+          {/* Cronograma */}
+          <div className="space-y-2">
+            <FieldLabel title="Cronograma" />
+            <div className="space-y-1.5">
+              <EntregaDateField
+                label="Recebimento do roteiro"
+                value={entrega.dataRecebimentoRoteiro}
+                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
+              />
+              <EntregaDateField
+                label="Recebimento do conteúdo"
+                value={entrega.dataRecebimentoConteudo}
+                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
+              />
+              <EntregaDateField
+                label="Postagem"
+                value={entrega.dataPostagem}
+                onChange={(v) => onChange({ dataPostagem: v })}
+              />
+              {[
+                ["Roteiro", entrega.dataRecebimentoRoteiro],
+                ["Conteúdo", entrega.dataRecebimentoConteudo],
+                ["Postagem", entrega.dataPostagem],
+              ]
+                .map(([lbl, d]) => ({ lbl, prazo: prazoLabel(d) }))
+                .filter(
+                  (x): x is { lbl: string; prazo: { text: string; late: boolean } } => !!x.prazo,
+                )
+                .map(({ lbl, prazo }) => (
+                  <span
+                    key={lbl}
+                    className={`mr-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      prazo.late
+                        ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                        : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                    }`}
+                  >
+                    {lbl}: {prazo.text}
+                  </span>
+                ))}
+            </div>
+          </div>
+
+          {/* Progresso por etapa */}
+          <div className="space-y-2">
+            <FieldLabel title="Progresso" />
+            <div className="flex flex-col gap-1.5">
+              {ENTREGA_ETAPA_ORDER.map((e, i) => (
+                <div key={e} className="flex items-center gap-2 text-xs">
+                  {i < etapaIndex ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  ) : i === etapaIndex ? (
+                    <CircleDot className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                  )}
+                  <span
+                    className={
+                      i === etapaIndex ? "font-semibold text-foreground" : "text-muted-foreground"
+                    }
+                  >
+                    {ENTREGA_ETAPA_LABEL[e]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Arquivos */}
+          <div className="space-y-2">
+            <FieldLabel title="Arquivos da entrega" />
+            <EntregaAnexosEditor
+              anexos={entrega.anexos ?? []}
+              onChange={(anexos) => onChange({ anexos })}
+            />
+          </div>
+
+          {/* Aprovação */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <FieldLabel title="Aprovação" />
+            {status === "EM_PRODUCAO" && (
+              <button
+                type="button"
+                onClick={onSendToClient}
+                className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90"
+              >
+                Enviar para cliente
+              </button>
+            )}
+            {status === "AGUARDANDO_APROVACAO" && (
+              <p className="text-xs text-muted-foreground">Aguardando aprovação do cliente.</p>
+            )}
+            {status === "AJUSTES_SOLICITADOS" && reprovacao && (
+              <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-2.5 text-xs text-orange-800 dark:text-orange-300">
+                <p className="font-semibold">Ajustes solicitados pelo cliente</p>
+                <p className="mt-0.5">{reprovacao.motivo}</p>
+              </div>
+            )}
+            {status === "APROVADA" && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                Aprovada — falta publicar.
+              </p>
+            )}
+            {status === "PUBLICADA" && (
+              <div className="space-y-2">
+                <AutoSaveInput
+                  key={entrega.id}
+                  value={entrega.url ?? ""}
+                  onSave={(v) => onChange({ url: v })}
+                  placeholder="Link do conteúdo publicado"
+                />
+                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
+              </div>
+            )}
+          </div>
+
+          {/* Histórico */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <FieldLabel title="Histórico" />
+            {historico.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">Nenhum evento registrado ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {historico.map((a) => (
+                  <div key={a.id} className="text-xs leading-relaxed">
+                    <span className="font-medium text-foreground">{a.author}</span>{" "}
+                    <span className="text-muted-foreground">{a.action}</span>
+                    <div className="text-[10px] text-muted-foreground/70">
+                      {new Date(a.createdAt).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border bg-muted/30 p-3">
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remover entrega
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Aba "Visão geral" do perfil — em poucos segundos dá pra entender status
+ * atual, próxima ação e pendências, sem percorrer a página inteira (é o
+ * resumo/hub; os detalhes completos ficam nas outras abas). */
+function InfluVisaoGeralTab({
+  influ,
+  onGoToTab,
+}: {
+  influ: Influ;
+  onGoToTab: (tab: string) => void;
+}) {
+  const entregas = influ.entregas;
+  const publicadas = entregas.filter((e) => e.conteudoStatus === "PUBLICADA").length;
+  const aguardandoCliente = entregas.filter(
+    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO",
+  ).length;
+  const pendentes = entregas.length - publicadas;
+  const nextActor = nextActionForInflu(influ.status);
+
+  const porTipo = new Map<string, Entrega[]>();
+  for (const e of entregas) {
+    porTipo.set(e.tipo || "Sem tipo", [...(porTipo.get(e.tipo || "Sem tipo") ?? []), e]);
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Resumo + próxima ação em destaque */}
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {entregas.length} {entregas.length === 1 ? "entrega" : "entregas"} · {publicadas}{" "}
+              publicada{publicadas === 1 ? "" : "s"} · {pendentes} pendente
+              {pendentes === 1 ? "" : "s"}
+              {aguardandoCliente > 0 && ` · ${aguardandoCliente} aguardando cliente`}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Status: {INFLU_STATUS_LABEL[influ.status]}
+            </p>
+          </div>
+          <NextActionBadge actor={nextActor} />
+        </div>
+      </div>
+
+      {/* Entregas por tipo — resumo compacto, sem abrir detalhes aqui */}
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <FieldLabel title="Entregas" hint="Resumo por tipo." />
+          <button
+            type="button"
+            onClick={() => onGoToTab("entregas")}
+            className="text-xs font-medium text-foreground underline underline-offset-2"
+          >
+            Abrir
+          </button>
+        </div>
+        {porTipo.size === 0 ? (
+          <EmptyHint text="Nenhuma entrega adicionada." />
+        ) : (
+          <div className="space-y-1.5">
+            {[...porTipo.entries()].map(([tipo, list]) => (
+              <div key={tipo} className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-medium text-foreground">
+                  {tipo}: {list.length} entrega{list.length === 1 ? "" : "s"}
+                </span>
+                <span className="text-muted-foreground">
+                  {list.filter((e) => e.conteudoStatus === "PUBLICADA").length} publicada(s)
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Outros dados — checkmarks linkando pra aba correspondente */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => onGoToTab("briefing")}
+          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+        >
+          <span>Briefing</span>
+          {influ.briefingPersonalizado || influ.briefingAnexoUrl ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onGoToTab("financeiro")}
+          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+        >
+          <span>Contrato</span>
+          {influ.contrato ? (
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onGoToTab("financeiro")}
+          className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-left text-xs hover:bg-muted/40"
+        >
+          <span>Pagamento</span>
+          <span
+            className={
+              influ.pagamento?.aprovacao === "aceito"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-muted-foreground"
+            }
+          >
+            {influ.pagamento ? APROVACAO_LABEL[influ.pagamento.aprovacao] : "—"}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ============================================================
  * Perfil do influenciador — diálogo único de visualização + edição.
  * Tudo salva imediato (sem botão "Salvar") e toda seção fica sempre
@@ -2960,6 +3295,7 @@ function InfluencerProfileDialog({
   onSendEntregaToClient: (entregaId: string) => void;
 }) {
   const [commentText, setCommentText] = useState("");
+  const [activeTab, setActiveTab] = useState("visao-geral");
   const bank = influ.bank ?? {};
   const fotoRef = useRef<HTMLInputElement>(null);
 
@@ -3176,155 +3512,179 @@ function InfluencerProfileDialog({
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
-          <div className="grid min-h-0 grid-cols-1 gap-5 overflow-y-auto bg-muted/40 px-7 py-6 sm:grid-cols-2">
-            {has("entregas") && (
-              // Sem título/ícone próprio aqui — EntregasEditor já renderiza
-              // seu próprio FieldLabel "Entregas" internamente (é
-              // compartilhado com o formulário de novo influenciador).
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:col-span-2">
-                <EntregasEditor
-                  entregas={influ.entregas}
-                  onChange={(next) => onPatch({ entregas: next })}
-                  influStatus={influ.status}
-                  onStatusChange={onSetConteudoStatus}
-                  onSendToClient={onSendEntregaToClient}
-                />
-              </div>
-            )}
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex min-h-0 flex-col overflow-hidden bg-muted/40"
+          >
+            <TabsList className="mx-7 mt-4 w-fit shrink-0">
+              <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
+              <TabsTrigger value="entregas">Entregas</TabsTrigger>
+              <TabsTrigger value="perfil">Perfil</TabsTrigger>
+              <TabsTrigger value="briefing">Briefing</TabsTrigger>
+              <TabsTrigger value="metricas">Métricas</TabsTrigger>
+              <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+              <TabsTrigger value="checklist">Checklist</TabsTrigger>
+            </TabsList>
 
-            <ProfileSectionCard
-              title="Briefing e observações"
-              icon={<FileText className="h-3.5 w-3.5" />}
-              tone="amber"
-              span="full"
-            >
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <FieldLabel
-                    title="Briefing personalizado"
-                    hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
+            <TabsContent value="visao-geral" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              <InfluVisaoGeralTab influ={influ} onGoToTab={setActiveTab} />
+            </TabsContent>
+
+            <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              {has("entregas") && (
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <EntregasEditor
+                    entregas={influ.entregas}
+                    onChange={(next) => onPatch({ entregas: next })}
+                    influStatus={influ.status}
+                    influActivity={influ.activity ?? []}
+                    onStatusChange={onSetConteudoStatus}
+                    onSendToClient={onSendEntregaToClient}
                   />
-                  <AutoSaveTextarea
-                    key={influ.id}
-                    value={influ.briefingPersonalizado ?? ""}
-                    onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-                    placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-                  />
-                  {influ.briefingAnexoUrl ? (
-                    <div className="flex items-center gap-2 text-xs">
-                      <a
-                        href={influ.briefingAnexoUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        {influ.briefingAnexoNome || "Anexo"}
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                        }
-                        className="text-muted-foreground hover:text-destructive"
-                        aria-label="Remover anexo"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <BriefingAnexoUploadButton
-                      onUpload={(nome, url) =>
-                        onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                      }
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="perfil" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {has("redes") && (
+                  <ProfileSectionCard
+                    title="Redes sociais"
+                    icon={<Share2 className="h-3.5 w-3.5" />}
+                    span="full"
+                  >
+                    <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
+                  </ProfileSectionCard>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="briefing" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              <ProfileSectionCard
+                title="Briefing e observações"
+                icon={<FileText className="h-3.5 w-3.5" />}
+                span="full"
+              >
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <FieldLabel
+                      title="Briefing personalizado"
+                      hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
                     />
-                  )}
+                    <AutoSaveTextarea
+                      key={influ.id}
+                      value={influ.briefingPersonalizado ?? ""}
+                      onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+                      placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+                    />
+                    {influ.briefingAnexoUrl ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        <a
+                          href={influ.briefingAnexoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          {influ.briefingAnexoNome || "Anexo"}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                          }
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label="Remover anexo"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <BriefingAnexoUploadButton
+                        onUpload={(nome, url) =>
+                          onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                        }
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <FieldLabel
+                      title="Observações"
+                      hint="Nota livre — visível pro time e também no portal do cliente."
+                    />
+                    <AutoSaveTextarea
+                      key={influ.id}
+                      value={influ.observacoes ?? ""}
+                      onSave={(v) => onPatch({ observacoes: v || undefined })}
+                      placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <FieldLabel
-                    title="Observações"
-                    hint="Nota livre — visível pro time e também no portal do cliente."
+              </ProfileSectionCard>
+            </TabsContent>
+
+            <TabsContent value="metricas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              {has("metricas") && (
+                <ProfileSectionCard
+                  title="Métricas do perfil"
+                  hint="Por rede social."
+                  icon={<BarChart3 className="h-3.5 w-3.5" />}
+                  span="full"
+                >
+                  <ProfileMetricsEditor
+                    redes={influ.redes}
+                    onChangeRedes={(redes) => onPatch({ redes })}
+                    value={influ.profileMetrics}
+                    onChange={(profileMetrics) => onPatch({ profileMetrics })}
                   />
-                  <AutoSaveTextarea
-                    key={influ.id}
-                    value={influ.observacoes ?? ""}
-                    onSave={(v) => onPatch({ observacoes: v || undefined })}
-                    placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
-                  />
-                </div>
-              </div>
-            </ProfileSectionCard>
+                </ProfileSectionCard>
+              )}
+            </TabsContent>
 
-            {/* Pagamento + Dados bancários lado a lado — dois blocos
-                pequenos, sem sentido de ocupar uma linha inteira cada um. */}
-            {has("pagamentos") && (
-              // Sem título próprio — PagamentoInfluSection já tem o seu.
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <PagamentoInfluSection
-                  value={influ.pagamento}
-                  onChange={(pagamento) => onPatch({ pagamento })}
-                />
-              </div>
-            )}
-
-            {has("bancario") && (
-              <ProfileSectionCard
-                title="Dados bancários"
-                icon={<Landmark className="h-3.5 w-3.5" />}
-                tone="emerald"
-              >
-                <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
-              </ProfileSectionCard>
-            )}
-
-            {/* Redes sociais + Métricas lado a lado — mesma lógica. */}
-            {has("redes") && (
-              <ProfileSectionCard
-                title="Redes sociais"
-                icon={<Share2 className="h-3.5 w-3.5" />}
-                tone="violet"
-              >
-                <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
-              </ProfileSectionCard>
-            )}
-
-            {has("metricas") && (
-              <ProfileSectionCard
-                title="Métricas do perfil"
-                hint="Por rede social."
-                icon={<BarChart3 className="h-3.5 w-3.5" />}
-                tone="indigo"
-              >
-                <ProfileMetricsEditor
-                  redes={influ.redes}
-                  onChangeRedes={(redes) => onPatch({ redes })}
-                  value={influ.profileMetrics}
-                  onChange={(profileMetrics) => onPatch({ profileMetrics })}
-                />
-              </ProfileSectionCard>
-            )}
-
-            {has("contrato") && (
-              <ProfileSectionCard
-                title="Contrato"
-                icon={<FileSignature className="h-3.5 w-3.5" />}
-                tone="rose"
-              >
-                <ContratoEditor
-                  value={influ.contrato}
-                  onChange={(contrato) => onPatch({ contrato })}
-                />
-              </ProfileSectionCard>
-            )}
-
-            <div className="sm:col-span-2">
+            <TabsContent value="checklist" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
               <ChecklistSection
                 checklist={influ.checklist ?? []}
                 onChange={onSetChecklist}
                 onApplyToAll={onApplyChecklistToAll}
               />
-            </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="financeiro" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {has("pagamentos") && (
+                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                    <PagamentoInfluSection
+                      value={influ.pagamento}
+                      onChange={(pagamento) => onPatch({ pagamento })}
+                    />
+                  </div>
+                )}
+
+                {has("bancario") && (
+                  <ProfileSectionCard
+                    title="Dados bancários"
+                    icon={<Landmark className="h-3.5 w-3.5" />}
+                  >
+                    <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
+                  </ProfileSectionCard>
+                )}
+
+                {has("contrato") && (
+                  <ProfileSectionCard
+                    title="Contrato"
+                    icon={<FileSignature className="h-3.5 w-3.5" />}
+                    span="full"
+                  >
+                    <ContratoEditor
+                      value={influ.contrato}
+                      onChange={(contrato) => onPatch({ contrato })}
+                    />
+                  </ProfileSectionCard>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
 
           <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
@@ -3830,20 +4190,10 @@ function FieldLabel({ title, hint }: { title: string; hint?: string }) {
  * (Entregas, Pagamento, Redes, Métricas etc) — ícone em badge + título,
  * substituindo o antigo empilhamento de seções separadas só por
  * `border-t`, sem hierarquia visual nenhuma entre elas. */
-const PROFILE_SECTION_TONES = {
-  sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-  indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
-} as const;
-
 function ProfileSectionCard({
   title,
   hint,
   icon,
-  tone,
   action,
   span,
   children,
@@ -3851,7 +4201,6 @@ function ProfileSectionCard({
   title: string;
   hint?: string;
   icon: ReactNode;
-  tone: keyof typeof PROFILE_SECTION_TONES;
   action?: ReactNode;
   /** Ocupa as duas colunas do grid (seções grandes, tipo tabela de
    * entregas) — sem isso a seção fica numa coluna só, lado a lado com a
@@ -3861,13 +4210,11 @@ function ProfileSectionCard({
 }) {
   return (
     <div
-      className={`space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm ${span === "full" ? "sm:col-span-2" : ""}`}
+      className={`space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm ${span === "full" ? "sm:col-span-2" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${PROFILE_SECTION_TONES[tone]}`}
-          >
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground">
             {icon}
           </span>
           <FieldLabel title={title} hint={hint} />
@@ -4327,9 +4674,20 @@ function EntregaAnexosEditor({
         setError("Falha ao subir o arquivo. Tente de novo.");
         return;
       }
+      const categoria = pendingCategoria.current;
+      const maxVersaoAtual = anexos
+        .filter((a) => a.categoria === categoria)
+        .reduce((max, a) => Math.max(max, a.versao ?? 1), 0);
       onChange([
         ...anexos,
-        { id: crypto.randomUUID(), categoria: pendingCategoria.current, nome: file.name, url },
+        {
+          id: crypto.randomUUID(),
+          categoria,
+          nome: file.name,
+          url,
+          versao: maxVersaoAtual + 1,
+          criadoEm: todayISO(),
+        },
       ]);
     } finally {
       setUploading(null);
@@ -4396,38 +4754,46 @@ function EntregaAnexosEditor({
 
       {anexos.length > 0 ? (
         <ul className="space-y-1.5">
-          {anexos.map((a) => (
-            <li
-              key={a.id}
-              className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
-            >
-              <AnexoThumb nome={a.nome} url={a.url} />
-              <div className="min-w-0 flex-1">
-                <a
-                  href={a.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download={a.nome}
-                  className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
-                >
-                  {a.nome}
-                </a>
-                <span
-                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-                >
-                  {a.categoria}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                aria-label="Remover anexo"
+          {anexos.map((a) => {
+            const totalNaCategoria = anexos.filter((x) => x.categoria === a.categoria).length;
+            return (
+              <li
+                key={a.id}
+                className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
+                <AnexoThumb nome={a.nome} url={a.url} />
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={a.nome}
+                    className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                  >
+                    {a.nome}
+                  </a>
+                  <span
+                    className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
+                  >
+                    {a.categoria}
+                  </span>
+                  {totalNaCategoria > 1 && (
+                    <span className="ml-1.5 mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      v{a.versao ?? 1}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                  aria-label="Remover anexo"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="text-[11px] text-muted-foreground/70">Nenhum anexo ainda.</p>

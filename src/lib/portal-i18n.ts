@@ -121,6 +121,9 @@ const pt: Dict = {
   abaTodos: "Ativos",
   abaReprovados: "Reprovados",
   semReprovados: "Nenhum influenciador reprovado nesta campanha.",
+  acoesPendentes: "Ações pendentes",
+  acoesPendentesCount: "{n} aguardando sua aprovação",
+  revisar: "Revisar",
 };
 
 const es: Dict = {
@@ -224,6 +227,9 @@ const es: Dict = {
   abaTodos: "Activos",
   abaReprovados: "Rechazados",
   semReprovados: "Ningún influencer rechazado en esta campaña.",
+  acoesPendentes: "Acciones pendientes",
+  acoesPendentesCount: "{n} esperando tu aprobación",
+  revisar: "Revisar",
 };
 
 const en: Dict = {
@@ -327,6 +333,9 @@ const en: Dict = {
   abaTodos: "Active",
   abaReprovados: "Rejected",
   semReprovados: "No rejected influencers in this campaign.",
+  acoesPendentes: "Pending actions",
+  acoesPendentesCount: "{n} waiting for your approval",
+  revisar: "Review",
 };
 
 const DICTS: Record<PortalLang, Dict> = { "pt-BR": pt, es, "en-US": en };

@@ -82,7 +82,7 @@ const EntregaPublic = z.object({
   quantidade: z.number(),
   status: z.enum(["orcado", "combinado", "publicado"]),
   conteudoStatus: z.string().optional(),
-  etapa: z.enum(["roteiro", "conteudo"]).optional(),
+  etapa: z.enum(["roteiro", "gravacao", "conteudo", "publicacao"]).optional(),
   /** Rótulo já simplificado pro cliente ("Aguardando sua aprovação" etc). */
   statusCliente: z.string(),
   dataPostagem: z.string().optional(),
