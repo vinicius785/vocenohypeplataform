@@ -1,6 +1,7 @@
 {
-  "version": "1.141.2",
+  "version": "1.141.3",
   "notes": [
+    "Refaz o card de resumo da reunião: cabeçalho maior com ícone, seções (Local/Link, Notas, Participantes, Presença) viram cards com ícone no mesmo padrão do resto da plataforma, em vez do bloco cinza com título em caixa alta minúscula de antes.",
     "Financeiro: campo Categoria do lançamento vira menu suspenso com opções padronizadas (antes era texto livre — cada pessoa digitava um nome diferente pra mesma coisa). Despesas incluem \"Pagamento de influenciador\", \"Salários\", \"Ferramentas e software\", \"Marketing e anúncios\", \"Impostos e taxas\", \"Aluguel e contas\" e \"Outros\"; receitas incluem \"Receita de campanha\", \"Consultoria\" e \"Outros\". Categorias antigas digitadas à mão continuam aparecendo (como opção extra) nos lançamentos que já as tinham.",
     "Financeiro: separa os anexos em duas caixas (Comprovante e Nota fiscal) em vez de uma lista só, e agora dá pra anexar ou abrir os arquivos direto na tela de detalhes do lançamento, sem precisar clicar em Editar primeiro.",
     "Financeiro: lançamentos (receita ou despesa) agora aceitam vários anexos — comprovantes, notas fiscais, etc — em vez de um único arquivo. Redesenha os diálogos de criar/editar e ver detalhes do lançamento: valor e status em destaque no topo, seções organizadas em cards com ícone (Pagamento, Detalhes, Dados bancários, Anexos), diálogo maior.",
