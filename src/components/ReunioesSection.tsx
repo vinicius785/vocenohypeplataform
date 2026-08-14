@@ -809,6 +809,8 @@ function MeetingDialog({
   // repete (0 = domingo .. 6 = sábado). Vazio = repete só no dia da semana
   // da data escolhida (comportamento antigo, "toda terça" por exemplo).
   const [weekDays, setWeekDays] = useState<number[]>([]);
+  // Só usado quando repeat === "daily" — true pula sábado/domingo.
+  const [dailyWeekdaysOnly, setDailyWeekdaysOnly] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -830,6 +832,7 @@ function MeetingDialog({
     setRepeat("none");
     setRepeatUntil("");
     setWeekDays([]);
+    setDailyWeekdaysOnly(true);
   }, [open, initial, defaultDate]);
 
   const toggleWeekDay = (day: number) => {
@@ -916,6 +919,16 @@ function MeetingDialog({
         const iso = toISODate(cursor);
         if (iso > repeatUntil) break;
         if (weekDays.includes(cursor.getDay())) dates.push(iso);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    } else if (repeat === "daily" && dailyWeekdaysOnly) {
+      dates = [];
+      const cursor = parseISODate(data);
+      while (dates.length < MAX_OCCURRENCES) {
+        const iso = toISODate(cursor);
+        if (iso > repeatUntil) break;
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) dates.push(iso);
         cursor.setDate(cursor.getDate() + 1);
       }
     } else {
@@ -1017,6 +1030,35 @@ function MeetingDialog({
                       onChange={(e) => setRepeatUntil(e.target.value)}
                       className={`mt-1 ${fieldCls}`}
                     />
+                  </div>
+                )}
+                {repeat === "daily" && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Quais dias</label>
+                    <div className="mt-1 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setDailyWeekdaysOnly(true)}
+                        className={`rounded-full px-3 py-1 text-xs ${
+                          dailyWeekdaysOnly
+                            ? "bg-foreground text-background"
+                            : "border border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        Só dias de semana
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDailyWeekdaysOnly(false)}
+                        className={`rounded-full px-3 py-1 text-xs ${
+                          !dailyWeekdaysOnly
+                            ? "bg-foreground text-background"
+                            : "border border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        Incluir fim de semana
+                      </button>
+                    </div>
                   </div>
                 )}
                 {repeat === "weekly" && (
