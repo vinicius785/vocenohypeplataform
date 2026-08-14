@@ -17,7 +17,7 @@ import { initMarketingTasksSync } from "@/lib/marketing-tasks";
 import { initCampanhaScopedSync } from "@/lib/campanha-scoped-store";
 import { initProjetoScopedSync } from "@/lib/projeto-scoped-store";
 import { initCallController, shutdownCallController } from "@/lib/call-controller";
-import { syncMyMeetingsToGoogle } from "@/lib/google-calendar.functions";
+import { syncAllMeetingsToGoogle } from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -143,10 +143,12 @@ function AuthenticatedLayout() {
     };
   }, [fetchDirectory]);
 
-  // Empurra as reuniões da plataforma pro Google Agenda de quem conectou a
-  // conta (sync de mão única, plataforma sempre vence) — a própria server
-  // function é barata pra quem não conectou (só lê a conexão e retorna).
-  const syncGoogleFn = useServerFn(syncMyMeetingsToGoogle);
+  // Empurra TODAS as reuniões da plataforma pro Google Agenda da conta
+  // compartilhada (contato@vocenohype.com.br) — sync de mão única,
+  // plataforma sempre vence. A própria server function é barata quando a
+  // conta ainda não foi conectada (só lê a conexão e retorna); dispara em
+  // qualquer sessão logada porque não há infraestrutura de job/cron aqui.
+  const syncGoogleFn = useServerFn(syncAllMeetingsToGoogle);
   useEffect(() => {
     let cancelled = false;
     const sync = () => {

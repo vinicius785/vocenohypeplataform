@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/google/oauth-callback")({
 
         const { data: stateRow } = await supabaseAdmin
           .from("google_oauth_states")
-          .select("user_id, created_at")
+          .select("user_id, created_at, purpose")
           .eq("token", state)
           .maybeSingle();
         await supabaseAdmin.from("google_oauth_states").delete().eq("token", state);
@@ -73,14 +73,27 @@ export const Route = createFileRoute("/api/google/oauth-callback")({
         const userInfo = userInfoRes.ok ? ((await userInfoRes.json()) as { email?: string }) : {};
 
         const tokenExpiry = new Date(Date.now() + tokenJson.expires_in * 1000).toISOString();
-        const { error } = await supabaseAdmin.from("google_calendar_connections").upsert({
-          user_id: stateRow.user_id,
-          google_email: userInfo.email ?? null,
-          access_token: tokenJson.access_token,
-          refresh_token: tokenJson.refresh_token,
-          token_expiry: tokenExpiry,
-          updated_at: new Date().toISOString(),
-        });
+        // "shared" = conta única (contato@vocenohype.com.br) que passa a ser
+        // dona de todos os eventos de reunião; "personal" = conexão de cada
+        // usuário com a própria conta (não alimenta a sincronização hoje).
+        const { error } =
+          stateRow.purpose === "shared"
+            ? await supabaseAdmin.from("shared_calendar_connection").upsert({
+                id: true,
+                google_email: userInfo.email ?? null,
+                access_token: tokenJson.access_token,
+                refresh_token: tokenJson.refresh_token,
+                token_expiry: tokenExpiry,
+                updated_at: new Date().toISOString(),
+              })
+            : await supabaseAdmin.from("google_calendar_connections").upsert({
+                user_id: stateRow.user_id,
+                google_email: userInfo.email ?? null,
+                access_token: tokenJson.access_token,
+                refresh_token: tokenJson.refresh_token,
+                token_expiry: tokenExpiry,
+                updated_at: new Date().toISOString(),
+              });
         if (error) {
           console.error("[google-oauth] failed to store connection", error);
           return redirectTo(origin, "error");

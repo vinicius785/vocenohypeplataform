@@ -10,15 +10,23 @@ export type RescheduleProposal = {
   note?: string;
 };
 
+export type ExternalGuest = { nome: string; email: string };
+
 export type Meeting = {
   id: string;
   titulo: string;
   data: string; // yyyy-mm-dd
   hora: string; // HH:mm
   duracao: number; // minutes
+  /** @deprecated Legado — nome de convidado externo em texto livre, sem
+   * e-mail (não vira convite de verdade). Substituído por
+   * `convidadosExternos`, mantido só pra reuniões antigas já salvas. */
   com: string;
   participanteId?: string; // legado: id do membro do time
   participanteIds?: string[]; // vários membros convidados
+  /** Convidados de fora da empresa, com e-mail de verdade — entram no
+   * convite do Google Agenda como `attendees` de verdade. */
+  convidadosExternos?: ExternalGuest[];
   local: string;
   notas?: string;
   status: MeetingStatus;

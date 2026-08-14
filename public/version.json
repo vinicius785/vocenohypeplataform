@@ -1,6 +1,9 @@
 {
-  "version": "1.128.0",
+  "version": "1.129.0",
   "notes": [
+    "Reuniões: redesenha o formulário de criar/editar reunião por completo (visual em cards, título grande, seções separadas pra Quando/Time/Convidados externos/Local/Notas).",
+    "Novo: dá pra convidar pessoas de fora da empresa numa reunião, com nome e e-mail de verdade — elas recebem o convite do Google Agenda normalmente, com link de videochamada incluso.",
+    "Novo (Configurações, só admin): conectar uma conta Google única e compartilhada (ex.: contato@vocenohype.com.br) pra ser a organizadora de TODAS as reuniões da plataforma, em vez de cada reunião sair da conta pessoal de quem criou — garante o mesmo nível de Google Meet em toda reunião.",
     "Corrige o espaçamento do texto dos artigos (Mural e Portal), que estava apertado — parágrafos e títulos agora respiram mais, mais parecido com o LinkedIn.",
     "Corrige o \"projeto de origem\" do artigo aparecendo colado no nome do autor no Mural interno, dando a impressão de ser o cargo da pessoa (ex.: \"Fulano · Marketing\") — agora aparece separado, junto da categoria.",
     "Redesenha a leitura de artigos (Mural interno e Portal do cliente) no formato usado em redes como o LinkedIn: capa em destaque com legenda \"Por: autor\", e um cartão de comentários fixo ao lado (resumo de reações, Gostei/Comentar, lista de comentários) — mesma estrutura nos dois lugares.",

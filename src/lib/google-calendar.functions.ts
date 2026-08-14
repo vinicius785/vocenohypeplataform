@@ -5,13 +5,23 @@ import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
- * Integração Google Calendar: cada usuário conecta a própria conta (OAuth);
- * a plataforma é sempre a fonte da verdade — a sincronização é unidirecional
- * (reuniões daqui -> eventos no Google), nunca o contrário. O upsert é
- * idempotente via `extendedProperties.private.vnhMeetingId` (marca cada
- * evento do Google com o id da reunião), então não precisamos guardar o id
- * do evento do Google em lugar nenhum do nosso lado — evita qualquer risco
- * de condição de corrida ao gravar de volta no registro da reunião.
+ * Integração Google Calendar. A plataforma é sempre a fonte da verdade — a
+ * sincronização é unidirecional (reuniões daqui -> eventos no Google), nunca
+ * o contrário. O upsert é idempotente via `extendedProperties.private.vnhMeetingId`
+ * (marca cada evento do Google com o id da reunião), então não precisamos
+ * guardar o id do evento do Google em lugar nenhum do nosso lado — evita
+ * qualquer risco de condição de corrida ao gravar de volta no registro da
+ * reunião.
+ *
+ * TODAS as reuniões saem de uma única conta compartilhada (ex.:
+ * contato@vocenohype.com.br, `shared_calendar_connection`), conectada por um
+ * admin em Configurações — isso garante Meet Pro (mais participantes,
+ * gravação, etc. conforme a licença Workspace daquela conta) em toda
+ * reunião, e permite convidar pessoas externas por e-mail de verdade. Além
+ * disso, cada pessoa ainda pode conectar sua conta PESSOAL
+ * (`google_calendar_connections`) via o card de Configurações — hoje isso
+ * não alimenta a sincronização de reuniões (que usa só a conta
+ * compartilhada), fica disponível pra uso futuro.
  */
 
 const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events openid email";
@@ -39,6 +49,15 @@ function redirectUriFromRequest(): string {
   return `${origin}/api/google/oauth-callback`;
 }
 
+async function requireAdmin(context: {
+  userId: string;
+  supabase: SupabaseClient<Database>;
+}): Promise<void> {
+  const { data: isAdmin } = await context.supabase.rpc("is_admin", { _user_id: context.userId });
+  if (!isAdmin)
+    throw new Error("Apenas administradores podem gerenciar o calendário compartilhado.");
+}
+
 export const startGoogleOAuth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -47,7 +66,7 @@ export const startGoogleOAuth = createServerFn({ method: "POST" })
     const token = crypto.randomUUID();
     const { error } = await supabaseAdmin
       .from("google_oauth_states")
-      .insert({ token, user_id: context.userId });
+      .insert({ token, user_id: context.userId, purpose: "personal" });
     if (error) throw new Error(error.message);
 
     const params = new URLSearchParams({
@@ -60,6 +79,72 @@ export const startGoogleOAuth = createServerFn({ method: "POST" })
       state: token,
     });
     return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
+  });
+
+/** Mesmo fluxo de `startGoogleOAuth`, mas pra conectar a conta ÚNICA e
+ * compartilhada (ex.: contato@vocenohype.com.br) que passa a ser dona de
+ * TODOS os eventos de reunião — só admin pode iniciar essa conexão, já que
+ * ela afeta a agenda de todo mundo. Quem faz login na tela de consentimento
+ * do Google, nesse fluxo, precisa ser a própria conta contato@..., não quem
+ * clicou no botão aqui dentro. */
+export const startSharedGoogleOAuth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const { clientId } = requireGoogleEnv();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const token = crypto.randomUUID();
+    const { error } = await supabaseAdmin
+      .from("google_oauth_states")
+      .insert({ token, user_id: context.userId, purpose: "shared" });
+    if (error) throw new Error(error.message);
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUriFromRequest(),
+      response_type: "code",
+      access_type: "offline",
+      prompt: "consent",
+      scope: GOOGLE_SCOPE,
+      state: token,
+    });
+    return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
+  });
+
+export const getSharedGoogleConnectionStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
+      .from("shared_calendar_connection")
+      .select("google_email, connected_at")
+      .eq("id", true)
+      .maybeSingle();
+    if (!data) return { connected: false as const };
+    return { connected: true as const, email: data.google_email, connectedAt: data.connected_at };
+  });
+
+export const disconnectSharedGoogleCalendar = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
+      .from("shared_calendar_connection")
+      .select("access_token")
+      .eq("id", true)
+      .maybeSingle();
+    if (data?.access_token) {
+      await fetch(
+        `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(data.access_token)}`,
+        { method: "POST" },
+      ).catch(() => {
+        /* best-effort — a desconexão local acontece de qualquer forma */
+      });
+    }
+    await supabaseAdmin.from("shared_calendar_connection").delete().eq("id", true);
+    return { ok: true };
   });
 
 export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
@@ -100,11 +185,15 @@ export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
 
 type AdminClient = SupabaseClient<Database>;
 
-async function getValidAccessToken(admin: AdminClient, userId: string): Promise<string | null> {
+/** Token da conta ÚNICA e compartilhada (ex.: contato@vocenohype.com.br) —
+ * dona de todos os eventos de reunião. Mesma lógica de refresh de
+ * `getValidAccessToken`, só que lendo/gravando `shared_calendar_connection`
+ * em vez de uma linha por usuário. */
+async function getValidSharedAccessToken(admin: AdminClient): Promise<string | null> {
   const { data } = await admin
-    .from("google_calendar_connections")
+    .from("shared_calendar_connection")
     .select("access_token, refresh_token, token_expiry")
-    .eq("user_id", userId)
+    .eq("id", true)
     .maybeSingle();
   if (!data) return null;
 
@@ -123,19 +212,19 @@ async function getValidAccessToken(admin: AdminClient, userId: string): Promise<
     }),
   });
   if (!res.ok) {
-    console.warn("[google-calendar] refresh token failed", await res.text());
+    console.warn("[google-calendar] shared refresh token failed", await res.text());
     return null;
   }
   const json = (await res.json()) as { access_token: string; expires_in: number };
   const tokenExpiry = new Date(Date.now() + json.expires_in * 1000).toISOString();
   await admin
-    .from("google_calendar_connections")
+    .from("shared_calendar_connection")
     .update({
       access_token: json.access_token,
       token_expiry: tokenExpiry,
       updated_at: new Date().toISOString(),
     })
-    .eq("user_id", userId);
+    .eq("id", true);
   return json.access_token;
 }
 
@@ -150,6 +239,7 @@ type SlimMeeting = {
   status?: string;
   criadorId?: string;
   participanteIds?: string[];
+  convidadosExternos?: { nome: string; email: string }[];
 };
 
 // `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
@@ -185,7 +275,7 @@ async function syncOneMeeting(
 
   if (m.status === "Cancelada") {
     if (existingId) {
-      await fetch(`${EVENTS_URL}/${existingId}?sendUpdates=none`, {
+      await fetch(`${EVENTS_URL}/${existingId}?sendUpdates=all`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${accessToken}` },
       }).catch(() => {});
@@ -198,10 +288,13 @@ async function syncOneMeeting(
     ...(m.participanteIds ?? []),
     ...(m.criadorId ? [m.criadorId] : []),
   ]);
-  const attendees = Array.from(attendeeIds)
+  const internalAttendees = Array.from(attendeeIds)
     .map((id) => emailById.get(id))
-    .filter((email): email is string => Boolean(email))
-    .map((email) => ({ email }));
+    .filter((email): email is string => Boolean(email));
+  const externalAttendees = (m.convidadosExternos ?? []).map((g) => g.email).filter(Boolean);
+  const attendees = Array.from(new Set([...internalAttendees, ...externalAttendees])).map(
+    (email) => ({ email }),
+  );
 
   const body = {
     summary: m.titulo || "Reunião",
@@ -210,12 +303,19 @@ async function syncOneMeeting(
     start: { dateTime: start, timeZone: "America/Sao_Paulo" },
     end: { dateTime: end, timeZone: "America/Sao_Paulo" },
     attendees: attendees.length > 0 ? attendees : undefined,
+    // Gera um link de Google Meet de verdade (a conta compartilhada tem
+    // Meet Pro) — sem isso, "local"/"notas" eram só texto livre, nunca um
+    // link de videochamada real criado pelo Google.
+    conferenceData: existingId
+      ? undefined
+      : { createRequest: { requestId: m.id, conferenceSolutionKey: { type: "hangoutsMeet" } } },
     extendedProperties: { private: { vnhMeetingId: m.id } },
   };
 
   const url = existingId ? `${EVENTS_URL}/${existingId}` : EVENTS_URL;
   const method = existingId ? "PATCH" : "POST";
-  const params = new URLSearchParams({ sendUpdates: "none" });
+  const params = new URLSearchParams({ sendUpdates: "all" });
+  if (!existingId) params.set("conferenceDataVersion", "1");
   const res = await fetch(`${url}?${params}`, {
     method,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -226,22 +326,24 @@ async function syncOneMeeting(
   }
 }
 
-export const syncMyMeetingsToGoogle = createServerFn({ method: "POST" })
+/** Sincroniza TODAS as reuniões (não só as do usuário que aciona) contra a
+ * conta compartilhada — antes cada pessoa sincronizava só as próprias
+ * reuniões contra a própria conta Google; agora existe uma única fonte de
+ * verdade (contato@vocenohype.com.br) dona de todos os eventos. */
+export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const accessToken = await getValidAccessToken(supabaseAdmin, context.userId);
+    const accessToken = await getValidSharedAccessToken(supabaseAdmin);
     if (!accessToken) return { synced: 0, connected: false as const };
 
     const { data: rows, error } = await supabaseAdmin.from("reunioes").select("data");
     if (error) throw new Error(error.message);
 
-    const mine = (rows ?? [])
-      .map((r) => r.data as SlimMeeting)
-      .filter((m) => m.criadorId === context.userId || m.participanteIds?.includes(context.userId));
+    const meetings = (rows ?? []).map((r) => r.data as SlimMeeting);
 
     const allIds = new Set<string>();
-    for (const m of mine) {
+    for (const m of meetings) {
       m.participanteIds?.forEach((id) => allIds.add(id));
       if (m.criadorId) allIds.add(m.criadorId);
     }
@@ -254,8 +356,8 @@ export const syncMyMeetingsToGoogle = createServerFn({ method: "POST" })
       for (const p of profiles ?? []) emailById.set(p.id, p.email);
     }
 
-    for (const m of mine) {
+    for (const m of meetings) {
       await syncOneMeeting(accessToken, m, emailById);
     }
-    return { synced: mine.length, connected: true as const };
+    return { synced: meetings.length, connected: true as const };
   });

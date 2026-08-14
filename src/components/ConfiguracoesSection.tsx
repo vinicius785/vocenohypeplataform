@@ -61,6 +61,9 @@ import {
   startGoogleOAuth,
   getGoogleConnectionStatus,
   disconnectGoogleCalendar,
+  startSharedGoogleOAuth,
+  getSharedGoogleConnectionStatus,
+  disconnectSharedGoogleCalendar,
 } from "@/lib/google-calendar.functions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { type NotifPrefs, loadNotifPrefs, saveNotifPrefs } from "@/lib/notif-prefs";
@@ -83,7 +86,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.128.0";
+export const APP_VERSION = "1.129.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -569,6 +572,23 @@ function IntegracoesTab() {
       <section className="space-y-3">
         <IntegracoesSectionHeader
           eyebrow="Administradores"
+          title="Calendário compartilhado"
+          description="A conta que passa a ser a organizadora de TODAS as reuniões da plataforma (link de Meet, convite por e-mail, inclusive pra gente de fora)."
+        />
+        {isAdmin === false ? (
+          <AdminOnlyNotice />
+        ) : isAdmin === null ? (
+          <IntegrationCardSkeleton />
+        ) : (
+          <SharedGoogleCalendarCard />
+        )}
+      </section>
+
+      <div className="border-t border-border" />
+
+      <section className="space-y-3">
+        <IntegracoesSectionHeader
+          eyebrow="Administradores"
           title="Entrada"
           description="Recebe dados de fora pra dentro da plataforma (ex: Make, Typeform)."
         />
@@ -714,6 +734,104 @@ function GoogleCalendarCard() {
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             Conectado{status.email ? ` como ${status.email}` : ""}.
+          </p>
+          <button
+            type="button"
+            onClick={disconnect}
+            disabled={disconnecting}
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {disconnecting ? "Desconectando..." : "Desconectar"}
+          </button>
+        </div>
+      )}
+    </IntegrationCard>
+  );
+}
+
+/** Conta ÚNICA (ex.: contato@vocenohype.com.br) que passa a ser dona de
+ * TODOS os eventos de reunião — quem clica aqui precisa estar logado com
+ * ESSA conta Google na tela de consentimento (não a própria conta pessoal),
+ * já que é ela que fica registrada como organizadora de tudo. */
+function SharedGoogleCalendarCard() {
+  const startFn = useServerFn(startSharedGoogleOAuth);
+  const statusFn = useServerFn(getSharedGoogleConnectionStatus);
+  const disconnectFn = useServerFn(disconnectSharedGoogleCalendar);
+
+  const [status, setStatus] = useState<
+    { state: "loading" } | { state: "disconnected" } | { state: "connected"; email?: string | null }
+  >({ state: "loading" });
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [callbackNotice, setCallbackNotice] = useState<"connected" | "error" | null>(null);
+
+  const refresh = useCallback(() => {
+    statusFn()
+      .then((r) =>
+        setStatus(r.connected ? { state: "connected", email: r.email } : { state: "disconnected" }),
+      )
+      .catch(() => setStatus({ state: "disconnected" }));
+  }, [statusFn]);
+
+  useEffect(() => {
+    refresh();
+    const params = new URLSearchParams(window.location.search);
+    const google = params.get("google");
+    if (google === "connected" || google === "error") {
+      setCallbackNotice(google);
+      params.delete("google");
+      const qs = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+  }, [refresh]);
+
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const { url } = await startFn();
+      window.location.href = url;
+    } catch {
+      setConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    try {
+      await disconnectFn();
+      setStatus({ state: "disconnected" });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  return (
+    <IntegrationCard
+      icon={<GoogleCalendarIcon className="h-5 w-5" />}
+      title="Conta compartilhada"
+      description="Ao conectar, faça login com a conta contato@vocenohype.com.br na tela do Google — é ela que passa a organizar todas as reuniões, com Meet Pro e convite de verdade pra convidados externos."
+    >
+      {callbackNotice === "error" && (
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          Não foi possível conectar a conta compartilhada. Tente novamente.
+        </p>
+      )}
+      {status.state === "loading" && <p className="text-xs text-muted-foreground">Carregando...</p>}
+      {status.state === "disconnected" && (
+        <button
+          type="button"
+          onClick={connect}
+          disabled={connecting}
+          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+        >
+          {connecting ? "Redirecionando..." : "Conectar conta compartilhada"}
+        </button>
+      )}
+      {status.state === "connected" && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Conectada{status.email ? ` como ${status.email}` : ""}. Toda reunião salva na plataforma
+            passa a sincronizar com essa conta.
           </p>
           <button
             type="button"

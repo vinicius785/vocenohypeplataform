@@ -11,6 +11,11 @@ import {
   Check,
   Pencil,
   CalendarClock,
+  MapPin,
+  UserPlus,
+  Repeat,
+  StickyNote,
+  Video,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useStorageSync } from "@/lib/use-storage-sync";
@@ -18,6 +23,7 @@ import {
   type Meeting,
   type MeetingStatus,
   type RescheduleProposal,
+  type ExternalGuest,
   loadMeetings,
   saveMeetings,
   onMeetingsChange,
@@ -788,8 +794,10 @@ function MeetingDialog({
   const [data, setData] = useState("");
   const [hora, setHora] = useState("10:00");
   const [duracao, setDuracao] = useState(30);
-  const [com, setCom] = useState("");
   const [participanteIds, setParticipanteIds] = useState<string[]>([]);
+  const [convidadosExternos, setConvidadosExternos] = useState<ExternalGuest[]>([]);
+  const [guestNome, setGuestNome] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [local, setLocal] = useState("");
   const [notas, setNotas] = useState("");
   const [status, setStatus] = useState<MeetingStatus>("Confirmada");
@@ -805,10 +813,12 @@ function MeetingDialog({
     setData(initial?.data ?? defaultDate);
     setHora(initial?.hora ?? "10:00");
     setDuracao(initial?.duracao ?? 30);
-    setCom(initial?.com ?? "");
     const ids =
       initial?.participanteIds ?? (initial?.participanteId ? [initial.participanteId] : []);
     setParticipanteIds(ids);
+    setConvidadosExternos(initial?.convidadosExternos ?? []);
+    setGuestNome("");
+    setGuestEmail("");
     setLocal(initial?.local ?? "");
     setNotas(initial?.notas ?? "");
     setStatus(initial?.status ?? "Confirmada");
@@ -819,16 +829,23 @@ function MeetingDialog({
 
   const selectedMembers = team.filter((t) => participanteIds.includes(t.id));
   const toggleMember = (id: string) => {
-    setParticipanteIds((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      const names = team
-        .filter((t) => next.includes(t.id))
-        .map((t) => t.name)
-        .join(", ");
-      if (names) setCom(names);
-      else if (!prev.length || prev.every((x) => next.includes(x) === false)) setCom("");
-      return next;
-    });
+    setParticipanteIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const addGuest = () => {
+    const nome = guestNome.trim();
+    const email = guestEmail.trim().toLowerCase();
+    if (!nome || !EMAIL_RE.test(email)) return;
+    if (convidadosExternos.some((g) => g.email === email)) return;
+    setConvidadosExternos((prev) => [...prev, { nome, email }]);
+    setGuestNome("");
+    setGuestEmail("");
+  };
+  const removeGuest = (email: string) => {
+    setConvidadosExternos((prev) => prev.filter((g) => g.email !== email));
   };
 
   // Próxima data da série a partir de `d` (yyyy-mm-dd), conforme a
@@ -853,13 +870,21 @@ function MeetingDialog({
     );
     if (newlyInvited.length > 0) void notifyMeetingInvite(newlyInvited, titulo.trim());
     const finalStatus: MeetingStatus = !initial && participanteIds.length > 0 ? "Pendente" : status;
+    // `com` fica só como resumo legado (nomes juntos) pras telas que ainda
+    // não foram atualizadas pra ler `participanteIds`/`convidadosExternos`
+    // diretamente — os dados de verdade vivem nesses dois campos.
+    const comSummary = [
+      ...selectedMembers.map((m) => m.name),
+      ...convidadosExternos.map((g) => g.nome),
+    ].join(", ");
     const base: Omit<Meeting, "id" | "data"> = {
       titulo: titulo.trim(),
       hora,
       duracao,
-      com: com.trim(),
+      com: comSummary,
       participanteId: participanteIds[0],
       participanteIds: participanteIds.length ? participanteIds : undefined,
+      convidadosExternos: convidadosExternos.length ? convidadosExternos : undefined,
       local: local.trim(),
       notas: notas.trim() || undefined,
       status: finalStatus,
@@ -884,66 +909,112 @@ function MeetingDialog({
     onSave(dates.map((d) => ({ id: crypto.randomUUID(), data: d, ...base })));
   };
 
+  const fieldCls =
+    "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col">
-        <DialogTitle>{initial ? "Editar reunião" : "Nova reunião"}</DialogTitle>
-        <DialogDescription className="sr-only">Cadastro de reunião</DialogDescription>
+      <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <div className="border-b border-border px-6 py-5">
+          <DialogTitle className="sr-only">
+            {initial ? "Editar reunião" : "Nova reunião"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">Cadastro de reunião</DialogDescription>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {initial ? "Editar reunião" : "Nova reunião"}
+          </p>
+          <input
+            type="text"
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            placeholder="Título da reunião"
+            className="w-full border-0 bg-transparent p-0 text-xl font-light tracking-tight text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+          />
+        </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Título</label>
-            <input
-              type="text"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-              placeholder="Ex.: Alinhamento com cliente"
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Data</label>
-              <input
-                type="date"
-                value={data}
-                onChange={(e) => setData(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          {/* Quando */}
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5" /> Quando
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Data</label>
+                <input
+                  type="date"
+                  value={data}
+                  onChange={(e) => setData(e.target.value)}
+                  className={`mt-1 ${fieldCls}`}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Hora</label>
+                <input
+                  type="time"
+                  value={hora}
+                  onChange={(e) => setHora(e.target.value)}
+                  className={`mt-1 ${fieldCls}`}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Duração (min)</label>
+                <input
+                  type="number"
+                  min={5}
+                  step={5}
+                  value={duracao}
+                  onChange={(e) => setDuracao(Number(e.target.value) || 0)}
+                  className={`mt-1 ${fieldCls}`}
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Hora</label>
-              <input
-                type="time"
-                value={hora}
-                onChange={(e) => setHora(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Duração (min)</label>
-              <input
-                type="number"
-                min={5}
-                step={5}
-                value={duracao}
-                onChange={(e) => setDuracao(Number(e.target.value) || 0)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">
-                Com (membros do time)
-              </label>
+            {!initial && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                    <Repeat className="h-3 w-3" /> Repetir
+                  </label>
+                  <select
+                    value={repeat}
+                    onChange={(e) => setRepeat(e.target.value as typeof repeat)}
+                    className={`mt-1 ${fieldCls}`}
+                  >
+                    <option value="none">Não repete</option>
+                    <option value="daily">Diariamente</option>
+                    <option value="weekly">Semanalmente</option>
+                    <option value="monthly">Mensalmente</option>
+                  </select>
+                </div>
+                {repeat !== "none" && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Repetir até</label>
+                    <input
+                      type="date"
+                      value={repeatUntil}
+                      min={data}
+                      onChange={(e) => setRepeatUntil(e.target.value)}
+                      className={`mt-1 ${fieldCls}`}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Participantes internos */}
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Users className="h-3.5 w-3.5" /> Time
+            </p>
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setPickerOpen((v) => !v)}
-                className="mt-1 flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+                className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-left text-sm hover:bg-muted/40"
               >
                 {selectedMembers.length === 0 ? (
-                  <span className="text-muted-foreground">— Selecione membros —</span>
+                  <span className="text-muted-foreground">Selecionar membros do time…</span>
                 ) : (
                   selectedMembers.map((m) => (
                     <span
@@ -970,7 +1041,7 @@ function MeetingDialog({
                 )}
               </button>
               {pickerOpen && (
-                <div className="mt-1 max-h-48 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
                   {team.length === 0 && (
                     <div className="px-2 py-2 text-xs text-muted-foreground">
                       Nenhum membro no time
@@ -1002,95 +1073,130 @@ function MeetingDialog({
                   })}
                 </div>
               )}
-              {participanteIds.length === 0 && (
-                <input
-                  type="text"
-                  value={com}
-                  onChange={(e) => setCom(e.target.value)}
-                  placeholder="Nome do convidado externo"
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              )}
-              {participanteIds.length > 0 && !initial && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Uma solicitação será enviada para {com} (fica em Solicitações como Pendente).
-                </p>
-              )}
             </div>
+            {participanteIds.length > 0 && !initial && (
+              <p className="text-[11px] text-muted-foreground">
+                Uma solicitação será enviada pra cada pessoa (fica em Solicitações como Pendente).
+              </p>
+            )}
+          </section>
 
+          {/* Convidados externos */}
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <UserPlus className="h-3.5 w-3.5" /> Convidados externos
+            </p>
+            {convidadosExternos.length > 0 && (
+              <ul className="space-y-1.5">
+                {convidadosExternos.map((g) => (
+                  <li
+                    key={g.email}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-2.5 py-1.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-foreground">{g.nome}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{g.email}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeGuest(g.email)}
+                      aria-label={`Remover ${g.nome}`}
+                      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={guestNome}
+                onChange={(e) => setGuestNome(e.target.value)}
+                placeholder="Nome"
+                className={`sm:w-1/3 ${fieldCls}`}
+              />
+              <input
+                type="email"
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addGuest();
+                  }
+                }}
+                placeholder="e-mail@exemplo.com"
+                className={`flex-1 ${fieldCls}`}
+              />
+              <button
+                type="button"
+                onClick={addGuest}
+                disabled={!guestNome.trim() || !EMAIL_RE.test(guestEmail.trim())}
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" /> Adicionar
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Recebem o convite por e-mail direto do Google Agenda, com link de videochamada.
+            </p>
+          </section>
+
+          {/* Local / Notas */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">Local / Link</label>
+              <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3 w-3" /> Local / Link
+              </label>
               <input
                 type="text"
                 value={local}
                 onChange={(e) => setLocal(e.target.value)}
-                placeholder="Google Meet, endereço..."
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder="Endereço, sala..."
+                className={`mt-1 ${fieldCls}`}
               />
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Video className="h-3 w-3" /> O link do Google Meet é gerado automaticamente.
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Status</label>
+              <div className="mt-1 flex gap-1.5">
+                {(["Confirmada", "Pendente", "Cancelada"] as MeetingStatus[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatus(s)}
+                    className={`rounded-full px-3 py-1 text-xs ${
+                      status === s
+                        ? statusTone(s)
+                        : "border border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {!initial && (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">Repetir</label>
-                <select
-                  value={repeat}
-                  onChange={(e) => setRepeat(e.target.value as typeof repeat)}
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="none">Não repete</option>
-                  <option value="daily">Diariamente</option>
-                  <option value="weekly">Semanalmente</option>
-                  <option value="monthly">Mensalmente</option>
-                </select>
-              </div>
-              {repeat !== "none" && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Repetir até</label>
-                  <input
-                    type="date"
-                    value={repeatUntil}
-                    min={data}
-                    onChange={(e) => setRepeatUntil(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Notas</label>
+            <label className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              <StickyNote className="h-3 w-3" /> Notas
+            </label>
             <textarea
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               rows={3}
-              className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Pauta, contexto, links de apoio..."
+              className="mt-1 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Status</label>
-            <div className="mt-1 flex gap-1.5">
-              {(["Confirmada", "Pendente", "Cancelada"] as MeetingStatus[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setStatus(s)}
-                  className={`rounded-full px-3 py-1 text-xs ${
-                    status === s
-                      ? statusTone(s)
-                      : "border border-border text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-4">
           <div>
             {initial && (
               <button
@@ -1106,15 +1212,15 @@ function MeetingDialog({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-sm hover:bg-muted"
             >
-              <X className="h-4 w-4" /> Cancelar
+              Cancelar
             </button>
             <button
               type="button"
               onClick={submit}
               disabled={!titulo.trim() || !data || (repeat !== "none" && !repeatUntil)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
               Salvar
             </button>
@@ -1313,9 +1419,16 @@ export function MeetingSummaryDialog({
 
           <SummarySection title="Participantes">
             <ul className="space-y-1.5">
-              {participantIds.length === 0 && meeting.com && (
-                <li className="text-sm text-muted-foreground">{meeting.com} (externo)</li>
-              )}
+              {(meeting.convidadosExternos?.length ?? 0) > 0
+                ? meeting.convidadosExternos!.map((g) => (
+                    <li key={g.email} className="text-sm text-muted-foreground">
+                      {g.nome} <span className="text-[11px]">(externo · {g.email})</span>
+                    </li>
+                  ))
+                : participantIds.length === 0 &&
+                  meeting.com && (
+                    <li className="text-sm text-muted-foreground">{meeting.com} (externo)</li>
+                  )}
               {participantIds.map((id) => {
                 const kind = confirmedBy.includes(id)
                   ? "confirmed"

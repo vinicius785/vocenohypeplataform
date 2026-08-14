@@ -476,16 +476,19 @@ export type Database = {
       google_oauth_states: {
         Row: {
           created_at: string;
+          purpose: string;
           token: string;
           user_id: string;
         };
         Insert: {
           created_at?: string;
+          purpose?: string;
           token: string;
           user_id: string;
         };
         Update: {
           created_at?: string;
+          purpose?: string;
           token?: string;
           user_id?: string;
         };
@@ -840,6 +843,36 @@ export type Database = {
           id?: string;
           updated_at?: string;
           updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      shared_calendar_connection: {
+        Row: {
+          access_token: string;
+          connected_at: string;
+          google_email: string | null;
+          id: boolean;
+          refresh_token: string;
+          token_expiry: string;
+          updated_at: string;
+        };
+        Insert: {
+          access_token: string;
+          connected_at?: string;
+          google_email?: string | null;
+          id?: boolean;
+          refresh_token: string;
+          token_expiry: string;
+          updated_at?: string;
+        };
+        Update: {
+          access_token?: string;
+          connected_at?: string;
+          google_email?: string | null;
+          id?: boolean;
+          refresh_token?: string;
+          token_expiry?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
