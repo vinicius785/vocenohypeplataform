@@ -24,6 +24,7 @@ import {
   Plus,
   MoreHorizontal,
   MessageSquare,
+  ArrowLeft,
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import {
@@ -274,7 +275,11 @@ export function ChatSection() {
 
   return (
     <div className="flex h-[calc(100vh-9rem)] w-full overflow-hidden rounded-lg border border-border bg-background">
-      <div className="flex w-[320px] shrink-0 flex-col overflow-hidden border-r border-border">
+      <div
+        className={`w-full shrink-0 flex-col overflow-hidden border-r border-border md:flex md:w-[320px] ${
+          activeId ? "hidden" : "flex"
+        }`}
+      >
         <ChatConversationList
           channels={channels}
           campaignChannels={campaignChannels}
@@ -286,8 +291,20 @@ export function ChatSection() {
           onSelectConvo={(id) => setActiveConvo(id)}
         />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={`min-w-0 flex-1 flex-col overflow-hidden md:flex ${activeId ? "flex" : "hidden"}`}
+      >
         <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          {activeId && (
+            <button
+              type="button"
+              onClick={() => setActiveConvo("")}
+              aria-label="Voltar pra lista de conversas"
+              className="-ml-1.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
           {activeChannel ? (
             <>
               {activeChannel.private ? (
@@ -295,7 +312,7 @@ export function ChatSection() {
               ) : (
                 <Hash className="h-4 w-4 text-muted-foreground" />
               )}
-              <h2 className="text-sm font-semibold">{activeChannel.name}</h2>
+              <h2 className="min-w-0 truncate text-sm font-semibold">{activeChannel.name}</h2>
               <span className="ml-2 flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Users className="h-3 w-3" /> {members.length}
               </span>
@@ -303,7 +320,7 @@ export function ChatSection() {
           ) : activeCampaign ? (
             <>
               <Hash className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold">{activeCampaign.name}</h2>
+              <h2 className="min-w-0 truncate text-sm font-semibold">{activeCampaign.name}</h2>
               <span className="text-[11px] text-muted-foreground">
                 campanha · {activeCampaign.empresa}
               </span>
@@ -311,7 +328,7 @@ export function ChatSection() {
           ) : activeProject ? (
             <>
               <Hash className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold">{activeProject.name}</h2>
+              <h2 className="min-w-0 truncate text-sm font-semibold">{activeProject.name}</h2>
               <span className="text-[11px] text-muted-foreground">projeto</span>
             </>
           ) : activeDmPartner ? (
@@ -336,7 +353,7 @@ export function ChatSection() {
                       className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
                     />
                   </span>
-                  <h2 className="text-sm font-semibold">{activeDmPartner.name}</h2>
+                  <h2 className="min-w-0 truncate text-sm font-semibold">{activeDmPartner.name}</h2>
                   <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</span>
                 </>
               );
@@ -344,9 +361,9 @@ export function ChatSection() {
           ) : (
             <h2 className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</h2>
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {activeId && (
-              <div className="relative">
+              <div className="relative hidden md:block">
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={search}

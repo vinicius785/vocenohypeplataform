@@ -1,6 +1,7 @@
 {
-  "version": "1.124.0",
+  "version": "1.125.0",
   "notes": [
+    "Corrige o Chat não sendo responsivo no mobile: agora, em telas pequenas, mostra a lista de conversas OU a conversa aberta em tela cheia (nunca as duas colunas espremidas), com um botão de voltar pra sair da conversa — igual ao WhatsApp no celular.",
     "Redesenha o criador de artigos do Blog (cards agrupados, autor com foto/avatar visível no editor e na pré-visualização) e adiciona curtir + comentar em artigos publicados, tanto no Mural de novidades quanto no Portal do cliente.",
     "Corrige o autor do artigo não aparecendo no Mural de novidades ao abrir a leitura completa (o dado já existia, só não era exibido).",
     "Simplifica os status de artigo do Blog para Agendado / Publicado / Despublicado (antes: rascunho, em revisão, publicado, arquivado) — um artigo despublicado some do Mural, do Portal do cliente e do Site pra todo mundo.",
