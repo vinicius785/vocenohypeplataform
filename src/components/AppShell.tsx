@@ -741,11 +741,16 @@ function useIncomingMessageNotifier() {
 function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const me = getMe();
   const navigate = useNavigate();
-  const [tick, force] = useState(0);
-  useEffect(() => onProjetosChange(() => force((n) => n + 1)), []);
-  useEffect(() => onCampanhaTarefasChange(() => force((n) => n + 1)), []);
+  // `dataTick` só muda quando os dados de verdade mudam (evento de store) —
+  // é o único gatilho pro `useMemo` abaixo (que escaneia todos os projetos)
+  // recalcular. `nowTick` muda a cada segundo só pra atualizar o texto de
+  // tempo decorrido, sem re-escanear projetos/tarefas nenhuma.
+  const [dataTick, forceData] = useState(0);
+  const [, forceNow] = useState(0);
+  useEffect(() => onProjetosChange(() => forceData((n) => n + 1)), []);
+  useEffect(() => onCampanhaTarefasChange(() => forceData((n) => n + 1)), []);
   useEffect(() => {
-    const iv = setInterval(() => force((n) => n + 1), 1000);
+    const iv = setInterval(() => forceNow((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, []);
 
@@ -789,7 +794,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
       }
     }
     return null;
-  }, [me.name, tick]);
+  }, [me.name, dataTick]);
 
   if (!active) return null;
   const elapsed = active.startedAt ? (Date.now() - Date.parse(active.startedAt)) / 1000 : 0;

@@ -1,6 +1,7 @@
 {
-  "version": "1.125.0",
+  "version": "1.126.0",
   "notes": [
+    "Otimização de performance: cada seção da plataforma (Início, Chat, Financeiro, etc.) agora carrega seu próprio código só quando você abre ela, em vez de tudo junto de uma vez — deixa o primeiro carregamento bem mais rápido. Também corrige o indicador de cronômetro ativo no topo, que recarregava todos os projetos a cada segundo só pra atualizar o relógio.",
     "Corrige o Chat não sendo responsivo no mobile: agora, em telas pequenas, mostra a lista de conversas OU a conversa aberta em tela cheia (nunca as duas colunas espremidas), com um botão de voltar pra sair da conversa — igual ao WhatsApp no celular.",
     "Redesenha o criador de artigos do Blog (cards agrupados, autor com foto/avatar visível no editor e na pré-visualização) e adiciona curtir + comentar em artigos publicados, tanto no Mural de novidades quanto no Portal do cliente.",
     "Corrige o autor do artigo não aparecendo no Mural de novidades ao abrir a leitura completa (o dado já existia, só não era exibido).",

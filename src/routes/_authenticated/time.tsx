@@ -1,21 +1,60 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
-import { InicioDashboard } from "@/components/InicioDashboard";
-import { ClientesSection } from "@/components/ClientesSection";
-import { CampanhasSection } from "@/components/CampanhasSection";
-import { TimeSection } from "@/components/TimeSection";
-import { InfluenciadoresSection } from "@/components/InfluenciadoresSection";
-import { MetasSection } from "@/components/MetasSection";
-import { ReunioesSection } from "@/components/ReunioesSection";
-import { ProjetosSection } from "@/components/ProjetosSection";
-import { ComercialSection } from "@/components/ComercialSection";
-import { ConfiguracoesSection } from "@/components/ConfiguracoesSection";
-import { FinanceiroSection } from "@/components/FinanceiroSection";
-
-import { ChatSection } from "@/components/ChatSection";
 import { LockedSection } from "@/components/LockedSection";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
+
+// Cada seção vira o próprio chunk JS, baixado só quando o usuário navega até
+// ela — antes todas as 12 seções (algumas com milhares de linhas, ex.
+// ConfiguracoesSection/ChatSection) eram importadas estaticamente aqui e
+// entravam no bundle inicial mesmo que só "Início" fosse aberto.
+const InicioDashboard = lazy(() =>
+  import("@/components/InicioDashboard").then((m) => ({ default: m.InicioDashboard })),
+);
+const ClientesSection = lazy(() =>
+  import("@/components/ClientesSection").then((m) => ({ default: m.ClientesSection })),
+);
+const CampanhasSection = lazy(() =>
+  import("@/components/CampanhasSection").then((m) => ({ default: m.CampanhasSection })),
+);
+const TimeSection = lazy(() =>
+  import("@/components/TimeSection").then((m) => ({ default: m.TimeSection })),
+);
+const InfluenciadoresSection = lazy(() =>
+  import("@/components/InfluenciadoresSection").then((m) => ({
+    default: m.InfluenciadoresSection,
+  })),
+);
+const MetasSection = lazy(() =>
+  import("@/components/MetasSection").then((m) => ({ default: m.MetasSection })),
+);
+const ReunioesSection = lazy(() =>
+  import("@/components/ReunioesSection").then((m) => ({ default: m.ReunioesSection })),
+);
+const ProjetosSection = lazy(() =>
+  import("@/components/ProjetosSection").then((m) => ({ default: m.ProjetosSection })),
+);
+const ComercialSection = lazy(() =>
+  import("@/components/ComercialSection").then((m) => ({ default: m.ComercialSection })),
+);
+const ConfiguracoesSection = lazy(() =>
+  import("@/components/ConfiguracoesSection").then((m) => ({ default: m.ConfiguracoesSection })),
+);
+const FinanceiroSection = lazy(() =>
+  import("@/components/FinanceiroSection").then((m) => ({ default: m.FinanceiroSection })),
+);
+const ChatSection = lazy(() =>
+  import("@/components/ChatSection").then((m) => ({ default: m.ChatSection })),
+);
+
+function SectionFallback() {
+  return (
+    <div className="flex h-[50vh] items-center justify-center">
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 const VALID: SectionKey[] = [
   "inicio",
@@ -90,35 +129,39 @@ function TimePage() {
     <AppShell active={active} onSelect={setActive}>
       {!allowed ? (
         <LockedSection title={section.title} />
-      ) : active === "inicio" ? (
-        <InicioDashboard />
-      ) : active === "clientes" ? (
-        <ClientesSection />
-      ) : active === "campanhas" ? (
-        <CampanhasSection />
-      ) : active === "time" ? (
-        <TimeSection />
-      ) : active === "influenciadores" ? (
-        <InfluenciadoresSection />
-      ) : active === "metas" ? (
-        <MetasSection />
-      ) : active === "reunioes" ? (
-        <ReunioesSection />
-      ) : active === "projetos" ? (
-        <ProjetosSection />
-      ) : active === "comercial" ? (
-        <ComercialSection />
-      ) : active === "configuracoes" ? (
-        <ConfiguracoesSection />
-      ) : active === "financeiro" ? (
-        <FinanceiroSection />
-      ) : active === "chat" ? (
-        <ChatSection />
       ) : (
-        <>
-          <h1 className="text-3xl font-semibold tracking-tight">{section.title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
-        </>
+        <Suspense fallback={<SectionFallback />}>
+          {active === "inicio" ? (
+            <InicioDashboard />
+          ) : active === "clientes" ? (
+            <ClientesSection />
+          ) : active === "campanhas" ? (
+            <CampanhasSection />
+          ) : active === "time" ? (
+            <TimeSection />
+          ) : active === "influenciadores" ? (
+            <InfluenciadoresSection />
+          ) : active === "metas" ? (
+            <MetasSection />
+          ) : active === "reunioes" ? (
+            <ReunioesSection />
+          ) : active === "projetos" ? (
+            <ProjetosSection />
+          ) : active === "comercial" ? (
+            <ComercialSection />
+          ) : active === "configuracoes" ? (
+            <ConfiguracoesSection />
+          ) : active === "financeiro" ? (
+            <FinanceiroSection />
+          ) : active === "chat" ? (
+            <ChatSection />
+          ) : (
+            <>
+              <h1 className="text-3xl font-semibold tracking-tight">{section.title}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">{section.description}</p>
+            </>
+          )}
+        </Suspense>
       )}
     </AppShell>
   );

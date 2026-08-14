@@ -245,13 +245,24 @@ export function initProjetosSync(): Promise<void> {
   return p;
 }
 
+// `projetosStore.get()` retorna sempre a mesma referência até o store
+// realmente mudar (ver table-array-store.ts) — cacheia o resultado mapeado
+// por identidade pra chamadas repetidas de `loadProjetos()` (ex.: em vários
+// componentes/efeitos no mesmo ciclo) não remapearem tudo à toa.
+let cachedRawProjetos: Project[] | null = null;
+let cachedMappedProjetos: Project[] = [];
+
 export function loadProjetos(): Project[] {
-  return projetosStore.get().map((p) => ({
+  const raw = projetosStore.get();
+  if (raw === cachedRawProjetos) return cachedMappedProjetos;
+  cachedRawProjetos = raw;
+  cachedMappedProjetos = raw.map((p) => ({
     ...p,
     milestones: p.milestones ?? [],
     tasks: (p.tasks ?? []).map((t) => ({ ...t, status: normalizeKanbanStatus(t.status) })),
     docs: p.docs ?? [],
   }));
+  return cachedMappedProjetos;
 }
 
 export function saveProjetos(list: Project[]) {
