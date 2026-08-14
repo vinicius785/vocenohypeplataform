@@ -234,7 +234,49 @@ async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof A
   return artigos;
 }
 
-const TokenInput = z.object({ token: z.string().min(1) });
+// Tokens são gerados como `crypto.randomUUID().replace(/-/g, "")` (32 hex
+// chars) — rejeitar qualquer coisa menor antes de bater no banco evita um
+// full-scan de `clientes` por tentativa óbvia de token inválido/curto demais.
+const TokenInput = z.object({ token: z.string().min(20).max(64) });
+
+/** Content-types aceitos em upload público (briefing/demanda do cliente) —
+ * sem essa lista, qualquer `contentType` informado no data-URL era aceito
+ * (ex: `text/html`, `image/svg+xml`, que podem embutir script e, se o
+ * bucket algum dia virar público/CDN, executar no navegador de quem abrir
+ * o link do anexo). Cobre os formatos usados na prática (mídia kit,
+ * briefing, comprovantes) sem abrir pra tipo arbitrário. */
+const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+]);
+function assertAllowedUploadContentType(contentType: string) {
+  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
+    throw new Error("Tipo de arquivo não suportado.");
+  }
+}
+
+/** Curtir/comentar/ler engajamento aceitavam qualquer `postId`, sem
+ * confirmar que o artigo pertence (publicado + compartilhado via
+ * `portalClienteIds`) ao cliente do token — um token válido conseguia
+ * curtir/comentar em artigo de OUTRO cliente, ou em rascunho não publicado.
+ * Mesmo formato de checagem de posse usado em `assertCampanhaDoCliente`. */
+async function assertArtigoDoCliente(clienteId: string, postId: string) {
+  const artigos = await findArtigosDoCliente(clienteId);
+  if (!artigos.some((a) => a.id === postId)) {
+    throw new Error("Artigo não encontrado.");
+  }
+}
 
 const ArtigoEngagementPublic = z.object({
   likeCount: z.number(),
@@ -258,6 +300,7 @@ export const loadArtigoEngagement = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<z.infer<typeof ArtigoEngagementPublic>> => {
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
+    await assertArtigoDoCliente(found.clienteId, data.postId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const likerKey = `cliente:${found.clienteId}`;
     const [likesRes, commentsRes] = await Promise.all([
@@ -291,6 +334,7 @@ export const toggleArtigoLike = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
+    await assertArtigoDoCliente(found.clienteId, data.postId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const likerKey = `cliente:${found.clienteId}`;
     const { data: existing, error: findError } = await supabaseAdmin
@@ -326,6 +370,7 @@ export const addArtigoComentario = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
+    await assertArtigoDoCliente(found.clienteId, data.postId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("blog_comments").insert({
       post_id: data.postId,
@@ -565,6 +610,7 @@ export const updateInfluBriefingAnexo = createServerFn({ method: "POST" })
     const match = /^data:([^;]+);base64,(.+)$/.exec(data.file.dataUrl);
     if (!match) throw new Error("Arquivo inválido.");
     const contentType = match[1];
+    assertAllowedUploadContentType(contentType);
     const buffer = Buffer.from(match[2], "base64");
     const safeName = data.file.nome.replace(/[^\w.-]+/g, "_");
     const path = `portal/${data.token}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;
@@ -622,6 +668,7 @@ export const submitClientDemand = createServerFn({ method: "POST" })
       const match = /^data:([^;]+);base64,(.+)$/.exec(data.file.dataUrl);
       if (!match) throw new Error("Arquivo inválido.");
       const contentType = match[1];
+      assertAllowedUploadContentType(contentType);
       const buffer = Buffer.from(match[2], "base64");
       const safeName = data.file.nome.replace(/[^\w.-]+/g, "_");
       const path = `portal/${data.token}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeName}`;

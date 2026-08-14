@@ -1,5 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+
+/** `!==` vaza quantos caracteres iniciais batem via tempo de resposta —
+ * teórico, mas trivial de evitar comparando em tempo constante. */
+function secretsMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 const bodySchema = z.object({
   // Campos do formulário público (nomes em EN, rótulos em PT)
@@ -76,7 +86,8 @@ export const Route = createFileRoute("/api/public/leads")({
           .maybeSingle();
         if (!config) return jsonResponse(500, { error: "Webhook not configured" });
         const provided = request.headers.get("x-webhook-secret") ?? "";
-        if (provided !== config.secret) return jsonResponse(401, { error: "Unauthorized" });
+        if (!secretsMatch(provided, config.secret))
+          return jsonResponse(401, { error: "Unauthorized" });
 
         let raw: unknown;
         try {

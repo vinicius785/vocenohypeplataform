@@ -15,6 +15,39 @@ async function assertAdmin(context: { supabase: SupabaseClient<Database>; userId
   if (!isAdmin) throw new Error("Apenas administradores podem configurar o autenticador.");
 }
 
+/** O código TOTP em si já é um segredo (só admins o têm), mas checar SÓ o
+ * código deixava a permissão "Senhas"/"Configurações" — que esconde a aba
+ * na UI — sem nenhuma validação correspondente no servidor: um usuário
+ * autenticado sem essa permissão, que de algum jeito visse/capturasse um
+ * código válido de um admin (compartilhamento de tela, foto, engenharia
+ * social), conseguia chamar esta function direto e receber a chave mestra
+ * do cofre mesmo assim. Exige a mesma permissão que já guarda a aba. */
+async function assertCanRequestVaultAccess(context: {
+  supabase: SupabaseClient<Database>;
+  userId: string;
+}) {
+  const { data: isAdmin, error: adminError } = await context.supabase.rpc("is_admin", {
+    _user_id: context.userId,
+  });
+  if (adminError) throw new Error(adminError.message);
+  if (isAdmin) return;
+  const { data: profile, error: profileError } = await context.supabase
+    .from("profiles")
+    .select("permissions")
+    .eq("id", context.userId)
+    .maybeSingle();
+  if (profileError) throw new Error(profileError.message);
+  const perms = (profile?.permissions as string[] | null) ?? [];
+  const allowed =
+    Array.isArray(perms) &&
+    (perms.includes("configuracoes") ||
+      perms.includes("senhas") ||
+      perms.includes("configuracoes:senhas"));
+  if (!allowed) {
+    throw new Error("Você não tem permissão para acessar o cofre de senhas.");
+  }
+}
+
 /** Admin-only: whether the current admin already has a TOTP secret registered. */
 export const getVaultTotpStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -55,6 +88,7 @@ export const verifyVaultTotpAndUnlock = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { code: string }) => data)
   .handler(async ({ context, data }) => {
+    await assertCanRequestVaultAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { verifyTotpCode } = await import("./totp.server");
 

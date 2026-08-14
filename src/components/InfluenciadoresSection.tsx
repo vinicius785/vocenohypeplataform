@@ -253,6 +253,10 @@ export function InfluenciadoresSection() {
     }
     const fmt = (n: number) => (n > 0 ? n.toLocaleString("pt-BR") : "—");
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // `b.foto` ia direto pro atributo `src`, sem escapar aspas — uma URL
+    // contendo `"` seguido de outro atributo (ex: `" onerror="...`) quebrava
+    // fora do atributo e executava JS na janela de impressão.
+    const escAttr = (s: string) => esc(s).replace(/"/g, "&quot;");
     const win = window.open("", "_blank");
     if (!win) return;
     win.document.write(`<!doctype html>
@@ -279,7 +283,7 @@ export function InfluenciadoresSection() {
 </style></head>
 <body>
   <div class="header">
-    ${b.foto ? `<img class="photo" src="${b.foto}" alt="" />` : `<div class="photo-fallback">${esc(b.nome.charAt(0).toUpperCase() || "?")}</div>`}
+    ${b.foto ? `<img class="photo" src="${escAttr(b.foto)}" alt="" />` : `<div class="photo-fallback">${esc(b.nome.charAt(0).toUpperCase() || "?")}</div>`}
     <div>
       <h1>${esc(b.nome)}</h1>
       ${b.nicho ? `<span class="nicho">${esc(b.nicho)}</span>` : ""}
