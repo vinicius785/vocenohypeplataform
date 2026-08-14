@@ -1,6 +1,7 @@
 {
-  "version": "1.134.4",
+  "version": "1.134.5",
   "notes": [
+    "Refaz o aviso de reprovação (perfil/roteiro/conteúdo) no Portal do cliente: agora é um card com ícone, data/hora do lado e o texto do motivo separado, em vez de um bloco vermelho só de texto. Também limpa sobras de texto colado de IA nesses motivos (preâmbulo tipo \"Aqui está: Justificativa de reprovação —\" e o placeholder \"[Nome do influenciador]\", que agora vira o nome real) — só na exibição, o texto salvo no banco não muda.",
     "Corrige perfil recusado pelo cliente mostrando as entregas com status \"Em produção\" no Portal do cliente (dava a entender que o time seguiu produzindo depois da recusa) — agora mostra um aviso \"Perfil recusado — nenhuma entrega em andamento\" no lugar da lista de entregas.",
     "Refaz o perfil do influenciador no Portal do cliente: entregas agora aparecem em cards organizados (quantidade, etapa e status bem visíveis), e Briefing/Observações ganham cards com ícone, área de texto maior e anexo mostrado como um cartão clicável (nome, ícone e link de abrir), no lugar da caixa simples e do link solto de antes.",
     "Etiqueta de próxima ação (kanban de influenciadores) agora vem com o rótulo completo \"Próxima ação: Cliente/VNH/Influenciador\", em vez de só o nome sozinho.",
@@ -130,6 +131,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Refaz o aviso de reprovação (perfil/roteiro/conteúdo): agora é um card com ícone, data/hora do lado e o texto do motivo separado. Também limpa sobras de texto colado de IA nesses motivos (preâmbulo \"Aqui está: Justificativa de reprovação —\" e o placeholder \"[Nome do influenciador]\", que agora vira o nome real).",
     "Corrige perfil recusado mostrando as entregas com status \"Em produção\" (dava a entender que o time seguiu produzindo depois da recusa) — agora mostra um aviso \"Perfil recusado — nenhuma entrega em andamento\" no lugar da lista de entregas.",
     "Refaz o perfil do influenciador: entregas agora aparecem em cards organizados (quantidade, etapa e status bem visíveis), e Briefing/Observações ganham cards com ícone, área de texto maior e anexo mostrado como um cartão clicável (nome, ícone e link de abrir), no lugar da caixa simples de antes.",
     "Simplifica os status que você vê no portal: perfis agora mostram Em análise / Aguardando sua aprovação / Aprovado / Recusado, e entregas mostram Em produção / Aguardando sua aprovação / Ajustes solicitados / Aprovado / Publicado — sem mais termos internos do time.",

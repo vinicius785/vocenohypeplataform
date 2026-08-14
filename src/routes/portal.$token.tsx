@@ -559,13 +559,39 @@ function AnexoChip({ nome, url, onRemove }: { nome?: string; url: string; onRemo
   );
 }
 
+/** Alguns motivos foram colados direto de um texto gerado por IA e
+ * carregam sobras do "prompt" (preâmbulo tipo "Aqui está:" e um cabeçalho
+ * "Justificativa de reprovação — [Nome do influenciador]" repetindo um
+ * placeholder de colchetes que nunca foi preenchido). Limpa só a
+ * apresentação — o texto salvo no banco não é alterado. */
+function sanitizeMotivo(raw: string, nome: string): string {
+  let text = raw.trim();
+  text = text.replace(/^aqui est[áa]:?\s*\n+/i, "");
+  text = text.replace(/^justificativa de reprova[cç][ãa]o\s*[—-]?[^\n]*\n+/i, "");
+  text = text.replace(/\[\s*nome do influenciador\s*\]/gi, nome);
+  return text.trim();
+}
+
 /** Aviso persistente de reprovação (do influ ou de uma entrega), até o
  * time reenviar e o cliente decidir de novo. */
-function ReprovacaoBanner({ v, lang }: { v: Veredito; lang: PortalLang }) {
+function ReprovacaoBanner({ v, lang, nome }: { v: Veredito; lang: PortalLang; nome: string }) {
+  const motivo = sanitizeMotivo(v.motivo, nome);
   return (
-    <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-400">
-      <p className="font-medium">{t(lang, "reprovouAviso")}</p>
-      <p className="mt-0.5">{v.motivo}</p>
+    <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
+          <XCircle className="h-3.5 w-3.5 shrink-0" />
+          {t(lang, "reprovouAviso")}
+        </p>
+        <span className="text-[10px] text-rose-700/70 dark:text-rose-400/70">
+          {fmtDateTime(v.respondedAt)}
+        </span>
+      </div>
+      {motivo && (
+        <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-rose-900/90 dark:text-rose-200/85">
+          {motivo}
+        </p>
+      )}
     </div>
   );
 }
@@ -953,7 +979,7 @@ function InfluencerDetail({
           )}
           {!influPending && inf.clienteReprovacao && (
             <div className="mt-3">
-              <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} />
+              <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} nome={inf.nome} />
             </div>
           )}
 
@@ -1223,7 +1249,7 @@ function InfluencerDetail({
                         )}
                         {!roteiroPendente && e.roteiroReprovacao && (
                           <div className="mt-3">
-                            <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
+                            <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} nome={inf.nome} />
                           </div>
                         )}
 
@@ -1253,7 +1279,11 @@ function InfluencerDetail({
                         )}
                         {!conteudoPendente && e.conteudoReprovacao && (
                           <div className="mt-3">
-                            <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
+                            <ReprovacaoBanner
+                              v={e.conteudoReprovacao}
+                              lang={lang}
+                              nome={inf.nome}
+                            />
                           </div>
                         )}
                       </div>
