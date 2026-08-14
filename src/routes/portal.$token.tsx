@@ -1128,132 +1128,141 @@ function InfluencerDetail({
       </div>
 
       <div className="mt-6 space-y-6">
-        {/* ENTREGAS — cards organizados por entrega, com status e ação inline */}
-        {entregasOrdenadas.length > 0 && (
-          <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Clock className="h-4 w-4" />{" "}
-              {t(lang, "entregasHeader", { count: inf.entregas.length })}
-            </h3>
-            <div className="space-y-2.5">
-              {entregasOrdenadas.map((e) => {
-                const roteiroPendente =
-                  e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro";
-                const conteudoPendente =
-                  e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo";
-                const publicado = e.status === "publicado";
-                const pendente = roteiroPendente || conteudoPendente;
-                const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
-                const conteudoAnexos = (e.anexos ?? []).filter(
-                  (a) => a.categoria === "Conteúdo publicado",
-                );
-                const barTone = publicado
-                  ? "bg-emerald-500"
-                  : pendente
-                    ? "bg-amber-500"
-                    : "bg-border";
-                const pillTone = e.conteudoStatus
-                  ? (ENTREGA_STATUS_TONE[e.conteudoStatus as EntregaStatus] ??
-                    "bg-muted text-muted-foreground")
-                  : "bg-muted text-muted-foreground";
-                return (
-                  <div
-                    key={e.id}
-                    className="flex overflow-hidden rounded-xl border border-border bg-background shadow-sm"
-                  >
-                    <span className={`w-1 shrink-0 ${barTone}`} />
-                    <div className="min-w-0 flex-1 p-3.5 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <span className="font-medium text-foreground">
-                            {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
-                            {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
-                          </span>
-                          {e.etapa && (
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                              {ENTREGA_ETAPA_LABEL[e.etapa]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {e.dataPostagem && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
-                            </span>
-                          )}
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pillTone}`}
-                          >
-                            {e.statusCliente}
-                          </span>
-                        </div>
-                      </div>
-
-                      {roteiroPendente && (
-                        <div className="mt-3 space-y-2 border-t border-border pt-3">
-                          {roteiroAnexos.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {roteiroAnexos.map((a) => (
-                                <AnexoChip key={a.id} nome={a.nome} url={a.url} />
-                              ))}
-                            </div>
-                          )}
-                          <ApproveRejectBar
-                            busy={busyKey === `roteiro:${e.id}`}
-                            rejecting={rejectingKey === `roteiro:${e.id}`}
-                            motivo={motivo}
-                            lang={lang}
-                            setRejecting={(v) => {
-                              setRejectingKey(v ? `roteiro:${e.id}` : null);
-                              setMotivo("");
-                            }}
-                            setMotivo={setMotivo}
-                            onApprove={() => void runEntrega(e.id, "roteiro", "aprovado")}
-                            onConfirmReject={() => void runEntrega(e.id, "roteiro", "reprovado")}
-                          />
-                        </div>
-                      )}
-                      {!roteiroPendente && e.roteiroReprovacao && (
-                        <div className="mt-3">
-                          <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
-                        </div>
-                      )}
-
-                      {conteudoPendente && (
-                        <div className="mt-3 space-y-2 border-t border-border pt-3">
-                          {conteudoAnexos.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {conteudoAnexos.map((a) => (
-                                <AnexoChip key={a.id} nome={a.nome} url={a.url} />
-                              ))}
-                            </div>
-                          )}
-                          <ApproveRejectBar
-                            busy={busyKey === `conteudo:${e.id}`}
-                            rejecting={rejectingKey === `conteudo:${e.id}`}
-                            motivo={motivo}
-                            lang={lang}
-                            setRejecting={(v) => {
-                              setRejectingKey(v ? `conteudo:${e.id}` : null);
-                              setMotivo("");
-                            }}
-                            setMotivo={setMotivo}
-                            onApprove={() => void runEntrega(e.id, "conteudo", "aprovado")}
-                            onConfirmReject={() => void runEntrega(e.id, "conteudo", "reprovado")}
-                          />
-                        </div>
-                      )}
-                      {!conteudoPendente && e.conteudoReprovacao && (
-                        <div className="mt-3">
-                          <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* ENTREGAS — cards organizados por entrega, com status e ação inline.
+            Perfil recusado nunca chegou a ser aprovado (única transição pra
+            RECUSADO é antes de APROVADO), então não faz sentido mostrar
+            entregas com status de produção/aprovação em andamento aqui. */}
+        {inf.status === "RECUSADO" ? (
+          <section className="rounded-2xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+            {t(lang, "recusadoSemEntregas")}
           </section>
+        ) : (
+          entregasOrdenadas.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Clock className="h-4 w-4" />{" "}
+                {t(lang, "entregasHeader", { count: inf.entregas.length })}
+              </h3>
+              <div className="space-y-2.5">
+                {entregasOrdenadas.map((e) => {
+                  const roteiroPendente =
+                    e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro";
+                  const conteudoPendente =
+                    e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo";
+                  const publicado = e.status === "publicado";
+                  const pendente = roteiroPendente || conteudoPendente;
+                  const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
+                  const conteudoAnexos = (e.anexos ?? []).filter(
+                    (a) => a.categoria === "Conteúdo publicado",
+                  );
+                  const barTone = publicado
+                    ? "bg-emerald-500"
+                    : pendente
+                      ? "bg-amber-500"
+                      : "bg-border";
+                  const pillTone = e.conteudoStatus
+                    ? (ENTREGA_STATUS_TONE[e.conteudoStatus as EntregaStatus] ??
+                      "bg-muted text-muted-foreground")
+                    : "bg-muted text-muted-foreground";
+                  return (
+                    <div
+                      key={e.id}
+                      className="flex overflow-hidden rounded-xl border border-border bg-background shadow-sm"
+                    >
+                      <span className={`w-1 shrink-0 ${barTone}`} />
+                      <div className="min-w-0 flex-1 p-3.5 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span className="font-medium text-foreground">
+                              {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
+                              {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
+                            </span>
+                            {e.etapa && (
+                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                {ENTREGA_ETAPA_LABEL[e.etapa]}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {e.dataPostagem && (
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
+                              </span>
+                            )}
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pillTone}`}
+                            >
+                              {e.statusCliente}
+                            </span>
+                          </div>
+                        </div>
+
+                        {roteiroPendente && (
+                          <div className="mt-3 space-y-2 border-t border-border pt-3">
+                            {roteiroAnexos.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {roteiroAnexos.map((a) => (
+                                  <AnexoChip key={a.id} nome={a.nome} url={a.url} />
+                                ))}
+                              </div>
+                            )}
+                            <ApproveRejectBar
+                              busy={busyKey === `roteiro:${e.id}`}
+                              rejecting={rejectingKey === `roteiro:${e.id}`}
+                              motivo={motivo}
+                              lang={lang}
+                              setRejecting={(v) => {
+                                setRejectingKey(v ? `roteiro:${e.id}` : null);
+                                setMotivo("");
+                              }}
+                              setMotivo={setMotivo}
+                              onApprove={() => void runEntrega(e.id, "roteiro", "aprovado")}
+                              onConfirmReject={() => void runEntrega(e.id, "roteiro", "reprovado")}
+                            />
+                          </div>
+                        )}
+                        {!roteiroPendente && e.roteiroReprovacao && (
+                          <div className="mt-3">
+                            <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} />
+                          </div>
+                        )}
+
+                        {conteudoPendente && (
+                          <div className="mt-3 space-y-2 border-t border-border pt-3">
+                            {conteudoAnexos.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {conteudoAnexos.map((a) => (
+                                  <AnexoChip key={a.id} nome={a.nome} url={a.url} />
+                                ))}
+                              </div>
+                            )}
+                            <ApproveRejectBar
+                              busy={busyKey === `conteudo:${e.id}`}
+                              rejecting={rejectingKey === `conteudo:${e.id}`}
+                              motivo={motivo}
+                              lang={lang}
+                              setRejecting={(v) => {
+                                setRejectingKey(v ? `conteudo:${e.id}` : null);
+                                setMotivo("");
+                              }}
+                              setMotivo={setMotivo}
+                              onApprove={() => void runEntrega(e.id, "conteudo", "aprovado")}
+                              onConfirmReject={() => void runEntrega(e.id, "conteudo", "reprovado")}
+                            />
+                          </div>
+                        )}
+                        {!conteudoPendente && e.conteudoReprovacao && (
+                          <div className="mt-3">
+                            <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )
         )}
 
         {/* GALERIA — só o conteúdo publicado deste influenciador nesta campanha */}

@@ -1,6 +1,7 @@
 {
-  "version": "1.134.3",
+  "version": "1.134.4",
   "notes": [
+    "Corrige perfil recusado pelo cliente mostrando as entregas com status \"Em produção\" no Portal do cliente (dava a entender que o time seguiu produzindo depois da recusa) — agora mostra um aviso \"Perfil recusado — nenhuma entrega em andamento\" no lugar da lista de entregas.",
     "Refaz o perfil do influenciador no Portal do cliente: entregas agora aparecem em cards organizados (quantidade, etapa e status bem visíveis), e Briefing/Observações ganham cards com ícone, área de texto maior e anexo mostrado como um cartão clicável (nome, ícone e link de abrir), no lugar da caixa simples e do link solto de antes.",
     "Etiqueta de próxima ação (kanban de influenciadores) agora vem com o rótulo completo \"Próxima ação: Cliente/VNH/Influenciador\", em vez de só o nome sozinho.",
     "Renomeia o rótulo \"Você (Hype)\" da etiqueta de próxima ação (kanban de influenciadores) para \"VNH\", e o card de influenciador (visão resumida, antes de abrir o perfil) agora lista cada entrega com seu status individual (etapa, quantidade e pill de status), em vez de só um resumo \"X entregas · Y publicadas\".",
@@ -129,6 +130,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Corrige perfil recusado mostrando as entregas com status \"Em produção\" (dava a entender que o time seguiu produzindo depois da recusa) — agora mostra um aviso \"Perfil recusado — nenhuma entrega em andamento\" no lugar da lista de entregas.",
     "Refaz o perfil do influenciador: entregas agora aparecem em cards organizados (quantidade, etapa e status bem visíveis), e Briefing/Observações ganham cards com ícone, área de texto maior e anexo mostrado como um cartão clicável (nome, ícone e link de abrir), no lugar da caixa simples de antes.",
     "Simplifica os status que você vê no portal: perfis agora mostram Em análise / Aguardando sua aprovação / Aprovado / Recusado, e entregas mostram Em produção / Aguardando sua aprovação / Ajustes solicitados / Aprovado / Publicado — sem mais termos internos do time.",
     "Corrige o botão de voltar no perfil do influenciador mostrando \"Voltar pra lista\" em vez de só \"Voltar\", padronizado com o resto da plataforma.",
