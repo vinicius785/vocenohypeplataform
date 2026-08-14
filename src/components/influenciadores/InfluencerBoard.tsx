@@ -3176,12 +3176,12 @@ function InfluencerProfileDialog({
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
-          <div className="min-h-0 space-y-5 overflow-y-auto bg-muted/40 px-7 py-6">
+          <div className="grid min-h-0 grid-cols-1 gap-5 overflow-y-auto bg-muted/40 px-7 py-6 sm:grid-cols-2">
             {has("entregas") && (
               // Sem título/ícone próprio aqui — EntregasEditor já renderiza
               // seu próprio FieldLabel "Entregas" internamente (é
               // compartilhado com o formulário de novo influenciador).
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:col-span-2">
                 <EntregasEditor
                   entregas={influ.entregas}
                   onChange={(next) => onPatch({ entregas: next })}
@@ -3192,19 +3192,11 @@ function InfluencerProfileDialog({
               </div>
             )}
 
-            {has("pagamentos") && (
-              // Idem — PagamentoInfluSection já tem seu próprio título.
-              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <PagamentoInfluSection
-                  value={influ.pagamento}
-                  onChange={(pagamento) => onPatch({ pagamento })}
-                />
-              </div>
-            )}
-
             <ProfileSectionCard
               title="Briefing e observações"
               icon={<FileText className="h-3.5 w-3.5" />}
+              tone="amber"
+              span="full"
             >
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -3263,8 +3255,35 @@ function InfluencerProfileDialog({
               </div>
             </ProfileSectionCard>
 
+            {/* Pagamento + Dados bancários lado a lado — dois blocos
+                pequenos, sem sentido de ocupar uma linha inteira cada um. */}
+            {has("pagamentos") && (
+              // Sem título próprio — PagamentoInfluSection já tem o seu.
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <PagamentoInfluSection
+                  value={influ.pagamento}
+                  onChange={(pagamento) => onPatch({ pagamento })}
+                />
+              </div>
+            )}
+
+            {has("bancario") && (
+              <ProfileSectionCard
+                title="Dados bancários"
+                icon={<Landmark className="h-3.5 w-3.5" />}
+                tone="emerald"
+              >
+                <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
+              </ProfileSectionCard>
+            )}
+
+            {/* Redes sociais + Métricas lado a lado — mesma lógica. */}
             {has("redes") && (
-              <ProfileSectionCard title="Redes sociais" icon={<Share2 className="h-3.5 w-3.5" />}>
+              <ProfileSectionCard
+                title="Redes sociais"
+                icon={<Share2 className="h-3.5 w-3.5" />}
+                tone="violet"
+              >
                 <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
               </ProfileSectionCard>
             )}
@@ -3274,6 +3293,7 @@ function InfluencerProfileDialog({
                 title="Métricas do perfil"
                 hint="Por rede social."
                 icon={<BarChart3 className="h-3.5 w-3.5" />}
+                tone="indigo"
               >
                 <ProfileMetricsEditor
                   redes={influ.redes}
@@ -3284,17 +3304,12 @@ function InfluencerProfileDialog({
               </ProfileSectionCard>
             )}
 
-            {has("bancario") && (
-              <ProfileSectionCard
-                title="Dados bancários"
-                icon={<Landmark className="h-3.5 w-3.5" />}
-              >
-                <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
-              </ProfileSectionCard>
-            )}
-
             {has("contrato") && (
-              <ProfileSectionCard title="Contrato" icon={<FileSignature className="h-3.5 w-3.5" />}>
+              <ProfileSectionCard
+                title="Contrato"
+                icon={<FileSignature className="h-3.5 w-3.5" />}
+                tone="rose"
+              >
                 <ContratoEditor
                   value={influ.contrato}
                   onChange={(contrato) => onPatch({ contrato })}
@@ -3302,11 +3317,13 @@ function InfluencerProfileDialog({
               </ProfileSectionCard>
             )}
 
-            <ChecklistSection
-              checklist={influ.checklist ?? []}
-              onChange={onSetChecklist}
-              onApplyToAll={onApplyChecklistToAll}
-            />
+            <div className="sm:col-span-2">
+              <ChecklistSection
+                checklist={influ.checklist ?? []}
+                onChange={onSetChecklist}
+                onApplyToAll={onApplyChecklistToAll}
+              />
+            </div>
           </div>
 
           <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
@@ -3813,24 +3830,44 @@ function FieldLabel({ title, hint }: { title: string; hint?: string }) {
  * (Entregas, Pagamento, Redes, Métricas etc) — ícone em badge + título,
  * substituindo o antigo empilhamento de seções separadas só por
  * `border-t`, sem hierarquia visual nenhuma entre elas. */
+const PROFILE_SECTION_TONES = {
+  sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+} as const;
+
 function ProfileSectionCard({
   title,
   hint,
   icon,
+  tone,
   action,
+  span,
   children,
 }: {
   title: string;
   hint?: string;
   icon: ReactNode;
+  tone: keyof typeof PROFILE_SECTION_TONES;
   action?: ReactNode;
+  /** Ocupa as duas colunas do grid (seções grandes, tipo tabela de
+   * entregas) — sem isso a seção fica numa coluna só, lado a lado com a
+   * próxima, pra reduzir o tanto de scroll da página. */
+  span?: "full";
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div
+      className={`space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm ${span === "full" ? "sm:col-span-2" : ""}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground/10 text-foreground">
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${PROFILE_SECTION_TONES[tone]}`}
+          >
             {icon}
           </span>
           <FieldLabel title={title} hint={hint} />
