@@ -12,7 +12,12 @@ import {
 export type Kind = "receita" | "despesa";
 export type Source = "manual" | "influenciador" | "salario" | "campanha";
 
+/** @deprecated substituído por `anexos` (Supabase Storage, suporta mais de
+ * um arquivo) — mantido só pra lançamentos antigos que já tinham uma nota
+ * fiscal salva como base64 direto na linha. */
 export type InvoiceFile = { name: string; dataUrl: string };
+
+export type FinanceiroAnexo = { id: string; nome: string; url: string; criadoEm?: string };
 
 export type Entry = {
   id: string;
@@ -30,6 +35,7 @@ export type Entry = {
   editable: boolean;
   bank?: BankInfo;
   invoice?: InvoiceFile;
+  anexos?: FinanceiroAnexo[];
   influencerName?: string;
   memberName?: string;
 };
@@ -45,6 +51,7 @@ export type ManualEntry = {
   campanhaId?: string;
   bank?: BankInfo;
   invoice?: InvoiceFile;
+  anexos?: FinanceiroAnexo[];
 };
 
 type InfluPersisted = {
@@ -74,6 +81,42 @@ type Member = {
   salary?: string;
   startDate?: string;
 };
+
+/** Sobe um comprovante/nota fiscal pro bucket `financeiro-anexos` (mesmo
+ * padrão de `uploadEntregaAnexo` em InfluencerBoard.tsx) e devolve a URL
+ * assinada (1 ano) — `null` se o usuário não estiver autenticado ou o
+ * upload falhar. */
+export async function uploadFinanceiroAnexo(file: File): Promise<string | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return null;
+  const safeName = file.name.replace(/[^\w.-]+/g, "_");
+  const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+  const { error } = await supabase.storage.from("financeiro-anexos").upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) {
+    console.warn("[financeiro-anexos] upload failed", error);
+    return null;
+  }
+  const { data: signed } = await supabase.storage
+    .from("financeiro-anexos")
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
+  return signed?.signedUrl ?? null;
+}
+
+/** Junta os anexos "de verdade" (Storage) com a nota fiscal antiga (base64,
+ * campo `invoice`, hoje `@deprecated`) num único array pra exibição — sem
+ * reescrever o registro, só normalizando na leitura. */
+export function entryAnexos(e: {
+  invoice?: InvoiceFile;
+  anexos?: FinanceiroAnexo[];
+}): FinanceiroAnexo[] {
+  const anexos = e.anexos ?? [];
+  if (!e.invoice) return anexos;
+  return [{ id: "legacy-invoice", nome: e.invoice.name, url: e.invoice.dataUrl }, ...anexos];
+}
 
 export const PAID_KEY = "financeiro:pagos";
 const influsKey = (id: string) => `campanha:influs:${id}`;
@@ -392,6 +435,7 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
       editable: true,
       bank: e.bank,
       invoice: e.invoice,
+      anexos: e.anexos,
     });
   }
 

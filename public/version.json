@@ -1,6 +1,7 @@
 {
-  "version": "1.140.0",
+  "version": "1.141.0",
   "notes": [
+    "Financeiro: lançamentos (receita ou despesa) agora aceitam vários anexos — comprovantes, notas fiscais, etc — em vez de um único arquivo. Redesenha os diálogos de criar/editar e ver detalhes do lançamento: valor e status em destaque no topo, seções organizadas em cards com ícone (Pagamento, Detalhes, Dados bancários, Anexos), diálogo maior.",
     "Simplifica radicalmente o fluxo de produção de entregas: em vez de escolher status e etapa manualmente em dois seletores separados, cada entrega agora mostra só a próxima ação certa num botão só (Iniciar produção → Adicionar roteiro → Enviar para cliente → ... → Marcar como publicado) — o sistema calcula status, etapa e responsável sozinho a partir da ação executada. \"Gravação\" vira uma etapa de verdade (roteiro → gravação → conteúdo final → publicação), separada e 100% interna (nunca vai pro cliente). Categoria de anexo \"Conteúdo publicado\" foi renomeada pra \"Conteúdo final\" (menos confusa — publicação de verdade só acontece na etapa final). Corrige também: pedido de ajustes do cliente agora usa o status \"Ajustes solicitados\" de verdade (antes voltava direto pra produção sem sinalizar isso), e aprovar o roteiro avança corretamente pra etapa de gravação (antes pulava direto pro conteúdo).",
     "Perfil de influenciador: Checklist deixa de ser uma aba própria e passa a fazer parte da \"Visão geral\", junto com o resumo de entregas e a próxima ação.",
     "Corrige o card \"Pagamento\" na aba Financeiro do perfil de influenciador: tinha uma linha sem sentido no topo (sobra de quando a seção ficava empilhada solta) e não tinha ícone, diferente dos cards vizinhos (Dados bancários, Contrato).",

@@ -16,6 +16,13 @@ import {
   User,
   Check,
   AlertCircle,
+  Loader2,
+  Paperclip,
+  Info,
+  Landmark,
+  Calendar,
+  Tag,
+  ArrowRightLeft,
 } from "lucide-react";
 
 import { SectionHeader } from "./SectionHeader";
@@ -24,7 +31,7 @@ import { BankFields, type BankInfo } from "./CampanhasSection";
 import {
   type Entry,
   type ManualEntry,
-  type InvoiceFile,
+  type FinanceiroAnexo,
   type Kind,
   type Source,
   useFinanceiroEntries,
@@ -36,6 +43,8 @@ import {
   updateManualEntry,
   deleteManualEntry,
   onManualChange,
+  uploadFinanceiroAnexo,
+  entryAnexos,
   fmtBRL,
   parseMoney,
   monthKey,
@@ -590,8 +599,13 @@ function EntryDialog({
   const [showBank, setShowBank] = useState<boolean>(
     !!initial?.bank && Object.values(initial.bank).some(Boolean),
   );
-  const [invoice, setInvoice] = useState<InvoiceFile | undefined>(initial?.invoice);
-  const invoiceInputRef = useRef<HTMLInputElement>(null);
+  // Nota fiscal antiga (base64, `@deprecated`) só é preservada se o
+  // lançamento já tinha uma — nunca é escrita de novo daqui em diante,
+  // novos anexos sempre vão pro Storage via `anexos`.
+  const [invoice] = useState(initial?.invoice);
+  const [anexos, setAnexos] = useState<FinanceiroAnexo[]>(initial?.anexos ?? []);
+  const [uploading, setUploading] = useState(false);
+  const anexoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
 
   const campanhas = useMemo(
@@ -604,18 +618,27 @@ function EntryDialog({
     else if (campanhaId && !campanhas.some((c) => c.id === campanhaId)) setCampanhaId("");
   }, [clienteId, campanhas, campanhaId]);
 
-  const handleInvoicePick = (file: File | null) => {
+  const handleAnexoPick = async (file: File | null) => {
     if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setError("Anexo muito grande (máx 4MB).");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Anexo muito grande (máx 10MB).");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setInvoice({ name: file.name, dataUrl: String(reader.result) });
-      setError("");
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    setError("");
+    try {
+      const url = await uploadFinanceiroAnexo(file);
+      if (!url) {
+        setError("Falha ao subir o arquivo. Tente de novo.");
+        return;
+      }
+      setAnexos((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), nome: file.name, url, criadoEm: todayISO() },
+      ]);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const submit = (e: React.FormEvent) => {
@@ -637,6 +660,7 @@ function EntryDialog({
       campanhaId: campanhaId || undefined,
       bank: bankFilled ? bank : undefined,
       invoice,
+      anexos,
     });
   };
 
@@ -648,32 +672,42 @@ function EntryDialog({
       <form
         onClick={(ev) => ev.stopPropagation()}
         onSubmit={submit}
-        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-sm font-semibold">
+        <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
+          <h2 className="text-sm font-semibold text-foreground">
             {initial ? "Editar lançamento" : "Novo lançamento"}
           </h2>
-          <button type="button" onClick={onClose} aria-label="Fechar">
-            <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
-          <div className="inline-flex rounded-md border border-border p-0.5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-border p-1">
             {(["receita", "despesa"] as const).map((k) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => setKind(k)}
-                className={`rounded px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                className={`inline-flex items-center justify-center gap-1.5 rounded-md py-2 text-xs font-semibold capitalize transition-colors ${
                   kind === k
                     ? k === "receita"
                       ? "bg-emerald-500/10 text-emerald-600"
                       : "bg-rose-500/10 text-rose-600"
-                    : "text-muted-foreground"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
+                {k === "receita" ? (
+                  <TrendingUp className="h-3.5 w-3.5" />
+                ) : (
+                  <TrendingDown className="h-3.5 w-3.5" />
+                )}
                 {k}
               </button>
             ))}
@@ -752,57 +786,84 @@ function EntryDialog({
             </Field>
           </div>
 
-          <div className="rounded-md border border-border">
+          <div className="rounded-xl border border-border">
             <button
               type="button"
               onClick={() => setShowBank((s) => !s)}
-              className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50"
+              className="flex w-full items-center justify-between px-3.5 py-2.5 text-xs font-semibold text-foreground hover:bg-muted/50"
             >
-              <span>Dados bancários {showBank ? "" : "(opcional)"}</span>
+              <span className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-muted-foreground" />
+                Dados bancários {showBank ? "" : "(opcional)"}
+              </span>
               <span className="text-muted-foreground">{showBank ? "−" : "+"}</span>
             </button>
             {showBank && (
-              <div className="border-t border-border p-3">
+              <div className="border-t border-border p-3.5">
                 <BankFields value={bank} onChange={setBank} compact />
               </div>
             )}
           </div>
 
-          <div className="rounded-md border border-border p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground">Nota fiscal (opcional)</span>
+          <div className="rounded-xl border border-border p-3.5">
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                Anexos (comprovantes, notas fiscais...)
+              </span>
               <input
-                ref={invoiceInputRef}
+                ref={anexoInputRef}
                 type="file"
                 accept="application/pdf,image/*"
                 className="hidden"
-                onChange={(e) => handleInvoicePick(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (anexoInputRef.current) anexoInputRef.current.value = "";
+                  void handleAnexoPick(file);
+                }}
               />
               <button
                 type="button"
-                onClick={() => invoiceInputRef.current?.click()}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                onClick={() => anexoInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
               >
-                <Upload className="h-3 w-3" /> {invoice ? "Trocar" : "Anexar"}
+                {uploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Paperclip className="h-3 w-3" />
+                )}
+                {uploading ? "Enviando..." : "Anexar"}
               </button>
             </div>
-            {invoice ? (
-              <div className="flex items-center justify-between gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
-                <span className="inline-flex items-center gap-1.5 truncate">
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{invoice.name}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setInvoice(undefined)}
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label="Remover nota fiscal"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+            {invoice || anexos.length > 0 ? (
+              <ul className="space-y-1.5">
+                {invoice && (
+                  <li className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{invoice.name}</span>
+                  </li>
+                )}
+                {anexos.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{a.nome}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAnexos((prev) => prev.filter((x) => x.id !== a.id))}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label="Remover anexo"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : (
-              <p className="text-[11px] text-muted-foreground">PDF ou imagem, até 4MB.</p>
+              <p className="text-[11px] text-muted-foreground">PDF ou imagem, até 10MB cada.</p>
             )}
           </div>
 
@@ -1085,6 +1146,36 @@ function ImportDialog({
   );
 }
 
+/** Card com ícone + título usado nos diálogos de lançamento (detalhes e
+ * formulário) — mesma moldura em toda seção, em vez de cada bloco ter seu
+ * próprio estilo de cabeçalho/borda. */
+function Section({
+  title,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2.5 rounded-xl border border-border bg-background p-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
+            {icon}
+          </span>
+          {title}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function EntryDetailsDialog({
   entry,
   paidAt,
@@ -1107,6 +1198,12 @@ function EntryDetailsDialog({
     campanha: "Receita de campanha",
   };
 
+  const kindTone =
+    entry.kind === "receita"
+      ? "bg-emerald-500/10 text-emerald-600"
+      : "bg-rose-500/10 text-rose-600";
+  const vencido = !paidAt && entry.kind === "despesa" && entry.date < todayISO();
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -1114,107 +1211,125 @@ function EntryDetailsDialog({
     >
       <div
         onClick={(ev) => ev.stopPropagation()}
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${
-                entry.kind === "receita"
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : "bg-rose-500/10 text-rose-600"
-              }`}
-            >
-              {entry.kind === "receita" ? (
-                <TrendingUp className="h-3.5 w-3.5" />
-              ) : (
-                <TrendingDown className="h-3.5 w-3.5" />
-              )}
-            </span>
-            <h2 className="text-sm font-semibold">Detalhes do lançamento</h2>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Fechar">
-            <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+        <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
+          <h2 className="text-sm font-semibold text-foreground">Detalhes do lançamento</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4 text-sm">
-          <div>
-            <p className="text-base font-medium text-foreground">{entry.description}</p>
-            <p
-              className={`mt-1 text-lg font-semibold tabular-nums ${entry.kind === "receita" ? "text-emerald-600" : "text-rose-600"}`}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {/* Hero — descrição, valor e status numa faixa só, igual o resto
+              da plataforma faz pra "o que é isso e qual o estado agora". */}
+          <div className="flex items-start gap-3">
+            <span
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${kindTone}`}
             >
-              {entry.kind === "receita" ? "+" : "-"} {fmtBRL(entry.amount)}
-            </p>
+              {entry.kind === "receita" ? (
+                <TrendingUp className="h-5 w-5" />
+              ) : (
+                <TrendingDown className="h-5 w-5" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-base font-semibold text-foreground">
+                {entry.description}
+              </p>
+              <p
+                className={`text-2xl font-bold tabular-nums ${entry.kind === "receita" ? "text-emerald-600" : "text-rose-600"}`}
+              >
+                {entry.kind === "receita" ? "+" : "−"} {fmtBRL(entry.amount)}
+              </p>
+            </div>
           </div>
 
           {onTogglePaid && (
-            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground">Status do pagamento</p>
-                <p className="text-xs text-foreground">
+            <Section
+              title="Pagamento"
+              icon={<Wallet className="h-4 w-4" />}
+              action={
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    paidAt
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : vencido
+                        ? "bg-rose-500/10 text-rose-600"
+                        : "bg-amber-500/10 text-amber-600"
+                  }`}
+                >
+                  {paidAt ? "Pago" : vencido ? "Vencido" : "Em aberto"}
+                </span>
+              }
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
                   {paidAt
                     ? `Pago em ${formatIsoDate(paidAt)}`
-                    : entry.date < todayISO()
-                      ? "Em aberto — vencido"
-                      : "Em aberto"}
+                    : `Vencimento ${formatIsoDate(entry.date)}`}
                 </p>
+                <button
+                  type="button"
+                  onClick={onTogglePaid}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${
+                    paidAt
+                      ? "border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "bg-emerald-600 text-white hover:opacity-90"
+                  }`}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  {paidAt ? "Marcar como não pago" : "Marcar como pago"}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onTogglePaid}
-                className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium ${
-                  paidAt
-                    ? "border border-border text-muted-foreground hover:text-foreground"
-                    : "bg-emerald-600 text-white hover:opacity-90"
-                }`}
-              >
-                <Check className="h-3 w-3" /> {paidAt ? "Marcar como não pago" : "Marcar como pago"}
-              </button>
-            </div>
+            </Section>
           )}
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <DetailRow
-              label={entry.kind === "despesa" ? "Vencimento" : "Data"}
-              value={formatIsoDate(entry.date)}
-            />
-
-            <DetailRow label="Categoria" value={entry.category} />
-            <DetailRow label="Tipo" value={entry.kind === "receita" ? "Receita" : "Despesa"} />
-            <DetailRow label="Origem" value={sourceLabel[entry.source]} />
-            {entry.clienteNome && (
+          <Section title="Detalhes" icon={<Info className="h-4 w-4" />}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
               <DetailRow
-                label="Cliente"
-                value={
-                  <span className="inline-flex items-center gap-1">
-                    <Building2 className="h-3 w-3 text-muted-foreground" />
-                    {entry.clienteNome}
-                  </span>
-                }
+                icon={<Calendar className="h-3 w-3" />}
+                label={entry.kind === "despesa" ? "Vencimento" : "Data"}
+                value={formatIsoDate(entry.date)}
               />
-            )}
-            {entry.campanhaNome && <DetailRow label="Campanha" value={entry.campanhaNome} />}
-            {entry.influencerName && (
               <DetailRow
-                label="Influenciador"
-                value={
-                  <span className="inline-flex items-center gap-1">
-                    <User className="h-3 w-3 text-muted-foreground" />
-                    {entry.influencerName}
-                  </span>
-                }
+                icon={<Tag className="h-3 w-3" />}
+                label="Categoria"
+                value={entry.category}
               />
-            )}
-            {entry.memberName && <DetailRow label="Membro" value={entry.memberName} />}
-          </div>
+              <DetailRow
+                icon={<ArrowRightLeft className="h-3 w-3" />}
+                label="Tipo"
+                value={entry.kind === "receita" ? "Receita" : "Despesa"}
+              />
+              <DetailRow label="Origem" value={sourceLabel[entry.source]} />
+              {entry.clienteNome && (
+                <DetailRow
+                  icon={<Building2 className="h-3 w-3" />}
+                  label="Cliente"
+                  value={entry.clienteNome}
+                />
+              )}
+              {entry.campanhaNome && <DetailRow label="Campanha" value={entry.campanhaNome} />}
+              {entry.influencerName && (
+                <DetailRow
+                  icon={<User className="h-3 w-3" />}
+                  label="Influenciador"
+                  value={entry.influencerName}
+                />
+              )}
+              {entry.memberName && <DetailRow label="Membro" value={entry.memberName} />}
+            </div>
+          </Section>
 
           {bankFilled && entry.bank && (
-            <div className="rounded-md border border-border">
-              <div className="border-b border-border bg-muted/30 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Dados bancários
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-3 py-2 text-xs">
+            <Section title="Dados bancários" icon={<Landmark className="h-4 w-4" />}>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
                 {entry.bank.titular && <DetailRow label="Titular" value={entry.bank.titular} />}
                 {entry.bank.cpfCnpj && <DetailRow label="CPF/CNPJ" value={entry.bank.cpfCnpj} />}
                 {entry.bank.banco && <DetailRow label="Banco" value={entry.bank.banco} />}
@@ -1226,41 +1341,46 @@ function EntryDetailsDialog({
                   <DetailRow label="PIX (chave)" value={entry.bank.pixChave} />
                 )}
               </div>
-            </div>
+            </Section>
           )}
 
-          {entry.invoice && (
-            <div className="rounded-md border border-border">
-              <div className="border-b border-border bg-muted/30 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Nota fiscal
-              </div>
-              <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{entry.invoice.name}</span>
-                </span>
-                <a
-                  href={entry.invoice.dataUrl}
-                  download={entry.invoice.name}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 hover:bg-muted"
-                >
-                  <Download className="h-3 w-3" /> Baixar
-                </a>
-              </div>
-            </div>
+          {entryAnexos(entry).length > 0 && (
+            <Section title="Anexos" icon={<Paperclip className="h-4 w-4" />}>
+              <ul className="space-y-1.5">
+                {entryAnexos(entry).map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2.5 py-2 text-xs"
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{a.nome}</span>
+                    </span>
+                    <a
+                      href={a.url}
+                      download={a.nome}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 hover:bg-muted"
+                    >
+                      <Download className="h-3 w-3" /> Baixar
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Section>
           )}
 
           {!entry.editable && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+              <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
               Este lançamento é gerado automaticamente e não pode ser editado aqui — ajuste na
               origem (campanha, influenciador ou salário do membro).
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3.5">
           <button
             type="button"
             onClick={onClose}
@@ -1283,11 +1403,22 @@ function EntryDetailsDialog({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="truncate text-foreground">{value}</p>
+      <p className="flex items-center gap-1.5 truncate text-foreground">
+        {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
+        {value}
+      </p>
     </div>
   );
 }
