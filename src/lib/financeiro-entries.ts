@@ -146,6 +146,25 @@ export function entryAnexos(e: {
   ];
 }
 
+/** Categorias padronizadas de lançamento manual — uma lista fixa por tipo,
+ * em vez de texto livre (cada pessoa digitava um nome diferente pra
+ * mesma coisa: "Influenciador", "Influenciadores", "Pagto influ"...). */
+export const CATEGORIAS_DESPESA = [
+  "Pagamento de influenciador",
+  "Salários",
+  "Ferramentas e software",
+  "Marketing e anúncios",
+  "Impostos e taxas",
+  "Aluguel e contas",
+  "Outros",
+] as const;
+
+export const CATEGORIAS_RECEITA = ["Receita de campanha", "Consultoria", "Outros"] as const;
+
+export function categoriasFor(kind: Kind): readonly string[] {
+  return kind === "despesa" ? CATEGORIAS_DESPESA : CATEGORIAS_RECEITA;
+}
+
 export const PAID_KEY = "financeiro:pagos";
 const influsKey = (id: string) => `campanha:influs:${id}`;
 // Só existe pra barrar datas claramente erradas (ex.: um ano digitado errado

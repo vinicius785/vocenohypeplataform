@@ -46,6 +46,7 @@ import {
   onManualChange,
   uploadFinanceiroAnexo,
   entryAnexos,
+  categoriasFor,
   fmtBRL,
   parseMoney,
   monthKey,
@@ -634,11 +635,23 @@ function EntryDialog({
     else if (campanhaId && !campanhas.some((c) => c.id === campanhaId)) setCampanhaId("");
   }, [clienteId, campanhas, campanhaId]);
 
+  // Trocar receita/despesa muda a lista de categorias válidas — se a
+  // categoria atual não existe mais nessa lista, limpa (menos no caso de
+  // um lançamento antigo sendo editado, onde a categoria "estranha" some
+  // do campo <select> como opção extra, então nunca fica inválida).
+  const categoriaOpts = categoriasFor(kind);
+  useEffect(() => {
+    if (category && !categoriaOpts.includes(category) && category !== initial?.category) {
+      setCategory("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseMoney(amount);
-    if (!description.trim() || amt <= 0 || !date) {
-      setError("Preencha descrição, valor e data.");
+    if (!description.trim() || amt <= 0 || !date || !category) {
+      setError("Preencha descrição, valor, data e categoria.");
       return;
     }
     const bankFilled = Object.values(bank).some((v) => v && String(v).trim() !== "");
@@ -739,12 +752,25 @@ function EntryDialog({
           </div>
 
           <Field label="Categoria">
-            <input
+            <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className={inputCls}
-              placeholder="Ex: Software, Aluguel, Vendas..."
-            />
+              required
+            >
+              <option value="">Selecione...</option>
+              {/* Categoria antiga (texto livre) que não está na lista padrão —
+                  mantém como opção extra, pra não sumir/mudar sozinha ao
+                  editar um lançamento já existente. */}
+              {category && !categoriaOpts.includes(category) && (
+                <option value={category}>{category}</option>
+              )}
+              {categoriaOpts.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </Field>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
