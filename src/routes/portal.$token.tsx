@@ -877,12 +877,12 @@ function InfluencerDetail({
   });
 
   // Galeria: só o conteúdo já publicado deste influenciador, mesmo critério
-  // da galeria da campanha na VI (anexo categoria "Conteúdo publicado", com
+  // da galeria da campanha na VI (anexo categoria "Conteúdo final", com
   // o link "url" como alternativa quando não há anexo).
   const galeriaItems: { entrega: PublicEntrega; nome?: string; url: string }[] = inf.entregas
     .filter((e) => e.status === "publicado")
     .flatMap((e) => {
-      const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo publicado");
+      const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo final");
       if (publicados.length > 0) {
         return publicados.map((a) => ({
           entrega: e,
@@ -1180,7 +1180,7 @@ function InfluencerDetail({
                   const pendente = roteiroPendente || conteudoPendente;
                   const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
                   const conteudoAnexos = (e.anexos ?? []).filter(
-                    (a) => a.categoria === "Conteúdo publicado",
+                    (a) => a.categoria === "Conteúdo final",
                   );
                   const barTone = publicado
                     ? "bg-emerald-500"
@@ -2178,7 +2178,7 @@ function ClientPortalPage() {
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {contentFeed.slice(0, 12).map((item) => {
                           const conteudoAnexos = (item.entrega.anexos ?? []).filter(
-                            (a) => a.categoria === "Conteúdo publicado",
+                            (a) => a.categoria === "Conteúdo final",
                           );
                           const thumbUrl = conteudoAnexos.find((a) => isImageUrl(a.nome))?.url;
                           return (

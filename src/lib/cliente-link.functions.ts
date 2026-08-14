@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Influ, Entrega } from "@/components/influenciadores/InfluencerBoard";
+import { legacyAnexoCategoria } from "@/components/influenciadores/InfluencerBoard";
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
 import {
   legacyInfluStatus,
@@ -161,7 +162,7 @@ function toPublicEntrega(e: Entrega): z.infer<typeof EntregaPublic> {
     dataPostagem: e.dataPostagem,
     publicadoEm: e.publicadoEm,
     url: e.url,
-    anexos: e.anexos,
+    anexos: (e.anexos ?? []).map((a) => ({ ...a, categoria: legacyAnexoCategoria(a.categoria) })),
     metrics: e.metrics,
     roteiroReprovacao: e.roteiroReprovacao,
     conteudoReprovacao: e.conteudoReprovacao,

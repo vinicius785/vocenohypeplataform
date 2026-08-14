@@ -56,9 +56,14 @@ export function applyInfluApproval(
   };
 }
 
-/** Etapas 2 e 3 — aprovar/reprovar o roteiro ou o conteúdo de uma entrega.
- * "Ajustes solicitados" volta a entrega pra EM_PRODUCAO automaticamente —
- * não fica parada esperando outra ação além do time refazer e reenviar. */
+/** Etapas 2 e 3 — aprovar/reprovar o roteiro ou o conteúdo final de uma
+ * entrega. Avança automaticamente a ETAPA real (roteiro→gravação,
+ * conteúdo→publicação — nunca fica parado esperando o time trocar um
+ * campo manual). "Ajustes solicitados" usa o status de verdade
+ * (AJUSTES_SOLICITADOS, não EM_PRODUCAO direto) e limpa o carimbo de
+ * prontidão da etapa reprovada — senão o motor (`entrega-engine.ts`)
+ * acharia que já tem material pronto e pularia direto pra "Enviar pro
+ * cliente" de novo, sem dar chance de corrigir o arquivo primeiro. */
 export function applyEntregaApproval(
   influ: Influ,
   entregaId: string,
@@ -71,20 +76,22 @@ export function applyEntregaApproval(
     if (e.id !== entregaId) return e;
     if (kind === "roteiro") {
       return status === "aprovado"
-        ? { ...e, conteudoStatus: "APROVADA", etapa: "roteiro", roteiroReprovacao: undefined }
+        ? { ...e, conteudoStatus: "EM_PRODUCAO", etapa: "gravacao", roteiroReprovacao: undefined }
         : {
             ...e,
-            conteudoStatus: "EM_PRODUCAO",
+            conteudoStatus: "AJUSTES_SOLICITADOS",
             etapa: "roteiro",
+            dataRecebimentoRoteiro: undefined,
             roteiroReprovacao: stamp(motivo ?? ""),
           };
     }
     return status === "aprovado"
-      ? { ...e, conteudoStatus: "APROVADA", etapa: "conteudo", conteudoReprovacao: undefined }
+      ? { ...e, conteudoStatus: "APROVADA", etapa: "publicacao", conteudoReprovacao: undefined }
       : {
           ...e,
-          conteudoStatus: "EM_PRODUCAO",
+          conteudoStatus: "AJUSTES_SOLICITADOS",
           etapa: "conteudo",
+          dataRecebimentoConteudo: undefined,
           conteudoReprovacao: stamp(motivo ?? ""),
         };
   });

@@ -1270,7 +1270,7 @@ function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
     i.entregas
       .filter((e) => e.status === "publicado")
       .flatMap((e) => {
-        const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo publicado");
+        const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo final");
         const galeria: { influ: Influ; entrega: Entrega; nome?: string; url: string }[] = [];
         if (publicados.length > 0) {
           publicados.forEach((a) =>
