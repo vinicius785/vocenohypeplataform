@@ -2532,11 +2532,11 @@ function EntregasEditor({
           <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 font-semibold">Tipo</th>
-                <th className="px-2 py-2 text-center font-semibold">Qtd</th>
-                <th className="px-2 py-2 font-semibold">Status</th>
-                <th className="px-2 py-2 text-center font-semibold">Anexos</th>
-                <th className="w-8 px-2 py-2" />
+                <th className="px-4 py-3 font-semibold">Tipo</th>
+                <th className="px-2 py-3 text-center font-semibold">Qtd</th>
+                <th className="px-2 py-3 font-semibold">Status</th>
+                <th className="px-2 py-3 text-center font-semibold">Anexos</th>
+                <th className="w-8 px-2 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -2550,17 +2550,17 @@ function EntregasEditor({
                       isSelected ? "bg-muted/60" : "hover:bg-muted/30"
                     }`}
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-2.5">
                       <input
                         list="entregas-tipos"
                         value={e.tipo}
                         onClick={(ev) => ev.stopPropagation()}
                         onChange={(ev) => update(e.id, { tipo: ev.target.value })}
                         placeholder="Reels, Stories..."
-                        className="w-full min-w-[110px] rounded-md bg-transparent px-1 py-1 font-medium outline-none focus:bg-background focus:ring-1 focus:ring-ring"
+                        className="w-full min-w-[110px] rounded-md bg-transparent px-1.5 py-1.5 font-medium outline-none focus:bg-background focus:ring-1 focus:ring-ring"
                       />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-2 py-2.5">
                       <div
                         className="mx-auto flex w-fit shrink-0 items-center rounded-md bg-muted"
                         onClick={(ev) => ev.stopPropagation()}
@@ -2570,23 +2570,23 @@ function EntregasEditor({
                           onClick={() =>
                             update(e.id, { quantidade: Math.max(1, e.quantidade - 1) })
                           }
-                          className="h-6 w-6 text-sm text-muted-foreground hover:text-foreground"
+                          className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center text-xs font-medium tabular-nums">
+                        <span className="w-7 text-center text-xs font-medium tabular-nums">
                           {e.quantidade}
                         </span>
                         <button
                           type="button"
                           onClick={() => update(e.id, { quantidade: e.quantidade + 1 })}
-                          className="h-6 w-6 text-sm text-muted-foreground hover:text-foreground"
+                          className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
                         >
                           +
                         </button>
                       </div>
                     </td>
-                    <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
+                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
                       <EntregaStatusPill
                         value={e.conteudoStatus ?? "COMBINADA"}
                         influStatus={influStatus}
@@ -2595,10 +2595,10 @@ function EntregasEditor({
                         }
                       />
                     </td>
-                    <td className="px-2 py-2 text-center text-[11px] text-muted-foreground">
+                    <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground">
                       {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
                     </td>
-                    <td className="px-2 py-2" onClick={(ev) => ev.stopPropagation()}>
+                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
                       <RemoveBtn
                         onClick={() => {
                           onChange(entregas.filter((x) => x.id !== e.id));
@@ -2992,7 +2992,7 @@ function InfluencerProfileDialog({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0"
+        className="flex h-[92vh] max-w-6xl flex-col gap-0 overflow-hidden p-0"
         onPointerDownOutside={() => {
           // Clicar fora fecha o diálogo antes do evento de blur do campo
           // focado terminar de disparar — o rascunho (ex: link de
@@ -3007,27 +3007,28 @@ function InfluencerProfileDialog({
           Informações completas do influenciador.
         </DialogDescription>
 
-        {/* CABEÇALHO — hero com banner gradiente + avatar sobreposto, mesmo
-            padrão visual já usado no Portal do cliente (portal.$token.tsx). */}
-        <div className="border-b border-border bg-background">
+        {/* CABEÇALHO — banner + avatar grande sobreposto; status/próxima
+            ação numa linha própria abaixo do nome (não espremidos junto),
+            contato como chips com contraste de verdade contra o card. */}
+        <div className="shrink-0 border-b border-border bg-card">
           <div
-            className="h-16"
+            className="h-24"
             style={{
-              background: "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
+              background: "linear-gradient(120deg, var(--chart-1), var(--chart-2), var(--chart-3))",
             }}
           />
-          <div className="px-6 pb-5">
-            <div className="flex flex-wrap items-end gap-4">
+          <div className="px-7 pb-6">
+            <div className="flex flex-wrap items-start gap-5">
               <button
                 type="button"
                 onClick={() => fotoRef.current?.click()}
                 aria-label="Trocar foto"
-                className="group relative -mt-10 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted shadow-sm ring-4 ring-background"
+                className="group relative -mt-12 flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted shadow-md ring-4 ring-card"
               >
                 {influ.foto ? (
                   <img src={influ.foto} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <User className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
+                  <User className="h-9 w-9 text-muted-foreground" strokeWidth={1.5} />
                 )}
                 <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
                   <Camera className="h-5 w-5" />
@@ -3046,7 +3047,7 @@ function InfluencerProfileDialog({
                   r.readAsDataURL(file);
                 }}
               />
-              <div className="min-w-0 flex-1 space-y-2 pb-1">
+              <div className="min-w-0 flex-1 space-y-3 pt-2.5">
                 {editingHeader ? (
                   <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -3102,44 +3103,48 @@ function InfluencerProfileDialog({
                     </div>
                   </div>
                 ) : (
-                  <div className="group/name flex flex-wrap items-center gap-2">
-                    <p className="truncate text-lg font-semibold text-foreground">
-                      {influ.nome || "Sem nome"}
-                    </p>
-                    {influ.nicho && (
-                      <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {influ.nicho}
-                      </span>
-                    )}
-                    {has("status") && (
-                      <InfluStatusPill value={influ.status} onChange={onSetStatus} />
-                    )}
-                    <NextActionBadge actor={nextActionForInflu(influ.status)} />
-                    {influ.status === "EM_CURADORIA" && (
+                  <div className="space-y-2">
+                    <div className="group/name flex flex-wrap items-center gap-2">
+                      <p className="truncate text-2xl font-bold tracking-tight text-foreground">
+                        {influ.nome || "Sem nome"}
+                      </p>
+                      {influ.nicho && (
+                        <span className="inline-block rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                          {influ.nicho}
+                        </span>
+                      )}
                       <button
                         type="button"
-                        onClick={onSendToClient}
-                        className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90"
+                        onClick={startEditing}
+                        className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
+                        aria-label="Editar nome, nicho e contato"
                       >
-                        Enviar para cliente
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={startEditing}
-                      className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
-                      aria-label="Editar nome, nicho e contato"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {has("status") && (
+                        <InfluStatusPill value={influ.status} onChange={onSetStatus} />
+                      )}
+                      <NextActionBadge actor={nextActionForInflu(influ.status)} />
+                      {influ.status === "EM_CURADORIA" && (
+                        <button
+                          type="button"
+                          onClick={onSendToClient}
+                          className="inline-flex items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90"
+                        >
+                          Enviar para cliente
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   {has("redes") &&
                     influ.redes.map((r) => (
                       <span
                         key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm"
                       >
                         <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
                         {r.handle ? `@${r.handle}` : r.plataforma}
@@ -3149,7 +3154,7 @@ function InfluencerProfileDialog({
                   {influ.telefone && !editingHeader && (
                     <a
                       href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
                     >
                       <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                       {formatPhoneBR(influ.telefone)}
@@ -3158,7 +3163,7 @@ function InfluencerProfileDialog({
                   {influ.email && !editingHeader && (
                     <a
                       href={`mailto:${influ.email}`}
-                      className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted/70"
+                      className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
                     >
                       <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate">{influ.email}</span>
@@ -3170,13 +3175,13 @@ function InfluencerProfileDialog({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-4 overflow-y-auto bg-muted/20 px-6 py-6">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
+          <div className="min-h-0 space-y-5 overflow-y-auto bg-muted/40 px-7 py-6">
             {has("entregas") && (
               // Sem título/ícone próprio aqui — EntregasEditor já renderiza
               // seu próprio FieldLabel "Entregas" internamente (é
               // compartilhado com o formulário de novo influenciador).
-              <div className="rounded-xl border border-border bg-background p-4 shadow-sm">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <EntregasEditor
                   entregas={influ.entregas}
                   onChange={(next) => onPatch({ entregas: next })}
@@ -3189,7 +3194,7 @@ function InfluencerProfileDialog({
 
             {has("pagamentos") && (
               // Idem — PagamentoInfluSection já tem seu próprio título.
-              <div className="rounded-xl border border-border bg-background p-4 shadow-sm">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <PagamentoInfluSection
                   value={influ.pagamento}
                   onChange={(pagamento) => onPatch({ pagamento })}
@@ -3822,10 +3827,10 @@ function ProfileSectionCard({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-background p-4 shadow-sm">
+    <div className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground/10 text-foreground">
             {icon}
           </span>
           <FieldLabel title={title} hint={hint} />
