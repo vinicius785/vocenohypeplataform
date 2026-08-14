@@ -44,6 +44,7 @@ import {
   CheckCircle2,
   Clock,
   History,
+  Calculator,
 } from "lucide-react";
 import { linkifyText } from "@/lib/linkify";
 
@@ -522,18 +523,23 @@ function LeadForm({
         onClick={(e) => e.stopPropagation()}
         className="flex h-full w-full max-w-4xl flex-col bg-background shadow-2xl md:border-l md:border-border"
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <div>
-            <h3 className="text-base font-semibold">
-              {initial ? "Editar oportunidade" : "Nova oportunidade"}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Preencha as informações — o resumo é atualizado em tempo real.
-            </p>
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <Briefcase className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold">
+                {initial ? "Editar oportunidade" : "Nova oportunidade"}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Preencha as informações — o resumo é atualizado em tempo real.
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
             type="button"
           >
             <X className="h-4 w-4" />
@@ -541,7 +547,7 @@ function LeadForm({
         </div>
 
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto bg-muted/20 p-5">
             <Section title="Oportunidade" icon={<Tag className="h-4 w-4" />}>
               <label className={labelCls}>
                 <span>Nome da oportunidade *</span>
@@ -554,32 +560,37 @@ function LeadForm({
                   maxLength={120}
                 />
               </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span className="flex items-center justify-between gap-2">
-                    Valor (R$)
-                    <button
-                      type="button"
-                      onClick={() => setShowSimulador(true)}
-                      className="font-medium normal-case text-primary hover:underline"
-                    >
-                      Simular proposta
-                    </button>
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    className={inputCls}
-                    placeholder="0"
-                  />
-                  {proposta && (
-                    <span className="block text-[11px] text-muted-foreground">
-                      Calculado no simulador: custo {formatBRL(proposta.custoTotal)} → preço{" "}
+
+              <div className="rounded-lg border border-primary/25 bg-primary/[0.04] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Valor (R$)</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSimulador(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm transition-transform hover:scale-[1.03] hover:opacity-90"
+                  >
+                    <Calculator className="h-3.5 w-3.5" />
+                    Simular proposta
+                  </button>
+                </div>
+                <input
+                  inputMode="decimal"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-lg font-semibold outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="0"
+                />
+                {proposta && (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Calculado no simulador: custo {formatBRL(proposta.custoTotal)} → preço{" "}
+                    <span className="font-medium text-foreground">
                       {formatBRL(proposta.precoFinal)}
                     </span>
-                  )}
-                </label>
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className={labelCls}>
                   <span>Etapa</span>
                   <select
@@ -594,24 +605,24 @@ function LeadForm({
                     ))}
                   </select>
                 </label>
-              </div>
-              <div className={labelCls}>
-                <span>Qualificação</span>
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setScore(score === n ? 0 : n)}
-                      className="rounded p-0.5 hover:bg-muted"
-                    >
-                      <Star
-                        className={`h-5 w-5 ${
-                          n <= score ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
-                        }`}
-                      />
-                    </button>
-                  ))}
+                <div className={labelCls}>
+                  <span>Qualificação</span>
+                  <div className="flex h-9 items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setScore(score === n ? 0 : n)}
+                        className="rounded p-0.5 hover:bg-muted"
+                      >
+                        <Star
+                          className={`h-5 w-5 ${
+                            n <= score ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </Section>
@@ -931,9 +942,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-5 space-y-3">
-      <div className="flex items-center gap-2 border-b border-border pb-1.5 text-sm font-semibold">
-        <span className="text-muted-foreground">{icon}</span>
+    <div className="mb-4 space-y-3 rounded-xl border border-border bg-background p-4 shadow-sm">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          {icon}
+        </span>
         {title}
       </div>
       {children}
