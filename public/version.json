@@ -1,6 +1,7 @@
 {
-  "version": "1.126.0",
+  "version": "1.127.0",
   "notes": [
+    "Redesenha a leitura de artigos (Mural interno e Portal do cliente) no formato usado em redes como o LinkedIn: capa em destaque com legenda \"Por: autor\", e um cartão de comentários fixo ao lado (resumo de reações, Gostei/Comentar, lista de comentários) — mesma estrutura nos dois lugares.",
     "Otimização de performance: cada seção da plataforma (Início, Chat, Financeiro, etc.) agora carrega seu próprio código só quando você abre ela, em vez de tudo junto de uma vez — deixa o primeiro carregamento bem mais rápido. Também corrige o indicador de cronômetro ativo no topo, que recarregava todos os projetos a cada segundo só pra atualizar o relógio.",
     "Corrige o Chat não sendo responsivo no mobile: agora, em telas pequenas, mostra a lista de conversas OU a conversa aberta em tela cheia (nunca as duas colunas espremidas), com um botão de voltar pra sair da conversa — igual ao WhatsApp no celular.",
     "Redesenha o criador de artigos do Blog (cards agrupados, autor com foto/avatar visível no editor e na pré-visualização) e adiciona curtir + comentar em artigos publicados, tanto no Mural de novidades quanto no Portal do cliente.",
@@ -114,6 +115,7 @@
     "Corrige o Mural de novidades no Início: clicar no título ou resumo de um artigo agora abre o conteúdo completo (antes não fazia nada)."
   ],
   "notesVC": [
+    "Redesenha a tela de leitura de artigos no formato usado em redes como o LinkedIn: capa em destaque e um cartão de comentários fixo ao lado.",
     "Agora dá pra curtir e comentar nos artigos publicados no seu portal.",
     "Os \"Últimos conteúdos\" da tela inicial agora aparecem em formato de galeria (fotos em grade). Dentro de uma campanha, o perfil de cada influenciador ganha sua própria galeria, só com o conteúdo publicado dele ali.",
     "O motivo da reprovação de um influenciador ou de uma entrega agora é opcional — antes era obrigatório preencher pra conseguir reprovar.",

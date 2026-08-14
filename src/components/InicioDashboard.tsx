@@ -29,17 +29,11 @@ import {
   type BlogPost,
   type Task as ProjTask,
 } from "@/lib/projetos";
-import {
-  renderMarkdownLite,
-  MARKDOWN_LITE_CLASSES,
-  ArticleEngagement,
-} from "@/components/marketing/BlogPanel";
+import { renderMarkdownLite, ArticleReader } from "@/components/marketing/BlogPanel";
 import {
   loadEngagementVI,
   toggleLikeVI,
   addCommentVI,
-  initialsOf,
-  colorFor,
   type BlogEngagement,
 } from "@/lib/blog-engagement";
 import { ZipGameSection } from "@/components/games/ZipGameSection";
@@ -1138,70 +1132,45 @@ function MuralNovidades() {
       </ul>
 
       <Dialog open={!!openArticle} onOpenChange={(v) => !v && setOpenArticle(null)}>
-        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">
           {openArticle && (
             <>
-              <DialogHeader className="border-b border-border px-6 py-4">
-                <DialogTitle className="font-light tracking-tight">{openArticle.title}</DialogTitle>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {authorPhoto ? (
-                    <img
-                      src={authorPhoto}
-                      alt=""
-                      className="h-5 w-5 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(openArticle.authorName || "?")}`}
-                    >
-                      {initialsOf(openArticle.authorName || "") || "?"}
-                    </span>
-                  )}
-                  <span className="font-medium text-foreground">
-                    {openArticle.authorName || "Sem autor"}
-                  </span>
-                  <span>· {openArticle.projectName}</span>
-                  {openArticle.publishDate && <span>· {openArticle.publishDate}</span>}
-                </div>
+              <DialogHeader className="sr-only">
+                <DialogTitle>{openArticle.title}</DialogTitle>
               </DialogHeader>
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                {openArticle.cover && (
-                  <img
-                    src={openArticle.cover}
-                    alt=""
-                    className="mb-4 max-h-64 w-full rounded-lg object-cover"
-                  />
-                )}
-                {openArticle.excerpt && openArticle.content && (
-                  <p className="text-sm italic text-muted-foreground">{openArticle.excerpt}</p>
-                )}
-                <div
-                  className={MARKDOWN_LITE_CLASSES}
-                  dangerouslySetInnerHTML={{
-                    __html: renderMarkdownLite(openArticle.content ?? openArticle.excerpt ?? ""),
-                  }}
-                />
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
                 {engagement && (
-                  <ArticleEngagement
-                    likeCount={engagement.likeCount}
-                    likedByMe={engagement.likedByMe}
-                    comments={engagement.comments}
-                    onToggleLike={async () => {
-                      setEngagement((e) =>
-                        e
-                          ? {
-                              ...e,
-                              likedByMe: !e.likedByMe,
-                              likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
-                            }
-                          : e,
-                      );
-                      await toggleLikeVI(openArticle.id);
-                    }}
-                    onAddComment={async (body) => {
-                      await addCommentVI(openArticle.id, body);
-                      const next = await loadEngagementVI(openArticle.id);
-                      setEngagement(next);
+                  <ArticleReader
+                    cover={openArticle.cover}
+                    title={openArticle.title}
+                    authorLabel={openArticle.authorName || "Sem autor"}
+                    authorPhoto={authorPhoto}
+                    metaExtra={openArticle.projectName}
+                    dateLabel={openArticle.publishDate}
+                    contentHtml={renderMarkdownLite(
+                      openArticle.content ?? openArticle.excerpt ?? "",
+                    )}
+                    engagement={{
+                      likeCount: engagement.likeCount,
+                      likedByMe: engagement.likedByMe,
+                      comments: engagement.comments,
+                      onToggleLike: async () => {
+                        setEngagement((e) =>
+                          e
+                            ? {
+                                ...e,
+                                likedByMe: !e.likedByMe,
+                                likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
+                              }
+                            : e,
+                        );
+                        await toggleLikeVI(openArticle.id);
+                      },
+                      onAddComment: async (body) => {
+                        await addCommentVI(openArticle.id, body);
+                        const next = await loadEngagementVI(openArticle.id);
+                        setEngagement(next);
+                      },
                     }}
                   />
                 )}

@@ -45,11 +45,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  renderMarkdownLite,
-  MARKDOWN_LITE_CLASSES,
-  ArticleEngagement,
-} from "@/components/marketing/BlogPanel";
+import { renderMarkdownLite, ArticleReader } from "@/components/marketing/BlogPanel";
 import type { BlogEngagement } from "@/lib/blog-engagement";
 import { PortalBugReportButton } from "@/components/PortalBugReportButton";
 import { BackButton } from "@/components/BackButton";
@@ -1720,68 +1716,47 @@ function ClientPortalPage() {
               const reading = data.artigos.find((a) => a.id === readingArticleId) ?? null;
               if (!reading) return null;
               return (
-                <div>
-                  <BackButton
-                    onClick={() => setReadingArticleId(null)}
-                    label={t(lang, "back")}
-                    className="mb-4"
+                <div className="mx-auto max-w-4xl">
+                  <ArticleReader
+                    cover={reading.cover}
+                    category={reading.category}
+                    title={reading.title}
+                    authorLabel={reading.authorName || "Sem autor"}
+                    dateLabel={reading.publishDate ? fmtDate(reading.publishDate) : undefined}
+                    contentHtml={renderMarkdownLite(reading.content ?? reading.excerpt ?? "")}
+                    headerExtra={
+                      <BackButton
+                        onClick={() => setReadingArticleId(null)}
+                        label={t(lang, "back")}
+                        className="mb-4"
+                      />
+                    }
+                    engagement={{
+                      likeCount: readingEngagement?.likeCount ?? 0,
+                      likedByMe: readingEngagement?.likedByMe ?? false,
+                      comments: readingEngagement?.comments ?? [],
+                      commentPlaceholder: t(lang, "articleCommentPlaceholder"),
+                      onToggleLike: async () => {
+                        setReadingEngagement((e) =>
+                          e
+                            ? {
+                                ...e,
+                                likedByMe: !e.likedByMe,
+                                likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
+                              }
+                            : e,
+                        );
+                        await toggleLikeFn({ data: { token, postId: reading.id } });
+                      },
+                      onAddComment: async (body) => {
+                        await addComentarioFn({ data: { token, postId: reading.id, body } });
+                        const next = await loadEngagementFn({
+                          data: { token, postId: reading.id },
+                        });
+                        setReadingEngagement(next);
+                      },
+                    }}
                   />
-                  <article className="mx-auto max-w-2xl">
-                    {reading.cover && (
-                      <img
-                        src={reading.cover}
-                        alt=""
-                        className="mb-4 aspect-video w-full rounded-xl object-cover"
-                      />
-                    )}
-                    {reading.category && (
-                      <Badge variant="secondary" className="mb-2">
-                        {reading.category}
-                      </Badge>
-                    )}
-                    <h1 className="text-2xl font-light tracking-tight text-foreground">
-                      {reading.title}
-                    </h1>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {reading.authorName || "Sem autor"}
-                      </span>
-                      {reading.publishDate && <span>· {fmtDate(reading.publishDate)}</span>}
-                    </div>
-                    <div
-                      className={`mt-6 ${MARKDOWN_LITE_CLASSES}`}
-                      dangerouslySetInnerHTML={{
-                        __html: renderMarkdownLite(reading.content ?? reading.excerpt ?? ""),
-                      }}
-                    />
-                    {readingEngagement && (
-                      <ArticleEngagement
-                        likeCount={readingEngagement.likeCount}
-                        likedByMe={readingEngagement.likedByMe}
-                        comments={readingEngagement.comments}
-                        commentPlaceholder={t(lang, "articleCommentPlaceholder")}
-                        onToggleLike={async () => {
-                          setReadingEngagement((e) =>
-                            e
-                              ? {
-                                  ...e,
-                                  likedByMe: !e.likedByMe,
-                                  likeCount: e.likeCount + (e.likedByMe ? -1 : 1),
-                                }
-                              : e,
-                          );
-                          await toggleLikeFn({ data: { token, postId: reading.id } });
-                        }}
-                        onAddComment={async (body) => {
-                          await addComentarioFn({ data: { token, postId: reading.id, body } });
-                          const next = await loadEngagementFn({
-                            data: { token, postId: reading.id },
-                          });
-                          setReadingEngagement(next);
-                        }}
-                      />
-                    )}
-                  </article>
                 </div>
               );
             })()
