@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getTeamDirectory } from "@/lib/team.functions";
 import { saveMe, initChatSync, heartbeat } from "@/lib/chat-store";
 import { initWorkspaceSync } from "@/lib/workspace-store";
+import { initPricingSync } from "@/lib/pricing-store";
 import { initSharedSync } from "@/lib/shared-sync";
 import { initClientesSync } from "@/lib/clientes-store";
 import { initProjetosSync } from "@/lib/projetos";
@@ -106,6 +107,7 @@ function AuthenticatedLayout() {
         void initChatSync(data.user.id);
         void heartbeat(data.user.id);
         initWorkspaceSync();
+        initPricingSync();
         void initCallController(
           data.user.id,
           profile.full_name?.trim() || "Você",

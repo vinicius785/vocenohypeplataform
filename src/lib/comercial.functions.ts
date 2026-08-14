@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import type { Lead, LeadHistoryEntry } from "./comercial";
+import type { Lead, LeadHistoryEntry, PropostaSnapshot } from "./comercial";
 import { dispatchOutgoingWebhook } from "./outgoing-webhooks";
 
 async function getActorName(supabase: SupabaseClient<Database>, userId: string): Promise<string> {
@@ -66,6 +66,7 @@ function rowToLead(row: LeadRow): Lead {
     experience: (extra.experience as string) ?? undefined,
     aiSummary: (extra.aiSummary as string) ?? undefined,
     budget: (extra.budget as number) ?? undefined,
+    proposta: (extra.proposta as PropostaSnapshot) ?? undefined,
     contactCompany: (extra.contactCompany as string) ?? undefined,
     contactPhone: (extra.contactPhone as string) ?? undefined,
     contactEmail: (extra.contactEmail as string) ?? undefined,
@@ -100,6 +101,20 @@ const leadInputSchema = z.object({
   experience: z.string().optional(),
   aiSummary: z.string().optional(),
   budget: z.number().optional(),
+  proposta: z
+    .object({
+      linhas: z.array(z.object({ tier: z.string(), formato: z.string(), qtd: z.number() })),
+      percentuais: z.object({
+        imposto: z.number(),
+        comissao: z.number(),
+        bonificacao: z.number(),
+        margem: z.number(),
+      }),
+      custoTotal: z.number(),
+      precoFinal: z.number(),
+      calculadoEm: z.number(),
+    })
+    .optional(),
   contactCompany: z.string().optional(),
   contactPhone: z.string().optional(),
   contactEmail: z.string().optional(),
@@ -124,6 +139,7 @@ function inputToRow(input: LeadInput) {
     "experience",
     "aiSummary",
     "budget",
+    "proposta",
     "contactCompany",
     "contactPhone",
     "contactEmail",

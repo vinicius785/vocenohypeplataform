@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { formatBRL, loadStages, type Lead, type Stage, type StageKey } from "@/lib/comercial";
+import {
+  formatBRL,
+  loadStages,
+  type Lead,
+  type Stage,
+  type StageKey,
+  type PropostaSnapshot,
+} from "@/lib/comercial";
+import { SimuladorPropostaDialog } from "@/components/comercial/SimuladorPropostaDialog";
 import {
   listLeads,
   upsertLead as upsertLeadFn,
@@ -63,6 +71,7 @@ function convertLeadToClienteEProjeto(lead: Lead): { clienteId: string; projectI
       whatsapp: lead.phone || "",
       clienteDesde: new Date().toISOString().slice(0, 10),
       campanhas: [],
+      orcamentoSugerido: lead.proposta?.precoFinal ?? (lead.value > 0 ? lead.value : undefined),
     },
   ]);
   upsertProjeto({
@@ -452,6 +461,8 @@ function LeadForm({
   const [urgency, setUrgency] = useState<string>(initial?.urgency ?? "");
   const [experience, setExperience] = useState(initial?.experience ?? "");
   const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
+  const [proposta, setProposta] = useState<PropostaSnapshot | undefined>(initial?.proposta);
+  const [showSimulador, setShowSimulador] = useState(false);
   const [stage, setStage] = useState<StageKey>(initial?.stage ?? stages[0]?.key ?? "lead");
   const [source, setSource] = useState(initial?.source ?? "");
   const [responsible, setResponsible] = useState(initial?.responsible ?? "");
@@ -483,6 +494,7 @@ function LeadForm({
       urgency: (urgency.trim() || undefined) as Lead["urgency"],
       experience: experience.trim() || undefined,
       value: parsedValue,
+      proposta,
       stage,
       tags: initial?.tags ?? [],
       source: source || undefined,
@@ -544,7 +556,16 @@ function LeadForm({
               </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className={labelCls}>
-                  <span>Valor (R$)</span>
+                  <span className="flex items-center justify-between gap-2">
+                    Valor (R$)
+                    <button
+                      type="button"
+                      onClick={() => setShowSimulador(true)}
+                      className="font-medium normal-case text-primary hover:underline"
+                    >
+                      Simular proposta
+                    </button>
+                  </span>
                   <input
                     inputMode="decimal"
                     value={value}
@@ -552,6 +573,12 @@ function LeadForm({
                     className={inputCls}
                     placeholder="0"
                   />
+                  {proposta && (
+                    <span className="block text-[11px] text-muted-foreground">
+                      Calculado no simulador: custo {formatBRL(proposta.custoTotal)} → preço{" "}
+                      {formatBRL(proposta.precoFinal)}
+                    </span>
+                  )}
                 </label>
                 <label className={labelCls}>
                   <span>Etapa</span>
@@ -881,6 +908,15 @@ function LeadForm({
           </div>
         </div>
       </div>
+
+      <SimuladorPropostaDialog
+        open={showSimulador}
+        onClose={() => setShowSimulador(false)}
+        onApply={(precoFinal, snapshot) => {
+          setValue(String(Math.round(precoFinal)));
+          setProposta(snapshot);
+        }}
+      />
     </div>
   );
 }

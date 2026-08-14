@@ -26,6 +26,7 @@ import {
   Check,
   CalendarDays,
   Zap,
+  DollarSign,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import {
@@ -78,8 +79,10 @@ import {
 } from "@/lib/push-notifications";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { LockedSection } from "./LockedSection";
+import { loadPricing, fetchPricing, savePricing, type PricingSettings } from "@/lib/pricing-store";
+import { TIERS, FORMATOS, type TierId, type FormatoId } from "@/lib/pricing";
 
-type TabKey = "perfil" | "workspace" | "senhas" | "preferencias" | "integracoes";
+type TabKey = "perfil" | "workspace" | "senhas" | "preferencias" | "integracoes" | "precificacao";
 
 type Perfil = {
   nome: string;
@@ -88,7 +91,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.134.5";
+export const APP_VERSION = "1.135.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -168,7 +171,7 @@ const loadSenhas = (): Senha[] => {
 /** "integracoes" não entra aqui: webhooks continuam admin-only (checado
  * dentro da própria aba), mas o Google Agenda é self-service — todo membro
  * do time precisa conseguir abrir a aba pra conectar a própria conta. */
-const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas"];
+const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas", "precificacao"];
 
 export function ConfiguracoesSection() {
   const [tab, setTab] = useState<TabKey>("perfil");
@@ -215,6 +218,7 @@ export function ConfiguracoesSection() {
             { k: "workspace", label: "Identidade", icon: Building2 },
             { k: "senhas", label: "Senhas", icon: KeyRound },
             { k: "integracoes", label: "Integrações", icon: Webhook },
+            { k: "precificacao", label: "Precificação", icon: DollarSign },
           ]}
         />
       </div>
@@ -225,6 +229,8 @@ export function ConfiguracoesSection() {
       {tab === "senhas" && (canConfig ? <SenhasTab /> : <LockedSection title="Senhas" />)}
       {tab === "preferencias" && <PreferenciasTab />}
       {tab === "integracoes" && <IntegracoesTab />}
+      {tab === "precificacao" &&
+        (canConfig ? <PrecificacaoTab /> : <LockedSection title="Precificação" />)}
 
       <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
     </div>
@@ -1268,6 +1274,168 @@ function WorkspaceTab() {
           className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
         >
           Salvar alterações
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Configuração dos percentuais fixos da agência + a matriz de custo médio
+ * por Tier×Formato usados pelo Simulador de Proposta (Comercial) — mesmos
+ * parâmetros da planilha "Calculadora custos op" do Caio, trazidos pra
+ * plataforma. Mesmo padrão de carregar/salvar de `WorkspaceTab`. */
+function PrecificacaoTab() {
+  const [settings, setSettings] = useState<PricingSettings>(() => loadPricing());
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void fetchPricing().then(setSettings);
+  }, []);
+
+  const setPct = (key: keyof PricingSettings["percentuais"], percentValue: string) => {
+    const n = Number(percentValue.replace(",", "."));
+    setSettings((s) => ({
+      ...s,
+      percentuais: { ...s.percentuais, [key]: Number.isFinite(n) ? n / 100 : 0 },
+    }));
+  };
+
+  const setCusto = (tier: TierId, formato: FormatoId, value: string) => {
+    const n = Number(value.replace(/[^\d.,]/g, "").replace(",", "."));
+    setSettings((s) => ({
+      ...s,
+      custos: {
+        ...s.custos,
+        [tier]: { ...s.custos[tier], [formato]: value.trim() ? n || 0 : undefined },
+      },
+    }));
+  };
+
+  const totalPct =
+    (settings.percentuais.imposto +
+      settings.percentuais.comissao +
+      settings.percentuais.bonificacao +
+      settings.percentuais.margem) *
+    100;
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setSaving(true);
+    const res = await savePricing(settings);
+    setSaving(false);
+    if (res.error) {
+      setErr(res.error);
+      return;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <form onSubmit={save} className="space-y-5">
+      <div className="space-y-4 rounded-lg border border-border bg-background p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Percentuais da agência</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Usados pelo Simulador de Proposta (Comercial) pra calcular o preço final a partir do
+            custo dos influenciadores: Preço final = Custo total ÷ (1 − soma dos percentuais).
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(
+            [
+              ["imposto", "Imposto"],
+              ["comissao", "Comissão de vendas"],
+              ["bonificacao", "Bonificação"],
+              ["margem", "Margem de lucro"],
+            ] as [keyof PricingSettings["percentuais"], string][]
+          ).map(([key, label]) => (
+            <label key={key} className="block space-y-1 text-xs font-medium text-muted-foreground">
+              <span>{label} (%)</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={(settings.percentuais[key] * 100).toFixed(1).replace(/\.0$/, "")}
+                onChange={(e) => setPct(key, e.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Total: <span className="font-medium text-foreground">{totalPct.toFixed(1)}%</span>
+          {totalPct >= 100 && (
+            <span className="ml-1.5 text-destructive">
+              — não pode chegar a 100%, o preço final ficaria infinito.
+            </span>
+          )}
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-background p-5">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Custo médio por Tier × Formato</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Valores praticados com os influenciadores, em R$. Deixe em branco quando não fizer
+            sentido pro tier (ex.: Live geralmente não é orçado à parte).
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className="sticky left-0 bg-background px-2 py-1.5 text-left font-medium text-muted-foreground">
+                  Tier
+                </th>
+                {FORMATOS.map((f) => (
+                  <th
+                    key={f.id}
+                    className="px-2 py-1.5 text-left font-medium text-muted-foreground"
+                  >
+                    {f.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TIERS.map((t) => (
+                <tr key={t.id} className="border-t border-border">
+                  <td className="sticky left-0 whitespace-nowrap bg-background px-2 py-1.5 font-medium text-foreground">
+                    {t.label}
+                  </td>
+                  {FORMATOS.map((f) => (
+                    <td key={f.id} className="px-2 py-1">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={settings.custos[t.id]?.[f.id] ?? ""}
+                        onChange={(e) => setCusto(t.id, f.id, e.target.value)}
+                        placeholder="—"
+                        className="h-8 w-24 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-3">
+        {err && <span className="text-xs text-destructive">{err}</span>}
+        {saved && <span className="text-xs text-emerald-600">Salvo</span>}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? "Salvando…" : "Salvar alterações"}
         </button>
       </div>
     </form>

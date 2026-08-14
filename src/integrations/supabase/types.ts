@@ -165,7 +165,7 @@ export type Database = {
         };
         Relationships: [];
       };
-      campanha_documentos: {
+      campanha_cronograma: {
         Row: {
           campanha_id: string;
           created_at: string;
@@ -192,7 +192,7 @@ export type Database = {
         };
         Relationships: [];
       };
-      campanha_cronograma: {
+      campanha_documentos: {
         Row: {
           campanha_id: string;
           created_at: string;
@@ -690,6 +690,36 @@ export type Database = {
           },
         ];
       };
+      pricing_settings: {
+        Row: {
+          bonificacao_pct: number;
+          comissao_pct: number;
+          custos_tier: Json;
+          id: boolean;
+          imposto_pct: number;
+          margem_pct: number;
+          updated_at: string;
+        };
+        Insert: {
+          bonificacao_pct?: number;
+          comissao_pct?: number;
+          custos_tier?: Json;
+          id?: boolean;
+          imposto_pct?: number;
+          margem_pct?: number;
+          updated_at?: string;
+        };
+        Update: {
+          bonificacao_pct?: number;
+          comissao_pct?: number;
+          custos_tier?: Json;
+          id?: boolean;
+          imposto_pct?: number;
+          margem_pct?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           birthday: string | null;
@@ -897,6 +927,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      sudoku_daily_results: {
+        Row: {
+          created_at: string;
+          date_key: string;
+          id: string;
+          time_ms: number;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          date_key: string;
+          id?: string;
+          time_ms: number;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          date_key?: string;
+          id?: string;
+          time_ms?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
           created_at: string;
@@ -1003,30 +1057,6 @@ export type Database = {
           key?: string;
           secret?: string;
           updated_at?: string;
-        };
-        Relationships: [];
-      };
-      sudoku_daily_results: {
-        Row: {
-          created_at: string;
-          date_key: string;
-          id: string;
-          time_ms: number;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          date_key: string;
-          id?: string;
-          time_ms: number;
-          user_id: string;
-        };
-        Update: {
-          created_at?: string;
-          date_key?: string;
-          id?: string;
-          time_ms?: number;
-          user_id?: string;
         };
         Relationships: [];
       };

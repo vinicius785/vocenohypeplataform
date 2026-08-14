@@ -49,6 +49,7 @@ import {
 } from "@/lib/banco-influs-store";
 import { getAllCampanhaInflus } from "@/lib/campanha-scoped-store";
 import DriftWall from "@/components/DriftWall";
+import { TIERS, suggestTier } from "@/lib/pricing";
 
 const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
 
@@ -1015,6 +1016,7 @@ function BankInfluDialog({
 }) {
   const [nome, setNome] = useState("");
   const [nicho, setNicho] = useState("");
+  const [tier, setTier] = useState("");
   const [foto, setFoto] = useState<string | undefined>(undefined);
   const [redes, setRedes] = useState<Rede[]>([]);
   const [endereco, setEndereco] = useState<Endereco>({});
@@ -1023,6 +1025,7 @@ function BankInfluDialog({
     if (!open) return;
     setNome(initial?.nome ?? "");
     setNicho(initial?.nicho ?? "");
+    setTier(initial?.tier ?? "");
     setFoto(initial?.foto);
     setRedes(
       initial?.redes && initial.redes.length > 0
@@ -1049,11 +1052,17 @@ function BankInfluDialog({
       id: initial?.id ?? crypto.randomUUID(),
       nome: nome.trim(),
       nicho: nicho || undefined,
+      tier: (tier || undefined) as BankInflu["tier"],
       foto,
       redes: redes.filter((r) => r.plataforma || r.handle),
       endereco: Object.keys(cleanedEnd).length ? cleanedEnd : undefined,
     });
   };
+
+  const maiorSeguidores = Math.max(
+    0,
+    ...redes.map((r) => Number((r.seguidores ?? "").replace(/\D/g, "")) || 0),
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -1106,6 +1115,35 @@ function BankInfluDialog({
               {NICHOS.map((n) => (
                 <option key={n} value={n}>
                   {n}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">
+                Tier (faixa de audiência)
+              </label>
+              {maiorSeguidores > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTier(suggestTier(maiorSeguidores))}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Sugerir a partir dos seguidores
+                </button>
+              )}
+            </div>
+            <select
+              value={tier}
+              onChange={(e) => setTier(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">Sem tier definido</option>
+              {TIERS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
                 </option>
               ))}
             </select>

@@ -1,5 +1,6 @@
 import type { Rede } from "@/components/influenciadores/InfluencerBoard";
 import { createTableArrayStore } from "./table-array-store";
+import type { TierId } from "./pricing";
 
 export type Endereco = {
   rua?: string;
@@ -17,6 +18,10 @@ export type BankInflu = {
   nome: string;
   foto?: string;
   nicho?: string;
+  /** Faixa de audiência (ver src/lib/pricing.ts) — usada pelo Simulador de
+   * Proposta (Comercial) pra estimar custo. Sugerida a partir dos
+   * seguidores cadastrados, mas sempre editável manualmente. */
+  tier?: TierId;
   redes: Rede[];
   endereco?: Endereco;
 };

@@ -32,6 +32,17 @@ export type LeadHistoryEntry = {
   createdAt: number;
 };
 
+/** Snapshot do Simulador de Proposta (Comercial) aplicado a este lead —
+ * linhas de Tier×Formato×Qtd + percentuais usados no cálculo, guardados
+ * pra referência de como o `value` foi calculado. Ver src/lib/pricing.ts. */
+export type PropostaSnapshot = {
+  linhas: { tier: string; formato: string; qtd: number }[];
+  percentuais: { imposto: number; comissao: number; bonificacao: number; margem: number };
+  custoTotal: number;
+  precoFinal: number;
+  calculadoEm: number;
+};
+
 export type Lead = {
   id: string;
   name: string; // deal name
@@ -60,6 +71,10 @@ export type Lead = {
   experience?: string;
   aiSummary?: string;
   budget?: number;
+  /** Preenchido ao usar o Simulador de Proposta e aplicar o preço final ao
+   * `value` deste lead — sobrevive à conversão em Cliente (ver
+   * `Cliente.orcamentoSugerido`). */
+  proposta?: PropostaSnapshot;
   score?: number;
   // contact block
   contactCompany?: string;

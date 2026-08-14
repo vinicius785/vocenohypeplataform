@@ -181,12 +181,16 @@ export function VincularCampanhaDialog({
   open,
   onOpenChange,
   clienteNome,
+  clienteOrcamentoSugerido,
   initial,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   clienteNome?: string;
+  /** Preço final calculado no Simulador de Proposta (Comercial) — pré-
+   * preenche o orçamento só ao CRIAR uma campanha nova, continua editável. */
+  clienteOrcamentoSugerido?: number;
   initial?: Campaign | null;
   onSave?: (c: Campaign) => void;
 }) {
@@ -263,7 +267,14 @@ export function VincularCampanhaDialog({
       setPrazo("");
       setLinhas([newLinha()]);
       setValorCliente("");
-      setOrcamento("");
+      setOrcamento(
+        clienteOrcamentoSugerido
+          ? clienteOrcamentoSugerido.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })
+          : "",
+      );
       setPagTipos([]);
       setPagConfig(emptyPagConfig);
       setPrazoPag("");
@@ -277,7 +288,7 @@ export function VincularCampanhaDialog({
       setDireitosImagem(emptyDireitosImagem);
       setPublicoAlvo(emptyPublicoAlvo);
     }
-  }, [open, initial]);
+  }, [open, initial, clienteOrcamentoSugerido]);
 
   const updateLinha = (id: string, patch: Partial<InfluLinha>) =>
     setLinhas((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -731,6 +742,11 @@ export function VincularCampanhaDialog({
                       placeholder="R$ 0,00"
                       className={inputCls}
                     />
+                    {!initial && clienteOrcamentoSugerido ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Sugerido pela proposta comercial — pode editar.
+                      </p>
+                    ) : null}
                   </Field>
                 </div>
 

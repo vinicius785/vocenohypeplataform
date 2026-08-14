@@ -485,6 +485,7 @@ export function ClientesSection() {
           if (!o) setEditingCampaign(null);
         }}
         clienteNome={selected?.empresa}
+        clienteOrcamentoSugerido={selected?.orcamentoSugerido}
         initial={editingCampaign}
         onSave={saveCampaign}
       />

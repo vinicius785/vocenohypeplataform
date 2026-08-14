@@ -16,6 +16,10 @@ export type Cliente = {
    * vez, na lazy, na primeira vez que alguém pede o link. Mostra TODAS as
    * campanhas do cliente (por isso mora aqui, não em `Campaign`). */
   publicToken?: string;
+  /** Preço final calculado no Simulador de Proposta (Comercial) e copiado
+   * na conversão do lead — pré-preenche o orçamento ao montar uma nova
+   * campanha pra este cliente, mas continua 100% editável à mão. */
+  orcamentoSugerido?: number;
 };
 
 const store = createTableArrayStore<Cliente>("clientes");
