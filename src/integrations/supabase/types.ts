@@ -359,6 +359,24 @@ export type Database = {
           },
         ];
       };
+      chat_deliveries: {
+        Row: {
+          convo_id: string;
+          last_delivered_at: string;
+          user_id: string;
+        };
+        Insert: {
+          convo_id: string;
+          last_delivered_at?: string;
+          user_id: string;
+        };
+        Update: {
+          convo_id?: string;
+          last_delivered_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       chat_reads: {
         Row: {
           convo_id: string;

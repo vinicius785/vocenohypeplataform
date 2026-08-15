@@ -125,6 +125,11 @@ let channelsCache: ChatChannel[] = [];
 let messagesCache: ChatMessage[] = [];
 let lastReadCache: Record<string, number> = {};
 let allReadsCache: Record<string, Record<string, number>> = {};
+/** Marca de ENTREGA por (convo, usuário) — carimbada automaticamente
+ * quando o cliente de alguém recebe uma mensagem nova via realtime, antes
+ * mesmo de a pessoa abrir a conversa. Distinta de `allReadsCache`, que só
+ * avança quando a pessoa efetivamente abre/olha a conversa. */
+let allDeliveriesCache: Record<string, Record<string, number>> = {};
 // Guarda o status "cru" (o que a pessoa escolheu, ou "online" por padrão) mais
 // o horário do último heartbeat — `getStatus` deriva o status exibido a partir
 // disso, então quem fecha a aba (ou perde conexão) automaticamente vira
@@ -240,6 +245,22 @@ async function reloadAllReads() {
   allReadsCache = next;
   emit();
 }
+/** All users' delivery markers (needed for per-message "entregue" receipts in DMs). */
+async function reloadAllDeliveries() {
+  const { data } = await supabase
+    .from("chat_deliveries")
+    .select("convo_id,user_id,last_delivered_at");
+  const next: Record<string, Record<string, number>> = {};
+  for (const r of (data ?? []) as {
+    convo_id: string;
+    user_id: string;
+    last_delivered_at: string;
+  }[]) {
+    (next[r.convo_id] ??= {})[r.user_id] = new Date(r.last_delivered_at).getTime();
+  }
+  allDeliveriesCache = next;
+  emit();
+}
 async function reloadStatuses() {
   const { data } = await supabase.from("chat_status").select("user_id,status,updated_at");
   const next: Record<string, { status: MemberStatus; updatedAt: number }> = {};
@@ -262,6 +283,7 @@ export async function initChatSync(userId: string) {
       reloadMessages(),
       reloadReads(userId),
       reloadAllReads(),
+      reloadAllDeliveries(),
       reloadStatuses(),
     ]);
     if (realtimeStarted) return;
@@ -291,6 +313,18 @@ export async function initChatSync(userId: string) {
           if (messagesCache.some((m) => m.id === mapped.id)) return; // already applied optimistically
           messagesCache = [...messagesCache, mapped].sort((a, b) => a.createdAt - b.createdAt);
           emit();
+          // "Entregue" = meu cliente recebeu a mensagem via realtime, mesmo
+          // sem eu ter aberto a conversa ainda — dispara pra qualquer DM da
+          // qual eu faço parte (nunca pra mensagem minha própria, nem pra
+          // canais, que não têm recibo de entrega implementado).
+          if (
+            currentUserId &&
+            mapped.authorId !== currentUserId &&
+            mapped.convoId.startsWith("dm:") &&
+            mapped.convoId.slice(3).split("|").includes(currentUserId)
+          ) {
+            void markDelivered(mapped.convoId);
+          }
         },
       )
       .on(
@@ -324,6 +358,12 @@ export async function initChatSync(userId: string) {
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_reads" }, () => {
         void reloadAllReads();
         if (currentUserId) void reloadReads(currentUserId);
+      })
+      .subscribe();
+    supabase
+      .channel("rt-chat-deliveries")
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_deliveries" }, () => {
+        void reloadAllDeliveries();
       })
       .subscribe();
     ensureTypingChannel();
@@ -619,6 +659,26 @@ export async function markRead(convoId: string) {
       { user_id: currentUserId, convo_id: convoId, last_read_at: new Date(now).toISOString() },
       { onConflict: "user_id,convo_id" },
     );
+}
+/** When `userId` last had `convoId` delivered to their client (ms epoch),
+ * or 0 if never — powers the "entregue" (double gray check) receipt. */
+export function getOtherDeliveredAt(convoId: string, userId: string): number {
+  return allDeliveriesCache[convoId]?.[userId] ?? 0;
+}
+/** Carimba "entregue" pro usuário atual nessa conversa — chamado
+ * automaticamente pelo handler de INSERT do realtime, nunca precisa ser
+ * chamado manualmente pela UI. */
+export async function markDelivered(convoId: string) {
+  if (!convoId || !currentUserId) return;
+  const now = Date.now();
+  await supabase.from("chat_deliveries").upsert(
+    {
+      user_id: currentUserId,
+      convo_id: convoId,
+      last_delivered_at: new Date(now).toISOString(),
+    },
+    { onConflict: "user_id,convo_id" },
+  );
 }
 export function getUnreadCount(convoId: string, messages: ChatMessage[], meId: string): number {
   const last = lastReadCache[convoId] ?? 0;

@@ -50,6 +50,7 @@ import {
   broadcastTyping,
   getTypingUsers,
   getOtherReadAt,
+  getOtherDeliveredAt,
   buildChatList,
   createChannel,
   updateChannel,
@@ -1084,6 +1085,7 @@ function MessageList({
     window.setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 1500);
   };
   const otherReadAt = isDm && otherUserId ? getOtherReadAt(convoId, otherUserId) : 0;
+  const otherDeliveredAt = isDm && otherUserId ? getOtherDeliveredAt(convoId, otherUserId) : 0;
 
   if (messages.length === 0) {
     return (
@@ -1097,11 +1099,22 @@ function MessageList({
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
       {messages.map((m, i) => {
         const prev = messages[i - 1];
+        const next = messages[i + 1];
         const grouped =
           prev &&
           prev.authorId === m.authorId &&
           m.createdAt - prev.createdAt < 5 * 60 * 1000 &&
           isSameDay(prev.createdAt, m.createdAt);
+        // Última mensagem de uma sequência do mesmo remetente — é onde o
+        // recibo (enviado/entregue/visto) aparece, nunca na primeira: é a
+        // mensagem mais recente que reflete o estado de verdade da
+        // conversa, e enquanto a sequência continua o recibo da anterior
+        // ficaria "preso" num estado que a próxima mensagem já superou.
+        const lastOfGroup =
+          !next ||
+          next.authorId !== m.authorId ||
+          next.createdAt - m.createdAt >= 5 * 60 * 1000 ||
+          !isSameDay(m.createdAt, next.createdAt);
         const mine = m.authorId === meId;
         const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
         const editing = editingId === m.id;
@@ -1168,15 +1181,6 @@ function MessageList({
                         minute: "2-digit",
                       })}
                     </span>
-                    {mine && isDm && (
-                      <span title={otherReadAt >= m.createdAt ? "Visto" : "Enviado"}>
-                        {otherReadAt >= m.createdAt ? (
-                          <CheckCheck className="h-3 w-3 text-sky-500" />
-                        ) : (
-                          <Check className="h-3 w-3 text-muted-foreground" />
-                        )}
-                      </span>
-                    )}
                   </div>
                 )}
                 {m.replyToId &&
@@ -1248,6 +1252,33 @@ function MessageList({
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+                {!editing && mine && isDm && lastOfGroup && (
+                  <div className="mt-0.5 flex items-center gap-1 self-end">
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <span
+                      title={
+                        otherReadAt >= m.createdAt
+                          ? "Visto"
+                          : otherDeliveredAt >= m.createdAt
+                            ? "Entregue"
+                            : "Enviado"
+                      }
+                    >
+                      {otherReadAt >= m.createdAt ? (
+                        <CheckCheck className="h-3 w-3 text-sky-500" />
+                      ) : otherDeliveredAt >= m.createdAt ? (
+                        <CheckCheck className="h-3 w-3 text-muted-foreground" />
+                      ) : (
+                        <Check className="h-3 w-3 text-muted-foreground" />
+                      )}
+                    </span>
                   </div>
                 )}
               </div>
