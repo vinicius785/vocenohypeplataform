@@ -10,6 +10,7 @@ import {
   type PropostaSnapshot,
 } from "@/lib/comercial";
 import { SimuladorPropostaDialog } from "@/components/comercial/SimuladorPropostaDialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   listLeads,
   upsertLead as upsertLeadFn,
@@ -383,6 +384,7 @@ export function ComercialSection() {
             setEditing(null);
           }}
           onRunAction={(input) => actionMutation.mutateAsync(input)}
+          onAutosave={(lead) => upsertMutation.mutateAsync(lead)}
         />
       )}
       {confirmDialog}
@@ -543,6 +545,7 @@ function LeadForm({
   onClose,
   onSave,
   onRunAction,
+  onAutosave,
 }: {
   initial: Lead | null;
   stages: Stage[];
@@ -550,10 +553,11 @@ function LeadForm({
   onClose: () => void;
   onSave: (l: Lead) => void;
   onRunAction: (input: OpportunityActionInput) => Promise<Lead>;
+  onAutosave: (l: Lead) => Promise<Lead>;
 }) {
   // `liveLead` acompanha o resultado de cada ação do motor (etapa, histórico,
-  // valor) sem fechar o drawer — os campos do formulário abaixo continuam
-  // como estado local separado, só sincronizado na abertura/criação.
+  // valor) e de cada autosave, sem fechar a ficha — os campos abaixo
+  // continuam como estado local separado, só sincronizado na abertura.
   const [liveLead, setLiveLead] = useState<Lead | null>(initial);
   const [name, setName] = useState(initial?.name ?? "");
   const [company, setCompany] = useState(initial?.company ?? "");
@@ -568,12 +572,17 @@ function LeadForm({
   const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
   const [proposta, setProposta] = useState<PropostaSnapshot | undefined>(initial?.proposta);
   const [showSimulador, setShowSimulador] = useState(false);
+  // Etapa só é editável diretamente aqui para uma oportunidade NOVA (ainda
+  // sem `liveLead`) — depois de criada, a etapa muda só via ação do motor
+  // ou via "Alterar etapa manualmente" no menu "⋯".
   const [stage, setStage] = useState<OpportunityStage>(legacyStage(initial?.stage));
   const [source, setSource] = useState(initial?.source ?? "");
   const [responsible, setResponsible] = useState(initial?.responsible ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [score, setScore] = useState<number>(initial?.score ?? 0);
+  const [tab, setTab] = useState("visao-geral");
   const [error, setError] = useState("");
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [showEtapaMenu, setShowEtapaMenu] = useState(false);
   const [runningAction, setRunningAction] = useState<OpportunityActionKind | null>(null);
   const [showAgendar, setShowAgendar] = useState(false);
@@ -587,8 +596,10 @@ function LeadForm({
   const [motivoPerdido, setMotivoPerdido] = useState("");
 
   const parsedValue = Number(value.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
-  const stageMeta = stages.find((s) => s.key === stage);
   const nextStep = liveLead ? deriveOpportunityNextStep(liveLead) : null;
+  const currentStageLabel = liveLead
+    ? nextStep!.stageLabel
+    : (stages.find((s) => s.key === stage)?.label ?? stage);
 
   const runAction = async (
     action: OpportunityActionKind,
@@ -610,17 +621,16 @@ function LeadForm({
     }
   };
 
-  const submit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const n = name.trim();
-    if (!n) {
-      setError("Informe o nome da oportunidade.");
-      return;
-    }
+  // Monta o `Lead` completo a partir do estado atual dos campos — usado
+  // tanto pela criação (submit) quanto pelo autosave de campo. A etapa
+  // nunca vem do `<select>` de criação depois que a oportunidade já existe:
+  // vem sempre de `liveLead.stage`, porque só o motor (ação/alteração
+  // manual) pode mudá-la nesse ponto.
+  const buildLead = (): Lead => {
     const now = Date.now();
-    const lead: Lead = {
-      id: initial?.id ?? uid(),
-      name: n,
+    return {
+      id: liveLead?.id ?? uid(),
+      name: name.trim(),
       company: company.trim() || undefined,
       contact: contact.trim() || undefined,
       email: email.trim() || undefined,
@@ -632,19 +642,49 @@ function LeadForm({
       experience: experience.trim() || undefined,
       value: parsedValue,
       proposta,
-      stage,
-      tags: initial?.tags ?? [],
+      stage: liveLead ? liveLead.stage : stage,
+      tags: liveLead?.tags ?? [],
       source: source || undefined,
       responsible: responsible || undefined,
       notes: notes.trim() || undefined,
       score,
-      activities: initial?.activities ?? [],
-      createdAt: initial?.createdAt ?? now,
+      activities: liveLead?.activities ?? [],
+      history: liveLead?.history,
+      createdAt: liveLead?.createdAt ?? now,
       updatedAt: now,
-      clienteId: initial?.clienteId,
-      projectId: initial?.projectId,
+      clienteId: liveLead?.clienteId,
+      projectId: liveLead?.projectId,
     };
-    onSave(lead);
+  };
+
+  // Autosave de campo — só depois que a oportunidade já existe (criação
+  // continua sendo uma transação única e explícita, via botão). Chamado no
+  // blur de inputs de texto e no change de selects/estrelas.
+  const autosaveField = async () => {
+    if (!liveLead) return;
+    const n = name.trim();
+    if (!n) return;
+    setAutosaveStatus("saving");
+    setError("");
+    try {
+      const saved = await onAutosave(buildLead());
+      setLiveLead(saved);
+      setAutosaveStatus("saved");
+      setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 1600);
+    } catch (e) {
+      setAutosaveStatus("idle");
+      setError(e instanceof Error ? e.message : "Não foi possível salvar essa alteração.");
+    }
+  };
+
+  const submit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const n = name.trim();
+    if (!n) {
+      setError("Informe o nome da oportunidade.");
+      return;
+    }
+    onSave(buildLead());
   };
 
   const handleConvert = () => {
@@ -659,56 +699,60 @@ function LeadForm({
         onClick={(e) => e.stopPropagation()}
         className="flex h-full w-full max-w-4xl flex-col bg-background shadow-2xl md:border-l md:border-border"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-              <Briefcase className="h-4 w-4" />
-            </span>
+        {/* Cabeçalho — ficha da oportunidade, não "editar formulário": quem é,
+            quanto vale, em que etapa está e o que precisa acontecer agora. */}
+        <div className="border-b border-border">
+          <div className="flex items-start justify-between gap-3 px-5 pt-4">
             <div className="min-w-0">
-              <h3 className="truncate text-lg font-light tracking-tight text-foreground">
-                {initial ? "Editar oportunidade" : "Nova oportunidade"}
+              <h3 className="truncate text-xl font-light tracking-tight text-foreground">
+                {name.trim() || "Nova oportunidade"}
               </h3>
-              <p className="text-xs text-muted-foreground">
-                Preencha as informações — o resumo é atualizado em tempo real.
+              <p className="truncate text-sm text-muted-foreground">
+                {company.trim() ? `${company} · ` : ""}
+                {formatBRL(parsedValue)}
               </p>
             </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-            type="button"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {liveLead && nextStep && (
-          <div className="relative border-b border-border bg-muted/30 px-5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground">
-                  {nextStep.stageLabel}
+            <div className="flex shrink-0 items-center gap-2">
+              {autosaveStatus !== "idle" && (
+                <span className="text-[11px] text-muted-foreground">
+                  {autosaveStatus === "saving" ? "Salvando…" : "Salvo"}
                 </span>
-                {nextStep.actionLabel ? (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <ArrowRight className="h-3 w-3" />
-                    Próxima ação:{" "}
-                    <span className="font-medium text-foreground">{nextStep.actionLabel}</span>
-                    {nextStep.actor && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
-                      </span>
-                    )}
-                  </span>
-                ) : nextStep.actor === "CLIENTE" ? (
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="h-1.5 w-1.5 rounded-full border border-foreground" />
-                    Aguardando resposta do cliente
-                  </span>
-                ) : null}
-              </div>
+              )}
+              <button
+                onClick={onClose}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                type="button"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
 
-              <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-end justify-between gap-3 px-5 pb-4 pt-3">
+            <div className="min-w-0">
+              <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-foreground">
+                {currentStageLabel}
+              </span>
+              {liveLead && nextStep && (
+                <div className="mt-2">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Próxima ação
+                  </div>
+                  <div className="text-sm font-medium text-foreground">
+                    {nextStep.actionLabel ??
+                      (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
+                  </div>
+                  {nextStep.actor && (
+                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {liveLead && nextStep && (
+              <div className="flex shrink-0 items-center gap-2">
                 {nextStep.action === "registrar_contato" && (
                   <ActionButton
                     label="Registrar contato"
@@ -755,37 +799,10 @@ function LeadForm({
                     }}
                   />
                 )}
-                {nextStep.stage === "PROPOSTA_ENVIADA" && (
-                  <button
-                    type="button"
-                    onClick={() => runAction("revisar_proposta")}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                  >
-                    Revisar proposta
-                  </button>
-                )}
-                {nextStep.stage !== "GANHO" && nextStep.stage !== "PERDIDO" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
-                        setShowGanho(true);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Marcar ganho
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowPerdido(true)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <XCircle className="h-3.5 w-3.5" /> Marcar perdido
-                    </button>
-                  </>
-                )}
 
+                {/* Ações secundárias — nunca disputam espaço com o botão
+                    principal: etapa manual, ganho, perdido e revisar
+                    proposta vivem só aqui, atrás do "⋯". */}
                 <div className="relative">
                   <button
                     type="button"
@@ -795,342 +812,473 @@ function LeadForm({
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
                   {showEtapaMenu && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-xl border border-border bg-background p-2 shadow-lg">
-                      <p className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">
-                        Alterar etapa manualmente
-                      </p>
-                      <select
-                        value={nextStep.stage}
-                        onChange={(e) => {
-                          setShowEtapaMenu(false);
-                          void runAction("alterar_etapa_manual", {
-                            toStage: e.target.value as OpportunityStage,
-                          });
-                        }}
-                        className={inputCls}
-                      >
-                        {OPPORTUNITY_STAGES.map((s) => (
-                          <option key={s} value={s}>
-                            {OPPORTUNITY_STAGE_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="absolute right-0 top-full z-10 mt-1 w-64 space-y-1 rounded-xl border border-border bg-background p-2 shadow-lg">
+                      {nextStep.stage === "PROPOSTA_ENVIADA" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEtapaMenu(false);
+                            void runAction("revisar_proposta");
+                          }}
+                          className="w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          Revisar proposta
+                        </button>
+                      )}
+                      {nextStep.stage !== "GANHO" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEtapaMenu(false);
+                            setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
+                            setShowGanho(true);
+                          }}
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Marcar como ganho
+                        </button>
+                      )}
+                      {nextStep.stage !== "PERDIDO" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEtapaMenu(false);
+                            setShowPerdido(true);
+                          }}
+                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> Marcar como perdido
+                        </button>
+                      )}
+                      <div className="border-t border-border pt-1">
+                        <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">
+                          Alterar etapa manualmente
+                        </p>
+                        <select
+                          value={nextStep.stage}
+                          onChange={(e) => {
+                            setShowEtapaMenu(false);
+                            void runAction("alterar_etapa_manual", {
+                              toStage: e.target.value as OpportunityStage,
+                            });
+                          }}
+                          className={inputCls}
+                        >
+                          {OPPORTUNITY_STAGES.map((s) => (
+                            <option key={s} value={s}>
+                              {OPPORTUNITY_STAGE_LABEL[s]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <div className="flex-1 overflow-y-auto bg-muted/20 p-5">
-            <Section title="Oportunidade" icon={<Tag className="h-4 w-4" />}>
-              <label className={labelCls}>
-                <span>Nome da oportunidade *</span>
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={inputCls}
-                  placeholder="Ex: Website institucional Acme"
-                  maxLength={120}
-                />
-              </label>
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="mx-5 mt-3 w-fit shrink-0">
+              <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
+              <TabsTrigger value="contato">Contato</TabsTrigger>
+              <TabsTrigger value="qualificacao">Qualificação</TabsTrigger>
+              <TabsTrigger value="proposta">Proposta</TabsTrigger>
+              {liveLead && <TabsTrigger value="historico">Histórico</TabsTrigger>}
+            </TabsList>
 
-              <div className="rounded-2xl border border-border bg-muted/40 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-muted-foreground">Valor (R$)</span>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-5">
+              <TabsContent value="visao-geral" className="mt-0 space-y-4">
+                <Section title="Oportunidade" icon={<Tag className="h-4 w-4" />}>
+                  <label className={labelCls}>
+                    <span>Nome da oportunidade *</span>
+                    <input
+                      autoFocus={!liveLead}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={autosaveField}
+                      className={inputCls}
+                      placeholder="Ex: Website institucional Acme"
+                      maxLength={120}
+                    />
+                  </label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={labelCls}>
+                      <span>Empresa</span>
+                      <input
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={120}
+                      />
+                    </label>
+                    <label className={labelCls}>
+                      <span>Valor (R$)</span>
+                      <input
+                        inputMode="decimal"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        placeholder="0"
+                      />
+                    </label>
+                  </div>
+                  {!liveLead && (
+                    <label className={labelCls}>
+                      <span>Etapa inicial</span>
+                      <select
+                        value={stage}
+                        onChange={(e) => setStage(e.target.value as OpportunityStage)}
+                        className={inputCls}
+                      >
+                        {stages.map((s) => (
+                          <option key={s.key} value={s.key}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </Section>
+
+                <Section title="Detalhes" icon={<FileText className="h-4 w-4" />}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={labelCls}>
+                      <span>Origem</span>
+                      <select
+                        value={source}
+                        onChange={(e) => setSource(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                      >
+                        <option value="">Selecione...</option>
+                        {SOURCES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={labelCls}>
+                      <span>Responsável pela oportunidade</span>
+                      <select
+                        value={responsible}
+                        onChange={(e) => setResponsible(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                      >
+                        <option value="">Selecione...</option>
+                        {team.map((m) => (
+                          <option key={m.id} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className={labelCls}>
+                    <span>Observações</span>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      onBlur={autosaveField}
+                      className={`${inputCls} h-24 resize-none py-2`}
+                      maxLength={1000}
+                    />
+                  </label>
+                </Section>
+              </TabsContent>
+
+              <TabsContent value="contato" className="mt-0 space-y-4">
+                <Section title="Contato" icon={<User className="h-4 w-4" />}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={labelCls}>
+                      <span>Nome</span>
+                      <input
+                        value={contact}
+                        onChange={(e) => setContact(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={120}
+                      />
+                    </label>
+                    <label className={labelCls}>
+                      <span>Cargo</span>
+                      <input
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={120}
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={labelCls}>
+                      <span>E-mail</span>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={255}
+                      />
+                    </label>
+                    <label className={labelCls}>
+                      <span>Telefone</span>
+                      <input
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={40}
+                      />
+                    </label>
+                  </div>
+                  {(phone.trim() || email.trim()) && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {phone.trim() && (
+                        <a
+                          href={`tel:${phone.replace(/\D/g, "")}`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <Phone className="h-3.5 w-3.5" /> Ligar
+                        </a>
+                      )}
+                      {phone.trim() && (
+                        <a
+                          href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          WhatsApp
+                        </a>
+                      )}
+                      {email.trim() && (
+                        <a
+                          href={`mailto:${email}`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <Mail className="h-3.5 w-3.5" /> E-mail
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </Section>
+              </TabsContent>
+
+              <TabsContent value="qualificacao" className="mt-0 space-y-4">
+                <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
+                  <div className={labelCls}>
+                    <span>Qualificação</span>
+                    <div className="flex h-9 items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setScore(score === n ? 0 : n);
+                            setTimeout(autosaveField, 0);
+                          }}
+                          className="rounded p-0.5 hover:bg-muted"
+                        >
+                          <Star
+                            className={`h-5 w-5 ${
+                              n <= score
+                                ? "fill-foreground text-foreground"
+                                : "text-muted-foreground"
+                            }`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className={labelCls}>
+                      <span>Setor</span>
+                      <input
+                        value={vertical}
+                        onChange={(e) => setVertical(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        maxLength={120}
+                      />
+                    </label>
+                    <label className={labelCls}>
+                      <span>Orçamento mensal</span>
+                      <input
+                        value={budget}
+                        onChange={(e) => setBudget(e.target.value)}
+                        onBlur={autosaveField}
+                        className={inputCls}
+                        placeholder="R$"
+                      />
+                    </label>
+                  </div>
+                  <label className={labelCls}>
+                    <span>Urgência</span>
+                    <input
+                      value={urgency}
+                      onChange={(e) => setUrgency(e.target.value)}
+                      onBlur={autosaveField}
+                      className={inputCls}
+                      maxLength={60}
+                    />
+                  </label>
+                  <label className={labelCls}>
+                    <span>Experiência com agência</span>
+                    <textarea
+                      value={experience}
+                      onChange={(e) => setExperience(e.target.value)}
+                      onBlur={autosaveField}
+                      className={`${inputCls} h-16 resize-none py-2`}
+                      maxLength={500}
+                    />
+                  </label>
+                </Section>
+              </TabsContent>
+
+              <TabsContent value="proposta" className="mt-0 space-y-4">
+                <Section title="Proposta" icon={<Calculator className="h-4 w-4" />}>
                   <button
                     type="button"
                     onClick={() => setShowSimulador(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
                   >
                     <Calculator className="h-3.5 w-3.5" />
-                    Simular proposta
+                    {proposta ? "Recalcular proposta" : "Simular proposta"}
                   </button>
-                </div>
-                <input
-                  inputMode="decimal"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  className="mt-2 h-11 w-full rounded-md border border-border bg-background px-3 text-lg font-semibold outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="0"
-                />
-                {proposta && (
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Calculado no simulador: custo {formatBRL(proposta.custoTotal)} → preço{" "}
-                    <span className="font-medium text-foreground">
-                      {formatBRL(proposta.precoFinal)}
-                    </span>
-                    {proposta.ajustadoManualmente && proposta.precoCalculado !== undefined && (
-                      <span className="italic">
-                        {" "}
-                        (ajustado manualmente — calculado era {formatBRL(proposta.precoCalculado)})
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {!liveLead && (
-                  <label className={labelCls}>
-                    <span>Etapa inicial</span>
-                    <select
-                      value={stage}
-                      onChange={(e) => setStage(e.target.value as OpportunityStage)}
-                      className={inputCls}
-                    >
-                      {stages.map((s) => (
-                        <option key={s.key} value={s.key}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <div className={labelCls}>
-                  <span>Qualificação</span>
-                  <div className="flex h-9 items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => setScore(score === n ? 0 : n)}
-                        className="rounded p-0.5 hover:bg-muted"
-                      >
-                        <Star
-                          className={`h-5 w-5 ${
-                            n <= score ? "fill-foreground text-foreground" : "text-muted-foreground"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Section>
-
-            <Section title="Contato" icon={<User className="h-4 w-4" />}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>Nome</span>
-                  <input
-                    value={contact}
-                    onChange={(e) => setContact(e.target.value)}
-                    className={inputCls}
-                    maxLength={120}
-                  />
-                </label>
-                <label className={labelCls}>
-                  <span>Cargo</span>
-                  <input
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className={inputCls}
-                    maxLength={120}
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>E-mail</span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputCls}
-                    maxLength={255}
-                  />
-                </label>
-                <label className={labelCls}>
-                  <span>Telefone</span>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className={inputCls}
-                    maxLength={40}
-                  />
-                </label>
-              </div>
-            </Section>
-
-            <Section title="Empresa" icon={<Building2 className="h-4 w-4" />}>
-              <label className={labelCls}>
-                <span>Nome da empresa</span>
-                <input
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className={inputCls}
-                  maxLength={120}
-                />
-              </label>
-            </Section>
-
-            <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>Setor</span>
-                  <input
-                    value={vertical}
-                    onChange={(e) => setVertical(e.target.value)}
-                    className={inputCls}
-                    maxLength={120}
-                  />
-                </label>
-                <label className={labelCls}>
-                  <span>Orçamento mensal</span>
-                  <input
-                    value={budget}
-                    onChange={(e) => setBudget(e.target.value)}
-                    className={inputCls}
-                    placeholder="R$"
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>Urgência</span>
-                  <input
-                    value={urgency}
-                    onChange={(e) => setUrgency(e.target.value)}
-                    className={inputCls}
-                    maxLength={60}
-                  />
-                </label>
-              </div>
-              <label className={labelCls}>
-                <span>Experiência com agência</span>
-                <textarea
-                  value={experience}
-                  onChange={(e) => setExperience(e.target.value)}
-                  className={`${inputCls} h-16 resize-none py-2`}
-                  maxLength={500}
-                />
-              </label>
-            </Section>
-
-            <Section title="Detalhes" icon={<FileText className="h-4 w-4" />}>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>Origem</span>
-                  <select
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Selecione...</option>
-                    {SOURCES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={labelCls}>
-                  <span>Responsável</span>
-                  <select
-                    value={responsible}
-                    onChange={(e) => setResponsible(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Selecione...</option>
-                    {team.map((m) => (
-                      <option key={m.id} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label className={labelCls}>
-                <span>Observações</span>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className={`${inputCls} h-24 resize-none py-2`}
-                  maxLength={1000}
-                />
-              </label>
-            </Section>
-
-            {error && (
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
-                <XCircle className="h-3.5 w-3.5 shrink-0" />
-                {error}
-              </div>
-            )}
-          </div>
-
-          <aside className="w-full shrink-0 overflow-y-auto border-t border-border bg-muted/30 p-5 md:w-80 md:border-l md:border-t-0">
-            <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Resumo ao vivo
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="h-1 bg-foreground" />
-              <div className="space-y-2 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">
-                      {name.trim() || "Nova oportunidade"}
+                  {proposta ? (
+                    <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          Custo dos influenciadores
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {formatBRL(proposta.custoTotal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Preço calculado</span>
+                        <span className="font-medium text-foreground">
+                          {formatBRL(proposta.precoCalculado ?? proposta.precoFinal)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-border pt-2">
+                        <span className="text-xs text-muted-foreground">Preço comercial</span>
+                        <span className="text-lg font-semibold text-foreground">
+                          {formatBRL(proposta.precoFinal)}
+                        </span>
+                      </div>
+                      {proposta.ajustadoManualmente && (
+                        <p className="text-[11px] italic text-muted-foreground">
+                          Ajustado manualmente
+                        </p>
+                      )}
                     </div>
-                    {company && (
-                      <div className="truncate text-xs text-muted-foreground">{company}</div>
-                    )}
-                  </div>
-                  <span className="rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-                    {stageMeta?.label ?? "—"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-semibold">{formatBRL(parsedValue)}</span>
-                </div>
-                {score > 0 && (
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star
-                        key={n}
-                        className={`h-3 w-3 ${
-                          n <= score
-                            ? "fill-foreground text-foreground"
-                            : "text-muted-foreground/40"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhuma proposta calculada ainda para esta oportunidade.
+                    </p>
+                  )}
 
-            <dl className="mt-4 space-y-2 text-xs">
-              <SummaryRow
-                icon={<User className="h-3.5 w-3.5" />}
-                label="Contato"
-                value={contact}
-                extra={role}
-              />
-              <SummaryRow icon={<Mail className="h-3.5 w-3.5" />} label="E-mail" value={email} />
-              <SummaryRow icon={<Phone className="h-3.5 w-3.5" />} label="Telefone" value={phone} />
-              <SummaryRow
-                icon={<Building2 className="h-3.5 w-3.5" />}
-                label="Empresa"
-                value={company}
-              />
-              <SummaryRow icon={<Tag className="h-3.5 w-3.5" />} label="Origem" value={source} />
+                  {liveLead && nextStep?.action === "enviar_proposta" && (
+                    <ActionButton
+                      label="Enviar proposta"
+                      busy={runningAction === "enviar_proposta"}
+                      onClick={() => runAction("enviar_proposta")}
+                    />
+                  )}
+                </Section>
+              </TabsContent>
+
+              {liveLead && (
+                <TabsContent value="historico" className="mt-0 space-y-4">
+                  <Section title="Histórico" icon={<History className="h-4 w-4" />}>
+                    {(liveLead.history?.length ?? 0) === 0 ? (
+                      <p className="text-xs text-muted-foreground">Sem eventos registrados.</p>
+                    ) : (
+                      <ul className="space-y-3 border-l border-border pl-3">
+                        {[...(liveLead.history ?? [])]
+                          .sort((a, b) => b.createdAt - a.createdAt)
+                          .map((h) => (
+                            <li key={h.id} className="text-xs leading-relaxed">
+                              <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
+                                {linkifyText(h.text)}
+                              </div>
+                              <div className="text-muted-foreground/70">
+                                {new Date(h.createdAt).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </Section>
+                </TabsContent>
+              )}
+
+              {error && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
+                  <XCircle className="h-3.5 w-3.5 shrink-0" />
+                  {error}
+                </div>
+              )}
+            </div>
+          </Tabs>
+
+          {/* Resumo — painel de contexto compacto, não um segundo formulário:
+              só o que ajuda a decidir a próxima ação, sem repetir os campos
+              que já estão nas abas ao lado. */}
+          <aside className="w-full shrink-0 overflow-y-auto border-t border-border bg-muted/30 p-4 md:w-64 md:border-l md:border-t-0">
+            <div className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Resumo
+            </div>
+            <dl className="space-y-3 text-xs">
+              <div>
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Valor</dt>
+                <dd className="text-base font-semibold text-foreground">
+                  {formatBRL(parsedValue)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Status
+                </dt>
+                <dd className="mt-0.5">
+                  <span className="inline-flex items-center rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-foreground">
+                    {currentStageLabel}
+                  </span>
+                </dd>
+              </div>
+              {liveLead && nextStep && (
+                <div>
+                  <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Próxima ação
+                  </dt>
+                  <dd className="font-medium text-foreground">
+                    {nextStep.actionLabel ??
+                      (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
+                  </dd>
+                </div>
+              )}
               <SummaryRow
                 icon={<UserCircle2 className="h-3.5 w-3.5" />}
                 label="Responsável"
                 value={responsible}
               />
-              {nextStep?.actor && (
-                <SummaryRow
-                  icon={<ArrowRight className="h-3.5 w-3.5" />}
-                  label="Próxima ação é de"
-                  value={OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
-                />
-              )}
               {liveLead && (
                 <SummaryRow
                   icon={<Clock className="h-3.5 w-3.5" />}
@@ -1140,70 +1288,50 @@ function LeadForm({
               )}
             </dl>
 
-            {notes.trim() && (
-              <div className="mt-4 rounded-md border border-border bg-background p-2.5 text-xs">
-                <div className="mb-1 flex items-center gap-1.5 font-medium">
-                  <FileText className="h-3.5 w-3.5" /> Observações
-                </div>
-                <p className="line-clamp-6 whitespace-pre-wrap text-muted-foreground">{notes}</p>
-              </div>
-            )}
-
-            {liveLead && (
+            {liveLead && (liveLead.history?.length ?? 0) > 0 && (
               <div className="mt-4">
-                <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <History className="h-3.5 w-3.5" /> Histórico
+                <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Histórico recente
                 </div>
-                {(liveLead.history?.length ?? 0) === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">Sem eventos registrados.</p>
-                ) : (
-                  <ul className="space-y-2 border-l border-border pl-3">
-                    {[...(liveLead.history ?? [])]
-                      .sort((a, b) => b.createdAt - a.createdAt)
-                      .map((h) => (
-                        <li key={h.id} className="text-[11px] leading-relaxed">
-                          <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
-                            {linkifyText(h.text)}
-                          </div>
-                          <div className="text-muted-foreground/70">
-                            {new Date(h.createdAt).toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </div>
-                        </li>
-                      ))}
-                  </ul>
-                )}
+                <ul className="space-y-1.5">
+                  {[...(liveLead.history ?? [])]
+                    .sort((a, b) => b.createdAt - a.createdAt)
+                    .slice(0, 3)
+                    .map((h) => (
+                      <li
+                        key={h.id}
+                        className="truncate text-[11px] text-muted-foreground"
+                        title={h.text}
+                      >
+                        • {h.text}
+                      </li>
+                    ))}
+                </ul>
               </div>
             )}
           </aside>
-        </form>
+        </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
-          <div>
-            {liveLead && legacyStage(liveLead.stage) === "GANHO" && (
-              <>
-                {liveLead.clienteId ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Convertido em cliente/projeto
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleConvert}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
-                  >
-                    <Briefcase className="h-3.5 w-3.5" /> Converter em cliente/projeto
-                  </button>
-                )}
-              </>
+        {liveLead && legacyStage(liveLead.stage) === "GANHO" && (
+          <div className="border-t border-border px-5 py-3">
+            {liveLead.clienteId ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Convertido em cliente/projeto
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleConvert}
+                className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                <Briefcase className="h-3.5 w-3.5" /> Converter em cliente/projeto
+              </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+        )}
+
+        {!liveLead && (
+          <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
             <button
               type="button"
               onClick={onClose}
@@ -1216,10 +1344,10 @@ function LeadForm({
               onClick={() => submit()}
               className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
             >
-              {initial ? "Salvar alterações" : "Criar oportunidade"}
+              Criar oportunidade
             </button>
           </div>
-        </div>
+        )}
       </div>
 
       <SimuladorPropostaDialog
