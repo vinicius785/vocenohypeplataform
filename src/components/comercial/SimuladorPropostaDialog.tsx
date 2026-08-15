@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Calculator, RotateCcw, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import {
   TIERS,
   FORMATOS,
@@ -97,7 +96,7 @@ export function SimuladorPropostaDialog({
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
           <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
               <Calculator className="h-4 w-4" />
             </span>
             <div className="min-w-0">
@@ -117,7 +116,7 @@ export function SimuladorPropostaDialog({
               {linhas.map((l, i) => (
                 <div
                   key={l.id}
-                  className="flex items-center gap-2 rounded-lg border border-border bg-muted/20 p-2"
+                  className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 p-2"
                 >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-semibold text-muted-foreground">
                     {i + 1}
@@ -168,13 +167,13 @@ export function SimuladorPropostaDialog({
                 type="button"
                 onClick={addLinha}
                 disabled={linhas.length >= 10}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-40"
+                className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline disabled:opacity-40"
               >
                 <Plus className="h-3 w-3" /> adicionar linha
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border">
+            <div className="overflow-hidden rounded-2xl border border-border">
               <div className="flex items-center justify-between bg-muted/40 px-4 py-2.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   Custo dos influenciadores
@@ -212,9 +211,9 @@ export function SimuladorPropostaDialog({
               </div>
             </div>
 
-            <div className="rounded-xl border-2 border-primary/30 bg-primary/[0.04] p-4">
+            <div className="rounded-2xl border-2 border-foreground bg-muted/40 p-4">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-foreground">
+                <label className="text-xs font-medium text-foreground">
                   Preço final ao cliente (R$)
                 </label>
                 {editadoManualmente && (
@@ -242,12 +241,20 @@ export function SimuladorPropostaDialog({
           </div>
 
           <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3.5">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            >
               Cancelar
-            </Button>
-            <Button type="button" onClick={apply}>
+            </button>
+            <button
+              type="button"
+              onClick={apply}
+              className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+            >
               Usar como valor do negócio
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

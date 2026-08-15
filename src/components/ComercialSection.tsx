@@ -23,7 +23,6 @@ import {
   legacyStage,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_LABEL,
-  OPPORTUNITY_STAGE_TONE,
   OPPORTUNITY_ACTOR_LABEL,
   type OpportunityActionKind,
   type OpportunityStage,
@@ -54,6 +53,7 @@ import {
   Star,
   Briefcase,
   CheckCircle2,
+  XCircle,
   Clock,
   History,
   Calculator,
@@ -659,13 +659,13 @@ function LeadForm({
         onClick={(e) => e.stopPropagation()}
         className="flex h-full w-full max-w-4xl flex-col bg-background shadow-2xl md:border-l md:border-border"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
               <Briefcase className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold">
+              <h3 className="truncate text-lg font-light tracking-tight text-foreground">
                 {initial ? "Editar oportunidade" : "Nova oportunidade"}
               </h3>
               <p className="text-xs text-muted-foreground">
@@ -675,7 +675,7 @@ function LeadForm({
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
             type="button"
           >
             <X className="h-4 w-4" />
@@ -686,9 +686,7 @@ function LeadForm({
           <div className="relative border-b border-border bg-muted/30 px-5 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${OPPORTUNITY_STAGE_TONE[nextStep.stage]}`}
-                >
+                <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground">
                   {nextStep.stageLabel}
                 </span>
                 {nextStep.actionLabel ? (
@@ -697,13 +695,14 @@ function LeadForm({
                     Próxima ação:{" "}
                     <span className="font-medium text-foreground">{nextStep.actionLabel}</span>
                     {nextStep.actor && (
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                         {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
                       </span>
                     )}
                   </span>
                 ) : nextStep.actor === "CLIENTE" ? (
-                  <span className="text-xs text-sky-600 dark:text-sky-400">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="h-1.5 w-1.5 rounded-full border border-foreground" />
                     Aguardando resposta do cliente
                   </span>
                 ) : null}
@@ -760,7 +759,7 @@ function LeadForm({
                   <button
                     type="button"
                     onClick={() => runAction("revisar_proposta")}
-                    className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                    className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                   >
                     Revisar proposta
                   </button>
@@ -773,16 +772,16 @@ function LeadForm({
                         setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
                         setShowGanho(true);
                       }}
-                      className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-500/20"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
                     >
-                      Marcar ganho
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Marcar ganho
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowPerdido(true)}
-                      className="rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-500/20"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
-                      Marcar perdido
+                      <XCircle className="h-3.5 w-3.5" /> Marcar perdido
                     </button>
                   </>
                 )}
@@ -791,12 +790,12 @@ function LeadForm({
                   <button
                     type="button"
                     onClick={() => setShowEtapaMenu((v) => !v)}
-                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
                   {showEtapaMenu && (
-                    <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-md border border-border bg-background p-2 shadow-lg">
+                    <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-xl border border-border bg-background p-2 shadow-lg">
                       <p className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">
                         Alterar etapa manualmente
                       </p>
@@ -839,13 +838,13 @@ function LeadForm({
                 />
               </label>
 
-              <div className="rounded-lg border border-primary/25 bg-primary/[0.04] p-3">
+              <div className="rounded-2xl border border-border bg-muted/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-medium text-muted-foreground">Valor (R$)</span>
                   <button
                     type="button"
                     onClick={() => setShowSimulador(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm transition-transform hover:scale-[1.03] hover:opacity-90"
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
                   >
                     <Calculator className="h-3.5 w-3.5" />
                     Simular proposta
@@ -865,7 +864,7 @@ function LeadForm({
                       {formatBRL(proposta.precoFinal)}
                     </span>
                     {proposta.ajustadoManualmente && proposta.precoCalculado !== undefined && (
-                      <span className="text-amber-600">
+                      <span className="italic">
                         {" "}
                         (ajustado manualmente — calculado era {formatBRL(proposta.precoCalculado)})
                       </span>
@@ -903,7 +902,7 @@ function LeadForm({
                       >
                         <Star
                           className={`h-5 w-5 ${
-                            n <= score ? "fill-amber-400 text-amber-400" : "text-muted-foreground"
+                            n <= score ? "fill-foreground text-foreground" : "text-muted-foreground"
                           }`}
                         />
                       </button>
@@ -1057,7 +1056,8 @@ function LeadForm({
             </Section>
 
             {error && (
-              <div className="mt-3 rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-600">
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
+                <XCircle className="h-3.5 w-3.5 shrink-0" />
                 {error}
               </div>
             )}
@@ -1067,8 +1067,8 @@ function LeadForm({
             <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Resumo ao vivo
             </div>
-            <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
-              <div className={`h-1 ${stageMeta?.color ?? "bg-muted"}`} />
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="h-1 bg-foreground" />
               <div className="space-y-2 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1079,12 +1079,12 @@ function LeadForm({
                       <div className="truncate text-xs text-muted-foreground">{company}</div>
                     )}
                   </div>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                  <span className="rounded-full border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground">
                     {stageMeta?.label ?? "—"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-sm">
-                  <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                  <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-semibold">{formatBRL(parsedValue)}</span>
                 </div>
                 {score > 0 && (
@@ -1093,7 +1093,9 @@ function LeadForm({
                       <Star
                         key={n}
                         className={`h-3 w-3 ${
-                          n <= score ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"
+                          n <= score
+                            ? "fill-foreground text-foreground"
+                            : "text-muted-foreground/40"
                         }`}
                       />
                     ))}
@@ -1186,14 +1188,14 @@ function LeadForm({
             {liveLead && legacyStage(liveLead.stage) === "GANHO" && (
               <>
                 {liveLead.clienteId ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Convertido em cliente/projeto
                   </span>
                 ) : (
                   <button
                     type="button"
                     onClick={handleConvert}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-500/20"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
                   >
                     <Briefcase className="h-3.5 w-3.5" /> Converter em cliente/projeto
                   </button>
@@ -1205,14 +1207,14 @@ function LeadForm({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+              className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={() => submit()}
-              className="rounded-md bg-foreground px-4 py-1.5 text-sm font-medium text-background hover:opacity-90"
+              className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
             >
               {initial ? "Salvar alterações" : "Criar oportunidade"}
             </button>
@@ -1364,7 +1366,7 @@ function ActionButton({
       type="button"
       disabled={busy}
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm transition-transform hover:scale-[1.02] hover:opacity-90 disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
       {label}
@@ -1394,15 +1396,15 @@ function MiniActionDialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-2xl border border-border bg-background p-4 shadow-2xl"
       >
-        <h4 className="mb-3 text-sm font-semibold">{title}</h4>
+        <h4 className="mb-3 text-sm font-medium text-foreground">{title}</h4>
         <div className="space-y-3">{children}</div>
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+            className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
             Cancelar
           </button>
@@ -1410,7 +1412,7 @@ function MiniActionDialog({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
           >
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {confirmLabel}
@@ -1431,9 +1433,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-4 space-y-3 rounded-xl border border-border bg-background p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
+    <div className="mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
           {icon}
         </span>
         {title}
