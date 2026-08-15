@@ -6,13 +6,21 @@ export type Stage = {
   color: string; // tailwind bg color class for the top bar
 };
 
+// As `key` abaixo são exatamente os valores de `OpportunityStage`
+// (src/lib/comercial-engine.ts) — mantém o pipeline visual em sincronia
+// com o motor de próxima ação, sem duas fontes de verdade. Leads antigos
+// com os 6 valores curtos de antes (`lead`, `contato`, etc) continuam
+// funcionando: `legacyStage()` traduz na leitura, sem migração de banco.
 export const DEFAULT_STAGES: Stage[] = [
-  { key: "lead", label: "Lead recebido", color: "bg-sky-500" },
-  { key: "contato", label: "Contato feito", color: "bg-indigo-500" },
-  { key: "proposta", label: "Proposta enviada", color: "bg-violet-500" },
-  { key: "negociacao", label: "Em negociação", color: "bg-amber-500" },
-  { key: "ganho", label: "Ganhou", color: "bg-emerald-500" },
-  { key: "perdido", label: "Perdeu", color: "bg-rose-500" },
+  { key: "LEAD_RECEBIDO", label: "Lead recebido", color: "bg-sky-500" },
+  { key: "CONTATO_FEITO", label: "Contato feito", color: "bg-indigo-500" },
+  { key: "REUNIAO_AGENDADA", label: "Reunião agendada", color: "bg-indigo-500" },
+  { key: "REUNIAO_REALIZADA", label: "Reunião realizada", color: "bg-violet-500" },
+  { key: "PROPOSTA_PREPARO", label: "Proposta em preparação", color: "bg-violet-500" },
+  { key: "PROPOSTA_ENVIADA", label: "Proposta enviada", color: "bg-amber-500" },
+  { key: "NEGOCIACAO", label: "Negociação", color: "bg-amber-500" },
+  { key: "GANHO", label: "Ganho", color: "bg-emerald-500" },
+  { key: "PERDIDO", label: "Perdido", color: "bg-rose-500" },
 ];
 
 export type Activity = {
@@ -39,7 +47,20 @@ export type PropostaSnapshot = {
   linhas: { tier: string; formato: string; qtd: number }[];
   percentuais: { imposto: number; comissao: number; bonificacao: number; margem: number };
   custoTotal: number;
+  /** Preço comercial — o que efetivamente vale pra essa proposta. Igual a
+   * `precoCalculado` quando ninguém mexeu no valor; diferente quando o
+   * vendedor ajustou manualmente (ver `ajustadoManualmente`). */
   precoFinal: number;
+  /** Preço puro calculado pela fórmula (custo/percentuais), preservado
+   * mesmo quando `precoFinal` é ajustado manualmente — nunca sobrescrito,
+   * pra nunca perder o valor "de referência" original. Ausente em
+   * propostas salvas antes desta mudança (tratar como igual a
+   * `precoFinal` nesse caso). */
+  precoCalculado?: number;
+  /** true quando `precoFinal` foi digitado manualmente, diferente do
+   * calculado — usado só pra exibição ("Ajustado manualmente") e pra
+   * decidir se registra a diferença no histórico. */
+  ajustadoManualmente?: boolean;
   calculadoEm: number;
 };
 

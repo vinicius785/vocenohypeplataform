@@ -77,6 +77,8 @@ export function SimuladorPropostaDialog({
       percentuais: settings.percentuais,
       custoTotal,
       precoFinal: precoFinalExibido,
+      precoCalculado,
+      ajustadoManualmente: editadoManualmente,
       calculadoEm: Date.now(),
     };
     onApply(precoFinalExibido, snapshot);

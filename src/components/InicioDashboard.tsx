@@ -51,7 +51,8 @@ import {
 import { useClientes } from "@/lib/clientes-store";
 import { supabase } from "@/integrations/supabase/client";
 import { listLeads } from "@/lib/comercial.functions";
-import { DEFAULT_STAGES, formatBRL } from "@/lib/comercial";
+import { formatBRL } from "@/lib/comercial";
+import { legacyStage } from "@/lib/comercial-engine";
 import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
 import type { SectionKey } from "@/components/AppShell";
 import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
@@ -417,8 +418,14 @@ export function InicioDashboard() {
     refetchInterval: 30000,
   });
   const comercialStats = useMemo(() => {
-    const abertos = leads.filter((l) => l.stage !== "ganho" && l.stage !== "perdido");
-    const novos = leads.filter((l) => l.stage === (DEFAULT_STAGES[0]?.key ?? "lead"));
+    // Compara sempre pela etapa NORMALIZADA (legacyStage) — leads antigos
+    // gravados com os 6 valores curtos ("lead", "ganho"...) e leads novos
+    // com o pipeline de 9 etapas do motor precisam contar igual aqui.
+    const abertos = leads.filter((l) => {
+      const s = legacyStage(l.stage);
+      return s !== "GANHO" && s !== "PERDIDO";
+    });
+    const novos = leads.filter((l) => legacyStage(l.stage) === "LEAD_RECEBIDO");
     const valorFunil = abertos.reduce((s, l) => s + (l.value || 0), 0);
     return { abertos: abertos.length, novos: novos.length, valorFunil };
   }, [leads]);

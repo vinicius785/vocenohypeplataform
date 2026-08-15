@@ -5,6 +5,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { Lead, LeadHistoryEntry, PropostaSnapshot } from "./comercial";
 import { dispatchOutgoingWebhook } from "./outgoing-webhooks";
+import {
+  applyOpportunityAction,
+  legacyStage,
+  OPPORTUNITY_STAGES,
+  type OpportunityActionKind,
+  type OpportunityStage,
+} from "./comercial-engine";
+
+const OPPORTUNITY_ACTION_KINDS = [
+  "registrar_contato",
+  "agendar_reuniao",
+  "registrar_reuniao",
+  "criar_proposta",
+  "enviar_proposta",
+  "revisar_proposta",
+  "registrar_negociacao",
+  "marcar_ganho",
+  "marcar_perdido",
+  "alterar_etapa_manual",
+] as const satisfies readonly OpportunityActionKind[];
 
 async function getActorName(supabase: SupabaseClient<Database>, userId: string): Promise<string> {
   const { data } = await supabase
@@ -76,6 +96,21 @@ function rowToLead(row: LeadRow): Lead {
   };
 }
 
+const propostaSchema = z.object({
+  linhas: z.array(z.object({ tier: z.string(), formato: z.string(), qtd: z.number() })),
+  percentuais: z.object({
+    imposto: z.number(),
+    comissao: z.number(),
+    bonificacao: z.number(),
+    margem: z.number(),
+  }),
+  custoTotal: z.number(),
+  precoFinal: z.number(),
+  precoCalculado: z.number().optional(),
+  ajustadoManualmente: z.boolean().optional(),
+  calculadoEm: z.number(),
+});
+
 const leadInputSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1).max(200),
@@ -101,20 +136,7 @@ const leadInputSchema = z.object({
   experience: z.string().optional(),
   aiSummary: z.string().optional(),
   budget: z.number().optional(),
-  proposta: z
-    .object({
-      linhas: z.array(z.object({ tier: z.string(), formato: z.string(), qtd: z.number() })),
-      percentuais: z.object({
-        imposto: z.number(),
-        comissao: z.number(),
-        bonificacao: z.number(),
-        margem: z.number(),
-      }),
-      custoTotal: z.number(),
-      precoFinal: z.number(),
-      calculadoEm: z.number(),
-    })
-    .optional(),
+  proposta: propostaSchema.optional(),
   contactCompany: z.string().optional(),
   contactPhone: z.string().optional(),
   contactEmail: z.string().optional(),
@@ -168,6 +190,133 @@ function inputToRow(input: LeadInput) {
     extra,
   };
 }
+
+/** Converte um `Lead` completo (já com o patch do motor aplicado) de volta
+ * pra shape de linha do banco — mesmo mapeamento de `inputToRow`, mas a
+ * partir do objeto `Lead` inteiro em vez do input validado do formulário.
+ * Único ponto de escrita usado por `runOpportunityAction`, pra não haver
+ * duas regras de "como salvar um lead" divergentes. */
+function leadToRow(lead: Lead) {
+  const extra: Record<string, unknown> = {};
+  const extraKeys: (keyof Lead)[] = [
+    "role",
+    "score",
+    "giftType",
+    "lossReason",
+    "language",
+    "urgency",
+    "vertical",
+    "experience",
+    "aiSummary",
+    "budget",
+    "proposta",
+    "contactCompany",
+    "contactPhone",
+    "contactEmail",
+    "contactRole",
+    "clienteId",
+    "projectId",
+  ];
+  for (const k of extraKeys) {
+    const v = lead[k];
+    if (v !== undefined && v !== "") extra[k] = v;
+  }
+  extra.history = lead.history ?? [];
+  return {
+    name: lead.name,
+    company: lead.company || null,
+    contact: lead.contact || null,
+    email: lead.email || null,
+    phone: lead.phone || null,
+    value: lead.value ?? 0,
+    stage: lead.stage,
+    tags: lead.tags ?? [],
+    source: lead.source || null,
+    responsible: lead.responsible || null,
+    notes: lead.notes || null,
+    activities: lead.activities ?? [],
+    next_meeting: lead.nextMeeting || null,
+    extra,
+  };
+}
+
+const opportunityActionSchema = z.object({
+  id: z.string(),
+  action: z.enum(OPPORTUNITY_ACTION_KINDS),
+  data: z.string().optional(),
+  proposta: propostaSchema.optional(),
+  nota: z.string().optional(),
+  novoValor: z.number().optional(),
+  valorFinal: z.number().optional(),
+  motivo: z.string().optional(),
+  toStage: z.enum(OPPORTUNITY_STAGES).optional(),
+});
+
+/**
+ * Único ponto de escrita orientada por ação do Comercial — AÇÃO → SISTEMA
+ * ATUALIZA O ESTADO. Sempre passa pelo motor puro (`comercial-engine.ts`),
+ * nunca monta o patch de etapa/valor/histórico na mão aqui — inclusive o
+ * drag-and-drop do kanban chama isso com `action: "alterar_etapa_manual"`
+ * (ver `updateLeadStage` abaixo), pra nunca existir um segundo caminho de
+ * escrita sem histórico.
+ */
+export const runOpportunityAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof opportunityActionSchema>) =>
+    opportunityActionSchema.parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const actorName = await getActorName(context.supabase, context.userId);
+    const { data: existingRow, error: fetchErr } = await context.supabase
+      .from("leads")
+      .select("*")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr) throw new Error(fetchErr.message);
+    const lead = rowToLead(existingRow as unknown as LeadRow);
+
+    const { patch, historyEntries } = applyOpportunityAction(
+      lead,
+      data.action as OpportunityActionKind,
+      actorName,
+      {
+        data: data.data,
+        proposta: data.proposta as PropostaSnapshot | undefined,
+        nota: data.nota,
+        novoValor: data.novoValor,
+        valorFinal: data.valorFinal,
+        motivo: data.motivo,
+        toStage: data.toStage as OpportunityStage | undefined,
+      },
+    );
+    const history: LeadHistoryEntry[] = [
+      ...(lead.history ?? []),
+      ...historyEntries.map((text) => ({
+        id: crypto.randomUUID(),
+        type: "stage" as const,
+        text,
+        createdAt: Date.now(),
+      })),
+    ];
+    const merged: Lead = { ...lead, ...patch, history };
+    const row = leadToRow(merged);
+
+    const { data: updated, error } = await context.supabase
+      .from("leads")
+      .update(row as never)
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    const result = rowToLead(updated as unknown as LeadRow);
+    if (result.stage === "GANHO") {
+      // Payload do webhook de saída preserva o valor legado "ganho" — é um
+      // contrato de integração externa (Zapier/Make etc), não deve mudar
+      // só porque o valor interno de `stage` ficou mais granular.
+      void dispatchOutgoingWebhook("lead.won", { id: data.id, stage: "ganho" });
+    }
+    return result;
+  });
 
 export const listLeads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -237,6 +386,12 @@ export const upsertLead = createServerFn({ method: "POST" })
     return lead;
   });
 
+/** Mantido pelo drag-and-drop do kanban (e por qualquer chamador antigo) —
+ * mas por baixo é só um atalho pra `runOpportunityAction` com
+ * `alterar_etapa_manual`. O drag-and-drop nunca foi um segundo motor de
+ * status independente: ele sempre passou por uma escrita própria aqui,
+ * mas agora essa escrita usa a mesma regra central do motor (histórico
+ * com de/para, mesmo formato de texto), em vez de montar o patch na mão. */
 export const updateLeadStage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string; stage: string; stageLabel?: string }) =>
@@ -246,31 +401,38 @@ export const updateLeadStage = createServerFn({ method: "POST" })
     const actorName = await getActorName(context.supabase, context.userId);
     const { data: existingRow, error: fetchErr } = await context.supabase
       .from("leads")
-      .select("extra")
+      .select("*")
       .eq("id", data.id)
       .single();
     if (fetchErr) throw new Error(fetchErr.message);
-    const prevExtra = ((existingRow as { extra: Record<string, unknown> } | null)?.extra ??
-      {}) as Record<string, unknown>;
-    const prevHistory = Array.isArray(prevExtra.history)
-      ? (prevExtra.history as LeadHistoryEntry[])
-      : [];
+    const lead = rowToLead(existingRow as unknown as LeadRow);
+    const toStage = legacyStage(data.stage);
+
+    const { patch, historyEntries } = applyOpportunityAction(
+      lead,
+      "alterar_etapa_manual",
+      actorName,
+      { toStage },
+    );
     const history: LeadHistoryEntry[] = [
-      ...prevHistory,
-      {
+      ...(lead.history ?? []),
+      ...historyEntries.map((text) => ({
         id: crypto.randomUUID(),
-        type: "stage",
-        text: `${actorName} moveu o lead para "${data.stageLabel ?? data.stage}"`,
+        type: "stage" as const,
+        text,
         createdAt: Date.now(),
-      },
+      })),
     ];
+    const merged: Lead = { ...lead, ...patch, history };
+    const row = leadToRow(merged);
+
     const { error } = await context.supabase
       .from("leads")
-      .update({ stage: data.stage, extra: { ...prevExtra, history } })
+      .update(row as never)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    if (data.stage === "ganho") {
-      void dispatchOutgoingWebhook("lead.won", { id: data.id, stage: data.stage });
+    if (toStage === "GANHO") {
+      void dispatchOutgoingWebhook("lead.won", { id: data.id, stage: "ganho" });
     }
     return { ok: true };
   });

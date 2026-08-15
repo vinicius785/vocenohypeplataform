@@ -15,7 +15,19 @@ import {
   upsertLead as upsertLeadFn,
   updateLeadStage,
   deleteLead as deleteLeadFn,
+  runOpportunityAction,
 } from "@/lib/comercial.functions";
+import {
+  deriveOpportunityNextStep,
+  daysSinceLastStageChange,
+  legacyStage,
+  OPPORTUNITY_STAGES,
+  OPPORTUNITY_STAGE_LABEL,
+  OPPORTUNITY_STAGE_TONE,
+  OPPORTUNITY_ACTOR_LABEL,
+  type OpportunityActionKind,
+  type OpportunityStage,
+} from "@/lib/comercial-engine";
 import {
   loadTeamMembers,
   type TeamMemberLite,
@@ -45,6 +57,9 @@ import {
   Clock,
   History,
   Calculator,
+  MoreHorizontal,
+  ArrowRight,
+  Loader2,
 } from "lucide-react";
 import { linkifyText } from "@/lib/linkify";
 
@@ -53,9 +68,8 @@ function daysSince(ms: number): number {
   return Math.floor((Date.now() - ms) / 86_400_000);
 }
 function isStale(lead: Lead): boolean {
-  return (
-    lead.stage !== "ganho" && lead.stage !== "perdido" && daysSince(lead.updatedAt) >= STALE_DAYS
-  );
+  const stage = legacyStage(lead.stage);
+  return stage !== "GANHO" && stage !== "PERDIDO" && daysSince(lead.updatedAt) >= STALE_DAYS;
 }
 
 function convertLeadToClienteEProjeto(lead: Lead): { clienteId: string; projectId: string } {
@@ -111,6 +125,7 @@ export function ComercialSection() {
   const upsertFn = useServerFn(upsertLeadFn);
   const stageFn = useServerFn(updateLeadStage);
   const deleteFn = useServerFn(deleteLeadFn);
+  const runActionFn = useServerFn(runOpportunityAction);
 
   const { data: leads = [] } = useQuery({
     queryKey: ["leads"],
@@ -165,6 +180,25 @@ export function ComercialSection() {
     onSuccess: invalidate,
   });
 
+  // AÇÃO → SISTEMA ATUALIZA O ESTADO — único caminho de escrita orientada
+  // por ação (registrar contato, agendar reunião, enviar proposta, marcar
+  // ganho/perdido, alterar etapa manualmente...). Nunca monta o patch na
+  // mão aqui: o servidor sempre passa pelo `comercial-engine.ts`.
+  const actionMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      action: OpportunityActionKind;
+      data?: string;
+      proposta?: PropostaSnapshot;
+      nota?: string;
+      novoValor?: number;
+      valorFinal?: number;
+      motivo?: string;
+      toStage?: OpportunityStage;
+    }) => runActionFn({ data: input as never }),
+    onSuccess: invalidate,
+  });
+
   useEffect(() => {
     const onStorage = () => setTeam(loadTeamMembers());
     window.addEventListener("storage", onStorage);
@@ -186,18 +220,42 @@ export function ComercialSection() {
     const map: Record<StageKey, Lead[]> = {};
     stages.forEach((s) => (map[s.key] = []));
     filtered.forEach((l) => {
-      if (!map[l.stage]) map[l.stage] = [];
-      map[l.stage].push(l);
+      // Bucket pela etapa NORMALIZADA (via legacyStage), nunca pela string
+      // crua — um lead com um dos 6 valores antigos ("lead", "proposta"...)
+      // não bate com nenhuma coluna do novo pipeline por igualdade direta,
+      // e sumiria silenciosamente do board sem isso.
+      const key = legacyStage(l.stage);
+      if (!map[key]) map[key] = [];
+      map[key].push(l);
     });
     return map;
   }, [filtered, stages]);
 
   const totals = useMemo(() => {
     const total = leads.reduce((sum, l) => sum + (l.value || 0), 0);
-    const ganho = leads.filter((l) => l.stage === "ganho").reduce((s, l) => s + (l.value || 0), 0);
-    const abertos = leads.filter((l) => l.stage !== "ganho" && l.stage !== "perdido").length;
+    const ganho = leads
+      .filter((l) => legacyStage(l.stage) === "GANHO")
+      .reduce((s, l) => s + (l.value || 0), 0);
+    const abertos = leads.filter((l) => {
+      const s = legacyStage(l.stage);
+      return s !== "GANHO" && s !== "PERDIDO";
+    }).length;
     const parados = leads.filter(isStale).length;
-    return { total, ganho, abertos, count: leads.length, parados };
+    const pendenciasHype = leads.filter(
+      (l) => deriveOpportunityNextStep(l).actor === "HYPE",
+    ).length;
+    const aguardandoCliente = leads.filter(
+      (l) => deriveOpportunityNextStep(l).actor === "CLIENTE",
+    ).length;
+    return {
+      total,
+      ganho,
+      abertos,
+      count: leads.length,
+      parados,
+      pendenciasHype,
+      aguardandoCliente,
+    };
   }, [leads]);
 
   const upsertLead = (lead: Lead) => {
@@ -255,6 +313,8 @@ export function ComercialSection() {
         <Kpi label="Ganhos" value={formatBRL(totals.ganho)} />
         <Kpi label="Pipeline total" value={formatBRL(totals.total)} />
         <Kpi label={`Parados (${STALE_DAYS}+ dias)`} value={String(totals.parados)} />
+        <Kpi label="Minhas pendências" value={String(totals.pendenciasHype)} />
+        <Kpi label="Aguardando cliente" value={String(totals.aguardandoCliente)} />
       </div>
 
       {/* Board */}
@@ -322,6 +382,7 @@ export function ComercialSection() {
             setShowForm(false);
             setEditing(null);
           }}
+          onRunAction={(input) => actionMutation.mutateAsync(input)}
         />
       )}
       {confirmDialog}
@@ -352,6 +413,7 @@ function LeadCard({
   onDragStart: () => void;
 }) {
   const meta = [lead.role, lead.vertical].filter(Boolean).join(" · ");
+  const step = deriveOpportunityNextStep(lead);
 
   return (
     <div
@@ -425,6 +487,22 @@ function LeadCard({
         </div>
       )}
 
+      {/* Próxima ação — o que precisa acontecer agora, separado do valor/responsável da oportunidade */}
+      {step.actionLabel && (
+        <div className="mt-1.5 flex items-center gap-1 truncate text-[11px] font-medium text-foreground">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${step.actor === "CLIENTE" ? "bg-sky-500" : "bg-amber-500"}`}
+          />
+          <span className="truncate">{step.actionLabel}</span>
+        </div>
+      )}
+      {!step.actionLabel && step.actor === "CLIENTE" && (
+        <div className="mt-1.5 flex items-center gap-1 truncate text-[11px] text-sky-600 dark:text-sky-400">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+          Aguardando cliente
+        </div>
+      )}
+
       {/* Rodapé: valor + responsável */}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
         <span className="text-sm font-semibold text-foreground">{formatBRL(lead.value || 0)}</span>
@@ -438,19 +516,45 @@ function LeadCard({
   );
 }
 
+type OpportunityActionInput = {
+  id: string;
+  action: OpportunityActionKind;
+  data?: string;
+  proposta?: PropostaSnapshot;
+  nota?: string;
+  novoValor?: number;
+  valorFinal?: number;
+  motivo?: string;
+  toStage?: OpportunityStage;
+};
+
+const PERDIDO_MOTIVOS = [
+  "Sem orçamento",
+  "Escolheu concorrente",
+  "Sem resposta do cliente",
+  "Fora do escopo/ICP",
+  "Timing ruim",
+];
+
 function LeadForm({
   initial,
   stages,
   team,
   onClose,
   onSave,
+  onRunAction,
 }: {
   initial: Lead | null;
   stages: Stage[];
   team: TeamMemberLite[];
   onClose: () => void;
   onSave: (l: Lead) => void;
+  onRunAction: (input: OpportunityActionInput) => Promise<Lead>;
 }) {
+  // `liveLead` acompanha o resultado de cada ação do motor (etapa, histórico,
+  // valor) sem fechar o drawer — os campos do formulário abaixo continuam
+  // como estado local separado, só sincronizado na abertura/criação.
+  const [liveLead, setLiveLead] = useState<Lead | null>(initial);
   const [name, setName] = useState(initial?.name ?? "");
   const [company, setCompany] = useState(initial?.company ?? "");
   const [contact, setContact] = useState(initial?.contact ?? "");
@@ -464,15 +568,47 @@ function LeadForm({
   const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
   const [proposta, setProposta] = useState<PropostaSnapshot | undefined>(initial?.proposta);
   const [showSimulador, setShowSimulador] = useState(false);
-  const [stage, setStage] = useState<StageKey>(initial?.stage ?? stages[0]?.key ?? "lead");
+  const [stage, setStage] = useState<OpportunityStage>(legacyStage(initial?.stage));
   const [source, setSource] = useState(initial?.source ?? "");
   const [responsible, setResponsible] = useState(initial?.responsible ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [score, setScore] = useState<number>(initial?.score ?? 0);
   const [error, setError] = useState("");
+  const [showEtapaMenu, setShowEtapaMenu] = useState(false);
+  const [runningAction, setRunningAction] = useState<OpportunityActionKind | null>(null);
+  const [showAgendar, setShowAgendar] = useState(false);
+  const [dataReuniao, setDataReuniao] = useState("");
+  const [showNegociacao, setShowNegociacao] = useState(false);
+  const [notaNegociacao, setNotaNegociacao] = useState("");
+  const [novoValorNegociacao, setNovoValorNegociacao] = useState("");
+  const [showGanho, setShowGanho] = useState(false);
+  const [valorGanho, setValorGanho] = useState(String(liveLead?.value ?? value ?? ""));
+  const [showPerdido, setShowPerdido] = useState(false);
+  const [motivoPerdido, setMotivoPerdido] = useState("");
 
   const parsedValue = Number(value.replace(/[^\d.,]/g, "").replace(",", ".")) || 0;
   const stageMeta = stages.find((s) => s.key === stage);
+  const nextStep = liveLead ? deriveOpportunityNextStep(liveLead) : null;
+
+  const runAction = async (
+    action: OpportunityActionKind,
+    opts: Partial<OpportunityActionInput> = {},
+  ) => {
+    if (!liveLead) return;
+    setRunningAction(action);
+    setError("");
+    try {
+      const updated = await onRunAction({ id: liveLead.id, action, ...opts });
+      setLiveLead(updated);
+      setStage(legacyStage(updated.stage));
+      setValue(String(updated.value ?? ""));
+      if (updated.proposta) setProposta(updated.proposta);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível executar a ação.");
+    } finally {
+      setRunningAction(null);
+    }
+  };
 
   const submit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -512,9 +648,9 @@ function LeadForm({
   };
 
   const handleConvert = () => {
-    if (!initial || initial.clienteId) return;
-    const { clienteId, projectId } = convertLeadToClienteEProjeto(initial);
-    onSave({ ...initial, clienteId, projectId });
+    if (!liveLead || liveLead.clienteId) return;
+    const { clienteId, projectId } = convertLeadToClienteEProjeto(liveLead);
+    onSave({ ...liveLead, clienteId, projectId });
   };
 
   return (
@@ -545,6 +681,148 @@ function LeadForm({
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {liveLead && nextStep && (
+          <div className="relative border-b border-border bg-muted/30 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${OPPORTUNITY_STAGE_TONE[nextStep.stage]}`}
+                >
+                  {nextStep.stageLabel}
+                </span>
+                {nextStep.actionLabel ? (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ArrowRight className="h-3 w-3" />
+                    Próxima ação:{" "}
+                    <span className="font-medium text-foreground">{nextStep.actionLabel}</span>
+                    {nextStep.actor && (
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                        {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
+                      </span>
+                    )}
+                  </span>
+                ) : nextStep.actor === "CLIENTE" ? (
+                  <span className="text-xs text-sky-600 dark:text-sky-400">
+                    Aguardando resposta do cliente
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {nextStep.action === "registrar_contato" && (
+                  <ActionButton
+                    label="Registrar contato"
+                    busy={runningAction === "registrar_contato"}
+                    onClick={() => runAction("registrar_contato")}
+                  />
+                )}
+                {nextStep.action === "agendar_reuniao" && (
+                  <ActionButton
+                    label="Agendar reunião"
+                    busy={runningAction === "agendar_reuniao"}
+                    onClick={() => setShowAgendar(true)}
+                  />
+                )}
+                {nextStep.action === "registrar_reuniao" && (
+                  <ActionButton
+                    label="Registrar reunião realizada"
+                    busy={runningAction === "registrar_reuniao"}
+                    onClick={() => runAction("registrar_reuniao")}
+                  />
+                )}
+                {nextStep.action === "criar_proposta" && (
+                  <ActionButton
+                    label="Criar proposta"
+                    icon={<Calculator className="h-3.5 w-3.5" />}
+                    busy={runningAction === "criar_proposta"}
+                    onClick={() => setShowSimulador(true)}
+                  />
+                )}
+                {nextStep.action === "enviar_proposta" && (
+                  <ActionButton
+                    label="Enviar proposta"
+                    busy={runningAction === "enviar_proposta"}
+                    onClick={() => runAction("enviar_proposta")}
+                  />
+                )}
+                {nextStep.action === "registrar_negociacao" && (
+                  <ActionButton
+                    label="Registrar atualização"
+                    busy={runningAction === "registrar_negociacao"}
+                    onClick={() => {
+                      setNovoValorNegociacao(String(liveLead.value ?? ""));
+                      setShowNegociacao(true);
+                    }}
+                  />
+                )}
+                {nextStep.stage === "PROPOSTA_ENVIADA" && (
+                  <button
+                    type="button"
+                    onClick={() => runAction("revisar_proposta")}
+                    className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+                  >
+                    Revisar proposta
+                  </button>
+                )}
+                {nextStep.stage !== "GANHO" && nextStep.stage !== "PERDIDO" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setValorGanho(String(proposta?.precoFinal ?? liveLead.value ?? ""));
+                        setShowGanho(true);
+                      }}
+                      className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-500/20"
+                    >
+                      Marcar ganho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPerdido(true)}
+                      className="rounded-md border border-rose-500/40 bg-rose-500/10 px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-500/20"
+                    >
+                      Marcar perdido
+                    </button>
+                  </>
+                )}
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowEtapaMenu((v) => !v)}
+                    className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {showEtapaMenu && (
+                    <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-md border border-border bg-background p-2 shadow-lg">
+                      <p className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+                        Alterar etapa manualmente
+                      </p>
+                      <select
+                        value={nextStep.stage}
+                        onChange={(e) => {
+                          setShowEtapaMenu(false);
+                          void runAction("alterar_etapa_manual", {
+                            toStage: e.target.value as OpportunityStage,
+                          });
+                        }}
+                        className={inputCls}
+                      >
+                        {OPPORTUNITY_STAGES.map((s) => (
+                          <option key={s} value={s}>
+                            {OPPORTUNITY_STAGE_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col md:flex-row">
           <div className="flex-1 overflow-y-auto bg-muted/20 p-5">
@@ -586,25 +864,33 @@ function LeadForm({
                     <span className="font-medium text-foreground">
                       {formatBRL(proposta.precoFinal)}
                     </span>
+                    {proposta.ajustadoManualmente && proposta.precoCalculado !== undefined && (
+                      <span className="text-amber-600">
+                        {" "}
+                        (ajustado manualmente — calculado era {formatBRL(proposta.precoCalculado)})
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className={labelCls}>
-                  <span>Etapa</span>
-                  <select
-                    value={stage}
-                    onChange={(e) => setStage(e.target.value)}
-                    className={inputCls}
-                  >
-                    {stages.map((s) => (
-                      <option key={s.key} value={s.key}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {!liveLead && (
+                  <label className={labelCls}>
+                    <span>Etapa inicial</span>
+                    <select
+                      value={stage}
+                      onChange={(e) => setStage(e.target.value as OpportunityStage)}
+                      className={inputCls}
+                    >
+                      {stages.map((s) => (
+                        <option key={s.key} value={s.key}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <div className={labelCls}>
                   <span>Qualificação</span>
                   <div className="flex h-9 items-center gap-1">
@@ -836,6 +1122,20 @@ function LeadForm({
                 label="Responsável"
                 value={responsible}
               />
+              {nextStep?.actor && (
+                <SummaryRow
+                  icon={<ArrowRight className="h-3.5 w-3.5" />}
+                  label="Próxima ação é de"
+                  value={OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
+                />
+              )}
+              {liveLead && (
+                <SummaryRow
+                  icon={<Clock className="h-3.5 w-3.5" />}
+                  label="Parado há"
+                  value={`${daysSinceLastStageChange(liveLead)} dia(s)`}
+                />
+              )}
             </dl>
 
             {notes.trim() && (
@@ -847,16 +1147,16 @@ function LeadForm({
               </div>
             )}
 
-            {initial && (
+            {liveLead && (
               <div className="mt-4">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <History className="h-3.5 w-3.5" /> Histórico
                 </div>
-                {(initial.history?.length ?? 0) === 0 ? (
+                {(liveLead.history?.length ?? 0) === 0 ? (
                   <p className="text-[11px] text-muted-foreground">Sem eventos registrados.</p>
                 ) : (
                   <ul className="space-y-2 border-l border-border pl-3">
-                    {[...(initial.history ?? [])]
+                    {[...(liveLead.history ?? [])]
                       .sort((a, b) => b.createdAt - a.createdAt)
                       .map((h) => (
                         <li key={h.id} className="text-[11px] leading-relaxed">
@@ -883,9 +1183,9 @@ function LeadForm({
 
         <div className="flex items-center justify-between gap-2 border-t border-border px-5 py-3">
           <div>
-            {initial && stage === "ganho" && (
+            {liveLead && legacyStage(liveLead.stage) === "GANHO" && (
               <>
-                {initial.clienteId ? (
+                {liveLead.clienteId ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Convertido em cliente/projeto
                   </span>
@@ -926,8 +1226,197 @@ function LeadForm({
         onApply={(precoFinal, snapshot) => {
           setValue(String(Math.round(precoFinal)));
           setProposta(snapshot);
+          // Aplicar o preço não avança a etapa por si só — só o gesto
+          // explícito "criar proposta" (com oportunidade já existente) faz
+          // o motor registrar a proposta e mover pra PROPOSTA_PREPARO.
+          if (liveLead) void runAction("criar_proposta", { proposta: snapshot });
         }}
       />
+
+      {showAgendar && (
+        <MiniActionDialog
+          title="Agendar reunião"
+          busy={runningAction === "agendar_reuniao"}
+          onClose={() => setShowAgendar(false)}
+          onConfirm={async () => {
+            await runAction("agendar_reuniao", { data: dataReuniao || undefined });
+            setShowAgendar(false);
+          }}
+        >
+          <label className={labelCls}>
+            <span>Data da reunião</span>
+            <input
+              type="date"
+              value={dataReuniao}
+              onChange={(e) => setDataReuniao(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </MiniActionDialog>
+      )}
+
+      {showNegociacao && (
+        <MiniActionDialog
+          title="Registrar atualização da negociação"
+          busy={runningAction === "registrar_negociacao"}
+          onClose={() => setShowNegociacao(false)}
+          onConfirm={async () => {
+            await runAction("registrar_negociacao", {
+              nota: notaNegociacao.trim() || undefined,
+              novoValor: novoValorNegociacao.trim() ? Number(novoValorNegociacao) : undefined,
+            });
+            setShowNegociacao(false);
+            setNotaNegociacao("");
+          }}
+        >
+          <label className={labelCls}>
+            <span>Novo valor (opcional)</span>
+            <input
+              inputMode="decimal"
+              value={novoValorNegociacao}
+              onChange={(e) => setNovoValorNegociacao(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+          <label className={labelCls}>
+            <span>Nota</span>
+            <textarea
+              value={notaNegociacao}
+              onChange={(e) => setNotaNegociacao(e.target.value)}
+              className={`${inputCls} h-20 resize-none py-2`}
+              placeholder="O que mudou na negociação?"
+            />
+          </label>
+        </MiniActionDialog>
+      )}
+
+      {showGanho && (
+        <MiniActionDialog
+          title="Marcar oportunidade como ganha"
+          confirmLabel="Confirmar ganho"
+          busy={runningAction === "marcar_ganho"}
+          onClose={() => setShowGanho(false)}
+          onConfirm={async () => {
+            await runAction("marcar_ganho", {
+              valorFinal: valorGanho.trim() ? Number(valorGanho) : undefined,
+            });
+            setShowGanho(false);
+          }}
+        >
+          <label className={labelCls}>
+            <span>Valor final (R$)</span>
+            <input
+              inputMode="decimal"
+              value={valorGanho}
+              onChange={(e) => setValorGanho(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+        </MiniActionDialog>
+      )}
+
+      {showPerdido && (
+        <MiniActionDialog
+          title="Marcar oportunidade como perdida"
+          confirmLabel="Confirmar perda"
+          busy={runningAction === "marcar_perdido"}
+          onClose={() => setShowPerdido(false)}
+          onConfirm={async () => {
+            await runAction("marcar_perdido", { motivo: motivoPerdido.trim() || undefined });
+            setShowPerdido(false);
+            setMotivoPerdido("");
+          }}
+        >
+          <label className={labelCls}>
+            <span>Motivo</span>
+            <input
+              list="perdido-motivos"
+              value={motivoPerdido}
+              onChange={(e) => setMotivoPerdido(e.target.value)}
+              className={inputCls}
+              placeholder="Ex: Sem orçamento"
+            />
+            <datalist id="perdido-motivos">
+              {PERDIDO_MOTIVOS.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </label>
+        </MiniActionDialog>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  icon,
+  busy,
+  onClick,
+}: {
+  label: string;
+  icon?: React.ReactNode;
+  busy?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm transition-transform hover:scale-[1.02] hover:opacity-90 disabled:opacity-60"
+    >
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
+      {label}
+    </button>
+  );
+}
+
+function MiniActionDialog({
+  title,
+  confirmLabel = "Confirmar",
+  busy,
+  children,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  confirmLabel?: string;
+  busy?: boolean;
+  children: React.ReactNode;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-2xl"
+      >
+        <h4 className="mb-3 text-sm font-semibold">{title}</h4>
+        <div className="space-y-3">{children}</div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90 disabled:opacity-60"
+          >
+            {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
