@@ -104,7 +104,7 @@ export function legacyStage(raw: string | undefined): OpportunityStage {
  * (`Lead.responsible`, o vendedor dono do lead, sempre manual). */
 export type OpportunityActor = "HYPE" | "CLIENTE" | null;
 export const OPPORTUNITY_ACTOR_LABEL: Record<Exclude<OpportunityActor, null>, string> = {
-  HYPE: "HYPE",
+  HYPE: "VNH",
   CLIENTE: "Cliente",
 };
 

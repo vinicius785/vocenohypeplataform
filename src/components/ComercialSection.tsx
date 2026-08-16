@@ -9,7 +9,7 @@ import {
   type StageKey,
   type PropostaSnapshot,
 } from "@/lib/comercial";
-import { SimuladorPropostaDialog } from "@/components/comercial/SimuladorPropostaDialog";
+import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   listLeads,
@@ -571,7 +571,6 @@ function LeadForm({
   const [experience, setExperience] = useState(initial?.experience ?? "");
   const [value, setValue] = useState<string>(initial ? String(initial.value ?? "") : "");
   const [proposta, setProposta] = useState<PropostaSnapshot | undefined>(initial?.proposta);
-  const [showSimulador, setShowSimulador] = useState(false);
   // Etapa só é editável diretamente aqui para uma oportunidade NOVA (ainda
   // sem `liveLead`) — depois de criada, a etapa muda só via ação do motor
   // ou via "Alterar etapa manualmente" no menu "⋯".
@@ -778,8 +777,7 @@ function LeadForm({
                   <ActionButton
                     label="Criar proposta"
                     icon={<Calculator className="h-3.5 w-3.5" />}
-                    busy={runningAction === "criar_proposta"}
-                    onClick={() => setShowSimulador(true)}
+                    onClick={() => setTab("proposta")}
                   />
                 )}
                 {nextStep.action === "enviar_proposta" && (
@@ -1145,17 +1143,8 @@ function LeadForm({
               </TabsContent>
 
               <TabsContent value="proposta" className="mt-0 space-y-4">
-                <Section title="Proposta" icon={<Calculator className="h-4 w-4" />}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSimulador(true)}
-                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
-                  >
-                    <Calculator className="h-3.5 w-3.5" />
-                    {proposta ? "Recalcular proposta" : "Simular proposta"}
-                  </button>
-
-                  {proposta ? (
+                {proposta && (
+                  <Section title="Proposta atual" icon={<Calculator className="h-4 w-4" />}>
                     <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
@@ -1183,19 +1172,30 @@ function LeadForm({
                         </p>
                       )}
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Nenhuma proposta calculada ainda para esta oportunidade.
-                    </p>
-                  )}
+                    {liveLead && nextStep?.action === "enviar_proposta" && (
+                      <ActionButton
+                        label="Enviar proposta"
+                        busy={runningAction === "enviar_proposta"}
+                        onClick={() => runAction("enviar_proposta")}
+                      />
+                    )}
+                  </Section>
+                )}
 
-                  {liveLead && nextStep?.action === "enviar_proposta" && (
-                    <ActionButton
-                      label="Enviar proposta"
-                      busy={runningAction === "enviar_proposta"}
-                      onClick={() => runAction("enviar_proposta")}
-                    />
-                  )}
+                <Section title="Simulador" icon={<Calculator className="h-4 w-4" />}>
+                  <SimuladorPropostaForm
+                    initial={proposta}
+                    applyLabel={proposta ? "Atualizar proposta" : "Usar como valor do negócio"}
+                    onApply={(precoFinal, snapshot) => {
+                      setValue(String(Math.round(precoFinal)));
+                      setProposta(snapshot);
+                      // Aplicar o preço não avança a etapa por si só — só o
+                      // gesto explícito de aplicar a proposta (com
+                      // oportunidade já existente) faz o motor registrar a
+                      // proposta e mover pra PROPOSTA_PREPARO.
+                      if (liveLead) void runAction("criar_proposta", { proposta: snapshot });
+                    }}
+                  />
                 </Section>
               </TabsContent>
 
@@ -1349,19 +1349,6 @@ function LeadForm({
           </div>
         )}
       </div>
-
-      <SimuladorPropostaDialog
-        open={showSimulador}
-        onClose={() => setShowSimulador(false)}
-        onApply={(precoFinal, snapshot) => {
-          setValue(String(Math.round(precoFinal)));
-          setProposta(snapshot);
-          // Aplicar o preço não avança a etapa por si só — só o gesto
-          // explícito "criar proposta" (com oportunidade já existente) faz
-          // o motor registrar a proposta e mover pra PROPOSTA_PREPARO.
-          if (liveLead) void runAction("criar_proposta", { proposta: snapshot });
-        }}
-      />
 
       {showAgendar && (
         <MiniActionDialog
