@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import { getEffectiveInscricaoPage } from "@/lib/inscricao-page";
 
 /**
  * Link público de INSCRIÇÃO de influenciadores numa campanha
@@ -65,11 +66,10 @@ export const getInscricaoCampanhaData = createServerFn({ method: "GET" })
       campanha: {
         id: found.campanha.id,
         nome: found.campanha.nome,
-        briefing: found.campanha.briefing,
-        briefingLinks: found.campanha.briefingLinks ?? [],
         prazo: found.campanha.prazo,
         prazoPag: found.campanha.prazoPag,
       },
+      page: getEffectiveInscricaoPage(found.campanha),
       ws,
     };
   });
@@ -78,6 +78,12 @@ const RedeInput = z.object({
   plataforma: z.string().min(1),
   handle: z.string().min(1),
   seguidores: z.string().optional(),
+});
+
+const RespostaInput = z.object({
+  questionId: z.string().min(1),
+  label: z.string().min(1),
+  value: z.union([z.string(), z.array(z.string())]),
 });
 
 const SubmitInscricaoInput = z.object({
@@ -92,6 +98,7 @@ const SubmitInscricaoInput = z.object({
     .object({ nome: z.string().min(1), dataUrl: z.string().min(1).max(8_000_000) })
     .nullable()
     .optional(),
+  respostas: z.array(RespostaInput).default([]),
 });
 
 export const submitInscricaoCampanha = createServerFn({ method: "POST" })
@@ -99,6 +106,17 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const found = await findCampanhaBySignupToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
+    // Defesa em profundidade: a UI pública já esconde o formulário fora de
+    // "PUBLICADA", mas o servidor nunca confia só nisso — nunca aceita uma
+    // submissão de uma página em rascunho ou encerrada.
+    const page = getEffectiveInscricaoPage(found.campanha);
+    if (page.status !== "PUBLICADA") {
+      throw new Error(
+        page.status === "ENCERRADA"
+          ? "As inscrições para esta campanha estão encerradas."
+          : "Esta página ainda não está disponível.",
+      );
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let anexoUrl: string | undefined;
@@ -144,6 +162,8 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       observacoes: observacoesPartes.length > 0 ? observacoesPartes.join("\n\n") : undefined,
       createdAt: now,
       updatedAt: now,
+      submittedVia: "inscricao_page",
+      inscricaoRespostas: data.respostas.length > 0 ? data.respostas : undefined,
     };
 
     const { error } = await supabaseAdmin

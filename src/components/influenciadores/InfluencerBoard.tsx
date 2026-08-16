@@ -805,6 +805,15 @@ export type Influ = {
   /** Pagamento único cobrindo TODAS as entregas do influenciador — não é
    * mais configurado por entrega individual. */
   pagamento?: PagamentoEntrega;
+  /** Marca que este influenciador entrou pela Página de Inscrição pública
+   * da campanha (em vez de cadastro manual pelo time) — usado só pras
+   * métricas da página (`src/lib/inscricao-page.ts`). */
+  submittedVia?: "inscricao_page";
+  /** Respostas das perguntas personalizadas da Página de Inscrição, no
+   * momento da inscrição — snapshot (sobrevive a mudanças futuras nas
+   * perguntas da campanha). O time vê isso sem precisar abrir a página
+   * pública. */
+  inscricaoRespostas?: { questionId: string; label: string; value: string | string[] }[];
 };
 
 /**
@@ -3675,6 +3684,26 @@ function InfluencerProfileDialog({
                   </div>
                 </div>
               </ProfileSectionCard>
+
+              {influ.inscricaoRespostas && influ.inscricaoRespostas.length > 0 && (
+                <ProfileSectionCard
+                  title="Respostas da inscrição"
+                  hint="Perguntas personalizadas da Página de Inscrição, respondidas no momento em que este influenciador se candidatou."
+                  icon={<FileText className="h-3.5 w-3.5" />}
+                  span="full"
+                >
+                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {influ.inscricaoRespostas.map((r) => (
+                      <div key={r.questionId} className="space-y-0.5">
+                        <dt className="text-xs font-medium text-muted-foreground">{r.label}</dt>
+                        <dd className="text-sm text-foreground">
+                          {Array.isArray(r.value) ? r.value.join(", ") || "—" : r.value || "—"}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </ProfileSectionCard>
+              )}
             </TabsContent>
 
             <TabsContent value="metricas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">

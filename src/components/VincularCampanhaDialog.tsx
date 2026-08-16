@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
+import type { InscricaoPageConfig } from "@/lib/inscricao-page";
 
 const TIPOS = ["Digital", "Celebridade", "Local", "Nicho", "Embaixador"] as const;
 const TAMANHOS = ["Nano", "Micro", "Médio", "Macro", "Mega"] as const;
@@ -115,6 +116,16 @@ export type Campaign = {
   /** Token do link público de inscrição de influenciadores nesta campanha
    * (diferente do publicToken do Cliente, que é o portal do cliente). */
   signupToken?: string;
+  /** Boas práticas / restrições da campanha — conteúdo da campanha (não só
+   * da Página de Inscrição), pra poder ser reaproveitado depois em
+   * curadoria/briefing/portal sem duplicar dado. A Página de Inscrição só
+   * decide SE mostra (`inscricaoPage.showDos`/`showDonts`). */
+  dos?: string[];
+  donts?: string[];
+  /** Configuração da Página de Inscrição pública desta campanha. Ausente =
+   * campanha "legada", continua funcionando com o formulário padrão atual
+   * (ver `getEffectiveInscricaoPage` em `src/lib/inscricao-page.ts`). */
+  inscricaoPage?: InscricaoPageConfig;
 };
 
 const newLinha = (): InfluLinha => ({

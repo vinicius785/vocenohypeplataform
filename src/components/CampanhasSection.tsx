@@ -6,7 +6,6 @@ import {
   Calendar,
   CalendarClock,
   Check,
-  Copy,
   Download,
   ExternalLink,
   FileBarChart,
@@ -28,6 +27,7 @@ import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
+import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { SectionHeader } from "./SectionHeader";
 import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
@@ -400,32 +400,23 @@ function CampanhaDetail({
     });
   };
 
-  // Link público de inscrição — permite o influenciador se candidatar
+  // Página de Inscrição pública — permite o influenciador se candidatar
   // direto pra esta campanha (entra em "Inscrito" no board), diferente
   // do link do cliente acima (que é por Cliente, não por Campanha).
-  const [signupLinkCopied, setSignupLinkCopied] = useState(false);
-  const copySignupLink = () => {
-    if (!fullCliente) return;
-    let token = c.signupToken;
-    if (!token) {
-      token = crypto.randomUUID().replace(/-/g, "");
-      setClientes((prev) =>
-        prev.map((cl) =>
-          cl.id !== fullCliente.id
-            ? cl
-            : {
-                ...cl,
-                campanhas: (cl.campanhas ?? []).map((camp) =>
-                  camp.id === c.id ? { ...camp, signupToken: token } : camp,
-                ),
-              },
-        ),
-      );
-    }
-    void navigator.clipboard.writeText(`${window.location.origin}/inscricao/${token}`).then(() => {
-      setSignupLinkCopied(true);
-      setTimeout(() => setSignupLinkCopied(false), 1500);
-    });
+  const [inscricaoOpen, setInscricaoOpen] = useState(false);
+  const saveInscricaoPage = (patch: Partial<Campaign>) => {
+    setClientes((prev) =>
+      prev.map((cl) =>
+        cl.id !== cliente.id
+          ? cl
+          : {
+              ...cl,
+              campanhas: (cl.campanhas ?? []).map((camp) =>
+                camp.id === c.id ? { ...camp, ...patch } : camp,
+              ),
+            },
+      ),
+    );
   };
 
   return (
@@ -482,18 +473,22 @@ function CampanhaDetail({
         </button>
         <button
           type="button"
-          onClick={copySignupLink}
+          onClick={() => setInscricaoOpen(true)}
           disabled={!fullCliente}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {signupLinkCopied ? (
-            <Check className="h-3.5 w-3.5" />
-          ) : (
-            <UserPlus className="h-3.5 w-3.5" />
-          )}
-          {signupLinkCopied ? "Link copiado!" : "Link de inscrição"}
+          <UserPlus className="h-3.5 w-3.5" />
+          Página de inscrição
         </button>
       </header>
+
+      <InscricaoPageDialog
+        open={inscricaoOpen}
+        onOpenChange={setInscricaoOpen}
+        campaign={c}
+        influs={influs}
+        onSave={saveInscricaoPage}
+      />
 
       {/* BRIEFING */}
       <section className="rounded-xl border border-border bg-background p-6">
