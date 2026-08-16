@@ -174,33 +174,35 @@ export function ClientesSection() {
           }
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-card p-0 shadow-[0_0_1px_hsl(var(--foreground)/0.1),0_2px_4px_hsl(var(--foreground)/0.02),0_12px_24px_hsl(var(--foreground)/0.06)]">
-          <div className="border-b border-border/60 px-8 pt-8 pb-6">
-            <DialogTitle className="text-xl font-semibold text-foreground">
-              {editingClienteId ? "Editar cliente" : "Novo cliente"}
-            </DialogTitle>
-            <DialogDescription className="mt-1 text-sm text-muted-foreground">
-              {editingClienteId
-                ? "Atualize as informações do cliente."
-                : "Cadastre as informações básicas para iniciar o workspace."}
-            </DialogDescription>
+        <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-card p-0">
+          <div className="flex items-center gap-3 border-b border-border px-6 py-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-lg font-light tracking-tight text-foreground">
+                {editingClienteId ? "Editar cliente" : "Novo cliente"}
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
+                {editingClienteId
+                  ? "Atualize as informações do cliente."
+                  : "Cadastre as informações básicas para iniciar o workspace."}
+              </DialogDescription>
+            </div>
           </div>
 
-          <form onSubmit={submit} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-8">
-            <div className="flex items-center gap-6">
+          <form onSubmit={submit} className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
+            <div className="flex items-center gap-5">
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="group flex h-20 w-20 flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-border bg-muted/50 text-muted-foreground transition-all hover:border-border hover:bg-muted"
+                  className="group flex h-16 w-16 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-muted"
                 >
                   {form.photo ? (
                     <img src={form.photo} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <>
-                      <ImageIcon className="mb-1 h-6 w-6" strokeWidth={1.75} />
-                      <span className="text-[10px] font-medium uppercase tracking-wider">Foto</span>
-                    </>
+                    <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
                   )}
                 </button>
                 <button
@@ -222,7 +224,7 @@ export function ClientesSection() {
                 />
               </div>
 
-              <div className="flex-1 space-y-4">
+              <div className="flex-1 space-y-3">
                 <Field label="Nome da empresa">
                   <input
                     value={form.empresa}
@@ -243,7 +245,7 @@ export function ClientesSection() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-4 rounded-2xl border border-border bg-muted/40 p-4 sm:grid-cols-2">
               <Field label="E-mail do cliente">
                 <div className="relative">
                   <Mail className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-muted-foreground" />
@@ -295,17 +297,17 @@ export function ClientesSection() {
               </Field>
             </div>
 
-            <div className="mt-2 flex items-center justify-end gap-3 border-t border-border/60 pt-4">
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+                className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+                className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
               >
                 {editingClienteId ? "Salvar alterações" : "Criar cliente"}
               </button>
