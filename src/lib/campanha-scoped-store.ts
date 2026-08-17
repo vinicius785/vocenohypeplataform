@@ -50,15 +50,21 @@ export async function initCampanhaScopedSync(): Promise<void> {
   // Segunda trava além do realtime: re-busca essas tabelas do zero de
   // tempos em tempos, corrigindo qualquer drift que um evento perdido ou
   // mal aplicado (ex: DELETE sem a coluna do parent, antes de
-  // REPLICA IDENTITY FULL) tenha deixado como "fantasma" no cache.
+  // REPLICA IDENTITY FULL) tenha deixado como "fantasma" no cache. Cada
+  // resync baixa a tabela INTEIRA (todas as campanhas do workspace, não só
+  // a aberta) — com várias abas ficando o dia todo abertas isso soma
+  // bastante egress, então: intervalo bem mais espaçado (era 5 min) e pula
+  // o ciclo enquanto a aba está em segundo plano (`document.hidden`), já
+  // que o realtime continua cobrindo mudanças ao vivo nesse meio tempo.
   if (!resyncStarted) {
     resyncStarted = true;
     setInterval(() => {
+      if (document.hidden) return;
       void influsStore.resync();
       void tarefasStore.resync();
       void docsStore.resync();
       void cronogramaStore.resync();
-    }, 5 * 60_000);
+    }, 20 * 60_000);
   }
 }
 

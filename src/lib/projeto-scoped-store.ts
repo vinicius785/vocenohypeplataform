@@ -11,12 +11,16 @@ export async function initProjetoScopedSync(): Promise<void> {
   await Promise.all([influsStore.init(), tarefasStore.init()]);
   influsStore.subscribeRealtime();
   tarefasStore.subscribeRealtime();
+  // Mesma lógica de campanha-scoped-store.ts: intervalo espaçado + pula
+  // enquanto a aba está em segundo plano, pra não multiplicar egress
+  // rebaixando a tabela inteira em toda aba aberta o dia todo.
   if (!resyncStarted) {
     resyncStarted = true;
     setInterval(() => {
+      if (document.hidden) return;
       void influsStore.resync();
       void tarefasStore.resync();
-    }, 5 * 60_000);
+    }, 20 * 60_000);
   }
 }
 
