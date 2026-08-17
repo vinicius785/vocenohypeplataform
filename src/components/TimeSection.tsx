@@ -1715,7 +1715,7 @@ function BugReportsPanel() {
     setLoading(true);
     setError("");
     try {
-      setReports(await listBugReports());
+      setReports(await listBugReports("plataforma"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar relatos.");
     }

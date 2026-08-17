@@ -61,7 +61,7 @@ export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: bool
     setLoading(true);
     setError("");
     try {
-      setReports(await listBugReports());
+      setReports(await listBugReports("hypeapp"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar relatos.");
     }
@@ -84,7 +84,13 @@ export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: bool
     setSubmitting(true);
     setError("");
     try {
-      await submitBugReport({ description, screenshotFile: screenshot, kind, scope });
+      await submitBugReport({
+        description,
+        screenshotFile: screenshot,
+        kind,
+        scope,
+        source: "hypeapp",
+      });
       setDescription("");
       setScreenshot(null);
       if (fileRef.current) fileRef.current.value = "";

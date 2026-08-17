@@ -2,6 +2,11 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type BugReportKind = "bug" | "sugestao";
 export type BugReportScope = "influenciador" | "backoffice";
+/** "plataforma" = botão flutuante global "Encontrou um bug?" (ou portal do
+ * cliente) — bug do HypeApp enquanto ferramenta. "hypeapp" = formulário
+ * dedicado do Projeto HypeApp — bug/sugestão sobre o produto HypeApp em si.
+ * São conceitos diferentes e nunca aparecem juntos nas listagens. */
+export type BugReportSource = "plataforma" | "hypeapp";
 
 export type BugReport = {
   id: string;
@@ -20,6 +25,7 @@ export type BugReport = {
   scope: BugReportScope | null;
   resolved: boolean;
   resolvedAt: string | null;
+  source: BugReportSource;
 };
 
 function mapRow(row: {
@@ -35,6 +41,7 @@ function mapRow(row: {
   scope: string | null;
   resolved: boolean;
   resolved_at: string | null;
+  source: string;
 }): BugReport {
   return {
     id: row.id,
@@ -49,6 +56,7 @@ function mapRow(row: {
     scope: row.scope === "influenciador" || row.scope === "backoffice" ? row.scope : null,
     resolved: row.resolved,
     resolvedAt: row.resolved_at,
+    source: row.source === "hypeapp" ? "hypeapp" : "plataforma",
   };
 }
 
@@ -58,6 +66,7 @@ export async function submitBugReport(input: {
   pageContext?: string;
   kind?: BugReportKind;
   scope?: BugReportScope | null;
+  source?: BugReportSource;
 }): Promise<void> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) throw authError ?? new Error("Sessão inválida.");
@@ -87,14 +96,18 @@ export async function submitBugReport(input: {
     page_context: input.pageContext ?? null,
     kind: input.kind ?? "bug",
     scope: input.scope ?? null,
+    source: input.source ?? "plataforma",
   });
   if (error) throw new Error(error.message);
 }
 
-export async function listBugReports(): Promise<BugReport[]> {
+/** `source` obrigatório — nunca faz sentido listar "todos" (Plataforma e
+ * HypeApp são audiências e listas diferentes, ver `BugReportSource`). */
+export async function listBugReports(source: BugReportSource): Promise<BugReport[]> {
   const { data, error } = await supabase
     .from("bug_reports")
     .select("*")
+    .eq("source", source)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map(mapRow);

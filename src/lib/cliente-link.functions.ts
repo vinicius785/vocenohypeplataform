@@ -746,6 +746,7 @@ export const submitPortalBugReport = createServerFn({ method: "POST" })
       description: data.description.trim(),
       screenshot_path: screenshotPath,
       page_context: data.pageContext ?? null,
+      source: "plataforma",
     });
     if (error) throw new Error(error.message);
 

@@ -146,6 +146,7 @@ export type Database = {
           resolved_at: string | null;
           scope: string | null;
           screenshot_path: string | null;
+          source: string;
         };
         Insert: {
           client_label?: string | null;
@@ -160,6 +161,7 @@ export type Database = {
           resolved_at?: string | null;
           scope?: string | null;
           screenshot_path?: string | null;
+          source?: string;
         };
         Update: {
           client_label?: string | null;
@@ -174,6 +176,7 @@ export type Database = {
           resolved_at?: string | null;
           scope?: string | null;
           screenshot_path?: string | null;
+          source?: string;
         };
         Relationships: [];
       };
