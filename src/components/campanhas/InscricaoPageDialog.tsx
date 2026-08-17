@@ -27,6 +27,7 @@ import {
   ANONYMOUS_CAMPAIGN_TITLE,
   getEffectiveInscricaoPage,
   newCustomQuestion,
+  type InscricaoSobre,
 } from "@/lib/inscricao-page";
 
 const inputCls =
@@ -885,7 +886,7 @@ function LivePreview({
   publicSubtitle: string;
   bannerUrl: string;
   description: string;
-  sobre: { objetivo?: string; regioes?: string; periodo?: string; infoImportante?: string };
+  sobre: InscricaoSobre;
   dos: string[];
   donts: string[];
   showDos: boolean;
@@ -897,7 +898,14 @@ function LivePreview({
   clienteNome: string;
   showClientName: boolean;
 }) {
-  const sobreItems = [sobre.objetivo, sobre.regioes, sobre.periodo].filter(Boolean);
+  const sobreRows: [string, string | undefined][] = [
+    ["Objetivo", sobre.objetivo],
+    ["Regiões", sobre.regioes],
+    ["Período", sobre.periodo],
+    ["Formato", sobre.tipoConteudo],
+    ["Requisitos", sobre.requisitos],
+    ["Público desejado", sobre.publicoDesejado],
+  ].filter(([, v]) => v?.trim()) as [string, string][];
 
   return (
     <div className="p-4">
@@ -927,16 +935,26 @@ function LivePreview({
             </p>
           )}
 
-          {sobreItems.length > 0 && (
-            <div className="rounded-lg border border-border bg-muted/40 p-2">
-              <p className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+          {(sobreRows.length > 0 || sobre.infoImportante?.trim()) && (
+            <div className="space-y-1.5 rounded-lg border border-border bg-muted/40 p-2">
+              <p className="text-[10px] font-semibold uppercase text-muted-foreground">
                 Sobre a campanha
               </p>
-              <ul className="space-y-0.5 text-[11px] text-foreground">
-                {sobreItems.map((v, i) => (
-                  <li key={i}>{v}</li>
-                ))}
-              </ul>
+              {sobreRows.length > 0 && (
+                <dl className="space-y-1 text-[11px] text-foreground">
+                  {sobreRows.map(([label, value]) => (
+                    <div key={label}>
+                      <dt className="text-[10px] text-muted-foreground">{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {sobre.infoImportante?.trim() && (
+                <p className="whitespace-pre-wrap text-[11px] text-foreground">
+                  {sobre.infoImportante}
+                </p>
+              )}
             </div>
           )}
 
