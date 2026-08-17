@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export type BugReportKind = "bug" | "sugestao";
+export type BugReportScope = "influenciador" | "backoffice";
+
 export type BugReport = {
   id: string;
   reporterId: string | null;
@@ -9,6 +12,14 @@ export type BugReport = {
   screenshotPath: string | null;
   pageContext: string | null;
   createdAt: string;
+  /** Ausente em linhas antigas (do botão flutuante global, anterior a essa
+   * distinção) — sempre tratar como "bug" nesse caso. */
+  kind: BugReportKind;
+  /** Só preenchido pelo formulário dedicado (Projeto HypeApp) — o botão
+   * flutuante global não pergunta escopo. */
+  scope: BugReportScope | null;
+  resolved: boolean;
+  resolvedAt: string | null;
 };
 
 function mapRow(row: {
@@ -20,6 +31,10 @@ function mapRow(row: {
   screenshot_path: string | null;
   page_context: string | null;
   created_at: string;
+  kind: string;
+  scope: string | null;
+  resolved: boolean;
+  resolved_at: string | null;
 }): BugReport {
   return {
     id: row.id,
@@ -30,6 +45,10 @@ function mapRow(row: {
     screenshotPath: row.screenshot_path,
     pageContext: row.page_context,
     createdAt: row.created_at,
+    kind: row.kind === "sugestao" ? "sugestao" : "bug",
+    scope: row.scope === "influenciador" || row.scope === "backoffice" ? row.scope : null,
+    resolved: row.resolved,
+    resolvedAt: row.resolved_at,
   };
 }
 
@@ -37,6 +56,8 @@ export async function submitBugReport(input: {
   description: string;
   screenshotFile?: File | null;
   pageContext?: string;
+  kind?: BugReportKind;
+  scope?: BugReportScope | null;
 }): Promise<void> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) throw authError ?? new Error("Sessão inválida.");
@@ -64,6 +85,8 @@ export async function submitBugReport(input: {
     description: input.description.trim(),
     screenshot_path: screenshotPath,
     page_context: input.pageContext ?? null,
+    kind: input.kind ?? "bug",
+    scope: input.scope ?? null,
   });
   if (error) throw new Error(error.message);
 }
@@ -82,6 +105,16 @@ export async function deleteBugReport(id: string, screenshotPath: string | null)
     await supabase.storage.from("bug-reports").remove([screenshotPath]);
   }
   const { error } = await supabase.from("bug_reports").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Alterna resolvido/reaberto — único ponto de escrita do status, pra não
+ * duplicar a lógica de "o que grava `resolved_at`" em cada componente. */
+export async function setBugReportResolved(id: string, resolved: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("bug_reports")
+    .update({ resolved, resolved_at: resolved ? new Date().toISOString() : null })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 

@@ -138,9 +138,13 @@ export type Database = {
           created_at: string;
           description: string;
           id: string;
+          kind: string;
           page_context: string | null;
           reporter_id: string | null;
           reporter_name: string;
+          resolved: boolean;
+          resolved_at: string | null;
+          scope: string | null;
           screenshot_path: string | null;
         };
         Insert: {
@@ -148,9 +152,13 @@ export type Database = {
           created_at?: string;
           description: string;
           id?: string;
+          kind?: string;
           page_context?: string | null;
           reporter_id?: string | null;
           reporter_name?: string;
+          resolved?: boolean;
+          resolved_at?: string | null;
+          scope?: string | null;
           screenshot_path?: string | null;
         };
         Update: {
@@ -158,9 +166,13 @@ export type Database = {
           created_at?: string;
           description?: string;
           id?: string;
+          kind?: string;
           page_context?: string | null;
           reporter_id?: string | null;
           reporter_name?: string;
+          resolved?: boolean;
+          resolved_at?: string | null;
+          scope?: string | null;
           screenshot_path?: string | null;
         };
         Relationships: [];

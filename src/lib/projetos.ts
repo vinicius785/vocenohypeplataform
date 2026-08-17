@@ -10,7 +10,8 @@ export type FeatureKey =
   | "calendario_editorial"
   | "trafego_pago"
   | "blog"
-  | "aeo_monitor";
+  | "aeo_monitor"
+  | "bugs_sugestoes";
 
 export const FEATURES: {
   key: FeatureKey;
@@ -65,6 +66,12 @@ export const FEATURES: {
     label: "AEO Monitor",
     hint: "Biblioteca de prompts e monitoramento de citação da marca em IAs (ChatGPT, Perplexity, Gemini, Claude).",
     group: "marketing",
+  },
+  {
+    key: "bugs_sugestoes",
+    label: "Bugs & Sugestões",
+    hint: "Relatos de bug e ideias sobre o HypeApp, com status de resolução.",
+    group: "core",
   },
 ];
 

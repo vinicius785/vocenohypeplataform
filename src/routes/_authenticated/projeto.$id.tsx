@@ -16,10 +16,12 @@ import {
   LayoutList,
   LayoutPanelTop,
   Radar,
+  Bug,
 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { BackButton } from "@/components/BackButton";
 import { MarketingSection } from "@/components/MarketingSection";
+import { ProjectBugsPanel } from "@/components/projetos/ProjectBugsPanel";
 import {
   TaskBoard,
   TaskDialog as SharedTaskDialog,
@@ -72,6 +74,7 @@ const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   trafego_pago: Megaphone,
   blog: Newspaper,
   aeo_monitor: Radar,
+  bugs_sugestoes: Bug,
 };
 
 function renderPanel(
@@ -100,6 +103,7 @@ function renderPanel(
   if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
   if (k === "blog") return <BlogPanel project={project} update={update} />;
   if (k === "aeo_monitor") return <AeoMonitorPanel />;
+  if (k === "bugs_sugestoes") return <ProjectBugsPanel />;
   return <SectionPanel project={project} update={update} featureKey={k} />;
 }
 
@@ -156,7 +160,14 @@ function ProjetoPage() {
     );
   }
 
-  const availableTabs = project.features;
+  // Projeto "HypeApp" ganha a aba de Bugs & Sugestões automaticamente,
+  // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
+  // precisar que alguém lembre de habilitar a feature manualmente.
+  const isHypeAppProject = project.name.trim().toLowerCase() === "hypeapp";
+  const availableTabs =
+    isHypeAppProject && !project.features.includes("bugs_sugestoes")
+      ? [...project.features, "bugs_sugestoes" as const]
+      : project.features;
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
