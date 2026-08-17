@@ -486,6 +486,7 @@ function CampanhaDetail({
         open={inscricaoOpen}
         onOpenChange={setInscricaoOpen}
         campaign={c}
+        clienteNome={cliente.empresa}
         influs={influs}
         onSave={saveInscricaoPage}
       />

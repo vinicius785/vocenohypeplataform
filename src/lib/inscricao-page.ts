@@ -80,10 +80,21 @@ export type InscricaoPageConfig = {
   sobre?: InscricaoSobre;
   showDos?: boolean;
   showDonts?: boolean;
+  /** Alguns clientes só são revelados depois de fechado — controla se o
+   * nome do cliente (`Cliente.empresa`) aparece na página pública. Default
+   * true (comportamento atual). */
+  showClientName?: boolean;
+  /** Mesma lógica pro nome real da campanha: só entra em jogo quando
+   * `publicTitle` está vazio (aí o título cai pro nome real, ver
+   * `getEffectiveInscricaoPage`) — se o time já escreveu um título
+   * público próprio, esse título sempre prevalece, independente disto. */
+  showCampaignName?: boolean;
   fields?: Partial<Record<InscricaoFieldKey, InscricaoFieldConfig>>;
   customQuestions?: CustomQuestion[];
   thankYouMessage?: string;
 };
+
+export const ANONYMOUS_CAMPAIGN_TITLE = "Oportunidade de parceria";
 
 export type EffectiveInscricaoPage = {
   status: InscricaoPageStatus;
@@ -96,6 +107,7 @@ export type EffectiveInscricaoPage = {
   donts: string[];
   showDos: boolean;
   showDonts: boolean;
+  showClientName: boolean;
   fields: Record<InscricaoFieldKey, InscricaoFieldConfig>;
   customQuestions: CustomQuestion[];
   thankYouMessage: string;
@@ -119,9 +131,10 @@ const DEFAULT_FIELDS: Record<InscricaoFieldKey, InscricaoFieldConfig> = {
  */
 export function getEffectiveInscricaoPage(campaign: Campaign): EffectiveInscricaoPage {
   const cfg = campaign.inscricaoPage;
+  const fallbackTitle = cfg?.showCampaignName === false ? ANONYMOUS_CAMPAIGN_TITLE : campaign.nome;
   return {
     status: cfg?.status ?? "PUBLICADA",
-    publicTitle: cfg?.publicTitle?.trim() || campaign.nome,
+    publicTitle: cfg?.publicTitle?.trim() || fallbackTitle,
     publicSubtitle: cfg?.publicSubtitle ?? "",
     bannerUrl: cfg?.bannerUrl,
     description: cfg?.description?.trim() || campaign.briefing || "",
@@ -130,6 +143,7 @@ export function getEffectiveInscricaoPage(campaign: Campaign): EffectiveInscrica
     donts: campaign.donts ?? [],
     showDos: cfg?.showDos ?? true,
     showDonts: cfg?.showDonts ?? true,
+    showClientName: cfg?.showClientName ?? true,
     fields: {
       nicho: { ...DEFAULT_FIELDS.nicho, ...cfg?.fields?.nicho },
       redes: { ...DEFAULT_FIELDS.redes, ...cfg?.fields?.redes },

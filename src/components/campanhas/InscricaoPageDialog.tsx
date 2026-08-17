@@ -24,6 +24,7 @@ import {
   INSCRICAO_STATUS_LABEL,
   INSCRICAO_FIELD_LABEL,
   CUSTOM_QUESTION_TYPE_LABEL,
+  ANONYMOUS_CAMPAIGN_TITLE,
   getEffectiveInscricaoPage,
   newCustomQuestion,
 } from "@/lib/inscricao-page";
@@ -90,18 +91,24 @@ export function InscricaoPageDialog({
   open,
   onOpenChange,
   campaign,
+  clienteNome,
   influs,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   campaign: Campaign;
+  clienteNome: string;
   influs: Influ[];
   onSave: (patch: Partial<Campaign>) => void;
 }) {
   const effective = getEffectiveInscricaoPage(campaign);
   const [tab, setTab] = useState("geral");
-  const [publicTitle, setPublicTitle] = useState(effective.publicTitle);
+  // Estado do campo é o valor CRU salvo (não o `effective.publicTitle` já
+  // com o fallback aplicado) — senão o campo sempre chegaria pré-preenchido
+  // com o nome real da campanha, e o toggle "Mostrar nome da campanha"
+  // nunca teria efeito (o campo nunca ficaria vazio pra cair no fallback).
+  const [publicTitle, setPublicTitle] = useState(campaign.inscricaoPage?.publicTitle ?? "");
   const [publicSubtitle, setPublicSubtitle] = useState(effective.publicSubtitle);
   const [bannerUrl, setBannerUrl] = useState(effective.bannerUrl ?? "");
   const [description, setDescription] = useState(effective.description);
@@ -111,6 +118,10 @@ export function InscricaoPageDialog({
   const [donts, setDonts] = useState<string[]>(effective.donts);
   const [showDos, setShowDos] = useState(effective.showDos);
   const [showDonts, setShowDonts] = useState(effective.showDonts);
+  const [showClientName, setShowClientName] = useState(effective.showClientName);
+  const [showCampaignName, setShowCampaignName] = useState(
+    campaign.inscricaoPage?.showCampaignName ?? true,
+  );
   const [fields, setFields] = useState(effective.fields);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>(
     effective.customQuestions,
@@ -126,7 +137,7 @@ export function InscricaoPageDialog({
   useEffect(() => {
     if (!open) return;
     const eff = getEffectiveInscricaoPage(campaign);
-    setPublicTitle(eff.publicTitle);
+    setPublicTitle(campaign.inscricaoPage?.publicTitle ?? "");
     setPublicSubtitle(eff.publicSubtitle);
     setBannerUrl(eff.bannerUrl ?? "");
     setDescription(eff.description);
@@ -136,6 +147,8 @@ export function InscricaoPageDialog({
     setDonts(eff.donts);
     setShowDos(eff.showDos);
     setShowDonts(eff.showDonts);
+    setShowClientName(eff.showClientName);
+    setShowCampaignName(campaign.inscricaoPage?.showCampaignName ?? true);
     setFields(eff.fields);
     setCustomQuestions(eff.customQuestions);
     setTab("geral");
@@ -162,6 +175,8 @@ export function InscricaoPageDialog({
       sobre,
       showDos,
       showDonts,
+      showClientName,
+      showCampaignName,
       fields,
       customQuestions,
       thankYouMessage: thankYouMessage.trim() || undefined,
@@ -309,7 +324,7 @@ export function InscricaoPageDialog({
                     <input
                       value={publicTitle}
                       onChange={(e) => setPublicTitle(e.target.value)}
-                      placeholder={campaign.nome}
+                      placeholder={showCampaignName ? campaign.nome : ANONYMOUS_CAMPAIGN_TITLE}
                       className={inputCls}
                       maxLength={120}
                     />
@@ -325,6 +340,31 @@ export function InscricaoPageDialog({
                     />
                   </label>
                 </div>
+
+                <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-2xl border border-border bg-muted/40 p-3">
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={showClientName}
+                      onChange={(e) => setShowClientName(e.target.checked)}
+                    />
+                    Mostrar nome do cliente ({clienteNome})
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={showCampaignName}
+                      onChange={(e) => setShowCampaignName(e.target.checked)}
+                    />
+                    Mostrar nome real da campanha se o título público ficar em branco
+                  </label>
+                </div>
+                {(!showClientName || !showCampaignName) && (
+                  <p className="-mt-3 text-[11px] text-muted-foreground">
+                    Útil quando o cliente só é revelado depois de fechado — deixe o título público
+                    em branco pra usar "{ANONYMOUS_CAMPAIGN_TITLE}".
+                  </p>
+                )}
                 <div className={labelCls}>
                   <span className="flex items-center gap-1.5">
                     <ImageIcon className="h-3.5 w-3.5" /> Banner (opcional)
@@ -684,7 +724,9 @@ export function InscricaoPageDialog({
               fields={fields}
               customQuestions={customQuestions}
               thankYouMessage={thankYouMessage}
-              fallbackTitle={campaign.nome}
+              fallbackTitle={showCampaignName ? campaign.nome : ANONYMOUS_CAMPAIGN_TITLE}
+              clienteNome={clienteNome}
+              showClientName={showClientName}
             />
           </aside>
         </div>
@@ -836,6 +878,8 @@ function LivePreview({
   customQuestions,
   thankYouMessage,
   fallbackTitle,
+  clienteNome,
+  showClientName,
 }: {
   publicTitle: string;
   publicSubtitle: string;
@@ -850,6 +894,8 @@ function LivePreview({
   customQuestions: CustomQuestion[];
   thankYouMessage: string;
   fallbackTitle: string;
+  clienteNome: string;
+  showClientName: boolean;
 }) {
   const sobreItems = [sobre.objetivo, sobre.regioes, sobre.periodo].filter(Boolean);
 
@@ -862,6 +908,11 @@ function LivePreview({
         {bannerUrl && <img src={bannerUrl} alt="" className="h-20 w-full object-cover" />}
         <div className="space-y-3 p-3">
           <div>
+            {showClientName && (
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {clienteNome}
+              </p>
+            )}
             <h3 className="text-sm font-semibold leading-tight text-foreground">
               {publicTitle.trim() || fallbackTitle}
             </h3>

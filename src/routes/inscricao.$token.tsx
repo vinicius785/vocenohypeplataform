@@ -178,9 +178,11 @@ function InscricaoPage() {
               </div>
             )}
 
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              {clienteNome}
-            </p>
+            {page.showClientName && (
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                {clienteNome}
+              </p>
+            )}
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
               {page.publicTitle}
             </h1>
