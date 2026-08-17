@@ -1,6 +1,7 @@
 {
-  "version": "1.151.0",
+  "version": "1.151.1",
   "notes": [
+    "Bugs & Sugestões ganha link próprio (/bugs) — \"Abrir link\" na aba dentro do Projeto HypeApp leva pra essa página em separado, com a mesma lista e o botão de marcar como resolvido, sem precisar navegar pela aba do projeto.",
     "Novo: aba \"Bugs & Sugestões\" no Projeto HypeApp (Projetos) — formulário próprio com tipo (Bug/Sugestão), visão afetada (Influenciador/Backoffice), descrição e anexo opcional. A lista fica visível pro time todo, separada em \"Em aberto\"/\"Resolvidos\", com botão pra admins marcarem como resolvido ou reabrir. Reaproveita a mesma base do botão flutuante \"Encontrou um bug?\" que já existia — os relatos de lá também aparecem aqui.",
     "Corrige a prévia ao vivo da Página de inscrição, que só mostrava 3 dos 7 campos de \"Sobre a campanha\" (faltavam formato, requisitos, público desejado e informações importantes) — agora mostra todos, com rótulo.",
     "Página de inscrição: novos toggles \"Mostrar nome do cliente\" e \"Mostrar nome real da campanha\" — pra campanhas onde o cliente só é revelado depois de fechado. Com o nome do cliente oculto, a página pública simplesmente não mostra aquela linha; com o nome da campanha oculto, deixar o título público em branco usa um texto neutro (\"Oportunidade de parceria\") em vez do nome real. Se você já escreveu um título público próprio, ele sempre prevalece, com ou sem os toggles.",

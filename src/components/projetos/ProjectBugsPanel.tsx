@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Bug, Lightbulb, Paperclip, Check, X, Trash2, ImageIcon, Loader2 } from "lucide-react";
+import {
+  Bug,
+  Lightbulb,
+  Paperclip,
+  Check,
+  X,
+  Trash2,
+  ImageIcon,
+  Loader2,
+  ExternalLink,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -30,7 +40,7 @@ const SCOPE_OPTS: { value: BugReportScope; label: string }[] = [
  * pelo botão flutuante global "Encontrou um bug?" — só adiciona tipo,
  * escopo e status de resolução por cima, sem criar uma tabela paralela.
  */
-export function ProjectBugsPanel() {
+export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: boolean } = {}) {
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -140,12 +150,24 @@ export function ProjectBugsPanel() {
   return (
     <div className="space-y-6">
       {confirmDialog}
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">Bugs & Sugestões</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Reporte problemas ou ideias sobre o HypeApp — visíveis pro time todo, com status de
-          resolução.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Bugs & Sugestões</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Reporte problemas ou ideias sobre o HypeApp — visíveis pro time todo, com status de
+            resolução.
+          </p>
+        </div>
+        {showOpenExternal && (
+          <a
+            href="/bugs"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Abrir link
+          </a>
+        )}
       </div>
 
       <form

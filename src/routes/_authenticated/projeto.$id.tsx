@@ -103,7 +103,7 @@ function renderPanel(
   if (k === "trafego_pago") return <TrafegoPagoPanel project={project} update={update} />;
   if (k === "blog") return <BlogPanel project={project} update={update} />;
   if (k === "aeo_monitor") return <AeoMonitorPanel />;
-  if (k === "bugs_sugestoes") return <ProjectBugsPanel />;
+  if (k === "bugs_sugestoes") return <ProjectBugsPanel showOpenExternal />;
   return <SectionPanel project={project} update={update} featureKey={k} />;
 }
 
