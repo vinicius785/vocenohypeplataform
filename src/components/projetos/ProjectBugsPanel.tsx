@@ -8,10 +8,11 @@ import {
   Trash2,
   ImageIcon,
   Loader2,
-  ExternalLink,
+  Link as LinkIcon,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
+import type { Project } from "@/lib/projetos";
 import {
   submitBugReport,
   listBugReports,
@@ -39,12 +40,24 @@ const SCOPE_OPTS: { value: BugReportScope; label: string }[] = [
  * em projeto.$id.tsx). Reaproveita a tabela/bucket `bug_reports` já usados
  * pelo botão flutuante global "Encontrou um bug?" — só adiciona tipo,
  * escopo e status de resolução por cima, sem criar uma tabela paralela.
+ *
+ * "Copiar link" gera (sob demanda) e copia um link público/externo
+ * (`/bugs/{token}`, token em `Project.bugsPublicToken`) — mesmo padrão dos
+ * links de portal do cliente / inscrição de campanha: quem tem o link vê e
+ * resolve os relatos sem precisar de login.
  */
-export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: boolean } = {}) {
+export function ProjectBugsPanel({
+  project,
+  update,
+}: {
+  project?: Project;
+  update?: (p: Partial<Project>) => void;
+} = {}) {
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [kind, setKind] = useState<BugReportKind>("bug");
   const [scope, setScope] = useState<BugReportScope>("backoffice");
@@ -150,6 +163,15 @@ export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: bool
     }
   };
 
+  const copyPublicLink = async () => {
+    if (!project || !update) return;
+    const token = project.bugsPublicToken ?? crypto.randomUUID().replace(/-/g, "");
+    if (!project.bugsPublicToken) update({ bugsPublicToken: token });
+    await navigator.clipboard.writeText(`${window.location.origin}/bugs/${token}`);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
   const abertos = reports.filter((r) => !r.resolved);
   const resolvidos = reports.filter((r) => r.resolved);
 
@@ -164,15 +186,14 @@ export function ProjectBugsPanel({ showOpenExternal }: { showOpenExternal?: bool
             resolução.
           </p>
         </div>
-        {showOpenExternal && (
-          <a
-            href="/bugs"
-            target="_blank"
-            rel="noreferrer"
+        {project && update && (
+          <button
+            type="button"
+            onClick={() => void copyPublicLink()}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
-            <ExternalLink className="h-3.5 w-3.5" /> Abrir link
-          </a>
+            <LinkIcon className="h-3.5 w-3.5" /> {linkCopied ? "Copiado!" : "Copiar link"}
+          </button>
         )}
       </div>
 

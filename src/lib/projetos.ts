@@ -243,6 +243,10 @@ export type Project = {
   editorial?: EditorialPost[];
   campaigns?: Campaign[];
   blog?: BlogPost[];
+  /** Token do link público/externo de Bugs & Sugestões (só usado pelo
+   * Projeto HypeApp) — gerado sob demanda, mesmo padrão de
+   * `Cliente.publicToken`/`Campaign.signupToken`. */
+  bugsPublicToken?: string;
 };
 
 const projetosStore = createTableArrayStore<Project>("projetos");

@@ -13,9 +13,9 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
+import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
-import { Route as AuthenticatedBugsRouteImport } from './routes/_authenticated/bugs'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
@@ -39,6 +39,11 @@ const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   path: '/inscricao/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BugsTokenRoute = BugsTokenRouteImport.update({
+  id: '/bugs/$token',
+  path: '/bugs/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedTimeRoute = AuthenticatedTimeRouteImport.update({
   id: '/time',
   path: '/time',
@@ -50,11 +55,6 @@ const AuthenticatedPrimeiroAcessoRoute =
     path: '/primeiro-acesso',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedBugsRoute = AuthenticatedBugsRouteImport.update({
-  id: '/bugs',
-  path: '/bugs',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   id: '/api/public/leads',
   path: '/api/public/leads',
@@ -73,9 +73,9 @@ const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/bugs': typeof AuthenticatedBugsRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/bugs/$token': typeof BugsTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -84,9 +84,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/bugs': typeof AuthenticatedBugsRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/bugs/$token': typeof BugsTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -97,9 +97,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/_authenticated/bugs': typeof AuthenticatedBugsRoute
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
+  '/bugs/$token': typeof BugsTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -110,9 +110,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/bugs'
     | '/primeiro-acesso'
     | '/time'
+    | '/bugs/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
@@ -121,9 +121,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/bugs'
     | '/primeiro-acesso'
     | '/time'
+    | '/bugs/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
@@ -133,9 +133,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
-    | '/_authenticated/bugs'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
+    | '/bugs/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/_authenticated/projeto/$id'
@@ -146,6 +146,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  BugsTokenRoute: typeof BugsTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   PortalTokenRoute: typeof PortalTokenRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
@@ -182,6 +183,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InscricaoTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bugs/$token': {
+      id: '/bugs/$token'
+      path: '/bugs/$token'
+      fullPath: '/bugs/$token'
+      preLoaderRoute: typeof BugsTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/time': {
       id: '/_authenticated/time'
       path: '/time'
@@ -194,13 +202,6 @@ declare module '@tanstack/react-router' {
       path: '/primeiro-acesso'
       fullPath: '/primeiro-acesso'
       preLoaderRoute: typeof AuthenticatedPrimeiroAcessoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/bugs': {
-      id: '/_authenticated/bugs'
-      path: '/bugs'
-      fullPath: '/bugs'
-      preLoaderRoute: typeof AuthenticatedBugsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/public/leads': {
@@ -228,14 +229,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedBugsRoute: typeof AuthenticatedBugsRoute
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedBugsRoute: AuthenticatedBugsRoute,
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,
@@ -247,6 +246,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  BugsTokenRoute: BugsTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   PortalTokenRoute: PortalTokenRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
