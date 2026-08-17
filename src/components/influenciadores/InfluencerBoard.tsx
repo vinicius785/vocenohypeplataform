@@ -3438,9 +3438,9 @@ function InfluencerProfileDialog({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  const r = new FileReader();
-                  r.onload = () => onPatch({ foto: String(r.result) });
-                  r.readAsDataURL(file);
+                  void uploadInfluFoto(file).then((url) => {
+                    if (url) onPatch({ foto: url });
+                  });
                 }}
               />
               <div className="min-w-0 flex-1 space-y-3 pt-2.5">
@@ -3983,9 +3983,9 @@ function InfluenciadorDialog({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  const r = new FileReader();
-                  r.onload = () => setFoto(String(r.result));
-                  r.readAsDataURL(file);
+                  void uploadInfluFoto(file).then((url) => {
+                    if (url) setFoto(url);
+                  });
                 }}
               />
               <button
@@ -4679,6 +4679,31 @@ function isImageName(nome: string): boolean {
 }
 function isVideoName(nome: string): boolean {
   return /\.(mp4|mov|webm|avi|mkv)$/i.test(nome);
+}
+
+/** Sobe a foto de perfil pro bucket `avatars` (Storage) e devolve uma URL
+ * assinada válida por ~10 anos — antes virava um data: URL (base64) direto
+ * na linha JSONB: ~80KB por foto, baixados de novo em TODA busca/resync da
+ * tabela inteira (não só quando alguém realmente vê a foto), inflando
+ * bastante o egress. Mesmo padrão de `uploadEntregaAnexo` abaixo. */
+async function uploadInfluFoto(file: File): Promise<string | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return null;
+  const ext = (file.name.split(".").pop() || "jpg").replace(/[^\w]+/g, "");
+  const path = `campanha_influenciadores/${uid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from("avatars").upload(path, file, {
+    contentType: file.type || "image/jpeg",
+    upsert: false,
+  });
+  if (error) {
+    console.warn("[avatars] upload failed", error);
+    return null;
+  }
+  const { data: signed } = await supabase.storage
+    .from("avatars")
+    .createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
+  return signed?.signedUrl ?? null;
 }
 
 /** Sobe o arquivo pro bucket `entrega-anexos` (Storage) e devolve uma URL
