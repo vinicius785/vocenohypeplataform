@@ -1,6 +1,7 @@
 {
-  "version": "1.151.4",
+  "version": "1.152.0",
   "notes": [
+    "Campanhas: remove o \"Relatório de métricas\" antigo (só existia depois de preencher métricas manualmente em cada influenciador) e troca por \"Relatórios mensais\" — o time sobe um PDF pronto, um por mês, direto na campanha. O cliente vê o PDF no portal sem precisar baixar (visualização embutida), com opção de download, e responde um NPS (0 a 10, com comentário opcional) sobre a campanha logo depois de ver o relatório.",
     "Financeiro: lançamentos de despesa marcados como pagos saem da lista principal e vão pra uma seção \"Pagos\" recolhida, separada — a lista de cima agora mostra só o que ainda está em aberto (pendente ou vencido). E a chave PIX nos Dados bancários do lançamento ganha um botão de copiar, em vez de precisar selecionar o texto na mão.",
     "Bugs & Sugestões: o link \"Abrir link\" (/bugs) virou um link público de verdade — \"Copiar link\" na aba do Projeto HypeApp gera e copia uma URL (/bugs/{token}) que qualquer pessoa com o link consegue abrir, reportar e marcar como resolvido sem precisar de login, no mesmo padrão dos links de portal do cliente e de inscrição de campanha.",
     "Corrige bugs da Plataforma (botão flutuante \"Encontrou um bug?\" + portal do cliente) aparecendo junto com bugs/sugestões do HypeApp (aba em Projetos) — eram listas separadas mas estavam se misturando. Agora cada uma mostra só o que é dela.",

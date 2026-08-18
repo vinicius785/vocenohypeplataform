@@ -13,10 +13,12 @@ import {
   FolderOpen,
   ImageIcon,
   Link as LinkIcon,
+  Loader2,
   Megaphone,
   Paperclip,
   ShieldCheck,
   Trash2,
+  Upload,
   User,
   UserPlus,
   Wallet,
@@ -40,7 +42,6 @@ import {
   normalizeInflus,
   totalAceito,
   canPublishEntrega,
-  computeMetricasRelatorio,
   type Influ,
   type InfluStatus,
   type BankInfo,
@@ -48,6 +49,14 @@ import {
 } from "@/components/influenciadores/InfluencerBoard";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
+import { formatIsoDate } from "@/lib/utils";
+import {
+  type RelatorioMensal,
+  mesLabel,
+  uploadRelatorioMensalPdf,
+  getRelatorioMensalUrl,
+  deleteRelatorioMensalPdf,
+} from "@/lib/relatorio-mensal";
 import {
   type CampaignDoc,
   loadCampanhaInflus,
@@ -319,26 +328,6 @@ function CampanhaDetail({
     [influs, monthFilter, isRecorrente],
   );
   const persistVisibleInflus = (next: Influ[]) => persistInflus([...hiddenInflus, ...next]);
-  // Só oferece "Gerar relatório" quando já existe alguma entrega publicada
-  // com métrica preenchida — senão o relatório sairia vazio.
-  const relatorioDisponivel = computeMetricasRelatorio(visibleInflus) !== null;
-  const gerarRelatorio = () => {
-    const relatorio = computeMetricasRelatorio(visibleInflus);
-    if (!relatorio) return;
-    setClientes((prev) =>
-      prev.map((cl) =>
-        cl.id !== cliente.id
-          ? cl
-          : {
-              ...cl,
-              campanhas: (cl.campanhas ?? []).map((camp) =>
-                camp.id === c.id ? { ...camp, relatorioMetricas: relatorio } : camp,
-              ),
-            },
-      ),
-    );
-    setOpenPanel("relatorio");
-  };
 
   // Approval metrics
   const enviados = visibleInflus.filter(
@@ -375,7 +364,7 @@ function CampanhaDetail({
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
   const [openPanel, setOpenPanel] = useState<
-    null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorio"
+    null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorioMensal"
   >(null);
 
   // Mesmo link (por cliente, não por campanha — um cliente pode ter várias
@@ -419,8 +408,78 @@ function CampanhaDetail({
     );
   };
 
+  // Relatórios mensais de métricas (PDF) — o time sobe o arquivo pronto,
+  // um por mês; o cliente vê no portal sem precisar baixar. Substitui o
+  // antigo relatório gerado automaticamente a partir das métricas dos
+  // influenciadores.
+  const relatorios = useMemo(
+    () => [...(c.relatoriosMensais ?? [])].sort((a, b) => b.mes.localeCompare(a.mes)),
+    [c.relatoriosMensais],
+  );
+  const [relatorioMes, setRelatorioMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const [relatorioUploading, setRelatorioUploading] = useState(false);
+  const [relatorioError, setRelatorioError] = useState("");
+  const [relatorioViewingId, setRelatorioViewingId] = useState<string | null>(null);
+  const [relatorioUrls, setRelatorioUrls] = useState<Record<string, string>>({});
+  const relatorioFileRef = useRef<HTMLInputElement>(null);
+  const { confirm: confirmDeleteRelatorio, confirmDialog: confirmDeleteRelatorioDialog } =
+    useConfirm();
+
+  const uploadRelatorioMensal = async (file: File) => {
+    if (file.type !== "application/pdf") {
+      setRelatorioError("Só é possível anexar arquivos PDF.");
+      return;
+    }
+    setRelatorioUploading(true);
+    setRelatorioError("");
+    try {
+      const storagePath = await uploadRelatorioMensalPdf(file);
+      if (!storagePath) throw new Error("Falha ao subir o arquivo.");
+      const novo: RelatorioMensal = {
+        id: crypto.randomUUID(),
+        mes: relatorioMes,
+        nome: file.name,
+        storagePath,
+        uploadedAt: new Date().toISOString(),
+      };
+      saveInscricaoPage({ relatoriosMensais: [...(c.relatoriosMensais ?? []), novo] });
+      if (relatorioFileRef.current) relatorioFileRef.current.value = "";
+    } catch (err) {
+      setRelatorioError(err instanceof Error ? err.message : "Erro ao subir o relatório.");
+    } finally {
+      setRelatorioUploading(false);
+    }
+  };
+
+  const deleteRelatorioMensal = async (r: RelatorioMensal) => {
+    const ok = await confirmDeleteRelatorio("Remover este relatório mensal?");
+    if (!ok) return;
+    await deleteRelatorioMensalPdf(r.storagePath);
+    saveInscricaoPage({
+      relatoriosMensais: (c.relatoriosMensais ?? []).filter((x) => x.id !== r.id),
+    });
+    if (relatorioViewingId === r.id) setRelatorioViewingId(null);
+  };
+
+  const toggleViewRelatorio = async (r: RelatorioMensal) => {
+    if (relatorioViewingId === r.id) {
+      setRelatorioViewingId(null);
+      return;
+    }
+    if (!relatorioUrls[r.id]) {
+      const url = await getRelatorioMensalUrl(r.storagePath);
+      if (!url) {
+        setRelatorioError("Não foi possível abrir o relatório.");
+        return;
+      }
+      setRelatorioUrls((prev) => ({ ...prev, [r.id]: url }));
+    }
+    setRelatorioViewingId(r.id);
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10">
+      {confirmDeleteRelatorioDialog}
       {/* BACK */}
       <BackButton onClick={onBack} />
 
@@ -575,14 +634,12 @@ function CampanhaDetail({
             active={c.direitosImagem?.permitido}
             onClick={() => setOpenPanel("direitos")}
           />
-          {(relatorioDisponivel || c.relatorioMetricas) && (
-            <FeatureButton
-              icon={FileBarChart}
-              label="Relatório de métricas"
-              active={!!c.relatorioMetricas}
-              onClick={() => setOpenPanel("relatorio")}
-            />
-          )}
+          <FeatureButton
+            icon={FileBarChart}
+            label="Relatórios mensais"
+            active={relatorios.length > 0}
+            onClick={() => setOpenPanel("relatorioMensal")}
+          />
         </div>
       </section>
 
@@ -735,142 +792,106 @@ function CampanhaDetail({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={openPanel === "relatorio"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+      <Dialog open={openPanel === "relatorioMensal"} onOpenChange={(o) => !o && setOpenPanel(null)}>
         <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col border-border bg-card">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <FileBarChart className="h-4 w-4" /> Relatório de métricas
+            <FileBarChart className="h-4 w-4" /> Relatórios mensais
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Métricas das entregas publicadas desta campanha, por influenciador, com destaque pro
-            melhor conteúdo.
+            PDFs de relatório de métricas enviados pro cliente, um por mês.
           </DialogDescription>
 
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto">
-            {c.relatorioMetricas ? (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  Gerado em{" "}
-                  {new Date(c.relatorioMetricas.geradoEm).toLocaleString("pt-BR", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}{" "}
-                  · {c.relatorioMetricas.totalPublicadas} publicação
-                  {c.relatorioMetricas.totalPublicadas === 1 ? "" : "ões"}
-                </p>
-
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                  {(
-                    [
-                      { key: "views", label: "Views" },
-                      { key: "reach", label: "Alcance" },
-                      { key: "likes", label: "Curtidas" },
-                      { key: "comments", label: "Comentários" },
-                      { key: "shares", label: "Compart." },
-                      { key: "saves", label: "Salvos" },
-                    ] as const
-                  ).map((m) => (
-                    <div key={m.key} className="rounded-lg border border-border p-2.5 text-center">
-                      <div className="text-base font-semibold text-foreground">
-                        {(c.relatorioMetricas!.totais[m.key] ?? 0) > 0
-                          ? c.relatorioMetricas!.totais[m.key]!.toLocaleString("pt-BR")
-                          : "—"}
-                      </div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {m.label}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {c.relatorioMetricas.melhorConteudo && (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                      🏆 Melhor conteúdo
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
-                      {c.relatorioMetricas.melhorConteudo.influNome} —{" "}
-                      {c.relatorioMetricas.melhorConteudo.tipo}
-                      {c.relatorioMetricas.melhorConteudo.titulo
-                        ? ` · ${c.relatorioMetricas.melhorConteudo.titulo}`
-                        : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {(c.relatorioMetricas.melhorConteudo.metrics.views ?? 0).toLocaleString(
-                        "pt-BR",
-                      )}{" "}
-                      views ·{" "}
-                      {(c.relatorioMetricas.melhorConteudo.metrics.likes ?? 0).toLocaleString(
-                        "pt-BR",
-                      )}{" "}
-                      curtidas
-                      {c.relatorioMetricas.melhorConteudo.url && (
-                        <>
-                          {" · "}
-                          <a
-                            href={c.relatorioMetricas.melhorConteudo.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline underline-offset-2 hover:text-foreground"
-                          >
-                            ver post
-                          </a>
-                        </>
-                      )}
-                    </p>
-                  </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
+              <input
+                type="month"
+                value={relatorioMes}
+                onChange={(e) => setRelatorioMes(e.target.value)}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+              />
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-foreground hover:text-foreground">
+                {relatorioUploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
                 )}
+                {relatorioUploading ? "Enviando..." : "Subir PDF"}
+                <input
+                  ref={relatorioFileRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  disabled={relatorioUploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void uploadRelatorioMensal(file);
+                  }}
+                />
+              </label>
+              <span className="text-[11px] text-muted-foreground">
+                O cliente vê este PDF no portal, sem precisar baixar.
+              </span>
+            </div>
 
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Por influenciador
-                  </p>
-                  <ul className="divide-y divide-border rounded-lg border border-border">
-                    {c.relatorioMetricas.porInflu.map((p) => (
-                      <li key={p.influId} className="flex items-center gap-3 px-3 py-2.5">
-                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
-                          {p.foto ? (
-                            <img src={p.foto} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-muted-foreground">
-                              {p.nome.charAt(0).toUpperCase() || "?"}
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{p.nome}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {p.publicadas} publicação{p.publicadas === 1 ? "" : "ões"}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right text-xs text-muted-foreground">
-                          <div className="font-semibold text-foreground">
-                            {(p.totais.views ?? 0).toLocaleString("pt-BR")} views
-                          </div>
-                          <div>{(p.totais.likes ?? 0).toLocaleString("pt-BR")} curtidas</div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
+            {relatorioError && <p className="text-xs text-destructive">{relatorioError}</p>}
+
+            {relatorios.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum relatório enviado ainda.</p>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Nenhum relatório gerado ainda. Clique em "Gerar relatório" pra reunir as métricas
-                das entregas já publicadas, separadas por influenciador.
-              </p>
+              <ul className="space-y-2">
+                {relatorios.map((r) => (
+                  <li key={r.id} className="rounded-lg border border-border">
+                    <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {mesLabel(r.mes)}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {r.nome} · enviado {formatIsoDate(r.uploadedAt.slice(0, 10))}
+                        </p>
+                        {r.nps && (
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            NPS do cliente: <span className="font-semibold">{r.nps.score}</span>
+                            {r.nps.comentario ? ` — "${r.nps.comentario}"` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void toggleViewRelatorio(r)}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                      >
+                        {relatorioViewingId === r.id ? "Ocultar" : "Visualizar"}
+                      </button>
+                      {relatorioUrls[r.id] && (
+                        <a
+                          href={relatorioUrls[r.id]}
+                          download={r.nome}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                        >
+                          <Download className="h-3 w-3" /> Baixar
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void deleteRelatorioMensal(r)}
+                        aria-label="Remover"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {relatorioViewingId === r.id && relatorioUrls[r.id] && (
+                      <iframe
+                        src={relatorioUrls[r.id]}
+                        title={r.nome}
+                        className="h-[60vh] w-full border-t border-border"
+                      />
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-
-          <div className="mt-4 shrink-0">
-            <button
-              type="button"
-              onClick={gerarRelatorio}
-              disabled={!relatorioDisponivel}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-            >
-              <FileBarChart className="h-3.5 w-3.5" />
-              {c.relatorioMetricas ? "Atualizar relatório" : "Gerar relatório"}
-            </button>
           </div>
         </DialogContent>
       </Dialog>

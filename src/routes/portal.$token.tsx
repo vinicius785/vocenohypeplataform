@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Download,
   ExternalLink,
   Facebook,
   FileText,
@@ -67,11 +68,12 @@ import {
   loadArtigoEngagement,
   toggleArtigoLike,
   addArtigoComentario,
+  submitRelatorioNps,
 } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { t, usePortalLang, PORTAL_LANGS, type PortalLang } from "@/lib/portal-i18n";
-import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
+import { mesLabel } from "@/lib/relatorio-mensal";
 
 /**
  * Portal do cliente (`/portal/$token`) — um link só, com TODAS as campanhas
@@ -215,6 +217,14 @@ type PublicCronogramaItem = {
   description?: string;
   recurring?: boolean;
 };
+type PublicRelatorioMensal = {
+  id: string;
+  mes: string;
+  nome: string;
+  uploadedAt: string;
+  nps?: { score: number; comentario?: string; respondedAt: string };
+  url: string | null;
+};
 type PublicCampanha = {
   id: string;
   nome: string;
@@ -223,7 +233,7 @@ type PublicCampanha = {
   planejado: number;
   influencers: PublicInfluencer[];
   cronograma: PublicCronogramaItem[];
-  relatorioMetricas?: MetricasRelatorio;
+  relatorios: PublicRelatorioMensal[];
 };
 type PublicArticle = {
   id: string;
@@ -699,6 +709,137 @@ function StatusBadge({
     <Badge variant="outline" className={`text-muted-foreground ${className}`}>
       {inf.statusCliente}
     </Badge>
+  );
+}
+
+/** Um relatório mensal (PDF) — abre inline sem precisar baixar (o cliente
+ * vê o PDF direto no navegador via `<iframe>`), com download opcional, e
+ * pede o NPS assim que o cliente já viu o relatório (some depois de
+ * respondido). */
+function RelatorioMensalCard({
+  relatorio,
+  campanhaId,
+  token,
+  viewing,
+  onToggleView,
+  onAnswered,
+}: {
+  relatorio: PublicRelatorioMensal;
+  campanhaId: string;
+  token: string;
+  viewing: boolean;
+  onToggleView: () => void;
+  onAnswered: (nps: NonNullable<PublicRelatorioMensal["nps"]>) => void;
+}) {
+  const submitNpsFn = useServerFn(submitRelatorioNps);
+  const [score, setScore] = useState<number | null>(null);
+  const [comentario, setComentario] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const submitNps = async () => {
+    if (score === null || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await submitNpsFn({
+        data: { token, campanhaId, relatorioId: relatorio.id, score, comentario },
+      });
+      onAnswered({
+        score,
+        comentario: comentario.trim() || undefined,
+        respondedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-background p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{mesLabel(relatorio.mes)}</p>
+          <p className="text-[11px] text-muted-foreground">{relatorio.nome}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {relatorio.url && (
+            <button
+              type="button"
+              onClick={onToggleView}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              {viewing ? "Ocultar" : "Visualizar"}
+            </button>
+          )}
+          {relatorio.url && (
+            <a
+              href={relatorio.url}
+              download={relatorio.nome}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <Download className="h-3.5 w-3.5" /> Baixar
+            </a>
+          )}
+        </div>
+      </div>
+
+      {viewing && relatorio.url && (
+        <iframe
+          src={relatorio.url}
+          title={relatorio.nome}
+          className="mt-3 h-[70vh] w-full rounded-lg border border-border"
+        />
+      )}
+
+      {viewing &&
+        (relatorio.nps ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Obrigado pela avaliação! Você deu nota {relatorio.nps.score}/10.
+          </p>
+        ) : (
+          <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs font-medium text-foreground">
+              De 0 a 10, o quanto você recomendaria esta campanha a um colega?
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Array.from({ length: 11 }, (_, n) => n).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setScore(n)}
+                  className={`flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium transition-colors ${
+                    score === n
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              placeholder="Comentário (opcional)"
+              rows={2}
+              maxLength={2000}
+              className="mt-2 w-full resize-none rounded-md border border-border bg-background px-2.5 py-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            />
+            {error && <p className="mt-1.5 text-xs text-destructive">{error}</p>}
+            <button
+              type="button"
+              onClick={() => void submitNps()}
+              disabled={score === null || submitting}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+            >
+              Enviar avaliação
+            </button>
+          </div>
+        ))}
+    </div>
   );
 }
 
@@ -1503,6 +1644,7 @@ function ClientPortalPage() {
   const loadEngagementFn = useServerFn(loadArtigoEngagement);
   const toggleLikeFn = useServerFn(toggleArtigoLike);
   const addComentarioFn = useServerFn(addArtigoComentario);
+  const [viewingRelatorioId, setViewingRelatorioId] = useState<string | null>(null);
   const [data, setData] = useState<ClienteLinkData | null>(loaderData.clienteData);
   const [status, setStatus] = useState<"loading" | "ready" | "notfound">(
     loaderData.clienteData ? "ready" : "notfound",
@@ -1958,120 +2100,45 @@ function ClientPortalPage() {
                   </div>
                 )}
 
-                {activeCampanha.relatorioMetricas && (
+                {activeCampanha.relatorios.length > 0 && (
                   <>
                     <h2 className="mb-3 mt-8 flex items-center gap-2 text-sm font-semibold text-foreground">
                       <BarChart3 className="h-4 w-4" /> {t(lang, "relatorioHeader")}
                     </h2>
-                    <div className="rounded-xl border border-border bg-background p-4">
-                      <p className="text-xs text-muted-foreground">
-                        {t(lang, "relatorioGeradoEm")}{" "}
-                        {new Date(activeCampanha.relatorioMetricas.geradoEm).toLocaleDateString(
-                          lang === "en-US" ? "en-US" : lang === "es" ? "es-ES" : "pt-BR",
-                        )}{" "}
-                        · {activeCampanha.relatorioMetricas.totalPublicadas}{" "}
-                        {t(lang, "relatorioPublicacoes")}
-                      </p>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                        {(
-                          [
-                            { key: "views", label: t(lang, "views") },
-                            { key: "reach", label: t(lang, "alcance") },
-                            { key: "likes", label: t(lang, "curtidas") },
-                            { key: "comments", label: t(lang, "comentarios") },
-                            { key: "shares", label: t(lang, "compartilhamentos") },
-                            { key: "saves", label: t(lang, "salvos") },
-                          ] as const
-                        ).map((m) => (
-                          <div
-                            key={m.key}
-                            className="rounded-lg border border-border p-2.5 text-center"
-                          >
-                            <div className="text-base font-semibold text-foreground">
-                              {(activeCampanha.relatorioMetricas!.totais[m.key] ?? 0) > 0
-                                ? activeCampanha.relatorioMetricas!.totais[m.key]!.toLocaleString(
-                                    "pt-BR",
-                                  )
-                                : "—"}
-                            </div>
-                            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {m.label}
-                            </div>
-                          </div>
+                    <div className="space-y-3">
+                      {[...activeCampanha.relatorios]
+                        .sort((a, b) => b.mes.localeCompare(a.mes))
+                        .map((r) => (
+                          <RelatorioMensalCard
+                            key={r.id}
+                            relatorio={r}
+                            campanhaId={activeCampanha.id}
+                            token={token}
+                            viewing={viewingRelatorioId === r.id}
+                            onToggleView={() =>
+                              setViewingRelatorioId((prev) => (prev === r.id ? null : r.id))
+                            }
+                            onAnswered={(nps) => {
+                              setData((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      campanhas: prev.campanhas.map((c) =>
+                                        c.id !== activeCampanha.id
+                                          ? c
+                                          : {
+                                              ...c,
+                                              relatorios: c.relatorios.map((x) =>
+                                                x.id === r.id ? { ...x, nps } : x,
+                                              ),
+                                            },
+                                      ),
+                                    }
+                                  : prev,
+                              );
+                            }}
+                          />
                         ))}
-                      </div>
-
-                      {activeCampanha.relatorioMetricas.melhorConteudo && (
-                        <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                            🏆 {t(lang, "relatorioMelhorConteudo")}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-foreground">
-                            {activeCampanha.relatorioMetricas.melhorConteudo.influNome} —{" "}
-                            {activeCampanha.relatorioMetricas.melhorConteudo.tipo}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {(
-                              activeCampanha.relatorioMetricas.melhorConteudo.metrics.views ?? 0
-                            ).toLocaleString("pt-BR")}{" "}
-                            {t(lang, "views").toLowerCase()} ·{" "}
-                            {(
-                              activeCampanha.relatorioMetricas.melhorConteudo.metrics.likes ?? 0
-                            ).toLocaleString("pt-BR")}{" "}
-                            {t(lang, "curtidas").toLowerCase()}
-                            {activeCampanha.relatorioMetricas.melhorConteudo.url && (
-                              <>
-                                {" · "}
-                                <a
-                                  href={activeCampanha.relatorioMetricas.melhorConteudo.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="underline underline-offset-2 hover:text-foreground"
-                                >
-                                  {t(lang, "relatorioVerPost")}
-                                </a>
-                              </>
-                            )}
-                          </p>
-                        </div>
-                      )}
-
-                      <p className="mb-1.5 mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {t(lang, "relatorioPorInflu")}
-                      </p>
-                      <ul className="divide-y divide-border rounded-lg border border-border">
-                        {activeCampanha.relatorioMetricas.porInflu.map((p) => (
-                          <li key={p.influId} className="flex items-center gap-3 px-3 py-2.5">
-                            <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted">
-                              {p.foto ? (
-                                <img src={p.foto} alt="" className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-muted-foreground">
-                                  {p.nome.charAt(0).toUpperCase() || "?"}
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {p.nome}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {p.publicadas} {t(lang, "relatorioPublicacoes")}
-                              </p>
-                            </div>
-                            <div className="shrink-0 text-right text-xs text-muted-foreground">
-                              <div className="font-semibold text-foreground">
-                                {(p.totais.views ?? 0).toLocaleString("pt-BR")} {t(lang, "views")}
-                              </div>
-                              <div>
-                                {(p.totais.likes ?? 0).toLocaleString("pt-BR")}{" "}
-                                {t(lang, "curtidas")}
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   </>
                 )}

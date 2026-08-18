@@ -15,8 +15,8 @@ import {
   UserPlus,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import type { MetricasRelatorio } from "@/components/influenciadores/InfluencerBoard";
 import type { InscricaoPageConfig } from "@/lib/inscricao-page";
+import type { RelatorioMensal } from "@/lib/relatorio-mensal";
 
 const TIPOS = ["Digital", "Celebridade", "Local", "Nicho", "Embaixador"] as const;
 const TAMANHOS = ["Nano", "Micro", "Médio", "Macro", "Mega"] as const;
@@ -111,7 +111,13 @@ export type Campaign = {
   pagClienteRecorrenteDia?: number; // dia do mês (1-31)
   pagClienteRecorrenteInicio?: string; // data inicial da recorrência
   direitosImagem?: DireitosImagem;
-  relatorioMetricas?: MetricasRelatorio;
+  /** Relatórios mensais de métricas em PDF, um por mês (`YYYY-MM`) — o
+   * time sobe o PDF pronto (fora da plataforma), o cliente vê no portal
+   * sem precisar baixar e responde um NPS sobre aquele relatório. Substitui
+   * o antigo `relatorioMetricas` gerado automaticamente a partir das
+   * métricas preenchidas nos influenciadores (removido — não fazia sentido
+   * depender disso pra ter relatório). */
+  relatoriosMensais?: RelatorioMensal[];
   publicoAlvo?: PublicoAlvo;
   /** Token do link público de inscrição de influenciadores nesta campanha
    * (diferente do publicToken do Cliente, que é o portal do cliente). */

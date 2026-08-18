@@ -427,6 +427,25 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           .map((r) => r.data)
           .sort((a, b) => a.date.localeCompare(b.date));
 
+        // Relatórios mensais (PDF) — o bucket é privado, então a URL
+        // assinada precisa ser gerada aqui (service-role), nunca no
+        // navegador do cliente (sem sessão nenhuma no portal público).
+        const relatorios = await Promise.all(
+          (c.relatoriosMensais ?? []).map(async (r) => {
+            const { data: signed } = await supabaseAdmin.storage
+              .from("relatorios-mensais")
+              .createSignedUrl(r.storagePath, 60 * 60);
+            return {
+              id: r.id,
+              mes: r.mes,
+              nome: r.nome,
+              uploadedAt: r.uploadedAt,
+              nps: r.nps,
+              url: signed?.signedUrl ?? null,
+            };
+          }),
+        );
+
         return {
           id: c.id,
           nome: c.nome,
@@ -435,7 +454,7 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           planejado,
           influencers,
           cronograma,
-          relatorioMetricas: c.relatorioMetricas,
+          relatorios,
         };
       }),
     );
@@ -749,6 +768,72 @@ export const submitPortalBugReport = createServerFn({ method: "POST" })
       source: "plataforma",
     });
     if (error) throw new Error(error.message);
+
+    return { ok: true };
+  });
+
+const SubmitRelatorioNpsInput = z.object({
+  token: z.string().min(1),
+  campanhaId: z.string().min(1),
+  relatorioId: z.string().min(1),
+  score: z.number().int().min(0).max(10),
+  comentario: z.string().trim().max(2000).optional(),
+});
+
+/** Público, sem auth — cliente responde o NPS de um relatório mensal
+ * específico logo depois de visualizá-lo. Recarrega a linha de `clientes`
+ * na hora (em vez de reusar `found.cliente`, que pode já estar um passo
+ * desatualizado) pra minimizar sobrescrever edições concorrentes do time —
+ * mesmo cuidado dos outros writes que mexem em `Campaign` dentro da
+ * JSONB de `clientes`. */
+export const submitRelatorioNps = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => SubmitRelatorioNpsInput.parse(raw))
+  .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error: readError } = await supabaseAdmin
+      .from("clientes")
+      .select("data")
+      .eq("id", found.clienteId)
+      .single();
+    if (readError || !row) throw new Error("Cliente não encontrado.");
+    const cliente = row.data as Cliente;
+
+    const campanha = cliente.campanhas?.find((c) => c.id === data.campanhaId);
+    if (!campanha) throw new Error("Campanha não encontrada neste link.");
+    const relatorio = campanha.relatoriosMensais?.find((r) => r.id === data.relatorioId);
+    if (!relatorio) throw new Error("Relatório não encontrado.");
+
+    const nextCliente: Cliente = {
+      ...cliente,
+      campanhas: (cliente.campanhas ?? []).map((c) =>
+        c.id !== data.campanhaId
+          ? c
+          : {
+              ...c,
+              relatoriosMensais: (c.relatoriosMensais ?? []).map((r) =>
+                r.id !== data.relatorioId
+                  ? r
+                  : {
+                      ...r,
+                      nps: {
+                        score: data.score,
+                        comentario: data.comentario?.trim() || undefined,
+                        respondedAt: new Date().toISOString(),
+                      },
+                    },
+              ),
+            },
+      ),
+    };
+
+    const { error: writeError } = await supabaseAdmin
+      .from("clientes")
+      .update({ data: nextCliente })
+      .eq("id", found.clienteId);
+    if (writeError) throw new Error(writeError.message);
 
     return { ok: true };
   });
