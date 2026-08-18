@@ -521,24 +521,26 @@ function CampanhaDetail({
             </select>
           </div>
         )}
-        <button
-          type="button"
-          onClick={copyClientLink}
-          disabled={!fullCliente}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-          {linkCopied ? "Link copiado!" : "Link do cliente"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setInscricaoOpen(true)}
-          disabled={!fullCliente}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <UserPlus className="h-3.5 w-3.5" />
-          Página de inscrição
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={copyClientLink}
+            disabled={!fullCliente}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+            {linkCopied ? "Link copiado!" : "Link do cliente"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setInscricaoOpen(true)}
+            disabled={!fullCliente}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            Página de inscrição
+          </button>
+        </div>
       </header>
 
       <InscricaoPageDialog
@@ -692,22 +694,29 @@ function CampanhaDetail({
         </div>
       </section>
 
-      {/* KPIs — uma linha, minimalista */}
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4 border-y border-border py-5 md:grid-cols-6">
-        <Kpi label="Planejado" value={totalInflus.toString()} />
-        <Kpi label="Enviados" value={`${enviados}/${totalEnviar}`} />
-        <Kpi label="Em aprovação" value={emAprovacao.toString()} />
-        <Kpi label="Aprovados" value={aprovados.toString()} />
-        <Kpi label="Orçamento" value={orcamento > 0 ? fmtBRL(orcamento) : "—"} />
-        <Kpi
-          label="Gasto"
-          value={fmtBRL(gasto)}
-          tone={overBudget ? "danger" : "default"}
-          hint={
-            orcamento > 0 ? `${Math.round(pctGasto)}% · ${fmtBRL(disponivel)} livre` : undefined
-          }
-        />
-      </div>
+      {/* VISÃO GERAL — mesmo tratamento de card do Briefing/Composição/
+          Direitos acima, pra página inteira ler como um conjunto só, em
+          vez de blocos com estilos diferentes entre si. */}
+      <section className="rounded-xl border border-border bg-background p-6">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Visão geral
+        </h2>
+        <div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-6">
+          <Kpi label="Planejado" value={totalInflus.toString()} />
+          <Kpi label="Enviados" value={`${enviados}/${totalEnviar}`} />
+          <Kpi label="Em aprovação" value={emAprovacao.toString()} />
+          <Kpi label="Aprovados" value={aprovados.toString()} />
+          <Kpi label="Orçamento" value={orcamento > 0 ? fmtBRL(orcamento) : "—"} />
+          <Kpi
+            label="Gasto"
+            value={fmtBRL(gasto)}
+            tone={overBudget ? "danger" : "default"}
+            hint={
+              orcamento > 0 ? `${Math.round(pctGasto)}% · ${fmtBRL(disponivel)} livre` : undefined
+            }
+          />
+        </div>
+      </section>
 
       {/* FERRAMENTAS ADICIONAIS — sobraram itens leves (documentos,
           calendário, relatórios mensais); mostrados direto numa fileira de
