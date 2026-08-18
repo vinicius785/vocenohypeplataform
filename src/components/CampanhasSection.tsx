@@ -10,7 +10,6 @@ import {
   ExternalLink,
   FileBarChart,
   FileText,
-  ChevronDown,
   FolderOpen,
   ImageIcon,
   Link as LinkIcon,
@@ -23,16 +22,9 @@ import {
   User,
   UserPlus,
   Wallet,
-  Wrench,
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
@@ -424,11 +416,6 @@ function CampanhaDetail({
     () => [...(c.relatoriosMensais ?? [])].sort((a, b) => b.mes.localeCompare(a.mes)),
     [c.relatoriosMensais],
   );
-  // Quantas ferramentas têm algo pra chamar atenção — mostrado como badge
-  // no botão do menu, já que os itens em si ficaram escondidos atrás dele.
-  // Composição & pagamentos e Direitos de imagem não entram aqui — viraram
-  // botões junto do Briefing, não fazem parte do menu.
-  const ferramentasAtivas = (docs.length > 0 ? 1 : 0) + (relatorios.length > 0 ? 1 : 0);
   const [relatorioMes, setRelatorioMes] = useState(() => new Date().toISOString().slice(0, 7));
   const [relatorioUploading, setRelatorioUploading] = useState(false);
   const [relatorioError, setRelatorioError] = useState("");
@@ -563,65 +550,145 @@ function CampanhaDetail({
         onSave={saveInscricaoPage}
       />
 
-      {/* BRIEFING — Composição & pagamentos e Direitos de imagem ficam
-          junto, não nas ferramentas adicionais: são parte do combinado da
-          campanha, não ferramenta secundária. */}
-      <section className="rounded-xl border border-border bg-background p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* BRIEFING — Composição & pagamentos e Direitos de imagem aparecem
+          por inteiro ao lado, como o resto do combinado da campanha, não
+          escondidos atrás de um botão/dialog. */}
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-border bg-background p-6 lg:col-span-2">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Briefing
           </h2>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setOpenPanel("composicao")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-            >
-              <Wallet className="h-3.5 w-3.5" /> Composição & pagamentos
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpenPanel("direitos")}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-            >
-              <ShieldCheck className="h-3.5 w-3.5" /> Direitos de imagem
-              {c.direitosImagem?.permitido && (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              )}
-            </button>
+          <div className="mt-3">
+            {c.briefing ? (
+              <p className="whitespace-pre-wrap text-sm text-foreground">{c.briefing}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Nenhum briefing cadastrado.</p>
+            )}
+            {c.briefingFile && (
+              <a
+                href={c.briefingFile}
+                download
+                className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-foreground underline underline-offset-2"
+              >
+                <Paperclip className="h-3.5 w-3.5" /> Anexo
+              </a>
+            )}
+            {(c.briefingLinks?.length ?? 0) > 0 && (
+              <ul className="mt-4 space-y-1.5">
+                {c.briefingLinks!.map((url) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 truncate text-xs font-medium text-foreground underline underline-offset-2"
+                    >
+                      <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-        <div className="mt-3">
-          {c.briefing ? (
-            <p className="whitespace-pre-wrap text-sm text-foreground">{c.briefing}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nenhum briefing cadastrado.</p>
-          )}
-          {c.briefingFile && (
-            <a
-              href={c.briefingFile}
-              download
-              className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-foreground underline underline-offset-2"
-            >
-              <Paperclip className="h-3.5 w-3.5" /> Anexo
-            </a>
-          )}
-          {(c.briefingLinks?.length ?? 0) > 0 && (
-            <ul className="mt-4 space-y-1.5">
-              {c.briefingLinks!.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 truncate text-xs font-medium text-foreground underline underline-offset-2"
-                  >
-                    <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-background p-5">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <Wallet className="h-3.5 w-3.5" /> Composição & pagamentos
+            </h2>
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Composição planejada
+                </p>
+                {c.linhas.length > 0 ? (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+                    {c.linhas.map((l) => (
+                      <span
+                        key={l.id}
+                        className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                      >
+                        {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-sm text-muted-foreground">—</p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Formas de pagamento
+                </p>
+                {(c.pagTipos?.length ?? 0) > 0 ? (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
+                    {c.pagTipos.map((t) => {
+                      const resumo = pagTipoResumo(t, c.pagConfig?.[t] ?? {});
+                      return (
+                        <span
+                          key={t}
+                          className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                        >
+                          <span className="font-medium">{t}</span>
+                          {resumo && <span className="text-muted-foreground"> · {resumo}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-sm text-muted-foreground">—</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-background p-5">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5" /> Direitos de imagem
+            </h2>
+            <div className="mt-3">
+              {c.direitosImagem?.permitido ? (
+                <div className="space-y-2.5 text-sm">
+                  {c.direitosImagem.usos.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      {c.direitosImagem.usos.map((u) => (
+                        <span
+                          key={u}
+                          className="rounded-md border border-border bg-muted/40 px-2 py-1 text-foreground"
+                        >
+                          {u}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-foreground">
+                    Duração:{" "}
+                    <span className="text-muted-foreground">
+                      {c.direitosImagem.duracaoDias
+                        ? `${c.direitosImagem.duracaoDias} dias`
+                        : "Indeterminada"}
+                    </span>
+                  </p>
+                  {c.direitosImagem.exclusividade && (
+                    <p className="text-foreground">
+                      Exclusividade:{" "}
+                      <span className="text-muted-foreground">
+                        {c.direitosImagem.exclusividadeSegmento || "Sim"}
+                      </span>
+                    </p>
+                  )}
+                  {c.direitosImagem.observacoes && (
+                    <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                      {c.direitosImagem.observacoes}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum direito de uso definido.</p>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -642,47 +709,32 @@ function CampanhaDetail({
         />
       </div>
 
-      {/* FERRAMENTAS ADICIONAIS — informações secundárias, atrás de um só
-          menu (viraram muitas: documentos, calendário, composição,
-          direitos de imagem, relatórios mensais... e tende a crescer) em
-          vez de uma fileira de botões que só aumenta. */}
+      {/* FERRAMENTAS ADICIONAIS — sobraram itens leves (documentos,
+          calendário, relatórios mensais); mostrados direto numa fileira de
+          cartões, sem esconder atrás de menu. */}
       <section>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
-            >
-              <Wrench className="h-3.5 w-3.5" />
-              Ferramentas adicionais
-              {ferramentasAtivas > 0 && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
-                  {ferramentasAtivas}
-                </span>
-              )}
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <FerramentaMenuItem
-              icon={FolderOpen}
-              label="Documentos"
-              count={docs.length}
-              onClick={() => setOpenPanel("documentos")}
-            />
-            <FerramentaMenuItem
-              icon={CalendarClock}
-              label="Calendário da campanha"
-              onClick={() => setOpenPanel("calendario")}
-            />
-            <FerramentaMenuItem
-              icon={FileBarChart}
-              label="Relatórios mensais"
-              count={relatorios.length}
-              onClick={() => setOpenPanel("relatorioMensal")}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Ferramentas adicionais
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <FerramentaCard
+            icon={FolderOpen}
+            label="Documentos"
+            count={docs.length}
+            onClick={() => setOpenPanel("documentos")}
+          />
+          <FerramentaCard
+            icon={CalendarClock}
+            label="Calendário da campanha"
+            onClick={() => setOpenPanel("calendario")}
+          />
+          <FerramentaCard
+            icon={FileBarChart}
+            label="Relatórios mensais"
+            count={relatorios.length}
+            onClick={() => setOpenPanel("relatorioMensal")}
+          />
+        </div>
       </section>
 
       <TaskBoard
@@ -941,30 +993,31 @@ function CampanhaDetail({
   );
 }
 
-function FerramentaMenuItem({
+function FerramentaCard({
   icon: Icon,
   label,
   count,
-  active,
   onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   count?: number;
-  active?: boolean;
   onClick: () => void;
 }) {
   return (
-    <DropdownMenuItem onClick={onClick} className="gap-2 text-xs">
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="flex-1">{label}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
       {typeof count === "number" && count > 0 && (
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
           {count}
         </span>
       )}
-      {active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-    </DropdownMenuItem>
+    </button>
   );
 }
 
