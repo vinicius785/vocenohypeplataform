@@ -501,7 +501,6 @@ function CampanhaDetail({
           </h1>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <Calendar className="h-3.5 w-3.5" /> Prazo {fmtDate(c.prazo)}
-            {c.prazoPag && <span className="ml-2">· Pagto. {c.prazoPag}</span>}
             {isRecorrente && <span className="ml-2">· Recorrente</span>}
           </p>
         </div>
@@ -641,6 +640,12 @@ function CampanhaDetail({
                 ) : (
                   <p className="mt-1.5 text-sm text-muted-foreground">—</p>
                 )}
+              </div>
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Prazo de pagamento
+                </p>
+                <p className="mt-1.5 text-sm text-foreground">{c.prazoPag || "—"}</p>
               </div>
             </div>
           </div>
