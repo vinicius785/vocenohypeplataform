@@ -936,6 +936,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      reunioes_disponibilidade: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       shared_calendar_connection: {
         Row: {
           access_token: string;

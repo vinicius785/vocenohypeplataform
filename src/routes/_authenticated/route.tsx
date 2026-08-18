@@ -9,7 +9,7 @@ import { initPricingSync } from "@/lib/pricing-store";
 import { initSharedSync } from "@/lib/shared-sync";
 import { initClientesSync } from "@/lib/clientes-store";
 import { initProjetosSync } from "@/lib/projetos";
-import { initReunioesSync } from "@/lib/reunioes-store";
+import { initReunioesSync, initDisponibilidadeSync } from "@/lib/reunioes-store";
 import { initFinanceiroSync } from "@/lib/financeiro-entries";
 import { initBancoInflusSync } from "@/lib/banco-influs-store";
 import { initMetasSync } from "@/lib/metas-store";
@@ -52,6 +52,7 @@ export const Route = createFileRoute("/_authenticated")({
         initClientesSync(),
         initProjetosSync(),
         initReunioesSync(),
+        initDisponibilidadeSync(),
         initFinanceiroSync(),
         initBancoInflusSync(),
         initMetasSync(),

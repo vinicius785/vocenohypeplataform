@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Users,
@@ -18,18 +18,29 @@ import {
   Video,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useStorageSync } from "@/lib/use-storage-sync";
 import {
   type Meeting,
   type MeetingStatus,
   type RescheduleProposal,
   type ExternalGuest,
+  type Availability,
+  type UnavailableBlock,
+  type DiaSemana,
+  DIAS_SEMANA as DIAS_SEMANA_KEYS,
   loadMeetings,
   saveMeetings,
   onMeetingsChange,
   meetingDisplayStatus,
   meetingNeedsMyAction,
   meetingEndTime,
+  confirmMeetingFor,
+  declineMeetingFor,
+  loadDisponibilidades,
+  saveMyDisponibilidade,
+  onDisponibilidadesChange,
+  defaultAvailability,
+  unavailableBlockAt,
+  blocksForDate,
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
@@ -51,45 +62,8 @@ function loadTeam(): TeamMember[] {
   }
 }
 
-type AvailabilityExtra = {
-  id: string;
-  escopo: "semanal" | "data";
-  dias?: string[]; // usados quando escopo === 'semanal'
-  data?: string; // yyyy-mm-dd, usado quando escopo === 'data'
-  inicio: string;
-  fim: string;
-  motivo?: string;
-};
-
-type Availability = {
-  dias: Record<string, boolean>; // 'seg'..'dom'
-  inicio: string;
-  fim: string;
-  extras?: AvailabilityExtra[];
-};
-
-const DIAS_SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"] as const;
+const DIAS_SEMANA = DIAS_SEMANA_KEYS;
 const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
-
-const AVAIL_KEY = "reunioes:disponibilidade";
-function loadAvail(): Availability {
-  try {
-    const raw = localStorage.getItem(AVAIL_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Availability;
-      if (!parsed.extras) parsed.extras = [];
-      return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return {
-    dias: { seg: true, ter: true, qua: true, qui: true, sex: true, sab: false, dom: false },
-    inicio: "09:00",
-    fim: "18:00",
-    extras: [],
-  };
-}
 
 function toISODate(d: Date) {
   const y = d.getFullYear();
@@ -148,7 +122,16 @@ export function ReunioesSection() {
   const me = getMe();
   const [tab, setTab] = useState<"calendario" | "solicitacoes" | "disponibilidade">("calendario");
   const [meetings, setMeetings] = useState<Meeting[]>(() => loadMeetings());
-  const [avail, setAvail] = useState<Availability>(() => loadAvail());
+  // Disponibilidade de TODO o time (uma linha por membro) — não só a minha,
+  // porque o diálogo de nova reunião precisa enxergar quando qualquer
+  // participante selecionado está indisponível, não só quem está logado.
+  const [disponibilidades, setDisponibilidades] = useState<Availability[]>(() =>
+    loadDisponibilidades(),
+  );
+  const myAvail = useMemo(
+    () => disponibilidades.find((a) => a.id === me.id) ?? defaultAvailability(me.id),
+    [disponibilidades, me.id],
+  );
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [selected, setSelected] = useState<string>(() => toISODate(new Date()));
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
@@ -159,16 +142,7 @@ export function ReunioesSection() {
     saveMeetings(next);
   };
   useEffect(() => onMeetingsChange(() => setMeetings(loadMeetings())), []);
-
-  const persistAvail = (a: Availability) => {
-    setAvail(a);
-    try {
-      localStorage.setItem(AVAIL_KEY, JSON.stringify(a));
-    } catch {
-      /* ignore */
-    }
-  };
-  useStorageSync(AVAIL_KEY, () => setAvail(loadAvail()));
+  useEffect(() => onDisponibilidadesChange(() => setDisponibilidades(loadDisponibilidades())), []);
 
   // Só reuniões onde a pessoa é criadora ou foi convidada — o calendário
   // deixou de mostrar tudo do workspace pra todo mundo.
@@ -295,6 +269,20 @@ export function ReunioesSection() {
             </div>
             <div className="mt-1 text-base font-semibold">{formatBR(selected)}</div>
 
+            {blocksForDate(myAvail, selected).length > 0 && (
+              <div className="mt-3 space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                  Você marcou indisponibilidade neste dia
+                </p>
+                {blocksForDate(myAvail, selected).map((b) => (
+                  <p key={b.id} className="text-xs text-amber-700 dark:text-amber-400">
+                    {b.inicio}–{b.fim}
+                    {b.motivo ? ` · ${b.motivo}` : ""}
+                  </p>
+                ))}
+              </div>
+            )}
+
             {selectedMeetings.length === 0 ? (
               <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center">
                 <CalendarDays className="mx-auto h-5 w-5 text-muted-foreground" />
@@ -337,16 +325,29 @@ export function ReunioesSection() {
       )}
 
       {tab === "solicitacoes" && (
-        <SolicitacoesTab meetings={myMeetings} me={me} onOpen={(m) => setSummary(m)} />
+        <SolicitacoesTab
+          meetings={myMeetings}
+          me={me}
+          onOpen={(m) => setSummary(m)}
+          onConfirm={(m) =>
+            persist(meetings.map((x) => (x.id === m.id ? confirmMeetingFor(x, me.id) : x)))
+          }
+          onDecline={(m) =>
+            persist(meetings.map((x) => (x.id === m.id ? declineMeetingFor(x, me.id) : x)))
+          }
+        />
       )}
 
-      {tab === "disponibilidade" && <DisponibilidadeTab avail={avail} onChange={persistAvail} />}
+      {tab === "disponibilidade" && (
+        <DisponibilidadeTab avail={myAvail} onChange={(next) => saveMyDisponibilidade(next)} />
+      )}
 
       <MeetingDialog
         open={!!dialog}
         initial={dialog?.data}
         defaultDate={selected}
         me={me}
+        disponibilidades={disponibilidades}
         onClose={() => setDialog(null)}
         onDelete={(id) => {
           persist(meetings.filter((m) => m.id !== id));
@@ -506,45 +507,88 @@ function SolicitacoesTab({
   meetings,
   me,
   onOpen,
+  onConfirm,
+  onDecline,
 }: {
   meetings: Meeting[];
   me: { id: string; name: string };
   onOpen: (m: Meeting) => void;
+  onConfirm: (m: Meeting) => void;
+  onDecline: (m: Meeting) => void;
 }) {
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  useEffect(() => setTeam(loadTeam()), []);
+
   const pend = meetings
     .filter((m) => meetingNeedsMyAction(m, me.id))
     .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
+
+  const criadorOf = (m: Meeting) =>
+    m.criadorId && m.criadorId !== me.id ? team.find((t) => t.id === m.criadorId) : undefined;
+
   return (
-    <div className="mt-6">
+    <div className="mt-6 max-w-2xl">
       <h2 className="text-sm font-semibold">Solicitações pendentes</h2>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Reuniões que você ainda não confirmou nem recusou.
+        Reuniões que você ainda não confirmou nem recusou — responda direto por aqui.
       </p>
       {pend.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Nenhuma solicitação pendente.
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
-          {pend.map((m) => (
-            <li key={m.id}>
-              <button
-                type="button"
-                onClick={() => onOpen(m)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{m.titulo}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {formatBR(m.data)} · {m.hora} {m.com ? `· com ${m.com}` : ""}
+        <ul className="mt-4 space-y-2">
+          {pend.map((m) => {
+            const criador = criadorOf(m);
+            return (
+              <li key={m.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                    {criador?.photo ? (
+                      <img src={criador.photo} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      (criador?.name ?? m.titulo).trim()[0]?.toUpperCase()
+                    )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(m)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="truncate text-sm font-medium">{m.titulo}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {criador ? `${criador.name} · ` : ""}
+                      {formatBR(m.data)} · {m.hora}
+                      {m.local ? ` · ${m.local}` : ""}
+                    </div>
+                  </button>
                 </div>
-                <span className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
-                  Ver detalhes
-                </span>
-              </button>
-            </li>
-          ))}
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onConfirm(m)}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+                  >
+                    <Check className="h-3.5 w-3.5" /> Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDecline(m)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <X className="h-3.5 w-3.5" /> Recusar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(m)}
+                    className="ml-auto rounded-md px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Ver detalhes
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -558,16 +602,34 @@ function DisponibilidadeTab({
   avail: Availability;
   onChange: (a: Availability) => void;
 }) {
-  const extras = avail.extras ?? [];
+  const bloqueios = avail.bloqueios ?? [];
+  // Feedback visual de salvamento — sem isso, marcar/desmarcar um dia ou
+  // criar um bloqueio não dava nenhuma sensação de "isso realmente foi
+  // salvo" (a queixa original). Cada chamada de `emit` mostra "Salvo" por
+  // alguns segundos, depois volta a sumir.
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimeout = useRef<number | null>(null);
+  const emit = (next: Availability) => {
+    onChange(next);
+    setJustSaved(true);
+    if (savedTimeout.current) window.clearTimeout(savedTimeout.current);
+    savedTimeout.current = window.setTimeout(() => setJustSaved(false), 2000);
+  };
+  useEffect(
+    () => () => {
+      if (savedTimeout.current) window.clearTimeout(savedTimeout.current);
+    },
+    [],
+  );
 
-  const updateExtra = (id: string, patch: Partial<AvailabilityExtra>) => {
-    onChange({ ...avail, extras: extras.map((e) => (e.id === id ? { ...e, ...patch } : e)) });
+  const updateBloqueio = (id: string, patch: Partial<UnavailableBlock>) => {
+    emit({ ...avail, bloqueios: bloqueios.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
   };
-  const removeExtra = (id: string) => {
-    onChange({ ...avail, extras: extras.filter((e) => e.id !== id) });
+  const removeBloqueio = (id: string) => {
+    emit({ ...avail, bloqueios: bloqueios.filter((b) => b.id !== id) });
   };
-  const addExtra = (escopo: "semanal" | "data") => {
-    const novo: AvailabilityExtra = {
+  const addBloqueio = (escopo: "semanal" | "data") => {
+    const novo: UnavailableBlock = {
       id: crypto.randomUUID(),
       escopo,
       dias: escopo === "semanal" ? [] : undefined,
@@ -576,20 +638,35 @@ function DisponibilidadeTab({
       fim: "18:00",
       motivo: "",
     };
-    onChange({ ...avail, extras: [...extras, novo] });
+    emit({ ...avail, bloqueios: [...bloqueios, novo] });
   };
-
-  const toggleDia = (extra: AvailabilityExtra, d: string) => {
-    const cur = extra.dias ?? [];
-    updateExtra(extra.id, { dias: cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d] });
+  const toggleDiaBloqueio = (bloqueio: UnavailableBlock, d: DiaSemana) => {
+    const cur = bloqueio.dias ?? [];
+    updateBloqueio(bloqueio.id, {
+      dias: cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d],
+    });
   };
 
   return (
     <div className="mt-6 max-w-xl">
-      <h2 className="text-sm font-semibold">Disponibilidade</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Dias e horários em que você aceita reuniões.
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">Disponibilidade</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Dias e horários em que você normalmente aceita reunião — e quando você está
+            indisponível, pra ninguém marcar em cima.
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-opacity duration-300 ${
+            justSaved
+              ? "bg-emerald-500/10 text-emerald-700 opacity-100 dark:text-emerald-400"
+              : "opacity-0"
+          }`}
+        >
+          <Check className="h-3 w-3" /> Salvo
+        </span>
+      </div>
 
       <div className="mt-4 rounded-lg border border-border bg-card p-4">
         <div className="text-xs font-medium text-muted-foreground">Padrão semanal</div>
@@ -600,7 +677,7 @@ function DisponibilidadeTab({
               <button
                 key={d}
                 type="button"
-                onClick={() => onChange({ ...avail, dias: { ...avail.dias, [d]: !on } })}
+                onClick={() => emit({ ...avail, dias: { ...avail.dias, [d]: !on } })}
                 className={`h-8 min-w-10 rounded-full px-3 text-xs font-medium ${
                   on
                     ? "bg-foreground text-background"
@@ -619,7 +696,7 @@ function DisponibilidadeTab({
             <input
               type="time"
               value={avail.inicio}
-              onChange={(e) => onChange({ ...avail, inicio: e.target.value })}
+              onChange={(e) => emit({ ...avail, inicio: e.target.value })}
               className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -628,7 +705,7 @@ function DisponibilidadeTab({
             <input
               type="time"
               value={avail.fim}
-              onChange={(e) => onChange({ ...avail, fim: e.target.value })}
+              onChange={(e) => emit({ ...avail, fim: e.target.value })}
               className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -637,44 +714,45 @@ function DisponibilidadeTab({
 
       <div className="mt-6 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold">Disponibilidades adicionais</h3>
+          <h3 className="text-sm font-semibold">Indisponibilidade</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Adicione janelas extras ou para datas específicas.
+            Bloqueie um dia específico ou um horário recorrente — aparece pra quem tentar marcar
+            reunião com você nesse período.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => addExtra("semanal")}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
-          >
-            <Plus className="h-3.5 w-3.5" /> Semanal
-          </button>
-          <button
-            type="button"
-            onClick={() => addExtra("data")}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
-          >
-            <Plus className="h-3.5 w-3.5" /> Data específica
-          </button>
-        </div>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => addBloqueio("data")}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          <Plus className="h-3.5 w-3.5" /> Bloquear data específica
+        </button>
+        <button
+          type="button"
+          onClick={() => addBloqueio("semanal")}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          <Plus className="h-3.5 w-3.5" /> Bloquear horário recorrente
+        </button>
       </div>
 
       <div className="mt-3 space-y-3">
-        {extras.length === 0 && (
+        {bloqueios.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-            Nenhuma disponibilidade adicional.
+            Nenhum bloqueio de indisponibilidade — você aparece disponível no padrão semanal acima.
           </div>
         )}
-        {extras.map((extra) => (
-          <div key={extra.id} className="rounded-lg border border-border bg-card p-4">
+        {bloqueios.map((b) => (
+          <div key={b.id} className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <div className="flex items-center justify-between">
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {extra.escopo === "semanal" ? "Semanal" : "Data específica"}
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                Indisponível · {b.escopo === "semanal" ? "toda semana" : "data específica"}
               </span>
               <button
                 type="button"
-                onClick={() => removeExtra(extra.id)}
+                onClick={() => removeBloqueio(b.id)}
                 className="text-muted-foreground hover:text-destructive"
                 aria-label="Remover"
               >
@@ -682,17 +760,17 @@ function DisponibilidadeTab({
               </button>
             </div>
 
-            {extra.escopo === "semanal" ? (
+            {b.escopo === "semanal" ? (
               <div className="mt-3">
                 <div className="text-xs font-medium text-muted-foreground">Dias</div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {DIAS_SEMANA.map((d, idx) => {
-                    const on = (extra.dias ?? []).includes(d);
+                    const on = (b.dias ?? []).includes(d);
                     return (
                       <button
                         key={d}
                         type="button"
-                        onClick={() => toggleDia(extra, d)}
+                        onClick={() => toggleDiaBloqueio(b, d)}
                         className={`h-8 min-w-10 rounded-full px-3 text-xs font-medium ${
                           on
                             ? "bg-foreground text-background"
@@ -710,8 +788,8 @@ function DisponibilidadeTab({
                 <label className="text-xs font-medium text-muted-foreground">Data</label>
                 <input
                   type="date"
-                  value={extra.data ?? ""}
-                  onChange={(e) => updateExtra(extra.id, { data: e.target.value })}
+                  value={b.data ?? ""}
+                  onChange={(e) => updateBloqueio(b.id, { data: e.target.value })}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
@@ -722,8 +800,8 @@ function DisponibilidadeTab({
                 <label className="text-xs font-medium text-muted-foreground">Início</label>
                 <input
                   type="time"
-                  value={extra.inicio}
-                  onChange={(e) => updateExtra(extra.id, { inicio: e.target.value })}
+                  value={b.inicio}
+                  onChange={(e) => updateBloqueio(b.id, { inicio: e.target.value })}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
@@ -731,8 +809,8 @@ function DisponibilidadeTab({
                 <label className="text-xs font-medium text-muted-foreground">Fim</label>
                 <input
                   type="time"
-                  value={extra.fim}
-                  onChange={(e) => updateExtra(extra.id, { fim: e.target.value })}
+                  value={b.fim}
+                  onChange={(e) => updateBloqueio(b.id, { fim: e.target.value })}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
@@ -742,8 +820,8 @@ function DisponibilidadeTab({
               <label className="text-xs font-medium text-muted-foreground">Motivo</label>
               <input
                 type="text"
-                value={extra.motivo ?? ""}
-                onChange={(e) => updateExtra(extra.id, { motivo: e.target.value })}
+                value={b.motivo ?? ""}
+                onChange={(e) => updateBloqueio(b.id, { motivo: e.target.value })}
                 placeholder="Ex.: Plantão, gravação, folga…"
                 className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
@@ -778,6 +856,7 @@ function MeetingDialog({
   initial,
   defaultDate,
   me,
+  disponibilidades,
   onClose,
   onSave,
   onDelete,
@@ -786,6 +865,7 @@ function MeetingDialog({
   initial?: Meeting;
   defaultDate: string;
   me: { id: string; name: string };
+  disponibilidades: Availability[];
   onClose: () => void;
   onSave: (meetings: Meeting[]) => void;
   onDelete: (id: string) => void;
@@ -845,6 +925,22 @@ function MeetingDialog({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
+
+  // Conflitos de indisponibilidade — checa a data/hora escolhida contra o
+  // bloqueio de CADA participante (inclusive quem está criando a reunião),
+  // não só o próprio. É o que faz a disponibilidade de alguém aparecer pra
+  // quem tenta marcar reunião com essa pessoa.
+  const participantesParaChecar = [
+    { id: me.id, name: `${me.name} (você)` },
+    ...selectedMembers.map((m) => ({ id: m.id, name: m.name })),
+  ];
+  const conflitos = participantesParaChecar
+    .map((p) => {
+      const avail = disponibilidades.find((a) => a.id === p.id);
+      const bloqueio = unavailableBlockAt(avail, data, hora, duracao);
+      return bloqueio ? { name: p.name, bloqueio } : null;
+    })
+    .filter((x): x is { name: string; bloqueio: UnavailableBlock } => x !== null);
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const addGuest = () => {
@@ -1092,6 +1188,21 @@ function MeetingDialog({
               </div>
             )}
           </section>
+
+          {conflitos.length > 0 && (
+            <div className="space-y-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                Conflito de disponibilidade
+              </p>
+              {conflitos.map((c, i) => (
+                <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                  {c.name} está indisponível nesse horário
+                  {c.bloqueio.motivo ? ` — ${c.bloqueio.motivo}` : ""} ({c.bloqueio.inicio}–
+                  {c.bloqueio.fim})
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* Participantes internos */}
           <section className="space-y-3 rounded-xl border border-border p-4">
@@ -1423,20 +1534,8 @@ export function MeetingSummaryDialog({
     id === me.id ? `${me.name} (você)` : (memberFor(id)?.name ?? id);
   const isFinished = meetingEndTime(meeting) < Date.now();
 
-  const confirm = () => {
-    onChange({
-      ...meeting,
-      confirmedBy: Array.from(new Set([...confirmedBy, me.id])),
-      declinedBy: declinedBy.filter((id) => id !== me.id),
-    });
-  };
-  const decline = () => {
-    onChange({
-      ...meeting,
-      declinedBy: Array.from(new Set([...declinedBy, me.id])),
-      confirmedBy: confirmedBy.filter((id) => id !== me.id),
-    });
-  };
+  const confirm = () => onChange(confirmMeetingFor(meeting, me.id));
+  const decline = () => onChange(declineMeetingFor(meeting, me.id));
   const sendProposal = () => {
     if (!propData || !propHora) return;
     const proposal: RescheduleProposal = {

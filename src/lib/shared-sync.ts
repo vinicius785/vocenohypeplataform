@@ -12,7 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 const EXACT_KEYS = new Set<string>([
   "comercial:stages",
-  "reunioes:disponibilidade",
   "financeiro:pagos",
   "config:senhas",
   "config:senhas:salt",

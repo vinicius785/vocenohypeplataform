@@ -92,3 +92,140 @@ export function saveMeetings(list: Meeting[]) {
 export function onMeetingsChange(callback: () => void): () => void {
   return store.subscribe(callback);
 }
+
+/** Confirma presença de `meId` numa reunião (e desfaz uma recusa anterior,
+ * se houver) — mesma lógica usada tanto no resumo da reunião quanto na
+ * lista de Solicitações (ação inline, sem precisar abrir o resumo). */
+export function confirmMeetingFor(m: Meeting, meId: string): Meeting {
+  return {
+    ...m,
+    confirmedBy: Array.from(new Set([...(m.confirmedBy ?? []), meId])),
+    declinedBy: (m.declinedBy ?? []).filter((id) => id !== meId),
+  };
+}
+
+/** Recusa presença de `meId` numa reunião (e desfaz uma confirmação
+ * anterior, se houver). */
+export function declineMeetingFor(m: Meeting, meId: string): Meeting {
+  return {
+    ...m,
+    declinedBy: Array.from(new Set([...(m.declinedBy ?? []), meId])),
+    confirmedBy: (m.confirmedBy ?? []).filter((id) => id !== meId),
+  };
+}
+
+/* ============================================================
+ * Disponibilidade — uma linha por membro do time (id = id do membro),
+ * numa tabela de verdade (não mais um blob global em shared_state: ver
+ * migration 20260818150000). Isso é o que permite o resto do app (o
+ * diálogo de nova reunião, por exemplo) enxergar quando OUTRA pessoa está
+ * indisponível, não só a sua própria.
+ * ============================================================ */
+
+export type DiaSemana = "dom" | "seg" | "ter" | "qua" | "qui" | "sex" | "sab";
+export const DIAS_SEMANA: DiaSemana[] = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+
+/** Um bloqueio de indisponibilidade — um dia específico ou um conjunto de
+ * dias da semana (recorrente), num intervalo de horário, com motivo
+ * opcional. Ao contrário do "padrão semanal" (quando você normalmente
+ * aceita reunião), um bloqueio é sempre uma exceção pra INDISPONÍVEL. */
+export type UnavailableBlock = {
+  id: string;
+  escopo: "semanal" | "data";
+  dias?: DiaSemana[]; // usado quando escopo === "semanal"
+  data?: string; // yyyy-mm-dd, usado quando escopo === "data"
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  motivo?: string;
+};
+
+export type Availability = {
+  id: string; // = id do membro do time
+  dias: Record<DiaSemana, boolean>; // dias em que normalmente aceita reunião
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  bloqueios: UnavailableBlock[];
+};
+
+export function defaultAvailability(memberId: string): Availability {
+  return {
+    id: memberId,
+    dias: { dom: false, seg: true, ter: true, qua: true, qui: true, sex: true, sab: false },
+    inicio: "09:00",
+    fim: "18:00",
+    bloqueios: [],
+  };
+}
+
+const availStore = createTableArrayStore<Availability>("reunioes_disponibilidade");
+
+export function initDisponibilidadeSync(): Promise<void> {
+  const p = availStore.init();
+  availStore.subscribeRealtime();
+  return p;
+}
+
+export function loadDisponibilidades(): Availability[] {
+  return availStore.get();
+}
+
+/** Salva (upsert) só a linha do próprio membro — a RLS também só permite
+ * escrever `id = auth.uid()`, então tentar salvar a de outra pessoa
+ * falharia silenciosamente do lado do banco de qualquer forma. */
+export function saveMyDisponibilidade(next: Availability) {
+  availStore.set((prev) => {
+    const idx = prev.findIndex((a) => a.id === next.id);
+    return idx >= 0 ? prev.map((a, i) => (i === idx ? next : a)) : [...prev, next];
+  });
+}
+
+export function onDisponibilidadesChange(callback: () => void): () => void {
+  return availStore.subscribe(callback);
+}
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function weekdayOf(dateISO: string): DiaSemana {
+  const [y, mo, d] = dateISO.split("-").map(Number);
+  return DIAS_SEMANA[new Date(y, (mo || 1) - 1, d || 1).getDay()];
+}
+
+/** Todos os bloqueios que caem numa data específica (ignora horário) —
+ * usado pra mostrar um aviso no dia selecionado do calendário, sem
+ * precisar de um horário específico pra comparar. */
+export function blocksForDate(
+  avail: Availability | undefined,
+  dateISO: string,
+): UnavailableBlock[] {
+  if (!avail || !dateISO) return [];
+  const dia = weekdayOf(dateISO);
+  return (avail.bloqueios ?? []).filter((b) =>
+    b.escopo === "data" ? b.data === dateISO : (b.dias ?? []).includes(dia),
+  );
+}
+
+/** Retorna o bloqueio que colide com o horário dado, se houver — usado
+ * pra avisar (não impedir) quem está marcando uma reunião que um
+ * participante está indisponível naquele dia/hora. */
+export function unavailableBlockAt(
+  avail: Availability | undefined,
+  dateISO: string,
+  hora: string,
+  duracaoMin: number,
+): UnavailableBlock | null {
+  if (!avail || !dateISO || !hora) return null;
+  const start = timeToMinutes(hora);
+  const end = start + (duracaoMin || 0);
+  const dia = weekdayOf(dateISO);
+  for (const b of avail.bloqueios ?? []) {
+    const diaColide = b.escopo === "data" ? b.data === dateISO : (b.dias ?? []).includes(dia);
+    if (!diaColide) continue;
+    const bStart = timeToMinutes(b.inicio);
+    const bEnd = timeToMinutes(b.fim);
+    if (start < bEnd && end > bStart) return b;
+  }
+  return null;
+}

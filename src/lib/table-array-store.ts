@@ -4,6 +4,7 @@ export type ArrayStoreTable =
   | "clientes"
   | "projetos"
   | "reunioes"
+  | "reunioes_disponibilidade"
   | "financeiro_lancamentos"
   | "banco_influenciadores"
   | "marketing_tasks"
