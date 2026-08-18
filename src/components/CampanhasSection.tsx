@@ -10,6 +10,7 @@ import {
   ExternalLink,
   FileBarChart,
   FileText,
+  ChevronDown,
   FolderOpen,
   ImageIcon,
   Link as LinkIcon,
@@ -22,9 +23,16 @@ import {
   User,
   UserPlus,
   Wallet,
+  Wrench,
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
@@ -416,6 +424,11 @@ function CampanhaDetail({
     () => [...(c.relatoriosMensais ?? [])].sort((a, b) => b.mes.localeCompare(a.mes)),
     [c.relatoriosMensais],
   );
+  // Quantas ferramentas têm algo pra chamar atenção — mostrado como badge
+  // no botão do menu, já que os itens em si ficaram escondidos atrás dele.
+  // Composição & pagamentos e Direitos de imagem não entram aqui — viraram
+  // botões junto do Briefing, não fazem parte do menu.
+  const ferramentasAtivas = (docs.length > 0 ? 1 : 0) + (relatorios.length > 0 ? 1 : 0);
   const [relatorioMes, setRelatorioMes] = useState(() => new Date().toISOString().slice(0, 7));
   const [relatorioUploading, setRelatorioUploading] = useState(false);
   const [relatorioError, setRelatorioError] = useState("");
@@ -550,11 +563,34 @@ function CampanhaDetail({
         onSave={saveInscricaoPage}
       />
 
-      {/* BRIEFING */}
+      {/* BRIEFING — Composição & pagamentos e Direitos de imagem ficam
+          junto, não nas ferramentas adicionais: são parte do combinado da
+          campanha, não ferramenta secundária. */}
       <section className="rounded-xl border border-border bg-background p-6">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Briefing
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Briefing
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setOpenPanel("composicao")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <Wallet className="h-3.5 w-3.5" /> Composição & pagamentos
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenPanel("direitos")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> Direitos de imagem
+              {c.direitosImagem?.permitido && (
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              )}
+            </button>
+          </div>
+        </div>
         <div className="mt-3">
           {c.briefing ? (
             <p className="whitespace-pre-wrap text-sm text-foreground">{c.briefing}</p>
@@ -606,41 +642,47 @@ function CampanhaDetail({
         />
       </div>
 
-      {/* FERRAMENTAS ADICIONAIS — informações secundárias, abertas sob demanda */}
+      {/* FERRAMENTAS ADICIONAIS — informações secundárias, atrás de um só
+          menu (viraram muitas: documentos, calendário, composição,
+          direitos de imagem, relatórios mensais... e tende a crescer) em
+          vez de uma fileira de botões que só aumenta. */}
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Ferramentas adicionais
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <FeatureButton
-            icon={FolderOpen}
-            label="Documentos"
-            count={docs.length}
-            onClick={() => setOpenPanel("documentos")}
-          />
-          <FeatureButton
-            icon={CalendarClock}
-            label="Calendário da campanha"
-            onClick={() => setOpenPanel("calendario")}
-          />
-          <FeatureButton
-            icon={Wallet}
-            label="Composição & pagamentos"
-            onClick={() => setOpenPanel("composicao")}
-          />
-          <FeatureButton
-            icon={ShieldCheck}
-            label="Direitos de imagem"
-            active={c.direitosImagem?.permitido}
-            onClick={() => setOpenPanel("direitos")}
-          />
-          <FeatureButton
-            icon={FileBarChart}
-            label="Relatórios mensais"
-            active={relatorios.length > 0}
-            onClick={() => setOpenPanel("relatorioMensal")}
-          />
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
+            >
+              <Wrench className="h-3.5 w-3.5" />
+              Ferramentas adicionais
+              {ferramentasAtivas > 0 && (
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+                  {ferramentasAtivas}
+                </span>
+              )}
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <FerramentaMenuItem
+              icon={FolderOpen}
+              label="Documentos"
+              count={docs.length}
+              onClick={() => setOpenPanel("documentos")}
+            />
+            <FerramentaMenuItem
+              icon={CalendarClock}
+              label="Calendário da campanha"
+              onClick={() => setOpenPanel("calendario")}
+            />
+            <FerramentaMenuItem
+              icon={FileBarChart}
+              label="Relatórios mensais"
+              count={relatorios.length}
+              onClick={() => setOpenPanel("relatorioMensal")}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
       </section>
 
       <TaskBoard
@@ -899,7 +941,7 @@ function CampanhaDetail({
   );
 }
 
-function FeatureButton({
+function FerramentaMenuItem({
   icon: Icon,
   label,
   count,
@@ -913,20 +955,16 @@ function FeatureButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
+    <DropdownMenuItem onClick={onClick} className="gap-2 text-xs">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      <span className="flex-1">{label}</span>
       {typeof count === "number" && count > 0 && (
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
           {count}
         </span>
       )}
       {active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-    </button>
+    </DropdownMenuItem>
   );
 }
 

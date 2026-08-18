@@ -762,7 +762,9 @@ function RelatorioMensalCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">{mesLabel(relatorio.mes)}</p>
-          <p className="text-[11px] text-muted-foreground">{relatorio.nome}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Enviado em {fmtDate(relatorio.uploadedAt.slice(0, 10))}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {relatorio.url && (
@@ -1625,6 +1627,23 @@ type PendingFeedItem = {
   inf: PublicInfluencer;
   reason: string;
 };
+/** Item do widget "Novidades" — além de influenciadores aguardando decisão
+ * (já existia), agora também sinaliza relatórios mensais novos (ainda sem
+ * NPS respondido pelo cliente), pra não passar batido dentro da campanha. */
+type NovidadeItem =
+  | {
+      kind: "influ";
+      campanhaId: string;
+      campanhaNome: string;
+      inf: PublicInfluencer;
+      reason: string;
+    }
+  | {
+      kind: "relatorio";
+      campanhaId: string;
+      campanhaNome: string;
+      relatorio: PublicRelatorioMensal;
+    };
 type ContentFeedItem = {
   campanhaId: string;
   campanhaNome: string;
@@ -1685,6 +1704,24 @@ function ClientPortalPage() {
       .catch(() => setStatus("notfound"));
   };
 
+  // Sem sessão/realtime nesse link público, então mudanças feitas pelo time
+  // (ex.: apagar um relatório mensal na VI) só chegariam na VC no próximo
+  // F5. Faz um polling leve (só com a aba visível, pra não gastar egress
+  // à toa em background) pra refletir isso sozinho, sem o cliente precisar
+  // atualizar a página.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    const id = window.setInterval(tick, 20_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
   if (status === "loading") {
     return (
       <div className="flex min-h-screen flex-col bg-background">
@@ -1727,6 +1764,23 @@ function ClientPortalPage() {
       })
       .filter((x): x is PendingFeedItem => x !== null),
   );
+
+  // Relatórios mensais que o cliente ainda não avaliou (sem NPS respondido)
+  // contam como novidade — mesmo critério de "precisa da sua atenção" usado
+  // pros influenciadores aguardando decisão.
+  const novidades: NovidadeItem[] = [
+    ...feed.map((f) => ({ kind: "influ" as const, ...f })),
+    ...data.campanhas.flatMap((c) =>
+      c.relatorios
+        .filter((r) => !r.nps)
+        .map((r) => ({
+          kind: "relatorio" as const,
+          campanhaId: c.id,
+          campanhaNome: c.nome,
+          relatorio: r,
+        })),
+    ),
+  ];
 
   // Conteúdo já publicado, mais recente primeiro — o "feed" central,
   // mesmo espírito de um feed de rede social (LinkedIn), só que com os
@@ -2347,37 +2401,61 @@ function ClientPortalPage() {
                     <h2 className="flex items-center gap-2 border-b border-border px-3.5 py-3 text-sm font-semibold text-foreground">
                       <Clock className="h-4 w-4" /> {t(lang, "novidades")}
                     </h2>
-                    {feed.length === 0 ? (
+                    {novidades.length === 0 ? (
                       <p className="px-3.5 py-6 text-center text-xs text-muted-foreground">
                         {t(lang, "tudoEmDia")}
                       </p>
                     ) : (
                       <div className="divide-y divide-border">
-                        {feed.slice(0, 6).map((item) => (
-                          <button
-                            key={`${item.campanhaId}:${item.inf.id}`}
-                            type="button"
-                            onClick={() => openInflu(item.campanhaId, item.inf.id)}
-                            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
-                          >
-                            <Avatar className="h-8 w-8 shrink-0">
-                              {item.inf.foto && (
-                                <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
-                              )}
-                              <AvatarFallback className="text-xs font-semibold">
-                                {initialsOf(item.inf.nome)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-medium text-foreground">
-                                {item.inf.nome}
-                              </p>
-                              <p className="truncate text-[11px] text-amber-700 dark:text-amber-400">
-                                {item.reason}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
+                        {novidades.slice(0, 6).map((item) =>
+                          item.kind === "influ" ? (
+                            <button
+                              key={`influ:${item.campanhaId}:${item.inf.id}`}
+                              type="button"
+                              onClick={() => openInflu(item.campanhaId, item.inf.id)}
+                              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
+                            >
+                              <Avatar className="h-8 w-8 shrink-0">
+                                {item.inf.foto && (
+                                  <AvatarImage src={item.inf.foto} alt={item.inf.nome} />
+                                )}
+                                <AvatarFallback className="text-xs font-semibold">
+                                  {initialsOf(item.inf.nome)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-foreground">
+                                  {item.inf.nome}
+                                </p>
+                                <p className="truncate text-[11px] text-amber-700 dark:text-amber-400">
+                                  {item.reason}
+                                </p>
+                              </div>
+                            </button>
+                          ) : (
+                            <button
+                              key={`relatorio:${item.relatorio.id}`}
+                              type="button"
+                              onClick={() => {
+                                setActiveCampanhaId(item.campanhaId);
+                                setViewingRelatorioId(item.relatorio.id);
+                              }}
+                              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                                <BarChart3 className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-foreground">
+                                  {mesLabel(item.relatorio.mes)} · {item.campanhaNome}
+                                </p>
+                                <p className="truncate text-[11px] text-amber-700 dark:text-amber-400">
+                                  Novo relatório de métricas
+                                </p>
+                              </div>
+                            </button>
+                          ),
+                        )}
                       </div>
                     )}
                   </section>
