@@ -23,6 +23,9 @@ import {
   Calendar,
   Tag,
   ArrowRightLeft,
+  Copy,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import { SectionHeader } from "./SectionHeader";
@@ -198,6 +201,20 @@ export function FinanceiroSection() {
     }
     return { receita, despesa, saldo: receita - despesa };
   }, [visible]);
+
+  // Só despesa tem conceito de "pago" — receita fica sempre na lista
+  // principal. Pagas saem da lista de "em aberto" e vão pra uma lista à
+  // parte, recolhida por padrão, pra não poluir o que ainda precisa de
+  // atenção (fluxo de pagamentos, não um extrato completo).
+  const openEntries = useMemo(
+    () => visible.filter((e) => !(e.kind === "despesa" && paid[e.id])),
+    [visible, paid],
+  );
+  const paidEntries = useMemo(
+    () => visible.filter((e) => e.kind === "despesa" && paid[e.id]),
+    [visible, paid],
+  );
+  const [showPaid, setShowPaid] = useState(false);
 
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
@@ -400,131 +417,72 @@ export function FinanceiroSection() {
 
       {/* Lista */}
       <div className="overflow-hidden rounded-lg border border-border bg-background">
-        {visible.length === 0 ? (
+        {openEntries.length === 0 ? (
           <p className="px-4 py-12 text-center text-xs text-muted-foreground">
-            Nenhum lançamento neste mês.
+            {visible.length === 0
+              ? "Nenhum lançamento neste mês."
+              : "Nenhum lançamento em aberto neste mês."}
           </p>
         ) : (
           <ul className="divide-y divide-border">
-            {visible.map((e) => (
-              <li
+            {openEntries.map((e) => (
+              <EntryRow
                 key={e.id}
-                onClick={() => setViewing(e)}
-                className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-muted/40"
-              >
-                <span
-                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                    e.kind === "receita"
-                      ? "bg-emerald-500/10 text-emerald-600"
-                      : "bg-rose-500/10 text-rose-600"
-                  }`}
-                >
-                  {e.kind === "receita" ? (
-                    <TrendingUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`truncate text-sm ${paid[e.id] ? "text-muted-foreground line-through" : "text-foreground"}`}
-                  >
-                    {e.description}
-                  </p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span>
-                      {e.kind === "despesa" ? "Vence " : ""}
-                      {formatIsoDate(e.date)}
-                    </span>
-                    <span>·</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5">{e.category}</span>
-                    {(e.clienteNome || e.campanhaNome) && (
-                      <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
-                        <Link2 className="h-3 w-3" />
-                        {[e.clienteNome, e.campanhaNome].filter(Boolean).join(" · ")}
-                      </span>
-                    )}
-                    {e.invoice && (
-                      <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
-                        <FileText className="h-3 w-3" />
-                        NF
-                      </span>
-                    )}
-                    {e.kind === "despesa" && paid[e.id] && (
-                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600">
-                        <Check className="h-3 w-3" /> Pago {formatIsoDate(paid[e.id])}
-                      </span>
-                    )}
-                    {e.kind === "despesa" && !paid[e.id] && e.date < todayISO() && (
-                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600">
-                        <AlertCircle className="h-3 w-3" /> Vencido
-                      </span>
-                    )}
-                    {e.source !== "manual" && (
-                      <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                        auto
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {e.kind === "despesa" && (
-                  <button
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      togglePaid(e.id);
-                    }}
-                    aria-label={paid[e.id] ? "Marcar como não pago" : "Marcar como pago"}
-                    title={paid[e.id] ? "Marcar como não pago" : "Marcar como pago"}
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
-                      paid[e.id]
-                        ? "border-emerald-600 bg-emerald-600 text-white"
-                        : "border-border bg-background text-transparent hover:border-foreground"
-                    }`}
-                  >
-                    <Check className="h-3 w-3" />
-                  </button>
-                )}
-
-                <span
-                  className={`shrink-0 text-sm font-medium tabular-nums ${
-                    e.kind === "receita" ? "text-emerald-600" : "text-rose-600"
-                  }`}
-                >
-                  {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
-                </span>
-                {e.editable && (
-                  <div className="ml-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        const m = manual.find((x) => x.id === e.id);
-                        if (m) {
-                          setEditing(m);
-                          setOpen(true);
-                        }
-                      }}
-                      aria-label="Editar"
-                      className="rounded p-1 hover:bg-muted"
-                    >
-                      <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                    </button>
-                    <button
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        handleDelete(e);
-                      }}
-                      aria-label="Remover"
-                      className="rounded p-1 hover:bg-muted"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                    </button>
-                  </div>
-                )}
-              </li>
+                e={e}
+                paid={paid}
+                onView={() => setViewing(e)}
+                onTogglePaid={() => togglePaid(e.id)}
+                onEdit={() => {
+                  const m = manual.find((x) => x.id === e.id);
+                  if (m) {
+                    setEditing(m);
+                    setOpen(true);
+                  }
+                }}
+                onDelete={() => handleDelete(e)}
+              />
             ))}
           </ul>
         )}
       </div>
+
+      {paidEntries.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border bg-background">
+          <button
+            type="button"
+            onClick={() => setShowPaid((v) => !v)}
+            className="flex w-full items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {showPaid ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            Pagos ({paidEntries.length})
+          </button>
+          {showPaid && (
+            <ul className="divide-y divide-border border-t border-border">
+              {paidEntries.map((e) => (
+                <EntryRow
+                  key={e.id}
+                  e={e}
+                  paid={paid}
+                  onView={() => setViewing(e)}
+                  onTogglePaid={() => togglePaid(e.id)}
+                  onEdit={() => {
+                    const m = manual.find((x) => x.id === e.id);
+                    if (m) {
+                      setEditing(m);
+                      setOpen(true);
+                    }
+                  }}
+                  onDelete={() => handleDelete(e)}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {open && (
         <EntryDialog
@@ -580,6 +538,134 @@ export function FinanceiroSection() {
         />
       )}
     </div>
+  );
+}
+
+function EntryRow({
+  e,
+  paid,
+  onView,
+  onTogglePaid,
+  onEdit,
+  onDelete,
+}: {
+  e: Entry;
+  paid: PaidMap;
+  onView: () => void;
+  onTogglePaid: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <li
+      onClick={onView}
+      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-muted/40"
+    >
+      <span
+        className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+          e.kind === "receita"
+            ? "bg-emerald-500/10 text-emerald-600"
+            : "bg-rose-500/10 text-rose-600"
+        }`}
+      >
+        {e.kind === "receita" ? (
+          <TrendingUp className="h-3.5 w-3.5" />
+        ) : (
+          <TrendingDown className="h-3.5 w-3.5" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={`truncate text-sm ${paid[e.id] ? "text-muted-foreground line-through" : "text-foreground"}`}
+        >
+          {e.description}
+        </p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>
+            {e.kind === "despesa" ? "Vence " : ""}
+            {formatIsoDate(e.date)}
+          </span>
+          <span>·</span>
+          <span className="rounded bg-muted px-1.5 py-0.5">{e.category}</span>
+          {(e.clienteNome || e.campanhaNome) && (
+            <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
+              <Link2 className="h-3 w-3" />
+              {[e.clienteNome, e.campanhaNome].filter(Boolean).join(" · ")}
+            </span>
+          )}
+          {e.invoice && (
+            <span className="inline-flex items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5">
+              <FileText className="h-3 w-3" />
+              NF
+            </span>
+          )}
+          {e.kind === "despesa" && paid[e.id] && (
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600">
+              <Check className="h-3 w-3" /> Pago {formatIsoDate(paid[e.id])}
+            </span>
+          )}
+          {e.kind === "despesa" && !paid[e.id] && e.date < todayISO() && (
+            <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600">
+              <AlertCircle className="h-3 w-3" /> Vencido
+            </span>
+          )}
+          {e.source !== "manual" && (
+            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+              auto
+            </span>
+          )}
+        </div>
+      </div>
+      {e.kind === "despesa" && (
+        <button
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onTogglePaid();
+          }}
+          aria-label={paid[e.id] ? "Marcar como não pago" : "Marcar como pago"}
+          title={paid[e.id] ? "Marcar como não pago" : "Marcar como pago"}
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+            paid[e.id]
+              ? "border-emerald-600 bg-emerald-600 text-white"
+              : "border-border bg-background text-transparent hover:border-foreground"
+          }`}
+        >
+          <Check className="h-3 w-3" />
+        </button>
+      )}
+
+      <span
+        className={`shrink-0 text-sm font-medium tabular-nums ${
+          e.kind === "receita" ? "text-emerald-600" : "text-rose-600"
+        }`}
+      >
+        {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
+      </span>
+      {e.editable && (
+        <div className="ml-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation();
+              onEdit();
+            }}
+            aria-label="Editar"
+            className="rounded p-1 hover:bg-muted"
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+          </button>
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation();
+              onDelete();
+            }}
+            aria-label="Remover"
+            className="rounded p-1 hover:bg-muted"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -1422,7 +1508,10 @@ function EntryDetailsDialog({
                 {entry.bank.tipoConta && <DetailRow label="Tipo" value={entry.bank.tipoConta} />}
                 {entry.bank.pixTipo && <DetailRow label="PIX (tipo)" value={entry.bank.pixTipo} />}
                 {entry.bank.pixChave && (
-                  <DetailRow label="PIX (chave)" value={entry.bank.pixChave} />
+                  <DetailRow
+                    label="PIX (chave)"
+                    value={<CopyPixButton value={entry.bank.pixChave} />}
+                  />
                 )}
               </div>
             </Section>
@@ -1512,6 +1601,34 @@ function EntryDetailsDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Chave PIX vem só pra leitura na maioria dos casos — copiar na mão pra
+ * fazer o pagamento é o fluxo real, por isso o botão fica junto do valor
+ * em vez de precisar selecionar o texto manualmente. */
+function CopyPixButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(ev) => {
+        ev.stopPropagation();
+        void navigator.clipboard.writeText(value).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-muted"
+      title="Copiar chave PIX"
+    >
+      <span className="truncate">{value}</span>
+      {copied ? (
+        <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+      ) : (
+        <Copy className="h-3 w-3 shrink-0 text-muted-foreground" />
+      )}
+    </button>
   );
 }
 
