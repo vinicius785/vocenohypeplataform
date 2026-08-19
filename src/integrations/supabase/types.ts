@@ -753,6 +753,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      password_reset_requests: {
+        Row: {
+          id: string;
+          email: string;
+          created_at: string;
+          resolved: boolean;
+          resolved_at: string | null;
+          resolved_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          created_at?: string;
+          resolved?: boolean;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          created_at?: string;
+          resolved?: boolean;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           birthday: string | null;

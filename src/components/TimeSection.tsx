@@ -1686,7 +1686,122 @@ export function TimeSection() {
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <SectionHeader title="Time" subtitle="Membros, métricas e pontuação do time." />
       <DiretorioTab />
+      <PasswordResetRequestsPanel />
       <BugReportsPanel />
+    </div>
+  );
+}
+
+type PasswordResetRequest = {
+  id: string;
+  email: string;
+  created_at: string;
+  resolved: boolean;
+};
+
+/** Painel admin-only com os pedidos de "esqueci minha senha" feitos na tela
+ * de login (sem sessão, então não têm como cair direto no perfil de
+ * ninguém) — o admin vê o e-mail, reseta manualmente pela aba de membros
+ * (KeyRound no perfil) e marca aqui como resolvido. */
+function PasswordResetRequestsPanel() {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [requests, setRequests] = useState<PasswordResetRequest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return setChecked(true);
+      const { data: ok } = await supabase.rpc("is_admin", { _user_id: u.user.id });
+      setIsAdmin(Boolean(ok));
+      setChecked(true);
+    })();
+  }, []);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    const { data, error: err } = await supabase
+      .from("password_reset_requests")
+      .select("id, email, created_at, resolved")
+      .eq("resolved", false)
+      .order("created_at", { ascending: false });
+    if (err) setError(err.message);
+    else setRequests(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (open) void load();
+  }, [open]);
+
+  const resolve = async (id: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== id));
+    const { data: u } = await supabase.auth.getUser();
+    const { error: err } = await supabase
+      .from("password_reset_requests")
+      .update({ resolved: true, resolved_at: new Date().toISOString(), resolved_by: u.user?.id })
+      .eq("id", id);
+    if (err) setError(err.message);
+  };
+
+  if (!checked || !isAdmin) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">Senhas esquecidas</span>
+          {requests.length > 0 && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              {requests.length}
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-border px-5 py-4">
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
+          {!loading && requests.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhum pedido pendente.</p>
+          )}
+          {requests.map((r) => (
+            <div
+              key={r.id}
+              className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{r.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(r.created_at).toLocaleString("pt-BR")} · redefina pelo perfil do membro
+                  (ícone de chave)
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void resolve(r.id)}
+                className="shrink-0"
+              >
+                Marcar resolvido
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

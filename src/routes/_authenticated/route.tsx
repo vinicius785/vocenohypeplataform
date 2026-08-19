@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { shouldExpireUnrememberedSession, markTabSessionActive } from "@/lib/session-scope";
 import { getTeamDirectory } from "@/lib/team.functions";
 import { saveMe, initChatSync, heartbeat } from "@/lib/chat-store";
 import { initWorkspaceSync } from "@/lib/workspace-store";
@@ -28,6 +29,14 @@ export const Route = createFileRoute("/_authenticated")({
     if (!sessionData.session) {
       throw redirect({ to: "/" });
     }
+    // "Manter conectado" desmarcado no login + esta ser uma aba/janela nova
+    // (não uma continuação da mesma) = o navegador foi fechado de vez e
+    // reaberto — a sessão (ainda válida no Supabase) deve encerrar aqui.
+    if (shouldExpireUnrememberedSession()) {
+      await supabase.auth.signOut();
+      throw redirect({ to: "/" });
+    }
+    markTabSessionActive();
     const userId = sessionData.session.user.id;
     const { data: profile } = await supabase
       .from("profiles")

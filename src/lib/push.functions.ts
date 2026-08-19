@@ -48,7 +48,7 @@ export const deletePushSubscription = createServerFn({ method: "POST" })
  * usuário comum. Usado por todo evento que deveria virar notificação no
  * celular: mensagem de chat, tarefa atribuída, convite de reunião.
  */
-async function deliverPush(
+export async function deliverPush(
   userIds: string[],
   payload: { title: string; body: string; url: string },
 ): Promise<{ sent: number }> {
