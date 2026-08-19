@@ -5,6 +5,7 @@ import { Mail, Lock, ArrowLeft, ArrowRight, Loader2, CheckCircle2 } from "lucide
 import { supabase } from "@/integrations/supabase/client";
 import { requestPasswordReset } from "@/lib/password-reset.functions";
 import { REMEMBER_KEY, markTabSessionActive } from "@/lib/session-scope";
+import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import Grainient from "@/components/Grainient";
 
 export const Route = createFileRoute("/")({
@@ -29,6 +30,7 @@ function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ws, setWs] = useState<Workspace | null>(null);
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -40,6 +42,12 @@ function LoginPage() {
       if (data.session) navigate({ to: "/time" });
     });
   }, [navigate]);
+
+  useEffect(() => {
+    fetchWorkspace()
+      .then(setWs)
+      .catch(() => setWs(null));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,8 +93,8 @@ function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6">
       <div className="pointer-events-none absolute inset-0">
         <Grainient
-          color1="#ff009c"
-          color2="#3300ff"
+          color1="#050505"
+          color2="#5a5a5a"
           color3="#ffffff"
           timeSpeed={0.5}
           colorBalance={-0.01}
@@ -103,7 +111,7 @@ function LoginPage() {
           grainAnimated={false}
           contrast={0.95}
           gamma={1.0}
-          saturation={1.0}
+          saturation={0.0}
           centerX={0.0}
           centerY={0.0}
           zoom={1.4}
@@ -111,8 +119,14 @@ function LoginPage() {
       </div>
 
       <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-card/95 p-8 shadow-xl backdrop-blur-sm">
-        <div className="mb-7 flex h-10 w-10 items-center justify-center rounded-xl bg-foreground text-background">
-          <span className="text-sm font-bold">V</span>
+        <div className="mb-7 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
+          {ws?.logo ? (
+            <img src={ws.logo} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-sm font-bold">
+              {(ws?.nome || "V").trim().charAt(0).toUpperCase()}
+            </span>
+          )}
         </div>
 
         {view === "login" && (
