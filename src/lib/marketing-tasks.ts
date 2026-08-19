@@ -32,9 +32,6 @@ export type MktRequest = {
   note?: string;
 };
 
-const STANDALONE_KEY = "marketing:standalone";
-const EVENT = "marketing:tasks:changed";
-
 export type MktStandalone = {
   id: string;
   title: string;
@@ -56,11 +53,37 @@ export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [
 ];
 
 const requestsStore = createTableArrayStore<MktRequest>("marketing_tasks");
+const standaloneStore = createTableArrayStore<MktStandalone>("marketing_standalone_tasks");
+
+/** Tarefas avulsas do Marketing viviam só em localStorage
+ * ("marketing:standalone") antes desta tabela existir — sem sincronizar
+ * entre pessoas/dispositivos e somem se o navegador limpar os dados. Se
+ * este navegador ainda tem alguma sobrando (nunca migrada), recupera pra
+ * tabela de verdade uma única vez e limpa a chave antiga. */
+const LEGACY_STANDALONE_KEY = "marketing:standalone";
+function migrateLegacyStandalone() {
+  try {
+    const raw = localStorage.getItem(LEGACY_STANDALONE_KEY);
+    if (!raw) return;
+    const legacy = JSON.parse(raw) as MktStandalone[];
+    if (Array.isArray(legacy) && legacy.length > 0) {
+      const existingIds = new Set(standaloneStore.get().map((s) => s.id));
+      const toAdd = legacy.filter((s) => s?.id && !existingIds.has(s.id));
+      if (toAdd.length > 0) standaloneStore.set((prev) => [...prev, ...toAdd]);
+    }
+    localStorage.removeItem(LEGACY_STANDALONE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function initMarketingTasksSync(): Promise<void> {
-  const p = requestsStore.init();
+  const p = Promise.all([requestsStore.init(), standaloneStore.init()]);
   requestsStore.subscribeRealtime();
-  return p;
+  standaloneStore.subscribeRealtime();
+  return p.then(() => {
+    migrateLegacyStandalone();
+  });
 }
 
 export function loadRequests(): MktRequest[] {
@@ -140,22 +163,11 @@ export function columnToCampanhaStatus(col: MktColumn): string {
 }
 
 export function loadStandalone(): MktStandalone[] {
-  try {
-    const raw = localStorage.getItem(STANDALONE_KEY);
-    return raw ? (JSON.parse(raw) as MktStandalone[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStandalone(list: MktStandalone[]) {
-  localStorage.setItem(STANDALONE_KEY, JSON.stringify(list));
-  window.dispatchEvent(new Event(EVENT));
+  return standaloneStore.get();
 }
 
 export function onStandaloneChange(cb: () => void): () => void {
-  window.addEventListener(EVENT, cb);
-  return () => window.removeEventListener(EVENT, cb);
+  return standaloneStore.subscribe(cb);
 }
 
 export function createStandalone(input: {
@@ -174,7 +186,7 @@ export function createStandalone(input: {
     note: input.note,
     createdAt: new Date().toISOString(),
   };
-  saveStandalone([...loadStandalone(), item]);
+  standaloneStore.set((prev) => [...prev, item]);
   return item;
 }
 
@@ -182,9 +194,9 @@ export function updateStandalone(
   id: string,
   patch: Partial<Omit<MktStandalone, "id" | "createdAt">>,
 ) {
-  saveStandalone(loadStandalone().map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  standaloneStore.set((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 }
 
 export function removeStandalone(id: string) {
-  saveStandalone(loadStandalone().filter((s) => s.id !== id));
+  standaloneStore.set((prev) => prev.filter((s) => s.id !== id));
 }
