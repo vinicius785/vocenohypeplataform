@@ -4589,7 +4589,12 @@ async function uploadInfluFoto(file: File): Promise<string | null> {
   const uid = userData.user?.id;
   if (!uid) return null;
   const ext = (file.name.split(".").pop() || "jpg").replace(/[^\w]+/g, "");
-  const path = `campanha_influenciadores/${uid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  // A policy de INSERT do bucket `avatars` exige que o primeiro segmento do
+  // path seja o uid de quem está subindo (mesma regra já usada pelas
+  // policies de leitura/update/delete) — o path antigo começava com
+  // "campanha_influenciadores/", nunca batendo com `auth.uid()`, e por isso
+  // TODO upload de foto de perfil vinha falhando com RLS silenciosamente.
+  const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from("avatars").upload(path, file, {
     contentType: file.type || "image/jpeg",
     upsert: false,

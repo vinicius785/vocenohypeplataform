@@ -1,6 +1,7 @@
 {
-  "version": "1.153.3",
+  "version": "1.153.4",
   "notes": [
+    "Corrige upload de foto de perfil de influenciador, que vinha falhando sempre: o caminho do arquivo no Storage não batia com a regra de permissão (esperava começar com o seu próprio ID, mas começava com um texto fixo) — agora sobe normalmente. Também aumenta o limite de tamanho de arquivo do bucket de anexos de entrega para caber vídeos maiores (o teto de 50MB do plano atual do Supabase ainda se aplica por cima; se vídeos grandes continuarem falhando, é esse limite do plano que precisa subir, não a plataforma).",
     "Nova página de erro 404, com a identidade do workspace (logo, pt-BR) em vez do \"Page not found\" genérico em inglês de antes — vale pra qualquer link quebrado ou digitado errado, dentro ou fora do login.",
     "Login: o quadrado com \"V\" vira o logo de verdade do Workspace (cai pra inicial do nome se não houver logo cadastrado), e o fundo animado troca o gradiente rosa/roxo genérico por um preto-e-branco em grão, no mesmo padrão monocromático do resto da plataforma.",
     "Login: refaz a tela por inteiro (visual mais limpo, ícones nos campos, cartão com blur sobre o fundo animado) e adiciona duas funções novas — \"Manter conectado\" (desmarcado, a sessão encerra sozinha quando o navegador é fechado de vez e reaberto) e \"Esqueci minha senha\" (a plataforma não manda e-mail de redefinição; o pedido avisa os admins por push notification e fica visível numa nova aba \"Senhas esquecidas\" em Time, pra quem for admin resetar manualmente pelo perfil do membro).",
