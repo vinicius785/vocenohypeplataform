@@ -7,31 +7,55 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { initTheme } from "../lib/theme";
+import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 
+/** 404 com a identidade do workspace — antes era um "Page not found"
+ * genérico em inglês, destoando do resto da plataforma (pt-BR, logo do
+ * workspace no login/sidebar). Fica no `__root.tsx` porque cobre qualquer
+ * rota, autenticada ou não — por isso "Voltar" sempre manda pra "/" (a
+ * própria tela de login já redireciona pra "/time" sozinha se já houver
+ * sessão, então não precisa checar auth aqui). */
 function NotFoundComponent() {
+  const [ws, setWs] = useState<Workspace | null>(null);
+  useEffect(() => {
+    fetchWorkspace()
+      .then(setWs)
+      .catch(() => setWs(null));
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90"
-          >
-            Go home
-          </Link>
-        </div>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
+      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-foreground text-background">
+        {ws?.logo ? (
+          <img src={ws.logo} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="text-lg font-bold">
+            {(ws?.nome || "V").trim().charAt(0).toUpperCase()}
+          </span>
+        )}
       </div>
+      <p className="mt-6 text-sm font-medium uppercase tracking-widest text-muted-foreground">
+        Erro 404
+      </p>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+        Essa página não existe
+      </h1>
+      <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+        O link pode estar errado ou a página pode ter sido movida. Confira o endereço ou volte pro
+        início.
+      </p>
+      <Link
+        to="/"
+        className="mt-7 inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+      >
+        Voltar pro início
+      </Link>
     </div>
   );
 }
