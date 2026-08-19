@@ -130,6 +130,7 @@ export function InscricaoPageDialog({
   const [newDo, setNewDo] = useState("");
   const [newDont, setNewDont] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const bannerRef = useRef<HTMLInputElement>(null);
 
@@ -191,11 +192,23 @@ export function InscricaoPageDialog({
 
   const publicUrl = (token: string) => `${window.location.origin}/inscricao/${token}`;
 
+  const savedTimeout = useRef<number | null>(null);
   const handleSave = (statusOverride?: InscricaoPageStatus) => {
     const patch = buildPatch(statusOverride);
     onSave(patch);
+    // Feedback visual de que salvou de verdade — antes o botão "Salvar" não
+    // dava nenhuma confirmação, então parecia que nada tinha acontecido.
+    setJustSaved(true);
+    if (savedTimeout.current) window.clearTimeout(savedTimeout.current);
+    savedTimeout.current = window.setTimeout(() => setJustSaved(false), 1800);
     return patch;
   };
+  useEffect(
+    () => () => {
+      if (savedTimeout.current) window.clearTimeout(savedTimeout.current);
+    },
+    [],
+  );
 
   const handleCopyLink = () => {
     const patch = handleSave();
@@ -743,9 +756,19 @@ export function InscricaoPageDialog({
           <button
             type="button"
             onClick={() => handleSave()}
-            className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+            className={`inline-flex items-center gap-1.5 rounded-full border-2 px-5 py-2 text-sm font-medium transition-colors duration-200 ${
+              justSaved
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
+            }`}
           >
-            Salvar
+            {justSaved ? (
+              <>
+                <Check className="h-4 w-4" /> Salvo!
+              </>
+            ) : (
+              "Salvar"
+            )}
           </button>
         </div>
       </DialogContent>
