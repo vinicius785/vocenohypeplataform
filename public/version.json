@@ -1,6 +1,7 @@
 {
-  "version": "1.153.6",
+  "version": "1.153.7",
   "notes": [
+    "Anexos de entrega (roteiro/conteúdo final dos influenciadores): agora avisa na hora, antes de tentar subir, se o arquivo passa de 100MB (limite atual do plano no Storage) — antes só dava um \"falha ao subir\" genérico depois de esperar o upload inteiro (minutos, em vídeo grande). A mensagem já mostra o tamanho do arquivo e o limite permitido.",
     "Página de inscrição da campanha: o botão \"Salvar\" agora mostra uma confirmação visual (fica verde com um check, \"Salvo!\") por alguns segundos depois de clicar — antes não dava nenhum feedback de que o salvamento tinha realmente acontecido.",
     "Corrige tarefas avulsas do Marketing (criadas direto no kanban, sem vir de projeto/campanha) sumindo: elas só existiam no localStorage do navegador de quem criou, nunca chegavam ao banco — em outro dispositivo, outra pessoa ou depois de limpar os dados do navegador, a tarefa simplesmente não existia mais. Agora ficam salvas de verdade (tabela própria, sincronizada em tempo real pra todo o time), com uma recuperação automática de qualquer tarefa que ainda esteja \"presa\" no armazenamento local de quem já tinha criado alguma antes dessa correção.",
     "Corrige upload de foto de perfil de influenciador, que vinha falhando sempre: o caminho do arquivo no Storage não batia com a regra de permissão (esperava começar com o seu próprio ID, mas começava com um texto fixo) — agora sobe normalmente. Também aumenta o limite de tamanho de arquivo do bucket de anexos de entrega para caber vídeos maiores (o teto de 50MB do plano atual do Supabase ainda se aplica por cima; se vídeos grandes continuarem falhando, é esse limite do plano que precisa subir, não a plataforma).",

@@ -2818,6 +2818,7 @@ function EntregaDetailSheet({
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Heurística simples: entradas de atividade que citam o tipo/título da
   // entrega (não há `entregaId` no log ainda, então filtra por texto).
@@ -2845,12 +2846,14 @@ function EntregaDetailSheet({
   const handleFileForAction = async (file: File) => {
     if (step.action !== "marcar_roteiro_pronto" && step.action !== "marcar_conteudo_pronto") return;
     setUploading(true);
+    setUploadError("");
     try {
       const url = await uploadEntregaAnexo(file);
-      if (!url) return;
       const categoria: EntregaAnexoCategoria =
         step.action === "marcar_roteiro_pronto" ? "Roteiro" : "Conteúdo final";
       onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
     } finally {
       setUploading(false);
     }
@@ -2925,14 +2928,17 @@ function EntregaDetailSheet({
               <NextActionBadge actor={step.responsavel} />
             </div>
             {step.action ? (
-              <button
-                type="button"
-                onClick={handleActionClick}
-                disabled={uploading}
-                className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
-              >
-                {uploading ? "Enviando..." : step.actionLabel}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleActionClick}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+                >
+                  {uploading ? "Enviando..." : step.actionLabel}
+                </button>
+                {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+              </>
             ) : (
               <p className="text-xs text-muted-foreground">
                 {status === "AGUARDANDO_APROVACAO"
@@ -4126,6 +4132,7 @@ function BriefingAnexoUploadButton({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
   return (
     <>
       <button
@@ -4136,6 +4143,7 @@ function BriefingAnexoUploadButton({
       >
         <Paperclip className="h-3 w-3" /> {uploading ? "Enviando..." : "Anexar arquivo"}
       </button>
+      {error && <p className="mt-1 text-[11px] text-destructive">{error}</p>}
       <input
         ref={ref}
         type="file"
@@ -4145,9 +4153,15 @@ function BriefingAnexoUploadButton({
           e.target.value = "";
           if (!file) return;
           setUploading(true);
-          const url = await uploadEntregaAnexo(file);
-          setUploading(false);
-          if (url) onUpload(file.name, url);
+          setError("");
+          try {
+            const url = await uploadEntregaAnexo(file);
+            onUpload(file.name, url);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
+          } finally {
+            setUploading(false);
+          }
         }}
       />
     </>
@@ -4609,15 +4623,32 @@ async function uploadInfluFoto(file: File): Promise<string | null> {
   return signed?.signedUrl ?? null;
 }
 
+// Precisa acompanhar o "Max file size" configurado no Storage do Supabase
+// (Dashboard → Storage → Configuration) — hoje 100MB. Checar no cliente
+// evita esperar o upload inteiro (às vezes minutos, num vídeo grande) só
+// pra descobrir no fim que o servidor ia recusar.
+const ENTREGA_ANEXO_MAX_BYTES = 100 * 1024 * 1024;
+
+function formatMB(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
 /** Sobe o arquivo pro bucket `entrega-anexos` (Storage) e devolve uma URL
  * assinada válida por ~1 ano — antes o arquivo virava um data: URL (base64)
  * embutido direto na linha JSONB, o que falhava silenciosamente pra
  * arquivos maiores (vídeos): o anexo nunca era salvo de fato. Mesmo padrão
- * já usado em `uploadChatAttachment` (chat-store.ts). */
-async function uploadEntregaAnexo(file: File): Promise<string | null> {
+ * já usado em `uploadChatAttachment` (chat-store.ts). Lança erro (em vez de
+ * devolver `null`) com uma mensagem específica pro chamador poder mostrar
+ * pra quem tentou o upload, em vez de um "falhou" genérico. */
+async function uploadEntregaAnexo(file: File): Promise<string> {
+  if (file.size > ENTREGA_ANEXO_MAX_BYTES) {
+    throw new Error(
+      `Arquivo muito grande (${formatMB(file.size)}). O máximo permitido é ${formatMB(ENTREGA_ANEXO_MAX_BYTES)}.`,
+    );
+  }
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
-  if (!uid) return null;
+  if (!uid) throw new Error("Sessão expirada — atualize a página e tente de novo.");
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
   const { error } = await supabase.storage.from("entrega-anexos").upload(path, file, {
@@ -4626,12 +4657,13 @@ async function uploadEntregaAnexo(file: File): Promise<string | null> {
   });
   if (error) {
     console.warn("[entrega-anexos] upload failed", error);
-    return null;
+    throw new Error("Falha ao subir o arquivo. Tente de novo.");
   }
   const { data: signed } = await supabase.storage
     .from("entrega-anexos")
     .createSignedUrl(path, 60 * 60 * 24 * 365);
-  return signed?.signedUrl ?? null;
+  if (!signed) throw new Error("Falha ao gerar o link do arquivo. Tente de novo.");
+  return signed.signedUrl;
 }
 
 /** Miniatura do anexo — imagem de verdade quando dá, ícone por tipo de
@@ -4677,11 +4709,9 @@ function EntregaAnexosEditor({
     setUploading(pendingCategoria.current);
     try {
       const url = await uploadEntregaAnexo(file);
-      if (!url) {
-        setError("Falha ao subir o arquivo. Tente de novo.");
-        return;
-      }
       onChange(addAnexoComVersao(anexos, pendingCategoria.current, file.name, url));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao subir o arquivo. Tente de novo.");
     } finally {
       setUploading(null);
     }
