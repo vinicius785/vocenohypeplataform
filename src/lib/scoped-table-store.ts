@@ -118,60 +118,70 @@ export function createScopedArrayStore<T extends { id: string }>(
       emit();
       for (const item of next) {
         if (prevById.get(item.id) !== item) {
-          supabase
-            .from(table)
-            .upsert({
-              id: item.id,
-              [parentColumn]: parentId,
-              data: item,
-              updated_at: new Date().toISOString(),
-            } as never)
-            .select("id")
-            .then(({ data, error }) => {
-              if (!error && (data?.length ?? 0) > 0) return;
-              console.warn(`[${table}] upsert failed`, error ?? "0 rows affected (RLS?)");
-              void import("sonner").then(({ toast }) => {
-                toast.error("Não foi possível salvar", {
-                  description:
-                    error?.message ||
-                    "Você pode não ter permissão pra essa ação. Verifique sua conexão e tente de novo.",
+          // `getSession()` primeiro: se o token de sessão expirou (comum em
+          // abas que ficam abertas o dia todo — o refresh automático do
+          // supabase-js roda num timer que o browser pode ter throttled
+          // enquanto a aba estava em segundo plano), isso força o refresh
+          // ANTES da escrita, em vez de mandar a requisição com um JWT
+          // vencido e RLS recusar silenciosamente (0 linhas, sem erro).
+          void supabase.auth.getSession().then(() =>
+            supabase
+              .from(table)
+              .upsert({
+                id: item.id,
+                [parentColumn]: parentId,
+                data: item,
+                updated_at: new Date().toISOString(),
+              } as never)
+              .select("id")
+              .then(({ data, error }) => {
+                if (!error && (data?.length ?? 0) > 0) return;
+                console.warn(`[${table}] upsert failed`, error ?? "0 rows affected (RLS?)");
+                void import("sonner").then(({ toast }) => {
+                  toast.error("Não foi possível salvar", {
+                    description:
+                      error?.message ||
+                      "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
+                  });
                 });
-              });
-            });
+              }),
+          );
         }
       }
       for (const id of prevById.keys()) {
         if (!nextIds.has(id)) {
-          supabase
-            .from(table)
-            .delete()
-            .eq("id", id)
-            // `.select("id")` é o único jeito de saber se a exclusão pegou
-            // alguma linha: RLS bloqueando não gera `error` nenhum — o
-            // Postgrest responde 200 com 0 linhas afetadas, então sem isso
-            // essa falha passava batido, o item continuava no banco, e
-            // reaparecia sozinho no próximo resync/realtime (sumia e voltava
-            // sem explicação nenhuma).
-            .select("id")
-            .then(({ data, error }) => {
-              if (!error && (data?.length ?? 0) > 0) return;
-              console.warn(`[${table}] delete failed`, error ?? "0 rows affected (RLS?)");
-              const removed = prevById.get(id);
-              if (removed) {
-                const current = cache.get(parentId) ?? [];
-                if (!current.some((x) => x.id === id)) {
-                  cache.set(parentId, [...current, removed]);
-                  emit();
+          void supabase.auth.getSession().then(() =>
+            supabase
+              .from(table)
+              .delete()
+              .eq("id", id)
+              // `.select("id")` é o único jeito de saber se a exclusão pegou
+              // alguma linha: RLS bloqueando não gera `error` nenhum — o
+              // Postgrest responde 200 com 0 linhas afetadas, então sem isso
+              // essa falha passava batido, o item continuava no banco, e
+              // reaparecia sozinho no próximo resync/realtime (sumia e voltava
+              // sem explicação nenhuma).
+              .select("id")
+              .then(({ data, error }) => {
+                if (!error && (data?.length ?? 0) > 0) return;
+                console.warn(`[${table}] delete failed`, error ?? "0 rows affected (RLS?)");
+                const removed = prevById.get(id);
+                if (removed) {
+                  const current = cache.get(parentId) ?? [];
+                  if (!current.some((x) => x.id === id)) {
+                    cache.set(parentId, [...current, removed]);
+                    emit();
+                  }
                 }
-              }
-              void import("sonner").then(({ toast }) => {
-                toast.error("Não foi possível excluir", {
-                  description:
-                    error?.message ||
-                    "Você pode não ter permissão pra essa ação. Verifique sua conexão e tente de novo.",
+                void import("sonner").then(({ toast }) => {
+                  toast.error("Não foi possível excluir", {
+                    description:
+                      error?.message ||
+                      "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
+                  });
                 });
-              });
-            });
+              }),
+          );
         }
       }
     },
