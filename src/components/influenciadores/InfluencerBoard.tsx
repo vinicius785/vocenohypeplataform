@@ -99,6 +99,12 @@ export type InfluActivity = {
   initials: string;
   color: string;
   action: string;
+  /** Id da entrega a que esta atividade se refere, quando aplicável — usada
+   * pelo Histórico da entrega pra casar de verdade, em vez do antigo
+   * casamento por substring do `tipo` (frágil quando há mais de uma
+   * entrega do mesmo tipo). Ausente em atividade registrada antes desse
+   * campo existir. */
+  entregaId?: string;
   createdAt: string;
 };
 
@@ -429,34 +435,29 @@ export function approvalSlaOverdueDays(influ: Influ): number | null {
  * influenciador e — só a partir desse momento — vira uma despesa real
  * no Financeiro (ver financeiro-entries.ts).
  */
-// Status de perfil (Influ) e de entrega vivem em src/lib/campanha-status.ts —
-// fonte única, compartilhada com o portal do cliente e as server functions.
-// Importados (e reexportados) aqui com os nomes antigos de entrega
-// (ENTREGA_CONTEUDO_*) só pra não precisar renomear as dezenas de usos já
-// existentes neste arquivo.
+// Status de perfil (Influ) e estágio de entrega (EntregaStage) vivem em
+// src/lib/campanha-status.ts — fonte única, compartilhada com o portal do
+// cliente e as server functions.
 import {
   INFLU_STATUSES,
   INFLU_KANBAN_ORDER,
   INFLU_STATUS_LABEL,
   INFLU_STATUS_TONE,
   INFLU_STATUS_BORDER,
-  ENTREGA_STATUSES as ENTREGA_CONTEUDO_STATUSES,
-  ENTREGA_STATUS_LABEL as ENTREGA_CONTEUDO_LABEL,
-  ENTREGA_STATUS_TONE as ENTREGA_CONTEUDO_TONE,
-  ENTREGA_STATUS_BORDER as ENTREGA_CONTEUDO_BORDER,
+  ENTREGA_STAGES,
+  ENTREGA_STAGE_LABEL,
+  ENTREGA_STAGE_TONE,
+  ENTREGA_STAGE_BORDER,
+  ENTREGA_STAGE_ORDER,
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
-  ENTREGA_ETAPA_LABEL,
-  ENTREGA_ETAPA_ORDER,
   canTransitionInflu,
   canTransitionEntrega,
   legacyInfluStatus,
-  legacyEntregaStatus,
-  legacyEntregaEtapa,
+  migrateLegacyEntregaStage,
   type InfluStatus,
-  type EntregaStatus as EntregaConteudoStatus,
-  type EntregaEtapa,
+  type EntregaStage,
   type NextActor,
 } from "@/lib/campanha-status";
 import {
@@ -470,19 +471,18 @@ export {
   INFLU_STATUS_LABEL,
   INFLU_STATUS_TONE,
   INFLU_STATUS_BORDER,
-  ENTREGA_CONTEUDO_STATUSES,
-  ENTREGA_CONTEUDO_LABEL,
-  ENTREGA_CONTEUDO_TONE,
-  ENTREGA_CONTEUDO_BORDER,
+  ENTREGA_STAGES,
+  ENTREGA_STAGE_LABEL,
+  ENTREGA_STAGE_TONE,
+  ENTREGA_STAGE_BORDER,
+  ENTREGA_STAGE_ORDER,
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
-  ENTREGA_ETAPA_LABEL,
-  ENTREGA_ETAPA_ORDER,
   canTransitionInflu,
   canTransitionEntrega,
 };
-export type { InfluStatus, EntregaConteudoStatus, EntregaEtapa, NextActor };
+export type { InfluStatus, EntregaStage, NextActor };
 
 export const ENTREGA_ANEXO_CATEGORIAS = ["Roteiro", "Gravação", "Conteúdo final", "Outro"] as const;
 export type EntregaAnexoCategoria = (typeof ENTREGA_ANEXO_CATEGORIAS)[number];
@@ -541,37 +541,26 @@ export type Entrega = {
   titulo?: string;
   quantidade: number;
   status: "orcado" | "combinado" | "publicado";
-  /** Status de produção/aprovação da entrega — independente do status de
-   * orçamento/publicação acima. Ver src/lib/campanha-status.ts. */
-  conteudoStatus?: EntregaConteudoStatus;
-  /** Qual etapa este status se refere a — roteiro ou conteúdo final. Não
-   * existe status separado por etapa: o MESMO fluxo (COMBINADA..PUBLICADA)
-   * se repete pra cada etapa, diferenciado só por este campo. */
-  etapa?: EntregaEtapa;
+  /** Estágio de produção/aprovação da entrega — independente do status de
+   * orçamento/publicação acima. Um único campo linear (ver
+   * src/lib/campanha-status.ts) — sempre presente, nunca lido sem
+   * fallback (entregas criadas antes do backfill sempre têm o valor
+   * setado por ele). */
+  stage: EntregaStage;
   dataPostagem?: string; // data planejada (ou realizada) para a postagem
   /** Carimbo de "roteiro pronto" — setado pelo motor (`entrega-engine.ts`)
    * quando o time confirma o roteiro, nunca editado por inferência de
    * anexo presente. Único sinal que libera a ação "Enviar para cliente"
-   * na etapa de roteiro. */
+   * no estágio de roteiro. */
   dataRecebimentoRoteiro?: string;
-  /** Carimbo de "gravação concluída" — etapa 100% interna, nunca vai pro
-   * cliente (não existe aprovação de gravação). Setado pelo motor ao
-   * avançar de "gravacao" pra "conteudo". */
-  dataGravacaoConcluida?: string;
   /** Carimbo de "conteúdo final pronto" — mesmo papel de
-   * `dataRecebimentoRoteiro`, mas pra etapa de conteúdo. */
+   * `dataRecebimentoRoteiro`, mas pro estágio de conteúdo. */
   dataRecebimentoConteudo?: string;
-  /** Anexos da entrega (roteiro, gravação, conteúdo publicado, etc) — podem
-   * ser adicionados em qualquer etapa/status, e mais de um por categoria. */
+  /** Anexos da entrega (roteiro, gravação, conteúdo final, etc) — podem
+   * ser adicionados em qualquer estágio, e mais de um por categoria. */
   anexos?: EntregaAnexo[];
-  /** @deprecated migrado para `anexos` (categoria "Roteiro") por `normalizeInflus`. */
-  roteiro?: string;
-  /** @deprecated migrado para `anexos` (categoria "Roteiro") por `normalizeInflus`. */
-  roteiroNome?: string;
   /** Link do post publicado (texto, não anexo). */
   url?: string;
-  /** @deprecated quando presente, `url` era o anexo em si — migrado pra `anexos` (categoria "Conteúdo final"). */
-  arquivoNome?: string;
   publicadoEm?: string;
   metrics?: PostMetrics;
   /** Preenchido quando o cliente reprova o roteiro pelo link público —
@@ -617,18 +606,19 @@ export function advanceStatusFromEntregas(status: InfluStatus, entregas: Entrega
   if (status !== "APROVADO" && status !== "EM_PRODUCAO") return status;
   if (entregas.length === 0) return status;
 
-  const allPublished = entregas.every((e) => e.conteudoStatus === "PUBLICADA");
+  const allPublished = entregas.every((e) => e.stage === "PUBLICADA");
   if (allPublished) return "CONCLUIDO";
 
-  const IN_PROGRESS_STATUSES = new Set<EntregaConteudoStatus>([
-    "EM_PRODUCAO",
-    "AGUARDANDO_APROVACAO",
-    "AJUSTES_SOLICITADOS",
-    "APROVADA",
+  const IN_PROGRESS_STAGES = new Set<EntregaStage>([
+    "ROTEIRO_PRODUCAO",
+    "ROTEIRO_APROVACAO",
+    "ROTEIRO_AJUSTES",
+    "PRODUCAO",
+    "CONTEUDO_APROVACAO",
+    "CONTEUDO_AJUSTES",
+    "PUBLICACAO",
   ]);
-  const anyInProgress = entregas.some(
-    (e) => e.conteudoStatus && IN_PROGRESS_STATUSES.has(e.conteudoStatus),
-  );
+  const anyInProgress = entregas.some((e) => IN_PROGRESS_STAGES.has(e.stage));
   if (anyInProgress) return "EM_PRODUCAO";
 
   return status;
@@ -738,54 +728,69 @@ export function normalizeInflus(list: unknown): Influ[] {
         ...a,
         categoria: legacyAnexoCategoria(a.categoria),
       }));
-      if (e.roteiro) {
+      const legacy = e as Entrega & {
+        roteiro?: string;
+        roteiroNome?: string;
+        arquivoNome?: string;
+        conteudoStatus?: string;
+        etapa?: string;
+      };
+      if (legacy.roteiro) {
         anexos.push({
           id: `${e.id}-mig-roteiro`,
           categoria: "Roteiro",
-          nome: e.roteiroNome || "Roteiro",
-          url: e.roteiro,
+          nome: legacy.roteiroNome || "Roteiro",
+          url: legacy.roteiro,
         });
       }
-      if (e.url && e.arquivoNome) {
+      if (e.url && legacy.arquivoNome) {
         anexos.push({
           id: `${e.id}-mig-publicado`,
           categoria: "Conteúdo final",
-          nome: e.arquivoNome,
+          nome: legacy.arquivoNome,
           url: e.url,
         });
       }
       const status = e.status ?? "combinado";
-      // Traduz status antigos (8 valores, com roteiro/conteúdo misturados)
-      // pro novo modelo (6 valores + `etapa` à parte) — dado antigo nunca é
-      // reescrito no banco, só traduzido aqui, toda vez que é lido.
-      const { status: conteudoStatus, etapa } = legacyEntregaStatus(
-        e.conteudoStatus ?? (status === "publicado" ? "Postado" : "Combinado"),
-        e.etapa,
-      );
+      // Defesa em profundidade: o backfill já reescreveu `stage` de verdade
+      // no banco pra todo mundo, mas se alguma linha antiga escapar (ou o
+      // dado vier de um snapshot velho em cache), essa tradução garante que
+      // a UI nunca vê um campo ausente/status texto-livre antiquíssimo.
+      const stage =
+        e.stage ??
+        migrateLegacyEntregaStage(
+          legacy.conteudoStatus ?? (status === "publicado" ? "Postado" : "Combinado"),
+          legacy.etapa,
+        );
       return {
         ...e,
         status,
-        conteudoStatus,
-        etapa,
+        stage,
         anexos,
         // Quando `url` era o próprio anexo (arquivoNome setado), o link vira
         // o anexo acima — não faz mais sentido manter os dois.
-        url: e.arquivoNome ? undefined : e.url,
-        roteiro: undefined,
-        roteiroNome: undefined,
-        arquivoNome: undefined,
+        url: legacy.arquivoNome ? undefined : e.url,
         pagamento: undefined,
       };
     });
     for (const c of r.conteudos ?? []) {
+      const id = (c.id as string) ?? crypto.randomUUID();
+      const url = c.url as string | undefined;
+      const arquivoNome = c.arquivoNome as string | undefined;
       entregas.push({
-        id: (c.id as string) ?? crypto.randomUUID(),
+        id,
         tipo: c.tipo === "anexo" ? "Anexo" : "Link",
         titulo: c.titulo as string | undefined,
         quantidade: 1,
         status: "publicado",
-        url: c.url as string | undefined,
-        arquivoNome: c.arquivoNome as string | undefined,
+        stage: "PUBLICADA",
+        // Quando `url` era o próprio anexo (arquivoNome setado), vira um
+        // anexo de verdade em vez de ficar como link solto.
+        url: arquivoNome ? undefined : url,
+        anexos:
+          url && arquivoNome
+            ? [{ id: `${id}-mig-publicado`, categoria: "Conteúdo final", nome: arquivoNome, url }]
+            : undefined,
         publicadoEm: c.criadoEm as string | undefined,
         metrics: c.metrics as PostMetrics | undefined,
       });
@@ -1453,7 +1458,7 @@ export function InfluencerBoard({
     onChange(next);
   };
 
-  const pushActivity = (i: Influ, action: string): Influ => {
+  const pushActivity = (i: Influ, action: string, entregaId?: string): Influ => {
     const me = getCurrentAuthor();
     return {
       ...i,
@@ -1466,6 +1471,7 @@ export function InfluencerBoard({
           initials: me.initials,
           color: me.color,
           action,
+          entregaId,
           createdAt: new Date().toISOString(),
         },
       ],
@@ -1499,15 +1505,14 @@ export function InfluencerBoard({
     );
   };
 
-  /** Idem, pra uma entrega (roteiro ou conteúdo, conforme `etapa` dela) —
-   * só sai de EM_PRODUCAO. */
+  /** Idem, pra uma entrega — mensagem por ação do motor de entrega. */
   const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
-    iniciar_producao: "iniciou a produção",
-    marcar_roteiro_pronto: "marcou o roteiro como pronto",
-    marcar_gravacao_concluida: "marcou a gravação como concluída",
-    marcar_conteudo_pronto: "marcou o conteúdo final como pronto",
-    enviar_cliente: "enviou para aprovação do cliente",
-    reconhecer_ajustes: "reconheceu os ajustes solicitados",
+    anexar_roteiro: "anexou o roteiro",
+    enviar_roteiro: "enviou o roteiro pra aprovação do cliente",
+    reconhecer_ajustes_roteiro: "reconheceu os ajustes pedidos no roteiro",
+    anexar_conteudo: "anexou o conteúdo final",
+    enviar_conteudo: "enviou o conteúdo final pra aprovação do cliente",
+    reconhecer_ajustes_conteudo: "reconheceu os ajustes pedidos no conteúdo final",
     marcar_publicado: "marcou como publicada",
   };
 
@@ -1553,6 +1558,7 @@ export function InfluencerBoard({
           entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, anexos, ...patch } : e)),
         },
         `${ENTREGA_ACTION_LOG[action]} — "${label}"`,
+        entregaId,
       );
     });
     applyInflusChange(next);
@@ -2143,22 +2149,16 @@ function InfluCard({
           <ul className="max-h-32 space-y-1 overflow-y-auto pr-0.5">
             {influ.entregas.map((e) => {
               const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo;
-              const status = e.conteudoStatus ?? "COMBINADA";
+              const stage = e.stage ?? "ROTEIRO_PRODUCAO";
               return (
                 <li key={e.id} className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="min-w-0 flex-1 truncate text-foreground/80">
                     {e.quantidade}x {label}
-                    {e.etapa && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {ENTREGA_ETAPA_LABEL[e.etapa]}
-                      </span>
-                    )}
                   </span>
                   <span
-                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[status]}`}
+                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
                   >
-                    {ENTREGA_CONTEUDO_LABEL[status]}
+                    {ENTREGA_STAGE_LABEL[stage]}
                   </span>
                 </li>
               );
@@ -2504,14 +2504,16 @@ function EntregasEditor({
                     </td>
                     <td className="px-2 py-2.5">
                       <span
-                        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_CONTEUDO_TONE[e.conteudoStatus ?? "COMBINADA"]}`}
+                        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[e.stage ?? "ROTEIRO_PRODUCAO"]}`}
                       >
-                        {step.statusLabel}
+                        {step.stageLabel}
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-xs text-muted-foreground">
                       {step.actionLabel ??
-                        (e.conteudoStatus === "AGUARDANDO_APROVACAO" ? "Aguardando cliente" : "—")}
+                        (step.stage === "ROTEIRO_APROVACAO" || step.stage === "CONTEUDO_APROVACAO"
+                          ? "Aguardando cliente"
+                          : "—")}
                     </td>
                     <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground">
                       {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
@@ -2544,8 +2546,7 @@ function EntregasEditor({
               tipo: "Reels",
               quantidade: 1,
               status: "combinado",
-              conteudoStatus: "COMBINADA",
-              etapa: "roteiro",
+              stage: "ROTEIRO_PRODUCAO",
             },
           ]);
           setSelectedId(id);
@@ -2812,31 +2813,43 @@ function EntregaDetailSheet({
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onRemove: () => void;
 }) {
-  const status = entrega.conteudoStatus ?? "COMBINADA";
+  const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
-  const etapaIndex = ENTREGA_ETAPA_ORDER.indexOf(step.etapaAtual);
+  // Os estágios de ajuste são um desvio do fluxo linear, não um degrau —
+  // pro checklist de progresso, contam como "de volta" pro estágio de
+  // produção correspondente.
+  const stepperStage =
+    stage === "ROTEIRO_AJUSTES"
+      ? "ROTEIRO_PRODUCAO"
+      : stage === "CONTEUDO_AJUSTES"
+        ? "PRODUCAO"
+        : stage;
+  const stageIndex = ENTREGA_STAGE_ORDER.indexOf(stepperStage);
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
-  // Heurística simples: entradas de atividade que citam o tipo/título da
-  // entrega (não há `entregaId` no log ainda, então filtra por texto).
+  // Casa por `entregaId` quando presente (atividade registrada depois
+  // desse campo existir); cai pro casamento por substring do tipo só pra
+  // atividade antiga que não tem o id.
   const historico = influActivity
-    .filter((a) => a.action.toLowerCase().includes(entrega.tipo.toLowerCase()))
+    .filter((a) =>
+      a.entregaId
+        ? a.entregaId === entrega.id
+        : a.action.toLowerCase().includes(entrega.tipo.toLowerCase()),
+    )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const reprovacao =
-    step.etapaAtual === "roteiro" || step.etapaAtual === "gravacao"
-      ? entrega.roteiroReprovacao
-      : entrega.conteudoReprovacao;
+    stage === "ROTEIRO_AJUSTES" ? entrega.roteiroReprovacao : entrega.conteudoReprovacao;
 
   // Ação principal contextual — o motor já disse qual é a única válida
   // agora (`step.action`). "Adicionar roteiro"/"conteúdo final" abrem o
   // seletor de arquivo antes de chamar o motor; as demais chamam direto.
   const handleActionClick = () => {
     if (!step.action) return;
-    if (step.action === "marcar_roteiro_pronto" || step.action === "marcar_conteudo_pronto") {
+    if (step.action === "anexar_roteiro" || step.action === "anexar_conteudo") {
       fileRef.current?.click();
       return;
     }
@@ -2844,13 +2857,13 @@ function EntregaDetailSheet({
   };
 
   const handleFileForAction = async (file: File) => {
-    if (step.action !== "marcar_roteiro_pronto" && step.action !== "marcar_conteudo_pronto") return;
+    if (step.action !== "anexar_roteiro" && step.action !== "anexar_conteudo") return;
     setUploading(true);
     setUploadError("");
     try {
       const url = await uploadEntregaAnexo(file);
       const categoria: EntregaAnexoCategoria =
-        step.action === "marcar_roteiro_pronto" ? "Roteiro" : "Conteúdo final";
+        step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
       onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
@@ -2921,9 +2934,9 @@ function EntregaDetailSheet({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span
-                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${ENTREGA_CONTEUDO_TONE[status]}`}
+                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${ENTREGA_STAGE_TONE[stage]}`}
               >
-                {step.statusLabel}
+                {step.stageLabel}
               </span>
               <NextActionBadge actor={step.responsavel} />
             </div>
@@ -2941,7 +2954,7 @@ function EntregaDetailSheet({
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {status === "AGUARDANDO_APROVACAO"
+                {stage === "ROTEIRO_APROVACAO" || stage === "CONTEUDO_APROVACAO"
                   ? "Aguardando aprovação do cliente."
                   : "Nenhuma ação pendente."}
               </p>
@@ -2995,21 +3008,21 @@ function EntregaDetailSheet({
           <div className="space-y-2">
             <FieldLabel title="Progresso" />
             <div className="flex flex-col gap-1.5">
-              {ENTREGA_ETAPA_ORDER.map((e, i) => (
-                <div key={e} className="flex items-center gap-2 text-xs">
-                  {i < etapaIndex ? (
+              {ENTREGA_STAGE_ORDER.map((s, i) => (
+                <div key={s} className="flex items-center gap-2 text-xs">
+                  {i < stageIndex ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  ) : i === etapaIndex ? (
+                  ) : i === stageIndex ? (
                     <CircleDot className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                   ) : (
                     <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
                   )}
                   <span
                     className={
-                      i === etapaIndex ? "font-semibold text-foreground" : "text-muted-foreground"
+                      i === stageIndex ? "font-semibold text-foreground" : "text-muted-foreground"
                     }
                   >
-                    {ENTREGA_ETAPA_LABEL[e]}
+                    {ENTREGA_STAGE_LABEL[s]}
                   </span>
                 </div>
               ))}
@@ -3028,16 +3041,20 @@ function EntregaDetailSheet({
           {/* Aprovação — o botão de ação já vive no cabeçalho; aqui só o
               que precisa de mais espaço (feedback do cliente, link e
               métricas depois de publicada). */}
-          {((status === "AJUSTES_SOLICITADOS" && reprovacao) || status === "PUBLICADA") && (
+          {(((stage === "ROTEIRO_AJUSTES" || stage === "CONTEUDO_AJUSTES") && reprovacao) ||
+            stage === "PUBLICADA") && (
             <div className="space-y-2 border-t border-border pt-4">
               <FieldLabel title="Aprovação" />
-              {status === "AJUSTES_SOLICITADOS" && reprovacao && (
+              {(stage === "ROTEIRO_AJUSTES" || stage === "CONTEUDO_AJUSTES") && reprovacao && (
                 <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-2.5 text-xs text-orange-800 dark:text-orange-300">
-                  <p className="font-semibold">Ajustes solicitados pelo cliente</p>
+                  <p className="font-semibold">
+                    Ajustes solicitados pelo cliente —{" "}
+                    {stage === "ROTEIRO_AJUSTES" ? "roteiro" : "conteúdo final"}
+                  </p>
                   <p className="mt-0.5">{reprovacao.motivo}</p>
                 </div>
               )}
-              {status === "PUBLICADA" && (
+              {stage === "PUBLICADA" && (
                 <div className="space-y-2">
                   <AutoSaveInput
                     key={entrega.id}
@@ -3109,9 +3126,9 @@ function InfluVisaoGeralTab({
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
 }) {
   const entregas = influ.entregas;
-  const publicadas = entregas.filter((e) => e.conteudoStatus === "PUBLICADA").length;
+  const publicadas = entregas.filter((e) => e.stage === "PUBLICADA").length;
   const aguardandoCliente = entregas.filter(
-    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO",
+    (e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO",
   ).length;
   const pendentes = entregas.length - publicadas;
   const nextActor = nextActionForInflu(influ.status);
@@ -3163,7 +3180,7 @@ function InfluVisaoGeralTab({
                   {tipo}: {list.length} entrega{list.length === 1 ? "" : "s"}
                 </span>
                 <span className="text-muted-foreground">
-                  {list.filter((e) => e.conteudoStatus === "PUBLICADA").length} publicada(s)
+                  {list.filter((e) => e.stage === "PUBLICADA").length} publicada(s)
                 </span>
               </div>
             ))}

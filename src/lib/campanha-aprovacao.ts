@@ -9,13 +9,14 @@ import type { Influ, Entrega, ClienteVeredito } from "@/components/influenciador
  * de qual status vira qual.
  */
 
-function clientActivity(action: string) {
+function clientActivity(action: string, entregaId?: string) {
   return {
     id: crypto.randomUUID(),
     author: "Cliente",
     initials: "CL",
     color: "bg-slate-500 text-white",
     action,
+    entregaId,
     createdAt: new Date().toISOString(),
   };
 }
@@ -57,45 +58,53 @@ export function applyInfluApproval(
 }
 
 /** Etapas 2 e 3 — aprovar/reprovar o roteiro ou o conteúdo final de uma
- * entrega. Avança automaticamente a ETAPA real (roteiro→gravação,
- * conteúdo→publicação — nunca fica parado esperando o time trocar um
- * campo manual). "Ajustes solicitados" usa o status de verdade
- * (AJUSTES_SOLICITADOS, não EM_PRODUCAO direto) e limpa o carimbo de
- * prontidão da etapa reprovada — senão o motor (`entrega-engine.ts`)
- * acharia que já tem material pronto e pularia direto pra "Enviar pro
- * cliente" de novo, sem dar chance de corrigir o arquivo primeiro. */
+ * entrega. Qual dos dois ciclos está em jogo vem do `stage` ATUAL da
+ * própria entrega (ROTEIRO_APROVACAO ou CONTEUDO_APROVACAO) — nunca de um
+ * parâmetro `kind` vindo do cliente, que poderia (por bug ou má-fé)
+ * divergir do estado real salvo no banco. Avança automaticamente o
+ * ESTÁGIO (roteiro aprovado → produção, conteúdo aprovado → publicação —
+ * nunca fica parado esperando o time trocar um campo manual). Reprovar
+ * usa o estágio "_AJUSTES" de verdade (não volta direto pra produção
+ * silenciosamente) e limpa o carimbo de prontidão da etapa reprovada —
+ * senão o motor (`entrega-engine.ts`) acharia que já tem material pronto
+ * e pularia direto pra "Enviar pro cliente" de novo, sem dar chance de
+ * corrigir o arquivo primeiro. */
 export function applyEntregaApproval(
   influ: Influ,
   entregaId: string,
-  kind: "roteiro" | "conteudo",
   status: "aprovado" | "reprovado",
   motivo?: string,
 ): Influ {
   const at = new Date().toISOString();
+  const entrega = influ.entregas.find((e) => e.id === entregaId);
+  if (!entrega) throw new Error("Entrega não encontrada.");
+  if (entrega.stage !== "ROTEIRO_APROVACAO" && entrega.stage !== "CONTEUDO_APROVACAO") {
+    throw new Error("Esta entrega não está aguardando aprovação do cliente no momento.");
+  }
+  const isRoteiro = entrega.stage === "ROTEIRO_APROVACAO";
+
   const entregas = influ.entregas.map((e): Entrega => {
     if (e.id !== entregaId) return e;
-    if (kind === "roteiro") {
+    if (isRoteiro) {
       return status === "aprovado"
-        ? { ...e, conteudoStatus: "EM_PRODUCAO", etapa: "gravacao", roteiroReprovacao: undefined }
+        ? { ...e, stage: "PRODUCAO", roteiroReprovacao: undefined }
         : {
             ...e,
-            conteudoStatus: "AJUSTES_SOLICITADOS",
-            etapa: "roteiro",
+            stage: "ROTEIRO_AJUSTES",
             dataRecebimentoRoteiro: undefined,
             roteiroReprovacao: stamp(motivo ?? ""),
           };
     }
     return status === "aprovado"
-      ? { ...e, conteudoStatus: "APROVADA", etapa: "publicacao", conteudoReprovacao: undefined }
+      ? { ...e, stage: "PUBLICACAO", conteudoReprovacao: undefined }
       : {
           ...e,
-          conteudoStatus: "AJUSTES_SOLICITADOS",
-          etapa: "conteudo",
+          stage: "CONTEUDO_AJUSTES",
           dataRecebimentoConteudo: undefined,
           conteudoReprovacao: stamp(motivo ?? ""),
         };
   });
-  const label = kind === "roteiro" ? "o roteiro" : "o conteúdo";
+  const label = isRoteiro ? "o roteiro" : "o conteúdo";
   const action =
     status === "aprovado"
       ? `aprovou ${label} de uma entrega`
@@ -103,8 +112,13 @@ export function applyEntregaApproval(
   return {
     ...influ,
     entregas,
-    lastClientAction: { kind, entregaId, status, at },
-    activity: [...(influ.activity ?? []), clientActivity(action)],
+    lastClientAction: {
+      kind: isRoteiro ? "roteiro" : "conteudo",
+      entregaId,
+      status,
+      at,
+    },
+    activity: [...(influ.activity ?? []), clientActivity(action, entregaId)],
     updatedAt: at,
   };
 }

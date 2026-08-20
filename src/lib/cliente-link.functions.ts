@@ -6,9 +6,8 @@ import { legacyAnexoCategoria } from "@/components/influenciadores/InfluencerBoa
 import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
 import {
   legacyInfluStatus,
-  legacyEntregaStatus,
   INFLU_STATUS_LABEL_CLIENTE,
-  ENTREGA_STATUS_LABEL_CLIENTE,
+  ENTREGA_STAGE_LABEL_CLIENTE,
 } from "@/lib/campanha-status";
 import type { BlogPost, Project } from "@/lib/projetos";
 import type { Task } from "@/components/tasks/TaskBoard";
@@ -82,9 +81,8 @@ const EntregaPublic = z.object({
   titulo: z.string().optional(),
   quantidade: z.number(),
   status: z.enum(["orcado", "combinado", "publicado"]),
-  conteudoStatus: z.string().optional(),
-  etapa: z.enum(["roteiro", "gravacao", "conteudo", "publicacao"]).optional(),
-  /** Rótulo já simplificado pro cliente ("Aguardando sua aprovação" etc). */
+  stage: z.string(),
+  /** Rótulo já simplificado pro cliente ("Aguardando sua aprovação (roteiro)" etc). */
   statusCliente: z.string(),
   dataPostagem: z.string().optional(),
   publicadoEm: z.string().optional(),
@@ -149,16 +147,15 @@ function statusHistoryFor(influ: Influ): { status: string; at: string }[] {
  * comments/activity/checklist/pagamento por entrega) pro subconjunto seguro
  * de mostrar num link público — nunca o objeto cru. */
 function toPublicEntrega(e: Entrega): z.infer<typeof EntregaPublic> {
-  const { status: entregaStatus, etapa } = legacyEntregaStatus(e.conteudoStatus, e.etapa);
+  const stage = e.stage ?? "ROTEIRO_PRODUCAO";
   return {
     id: e.id,
     tipo: e.tipo,
     titulo: e.titulo,
     quantidade: e.quantidade,
     status: e.status,
-    conteudoStatus: entregaStatus,
-    etapa,
-    statusCliente: ENTREGA_STATUS_LABEL_CLIENTE[entregaStatus],
+    stage,
+    statusCliente: ENTREGA_STAGE_LABEL_CLIENTE[stage],
     dataPostagem: e.dataPostagem,
     publicadoEm: e.publicadoEm,
     url: e.url,
@@ -525,28 +522,55 @@ const RespondEntregaInput = z.object({
   campanhaId: z.string().min(1),
   influencerId: z.string().min(1),
   entregaId: z.string().min(1),
-  kind: z.enum(["roteiro", "conteudo"]),
   status: z.enum(["aprovado", "reprovado"]),
   motivo: z.string().trim().max(2000).optional(),
 });
 
-/** Etapas 2 e 3 — público, sem auth. */
+/** Best-effort: avisa os admins por push quando o cliente aprova/reprova
+ * uma entrega — nunca trava a resposta se o push falhar (VAPID não
+ * configurado, etc). Não existe hoje um "responsável" por entrega/
+ * influenciador guardado no dado, então o alvo é sempre os admins (mesmo
+ * fallback usado no aviso de senha esquecida). */
+async function notifyTeamEntregaResponse(
+  clienteNome: string,
+  entrega: Entrega,
+  status: "aprovado" | "reprovado",
+) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roles } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id")
+      .eq("role", "admin");
+    const adminIds = (roles ?? []).map((r) => r.user_id);
+    if (adminIds.length === 0) return;
+    const { deliverPush } = await import("@/lib/push.functions");
+    const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+    await deliverPush(adminIds, {
+      title: status === "aprovado" ? "Entrega aprovada" : "Ajustes solicitados",
+      body: `${clienteNome} ${status === "aprovado" ? "aprovou" : "pediu ajuste em"} "${label}".`,
+      url: "/time",
+    });
+  } catch (err) {
+    console.warn("[cliente-link] aviso ao time falhou", err);
+  }
+}
+
+/** Etapas 2 e 3 — público, sem auth. Qual ciclo (roteiro ou conteúdo)
+ * está em jogo vem do `stage` ATUAL da entrega salva no banco, nunca de
+ * um parâmetro vindo do cliente. */
 export const respondCampanhaEntrega = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RespondEntregaInput.parse(raw))
   .handler(async ({ data }) => {
+    const found = await findClienteByToken(data.token);
+    if (!found) throw new Error("Link não encontrado.");
     await assertCampanhaDoCliente(data.token, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
-    if (!influ.entregas.some((e) => e.id === data.entregaId)) {
-      throw new Error("Entrega não encontrada.");
-    }
-    const next = applyEntregaApproval(
-      influ,
-      data.entregaId,
-      data.kind,
-      data.status,
-      data.motivo?.trim(),
-    );
+    const entrega = influ.entregas.find((e) => e.id === data.entregaId);
+    if (!entrega) throw new Error("Entrega não encontrada.");
+    const next = applyEntregaApproval(influ, data.entregaId, data.status, data.motivo?.trim());
     await saveInfluRow(data.campanhaId, data.influencerId, next);
+    void notifyTeamEntregaResponse(found.cliente.empresa, entrega, data.status);
     return { ok: true };
   });
 

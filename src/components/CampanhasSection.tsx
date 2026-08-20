@@ -1390,7 +1390,11 @@ function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
 
   const items = influs.flatMap((i) =>
     i.entregas
-      .filter((e) => e.status === "publicado")
+      // `status` (orçado/combinado/publicado) é o eixo orçamentário — o
+      // que representa "publicado de verdade" é o `stage` de produção
+      // (os dois podem divergir: uma entrega pode estar orçada como
+      // "publicado" antes de sequer passar pela aprovação do cliente).
+      .filter((e) => e.stage === "PUBLICADA")
       .flatMap((e) => {
         const publicados = (e.anexos ?? []).filter((a) => a.categoria === "Conteúdo final");
         const galeria: { influ: Influ; entrega: Entrega; nome?: string; url: string }[] = [];

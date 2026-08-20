@@ -97,7 +97,7 @@ const pt: Dict = {
   confirmarReprovacao: "Confirmar reprovação",
   aprovar: "Aprovar",
   reprovar: "Reprovar",
-  motivoPlaceholder: "Motivo da reprovação (opcional)",
+  motivoPlaceholder: "O que precisa mudar? Seja objetivo (opcional)",
   reprovouAviso: "Você reprovou — aguardando reenvio do time",
   planejado: "Planejado",
   aguardandoVoce: "Aguardando você",

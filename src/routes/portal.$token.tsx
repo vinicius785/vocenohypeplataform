@@ -44,11 +44,7 @@ import {
   XCircle,
   Youtube,
 } from "lucide-react";
-import {
-  ENTREGA_ETAPA_LABEL,
-  ENTREGA_STATUS_TONE,
-  type EntregaStatus,
-} from "@/lib/campanha-status";
+import { ENTREGA_STAGE_TONE, type EntregaStage } from "@/lib/campanha-status";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,6 +126,13 @@ function isImageUrl(nome?: string): boolean {
   return !!nome && /\.(png|jpe?g|gif|webp|svg)$/i.test(nome);
 }
 
+/** Vídeo de conteúdo (Reels/TikTok/etc) — antes o cliente só via um ícone
+ * genérico + link pra abrir/baixar em outra aba, sem conseguir assistir
+ * direto no portal antes de aprovar. */
+function isVideoUrl(nome?: string): boolean {
+  return !!nome && /\.(mp4|mov|webm|m4v)$/i.test(nome);
+}
+
 export const Route = createFileRoute("/portal/$token")({
   component: ClientPortalPage,
   // Carrega os dados da campanha (e o workspace, pro cabeçalho) no servidor
@@ -181,8 +184,7 @@ type PublicEntrega = {
   titulo?: string;
   quantidade: number;
   status: "orcado" | "combinado" | "publicado";
-  conteudoStatus?: string;
-  etapa?: "roteiro" | "conteudo";
+  stage: string;
   statusCliente: string;
   dataPostagem?: string;
   publicadoEm?: string;
@@ -265,13 +267,9 @@ function entregasSummary(entregas: PublicEntrega[]): string {
  * decisão, ou alguma entrega está aguardando aprovação de roteiro/conteúdo. */
 function pendingReason(inf: PublicInfluencer, lang: PortalLang): string | null {
   if (inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao) return t(lang, "pendingInflu");
-  const roteiro = inf.entregas.some(
-    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro",
-  );
+  const roteiro = inf.entregas.some((e) => e.stage === "ROTEIRO_APROVACAO");
   if (roteiro) return t(lang, "pendingRoteiro");
-  const conteudo = inf.entregas.some(
-    (e) => e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo",
-  );
+  const conteudo = inf.entregas.some((e) => e.stage === "CONTEUDO_APROVACAO");
   if (conteudo) return t(lang, "pendingConteudo");
   return null;
 }
@@ -568,6 +566,24 @@ function AnexoChip({ nome, url, onRemove }: { nome?: string; url: string; onRemo
       )}
     </span>
   );
+}
+
+/** Anexo de uma entrega em revisão — vídeo toca inline (player nativo),
+ * pra dar pra assistir e decidir sem precisar baixar o arquivo antes.
+ * Qualquer outro tipo cai no chip de link de sempre. */
+function EntregaAnexoPreview({ nome, url }: { nome?: string; url: string }) {
+  if (isVideoUrl(nome)) {
+    return (
+      <video
+        controls
+        preload="metadata"
+        className="max-h-72 w-full rounded-lg border border-border bg-black"
+      >
+        <source src={url} />
+      </video>
+    );
+  }
+  return <AnexoChip nome={nome} url={url} />;
 }
 
 /** Alguns motivos foram colados direto de um texto gerado por IA e
@@ -917,7 +933,6 @@ function InfluencerDetail({
   onRespondInflu: (status: "aprovado" | "reprovado", motivo?: string) => Promise<void>;
   onRespondEntrega: (
     entregaId: string,
-    kind: "roteiro" | "conteudo",
     status: "aprovado" | "reprovado",
     motivo?: string,
   ) => Promise<void>;
@@ -990,20 +1005,19 @@ function InfluencerDetail({
       setBusyKey(null);
     }
   };
+  // `scope` é só pra distinguir, na UI, qual das duas barras (roteiro ou
+  // conteúdo) está ocupada — o servidor já deriva sozinho qual ciclo está
+  // em jogo a partir do `stage` atual da entrega, nunca confia nisso vindo
+  // do cliente.
   const runEntrega = async (
     entregaId: string,
-    kind: "roteiro" | "conteudo",
+    scope: "roteiro" | "conteudo",
     status: "aprovado" | "reprovado",
   ) => {
-    const key = `${kind}:${entregaId}`;
+    const key = `${scope}:${entregaId}`;
     setBusyKey(key);
     try {
-      await onRespondEntrega(
-        entregaId,
-        kind,
-        status,
-        status === "reprovado" ? motivo.trim() : undefined,
-      );
+      await onRespondEntrega(entregaId, status, status === "reprovado" ? motivo.trim() : undefined);
       setRejectingKey(null);
       setMotivo("");
     } finally {
@@ -1315,10 +1329,8 @@ function InfluencerDetail({
               </h3>
               <div className="space-y-2.5">
                 {entregasOrdenadas.map((e) => {
-                  const roteiroPendente =
-                    e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "roteiro";
-                  const conteudoPendente =
-                    e.conteudoStatus === "AGUARDANDO_APROVACAO" && e.etapa === "conteudo";
+                  const roteiroPendente = e.stage === "ROTEIRO_APROVACAO";
+                  const conteudoPendente = e.stage === "CONTEUDO_APROVACAO";
                   const publicado = e.status === "publicado";
                   const pendente = roteiroPendente || conteudoPendente;
                   const roteiroAnexos = (e.anexos ?? []).filter((a) => a.categoria === "Roteiro");
@@ -1330,10 +1342,8 @@ function InfluencerDetail({
                     : pendente
                       ? "bg-amber-500"
                       : "bg-border";
-                  const pillTone = e.conteudoStatus
-                    ? (ENTREGA_STATUS_TONE[e.conteudoStatus as EntregaStatus] ??
-                      "bg-muted text-muted-foreground")
-                    : "bg-muted text-muted-foreground";
+                  const pillTone =
+                    ENTREGA_STAGE_TONE[e.stage as EntregaStage] ?? "bg-muted text-muted-foreground";
                   return (
                     <div
                       key={e.id}
@@ -1347,11 +1357,6 @@ function InfluencerDetail({
                               {e.quantidade && e.quantidade > 1 ? `${e.quantidade}× ` : ""}
                               {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
                             </span>
-                            {e.etapa && (
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                {ENTREGA_ETAPA_LABEL[e.etapa]}
-                              </span>
-                            )}
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {e.dataPostagem && (
@@ -1370,9 +1375,9 @@ function InfluencerDetail({
                         {roteiroPendente && (
                           <div className="mt-3 space-y-2 border-t border-border pt-3">
                             {roteiroAnexos.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
+                              <div className="space-y-2">
                                 {roteiroAnexos.map((a) => (
-                                  <AnexoChip key={a.id} nome={a.nome} url={a.url} />
+                                  <EntregaAnexoPreview key={a.id} nome={a.nome} url={a.url} />
                                 ))}
                               </div>
                             )}
@@ -1400,9 +1405,9 @@ function InfluencerDetail({
                         {conteudoPendente && (
                           <div className="mt-3 space-y-2 border-t border-border pt-3">
                             {conteudoAnexos.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
+                              <div className="space-y-2">
                                 {conteudoAnexos.map((a) => (
-                                  <AnexoChip key={a.id} nome={a.nome} url={a.url} />
+                                  <EntregaAnexoPreview key={a.id} nome={a.nome} url={a.url} />
                                 ))}
                               </div>
                             )}
@@ -1820,19 +1825,13 @@ function ClientPortalPage() {
     : undefined;
 
   const respondEntrega = viewing
-    ? async (
-        entregaId: string,
-        kind: "roteiro" | "conteudo",
-        respStatus: "aprovado" | "reprovado",
-        motivo?: string,
-      ) => {
+    ? async (entregaId: string, respStatus: "aprovado" | "reprovado", motivo?: string) => {
         await respondEntregaFn({
           data: {
             token,
             campanhaId: activeCampanha!.id,
             influencerId: viewing.id,
             entregaId,
-            kind,
             status: respStatus,
             motivo,
           },
