@@ -30,6 +30,7 @@ import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
+import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { SectionHeader } from "./SectionHeader";
 import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
@@ -253,25 +254,10 @@ function CampanhaDetail({
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [monthFilter, setMonthFilter] = useState<string>(defaultMonth);
-  const monthOptions = useMemo(() => {
-    const opts: { value: string; label: string }[] = [];
-    const startStr = c.pagClienteRecorrenteInicio;
-    const start = startStr
-      ? new Date(startStr + "T00:00:00")
-      : new Date(now.getFullYear(), now.getMonth() - 12, 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 6, 1);
-    const cur = new Date(start.getFullYear(), start.getMonth(), 1);
-    while (cur <= end) {
-      const v = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
-      const label = cur.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      opts.push({
-        value: v,
-        label: label.charAt(0).toUpperCase() + label.slice(1),
-      });
-      cur.setMonth(cur.getMonth() + 1);
-    }
-    return opts;
-  }, [c.pagClienteRecorrenteInicio]);
+  const monthOptions = useMemo(
+    () => buildMesReferenciaOptions(c.pagClienteRecorrenteInicio),
+    [c.pagClienteRecorrenteInicio],
+  );
   const totalInflus = c.linhas.reduce((s, l) => s + (l.quantidade || 0), 0);
   const totalEnviar = c.linhas.reduce((s, l) => s + (l.enviar || 0), 0);
 
@@ -319,12 +305,19 @@ function CampanhaDetail({
   // salvar reconciliamos de volta com os itens escondidos (`hiddenInflus`/
   // `hiddenTasks`) — senão o onChange deles, construído só a partir do que
   // recebeu, sobrescreveria a campanha inteira e apagaria os outros meses.
+  // Prioriza `cicloMes` (mês de referência explícito, gravado pelo
+  // servidor a partir da Página de Inscrição — ver
+  // `submitInscricaoCampanha`) sobre `createdAt`: influenciadores que
+  // entraram pela página pública não devem depender do timing exato de
+  // quando alguém preencheu o formulário pra cair no mês certo. Entradas
+  // antigas/manuais sem `cicloMes` continuam usando a heurística por
+  // `createdAt` de sempre.
   const visibleInflus = useMemo(
-    () => influs.filter((i) => inSelectedMonth(i.createdAt)),
+    () => influs.filter((i) => inSelectedMonth(i.cicloMes ?? i.createdAt)),
     [influs, monthFilter, isRecorrente],
   );
   const hiddenInflus = useMemo(
-    () => influs.filter((i) => !inSelectedMonth(i.createdAt)),
+    () => influs.filter((i) => !inSelectedMonth(i.cicloMes ?? i.createdAt)),
     [influs, monthFilter, isRecorrente],
   );
   const persistVisibleInflus = (next: Influ[]) => persistInflus([...hiddenInflus, ...next]);

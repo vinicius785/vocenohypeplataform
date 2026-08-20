@@ -139,6 +139,13 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       anexoUrl = signed.signedUrl;
     }
 
+    // "Mês de referência" — só existe pra campanhas recorrentes (o link
+    // é reaproveitado mês após mês, então quem publica escolhe pra qual
+    // ciclo cada leva de inscrições é). Nunca vem do client: é sempre o
+    // que o time configurou na campanha, lido aqui no servidor.
+    const cicloMes =
+      found.campanha.pagClienteTipo === "Recorrente" ? page.mesReferencia : undefined;
+
     const now = new Date().toISOString();
     const observacoesPartes = [
       data.mensagem?.trim(),
@@ -164,6 +171,7 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       updatedAt: now,
       submittedVia: "inscricao_page",
       inscricaoRespostas: data.respostas.length > 0 ? data.respostas : undefined,
+      cicloMes,
     };
 
     const { error } = await supabaseAdmin

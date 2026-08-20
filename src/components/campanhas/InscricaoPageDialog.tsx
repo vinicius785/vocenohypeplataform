@@ -27,6 +27,7 @@ import {
   ANONYMOUS_CAMPAIGN_TITLE,
   getEffectiveInscricaoPage,
   newCustomQuestion,
+  buildMesReferenciaOptions,
   type InscricaoSobre,
 } from "@/lib/inscricao-page";
 
@@ -127,6 +128,9 @@ export function InscricaoPageDialog({
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>(
     effective.customQuestions,
   );
+  const isRecorrente = campaign.pagClienteTipo === "Recorrente";
+  const [mesReferencia, setMesReferencia] = useState(effective.mesReferencia);
+  const mesOptions = buildMesReferenciaOptions(campaign.pagClienteRecorrenteInicio);
   const [newDo, setNewDo] = useState("");
   const [newDont, setNewDont] = useState("");
   const [linkCopied, setLinkCopied] = useState(false);
@@ -153,6 +157,7 @@ export function InscricaoPageDialog({
     setShowCampaignName(campaign.inscricaoPage?.showCampaignName ?? true);
     setFields(eff.fields);
     setCustomQuestions(eff.customQuestions);
+    setMesReferencia(eff.mesReferencia);
     setTab("geral");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, campaign.id]);
@@ -182,6 +187,7 @@ export function InscricaoPageDialog({
       fields,
       customQuestions,
       thankYouMessage: thankYouMessage.trim() || undefined,
+      mesReferencia: isRecorrente ? mesReferencia : undefined,
     };
     const patch: Partial<Campaign> = { dos, donts, inscricaoPage };
     if (!campaign.signupToken) {
@@ -268,6 +274,22 @@ export function InscricaoPageDialog({
               />
               {INSCRICAO_STATUS_LABEL[effective.status]}
             </span>
+            {isRecorrente && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                Mês de referência
+                <select
+                  value={mesReferencia}
+                  onChange={(e) => setMesReferencia(e.target.value)}
+                  className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {mesOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <span className="text-xs text-muted-foreground">
               <strong className="font-semibold text-foreground">{totalInscricoes}</strong>{" "}
               inscrições

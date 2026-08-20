@@ -711,6 +711,13 @@ export type Influ = {
    * perguntas da campanha). O time vê isso sem precisar abrir a página
    * pública. */
   inscricaoRespostas?: { questionId: string; label: string; value: string | string[] }[];
+  /** Mês de referência (`"YYYY-MM"`) pra campanhas recorrentes — setado
+   * pelo servidor no momento da inscrição, a partir do "Mês de
+   * referência" configurado na Página de Inscrição (nunca vem direto do
+   * formulário público). Usado por `CampanhasSection.tsx` pra decidir em
+   * qual mês do kanban esse influenciador aparece, em vez de depender do
+   * timing exato de `createdAt`. Ausente em entradas manuais/antigas. */
+  cicloMes?: string;
 };
 
 /**

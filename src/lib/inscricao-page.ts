@@ -92,6 +92,12 @@ export type InscricaoPageConfig = {
   fields?: Partial<Record<InscricaoFieldKey, InscricaoFieldConfig>>;
   customQuestions?: CustomQuestion[];
   thankYouMessage?: string;
+  /** Só relevante pra campanhas recorrentes (`Campaign.pagClienteTipo
+   * === "Recorrente"`) — o link de inscrição é reaproveitado mês após
+   * mês, então cada submissão precisa dizer pra qual ciclo (`"YYYY-MM"`)
+   * ela é, em vez de cair no mês corrente só pelo timing de quando
+   * alguém preencheu o formulário. Ver `submitInscricaoCampanha`. */
+  mesReferencia?: string;
 };
 
 export const ANONYMOUS_CAMPAIGN_TITLE = "Oportunidade de parceria";
@@ -111,7 +117,13 @@ export type EffectiveInscricaoPage = {
   fields: Record<InscricaoFieldKey, InscricaoFieldConfig>;
   customQuestions: CustomQuestion[];
   thankYouMessage: string;
+  mesReferencia: string;
 };
+
+function currentMesReferencia(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
 
 export const DEFAULT_THANK_YOU_MESSAGE =
   "Inscrição recebida. Nossa equipe analisará seu perfil e, caso haja interesse, entraremos em contato.";
@@ -152,9 +164,35 @@ export function getEffectiveInscricaoPage(campaign: Campaign): EffectiveInscrica
     },
     customQuestions: cfg?.customQuestions ?? [],
     thankYouMessage: cfg?.thankYouMessage?.trim() || DEFAULT_THANK_YOU_MESSAGE,
+    mesReferencia: cfg?.mesReferencia || currentMesReferencia(),
   };
 }
 
 export function newCustomQuestion(): CustomQuestion {
   return { id: crypto.randomUUID(), label: "", type: "texto_curto", required: false };
+}
+
+/** Opções de mês (`"YYYY-MM"` + rótulo em pt-BR) pra campanhas
+ * recorrentes — de `recorrenteInicio` (ou 12 meses atrás, se não
+ * setado) até 6 meses à frente. Única fonte dessa lista: usada tanto
+ * pelo filtro de mês do kanban (`CampanhasSection.tsx`) quanto pelo
+ * seletor de "Mês de referência" da Página de Inscrição, pra nunca
+ * divergir entre os dois. */
+export function buildMesReferenciaOptions(
+  recorrenteInicio?: string,
+): { value: string; label: string }[] {
+  const now = new Date();
+  const opts: { value: string; label: string }[] = [];
+  const start = recorrenteInicio
+    ? new Date(recorrenteInicio + "T00:00:00")
+    : new Date(now.getFullYear(), now.getMonth() - 12, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cur <= end) {
+    const value = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+    const label = cur.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    opts.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return opts;
 }
