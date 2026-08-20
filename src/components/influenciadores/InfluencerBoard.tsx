@@ -2964,7 +2964,7 @@ function EntregaDetailSheet({
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           {/* Cabeçalho — só o essencial; edição de tipo/título/quantidade
               fica atrás de "Editar" pra não competir com Situação atual. */}
-          <div className="space-y-2 border-b border-border pb-4">
+          <div className="space-y-2 border-b border-border pb-4 pr-8">
             <div className="flex items-start justify-between gap-2">
               <p className="text-lg font-bold text-foreground">
                 {entrega.tipo || "Sem tipo"}

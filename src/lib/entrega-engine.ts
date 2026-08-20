@@ -1,4 +1,4 @@
-import type { Entrega } from "@/components/influenciadores/InfluencerBoard";
+import type { Entrega, EntregaAnexoCategoria } from "@/components/influenciadores/InfluencerBoard";
 import {
   nextActionForEntrega,
   ENTREGA_STAGE_LABEL,
@@ -14,11 +14,17 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
  * UI decide isso na mão: sempre lê `deriveEntregaNextStep` e sempre
  * escreve através de `applyEntregaAction`.
  *
- * Prontidão de cada etapa (roteiro/conteúdo) NUNCA é inferida de
- * `anexos.some(...)` — só dos carimbos explícitos (`dataRecebimentoRoteiro`,
- * `dataRecebimentoConteudo`), setados só quando o time confirma a ação,
- * nunca automaticamente a partir de um upload solto.
+ * Prontidão de cada etapa (roteiro/conteúdo) é derivada de existir um
+ * anexo de verdade na categoria correspondente (`hasAnexoCategoria`) — não
+ * do carimbo de data (`dataRecebimentoRoteiro`/`dataRecebimentoConteudo`),
+ * que também é editável à mão na seção Prazos e por isso não pode ser a
+ * trava de "já anexou". Sem isso, dava pra digitar uma data ali e liberar
+ * "Enviar roteiro" sem nunca ter subido arquivo nenhum.
  */
+
+function hasAnexoCategoria(entrega: Entrega, categoria: EntregaAnexoCategoria): boolean {
+  return (entrega.anexos ?? []).some((a) => a.categoria === categoria);
+}
 
 export type EntregaEngineActionKind =
   | "anexar_roteiro"
@@ -56,7 +62,7 @@ export function deriveEntregaNextStep(entrega: Entrega): EntregaNextStep {
 
   switch (stage) {
     case "ROTEIRO_PRODUCAO":
-      return entrega.dataRecebimentoRoteiro
+      return hasAnexoCategoria(entrega, "Roteiro")
         ? step("Enviar roteiro para o cliente", "enviar_roteiro")
         : step("Adicionar roteiro", "anexar_roteiro");
 
@@ -67,7 +73,7 @@ export function deriveEntregaNextStep(entrega: Entrega): EntregaNextStep {
       return step("Ver feedback do roteiro", "reconhecer_ajustes_roteiro");
 
     case "PRODUCAO":
-      return entrega.dataRecebimentoConteudo
+      return hasAnexoCategoria(entrega, "Conteúdo final")
         ? step("Enviar conteúdo final para o cliente", "enviar_conteudo")
         : step("Adicionar conteúdo final", "anexar_conteudo");
 
@@ -109,7 +115,7 @@ export function applyEntregaAction(
       return { dataRecebimentoRoteiro: today };
 
     case "enviar_roteiro":
-      assert(stage === "ROTEIRO_PRODUCAO");
+      assert(stage === "ROTEIRO_PRODUCAO" && hasAnexoCategoria(entrega, "Roteiro"));
       return { stage: "ROTEIRO_APROVACAO" };
 
     case "reconhecer_ajustes_roteiro":
@@ -121,7 +127,7 @@ export function applyEntregaAction(
       return { dataRecebimentoConteudo: today };
 
     case "enviar_conteudo":
-      assert(stage === "PRODUCAO");
+      assert(stage === "PRODUCAO" && hasAnexoCategoria(entrega, "Conteúdo final"));
       return { stage: "CONTEUDO_APROVACAO" };
 
     case "reconhecer_ajustes_conteudo":
