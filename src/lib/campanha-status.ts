@@ -179,6 +179,59 @@ export const ENTREGA_STAGE_BORDER: Record<EntregaStage, string> = {
   PUBLICADA: "border-emerald-500",
 };
 
+/** Frase de 1 linha pro banner de "Situação atual" no painel de detalhe —
+ * só apresentação, não influencia nenhuma regra. */
+export const ENTREGA_STAGE_DESCRIPTION: Record<EntregaStage, string> = {
+  ROTEIRO_PRODUCAO: "O roteiro ainda precisa ser adicionado e enviado para o cliente.",
+  ROTEIRO_APROVACAO: "O roteiro foi enviado e está aguardando aprovação do cliente.",
+  ROTEIRO_AJUSTES: "O cliente solicitou alterações no roteiro.",
+  PRODUCAO: "O conteúdo final ainda precisa ser adicionado e enviado para o cliente.",
+  CONTEUDO_APROVACAO: "O conteúdo final foi enviado e está aguardando aprovação do cliente.",
+  CONTEUDO_AJUSTES: "O cliente solicitou alterações no conteúdo final.",
+  PUBLICACAO: "Aprovado pelo cliente — falta confirmar a publicação.",
+  PUBLICADA: "A entrega foi concluída.",
+};
+
+/** Ícone do banner de situação — "warning" pros dois estágios de ajuste,
+ * "success" pra publicada, "dot" (em andamento) pros demais. */
+export function entregaStatusIcon(stage: EntregaStage): "dot" | "warning" | "success" {
+  if (stage === "ROTEIRO_AJUSTES" || stage === "CONTEUDO_AJUSTES") return "warning";
+  if (stage === "PUBLICADA") return "success";
+  return "dot";
+}
+
+/** As 3 fases que fazem sentido pra quem está acompanhando (roteiro →
+ * conteúdo → publicação) — reagrupamento puramente visual dos 8 valores
+ * de `EntregaStage`. "Etapa 4 de 6" (a granularidade do motor) não
+ * corresponde a como alguém percebe o progresso; isso não altera
+ * `ENTREGA_STAGE_ORDER` nem nenhuma regra de transição. */
+export type EntregaFaseConceitual = {
+  fase: "Roteiro" | "Conteúdo" | "Publicação";
+  faseIndex: 0 | 1 | 2;
+  subLabel: string;
+};
+
+export function entregaFaseConceitual(stage: EntregaStage): EntregaFaseConceitual {
+  switch (stage) {
+    case "ROTEIRO_PRODUCAO":
+      return { fase: "Roteiro", faseIndex: 0, subLabel: "Em produção" };
+    case "ROTEIRO_APROVACAO":
+      return { fase: "Roteiro", faseIndex: 0, subLabel: "Aguardando aprovação" };
+    case "ROTEIRO_AJUSTES":
+      return { fase: "Roteiro", faseIndex: 0, subLabel: "Ajustes solicitados" };
+    case "PRODUCAO":
+      return { fase: "Conteúdo", faseIndex: 1, subLabel: "Em produção" };
+    case "CONTEUDO_APROVACAO":
+      return { fase: "Conteúdo", faseIndex: 1, subLabel: "Aguardando aprovação" };
+    case "CONTEUDO_AJUSTES":
+      return { fase: "Conteúdo", faseIndex: 1, subLabel: "Ajustes solicitados" };
+    case "PUBLICACAO":
+      return { fase: "Publicação", faseIndex: 2, subLabel: "Pronto para publicar" };
+    case "PUBLICADA":
+      return { fase: "Publicação", faseIndex: 2, subLabel: "Publicado" };
+  }
+}
+
 // ============================================================
 // Próxima ação — "quem precisa agir?"
 // ============================================================

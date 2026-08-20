@@ -67,6 +67,12 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -449,6 +455,9 @@ import {
   ENTREGA_STAGE_TONE,
   ENTREGA_STAGE_BORDER,
   ENTREGA_STAGE_ORDER,
+  ENTREGA_STAGE_DESCRIPTION,
+  entregaStatusIcon,
+  entregaFaseConceitual,
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
@@ -2473,59 +2482,72 @@ function EntregasEditor({
       {entregas.length === 0 ? (
         <EmptyHint text="Nenhuma entrega adicionada." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Tipo</th>
-                <th className="px-2 py-3 text-center font-semibold">Qtd</th>
-                <th className="px-2 py-3 font-semibold">Status</th>
-                <th className="px-2 py-3 font-semibold">Próxima ação</th>
-                <th className="px-2 py-3 text-center font-semibold">Anexos</th>
-                <th className="w-8 px-2 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {entregas.map((e) => {
-                const step = deriveEntregaNextStep(e);
-                return (
-                  <tr
-                    key={e.id}
-                    onClick={() => setSelectedId(e.id)}
-                    className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/30"
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {entregas.map((e) => {
+            const step = deriveEntregaNextStep(e);
+            const stage = e.stage ?? "ROTEIRO_PRODUCAO";
+            const fase = entregaFaseConceitual(stage);
+            const aguardandoCliente = !step.action && step.responsavel === "cliente";
+            const prazo = nextPrazoData(e);
+            return (
+              <div
+                key={e.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedId(e.id)}
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter" || ev.key === " ") setSelectedId(e.id);
+                }}
+                className="grid cursor-pointer grid-cols-1 items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm transition-colors hover:bg-muted/30 sm:grid-cols-[1.3fr_1.1fr_1.3fr_auto_auto]"
+              >
+                <p className="min-w-0 truncate font-medium text-foreground">
+                  {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
+                  </span>
+                </p>
+
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span
+                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
                   >
-                    <td className="px-4 py-2.5">
-                      <p className="font-medium text-foreground">
-                        {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
-                      </p>
-                    </td>
-                    <td className="px-2 py-2.5 text-center text-xs tabular-nums text-muted-foreground">
-                      {e.quantidade}
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <span
-                        className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[e.stage ?? "ROTEIRO_PRODUCAO"]}`}
-                      >
-                        {step.stageLabel}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2.5 text-xs text-muted-foreground">
-                      {step.actionLabel ??
-                        (step.stage === "ROTEIRO_APROVACAO" || step.stage === "CONTEUDO_APROVACAO"
-                          ? "Aguardando cliente"
-                          : "—")}
-                    </td>
-                    <td className="px-2 py-2.5 text-center text-[11px] text-muted-foreground">
-                      {(e.anexos?.length ?? 0) > 0 ? e.anexos!.length : "—"}
-                    </td>
-                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
-                      <RemoveBtn onClick={() => onChange(entregas.filter((x) => x.id !== e.id))} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    {fase.fase}
+                  </span>
+                  <span className="truncate text-muted-foreground">{fase.subLabel}</span>
+                </div>
+
+                <div className="min-w-0 text-xs">
+                  {step.action ? (
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                      <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{step.actionLabel}</span>
+                    </span>
+                  ) : aguardandoCliente ? (
+                    <span className="truncate text-muted-foreground">
+                      Aguardando aprovação do cliente
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </div>
+
+                <div className="text-[11px] text-muted-foreground">
+                  {prazo ? `${prazo.label}: ${formatDataCurta(prazo.data)}` : ""}
+                </div>
+
+                <div onClick={(ev) => ev.stopPropagation()} className="justify-self-end">
+                  <button
+                    type="button"
+                    onClick={() => onChange(entregas.filter((x) => x.id !== e.id))}
+                    aria-label="Remover entrega"
+                    className="rounded p-1.5 text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -2782,20 +2804,69 @@ function EntregaAnexosPopup({
   );
 }
 
-/** Calcula "Atrasado"/"No prazo" pra uma data planejada — só um rótulo
- * derivado, nunca vira campo/status novo (ver seção 7 da spec: datas e
- * status são eixos separados). */
-function prazoLabel(dateISO?: string): { text: string; late: boolean } | null {
-  if (!dateISO) return null;
-  const d = new Date(dateISO);
-  if (Number.isNaN(d.getTime())) return null;
-  const today = new Date(todayISO());
-  return d < today ? { text: "Atrasado", late: true } : { text: "No prazo", late: false };
+/** `dataRecebimentoRoteiro`/`dataRecebimentoConteudo` são ao mesmo tempo
+ * editáveis à mão E carimbadas automaticamente pelo motor no momento em
+ * que o time anexa o arquivo (`entrega-engine.ts`) — não existe um campo
+ * separado de "prazo planejado". Por isso essas datas são exibidas de
+ * forma neutra (rótulo + valor), sem indicador de atrasado/no prazo: uma
+ * comparação `data < hoje` não teria significado confiável aqui (ver
+ * plano de redesenho de Entregas — ponto de atenção arquitetural). */
+function formatDataCurta(dateISO: string): string {
+  const d = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateISO;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 }
 
-/** View dedicada de uma entrega — cabeçalho, cronograma, progresso por
- * etapa, arquivos, aprovação e histórico. Abre num Sheet lateral ao
- * clicar numa linha de `EntregasEditor`, em vez de expandir inline. */
+/** Data mais relevante pra exibir na linha resumida da lista — a mais
+ * recente entre as 3 datas da entrega, só como valor informativo. */
+function nextPrazoData(entrega: Entrega): { label: string; data: string } | null {
+  const candidatos: [string, string | undefined][] = [
+    ["Roteiro", entrega.dataRecebimentoRoteiro],
+    ["Conteúdo final", entrega.dataRecebimentoConteudo],
+    ["Publicação", entrega.dataPostagem],
+  ];
+  const preenchidos = candidatos.filter(
+    (c): c is [string, string] => !!c[1] && !Number.isNaN(new Date(c[1]).getTime()),
+  );
+  if (preenchidos.length === 0) return null;
+  const [label, data] = preenchidos.reduce((a, b) => (a[1] > b[1] ? a : b));
+  return { label, data };
+}
+
+/** Banner de "Situação atual" — o elemento mais importante do painel.
+ * Nunca dá pra escolher um estágio aqui (isso é o motor quem decide);
+ * só traduz o `stage` atual numa frase que qualquer pessoa entende sem
+ * precisar saber o nome interno do estado. */
+function EntregaSituacaoBanner({
+  stage,
+  reprovacao,
+}: {
+  stage: EntregaStage;
+  reprovacao?: ClienteVeredito;
+}) {
+  const icon = entregaStatusIcon(stage);
+  const Icon = icon === "warning" ? AlertTriangle : icon === "success" ? CheckCircle2 : CircleDot;
+  const tone =
+    icon === "warning"
+      ? "border-orange-500/30 bg-orange-500/10 text-orange-800 dark:text-orange-300"
+      : icon === "success"
+        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+        : "border-border bg-muted/40 text-foreground";
+  return (
+    <div className={`space-y-1 rounded-md border p-3 ${tone}`}>
+      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        {ENTREGA_STAGE_LABEL[stage]}
+      </p>
+      <p className="text-xs opacity-90">{ENTREGA_STAGE_DESCRIPTION[stage]}</p>
+      {reprovacao && <p className="pt-0.5 text-xs font-medium opacity-90">"{reprovacao.motivo}"</p>}
+    </div>
+  );
+}
+
+/** View dedicada de uma entrega — situação atual, próxima ação, etapas,
+ * prazos, arquivos e histórico. Abre num Sheet lateral ao clicar numa
+ * linha de `EntregasEditor`, em vez de expandir inline. */
 function EntregaDetailSheet({
   entrega,
   influActivity,
@@ -2815,20 +2886,12 @@ function EntregaDetailSheet({
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
-  // Os estágios de ajuste são um desvio do fluxo linear, não um degrau —
-  // pro checklist de progresso, contam como "de volta" pro estágio de
-  // produção correspondente.
-  const stepperStage =
-    stage === "ROTEIRO_AJUSTES"
-      ? "ROTEIRO_PRODUCAO"
-      : stage === "CONTEUDO_AJUSTES"
-        ? "PRODUCAO"
-        : stage;
-  const stageIndex = ENTREGA_STAGE_ORDER.indexOf(stepperStage);
+  const fase = entregaFaseConceitual(stage);
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [editandoCabecalho, setEditandoCabecalho] = useState(false);
 
   // Casa por `entregaId` quando presente (atividade registrada depois
   // desse campo existir); cai pro casamento por substring do tipo só pra
@@ -2842,7 +2905,11 @@ function EntregaDetailSheet({
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const reprovacao =
-    stage === "ROTEIRO_AJUSTES" ? entrega.roteiroReprovacao : entrega.conteudoReprovacao;
+    stage === "ROTEIRO_AJUSTES"
+      ? entrega.roteiroReprovacao
+      : stage === "CONTEUDO_AJUSTES"
+        ? entrega.conteudoReprovacao
+        : undefined;
 
   // Ação principal contextual — o motor já disse qual é a única válida
   // agora (`step.action`). "Adicionar roteiro"/"conteúdo final" abrem o
@@ -2895,53 +2962,80 @@ function EntregaDetailSheet({
         />
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          {/* Cabeçalho */}
-          <div className="space-y-3 border-b border-border pb-4">
-            <p className="text-lg font-bold text-foreground">{label}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                list="entregas-tipos"
-                value={entrega.tipo}
-                onChange={(ev) => onChange({ tipo: ev.target.value })}
-                placeholder="Tipo (Reels, Stories...)"
-                className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
-              />
-              <input
-                value={entrega.titulo ?? ""}
-                onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
-                placeholder="Título (opcional)"
-                className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-              />
-              <div className="flex shrink-0 items-center rounded-md bg-muted">
-                <button
-                  type="button"
-                  onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
-                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  −
-                </button>
-                <span className="w-7 text-center text-xs font-medium tabular-nums">
-                  {entrega.quantidade}
+          {/* Cabeçalho — só o essencial; edição de tipo/título/quantidade
+              fica atrás de "Editar" pra não competir com Situação atual. */}
+          <div className="space-y-2 border-b border-border pb-4">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-lg font-bold text-foreground">
+                {entrega.tipo || "Sem tipo"}
+                <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                  · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
-                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold shadow-sm ${ENTREGA_STAGE_TONE[stage]}`}
+                {entrega.titulo && (
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {entrega.titulo}
+                  </span>
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditandoCabecalho((v) => !v)}
+                className="inline-flex shrink-0 items-center gap-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Editar tipo, título e quantidade"
               >
-                {step.stageLabel}
-              </span>
-              <NextActionBadge actor={step.responsavel} />
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </div>
+            {editandoCabecalho && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 p-2">
+                <input
+                  list="entregas-tipos"
+                  value={entrega.tipo}
+                  onChange={(ev) => onChange({ tipo: ev.target.value })}
+                  placeholder="Tipo (Reels, Stories...)"
+                  className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
+                />
+                <input
+                  value={entrega.titulo ?? ""}
+                  onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
+                  placeholder="Título (opcional)"
+                  className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+                />
+                <div className="flex shrink-0 items-center rounded-md bg-background">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    −
+                  </button>
+                  <span className="w-7 text-center text-xs font-medium tabular-nums">
+                    {entrega.quantidade}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Situação atual */}
+          <div className="space-y-1.5">
+            <FieldLabel title="Situação atual" />
+            <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
+          </div>
+
+          {/* Próxima ação / Aguardando */}
+          <div className="space-y-2">
             {step.action ? (
               <>
+                <FieldLabel title="Próxima ação" />
+                <p className="text-xs text-muted-foreground">{step.actionLabel}</p>
                 <button
                   type="button"
                   onClick={handleActionClick}
@@ -2952,122 +3046,102 @@ function EntregaDetailSheet({
                 </button>
                 {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
               </>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {stage === "ROTEIRO_APROVACAO" || stage === "CONTEUDO_APROVACAO"
-                  ? "Aguardando aprovação do cliente."
-                  : "Nenhuma ação pendente."}
-              </p>
+            ) : stage === "PUBLICADA" ? null : (
+              <>
+                <FieldLabel title="Aguardando" />
+                <p className="text-xs text-muted-foreground">
+                  {step.responsavel === "cliente"
+                    ? "Aguardando aprovação do cliente."
+                    : "Nenhuma ação pendente no momento."}
+                </p>
+              </>
             )}
           </div>
 
-          {/* Cronograma */}
+          {/* Etapas — 3 fases conceituais (roteiro/conteúdo/publicação),
+              não os 6 estágios internos do motor. */}
           <div className="space-y-2">
-            <FieldLabel title="Cronograma" />
-            <div className="space-y-1.5">
-              <EntregaDateField
-                label="Recebimento do roteiro"
-                value={entrega.dataRecebimentoRoteiro}
-                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
-              />
-              <EntregaDateField
-                label="Recebimento do conteúdo"
-                value={entrega.dataRecebimentoConteudo}
-                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
-              />
-              <EntregaDateField
-                label="Postagem"
-                value={entrega.dataPostagem}
-                onChange={(v) => onChange({ dataPostagem: v })}
-              />
-              {[
-                ["Roteiro", entrega.dataRecebimentoRoteiro],
-                ["Conteúdo", entrega.dataRecebimentoConteudo],
-                ["Postagem", entrega.dataPostagem],
-              ]
-                .map(([lbl, d]) => ({ lbl, prazo: prazoLabel(d) }))
-                .filter(
-                  (x): x is { lbl: string; prazo: { text: string; late: boolean } } => !!x.prazo,
-                )
-                .map(({ lbl, prazo }) => (
-                  <span
-                    key={lbl}
-                    className={`mr-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                      prazo.late
-                        ? "bg-red-500/10 text-red-700 dark:text-red-400"
-                        : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                    }`}
-                  >
-                    {lbl}: {prazo.text}
-                  </span>
-                ))}
-            </div>
-          </div>
-
-          {/* Progresso por etapa */}
-          <div className="space-y-2">
-            <FieldLabel title="Progresso" />
+            <FieldLabel title="Etapas" />
             <div className="flex flex-col gap-1.5">
-              {ENTREGA_STAGE_ORDER.map((s, i) => (
-                <div key={s} className="flex items-center gap-2 text-xs">
-                  {i < stageIndex ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  ) : i === stageIndex ? (
-                    <CircleDot className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+              {(["Roteiro", "Conteúdo", "Publicação"] as const).map((nomeFase, i) => (
+                <div key={nomeFase} className="flex items-center gap-2 text-xs">
+                  {i < fase.faseIndex ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : i === fase.faseIndex ? (
+                    <CircleDot className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
                   ) : (
-                    <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                    <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
                   )}
                   <span
                     className={
-                      i === stageIndex ? "font-semibold text-foreground" : "text-muted-foreground"
+                      i === fase.faseIndex
+                        ? "font-semibold text-foreground"
+                        : "text-muted-foreground"
                     }
                   >
-                    {ENTREGA_STAGE_LABEL[s]}
+                    {nomeFase}
+                  </span>
+                  <span className="text-muted-foreground/70">
+                    ·{" "}
+                    {i < fase.faseIndex
+                      ? "Concluída"
+                      : i === fase.faseIndex
+                        ? fase.subLabel
+                        : "Aguardando etapa anterior"}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Prazos — datas sem indicador de atrasado/no prazo (ver
+              comentário de formatDataCurta/nextPrazoData: essas datas não
+              distinguem "prazo planejado" de "recebimento real"). */}
+          <div className="space-y-2">
+            <FieldLabel title="Prazos" />
+            <div className="space-y-1.5">
+              <EntregaDateField
+                label="Roteiro"
+                value={entrega.dataRecebimentoRoteiro}
+                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
+              />
+              <EntregaDateField
+                label="Conteúdo final"
+                value={entrega.dataRecebimentoConteudo}
+                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
+              />
+              <EntregaDateField
+                label="Publicação"
+                value={entrega.dataPostagem}
+                onChange={(v) => onChange({ dataPostagem: v })}
+              />
+            </div>
+          </div>
+
           {/* Arquivos */}
           <div className="space-y-2">
-            <FieldLabel title="Arquivos da entrega" />
+            <FieldLabel title="Arquivos" />
             <EntregaAnexosEditor
               anexos={entrega.anexos ?? []}
               onChange={(anexos) => onChange({ anexos })}
             />
           </div>
 
-          {/* Aprovação — o botão de ação já vive no cabeçalho; aqui só o
-              que precisa de mais espaço (feedback do cliente, link e
-              métricas depois de publicada). */}
-          {(((stage === "ROTEIRO_AJUSTES" || stage === "CONTEUDO_AJUSTES") && reprovacao) ||
-            stage === "PUBLICADA") && (
+          {/* Publicação — só quando já concluída (link + métricas). O
+              motivo de reprovação do cliente já aparece em Situação
+              atual, não fica mais numa seção "Aprovação" separada. */}
+          {stage === "PUBLICADA" && (
             <div className="space-y-2 border-t border-border pt-4">
-              <FieldLabel title="Aprovação" />
-              {(stage === "ROTEIRO_AJUSTES" || stage === "CONTEUDO_AJUSTES") && reprovacao && (
-                <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-2.5 text-xs text-orange-800 dark:text-orange-300">
-                  <p className="font-semibold">
-                    Ajustes solicitados pelo cliente —{" "}
-                    {stage === "ROTEIRO_AJUSTES" ? "roteiro" : "conteúdo final"}
-                  </p>
-                  <p className="mt-0.5">{reprovacao.motivo}</p>
-                </div>
-              )}
-              {stage === "PUBLICADA" && (
-                <div className="space-y-2">
-                  <AutoSaveInput
-                    key={entrega.id}
-                    value={entrega.url ?? ""}
-                    onSave={(v) => onChange({ url: v })}
-                    placeholder="Link do conteúdo publicado"
-                  />
-                  <MetricsEditor
-                    value={entrega.metrics}
-                    onChange={(m) => onChange({ metrics: m })}
-                  />
-                </div>
-              )}
+              <FieldLabel title="Publicação" />
+              <div className="space-y-2">
+                <AutoSaveInput
+                  key={entrega.id}
+                  value={entrega.url ?? ""}
+                  onSave={(v) => onChange({ url: v })}
+                  placeholder="Link do conteúdo publicado"
+                />
+                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
+              </div>
             </div>
           )}
 
@@ -4591,12 +4665,6 @@ function EntregaDateField({
   );
 }
 
-const ENTREGA_ANEXO_TONE: Record<EntregaAnexoCategoria, string> = {
-  Roteiro: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  Gravação: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  "Conteúdo final": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Outro: "bg-muted text-muted-foreground",
-};
 const ENTREGA_ANEXO_ICON: Record<EntregaAnexoCategoria, typeof FileText> = {
   Roteiro: FileText,
   Gravação: Film,
@@ -4736,8 +4804,6 @@ function EntregaAnexosEditor({
 
   return (
     <div className="space-y-2.5">
-      <p className="text-[11px] font-medium text-muted-foreground">Anexos</p>
-
       <input
         ref={fileRef}
         type="file"
@@ -4749,92 +4815,94 @@ function EntregaAnexosEditor({
         }}
       />
 
-      {/* Um box tracejado com "+" por categoria, em vez de um menu genérico
-          — dá pra ver de cara o que já tem roteiro/gravação/conteúdo
-          anexado, e onde clicar pra subir cada tipo de arquivo. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {ENTREGA_ANEXO_CATEGORIAS.map((c) => {
-          const Icon = ENTREGA_ANEXO_ICON[c];
-          const count = anexos.filter((a) => a.categoria === c).length;
-          const isUploadingThis = uploading === c;
-          return (
-            <button
-              key={c}
-              type="button"
-              disabled={uploading !== null}
-              onClick={() => pick(c)}
-              className={`group relative flex h-24 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                count > 0
-                  ? "border-border bg-muted/20 hover:border-foreground/40 hover:bg-muted/30"
-                  : "border-border hover:border-foreground/40 hover:bg-muted/20"
-              }`}
-            >
-              {count > 0 && (
-                <span className="absolute right-1.5 top-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
-                  {count}
-                </span>
-              )}
-              {isUploadingThis ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <div className="relative">
-                  <Icon className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-foreground" />
-                  <span className="absolute -bottom-1 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-foreground text-background">
-                    <Plus className="h-2.5 w-2.5" strokeWidth={3} />
-                  </span>
-                </div>
-              )}
-              <span className="text-[11px] font-medium leading-tight text-foreground">{c}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Um único botão compacto abre um menu com as 4 categorias — todas
+          continuam descobríveis e a um clique, sem gastar 4 blocos grandes
+          de tela quando ainda não há nada anexado. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            disabled={uploading !== null}
+            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {uploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            {uploading ? `Enviando ${uploading}...` : "Adicionar arquivo"}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {ENTREGA_ANEXO_CATEGORIAS.map((c) => {
+            const Icon = ENTREGA_ANEXO_ICON[c];
+            const count = anexos.filter((a) => a.categoria === c).length;
+            return (
+              <DropdownMenuItem key={c} onClick={() => pick(c)}>
+                <Icon className="h-3.5 w-3.5" />
+                {c}
+                {count > 0 && (
+                  <span className="ml-auto text-[10px] text-muted-foreground">{count}</span>
+                )}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {error && <p className="text-[11px] text-destructive">{error}</p>}
 
       {anexos.length > 0 ? (
-        <ul className="space-y-1.5">
-          {anexos.map((a) => {
-            const totalNaCategoria = anexos.filter((x) => x.categoria === a.categoria).length;
-            return (
-              <li
-                key={a.id}
-                className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
-              >
-                <AnexoThumb nome={a.nome} url={a.url} />
-                <div className="min-w-0 flex-1">
-                  <a
-                    href={a.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    download={a.nome}
-                    className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
-                  >
-                    {a.nome}
-                  </a>
-                  <span
-                    className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_ANEXO_TONE[a.categoria]}`}
-                  >
-                    {a.categoria}
-                  </span>
-                  {totalNaCategoria > 1 && (
-                    <span className="ml-1.5 mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      v{a.versao ?? 1}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-2.5">
+          {ENTREGA_ANEXO_CATEGORIAS.filter((c) => anexos.some((a) => a.categoria === c)).map(
+            (c) => (
+              <div key={c} className="space-y-1">
+                <p className="text-[11px] font-medium text-muted-foreground">{c}</p>
+                <ul className="space-y-1.5">
+                  {anexos
+                    .filter((a) => a.categoria === c)
+                    .map((a) => {
+                      const totalNaCategoria = anexos.filter(
+                        (x) => x.categoria === a.categoria,
+                      ).length;
+                      return (
+                        <li
+                          key={a.id}
+                          className="flex items-center gap-2.5 rounded-md border border-border bg-background p-1.5"
+                        >
+                          <AnexoThumb nome={a.nome} url={a.url} />
+                          <div className="min-w-0 flex-1">
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={a.nome}
+                              className="block truncate text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                            >
+                              {a.nome}
+                            </a>
+                            {totalNaCategoria > 1 && (
+                              <span className="mt-0.5 inline-block rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                v{a.versao ?? 1}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                            aria-label="Remover anexo"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            ),
+          )}
+        </div>
       ) : (
         <p className="text-[11px] text-muted-foreground/70">Nenhum anexo ainda.</p>
       )}
