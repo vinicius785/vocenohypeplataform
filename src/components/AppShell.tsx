@@ -33,6 +33,7 @@ import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-s
 import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
+import { setFaviconBadge } from "@/lib/favicon-badge";
 import { SidebarProfile } from "./ConfiguracoesSection";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
@@ -1340,6 +1341,12 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     taskActivityItems.length +
     meetingItems.length +
     rescheduleItems.length;
+
+  // Mesmo sino, mesmo contador — só reflete no favicon da aba pra dar
+  // pra notar uma notificação pendente sem a aba estar em foco.
+  useEffect(() => {
+    void setFaviconBadge(total > 0);
+  }, [total]);
 
   const openConvo = (id: string) => {
     setActiveConvo(id);
