@@ -1753,8 +1753,16 @@ function ClientPortalPage() {
   }
 
   const activeCampanha = data.campanhas.find((c) => c.id === activeCampanhaId) ?? null;
-  const reprovados = activeCampanha?.influencers.filter((i) => i.clienteReprovacao) ?? [];
-  const ativos = activeCampanha?.influencers.filter((i) => !i.clienteReprovacao) ?? [];
+  // Reprovado é `status === "RECUSADO"` (inclusive quando o time reverte
+  // manualmente uma aprovação — não sobra `clienteReprovacao` nesse caso,
+  // já que não foi o cliente quem reprovou) OU uma reprovação de verdade
+  // do cliente que ainda não foi reaberta — mesma lógica de `influApproval`
+  // acima, só que pra dividir as duas abas em vez de decidir um selo.
+  const reprovados =
+    activeCampanha?.influencers.filter((i) => i.status === "RECUSADO" || i.clienteReprovacao) ?? [];
+  const ativos =
+    activeCampanha?.influencers.filter((i) => i.status !== "RECUSADO" && !i.clienteReprovacao) ??
+    [];
   const viewing = activeCampanha?.influencers.find((i) => i.id === viewingId) ?? null;
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);

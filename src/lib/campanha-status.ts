@@ -286,10 +286,16 @@ const INFLU_TRANSITIONS: Record<InfluStatus, InfluStatus[]> = {
   INSCRITO: ["EM_CURADORIA", "RECUSADO"],
   EM_CURADORIA: ["INSCRITO", "ENVIADO_AO_CLIENTE", "RECUSADO"],
   ENVIADO_AO_CLIENTE: ["EM_CURADORIA", "APROVADO", "RECUSADO"],
-  APROVADO: ["EM_PRODUCAO", "CONCLUIDO"],
+  // Time pode reverter uma aprovação (ex: cliente pediu troca depois de já
+  // ter aprovado) — volta pra RECUSADO, que por sua vez pode ser reenviado
+  // pro cliente decidir de novo (ver RECUSADO abaixo).
+  APROVADO: ["EM_PRODUCAO", "CONCLUIDO", "RECUSADO"],
   EM_PRODUCAO: ["APROVADO", "CONCLUIDO"],
   CONCLUIDO: ["EM_PRODUCAO"],
-  RECUSADO: ["EM_CURADORIA"],
+  // RECUSADO → ENVIADO_AO_CLIENTE é o caminho de "reabrir a aprovação":
+  // o time ajusta algo na curadoria e manda de volta pro cliente decidir
+  // de novo, sem precisar passar por EM_CURADORIA de novo.
+  RECUSADO: ["EM_CURADORIA", "ENVIADO_AO_CLIENTE"],
 };
 export function canTransitionInflu(from: InfluStatus, to: InfluStatus): boolean {
   return from === to || (INFLU_TRANSITIONS[from] ?? []).includes(to);

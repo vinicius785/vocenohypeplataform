@@ -1494,12 +1494,21 @@ export function InfluencerBoard({
     };
   };
 
+  // Usado pelo drag-and-drop do kanban e pelo dropdown de status do card —
+  // os dois únicos lugares fora do perfil (`setInfluStatusFromResumo`, que
+  // já faz o mesmo) que mudam o status na mão. Ignora silenciosamente uma
+  // transição que `canTransitionInflu` não permite (o dropdown já desabilita
+  // essas opções; isso é só a rede de segurança pro drag, que não filtra
+  // coluna de destino). Sempre limpa `clienteReprovacao` — senão, ao
+  // reabrir a aprovação (RECUSADO → ENVIADO_AO_CLIENTE) ou ao reprovar
+  // manualmente um já aprovado (APROVADO → RECUSADO), o selo antigo do
+  // cliente ficaria preso e o portal continuaria tratando como já decidido.
   const changeStatus = (influId: string, status: InfluStatus) =>
     applyInflusChange(
       latestInflusRef.current.map((x) =>
-        x.id === influId
+        x.id === influId && canTransitionInflu(x.status, status)
           ? pushActivity(
-              { ...x, status, statusUpdatedAt: todayISO() },
+              { ...x, status, statusUpdatedAt: todayISO(), clienteReprovacao: undefined },
               `mudou status para ${INFLU_STATUS_LABEL[status]}`,
             )
           : x,
