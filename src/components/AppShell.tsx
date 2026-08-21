@@ -893,14 +893,24 @@ type ClienteActionItem = {
 };
 
 /** Título (quem aparece em negrito no sino) e subtítulo da notificação.
- * Reprovações são o caso que mais importa pegar rápido — usa o nome do
- * CLIENTE como título (em vez do influenciador) pra bater o olho e ver quem
- * precisa de atenção, sem precisar abrir a notificação. */
+ * Reprovações e a aprovação de influenciador são os casos que mais importa
+ * pegar rápido — usam o nome do CLIENTE como título (em vez do
+ * influenciador) pra bater o olho e ver quem precisa de atenção, sem
+ * precisar abrir a notificação. */
 function describeClientAction(
   nome: string,
   action: NonNullable<Influ["lastClientAction"]>,
   empresa?: string,
+  campanhaNome?: string,
 ): { title: string; subtitle: string } {
+  if (action.kind === "influ" && action.status === "aprovado" && empresa) {
+    return {
+      title: empresa,
+      subtitle: campanhaNome
+        ? `Aprovou ${nome} para a campanha ${campanhaNome}`
+        : `Aprovou ${nome}`,
+    };
+  }
   const verbo = action.status === "aprovado" ? "aprovou" : "reprovou";
   const alvo =
     action.kind === "influ"
@@ -938,6 +948,9 @@ function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
 
     const empresaDaCampanha = (campanhaId: string): string | undefined =>
       clientesRef.current.find((c) => c.campanhas?.some((camp) => camp.id === campanhaId))?.empresa;
+    const nomeDaCampanha = (campanhaId: string): string | undefined =>
+      clientesRef.current.flatMap((c) => c.campanhas ?? []).find((camp) => camp.id === campanhaId)
+        ?.nome;
 
     const toItem = (row: {
       id: string;
@@ -951,6 +964,7 @@ function useCampanhaAprovacaoNotifier(clientes: Cliente[]): {
         row.data.nome,
         action,
         empresaDaCampanha(row.campanha_id),
+        nomeDaCampanha(row.campanha_id),
       );
       return {
         key,
