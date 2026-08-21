@@ -85,7 +85,12 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
       cache = next;
       emit();
       for (const item of next) {
-        if (prevById.get(item.id) !== item) {
+        // Comparação por VALOR, não por referência — ver o mesmo fix e
+        // motivo em scoped-table-store.ts (`normalizeInflus`-like reads
+        // recriam objetos novos em toda leitura mesmo sem mudança real,
+        // então `!==` fazia todo save reenviar itens que não mudaram).
+        const prevItem = prevById.get(item.id);
+        if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(item)) {
           // Supabase's query builder is a lazy thenable — the fetch only
           // fires once `.then()`/`await` runs on it, so a bare `void
           // builder` (no .then/.catch) silently never sends the request.

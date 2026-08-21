@@ -48,3 +48,49 @@ export function useConfirm() {
 
   return { confirm, confirmDialog };
 }
+
+/**
+ * Variante de `useConfirm` com mais de duas saídas (ex: "só esta" vs
+ * "todas" vs cancelar, pra ações numa reunião/item recorrente) — mesmo
+ * padrão de Promise resolvida pelo clique, só que resolve pro `value` da
+ * opção escolhida (ou `null` se cancelar/fechar) em vez de um boolean.
+ */
+export function useConfirmChoice<T extends string>() {
+  const [state, setState] = useState<{
+    message: string;
+    options: { value: T; label: string }[];
+    resolve: (v: T | null) => void;
+  } | null>(null);
+
+  const confirmChoice = useCallback((message: string, options: { value: T; label: string }[]) => {
+    return new Promise<T | null>((resolve) => {
+      setState({ message, options, resolve });
+    });
+  }, []);
+
+  const settle = (value: T | null) => {
+    state?.resolve(value);
+    setState(null);
+  };
+
+  const confirmChoiceDialog = (
+    <AlertDialog open={!!state} onOpenChange={(o) => !o && settle(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Reunião recorrente</AlertDialogTitle>
+          <AlertDialogDescription>{state?.message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => settle(null)}>Cancelar</AlertDialogCancel>
+          {state?.options.map((o) => (
+            <AlertDialogAction key={o.value} onClick={() => settle(o.value)}>
+              {o.label}
+            </AlertDialogAction>
+          ))}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  return { confirmChoice, confirmChoiceDialog };
+}

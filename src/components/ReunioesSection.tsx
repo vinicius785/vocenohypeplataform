@@ -44,7 +44,7 @@ import {
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
-import { useConfirm } from "@/hooks/use-confirm";
+import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
 import { SectionHeader } from "./SectionHeader";
 
 type TeamMember = { id: string; name: string; photo?: string };
@@ -143,6 +143,45 @@ export function ReunioesSection() {
   };
   useEffect(() => onMeetingsChange(() => setMeetings(loadMeetings())), []);
   useEffect(() => onDisponibilidadesChange(() => setDisponibilidades(loadDisponibilidades())), []);
+
+  const { confirm: confirmDelete, confirmDialog: deleteConfirmDialog } = useConfirm();
+  const { confirmChoice: confirmDeleteChoice, confirmChoiceDialog: deleteChoiceDialog } =
+    useConfirmChoice<"this" | "all">();
+
+  // Único ponto que exclui uma reunião — usado tanto pelo formulário
+  // (`MeetingDialog`) quanto pelo resumo (`MeetingSummaryDialog`), pra não
+  // duplicar a lógica de "é série ou não" nos dois. Reunião sem `seriesId`
+  // (ou cuja série já ficou com só ela mesma depois de exclusões
+  // anteriores) usa a confirmação binária de sempre; com irmãs de verdade,
+  // pergunta "só esta ou todas".
+  const requestDeleteMeeting = async (id: string) => {
+    const alvo = meetings.find((m) => m.id === id);
+    if (!alvo) return;
+    const siblings = alvo.seriesId ? meetings.filter((m) => m.seriesId === alvo.seriesId) : [];
+    if (siblings.length > 1) {
+      const choice = await confirmDeleteChoice(
+        `"${alvo.titulo}" faz parte de uma série de ${siblings.length} reuniões recorrentes. O que você quer excluir?`,
+        [
+          { value: "this", label: "Só esta" },
+          { value: "all", label: `Todas (${siblings.length})` },
+        ],
+      );
+      if (!choice) return;
+      persist(
+        choice === "all"
+          ? meetings.filter((m) => m.seriesId !== alvo.seriesId)
+          : meetings.filter((m) => m.id !== id),
+      );
+    } else {
+      const ok = await confirmDelete(
+        `Excluir a reunião "${alvo.titulo}"? Essa ação não pode ser desfeita.`,
+      );
+      if (!ok) return;
+      persist(meetings.filter((m) => m.id !== id));
+    }
+    setDialog(null);
+    setSummary(null);
+  };
 
   // Só reuniões onde a pessoa é criadora ou foi convidada — o calendário
   // deixou de mostrar tudo do workspace pra todo mundo.
@@ -345,18 +384,45 @@ export function ReunioesSection() {
       <MeetingDialog
         open={!!dialog}
         initial={dialog?.data}
+        seriesSize={
+          dialog?.data?.seriesId
+            ? meetings.filter((m) => m.seriesId === dialog.data!.seriesId).length
+            : 0
+        }
         defaultDate={selected}
         me={me}
         disponibilidades={disponibilidades}
         onClose={() => setDialog(null)}
-        onDelete={(id) => {
-          persist(meetings.filter((m) => m.id !== id));
-          setDialog(null);
-        }}
-        onSave={(saved) => {
+        onDelete={(id) => void requestDeleteMeeting(id)}
+        onSave={(saved, opts) => {
           if (dialog?.mode === "edit" && saved.length === 1) {
             const m = saved[0];
-            persist(meetings.map((x) => (x.id === m.id ? m : x)));
+            if (opts?.applyToSeries && m.seriesId) {
+              // Só os campos compartilhados da série — cada ocorrência
+              // mantém sua própria data e todo estado por-ocorrência
+              // (confirmações, presença, reagendamento etc.).
+              const {
+                id: _id,
+                data: _data,
+                status: _status,
+                confirmedBy: _confirmedBy,
+                declinedBy: _declinedBy,
+                rescheduleProposal: _rescheduleProposal,
+                attendedBy: _attendedBy,
+                attendanceRecorded: _attendanceRecorded,
+                transcricao: _transcricao,
+                criadorId: _criadorId,
+                seriesId: _seriesId,
+                ...sharedPatch
+              } = m;
+              persist(
+                meetings.map((x) =>
+                  x.id === m.id ? m : x.seriesId === m.seriesId ? { ...x, ...sharedPatch } : x,
+                ),
+              );
+            } else {
+              persist(meetings.map((x) => (x.id === m.id ? m : x)));
+            }
           } else {
             persist([...meetings, ...saved]);
           }
@@ -374,11 +440,11 @@ export function ReunioesSection() {
           setDialog({ mode: "edit", data: m });
         }}
         onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
-        onDelete={(id) => {
-          persist(meetings.filter((m) => m.id !== id));
-          setSummary(null);
-        }}
+        onDelete={(id) => void requestDeleteMeeting(id)}
       />
+
+      {deleteConfirmDialog}
+      {deleteChoiceDialog}
     </div>
   );
 }
@@ -854,6 +920,7 @@ async function notifyMeetingInvite(userIds: string[], titulo: string) {
 function MeetingDialog({
   open,
   initial,
+  seriesSize = 0,
   defaultDate,
   me,
   disponibilidades,
@@ -863,13 +930,18 @@ function MeetingDialog({
 }: {
   open: boolean;
   initial?: Meeting;
+  /** Quantas reuniões (incluindo esta) compartilham `initial?.seriesId` —
+   * 0/1 quando não é série. O pai calcula, porque só ele tem a lista
+   * completa de reuniões. */
+  seriesSize?: number;
   defaultDate: string;
   me: { id: string; name: string };
   disponibilidades: Availability[];
   onClose: () => void;
-  onSave: (meetings: Meeting[]) => void;
+  onSave: (meetings: Meeting[], opts?: { applyToSeries?: boolean }) => void;
   onDelete: (id: string) => void;
 }) {
+  const { confirmChoice, confirmChoiceDialog } = useConfirmChoice<"this" | "all">();
   const [titulo, setTitulo] = useState("");
   const [data, setData] = useState("");
   const [hora, setHora] = useState("10:00");
@@ -969,8 +1041,20 @@ function MeetingDialog({
 
   const MAX_OCCURRENCES = 52;
 
-  const submit = () => {
+  const submit = async () => {
     if (!titulo.trim() || !data) return;
+    let applyToSeries = false;
+    if (initial?.seriesId && seriesSize > 1) {
+      const choice = await confirmChoice(
+        `"${initial.titulo}" faz parte de uma série de ${seriesSize} reuniões recorrentes. Aplicar essa alteração em qual delas?`,
+        [
+          { value: "this", label: "Só esta" },
+          { value: "all", label: `Todas (${seriesSize})` },
+        ],
+      );
+      if (!choice) return;
+      applyToSeries = choice === "all";
+    }
     const prevParticipantIds =
       initial?.participanteIds ?? (initial?.participanteId ? [initial.participanteId] : []);
     const newlyInvited = participanteIds.filter(
@@ -986,6 +1070,7 @@ function MeetingDialog({
       ...convidadosExternos.map((g) => g.nome),
     ].join(", ");
     const base: Omit<Meeting, "id" | "data"> = {
+      seriesId: initial?.seriesId,
       titulo: titulo.trim(),
       hora,
       duracao,
@@ -1003,7 +1088,7 @@ function MeetingDialog({
     };
 
     if (initial || repeat === "none" || !repeatUntil || repeatUntil < data) {
-      onSave([{ id: initial?.id ?? crypto.randomUUID(), data, ...base }]);
+      onSave([{ id: initial?.id ?? crypto.randomUUID(), data, ...base }], { applyToSeries });
       return;
     }
 
@@ -1036,7 +1121,12 @@ function MeetingDialog({
         dates.push(cursor);
       }
     }
-    onSave(dates.map((d) => ({ id: crypto.randomUUID(), data: d, ...base })));
+    // Mais de 1 data gerada = uma série de verdade — carimba o mesmo
+    // `seriesId` em todas, pra excluir/editar depois poder oferecer "só
+    // esta ou todas". Uma repetição que gerou 1 única data (ex: data de
+    // início já é depois de "repetir até") não vira série.
+    const seriesId = dates.length > 1 ? crypto.randomUUID() : undefined;
+    onSave(dates.map((d) => ({ id: crypto.randomUUID(), data: d, ...base, seriesId })));
   };
 
   const fieldCls =
@@ -1420,7 +1510,7 @@ function MeetingDialog({
             </button>
             <button
               type="button"
-              onClick={submit}
+              onClick={() => void submit()}
               disabled={!titulo.trim() || !data || (repeat !== "none" && !repeatUntil)}
               className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
@@ -1429,6 +1519,7 @@ function MeetingDialog({
           </div>
         </div>
       </DialogContent>
+      {confirmChoiceDialog}
     </Dialog>
   );
 }
@@ -1495,7 +1586,6 @@ export function MeetingSummaryDialog({
   onChange: (m: Meeting) => void;
   onDelete: (id: string) => void;
 }) {
-  const { confirm: confirmDelete, confirmDialog: deleteConfirmDialog } = useConfirm();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [proposing, setProposing] = useState(false);
   const [propData, setPropData] = useState("");
@@ -1877,12 +1967,7 @@ export function MeetingSummaryDialog({
               {isCreator && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    const ok = await confirmDelete(
-                      `Excluir a reunião "${meeting.titulo}"? Essa ação não pode ser desfeita.`,
-                    );
-                    if (ok) onDelete(meeting.id);
-                  }}
+                  onClick={() => onDelete(meeting.id)}
                   className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Excluir
@@ -1909,7 +1994,6 @@ export function MeetingSummaryDialog({
             </div>
           </div>
         </div>
-        {deleteConfirmDialog}
       </DialogContent>
     </Dialog>
   );

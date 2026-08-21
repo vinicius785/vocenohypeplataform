@@ -14,6 +14,13 @@ export type ExternalGuest = { nome: string; email: string };
 
 export type Meeting = {
   id: string;
+  /** Presente só quando a reunião nasceu de uma repetição que gerou mais
+   * de 1 data (`MeetingDialog.submit()`) — todas as ocorrências daquela
+   * leva compartilham o mesmo `seriesId`, gerado uma vez. Reuniões
+   * avulsas e reuniões criadas antes desse campo existir não têm
+   * `seriesId` — excluir/editar continua afetando só aquele registro,
+   * já que o sistema não tem como saber se eram parte de uma série. */
+  seriesId?: string;
   titulo: string;
   data: string; // yyyy-mm-dd
   hora: string; // HH:mm
