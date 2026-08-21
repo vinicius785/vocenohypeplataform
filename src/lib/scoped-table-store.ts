@@ -117,7 +117,19 @@ export function createScopedArrayStore<T extends { id: string }>(
       cache.set(parentId, next);
       emit();
       for (const item of next) {
-        if (prevById.get(item.id) !== item) {
+        // Comparação por VALOR, não por referência: `normalizeInflus` (e
+        // funções análogas) recriam um objeto novo do zero em TODO item a
+        // cada leitura, mesmo quando nada mudou de verdade — comparar só
+        // `!==` fazia CADA save reenviar a campanha inteira pro Supabase
+        // (visto ao vivo nos logs: uma exclusão de 1 influenciador
+        // disparando ~15 upserts simultâneos dos outros, todos "iguais").
+        // Pior: uma aba desatualizada que ainda tem localmente um
+        // influenciador já excluído em outra aba acaba "ressuscitando"
+        // ele de volta no próximo save de qualquer outro campo — dava
+        // exatamente a sensação de "não dá pra excluir, ele volta
+        // sozinho". Só reenvia quem realmente mudou de conteúdo.
+        const prevItem = prevById.get(item.id);
+        if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(item)) {
           // `getSession()` primeiro: se o token de sessão expirou (comum em
           // abas que ficam abertas o dia todo — o refresh automático do
           // supabase-js roda num timer que o browser pode ter throttled
