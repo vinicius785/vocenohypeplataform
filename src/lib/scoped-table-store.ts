@@ -116,6 +116,15 @@ export function createScopedArrayStore<T extends { id: string }>(
       const nextIds = new Set(next.map((x) => x.id));
       cache.set(parentId, next);
       emit();
+      const rollbackDelete = (pId: string, id: string) => {
+        const removed = prevById.get(id);
+        if (!removed) return;
+        const current = cache.get(pId) ?? [];
+        if (!current.some((x) => x.id === id)) {
+          cache.set(pId, [...current, removed]);
+          emit();
+        }
+      };
       for (const item of next) {
         // Comparação por VALOR, não por referência: `normalizeInflus` (e
         // funções análogas) recriam um objeto novo do zero em TODO item a
@@ -174,21 +183,39 @@ export function createScopedArrayStore<T extends { id: string }>(
               // reaparecia sozinho no próximo resync/realtime (sumia e voltava
               // sem explicação nenhuma).
               .select("id")
-              .then(({ data, error }) => {
+              .then(async ({ data, error }) => {
                 if (!error && (data?.length ?? 0) > 0) return;
-                console.warn(`[${table}] delete failed`, error ?? "0 rows affected (RLS?)");
-                const removed = prevById.get(id);
-                if (removed) {
-                  const current = cache.get(parentId) ?? [];
-                  if (!current.some((x) => x.id === id)) {
-                    cache.set(parentId, [...current, removed]);
-                    emit();
-                  }
+                if (error) {
+                  console.warn(`[${table}] delete failed`, error);
+                  rollbackDelete(parentId, id);
+                  void import("sonner").then(({ toast }) => {
+                    toast.error("Não foi possível excluir", {
+                      description:
+                        error.message ||
+                        "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
+                    });
+                  });
+                  return;
                 }
+                // 0 linhas sem erro nenhum é ambíguo — pode ser RLS
+                // bloqueando (precisa restaurar o item local e avisar) OU
+                // a linha já não existir mais no banco (delete anterior já
+                // tinha funcionado, isso aqui é só um retry/eco de estado
+                // local desatualizado — nesse caso NÃO restaurar, senão o
+                // item nunca sai da tela, mesmo já estando excluído de
+                // verdade: "excluo, confirmo, e ele volta sozinho" pra
+                // sempre). Um SELECT rápido desempata os dois casos.
+                const { data: stillThere } = await supabase
+                  .from(table)
+                  .select("id")
+                  .eq("id", id)
+                  .maybeSingle();
+                if (!stillThere) return;
+                console.warn(`[${table}] delete failed`, "0 rows affected (RLS?)");
+                rollbackDelete(parentId, id);
                 void import("sonner").then(({ toast }) => {
                   toast.error("Não foi possível excluir", {
                     description:
-                      error?.message ||
                       "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
                   });
                 });
