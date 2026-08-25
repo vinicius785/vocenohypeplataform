@@ -1,5 +1,5 @@
 {
-  "version": "2.3.0",
+  "version": "1.149.2",
   "notes": [
     "Indicadores percentuais em Metas ganham cálculo automático na hora de atualizar: em vez de digitar o % direto, dá pra escolher \"Calcular (X de Y)\" e informar só a quantidade e o total (ex: 2 de 10 projetos no prazo) — o app calcula os 20% sozinho. O modo calculado fica salvo no indicador e volta pré-preenchido na próxima atualização, e a página do indicador mostra \"2 de 10\" junto do valor atual pra dar contexto.",
     "Indicadores em Metas agora aparecem em formato de galeria (cards quadrados lado a lado) em vez de lista de linhas — tanto na seção \"Indicadores independentes\" quanto dentro da página de um objetivo. Cada card já tem um botão \"Atualizar\" no rodapé que abre a atualização rápida de valor ali mesmo, sem precisar entrar na página do indicador.",
