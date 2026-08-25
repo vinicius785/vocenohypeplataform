@@ -554,7 +554,9 @@ function CampanhaDetail({
           </h2>
           <div className="mt-3">
             {c.briefing ? (
-              <p className="whitespace-pre-wrap text-sm text-foreground">{c.briefing}</p>
+              <p className="whitespace-pre-wrap break-words text-sm text-foreground">
+                {c.briefing}
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">Nenhum briefing cadastrado.</p>
             )}
@@ -679,7 +681,7 @@ function CampanhaDetail({
                     </p>
                   )}
                   {c.direitosImagem.observacoes && (
-                    <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                    <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
                       {c.direitosImagem.observacoes}
                     </p>
                   )}
@@ -886,7 +888,7 @@ function CampanhaDetail({
                 </p>
               )}
               {c.direitosImagem.observacoes && (
-                <p className="whitespace-pre-wrap text-muted-foreground">
+                <p className="whitespace-pre-wrap break-words text-muted-foreground">
                   {c.direitosImagem.observacoes}
                 </p>
               )}
