@@ -155,6 +155,17 @@ export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): strin
   return t.assignee ? [t.assignee] : [];
 }
 
+/** Quando a tarefa foi concluída — a última vez que o log de atividade
+ * registrou "mudou status para Concluído" (mesma derivação de
+ * `src/lib/score.ts:taskCompletionDate`, sem campo `completedAt`
+ * dedicado). Cai pra `createdAt` se não achar (tarefa concluída sem
+ * passar pelo fluxo normal, ou dado antigo sem esse log) — só usado pra
+ * ordenar a coluna Concluído da mais recente pra mais antiga. */
+function taskCompletedAt(t: Task): string {
+  const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
+  return entries.length > 0 ? entries[entries.length - 1].createdAt : t.createdAt;
+}
+
 type Member = { name: string; initials: string; color: string; photo?: string };
 
 const AVATAR_COLORS = [
@@ -397,6 +408,7 @@ export function TaskBoard({
     defaultStatus?: TaskStatus;
   } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [showAllDone, setShowAllDone] = useState(false);
   const members = useTeamMembers();
 
   useEffect(() => {
@@ -445,7 +457,19 @@ export function TaskBoard({
 
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
         {TASK_STATUSES.map((col) => {
-          const items = tasks.filter((t) => t.status === col);
+          const allItems = tasks.filter((t) => t.status === col);
+          // Concluído acumula pra sempre — sem limite, uma campanha/projeto
+          // antigo vira uma coluna infinita de tarefas que ninguém mais
+          // precisa ver no dia a dia. Mostra só as 4 mais recentes por
+          // padrão (derivado do log de atividade, ver `taskCompletedAt`),
+          // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
+          // completo.
+          const isDone = col === "Concluído";
+          const sortedItems = isDone
+            ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
+            : allItems;
+          const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
+          const hiddenCount = allItems.length - items.length;
           return (
             <div
               key={col}
@@ -465,7 +489,7 @@ export function TaskBoard({
                   </h3>
                 </div>
                 <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {items.length}
+                  {allItems.length}
                 </span>
               </div>
               <div className="flex-1 space-y-2">
@@ -520,6 +544,24 @@ export function TaskBoard({
                     )}
                   </div>
                 ))}
+                {isDone && hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllDone(true)}
+                    className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  >
+                    Mostrar tudo ({allItems.length})
+                  </button>
+                )}
+                {isDone && showAllDone && allItems.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllDone(false)}
+                    className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  >
+                    Mostrar só as recentes
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setTaskDialog({ mode: "new", defaultStatus: col })}
