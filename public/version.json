@@ -1,6 +1,7 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "notes": [
+    "Indicadores em Metas agora aparecem em formato de galeria (cards quadrados lado a lado) em vez de lista de linhas — tanto na seção \"Indicadores independentes\" quanto dentro da página de um objetivo. Cada card já tem um botão \"Atualizar\" no rodapé que abre a atualização rápida de valor ali mesmo, sem precisar entrar na página do indicador.",
     "\"Copiar link\" do painel de Bugs & Sugestões do HypeApp (dentro do projeto HypeApp, em Projetos) agora tem duas opções: \"Só o formulário\" (link pra quem só deve reportar, sem ver os relatos de todo mundo) e \"Formulário + lista de bugs\" (o link de sempre, com todos os relatos e status). A página pública em si não muda pra quem já tinha o link antigo.",
     "Remove a foto de perfil dos indicadores em Metas — indicador não tem avatar, só o nome do dono em texto. A foto continua aparecendo nos objetivos (card e página).",
     "Corrige a foto/nome do dono sumindo dos cards de Metas na reformulação anterior — voltou a aparecer no card de objetivo, na linha de indicador e no topo das páginas de Objetivo/Indicador. Também reorganiza a página do Indicador (estava com layout desalinhado): título e rótulo de meta consistentes, barra de progresso de volta, e os blocos de Desempenho/Acompanhamento viraram cartões uniformes em vez de uma grade apertada de 4 colunas.",

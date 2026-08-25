@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2, X } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import { INDICADOR_SAUDE_BAR, objetivoProgresso, objetivoStats } from "@/lib/metas-engine";
 import { fmtPeriodo } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { IndicadorRow } from "./IndicadorRow";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
+import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { AjustarPesosDialog } from "./AjustarPesosDialog";
 import { useDropdown } from "./use-dropdown";
 
@@ -27,6 +28,7 @@ export function ObjetivoPage({
   onLinkIndicador,
   onUnlinkIndicador,
   onSavePesos,
+  onQuickUpdate,
 }: {
   objetivo: Objetivo;
   indicadoresDoObjetivo: Indicador[];
@@ -40,11 +42,13 @@ export function ObjetivoPage({
   onLinkIndicador: (id: string) => void;
   onUnlinkIndicador: (id: string) => void;
   onSavePesos: (pesos: Record<string, number>) => void;
+  onQuickUpdate: (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [pesosOpen, setPesosOpen] = useState(false);
+  const [quickUpdateTarget, setQuickUpdateTarget] = useState<Indicador | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const addRef = useRef<HTMLDivElement>(null);
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
@@ -230,13 +234,14 @@ export function ObjetivoPage({
           </button>
         </div>
       ) : (
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {indicadoresDoObjetivo.map((ind) => (
             <div key={ind.id} className="group relative">
               <IndicadorRow
                 indicador={ind}
                 dono={objetivo.dono}
                 onOpen={() => onOpenIndicador(ind.id)}
+                onQuickUpdate={() => setQuickUpdateTarget(ind)}
               />
               <button
                 type="button"
@@ -245,9 +250,10 @@ export function ObjetivoPage({
                   onUnlinkIndicador(ind.id);
                 }}
                 title="Desvincular do objetivo"
-                className="absolute right-16 top-1/2 hidden -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-destructive group-hover:block"
+                aria-label="Desvincular do objetivo"
+                className="absolute right-2 top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive group-hover:flex"
               >
-                Desvincular
+                <X className="h-3 w-3" />
               </button>
             </div>
           ))}
@@ -272,6 +278,14 @@ export function ObjetivoPage({
         onSave={(pesos) => {
           setPesosOpen(false);
           onSavePesos(pesos);
+        }}
+      />
+      <IndicadorQuickUpdate
+        indicador={quickUpdateTarget}
+        onClose={() => setQuickUpdateTarget(null)}
+        onSave={(ind, patch, nota) => {
+          setQuickUpdateTarget(null);
+          onQuickUpdate(ind, patch, nota);
         }}
       />
     </div>

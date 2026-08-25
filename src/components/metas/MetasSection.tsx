@@ -22,7 +22,7 @@ import { ObjetivoPage } from "./ObjetivoPage";
 import { IndicadorPage } from "./IndicadorPage";
 import { ObjetivoQuickDialog } from "./ObjetivoQuickDialog";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
-import type { IndicadorQuickPatch } from "./IndicadorQuickUpdate";
+import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { colorFor, initialsOf } from "./metas-ui-utils";
 import { useDropdown } from "./use-dropdown";
 
@@ -63,6 +63,7 @@ export function MetasSection() {
 
   const [objetivoDialog, setObjetivoDialog] = useState<{ data?: Objetivo } | null>(null);
   const [indicadorCreateDialog, setIndicadorCreateDialog] = useState(false);
+  const [quickUpdateTarget, setQuickUpdateTarget] = useState<Indicador | null>(null);
   const novoMenu = useRef<HTMLDivElement>(null);
   const [novoOpen, setNovoOpen] = useState(false);
   useDropdown(novoMenu, novoOpen, () => setNovoOpen(false));
@@ -320,6 +321,7 @@ export function MetasSection() {
           onLinkIndicador={(id) => linkIndicador(objetivo.id, id)}
           onUnlinkIndicador={unlinkIndicador}
           onSavePesos={savePesos}
+          onQuickUpdate={updateIndicadorPatch}
         />
         <ObjetivoQuickDialog
           open={!!objetivoDialog}
@@ -614,12 +616,13 @@ export function MetasSection() {
           {visibleIndicadoresStandalone.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold text-foreground">Indicadores independentes</h2>
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {visibleIndicadoresStandalone.map((ind) => (
                   <IndicadorRow
                     key={ind.id}
                     indicador={ind}
                     onOpen={() => push({ kind: "indicador", id: ind.id })}
+                    onQuickUpdate={() => setQuickUpdateTarget(ind)}
                   />
                 ))}
               </div>
@@ -646,6 +649,14 @@ export function MetasSection() {
         members={members}
         onClose={() => setIndicadorCreateDialog(false)}
         onCreate={createIndicadorStandalone}
+      />
+      <IndicadorQuickUpdate
+        indicador={quickUpdateTarget}
+        onClose={() => setQuickUpdateTarget(null)}
+        onSave={(ind, patch, nota) => {
+          setQuickUpdateTarget(null);
+          updateIndicadorPatch(ind, patch, nota);
+        }}
       />
       {confirmDialog}
     </div>
