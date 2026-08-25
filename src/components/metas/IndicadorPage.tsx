@@ -9,7 +9,6 @@ import {
   indicadorSaude,
 } from "@/lib/metas-engine";
 import { formatIndicadorValor, timeAgo } from "./metas-ui-utils";
-import { Avatar } from "./Avatar";
 import { IndicadorHistorico } from "./IndicadorHistorico";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { IndicadorAdvancedSettings } from "./IndicadorAdvancedSettings";
@@ -72,7 +71,6 @@ export function IndicadorPage({
   const linked = !!indicador.objetivoId;
   const donoNome = linked ? objetivo?.dono : indicador.dono;
   const colaboradoresNomes = linked ? objetivo?.colaboradores : indicador.colaboradores;
-  const donoMember = members.find((m) => m.name === donoNome);
 
   const valorPrincipal =
     indicador.tipo === "binario"
@@ -142,13 +140,10 @@ export function IndicadorPage({
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
         {indicador.titulo}
       </h1>
-      <div className="mt-2 flex items-center gap-2">
-        <Avatar name={donoNome} photo={donoMember?.photo} />
-        <span className="text-sm text-muted-foreground">
-          {donoNome || "Sem dono"}
-          {linked && " · herdado do objetivo"}
-        </span>
-      </div>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {donoNome || "Sem dono"}
+        {linked && " · herdado do objetivo"}
+      </p>
       {indicador.descricao && (
         <p className="mt-2 text-sm text-muted-foreground">{indicador.descricao}</p>
       )}
@@ -213,12 +208,7 @@ export function IndicadorPage({
       <div className="mt-9">
         <h2 className="text-sm font-semibold text-foreground">Acompanhamento</h2>
         <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-          <StatBlock label="Dono">
-            <span className="flex items-center gap-1.5">
-              <Avatar name={donoNome} photo={donoMember?.photo} />
-              {donoNome || "Sem dono"}
-            </span>
-          </StatBlock>
+          <StatBlock label="Dono">{donoNome || "Sem dono"}</StatBlock>
           <StatBlock label="Colaboradores">
             {colaboradoresNomes?.length ? colaboradoresNomes.join(", ") : "Nenhum"}
           </StatBlock>

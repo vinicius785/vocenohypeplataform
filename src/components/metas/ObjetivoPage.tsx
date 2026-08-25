@@ -236,7 +236,6 @@ export function ObjetivoPage({
               <IndicadorRow
                 indicador={ind}
                 dono={objetivo.dono}
-                members={members}
                 onOpen={() => onOpenIndicador(ind.id)}
               />
               <button

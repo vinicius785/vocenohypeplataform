@@ -619,7 +619,6 @@ export function MetasSection() {
                   <IndicadorRow
                     key={ind.id}
                     indicador={ind}
-                    members={members}
                     onOpen={() => push({ kind: "indicador", id: ind.id })}
                   />
                 ))}
