@@ -10,7 +10,7 @@ import {
   type TrackingFrequency,
 } from "@/lib/metas-store";
 import { indicadorSaude, INDICADOR_SAUDE_LABEL, INDICADOR_SAUDE_TONE } from "@/lib/metas-engine";
-import { IndicadorDialog } from "./IndicadorDialog";
+import { IndicadorForm } from "./IndicadorDialog";
 import { formatIndicadorValor } from "./metas-ui-utils";
 
 type Member = { name: string; photo?: string };
@@ -18,6 +18,7 @@ type Member = { name: string; photo?: string };
 const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
+const HINT_CLS = "mt-1 text-[11px] leading-snug text-muted-foreground";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -112,12 +113,43 @@ export function ObjetivoDialog({
 
   const pesoSum = linked.reduce((s, i) => s + (i.peso ?? 0), 0);
 
+  // Criar/editar um indicador vinculado troca o CONTEÚDO deste mesmo modal
+  // (em vez de abrir um segundo modal por cima) — evita o problema de dois
+  // formulários empilhados, um bloqueando o preenchimento do outro.
+  if (indicadorDialog) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent className="flex max-h-[88vh] max-w-lg flex-col">
+          <DialogTitle>{indicadorDialog.data ? "Editar indicador" : "Novo indicador"}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Vinculado ao objetivo "{titulo || "sem nome ainda"}". Ao salvar, você volta pro objetivo
+            — nada é gravado de verdade até você salvar o objetivo também.
+          </DialogDescription>
+          <IndicadorForm
+            initial={indicadorDialog.data}
+            objetivoId={objetivoId}
+            members={members}
+            cancelLabel="Voltar pro objetivo"
+            onCancel={() => setIndicadorDialog(null)}
+            onSubmit={(ind) => {
+              setLinked((prev) => {
+                const exists = prev.some((i) => i.id === ind.id);
+                return exists ? prev.map((i) => (i.id === ind.id ? ind : i)) : [...prev, ind];
+              });
+              setIndicadorDialog(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="flex max-h-[88vh] max-w-lg flex-col">
         <DialogTitle>{initial ? "Editar objetivo" : "Novo objetivo"}</DialogTitle>
-        <DialogDescription className="sr-only">
-          Resultado maior, composto por vários indicadores.
+        <DialogDescription className="text-xs text-muted-foreground">
+          Um objetivo agrupa vários indicadores e mostra o progresso combinado deles.
         </DialogDescription>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
@@ -173,10 +205,11 @@ export function ObjetivoDialog({
                   </option>
                 ))}
               </select>
+              <p className={HINT_CLS}>Quem responde pelo objetivo como um todo.</p>
             </div>
             {members.length > 0 && (
               <div>
-                <label className={LABEL_CLS}>Colaboradores</label>
+                <label className={LABEL_CLS}>Colaboradores (opcional)</label>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {members
                     .filter((m) => m.name !== dono)
@@ -198,6 +231,9 @@ export function ObjetivoDialog({
                       );
                     })}
                 </div>
+                <p className={HINT_CLS}>
+                  Quem mais participa e pode ser acionado — clique pra marcar/desmarcar.
+                </p>
               </div>
             )}
           </div>
@@ -239,20 +275,26 @@ export function ObjetivoDialog({
                   </option>
                 ))}
               </select>
+              <p className={HINT_CLS}>De quanto em quanto tempo o objetivo é revisado.</p>
             </div>
           </div>
 
           <div className="space-y-3 border-t border-border pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Indicadores
               </p>
               {pesoSum > 100 && (
-                <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                <span className="text-right text-[10px] font-medium text-amber-600 dark:text-amber-400">
                   Peso soma {pesoSum}% — será normalizado pra não passar de 100%
                 </span>
               )}
             </div>
+            <p className={HINT_CLS}>
+              O progresso deste objetivo é a média do desempenho de cada indicador abaixo, ponderada
+              pelo peso de cada um (defina o peso ao criar/editar o indicador — sem peso, todos
+              contam igual).
+            </p>
 
             {linked.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhum indicador vinculado ainda.</p>
@@ -382,23 +424,6 @@ export function ObjetivoDialog({
           </div>
         </div>
       </DialogContent>
-
-      {indicadorDialog && (
-        <IndicadorDialog
-          open={!!indicadorDialog}
-          initial={indicadorDialog.data}
-          objetivoId={objetivoId}
-          members={members}
-          onClose={() => setIndicadorDialog(null)}
-          onSave={(ind) => {
-            setLinked((prev) => {
-              const exists = prev.some((i) => i.id === ind.id);
-              return exists ? prev.map((i) => (i.id === ind.id ? ind : i)) : [...prev, ind];
-            });
-            setIndicadorDialog(null);
-          }}
-        />
-      )}
     </Dialog>
   );
 }
