@@ -1,6 +1,7 @@
 {
-  "version": "1.162.1",
+  "version": "1.163.0",
   "notes": [
+    "Corrige um influenciador excluído voltando sozinho depois de um tempo: a sincronização periódica que refaz a busca no banco podia cair bem no meio de uma exclusão ainda não confirmada e reintroduzir o item de volta na tela por até 20 minutos. Também deixa claro, no painel do cliente, de qual mês cada influenciador é: em \"Ações pendentes\" (na tela inicial) e no perfil de cada um, quando a campanha é recorrente.",
     "Agora dá pra mudar manualmente o mês de um influenciador em campanhas recorrentes — um seletor \"Mês\" apareceu no perfil dele, ao lado do status. Útil pra corrigir quem ficou no mês errado ou mover alguém de ciclo depois de criado.",
     "Corrige o mês em campanhas recorrentes: influenciadores criados por dentro da plataforma (Criar do zero ou Adicionar do banco) agora ficam de verdade no mês selecionado na tela, em vez de sempre cair no mês corrente. E o painel do cliente ganhou o mesmo seletor de mês do painel interno — antes mostrava todos os influenciadores de todos os meses misturados, sem separar por ciclo.",
     "Ajusta o texto da notificação no sino quando um cliente aprova um influenciador: agora diz \"(Cliente) aprovou (Influenciador) para a campanha (Campanha)\" em vez de só \"(Influenciador) aprovou a seleção pra campanha\".",

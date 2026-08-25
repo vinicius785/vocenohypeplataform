@@ -25,6 +25,14 @@ export function createScopedArrayStore<T extends { id: string }>(
   let loaded = false;
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((l) => l());
+  // Ids com uma exclusão em andamento (do `set()` já removeu localmente,
+  // esperando o DELETE no Supabase confirmar) — `resync()` busca a tabela
+  // inteira do zero e SUBSTITUI o cache; se ele cair bem nessa janela
+  // (antes do DELETE terminar de verdade no banco), reintroduzia o item
+  // apagado de volta na tela por até 20 min (o intervalo do resync), até o
+  // próximo ciclo corrigir sozinho — exatamente o "apago e ele volta depois
+  // de um tempo" relatado. `resync()` ignora qualquer id aqui dentro.
+  const pendingDeletes = new Set<string>();
 
   async function fetchAll(): Promise<Map<string, T[]> | null> {
     const { data, error } = await supabase.from(table).select(`data, ${parentColumn}`);
@@ -60,6 +68,16 @@ export function createScopedArrayStore<T extends { id: string }>(
     try {
       const next = await fetchAll();
       if (next) {
+        if (pendingDeletes.size > 0) {
+          for (const [parentId, arr] of next) {
+            if (arr.some((x) => pendingDeletes.has(x.id))) {
+              next.set(
+                parentId,
+                arr.filter((x) => !pendingDeletes.has(x.id)),
+              );
+            }
+          }
+        }
         cache = next;
         emit();
       }
@@ -171,56 +189,60 @@ export function createScopedArrayStore<T extends { id: string }>(
       }
       for (const id of prevById.keys()) {
         if (!nextIds.has(id)) {
-          void supabase.auth.getSession().then(() =>
-            supabase
-              .from(table)
-              .delete()
-              .eq("id", id)
-              // `.select("id")` é o único jeito de saber se a exclusão pegou
-              // alguma linha: RLS bloqueando não gera `error` nenhum — o
-              // Postgrest responde 200 com 0 linhas afetadas, então sem isso
-              // essa falha passava batido, o item continuava no banco, e
-              // reaparecia sozinho no próximo resync/realtime (sumia e voltava
-              // sem explicação nenhuma).
-              .select("id")
-              .then(async ({ data, error }) => {
-                if (!error && (data?.length ?? 0) > 0) return;
-                if (error) {
-                  console.warn(`[${table}] delete failed`, error);
+          pendingDeletes.add(id);
+          void supabase.auth
+            .getSession()
+            .then(() =>
+              supabase
+                .from(table)
+                .delete()
+                .eq("id", id)
+                // `.select("id")` é o único jeito de saber se a exclusão pegou
+                // alguma linha: RLS bloqueando não gera `error` nenhum — o
+                // Postgrest responde 200 com 0 linhas afetadas, então sem isso
+                // essa falha passava batido, o item continuava no banco, e
+                // reaparecia sozinho no próximo resync/realtime (sumia e voltava
+                // sem explicação nenhuma).
+                .select("id")
+                .then(async ({ data, error }) => {
+                  if (!error && (data?.length ?? 0) > 0) return;
+                  if (error) {
+                    console.warn(`[${table}] delete failed`, error);
+                    rollbackDelete(parentId, id);
+                    void import("sonner").then(({ toast }) => {
+                      toast.error("Não foi possível excluir", {
+                        description:
+                          error.message ||
+                          "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
+                      });
+                    });
+                    return;
+                  }
+                  // 0 linhas sem erro nenhum é ambíguo — pode ser RLS
+                  // bloqueando (precisa restaurar o item local e avisar) OU
+                  // a linha já não existir mais no banco (delete anterior já
+                  // tinha funcionado, isso aqui é só um retry/eco de estado
+                  // local desatualizado — nesse caso NÃO restaurar, senão o
+                  // item nunca sai da tela, mesmo já estando excluído de
+                  // verdade: "excluo, confirmo, e ele volta sozinho" pra
+                  // sempre). Um SELECT rápido desempata os dois casos.
+                  const { data: stillThere } = await supabase
+                    .from(table)
+                    .select("id")
+                    .eq("id", id)
+                    .maybeSingle();
+                  if (!stillThere) return;
+                  console.warn(`[${table}] delete failed`, "0 rows affected (RLS?)");
                   rollbackDelete(parentId, id);
                   void import("sonner").then(({ toast }) => {
                     toast.error("Não foi possível excluir", {
                       description:
-                        error.message ||
                         "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
                     });
                   });
-                  return;
-                }
-                // 0 linhas sem erro nenhum é ambíguo — pode ser RLS
-                // bloqueando (precisa restaurar o item local e avisar) OU
-                // a linha já não existir mais no banco (delete anterior já
-                // tinha funcionado, isso aqui é só um retry/eco de estado
-                // local desatualizado — nesse caso NÃO restaurar, senão o
-                // item nunca sai da tela, mesmo já estando excluído de
-                // verdade: "excluo, confirmo, e ele volta sozinho" pra
-                // sempre). Um SELECT rápido desempata os dois casos.
-                const { data: stillThere } = await supabase
-                  .from(table)
-                  .select("id")
-                  .eq("id", id)
-                  .maybeSingle();
-                if (!stillThere) return;
-                console.warn(`[${table}] delete failed`, "0 rows affected (RLS?)");
-                rollbackDelete(parentId, id);
-                void import("sonner").then(({ toast }) => {
-                  toast.error("Não foi possível excluir", {
-                    description:
-                      "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.",
-                  });
-                });
-              }),
-          );
+                }),
+            )
+            .finally(() => pendingDeletes.delete(id));
         }
       }
     },

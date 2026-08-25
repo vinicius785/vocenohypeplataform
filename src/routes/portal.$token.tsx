@@ -924,6 +924,7 @@ function InfluencerGalleryCard({
 function InfluencerDetail({
   inf,
   lang,
+  mes,
   onBack,
   onRespondInflu,
   onRespondEntrega,
@@ -933,6 +934,10 @@ function InfluencerDetail({
 }: {
   inf: PublicInfluencer;
   lang: PortalLang;
+  /** Mês (`"YYYY-MM"`) desse influenciador — só passado quando a campanha é
+   * recorrente, pra deixar claro de qual ciclo ele é (a mesma campanha
+   * acumula vários meses ao longo do tempo). */
+  mes?: string;
   onBack: () => void;
   onRespondInflu: (status: "aprovado" | "reprovado", motivo?: string) => Promise<void>;
   onRespondEntrega: (
@@ -1080,6 +1085,7 @@ function InfluencerDetail({
               <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <h2 className="text-xl font-semibold text-foreground">{inf.nome}</h2>
                 {inf.nicho && <Badge variant="secondary">{inf.nicho}</Badge>}
+                {mes && <Badge variant="secondary">{mesLabel(mes)}</Badge>}
                 <StatusBadge inf={inf} lang={lang} />
               </div>
             </div>
@@ -1635,6 +1641,10 @@ type PendingFeedItem = {
   campanhaNome: string;
   inf: PublicInfluencer;
   reason: string;
+  /** Mês (`"YYYY-MM"`) do influenciador, só quando a campanha é recorrente
+   * — evita o cliente confundir pendências de ciclos diferentes quando a
+   * mesma campanha acumula vários meses. */
+  mes?: string;
 };
 /** Item do widget "Novidades" — além de influenciadores aguardando decisão
  * (já existia), agora também sinaliza relatórios mensais novos (ainda sem
@@ -1798,9 +1808,11 @@ function ClientPortalPage() {
 
   const feed: PendingFeedItem[] = data.campanhas.flatMap((c) =>
     c.influencers
-      .map((inf) => {
+      .map((inf): PendingFeedItem | null => {
         const reason = pendingReason(inf, lang);
-        return reason ? { campanhaId: c.id, campanhaNome: c.nome, inf, reason } : null;
+        if (!reason) return null;
+        const mes = c.isRecorrente ? (inf.cicloMes ?? inf.criadoEm ?? "").slice(0, 7) : undefined;
+        return { campanhaId: c.id, campanhaNome: c.nome, inf, reason, mes };
       })
       .filter((x): x is PendingFeedItem => x !== null),
   );
@@ -2078,6 +2090,11 @@ function ClientPortalPage() {
               <InfluencerDetail
                 inf={viewing}
                 lang={lang}
+                mes={
+                  activeCampanha.isRecorrente
+                    ? (viewing.cicloMes ?? viewing.criadoEm ?? "").slice(0, 7)
+                    : undefined
+                }
                 onBack={() => setViewingId(null)}
                 onRespondInflu={respondInflu!}
                 onRespondEntrega={respondEntrega!}
@@ -2323,7 +2340,8 @@ function ClientPortalPage() {
                             {item.inf.nome}
                           </p>
                           <p className="truncate text-[11px] text-muted-foreground">
-                            {item.campanhaNome} · {item.reason}
+                            {item.campanhaNome}
+                            {item.mes ? ` · ${mesLabel(item.mes)}` : ""} · {item.reason}
                           </p>
                         </div>
                         <span className="shrink-0 text-[11px] font-semibold text-foreground underline underline-offset-2">
