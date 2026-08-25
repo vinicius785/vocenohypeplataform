@@ -14,6 +14,9 @@ type BugReportsData = Awaited<ReturnType<typeof getPublicBugReports>>;
 
 export const Route = createFileRoute("/bugs/$token")({
   component: PublicBugsPage,
+  validateSearch: (s: Record<string, unknown>): { view?: "form" } => {
+    return s.view === "form" ? { view: "form" } : {};
+  },
   loader: async ({ params }) => {
     const [reports, ws] = await Promise.all([
       getPublicBugReports({ data: { token: params.token } }).catch(() => null),
@@ -55,6 +58,8 @@ function Header({ logo, nome }: { logo?: string; nome: string }) {
 
 function PublicBugsPage() {
   const { token } = Route.useParams();
+  const { view } = Route.useSearch();
+  const formOnly = view === "form";
   const { reports: initialReports, ws } = Route.useLoaderData();
   const getReportsFn = useServerFn(getPublicBugReports);
   const getUrlFn = useServerFn(getPublicBugScreenshotUrl);
@@ -150,8 +155,9 @@ function PublicBugsPage() {
         <div>
           <h1 className="text-lg font-semibold text-foreground">Bugs & Sugestões — HypeApp</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Relate um problema ou uma ideia. Qualquer pessoa com este link pode ver os relatos e
-            marcar como resolvido.
+            {formOnly
+              ? "Relate um problema ou uma ideia."
+              : "Relate um problema ou uma ideia. Qualquer pessoa com este link pode ver os relatos e marcar como resolvido."}
           </p>
         </div>
 
@@ -279,29 +285,30 @@ function PublicBugsPage() {
           </div>
         )}
 
-        {reports.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhum relato ainda.</p>
-        ) : (
-          <div className="space-y-4">
-            <ReportList
-              title="Em aberto"
-              items={abertos}
-              busyId={busyId}
-              onToggleResolved={toggleResolved}
-              onOpenScreenshot={openScreenshot}
-            />
-            {resolvidos.length > 0 && (
+        {!formOnly &&
+          (reports.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhum relato ainda.</p>
+          ) : (
+            <div className="space-y-4">
               <ReportList
-                title="Resolvidos"
-                items={resolvidos}
+                title="Em aberto"
+                items={abertos}
                 busyId={busyId}
                 onToggleResolved={toggleResolved}
                 onOpenScreenshot={openScreenshot}
-                muted
               />
-            )}
-          </div>
-        )}
+              {resolvidos.length > 0 && (
+                <ReportList
+                  title="Resolvidos"
+                  items={resolvidos}
+                  busyId={busyId}
+                  onToggleResolved={toggleResolved}
+                  onOpenScreenshot={openScreenshot}
+                  muted
+                />
+              )}
+            </div>
+          ))}
       </main>
     </div>
   );

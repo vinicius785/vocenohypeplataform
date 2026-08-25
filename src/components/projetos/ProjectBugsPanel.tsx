@@ -9,7 +9,16 @@ import {
   ImageIcon,
   Loader2,
   Link as LinkIcon,
+  ChevronDown,
+  ClipboardList,
+  FileText,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import type { Project } from "@/lib/projetos";
@@ -163,11 +172,15 @@ export function ProjectBugsPanel({
     }
   };
 
-  const copyPublicLink = async () => {
+  /** `withList: false` gera o link só com o formulário (`?view=form`) —
+   * pra compartilhar com quem só deve reportar, sem ver os relatos de
+   * todo mundo. `withList: true` é o link completo de sempre. */
+  const copyPublicLink = async (withList: boolean) => {
     if (!project || !update) return;
     const token = project.bugsPublicToken ?? crypto.randomUUID().replace(/-/g, "");
     if (!project.bugsPublicToken) update({ bugsPublicToken: token });
-    await navigator.clipboard.writeText(`${window.location.origin}/bugs/${token}`);
+    const url = `${window.location.origin}/bugs/${token}${withList ? "" : "?view=form"}`;
+    await navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
@@ -187,13 +200,37 @@ export function ProjectBugsPanel({
           </p>
         </div>
         {project && update && (
-          <button
-            type="button"
-            onClick={() => void copyPublicLink()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
-            <LinkIcon className="h-3.5 w-3.5" /> {linkCopied ? "Copiado!" : "Copiar link"}
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+              >
+                <LinkIcon className="h-3.5 w-3.5" /> {linkCopied ? "Copiado!" : "Copiar link"}
+                <ChevronDown className="h-3 w-3 opacity-70" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onClick={() => void copyPublicLink(false)} className="gap-2">
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <span className="block">Só o formulário</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Pra quem só deve reportar, sem ver os relatos de todo mundo.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void copyPublicLink(true)} className="gap-2">
+                <ClipboardList className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <span className="block">Formulário + lista de bugs</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Mostra também os relatos já enviados e o status de cada um.
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
