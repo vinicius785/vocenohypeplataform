@@ -41,6 +41,21 @@ function howToTipoDirecao(
   return { tipo: unit, direcao: "aumentar" };
 }
 
+/** "Manter acima/abaixo" sempre vira `tipo: "min"/"max"` (não muda com a
+ * unidade escolhida, ao contrário de "alcançar"), então `%`/`R$` precisam
+ * ser gravados como `unidade` de verdade pra aparecer no valor exibido —
+ * `formatIndicadorValor` só prefixa "%"/"R$" sozinho quando `tipo` é
+ * literalmente "percentual"/"moeda". */
+function unidadeFor(how: HowKind, unit: Unit, unidadeLivre: string): string | undefined {
+  if (how === "acima" || how === "abaixo") {
+    if (unit === "percentual") return "%";
+    if (unit === "moeda") return "R$";
+    return unidadeLivre.trim() || undefined;
+  }
+  if (how === "alcancar" && unit === "numero") return unidadeLivre.trim() || undefined;
+  return undefined;
+}
+
 /** Criação de um Indicador — uma tela só, em linguagem natural. Tipo e
  * direção técnicos (`MetricType`/`MetricDirection` em `metas-store.ts`,
  * lidos por `metas-engine.ts` sem nenhuma mudança) continuam existindo por
@@ -109,7 +124,7 @@ export function IndicadorQuickCreateDialog({
       tipo,
       direcao,
       dataSource: "manual",
-      unidade: how === "acima" || how === "abaixo" ? unidadeLivre.trim() || undefined : undefined,
+      unidade: unidadeFor(how, unit, unidadeLivre),
       niveis: { esperado: how === "concluir" ? undefined : meta.trim() ? Number(meta) : undefined },
       concluido: how === "concluir" ? false : undefined,
       createdAt: now,
@@ -214,13 +229,31 @@ export function IndicadorQuickCreateDialog({
                   placeholder="Ex: 6"
                   className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
+                <div className="flex overflow-hidden rounded-md border border-input">
+                  {UNIT_OPTIONS.map(({ unit: u, label }) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => setUnit(u)}
+                      className={`px-3 text-xs font-medium ${
+                        unit === u
+                          ? "bg-foreground text-background"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {unit === "numero" && (
                 <input
                   value={unidadeLivre}
                   onChange={(e) => setUnidadeLivre(e.target.value)}
-                  placeholder="Unidade (opcional)"
-                  className="h-9 w-32 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder="Unidade (opcional) — clientes, operações..."
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
-              </div>
+              )}
             </div>
           )}
 
