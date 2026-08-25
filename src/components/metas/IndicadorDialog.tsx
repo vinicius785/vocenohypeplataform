@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Info, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   META_AREAS,
@@ -14,13 +14,13 @@ import {
   type MetricDirection,
   type IndicadorMarcoStatus,
 } from "@/lib/metas-store";
+import { StepHeader } from "./StepHeader";
 
 type Member = { name: string; photo?: string };
 
 const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
-const LABEL_CLS = "flex items-center gap-1 text-xs font-medium text-muted-foreground";
-const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-wider text-foreground/70";
+const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -55,17 +55,6 @@ const MARCO_STATUS_LABEL: Record<IndicadorMarcoStatus, string> = {
   concluido: "Concluído",
 };
 
-/** Pontinho "i" com dica no hover — usado só nos poucos campos que
- * realmente precisam de explicação, pra não poluir o formulário com
- * parágrafo embaixo de cada input. */
-function Hint({ text }: { text: string }) {
-  return (
-    <span title={text} className="cursor-help text-muted-foreground/60 hover:text-foreground">
-      <Info className="h-3 w-3" />
-    </span>
-  );
-}
-
 /** `tipo: "min"`/`"max"` pré-selecionam a direção certa — o motor de
  * cálculo só olha pra `direcao`, isso é só conveniência de formulário. */
 function defaultDirectionForTipo(tipo: MetricType): MetricDirection {
@@ -78,7 +67,9 @@ const NUMERIC_TYPES: MetricType[] = ["numero", "percentual", "moeda", "min", "ma
 
 /** Corpo do formulário de Indicador, sem o `<Dialog>` em volta — assim dá
  * pra usar tanto como modal próprio (`IndicadorDialog`) quanto embutido
- * dentro do modal de Objetivo (evita abrir um modal em cima do outro). */
+ * dentro do modal de Objetivo (troca o conteúdo do mesmo modal, nunca
+ * abre um por cima do outro). Passo a passo: cada etapa mostra só os
+ * campos daquele assunto, com uma frase explicando o que ela pede. */
 export function IndicadorForm({
   initial,
   objetivoId,
@@ -90,8 +81,8 @@ export function IndicadorForm({
 }: {
   initial?: Indicador;
   /** Pré-seta o objetivo pai quando criado de dentro do `ObjetivoDialog` —
-   * nesse caso o campo fica fixo (não editável), pra não permitir mover o
-   * indicador de objetivo sem querer por aqui. */
+   * nesse caso Responsabilidade e Período são herdados do objetivo, não
+   * definidos aqui. */
   objetivoId?: string;
   members: Member[];
   cancelLabel?: string;
@@ -119,8 +110,9 @@ export function IndicadorForm({
   const [concluido, setConcluido] = useState(false);
   const [marcoStatus, setMarcoStatus] = useState<IndicadorMarcoStatus>("nao_iniciado");
   const [peso, setPeso] = useState("");
-  const [showDescricao, setShowDescricao] = useState(false);
-  const [showNiveis, setShowNiveis] = useState(false);
+  const [step, setStep] = useState(0);
+
+  const linkedToObjetivo = !!(objetivoId ?? initial?.objetivoId);
 
   useEffect(() => {
     setTitulo(initial?.titulo ?? "");
@@ -143,12 +135,7 @@ export function IndicadorForm({
     setConcluido(initial?.concluido ?? false);
     setMarcoStatus(initial?.marcoStatus ?? "nao_iniciado");
     setPeso(initial?.peso != null ? String(initial.peso) : "");
-    setShowDescricao(!!initial?.descricao);
-    setShowNiveis(
-      initial?.niveis?.baseline != null ||
-        initial?.niveis?.minimo != null ||
-        initial?.niveis?.excelencia != null,
-    );
+    setStep(0);
   }, [initial]);
 
   const toggleColaborador = (name: string) =>
@@ -171,11 +158,15 @@ export function IndicadorForm({
       titulo: titulo.trim(),
       descricao: descricao.trim() || undefined,
       area,
-      dono: dono || undefined,
-      colaboradores: colaboradores.length ? colaboradores : undefined,
-      dataInicio: dataInicio || undefined,
-      dataFim: dataFim || undefined,
-      frequencia,
+      dono: effectiveObjetivoId ? undefined : dono || undefined,
+      colaboradores: effectiveObjetivoId
+        ? undefined
+        : colaboradores.length
+          ? colaboradores
+          : undefined,
+      dataInicio: effectiveObjetivoId ? undefined : dataInicio || undefined,
+      dataFim: effectiveObjetivoId ? undefined : dataFim || undefined,
+      frequencia: effectiveObjetivoId ? (initial?.frequencia ?? "continuo") : frequencia,
       vinculos: initial?.vinculos,
       cancelado: initial?.cancelado,
       createdAt: initial?.createdAt ?? new Date().toISOString(),
@@ -199,22 +190,59 @@ export function IndicadorForm({
     });
   };
 
+  const steps = [
+    {
+      title: "Informações",
+      description: "O nome e a área identificam esse indicador nas listas, cards e filtros.",
+    },
+    {
+      title: "Responsabilidade",
+      description: linkedToObjetivo
+        ? "Indicadores dentro de um objetivo não têm dono próprio — usam o dono e os colaboradores do objetivo."
+        : "Dono é quem responde por esse número no dia a dia. Colaboradores são quem mais participa, sem ser o principal responsável.",
+    },
+    {
+      title: "Como medir",
+      description:
+        "O tipo define o formato do valor. A direção diz se subir o número é bom ou ruim — é o que decide se o indicador fica saudável ou em risco.",
+    },
+    {
+      title: "Desempenho",
+      description:
+        "A meta esperada é o valor que define o progresso do indicador. Baseline, meta mínima e de excelência são opcionais e refinam quando ele entra em risco ou vira destaque.",
+    },
+    {
+      title: "Quando e origem",
+      description: linkedToObjetivo
+        ? "O período e a frequência de acompanhamento também são herdados do objetivo. Aqui você só define a origem do dado e, opcionalmente, o peso deste indicador no cálculo do objetivo."
+        : "Data de início/fim e frequência dizem quando esse indicador é acompanhado. Origem é sempre manual por enquanto.",
+    },
+  ];
+  const last = steps.length - 1;
+  const canAdvance = step > 0 || titulo.trim().length > 0;
+
   return (
     <>
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
-        {/* Sobre */}
-        <div className="space-y-3">
-          <div>
-            <label className={LABEL_CLS}>Nome</label>
-            <input
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-              placeholder="Ex: Margem média da carteira"
-              className={FIELD_CLS}
-              autoFocus
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+      <StepHeader
+        step={step}
+        total={steps.length}
+        title={steps[step].title}
+        description={steps[step].description}
+      />
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4 pr-1">
+        {step === 0 && (
+          <>
+            <div>
+              <label className={LABEL_CLS}>Nome</label>
+              <input
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                placeholder="Ex: Margem média da carteira"
+                className={FIELD_CLS}
+                autoFocus
+              />
+            </div>
             <div>
               <label className={LABEL_CLS}>Área</label>
               <select
@@ -230,69 +258,73 @@ export function IndicadorForm({
               </select>
             </div>
             <div>
-              <label className={LABEL_CLS}>Dono</label>
-              <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
-                <option value="">Sem dono</option>
-                {members.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {members.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {members
-                .filter((m) => m.name !== dono)
-                .map((m) => {
-                  const active = colaboradores.includes(m.name);
-                  return (
-                    <button
-                      key={m.name}
-                      type="button"
-                      onClick={() => toggleColaborador(m.name)}
-                      title="Colaborador — participa junto, sem ser o dono principal"
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                        active
-                          ? "border-foreground bg-muted text-foreground"
-                          : "border-border text-muted-foreground hover:bg-muted/40"
-                      }`}
-                    >
-                      + {m.name}
-                    </button>
-                  );
-                })}
-            </div>
-          )}
-          {showDescricao ? (
-            <div>
-              <label className={LABEL_CLS}>Descrição</label>
+              <label className={LABEL_CLS}>Descrição (opcional)</label>
               <textarea
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
                 rows={2}
-                autoFocus
                 className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowDescricao(true)}
-              className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
-            >
-              + Adicionar descrição
-            </button>
-          )}
-        </div>
+          </>
+        )}
 
-        {/* Como medir */}
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className={SECTION_TITLE_CLS}>Como medir</p>
-          <div className="grid grid-cols-2 gap-3">
+        {step === 1 &&
+          (linkedToObjetivo ? (
+            <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+              Sem campos aqui — este indicador segue o dono e os colaboradores definidos no
+              objetivo.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className={LABEL_CLS}>Dono</label>
+                <select
+                  value={dono}
+                  onChange={(e) => setDono(e.target.value)}
+                  className={FIELD_CLS}
+                >
+                  <option value="">Sem dono definido</option>
+                  {members.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {members.length > 0 && (
+                <div>
+                  <label className={LABEL_CLS}>Colaboradores (opcional)</label>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {members
+                      .filter((m) => m.name !== dono)
+                      .map((m) => {
+                        const active = colaboradores.includes(m.name);
+                        return (
+                          <button
+                            key={m.name}
+                            type="button"
+                            onClick={() => toggleColaborador(m.name)}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                              active
+                                ? "border-foreground bg-muted text-foreground"
+                                : "border-border text-muted-foreground hover:bg-muted/40"
+                            }`}
+                          >
+                            {m.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </>
+          ))}
+
+        {step === 2 && (
+          <>
             <div>
-              <label className={LABEL_CLS}>Tipo</label>
+              <label className={LABEL_CLS}>Tipo de medição</label>
               <select
                 value={tipo}
                 onChange={(e) => changeTipo(e.target.value as MetricType)}
@@ -307,10 +339,7 @@ export function IndicadorForm({
             </div>
             {NUMERIC_TYPES.includes(tipo) && (
               <div>
-                <label className={LABEL_CLS}>
-                  Direção{" "}
-                  <Hint text="Define se subir o valor é bom ou ruim — é isso que decide se o indicador está saudável ou em risco." />
-                </label>
+                <label className={LABEL_CLS}>Direção</label>
                 <select
                   value={direcao}
                   onChange={(e) => setDirecao(e.target.value as MetricDirection)}
@@ -324,37 +353,38 @@ export function IndicadorForm({
                 </select>
               </div>
             )}
-          </div>
+            {tipo === "binario" && (
+              <label className="flex items-center gap-2 pt-1 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={concluido}
+                  onChange={(e) => setConcluido(e.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                Já está concluído
+              </label>
+            )}
+            {tipo === "marco" && (
+              <div>
+                <label className={LABEL_CLS}>Etapa atual</label>
+                <select
+                  value={marcoStatus}
+                  onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
+                  className={FIELD_CLS}
+                >
+                  {INDICADOR_MARCO_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {MARCO_STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </>
+        )}
 
-          {tipo === "binario" && (
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={concluido}
-                onChange={(e) => setConcluido(e.target.checked)}
-                className="h-4 w-4 rounded border-input"
-              />
-              Já está concluído
-            </label>
-          )}
-          {tipo === "marco" && (
-            <div>
-              <label className={LABEL_CLS}>Etapa atual</label>
-              <select
-                value={marcoStatus}
-                onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
-                className={FIELD_CLS}
-              >
-                {INDICADOR_MARCO_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {MARCO_STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {NUMERIC_TYPES.includes(tipo) && (
+        {step === 3 &&
+          (NUMERIC_TYPES.includes(tipo) ? (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -385,130 +415,127 @@ export function IndicadorForm({
                   className={FIELD_CLS}
                 />
               </div>
-              {showNiveis ? (
-                <div className="grid grid-cols-3 gap-3">
+              <p className="pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Opcional — refina a régua de saúde
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={LABEL_CLS}>Baseline</label>
+                  <input
+                    type="number"
+                    value={baseline}
+                    onChange={(e) => setBaseline(e.target.value)}
+                    placeholder="De onde partiu"
+                    className={FIELD_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Meta mínima</label>
+                  <input
+                    type="number"
+                    value={minimo}
+                    onChange={(e) => setMinimo(e.target.value)}
+                    placeholder="Vira risco abaixo"
+                    className={FIELD_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Excelência</label>
+                  <input
+                    type="number"
+                    value={excelencia}
+                    onChange={(e) => setExcelencia(e.target.value)}
+                    placeholder="Vira destaque acima"
+                    className={FIELD_CLS}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+              {tipo === "binario"
+                ? "Indicadores Sim/Não não têm níveis de meta — o desempenho já foi definido na etapa anterior."
+                : "Indicadores de Marco não têm níveis de meta — o desempenho segue a etapa da etapa anterior."}
+            </p>
+          ))}
+
+        {step === 4 && (
+          <>
+            {!linkedToObjetivo && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={LABEL_CLS}>
-                      Baseline{" "}
-                      <Hint text="De onde o indicador partiu — usado como referência de início." />
-                    </label>
+                    <label className={LABEL_CLS}>Data inicial</label>
                     <input
-                      type="number"
-                      value={baseline}
-                      onChange={(e) => setBaseline(e.target.value)}
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
                       className={FIELD_CLS}
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLS}>
-                      Meta mínima <Hint text="Abaixo desse valor, o indicador entra em risco." />
-                    </label>
+                    <label className={LABEL_CLS}>Data final</label>
                     <input
-                      type="number"
-                      value={minimo}
-                      onChange={(e) => setMinimo(e.target.value)}
-                      className={FIELD_CLS}
-                    />
-                  </div>
-                  <div>
-                    <label className={LABEL_CLS}>
-                      Excelência <Hint text="Acima desse valor, o indicador é destaque." />
-                    </label>
-                    <input
-                      type="number"
-                      value={excelencia}
-                      onChange={(e) => setExcelencia(e.target.value)}
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
                       className={FIELD_CLS}
                     />
                   </div>
                 </div>
-              ) : (
+                <div>
+                  <label className={LABEL_CLS}>Frequência de acompanhamento</label>
+                  <select
+                    value={frequencia}
+                    onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
+                    className={FIELD_CLS}
+                  >
+                    {TRACKING_FREQUENCIES.map((f) => (
+                      <option key={f} value={f}>
+                        {FREQUENCY_LABEL[f]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            <div>
+              <label className={LABEL_CLS}>Origem do dado</label>
+              <div className="mt-1 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowNiveis(true)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+                  onClick={() => setDataSource("manual")}
+                  className="flex-1 rounded-md border border-foreground bg-muted px-3 py-1.5 text-xs font-medium"
                 >
-                  + Refinar com baseline, meta mínima e excelência
+                  Manual
                 </button>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Quando e origem */}
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className={SECTION_TITLE_CLS}>Quando e origem</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL_CLS}>Data inicial</label>
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className={FIELD_CLS}
-              />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Data final</label>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className={FIELD_CLS}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={LABEL_CLS}>Frequência</label>
-              <select
-                value={frequencia}
-                onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
-                className={FIELD_CLS}
-              >
-                {TRACKING_FREQUENCIES.map((f) => (
-                  <option key={f} value={f}>
-                    {FREQUENCY_LABEL[f]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={LABEL_CLS}>
-                Origem{" "}
-                <Hint text="Por enquanto todo indicador é atualizado manualmente — origem automática ainda não existe." />
-              </label>
-              <select
-                value={dataSource}
-                onChange={() => setDataSource("manual")}
-                className={FIELD_CLS}
-              >
-                <option value="manual">Manual</option>
-                <option value="auto" disabled>
+                <button
+                  type="button"
+                  disabled
+                  title="Reservado pro futuro — nenhuma fonte automática existe ainda"
+                  className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/60"
+                >
                   Automática (em breve)
-                </option>
-              </select>
+                </button>
+              </div>
             </div>
-          </div>
-          {(objetivoId ?? initial?.objetivoId) ? (
-            <div>
-              <label className={LABEL_CLS}>
-                Peso no objetivo (%)
-                <Hint text="Quanto esse indicador pesa no progresso do objetivo. Vazio = divide igual entre quem não tem peso." />
-              </label>
-              <input
-                type="number"
-                value={peso}
-                onChange={(e) => setPeso(e.target.value)}
-                placeholder="Vazio = divide igual"
-                className={FIELD_CLS}
-              />
-            </div>
-          ) : null}
-        </div>
+            {linkedToObjetivo && (
+              <div>
+                <label className={LABEL_CLS}>Peso no objetivo (%, opcional)</label>
+                <input
+                  type="number"
+                  value={peso}
+                  onChange={(e) => setPeso(e.target.value)}
+                  placeholder="Vazio = divide igual entre quem não tem peso"
+                  className={FIELD_CLS}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-4">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-4">
         <div>
           {initial && onDelete && (
             <button
@@ -523,19 +550,38 @@ export function IndicadorForm({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => (step === 0 ? onCancel() : setStep((s) => s - 1))}
             className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            <X className="h-4 w-4" /> {cancelLabel}
+            {step === 0 ? (
+              <>
+                <X className="h-4 w-4" /> {cancelLabel}
+              </>
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" /> Voltar
+              </>
+            )}
           </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!titulo.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-          >
-            Salvar
-          </button>
+          {step < last ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s + 1)}
+              disabled={!canAdvance}
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+            >
+              Próximo <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!titulo.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+            >
+              Salvar
+            </button>
+          )}
         </div>
       </div>
     </>
