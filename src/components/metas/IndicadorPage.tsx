@@ -152,7 +152,15 @@ export function IndicadorPage({
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-4xl font-light tracking-tight text-foreground">{valorPrincipal}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">Atual</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Atual
+            {indicador.calcTotal != null && indicador.calcContagem != null && (
+              <span>
+                {" "}
+                · {indicador.calcContagem} de {indicador.calcTotal}
+              </span>
+            )}
+          </p>
         </div>
         {metaValor && (
           <div className="text-right">

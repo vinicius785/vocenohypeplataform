@@ -17,12 +17,27 @@ export type IndicadorQuickPatch = {
   valorAtual?: number;
   concluido?: boolean;
   marcoStatus?: IndicadorMarcoStatus;
+  calcTotal?: number;
+  calcContagem?: number;
 };
+
+/** Percentual calculado a partir de uma razão — arredonda pra 1 casa e
+ * tira o ".0" quando é um número redondo (20 em vez de 20.0). */
+function ratioToPercent(contagem: number, total: number): number {
+  if (!total) return 0;
+  return Math.round((contagem / total) * 1000) / 10;
+}
 
 /** Tela de "editar indicador" no dia a dia: só o número (ou status), sem
  * reabrir nome/tipo/direção/dono — isso já ficou definido na criação e
  * raramente muda. Pra corrigir esses detalhes estruturais, use "Editar
- * detalhes" (o formulário completo), não esta tela. */
+ * detalhes" (o formulário completo), não esta tela.
+ *
+ * Indicador percentual pode ser atualizado de duas formas: digitando o %
+ * direto, ou calculando automaticamente a partir de uma razão ("2 de 10
+ * projetos no prazo" → 20%) — o app faz a conta, ninguém precisa converter
+ * na mão. O modo calculado fica salvo no indicador (`calcTotal`/
+ * `calcContagem`) e volta pré-preenchido na próxima atualização. */
 export function IndicadorQuickUpdate({
   indicador,
   onClose,
@@ -35,6 +50,9 @@ export function IndicadorQuickUpdate({
   const [valor, setValor] = useState("");
   const [concluido, setConcluido] = useState(false);
   const [marcoStatus, setMarcoStatus] = useState<IndicadorMarcoStatus>("nao_iniciado");
+  const [calcMode, setCalcMode] = useState(false);
+  const [calcTotal, setCalcTotal] = useState("");
+  const [calcContagem, setCalcContagem] = useState("");
   const [nota, setNota] = useState("");
 
   useEffect(() => {
@@ -42,20 +60,38 @@ export function IndicadorQuickUpdate({
       setValor(indicador.valorAtual != null ? String(indicador.valorAtual) : "");
       setConcluido(indicador.concluido ?? false);
       setMarcoStatus(indicador.marcoStatus ?? "nao_iniciado");
+      setCalcMode(indicador.calcTotal != null && indicador.calcContagem != null);
+      setCalcTotal(indicador.calcTotal != null ? String(indicador.calcTotal) : "");
+      setCalcContagem(indicador.calcContagem != null ? String(indicador.calcContagem) : "");
       setNota("");
     }
   }, [indicador]);
 
   if (!indicador) return null;
 
+  const isPercentual = indicador.tipo === "percentual";
+  const total = Number(calcTotal) || 0;
+  const contagem = Number(calcContagem) || 0;
+  const computedPercent = ratioToPercent(contagem, total);
+
   const submit = () => {
-    const patch: IndicadorQuickPatch =
-      indicador.tipo === "binario"
-        ? { concluido }
-        : indicador.tipo === "marco"
-          ? { marcoStatus }
-          : { valorAtual: valor ? Number(valor) : undefined };
-    onSave(indicador, patch, nota);
+    let patch: IndicadorQuickPatch;
+    let defaultNota = "";
+    if (indicador.tipo === "binario") {
+      patch = { concluido };
+    } else if (indicador.tipo === "marco") {
+      patch = { marcoStatus };
+    } else if (isPercentual && calcMode) {
+      patch = { valorAtual: computedPercent, calcTotal: total, calcContagem: contagem };
+      defaultNota = `${calcContagem} de ${calcTotal}`;
+    } else {
+      patch = {
+        valorAtual: valor ? Number(valor) : undefined,
+        calcTotal: undefined,
+        calcContagem: undefined,
+      };
+    }
+    onSave(indicador, patch, nota.trim() || defaultNota);
   };
 
   return (
@@ -98,16 +134,82 @@ export function IndicadorQuickUpdate({
             </div>
           ) : (
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">
-                Valor atual{indicador.unidade ? ` (${indicador.unidade})` : ""}
-              </label>
-              <input
-                type="number"
-                value={valor}
-                onChange={(e) => setValor(e.target.value)}
-                autoFocus
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
+              {isPercentual && (
+                <div className="mb-2 flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCalcMode(false)}
+                    className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                      !calcMode
+                        ? "border-foreground bg-muted text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    Digitar %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalcMode(true)}
+                    className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                      calcMode
+                        ? "border-foreground bg-muted text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    Calcular (X de Y)
+                  </button>
+                </div>
+              )}
+
+              {isPercentual && calcMode ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Quantos alcançaram
+                      </label>
+                      <input
+                        type="number"
+                        value={calcContagem}
+                        onChange={(e) => setCalcContagem(e.target.value)}
+                        placeholder="Ex: 2"
+                        autoFocus
+                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        Total
+                      </label>
+                      <input
+                        type="number"
+                        value={calcTotal}
+                        onChange={(e) => setCalcTotal(e.target.value)}
+                        placeholder="Ex: 10"
+                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {calcContagem || "0"} de {calcTotal || "0"} ={" "}
+                    <span className="font-medium text-foreground">{computedPercent}%</span>
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Valor atual
+                    {indicador.unidade ? ` (${indicador.unidade})` : isPercentual ? " (%)" : ""}
+                  </label>
+                  <input
+                    type="number"
+                    value={valor}
+                    onChange={(e) => setValor(e.target.value)}
+                    autoFocus={!isPercentual}
+                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              )}
             </div>
           )}
           <div>

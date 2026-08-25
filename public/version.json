@@ -1,6 +1,7 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "notes": [
+    "Indicadores percentuais em Metas ganham cálculo automático na hora de atualizar: em vez de digitar o % direto, dá pra escolher \"Calcular (X de Y)\" e informar só a quantidade e o total (ex: 2 de 10 projetos no prazo) — o app calcula os 20% sozinho. O modo calculado fica salvo no indicador e volta pré-preenchido na próxima atualização, e a página do indicador mostra \"2 de 10\" junto do valor atual pra dar contexto.",
     "Indicadores em Metas agora aparecem em formato de galeria (cards quadrados lado a lado) em vez de lista de linhas — tanto na seção \"Indicadores independentes\" quanto dentro da página de um objetivo. Cada card já tem um botão \"Atualizar\" no rodapé que abre a atualização rápida de valor ali mesmo, sem precisar entrar na página do indicador.",
     "\"Copiar link\" do painel de Bugs & Sugestões do HypeApp (dentro do projeto HypeApp, em Projetos) agora tem duas opções: \"Só o formulário\" (link pra quem só deve reportar, sem ver os relatos de todo mundo) e \"Formulário + lista de bugs\" (o link de sempre, com todos os relatos e status). A página pública em si não muda pra quem já tinha o link antigo.",
     "Remove a foto de perfil dos indicadores em Metas — indicador não tem avatar, só o nome do dono em texto. A foto continua aparecendo nos objetivos (card e página).",

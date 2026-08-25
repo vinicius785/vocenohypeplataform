@@ -139,6 +139,15 @@ export type Indicador = MetaBase & {
   valorAtual?: number; // numero/percentual/moeda/min/max/manual
   concluido?: boolean; // binario
   marcoStatus?: IndicadorMarcoStatus; // marco
+  /** Cálculo automático do valor a partir de uma razão (só faz sentido
+   * pra `tipo: "percentual"`) — ex. "2 de 10 projetos no prazo" = 20%.
+   * Quando os dois estão setados, `valorAtual` é sempre o percentual
+   * derivado (`calcContagem / calcTotal * 100`), mantido em sync no
+   * momento de salvar — nunca calculado de novo em outro lugar do código
+   * (única fonte: o formulário de atualização). Ausentes = valor digitado
+   * direto, comportamento de sempre. */
+  calcTotal?: number;
+  calcContagem?: number;
   atualizacoes?: MetaAtualizacao[];
 };
 
