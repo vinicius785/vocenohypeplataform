@@ -4,10 +4,14 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import {
   META_AREAS,
   TRACKING_FREQUENCIES,
+  METRIC_TYPES,
+  METRIC_DIRECTIONS,
   type Objetivo,
   type Indicador,
   type MetaArea,
   type TrackingFrequency,
+  type MetricType,
+  type MetricDirection,
 } from "@/lib/metas-store";
 import { indicadorSaude, INDICADOR_SAUDE_LABEL, INDICADOR_SAUDE_TONE } from "@/lib/metas-engine";
 import { IndicadorForm } from "./IndicadorDialog";
@@ -27,6 +31,33 @@ const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   trimestral: "Trimestral",
   personalizado: "Personalizado",
 };
+
+const METRIC_TYPE_LABEL: Record<MetricType, string> = {
+  numero: "Número",
+  percentual: "Percentual",
+  moeda: "Moeda (R$)",
+  min: "Limite mínimo (≥)",
+  max: "Limite máximo (≤)",
+  binario: "Sim / Não",
+  marco: "Marco (etapas)",
+  manual: "Manual (livre)",
+};
+
+const METRIC_DIRECTION_LABEL: Record<MetricDirection, string> = {
+  aumentar: "Aumentar (mais é melhor)",
+  reduzir: "Reduzir (menos é melhor)",
+  manter_abaixo: "Manter abaixo de um limite",
+  manter_acima: "Manter acima de um limite",
+  concluir: "Concluir (feito ou não)",
+};
+
+function defaultDirectionForTipo(tipo: MetricType): MetricDirection {
+  if (tipo === "min") return "manter_acima";
+  if (tipo === "max") return "manter_abaixo";
+  return "aumentar";
+}
+
+const NUMERIC_TYPES: MetricType[] = ["numero", "percentual", "moeda", "min", "max", "manual"];
 
 export function ObjetivoDialog({
   open,
@@ -66,6 +97,15 @@ export function ObjetivoDialog({
   const [indicadorDialog, setIndicadorDialog] = useState<{ data?: Indicador } | null>(null);
   const [step, setStep] = useState(0);
 
+  // Criação rápida de indicador, direto na etapa "Indicadores" — sem trocar
+  // de tela, pra dar pra adicionar vários em sequência.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [qaTitulo, setQaTitulo] = useState("");
+  const [qaTipo, setQaTipo] = useState<MetricType>("numero");
+  const [qaDirecao, setQaDirecao] = useState<MetricDirection>("aumentar");
+  const [qaEsperado, setQaEsperado] = useState("");
+  const [qaPeso, setQaPeso] = useState("");
+
   useEffect(() => {
     if (!open) return;
     setTitulo(initial?.titulo ?? "");
@@ -78,6 +118,12 @@ export function ObjetivoDialog({
     setFrequencia(initial?.frequencia ?? "continuo");
     setLinked(indicadoresDoObjetivo);
     setStep(0);
+    setQuickAddOpen(false);
+    setQaTitulo("");
+    setQaTipo("numero");
+    setQaDirecao("aumentar");
+    setQaEsperado("");
+    setQaPeso("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
@@ -89,6 +135,37 @@ export function ObjetivoDialog({
   const unlink = (id: string) => setLinked((prev) => prev.filter((i) => i.id !== id));
   const setPeso = (id: string, peso: number | undefined) =>
     setLinked((prev) => prev.map((i) => (i.id === id ? { ...i, peso } : i)));
+
+  const changeQaTipo = (next: MetricType) => {
+    setQaTipo(next);
+    if (next === "min" || next === "max") setQaDirecao(defaultDirectionForTipo(next));
+  };
+
+  const addQuick = () => {
+    if (!qaTitulo.trim()) return;
+    const num = (s: string): number | undefined => (s.trim() ? Number(s) : undefined);
+    const newInd: Indicador = {
+      kind: "indicador",
+      id: crypto.randomUUID(),
+      titulo: qaTitulo.trim(),
+      area,
+      frequencia,
+      objetivoId,
+      dataSource: "manual",
+      tipo: qaTipo,
+      direcao: qaDirecao,
+      niveis: { esperado: NUMERIC_TYPES.includes(qaTipo) ? num(qaEsperado) : undefined },
+      peso: num(qaPeso),
+      concluido: qaTipo === "binario" ? false : undefined,
+      marcoStatus: qaTipo === "marco" ? "nao_iniciado" : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setLinked((prev) => [...prev, newInd]);
+    setQaTitulo("");
+    setQaEsperado("");
+    setQaPeso("");
+  };
 
   const submit = () => {
     if (!titulo.trim()) return;
@@ -379,15 +456,25 @@ export function ObjetivoDialog({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setIndicadorDialog({})}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                  onClick={() => {
+                    setQuickAddOpen((v) => !v);
+                    setVincularOpen(false);
+                  }}
+                  className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    quickAddOpen
+                      ? "border-foreground bg-muted text-foreground"
+                      : "border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                  }`}
                 >
                   <Plus className="h-3.5 w-3.5" /> Criar novo
                 </button>
                 <div className="relative flex-1">
                   <button
                     type="button"
-                    onClick={() => setVincularOpen((v) => !v)}
+                    onClick={() => {
+                      setVincularOpen((v) => !v);
+                      setQuickAddOpen(false);
+                    }}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                   >
                     Vincular existente
@@ -420,6 +507,92 @@ export function ObjetivoDialog({
                   )}
                 </div>
               </div>
+
+              {quickAddOpen && (
+                <div className="space-y-2.5 rounded-md border border-border bg-muted/30 p-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Dono, colaboradores e período já vêm do objetivo. Dá pra adicionar quantos
+                    quiser aqui — depois de salvar, clique num indicador pra ajustar valor atual,
+                    unidade ou níveis mais finos.
+                  </p>
+                  <input
+                    value={qaTitulo}
+                    onChange={(e) => setQaTitulo(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addQuick();
+                      }
+                    }}
+                    placeholder="Nome do indicador"
+                    autoFocus
+                    className={FIELD_CLS}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={qaTipo}
+                      onChange={(e) => changeQaTipo(e.target.value as MetricType)}
+                      className={FIELD_CLS}
+                    >
+                      {METRIC_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {METRIC_TYPE_LABEL[t]}
+                        </option>
+                      ))}
+                    </select>
+                    {NUMERIC_TYPES.includes(qaTipo) ? (
+                      <select
+                        value={qaDirecao}
+                        onChange={(e) => setQaDirecao(e.target.value as MetricDirection)}
+                        className={FIELD_CLS}
+                      >
+                        {METRIC_DIRECTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {METRIC_DIRECTION_LABEL[d]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+                  {NUMERIC_TYPES.includes(qaTipo) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        value={qaEsperado}
+                        onChange={(e) => setQaEsperado(e.target.value)}
+                        placeholder="Meta esperada"
+                        className={FIELD_CLS}
+                      />
+                      <input
+                        type="number"
+                        value={qaPeso}
+                        onChange={(e) => setQaPeso(e.target.value)}
+                        placeholder="Peso % (opcional)"
+                        className={FIELD_CLS}
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center justify-end gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuickAddOpen(false)}
+                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      Concluir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addQuick}
+                      disabled={!qaTitulo.trim()}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Adicionar
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
