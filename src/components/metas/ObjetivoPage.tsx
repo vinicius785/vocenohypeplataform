@@ -32,6 +32,9 @@ export function ObjetivoPage({
 }: {
   objetivo: Objetivo;
   indicadoresDoObjetivo: Indicador[];
+  /** TODOS os indicadores (não só os sem objetivo) — indicador é
+   * universal, então pode ser vinculado aqui mesmo já estando em outro
+   * objetivo. `linkable` abaixo só desconta quem já está NESTE. */
   indicadoresDisponiveis: Indicador[];
   members: Member[];
   onBack: () => void;
@@ -196,23 +199,31 @@ export function ObjetivoPage({
                   </p>
                   {linkable.length === 0 ? (
                     <p className="px-2 py-1 text-[11px] text-muted-foreground">
-                      Nenhum indicador independente disponível.
+                      Nenhum outro indicador disponível.
                     </p>
                   ) : (
                     <div className="max-h-40 overflow-y-auto">
-                      {linkable.map((i) => (
-                        <button
-                          key={i.id}
-                          type="button"
-                          onClick={() => {
-                            setAddOpen(false);
-                            onLinkIndicador(i.id);
-                          }}
-                          className="block w-full truncate rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                        >
-                          {i.titulo}
-                        </button>
-                      ))}
+                      {linkable.map((i) => {
+                        const outrosVinculos = i.objetivoIds?.length ?? 0;
+                        return (
+                          <button
+                            key={i.id}
+                            type="button"
+                            onClick={() => {
+                              setAddOpen(false);
+                              onLinkIndicador(i.id);
+                            }}
+                            className="block w-full truncate rounded px-2 py-1.5 text-left hover:bg-muted"
+                          >
+                            <span className="block truncate text-xs">{i.titulo}</span>
+                            {outrosVinculos > 0 && (
+                              <span className="block truncate text-[10px] text-muted-foreground">
+                                já em {outrosVinculos} objetivo{outrosVinculos === 1 ? "" : "s"}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -239,7 +250,6 @@ export function ObjetivoPage({
             <div key={ind.id} className="group relative">
               <IndicadorRow
                 indicador={ind}
-                dono={objetivo.dono}
                 onOpen={() => onOpenIndicador(ind.id)}
                 onQuickUpdate={() => setQuickUpdateTarget(ind)}
               />
@@ -273,6 +283,7 @@ export function ObjetivoPage({
       />
       <AjustarPesosDialog
         open={pesosOpen}
+        objetivoId={objetivo.id}
         indicadores={indicadoresDoObjetivo}
         onClose={() => setPesosOpen(false)}
         onSave={(pesos) => {

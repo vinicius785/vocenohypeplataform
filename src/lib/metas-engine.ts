@@ -147,22 +147,28 @@ export function indicadorSaude(ind: Indicador): IndicadorSaude {
   return perf >= 80 ? "atencao" : "em_risco";
 }
 
-/** Peso efetivo do indicador dentro do cálculo do objetivo (0-100).
- * Regras: usa `ind.peso` quando definido; indicadores sem peso dividem
- * igualmente o que sobrar de 100 depois de descontar quem tem peso
- * explícito; se a soma dos pesos explícitos passar de 100, normaliza
- * proporcionalmente em vez de deixar o cálculo do objetivo estourar —
- * um peso mal configurado nunca corrompe o resultado, só fica
- * proporcionalmente menor que o número digitado. */
-export function indicadorPeso(ind: Indicador, siblings: Indicador[]): number {
-  const group = siblings.filter((s) => s.objetivoId === ind.objetivoId && !s.cancelado);
-  const withWeight = group.filter((s) => s.peso != null);
-  const withoutWeight = group.filter((s) => s.peso == null);
-  const explicitSum = withWeight.reduce((s, x) => s + (x.peso ?? 0), 0);
+/** Peso efetivo do indicador dentro do cálculo de UM objetivo específico
+ * (0-100) — o mesmo indicador pode pesar diferente em objetivos
+ * diferentes, por isso `objetivoId` é sempre explícito (nunca inferido de
+ * um único campo no indicador). Regras: usa `ind.pesos[objetivoId]`
+ * quando definido; indicadores sem peso dividem igualmente o que sobrar
+ * de 100 depois de descontar quem tem peso explícito NESTE objetivo; se a
+ * soma dos pesos explícitos passar de 100, normaliza proporcionalmente em
+ * vez de deixar o cálculo do objetivo estourar — um peso mal configurado
+ * nunca corrompe o resultado, só fica proporcionalmente menor que o
+ * número digitado. `siblings` já deve vir filtrado pros indicadores DESTE
+ * objetivo (quem chama decide o grupo, ex. `objetivoProgresso`). */
+export function indicadorPeso(ind: Indicador, siblings: Indicador[], objetivoId: string): number {
+  const group = siblings.filter((s) => !s.cancelado);
+  const pesoDe = (s: Indicador) => s.pesos?.[objetivoId];
+  const withWeight = group.filter((s) => pesoDe(s) != null);
+  const withoutWeight = group.filter((s) => pesoDe(s) == null);
+  const explicitSum = withWeight.reduce((s, x) => s + (pesoDe(x) ?? 0), 0);
 
-  if (ind.peso != null) {
-    if (explicitSum <= 100 || explicitSum === 0) return ind.peso;
-    return (ind.peso / explicitSum) * 100; // normaliza pra nunca passar de 100 somado
+  const indPeso = pesoDe(ind);
+  if (indPeso != null) {
+    if (explicitSum <= 100 || explicitSum === 0) return indPeso;
+    return (indPeso / explicitSum) * 100; // normaliza pra nunca passar de 100 somado
   }
   const remaining = Math.max(0, 100 - Math.min(100, explicitSum));
   return withoutWeight.length > 0 ? remaining / withoutWeight.length : 0;
@@ -175,9 +181,9 @@ export function indicadorPeso(ind: Indicador, siblings: Indicador[]): number {
  * calculável (ainda não configurados) são excluídos do cálculo, não
  * contam como 0. `null` quando não há nenhum indicador calculável. */
 export function objetivoProgresso(objetivoId: string, indicadores: Indicador[]): number | null {
-  const group = indicadores.filter((i) => i.objetivoId === objetivoId && !i.cancelado);
+  const group = indicadores.filter((i) => i.objetivoIds?.includes(objetivoId) && !i.cancelado);
   const scored = group
-    .map((i) => ({ perf: indicadorPerformance(i), peso: indicadorPeso(i, group) }))
+    .map((i) => ({ perf: indicadorPerformance(i), peso: indicadorPeso(i, group, objetivoId) }))
     .filter((x): x is { perf: number; peso: number } => x.perf !== null);
   if (scored.length === 0) return null;
   const totalPeso = scored.reduce((s, x) => s + x.peso, 0);
@@ -197,7 +203,7 @@ export type ObjetivoStats = {
 };
 
 export function objetivoStats(objetivoId: string, indicadores: Indicador[]): ObjetivoStats {
-  const group = indicadores.filter((i) => i.objetivoId === objetivoId);
+  const group = indicadores.filter((i) => i.objetivoIds?.includes(objetivoId));
   const stats: ObjetivoStats = {
     total: group.length,
     saudaveis: 0,

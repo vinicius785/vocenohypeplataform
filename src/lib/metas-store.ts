@@ -5,11 +5,12 @@ import { createTableArrayStore } from "./table-array-store";
  * número só" (`tipo: "numerica"|"binaria"`, um `responsavel`, um `prazo`).
  * As duas variantes vivem na MESMA tabela `metas` (uma linha por item,
  * mesma RLS/realtime de sempre — sem migration de schema, só muda o
- * formato do `data` JSONB), diferenciadas por `kind`. Um Indicador aponta
- * pro Objetivo com `objetivoId?` (mesmo padrão de referência solta já
- * usado em `financeiro-entries.ts`: `clienteId?`/`campanhaId?`) — sem
- * `objetivoId`, ele é um indicador independente (é exatamente o que toda
- * meta antiga vira ao ser migrada, ver `normalizeMetaItem`).
+ * formato do `data` JSONB), diferenciadas por `kind`. Um Indicador é
+ * "universal": aponta pra zero ou mais Objetivos com `objetivoIds?`
+ * (mesmo espírito de referência solta já usado em `financeiro-entries.ts`:
+ * `clienteId?`/`campanhaId?`, só que em lista) — array vazio/ausente = ele
+ * é um indicador independente (é exatamente o que toda meta antiga vira
+ * ao ser migrada, ver `normalizeMetaItem`).
  *
  * Toda a lógica de cálculo (performance/saúde/peso/progresso do objetivo)
  * fica em `metas-engine.ts` — este arquivo só cuida de tipos e persistência.
@@ -110,21 +111,28 @@ type MetaBase = {
   updatedAt?: string;
 };
 
-/** Resultado maior, composto por vários indicadores (`Indicador.objetivoId`
- * apontando de volta pra ele). O progresso do Objetivo é sempre DERIVADO
+/** Resultado maior, composto por vários indicadores (`Indicador.objetivoIds`
+ * incluindo o id dele — um indicador pode apontar pra vários objetivos ao
+ * mesmo tempo). O progresso do Objetivo é sempre DERIVADO
  * (`objetivoProgresso` em `metas-engine.ts`) a partir do desempenho de
  * cada indicador — nunca um número guardado à parte que possa dessincronizar. */
 export type Objetivo = MetaBase & { kind: "objetivo" };
 
-/** Métrica individual — pode pertencer a um Objetivo (`objetivoId`) ou
- * existir sozinha. */
+/** Métrica individual — "universal": pode pertencer a zero, um ou vários
+ * Objetivos ao mesmo tempo (`objetivoIds`), contando pro progresso de
+ * cada um com um peso próprio (`pesos`). Diferente de Objetivo, sempre
+ * tem seus PRÓPRIOS dono/colaboradores/período/frequência (herdados de
+ * `MetaBase`) — nunca apagados/herdados de um objetivo pai, já que agora
+ * pode ter vários ao mesmo tempo (ou nenhum). */
 export type Indicador = MetaBase & {
   kind: "indicador";
-  objetivoId?: string;
-  /** 0-100, só relevante quando `objetivoId` está setado — ver
-   * `indicadorPeso` em `metas-engine.ts` pra como pesos ausentes/inválidos
-   * são tratados (nunca corrompe o cálculo do objetivo). */
-  peso?: number;
+  objetivoIds?: string[];
+  /** Peso (0-100) deste indicador dentro do cálculo de CADA objetivo,
+   * indexado por `objetivoId` — o mesmo indicador pode pesar diferente em
+   * objetivos diferentes. Ver `indicadorPeso` em `metas-engine.ts` pra
+   * como pesos ausentes/inválidos são tratados (nunca corrompe o cálculo
+   * do objetivo). */
+  pesos?: Record<string, number>;
   tipo: MetricType;
   /** `tipo: "min"`/`"max"` pré-selecionam isso no formulário
    * (`manter_acima`/`manter_abaixo`), mas o motor de cálculo sempre olha
@@ -202,8 +210,8 @@ function migrateLegacyMeta(m: LegacyMeta): Indicador {
     cancelado: m.cancelada,
     createdAt: m.createdAt,
     updatedAt: m.updatedAt,
-    objetivoId: undefined,
-    peso: undefined,
+    objetivoIds: undefined,
+    pesos: undefined,
     tipo: m.tipo === "binaria" ? "binario" : "numero",
     // Único sentido que o modelo antigo já implicava: valorAtual crescendo
     // até bater valorAlvo.
@@ -218,12 +226,30 @@ function migrateLegacyMeta(m: LegacyMeta): Indicador {
   };
 }
 
+/** Indicador salvo no formato anterior a "indicador universal" tinha um
+ * único `objetivoId?: string` + `peso?: number`, em vez de
+ * `objetivoIds?: string[]` + `pesos?: Record<string, number>`. Traduz
+ * não-destrutivamente (só regrava no formato novo se o indicador for
+ * salvo de novo depois) — mesmo espírito de `migrateLegacyMeta`. */
+function normalizeIndicadorLinks(ind: Indicador): Indicador {
+  const legacy = ind as Indicador & { objetivoId?: string; peso?: number };
+  if (legacy.objetivoIds !== undefined || legacy.objetivoId == null) return ind;
+  return {
+    ...ind,
+    objetivoIds: [legacy.objetivoId],
+    pesos: legacy.peso != null ? { [legacy.objetivoId]: legacy.peso } : undefined,
+  };
+}
+
 /** Única porta de entrada pra normalizar uma linha da tabela `metas` —
- * chamada por `loadMetas()`. Formato novo passa direto; formato antigo é
- * migrado via `migrateLegacyMeta`. */
+ * chamada por `loadMetas()`. Formato novo passa direto; formato antigo de
+ * meta legada é migrado via `migrateLegacyMeta`; indicador no formato
+ * anterior de vínculo único (`objetivoId`/`peso`) é traduzido via
+ * `normalizeIndicadorLinks`. */
 export function normalizeMetaItem(raw: unknown): MetaItem {
   if (isLegacyMeta(raw)) return migrateLegacyMeta(raw);
-  return raw as MetaItem;
+  const item = raw as MetaItem;
+  return item.kind === "indicador" ? normalizeIndicadorLinks(item) : item;
 }
 
 const store = createTableArrayStore<MetaItem>("metas");

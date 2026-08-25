@@ -15,22 +15,18 @@ import { formatIndicadorValor } from "./metas-ui-utils";
  * principal. Clicar no corpo abre a página do indicador; o botão
  * "Atualizar" no rodapé abre a atualização rápida ali mesmo, sem precisar
  * entrar na página — pensado pra digitar vários valores em sequência sem
- * navegar. `dono` é opcional porque um indicador vinculado a um objetivo
- * não tem dono próprio — quem chama passa o dono do objetivo pai. */
+ * navegar. Indicador é universal (pode estar em vários objetivos ao mesmo
+ * tempo), então sempre mostra o PRÓPRIO dono — nunca herdado de um
+ * objetivo específico. */
 export function IndicadorRow({
   indicador,
-  dono,
   onOpen,
   onQuickUpdate,
 }: {
   indicador: Indicador;
-  /** Nome a exibir — o próprio `indicador.dono` (independente) ou o dono
-   * do objetivo pai (vinculado). */
-  dono?: string;
   onOpen: () => void;
   onQuickUpdate: () => void;
 }) {
-  const donoNome = dono ?? indicador.dono;
   const saude = indicadorSaude(indicador);
   const progresso = indicadorProgressoExibicao(indicador);
   const valor =
@@ -82,7 +78,7 @@ export function IndicadorRow({
             />
           </div>
           <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
-            {donoNome || "Sem dono"}
+            {indicador.dono || "Sem dono"}
           </p>
         </div>
       </button>

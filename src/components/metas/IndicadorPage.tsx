@@ -38,27 +38,36 @@ function StatBlock({ label, children }: { label: string; children: React.ReactNo
 }
 
 /** Página de gestão de um Indicador — valor atual em destaque + ação de
- * atualizar, desempenho, acompanhamento (dono/colaboradores herdados ou
- * próprios), histórico completo, e configurações avançadas escondidas
- * atrás de um "mostrar" (progressive disclosure — não aparecem de cara). */
+ * atualizar, desempenho, acompanhamento (sempre do próprio indicador —
+ * "universal" não herda mais de nenhum objetivo), histórico completo, e
+ * configurações avançadas escondidas atrás de um "mostrar" (progressive
+ * disclosure — não aparecem de cara). */
 export function IndicadorPage({
   indicador,
-  objetivo,
+  cameFromObjetivo,
+  objetivosVinculados,
   members,
   onBack,
+  onOpenObjetivo,
   onDelete,
   onUpdate,
   onSaveAdvanced,
+  onUnlinkObjetivo,
 }: {
   indicador: Indicador;
-  /** Objetivo pai, quando vinculado — usado só pra exibir os valores
-   * herdados de dono/colaboradores/período/frequência. */
-  objetivo?: Objetivo;
+  /** De qual objetivo esta página foi aberta (se foi) — só pra rotular o
+   * botão "voltar"; não é "o" objetivo do indicador, que pode ter vários
+   * (ver `objetivosVinculados`). */
+  cameFromObjetivo?: Objetivo;
+  /** TODOS os objetivos que este indicador alimenta hoje. */
+  objetivosVinculados: Objetivo[];
   members: Member[];
   onBack: () => void;
+  onOpenObjetivo: (id: string) => void;
   onDelete: () => void;
   onUpdate: (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => void;
   onSaveAdvanced: (ind: Indicador) => void;
+  onUnlinkObjetivo: (objetivoId: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -68,9 +77,6 @@ export function IndicadorPage({
 
   const saude = indicadorSaude(indicador);
   const progresso = indicadorProgressoExibicao(indicador);
-  const linked = !!indicador.objetivoId;
-  const donoNome = linked ? objetivo?.dono : indicador.dono;
-  const colaboradoresNomes = linked ? objetivo?.colaboradores : indicador.colaboradores;
 
   const valorPrincipal =
     indicador.tipo === "binario"
@@ -108,7 +114,7 @@ export function IndicadorPage({
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" /> {objetivo ? objetivo.titulo : "Metas"}
+          <ArrowLeft className="h-4 w-4" /> {cameFromObjetivo ? cameFromObjetivo.titulo : "Metas"}
         </button>
         <div ref={menuRef} className="relative">
           <button
@@ -140,10 +146,7 @@ export function IndicadorPage({
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
         {indicador.titulo}
       </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {donoNome || "Sem dono"}
-        {linked && " · herdado do objetivo"}
-      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{indicador.dono || "Sem dono"}</p>
       {indicador.descricao && (
         <p className="mt-2 text-sm text-muted-foreground">{indicador.descricao}</p>
       )}
@@ -216,9 +219,9 @@ export function IndicadorPage({
       <div className="mt-9">
         <h2 className="text-sm font-semibold text-foreground">Acompanhamento</h2>
         <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-          <StatBlock label="Dono">{donoNome || "Sem dono"}</StatBlock>
+          <StatBlock label="Dono">{indicador.dono || "Sem dono"}</StatBlock>
           <StatBlock label="Colaboradores">
-            {colaboradoresNomes?.length ? colaboradoresNomes.join(", ") : "Nenhum"}
+            {indicador.colaboradores?.length ? indicador.colaboradores.join(", ") : "Nenhum"}
           </StatBlock>
           <StatBlock label="Frequência">
             <span className="capitalize">{indicador.frequencia}</span>
@@ -228,6 +231,25 @@ export function IndicadorPage({
           </StatBlock>
         </div>
       </div>
+
+      {/* Vinculado a — pode ser mais de um objetivo, indicador é universal */}
+      {objetivosVinculados.length > 0 && (
+        <div className="mt-9">
+          <h2 className="text-sm font-semibold text-foreground">Vinculado a</h2>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {objetivosVinculados.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => onOpenObjetivo(o.id)}
+                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
+              >
+                {o.titulo}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Histórico */}
       <div className="mt-9">
@@ -255,8 +277,10 @@ export function IndicadorPage({
           <div className="mt-3 rounded-lg border border-border p-4">
             <IndicadorAdvancedSettings
               indicador={indicador}
+              objetivosVinculados={objetivosVinculados}
               members={members}
               onSave={onSaveAdvanced}
+              onUnlinkObjetivo={onUnlinkObjetivo}
             />
           </div>
         )}

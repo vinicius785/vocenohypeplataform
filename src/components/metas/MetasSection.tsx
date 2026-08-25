@@ -37,7 +37,10 @@ const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
 type MetasView =
   | { kind: "list" }
   | { kind: "objetivo"; id: string }
-  | { kind: "indicador"; id: string };
+  // `fromObjetivoId` só serve pra rotular o botão "voltar" — a lista
+  // completa de objetivos que o indicador alimenta aparece na própria
+  // página dele (`IndicadorPage`), já que agora pode estar em vários.
+  | { kind: "indicador"; id: string; fromObjetivoId?: string };
 
 export function MetasSection() {
   const [items, setItems] = useState<MetaItem[]>(() => loadMetas());
@@ -96,7 +99,7 @@ export function MetasSection() {
     [items],
   );
   const indicadoresStandalone = useMemo(
-    () => indicadores.filter((i) => !i.objetivoId),
+    () => indicadores.filter((i) => !i.objetivoIds?.length),
     [indicadores],
   );
 
@@ -213,37 +216,39 @@ export function MetasSection() {
     persist([...items, ind]);
   };
 
+  // Indicador é universal: vincular só ADICIONA objetivoId à lista dele
+  // (nunca mexe em dono/colaboradores/período — isso é sempre do próprio
+  // indicador agora, não herdado de nenhum objetivo).
   const linkIndicador = (objetivoId: string, indId: string) => {
-    const objetivo = objetivos.find((o) => o.id === objetivoId);
     persist(
       items.map((x) =>
         x.id === indId && x.kind === "indicador"
-          ? {
-              ...x,
-              objetivoId,
-              dono: undefined,
-              colaboradores: undefined,
-              dataInicio: undefined,
-              dataFim: undefined,
-              frequencia: objetivo?.frequencia ?? x.frequencia,
-            }
+          ? { ...x, objetivoIds: Array.from(new Set([...(x.objetivoIds ?? []), objetivoId])) }
           : x,
       ),
     );
   };
 
-  const unlinkIndicador = (indId: string) => {
+  const unlinkIndicador = (objetivoId: string, indId: string) => {
     persist(
-      items.map((x) =>
-        x.id === indId && x.kind === "indicador" ? { ...x, objetivoId: undefined } : x,
-      ),
+      items.map((x) => {
+        if (x.id !== indId || x.kind !== "indicador") return x;
+        const { [objetivoId]: _removido, ...restoPesos } = x.pesos ?? {};
+        return {
+          ...x,
+          objetivoIds: (x.objetivoIds ?? []).filter((id) => id !== objetivoId),
+          pesos: Object.keys(restoPesos).length ? restoPesos : undefined,
+        };
+      }),
     );
   };
 
-  const savePesos = (pesos: Record<string, number>) => {
+  const savePesos = (objetivoId: string, pesos: Record<string, number>) => {
     persist(
       items.map((x) =>
-        x.kind === "indicador" && pesos[x.id] != null ? { ...x, peso: pesos[x.id] } : x,
+        x.kind === "indicador" && pesos[x.id] != null
+          ? { ...x, pesos: { ...x.pesos, [objetivoId]: pesos[x.id] } }
+          : x,
       ),
     );
   };
@@ -277,7 +282,7 @@ export function MetasSection() {
   };
 
   const handleDeleteObjetivo = async (obj: Objetivo) => {
-    const filhos = indicadores.filter((i) => i.objetivoId === obj.id);
+    const filhos = indicadores.filter((i) => i.objetivoIds?.includes(obj.id));
     const ok = await confirm(
       filhos.length > 0
         ? `Excluir o objetivo "${obj.titulo}"? Os ${filhos.length} indicador(es) vinculados continuam existindo, só deixam de fazer parte deste objetivo.`
@@ -288,7 +293,9 @@ export function MetasSection() {
       items
         .filter((x) => x.id !== obj.id)
         .map((x) =>
-          x.kind === "indicador" && x.objetivoId === obj.id ? { ...x, objetivoId: undefined } : x,
+          x.kind === "indicador" && x.objetivoIds?.includes(obj.id)
+            ? { ...x, objetivoIds: x.objetivoIds.filter((id) => id !== obj.id) }
+            : x,
         ),
     );
     if (view.kind === "objetivo" && view.id === obj.id) setViewStack([{ kind: "list" }]);
@@ -310,17 +317,17 @@ export function MetasSection() {
       <>
         <ObjetivoPage
           objetivo={objetivo}
-          indicadoresDoObjetivo={indicadores.filter((i) => i.objetivoId === objetivo.id)}
-          indicadoresDisponiveis={indicadoresStandalone}
+          indicadoresDoObjetivo={indicadores.filter((i) => i.objetivoIds?.includes(objetivo.id))}
+          indicadoresDisponiveis={indicadores}
           members={members}
           onBack={pop}
-          onOpenIndicador={(id) => push({ kind: "indicador", id })}
+          onOpenIndicador={(id) => push({ kind: "indicador", id, fromObjetivoId: objetivo.id })}
           onEdit={() => setObjetivoDialog({ data: objetivo })}
           onDelete={() => void handleDeleteObjetivo(objetivo)}
           onCreateIndicador={createIndicadorForObjetivo}
           onLinkIndicador={(id) => linkIndicador(objetivo.id, id)}
-          onUnlinkIndicador={unlinkIndicador}
-          onSavePesos={savePesos}
+          onUnlinkIndicador={(id) => unlinkIndicador(objetivo.id, id)}
+          onSavePesos={(pesos) => savePesos(objetivo.id, pesos)}
           onQuickUpdate={updateIndicadorPatch}
         />
         <ObjetivoQuickDialog
@@ -338,19 +345,23 @@ export function MetasSection() {
   if (view.kind === "indicador") {
     const indicador = indicadores.find((i) => i.id === view.id);
     if (!indicador) return null;
-    const objetivoPai = indicador.objetivoId
-      ? objetivos.find((o) => o.id === indicador.objetivoId)
+    const cameFromObjetivo = view.fromObjetivoId
+      ? objetivos.find((o) => o.id === view.fromObjetivoId)
       : undefined;
+    const objetivosVinculados = objetivos.filter((o) => indicador.objetivoIds?.includes(o.id));
     return (
       <>
         <IndicadorPage
           indicador={indicador}
-          objetivo={objetivoPai}
+          cameFromObjetivo={cameFromObjetivo}
+          objetivosVinculados={objetivosVinculados}
           members={members}
           onBack={pop}
+          onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
           onDelete={() => void handleDeleteIndicador(indicador)}
           onUpdate={updateIndicadorPatch}
           onSaveAdvanced={saveIndicadorAdvanced}
+          onUnlinkObjetivo={(objetivoId) => unlinkIndicador(objetivoId, indicador.id)}
         />
         {confirmDialog}
       </>
@@ -580,7 +591,7 @@ export function MetasSection() {
                   <ObjetivoSummaryCard
                     key={o.id}
                     objetivo={o}
-                    indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                    indicadores={indicadores.filter((i) => i.objetivoIds?.includes(o.id))}
                     members={members}
                     onOpen={() => push({ kind: "objetivo", id: o.id })}
                   />
@@ -602,7 +613,7 @@ export function MetasSection() {
                       <ObjetivoSummaryCard
                         key={o.id}
                         objetivo={o}
-                        indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                        indicadores={indicadores.filter((i) => i.objetivoIds?.includes(o.id))}
                         members={members}
                         onOpen={() => push({ kind: "objetivo", id: o.id })}
                       />

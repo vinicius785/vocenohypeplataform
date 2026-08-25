@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import {
   META_AREAS,
   TRACKING_FREQUENCIES,
@@ -6,6 +7,7 @@ import {
   METRIC_DIRECTIONS,
   INDICADOR_MARCO_STATUSES,
   type Indicador,
+  type Objetivo,
   type MetaArea,
   type TrackingFrequency,
   type MetricType,
@@ -57,18 +59,28 @@ const NUMERIC_TYPES: MetricType[] = ["numero", "percentual", "moeda", "min", "ma
 
 /** Painel "Configurações avançadas" da página do indicador — os campos
  * técnicos que a criação rápida (`IndicadorQuickCreateDialog`) não expõe:
- * tipo/direção completos (inclui marco/manual), níveis de meta, e (só se
- * independente) responsabilidade/período/frequência, e origem/peso. Tudo
- * numa lista só, sem etapas — quem abriu isso já optou por configurar,
- * não precisa de progressive disclosure dentro do próprio painel. */
+ * tipo/direção completos (inclui marco/manual), níveis de meta,
+ * responsabilidade/período/frequência (sempre do próprio indicador —
+ * "universal" não herda mais de um objetivo único) e origem. Peso NÃO
+ * mora aqui: como o mesmo indicador pode estar em vários objetivos com
+ * pesos diferentes, isso só se ajusta em "Ajustar pesos" de cada
+ * objetivo. Tudo numa lista só, sem etapas — quem abriu isso já optou
+ * por configurar, não precisa de progressive disclosure aqui dentro. */
 export function IndicadorAdvancedSettings({
   indicador,
+  objetivosVinculados,
   members,
   onSave,
+  onUnlinkObjetivo,
 }: {
   indicador: Indicador;
+  /** Objetivos que este indicador alimenta hoje — só pra exibir a lista e
+   * permitir desvincular daqui também (o mesmo "x" já existe no card
+   * dentro de cada objetivo, isso é só um segundo acesso). */
+  objetivosVinculados: Objetivo[];
   members: Member[];
   onSave: (ind: Indicador) => void;
+  onUnlinkObjetivo: (objetivoId: string) => void;
 }) {
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -89,9 +101,6 @@ export function IndicadorAdvancedSettings({
   const [valorAtual, setValorAtual] = useState("");
   const [concluido, setConcluido] = useState(false);
   const [marcoStatus, setMarcoStatus] = useState<IndicadorMarcoStatus>("nao_iniciado");
-  const [peso, setPeso] = useState("");
-
-  const linkedToObjetivo = !!indicador.objetivoId;
 
   useEffect(() => {
     setTitulo(indicador.titulo);
@@ -113,7 +122,6 @@ export function IndicadorAdvancedSettings({
     setValorAtual(indicador.valorAtual != null ? String(indicador.valorAtual) : "");
     setConcluido(indicador.concluido ?? false);
     setMarcoStatus(indicador.marcoStatus ?? "nao_iniciado");
-    setPeso(indicador.peso != null ? String(indicador.peso) : "");
   }, [indicador]);
 
   const toggleColaborador = (name: string) =>
@@ -129,17 +137,12 @@ export function IndicadorAdvancedSettings({
       titulo: titulo.trim(),
       descricao: descricao.trim() || undefined,
       area,
-      dono: linkedToObjetivo ? undefined : dono || undefined,
-      colaboradores: linkedToObjetivo
-        ? undefined
-        : colaboradores.length
-          ? colaboradores
-          : undefined,
-      dataInicio: linkedToObjetivo ? undefined : dataInicio || undefined,
-      dataFim: linkedToObjetivo ? undefined : dataFim || undefined,
-      frequencia: linkedToObjetivo ? indicador.frequencia : frequencia,
+      dono: dono || undefined,
+      colaboradores: colaboradores.length ? colaboradores : undefined,
+      dataInicio: dataInicio || undefined,
+      dataFim: dataFim || undefined,
+      frequencia,
       updatedAt: new Date().toISOString(),
-      peso: linkedToObjetivo ? num(peso) : undefined,
       tipo,
       direcao,
       dataSource,
@@ -320,88 +323,76 @@ export function IndicadorAdvancedSettings({
 
       <div className="space-y-3 border-t border-border pt-4">
         <p className={SECTION_TITLE_CLS}>Responsabilidade e período</p>
-        {linkedToObjetivo ? (
-          <p className="text-xs text-muted-foreground">
-            Herdado do objetivo — edite lá pra mudar dono, colaboradores ou período.
-          </p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLS}>Dono</label>
-                <select
-                  value={dono}
-                  onChange={(e) => setDono(e.target.value)}
-                  className={FIELD_CLS}
-                >
-                  <option value="">Sem dono</option>
-                  {members.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Frequência</label>
-                <select
-                  value={frequencia}
-                  onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
-                  className={FIELD_CLS}
-                >
-                  {TRACKING_FREQUENCIES.map((f) => (
-                    <option key={f} value={f}>
-                      {FREQUENCY_LABEL[f]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {members.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {members
-                  .filter((m) => m.name !== dono)
-                  .map((m) => {
-                    const active = colaboradores.includes(m.name);
-                    return (
-                      <button
-                        key={m.name}
-                        type="button"
-                        onClick={() => toggleColaborador(m.name)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                          active
-                            ? "border-foreground bg-muted text-foreground"
-                            : "border-border text-muted-foreground hover:bg-muted/40"
-                        }`}
-                      >
-                        {m.name}
-                      </button>
-                    );
-                  })}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLS}>Data inicial</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className={FIELD_CLS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Data final</label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className={FIELD_CLS}
-                />
-              </div>
-            </div>
-          </>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLS}>Dono</label>
+            <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
+              <option value="">Sem dono</option>
+              {members.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Frequência</label>
+            <select
+              value={frequencia}
+              onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
+              className={FIELD_CLS}
+            >
+              {TRACKING_FREQUENCIES.map((f) => (
+                <option key={f} value={f}>
+                  {FREQUENCY_LABEL[f]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {members.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {members
+              .filter((m) => m.name !== dono)
+              .map((m) => {
+                const active = colaboradores.includes(m.name);
+                return (
+                  <button
+                    key={m.name}
+                    type="button"
+                    onClick={() => toggleColaborador(m.name)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                      active
+                        ? "border-foreground bg-muted text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    {m.name}
+                  </button>
+                );
+              })}
+          </div>
         )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLS}>Data inicial</label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className={FIELD_CLS}
+            />
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Data final</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className={FIELD_CLS}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3 border-t border-border pt-4">
@@ -425,18 +416,37 @@ export function IndicadorAdvancedSettings({
         </div>
       </div>
 
-      {linkedToObjetivo && (
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className={SECTION_TITLE_CLS}>Peso no objetivo</p>
-          <input
-            type="number"
-            value={peso}
-            onChange={(e) => setPeso(e.target.value)}
-            placeholder="Vazio = divide igual (ou use Ajustar pesos no objetivo)"
-            className={FIELD_CLS}
-          />
-        </div>
-      )}
+      <div className="space-y-3 border-t border-border pt-4">
+        <p className={SECTION_TITLE_CLS}>Vinculado a</p>
+        {objetivosVinculados.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nenhum objetivo — este indicador é independente.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {objetivosVinculados.map((o) => (
+              <li
+                key={o.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5"
+              >
+                <span className="truncate text-xs text-foreground">{o.titulo}</span>
+                <button
+                  type="button"
+                  onClick={() => onUnlinkObjetivo(o.id)}
+                  title="Desvincular deste objetivo"
+                  aria-label="Desvincular deste objetivo"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-[11px] text-muted-foreground">
+          Peso em cada objetivo se ajusta em "Ajustar pesos", dentro da página do objetivo.
+        </p>
+      </div>
 
       <div className="flex justify-end border-t border-border pt-4">
         <button

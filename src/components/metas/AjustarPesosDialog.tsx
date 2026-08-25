@@ -10,11 +10,15 @@ import { indicadorPeso } from "@/lib/metas-engine";
  * inventa um número diferente do que está valendo). */
 export function AjustarPesosDialog({
   open,
+  objetivoId,
   indicadores,
   onClose,
   onSave,
 }: {
   open: boolean;
+  /** Objetivo cujo peso está sendo ajustado — o mesmo indicador pode ter
+   * um peso diferente em outro objetivo, então isso é sempre explícito. */
+  objetivoId: string;
   indicadores: Indicador[];
   onClose: () => void;
   onSave: (pesos: Record<string, number>) => void;
@@ -25,7 +29,7 @@ export function AjustarPesosDialog({
     if (!open) return;
     const next: Record<string, string> = {};
     for (const ind of indicadores) {
-      next[ind.id] = String(Math.round(indicadorPeso(ind, indicadores) * 10) / 10);
+      next[ind.id] = String(Math.round(indicadorPeso(ind, indicadores, objetivoId) * 10) / 10);
     }
     setPesos(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps

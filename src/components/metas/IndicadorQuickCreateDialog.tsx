@@ -63,7 +63,8 @@ function unidadeFor(how: HowKind, unit: Unit, unidadeLivre: string): string | un
  * escolher os termos técnicos direto. `marco`/`manual` e os níveis
  * avançados (baseline/mínima/excelência/origem/peso) não aparecem aqui —
  * ficam em "Configurações avançadas" na página do indicador, depois de
- * criado. */
+ * criado. Indicador é universal: sempre tem seu próprio dono/período,
+ * vinculado a um Objetivo ou não — esses campos nunca ficam escondidos. */
 export function IndicadorQuickCreateDialog({
   open,
   objetivoId,
@@ -73,9 +74,9 @@ export function IndicadorQuickCreateDialog({
   onCreate,
 }: {
   open: boolean;
-  /** Setado quando criado de dentro de um Objetivo — nesse caso
-   * área/dono/colaboradores/período são herdados do objetivo (não
-   * perguntados aqui), igual já funciona hoje pra indicador vinculado. */
+  /** Setado quando criado de dentro de um Objetivo — nesse caso o
+   * indicador já nasce vinculado a ele (`objetivoIds: [objetivoId]`), e
+   * `objetivoArea` só pré-preenche o campo Área como sugestão. */
   objetivoId?: string;
   objetivoArea?: MetaArea;
   members: Member[];
@@ -91,8 +92,6 @@ export function IndicadorQuickCreateDialog({
   const [dono, setDono] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
-
-  const standalone = !objetivoId;
 
   useEffect(() => {
     if (!open) return;
@@ -115,12 +114,12 @@ export function IndicadorQuickCreateDialog({
       kind: "indicador",
       id: crypto.randomUUID(),
       titulo: titulo.trim(),
-      area: objetivoId ? (objetivoArea ?? area) : area,
-      dono: standalone ? dono || undefined : undefined,
-      dataInicio: standalone ? dataInicio || undefined : undefined,
-      dataFim: standalone ? dataFim || undefined : undefined,
+      area,
+      dono: dono || undefined,
+      dataInicio: dataInicio || undefined,
+      dataFim: dataFim || undefined,
       frequencia: "continuo",
-      objetivoId,
+      objetivoIds: objetivoId ? [objetivoId] : undefined,
       tipo,
       direcao,
       dataSource: "manual",
@@ -264,58 +263,50 @@ export function IndicadorQuickCreateDialog({
             </p>
           )}
 
-          {standalone && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLS}>Área</label>
-                  <select
-                    value={area}
-                    onChange={(e) => setArea(e.target.value as MetaArea)}
-                    className={FIELD_CLS}
-                  >
-                    {META_AREAS.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>Dono</label>
-                  <select
-                    value={dono}
-                    onChange={(e) => setDono(e.target.value)}
-                    className={FIELD_CLS}
-                  >
-                    <option value="">Sem dono</option>
-                    {members.map((m) => (
-                      <option key={m.name} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Período (opcional)</label>
-                <div className="mt-1 grid grid-cols-2 gap-3">
-                  <input
-                    type="date"
-                    value={dataInicio}
-                    onChange={(e) => setDataInicio(e.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <input
-                    type="date"
-                    value={dataFim}
-                    onChange={(e) => setDataFim(e.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              </div>
-            </>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>Área</label>
+              <select
+                value={area}
+                onChange={(e) => setArea(e.target.value as MetaArea)}
+                className={FIELD_CLS}
+              >
+                {META_AREAS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Dono</label>
+              <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
+                <option value="">Sem dono</option>
+                {members.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Período (opcional)</label>
+            <div className="mt-1 grid grid-cols-2 gap-3">
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-4">
