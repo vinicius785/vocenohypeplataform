@@ -76,6 +76,13 @@ type DashTask = {
    * campanha, que não tem rota própria e precisa do deep-link por
    * sessionStorage já usado pelo indicador de timer ativo. */
   campanhaId?: string;
+  /** Presente = isso é uma subtarefa (título da tarefa-mãe direta, só pra
+   * exibição). Subtarefas não têm dialog próprio pra abrir sozinhas — só
+   * são editadas de dentro do dialog da tarefa de nível raiz, que é o que
+   * `parentId` aponta (pode ser diferente de um `parentTitle` mais de um
+   * nível acima, se houver subtarefa dentro de subtarefa). */
+  parentTitle?: string;
+  parentId?: string;
 };
 
 type PersonalItem = { id: string; text: string; done: boolean };
@@ -132,6 +139,7 @@ type CampanhaTaskLike = {
   status: ProjTask["status"];
   assignee?: string;
   assignees?: string[];
+  subtasks?: CampanhaTaskLike[];
 };
 
 /** `campanhaNames` mapeia campanhaId -> nome, pra dar título nas tarefas de
@@ -142,39 +150,66 @@ type CampanhaTaskLike = {
  * `meName` filtra pra só entrar tarefa onde a pessoa está entre os
  * responsáveis (sozinha ou dividindo com mais alguém) — "Meu trabalho" é
  * pra ser pessoal, não a lista de tarefas de todo mundo. */
+/** Percorre uma tarefa e (recursivamente) suas subtarefas, empurrando uma
+ * entrada pra cada uma que tenha a pessoa entre os responsáveis — uma
+ * subtarefa pode ter um responsável diferente da tarefa-mãe, então cada
+ * nível é checado à parte, não só a raiz. `parentTitle` é o título do pai
+ * DIRETO (só pra contexto na lista) — quem chama sempre associa a entrada
+ * ao id da tarefa de nível raiz pra navegação, já que subtarefa não tem
+ * dialog próprio pra abrir sozinha. */
+function collectAssignedTasks<T extends CampanhaTaskLike>(
+  items: T[],
+  meName: string,
+  parentTitle: string | undefined,
+  push: (t: T, parentTitle: string | undefined) => void,
+): void {
+  for (const t of items) {
+    if (getTaskAssignees(t).includes(meName)) push(t, parentTitle);
+    if (t.subtasks?.length) {
+      collectAssignedTasks(t.subtasks as T[], meName, t.title, push);
+    }
+  }
+}
+
 function loadAllTasks(campanhaNames: Map<string, string>, meName: string): DashTask[] {
   const projs = loadProjetos();
   const out: DashTask[] = [];
   for (const p of projs) {
-    for (const t of p.tasks ?? []) {
-      if (!getTaskAssignees(t).includes(meName)) continue;
-      const b = bucketFor(t.dueDate, t.status);
-      out.push({
-        id: t.id,
-        projectId: p.id,
-        projectName: p.name,
-        title: t.title,
-        bucket: b,
-        due: formatDue(t.dueDate, b),
-        priority: t.priority,
-        status: t.status,
+    for (const root of p.tasks ?? []) {
+      collectAssignedTasks([root], meName, undefined, (t, parentTitle) => {
+        const b = bucketFor(t.dueDate, t.status);
+        out.push({
+          id: t.id,
+          projectId: p.id,
+          projectName: p.name,
+          title: t.title,
+          bucket: b,
+          due: formatDue(t.dueDate, b),
+          priority: t.priority,
+          status: t.status,
+          parentTitle,
+          parentId: parentTitle ? root.id : undefined,
+        });
       });
     }
   }
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
-    for (const t of tasks as unknown as CampanhaTaskLike[]) {
-      if (!getTaskAssignees(t).includes(meName)) continue;
-      const b = bucketFor(t.dueDate, t.status);
-      out.push({
-        id: t.id,
-        projectId: "",
-        projectName: campanhaNames.get(campanhaId) ?? "Campanha",
-        title: t.title,
-        bucket: b,
-        due: formatDue(t.dueDate, b),
-        priority: t.priority,
-        status: t.status,
-        campanhaId,
+    for (const root of tasks as unknown as CampanhaTaskLike[]) {
+      collectAssignedTasks([root], meName, undefined, (t, parentTitle) => {
+        const b = bucketFor(t.dueDate, t.status);
+        out.push({
+          id: t.id,
+          projectId: "",
+          projectName: campanhaNames.get(campanhaId) ?? "Campanha",
+          title: t.title,
+          bucket: b,
+          due: formatDue(t.dueDate, b),
+          priority: t.priority,
+          status: t.status,
+          campanhaId,
+          parentTitle,
+          parentId: parentTitle ? root.id : undefined,
+        });
       });
     }
   }
@@ -464,18 +499,22 @@ export function InicioDashboard() {
   };
 
   const openTask = (t: DashTask) => {
+    // Subtarefa não tem dialog próprio pra abrir sozinha (só é editada de
+    // dentro do dialog da tarefa-mãe de nível raiz) — abre o pai em vez
+    // dela; a subtarefa aparece logo na lista de subtarefas já expandida.
+    const targetId = t.parentId ?? t.id;
     if (t.campanhaId) {
       // Campanhas não têm rota própria (é tudo dentro de /time?section=campanhas,
       // navegação client-side) — mesmo deep-link por sessionStorage que o
       // indicador de timer ativo (AppShell) já usa pra abrir campanha + tarefa.
       sessionStorage.setItem(
         OPEN_CAMPANHA_TASK_KEY,
-        JSON.stringify({ campanhaId: t.campanhaId, taskId: t.id }),
+        JSON.stringify({ campanhaId: t.campanhaId, taskId: targetId }),
       );
       navigate({ to: "/time", search: { section: "campanhas" as SectionKey } });
       return;
     }
-    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
   };
 
   return (
@@ -582,8 +621,16 @@ export function InicioDashboard() {
                 >
                   <PriorityFlag priority={t.priority} bucket={t.bucket} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-foreground group-hover:underline">
-                      {t.title}
+                    <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
+                      {t.parentTitle && (
+                        <span
+                          title={`Subtarefa de "${t.parentTitle}"`}
+                          className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                        >
+                          Sub
+                        </span>
+                      )}
+                      <span className="truncate">{t.title}</span>
                     </p>
                   </div>
                   <span

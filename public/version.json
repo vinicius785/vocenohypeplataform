@@ -1,6 +1,7 @@
 {
-  "version": "1.164.0",
+  "version": "1.165.0",
   "notes": [
+    "Subtarefas atribuídas a você agora aparecem na lista \"Meu trabalho\" da página de início, junto com as tarefas normais — antes ficavam invisíveis ali, só apareciam dentro da tarefa-mãe. Cada uma vem com um selo \"Sub\" pra deixar claro que é uma subtarefa (passe o mouse pra ver de qual tarefa).",
     "A coluna Concluído do quadro de tarefas (Marketing, Campanhas e Projetos) agora mostra só as 4 tarefas concluídas mais recentes por padrão, com um botão \"Mostrar tudo\" pra ver o histórico completo quando precisar — antes acumulava todas pra sempre, virando uma lista enorme.",
     "Corrige texto longo (palavra ou link sem espaço) vazando pra fora da caixa no Briefing e nas Observações de Direitos de imagem da página da campanha — agora quebra a linha em vez de estourar o card.",
     "Corrige um influenciador excluído voltando sozinho depois de um tempo: a sincronização periódica que refaz a busca no banco podia cair bem no meio de uma exclusão ainda não confirmada e reintroduzir o item de volta na tela por até 20 minutos. Também deixa claro, no painel do cliente, de qual mês cada influenciador é: em \"Ações pendentes\" (na tela inicial) e no perfil de cada um, quando a campanha é recorrente.",
