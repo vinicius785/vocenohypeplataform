@@ -579,6 +579,7 @@ export function MetasSection() {
                     key={o.id}
                     objetivo={o}
                     indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                    members={members}
                     onOpen={() => push({ kind: "objetivo", id: o.id })}
                   />
                 ))}
@@ -600,6 +601,7 @@ export function MetasSection() {
                         key={o.id}
                         objetivo={o}
                         indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                        members={members}
                         onOpen={() => push({ kind: "objetivo", id: o.id })}
                       />
                     ))}
@@ -617,6 +619,7 @@ export function MetasSection() {
                   <IndicadorRow
                     key={ind.id}
                     indicador={ind}
+                    members={members}
                     onOpen={() => push({ kind: "indicador", id: ind.id })}
                   />
                 ))}

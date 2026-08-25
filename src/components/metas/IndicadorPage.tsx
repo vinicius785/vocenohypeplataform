@@ -1,14 +1,42 @@
 import { useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
-import { INDICADOR_SAUDE_LABEL, INDICADOR_SAUDE_TONE, indicadorSaude } from "@/lib/metas-engine";
+import {
+  INDICADOR_SAUDE_BAR,
+  INDICADOR_SAUDE_LABEL,
+  INDICADOR_SAUDE_TONE,
+  indicadorProgressoExibicao,
+  indicadorSaude,
+} from "@/lib/metas-engine";
 import { formatIndicadorValor, timeAgo } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
 import { IndicadorHistorico } from "./IndicadorHistorico";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { IndicadorAdvancedSettings } from "./IndicadorAdvancedSettings";
 import { useDropdown } from "./use-dropdown";
 
 type Member = { name: string; photo?: string };
+
+/** Rótulo consistente pro nível "esperado" — usado tanto no destaque do
+ * topo quanto na grade de Desempenho, pra nunca chamar o mesmo número de
+ * duas coisas diferentes na mesma tela. */
+function metaLabelFor(tipo: Indicador["tipo"]): string {
+  if (tipo === "min") return "Meta (mínimo)";
+  if (tipo === "max") return "Meta (máximo)";
+  return "Meta esperada";
+}
+
+/** Card compacto de estatística — mesmo bloco reaproveitado em Desempenho
+ * e Acompanhamento, pra manter os dois grids visualmente idênticos em vez
+ * de cada seção inventar seu próprio layout. */
+function StatBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <div className="mt-1 text-sm font-medium text-foreground">{children}</div>
+    </div>
+  );
+}
 
 /** Página de gestão de um Indicador — valor atual em destaque + ação de
  * atualizar, desempenho, acompanhamento (dono/colaboradores herdados ou
@@ -40,7 +68,11 @@ export function IndicadorPage({
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
 
   const saude = indicadorSaude(indicador);
+  const progresso = indicadorProgressoExibicao(indicador);
   const linked = !!indicador.objetivoId;
+  const donoNome = linked ? objetivo?.dono : indicador.dono;
+  const colaboradoresNomes = linked ? objetivo?.colaboradores : indicador.colaboradores;
+  const donoMember = members.find((m) => m.name === donoNome);
 
   const valorPrincipal =
     indicador.tipo === "binario"
@@ -55,12 +87,8 @@ export function IndicadorPage({
             : "Não iniciado"
         : formatIndicadorValor(indicador.tipo, indicador.valorAtual, indicador.unidade);
 
-  const metaLabel =
-    indicador.tipo === "min"
-      ? "Meta mínima"
-      : indicador.tipo === "max"
-        ? "Meta máxima"
-        : "Meta esperada";
+  const showProgressBar = indicador.tipo !== "binario" && indicador.tipo !== "marco";
+  const metaLabel = metaLabelFor(indicador.tipo);
   const metaValor =
     indicador.niveis.esperado != null
       ? formatIndicadorValor(indicador.tipo, indicador.niveis.esperado, indicador.unidade)
@@ -69,12 +97,13 @@ export function IndicadorPage({
   const niveisRows: { label: string; value: number }[] = [
     { label: "Baseline", value: indicador.niveis.baseline as number },
     { label: "Meta mínima", value: indicador.niveis.minimo as number },
-    { label: "Meta esperada", value: indicador.niveis.esperado as number },
+    { label: metaLabel, value: indicador.niveis.esperado as number },
     { label: "Meta de excelência", value: indicador.niveis.excelencia as number },
   ].filter((r) => r.value != null);
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl pb-10">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -109,13 +138,22 @@ export function IndicadorPage({
         </div>
       </div>
 
-      <h1 className="mt-4 text-2xl font-semibold uppercase tracking-tight text-foreground">
+      {/* Título + dono */}
+      <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
         {indicador.titulo}
       </h1>
+      <div className="mt-2 flex items-center gap-2">
+        <Avatar name={donoNome} photo={donoMember?.photo} />
+        <span className="text-sm text-muted-foreground">
+          {donoNome || "Sem dono"}
+          {linked && " · herdado do objetivo"}
+        </span>
+      </div>
       {indicador.descricao && (
-        <p className="mt-1.5 text-sm text-muted-foreground">{indicador.descricao}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{indicador.descricao}</p>
       )}
 
+      {/* Valor em destaque */}
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-4xl font-light tracking-tight text-foreground">{valorPrincipal}</p>
@@ -129,7 +167,16 @@ export function IndicadorPage({
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      {showProgressBar && (
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={`h-full rounded-full transition-[width] duration-300 ${INDICADOR_SAUDE_BAR[saude]}`}
+            style={{ width: `${progresso}%` }}
+          />
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${INDICADOR_SAUDE_TONE[saude]}`}
         >
@@ -148,62 +195,56 @@ export function IndicadorPage({
         Atualizar indicador
       </button>
 
+      {/* Desempenho */}
       {niveisRows.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-9">
           <h2 className="text-sm font-semibold text-foreground">Desempenho</h2>
-          <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
             {niveisRows.map((r) => (
-              <div key={r.label} className="rounded-lg border border-border p-3">
-                <dt className="text-[11px] text-muted-foreground">{r.label}</dt>
-                <dd className="mt-0.5 text-base font-medium text-foreground">
-                  {formatIndicadorValor(indicador.tipo, r.value, indicador.unidade)}
-                </dd>
-              </div>
+              <StatBlock key={r.label} label={r.label}>
+                {formatIndicadorValor(indicador.tipo, r.value, indicador.unidade)}
+              </StatBlock>
             ))}
-          </dl>
+          </div>
         </div>
       )}
 
-      <div className="mt-8">
+      {/* Acompanhamento */}
+      <div className="mt-9">
         <h2 className="text-sm font-semibold text-foreground">Acompanhamento</h2>
-        <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div>
-            <dt className="text-[11px] text-muted-foreground">Dono</dt>
-            <dd className="mt-0.5 text-sm text-foreground">
-              {(linked ? objetivo?.dono : indicador.dono) || "Sem dono"}
-              {linked && <span className="text-muted-foreground"> (do objetivo)</span>}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] text-muted-foreground">Colaboradores</dt>
-            <dd className="mt-0.5 text-sm text-foreground">
-              {(linked ? objetivo?.colaboradores : indicador.colaboradores)?.join(", ") || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11px] text-muted-foreground">Frequência</dt>
-            <dd className="mt-0.5 text-sm capitalize text-foreground">{indicador.frequencia}</dd>
-          </div>
-          <div>
-            <dt className="text-[11px] text-muted-foreground">Origem</dt>
-            <dd className="mt-0.5 text-sm text-foreground">
-              {indicador.dataSource === "manual" ? "Manual" : "Automática"}
-            </dd>
-          </div>
-        </dl>
+        <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+          <StatBlock label="Dono">
+            <span className="flex items-center gap-1.5">
+              <Avatar name={donoNome} photo={donoMember?.photo} />
+              {donoNome || "Sem dono"}
+            </span>
+          </StatBlock>
+          <StatBlock label="Colaboradores">
+            {colaboradoresNomes?.length ? colaboradoresNomes.join(", ") : "Nenhum"}
+          </StatBlock>
+          <StatBlock label="Frequência">
+            <span className="capitalize">{indicador.frequencia}</span>
+          </StatBlock>
+          <StatBlock label="Origem">
+            {indicador.dataSource === "manual" ? "Manual" : "Automática"}
+          </StatBlock>
+        </div>
       </div>
 
-      <div className="mt-8">
+      {/* Histórico */}
+      <div className="mt-9">
         <h2 className="text-sm font-semibold text-foreground">Histórico</h2>
-        <div className="mt-2 rounded-lg border border-border">
-          <IndicadorHistorico atualizacoes={indicador.atualizacoes ?? []} />
-          {(indicador.atualizacoes ?? []).length === 0 && (
+        <div className="mt-2.5 rounded-lg border border-border">
+          {(indicador.atualizacoes ?? []).length === 0 ? (
             <p className="p-3 text-xs text-muted-foreground">Nenhuma atualização ainda.</p>
+          ) : (
+            <IndicadorHistorico atualizacoes={indicador.atualizacoes ?? []} />
           )}
         </div>
       </div>
 
-      <div className="mb-10 mt-8">
+      {/* Configurações avançadas */}
+      <div className="mt-9">
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}

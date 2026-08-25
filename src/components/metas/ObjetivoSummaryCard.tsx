@@ -2,20 +2,26 @@ import { ChevronRight } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import { INDICADOR_SAUDE_BAR, objetivoProgresso, objetivoStats } from "@/lib/metas-engine";
 import { fmtPeriodo } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
+
+type Member = { name: string; photo?: string };
 
 /** Card compacto de Objetivo pra tela principal — só o suficiente pra
- * decidir se vale entrar: progresso, saúde resumida, área/período,
+ * decidir se vale entrar: dono, progresso, saúde resumida, área/período,
  * contagem de indicadores. Edição/exclusão vivem na página do objetivo,
  * não aqui (clicar sempre navega, nunca abre menu). */
 export function ObjetivoSummaryCard({
   objetivo,
   indicadores,
+  members,
   onOpen,
 }: {
   objetivo: Objetivo;
   indicadores: Indicador[];
+  members: Member[];
   onOpen: () => void;
 }) {
+  const donoMember = members.find((m) => m.name === objetivo.dono);
   const progresso = objetivoProgresso(objetivo.id, indicadores);
   const stats = objetivoStats(objetivo.id, indicadores);
   const resumoSaude = objetivo.cancelado
@@ -37,6 +43,13 @@ export function ObjetivoSummaryCard({
       onClick={onOpen}
       className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-foreground/30"
     >
+      <div className="flex items-center gap-2">
+        <Avatar name={objetivo.dono} photo={donoMember?.photo} />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
+          {objetivo.dono || "Sem dono"}
+        </span>
+      </div>
+
       <div className="flex items-start justify-between gap-3">
         <h3 className="min-w-0 text-base font-medium leading-snug text-foreground">
           {objetivo.titulo}

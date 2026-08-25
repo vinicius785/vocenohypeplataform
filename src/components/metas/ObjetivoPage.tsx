@@ -3,6 +3,7 @@ import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import { INDICADOR_SAUDE_BAR, objetivoProgresso, objetivoStats } from "@/lib/metas-engine";
 import { fmtPeriodo } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
 import { IndicadorRow } from "./IndicadorRow";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { AjustarPesosDialog } from "./AjustarPesosDialog";
@@ -116,11 +117,13 @@ export function ObjetivoPage({
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
         {objetivo.titulo}
       </h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">
-        {objetivo.area}
-        {objetivo.dono ? ` · ${objetivo.dono}` : ""}
-        {periodo ? ` · ${periodo}` : ""}
-      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <Avatar name={objetivo.dono} photo={members.find((m) => m.name === objetivo.dono)?.photo} />
+        <p className="text-sm text-muted-foreground">
+          {objetivo.dono || "Sem dono"} · {objetivo.area}
+          {periodo ? ` · ${periodo}` : ""}
+        </p>
+      </div>
       {objetivo.descricao && (
         <p className="mt-2 text-sm text-muted-foreground">{objetivo.descricao}</p>
       )}
@@ -230,7 +233,12 @@ export function ObjetivoPage({
         <div className="mt-4 space-y-2">
           {indicadoresDoObjetivo.map((ind) => (
             <div key={ind.id} className="group relative">
-              <IndicadorRow indicador={ind} onOpen={() => onOpenIndicador(ind.id)} />
+              <IndicadorRow
+                indicador={ind}
+                dono={objetivo.dono}
+                members={members}
+                onOpen={() => onOpenIndicador(ind.id)}
+              />
               <button
                 type="button"
                 onClick={(e) => {

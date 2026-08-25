@@ -6,12 +6,31 @@ import {
   indicadorSaude,
 } from "@/lib/metas-engine";
 import { formatIndicadorValor } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
+
+type Member = { name: string; photo?: string };
 
 /** Linha compacta de um Indicador — usada dentro da página do Objetivo e
- * na seção "Indicadores independentes" da tela principal. Só nome, valor/
- * meta e saúde; qualquer ação (atualizar, editar, histórico) acontece na
- * página do próprio indicador depois de clicar. */
-export function IndicadorRow({ indicador, onOpen }: { indicador: Indicador; onOpen: () => void }) {
+ * na seção "Indicadores independentes" da tela principal. Nome + dono
+ * (foto/iniciais), valor/meta e saúde; qualquer ação (atualizar, editar,
+ * histórico) acontece na página do próprio indicador depois de clicar.
+ * `dono` é opcional porque um indicador vinculado a um objetivo não tem
+ * dono próprio — quem chama passa o dono do objetivo pai nesse caso. */
+export function IndicadorRow({
+  indicador,
+  dono,
+  members,
+  onOpen,
+}: {
+  indicador: Indicador;
+  /** Nome a exibir — o próprio `indicador.dono` (independente) ou o dono
+   * do objetivo pai (vinculado). */
+  dono?: string;
+  members: Member[];
+  onOpen: () => void;
+}) {
+  const donoNome = dono ?? indicador.dono;
+  const donoMember = members.find((m) => m.name === donoNome);
   const saude = indicadorSaude(indicador);
   const valor =
     indicador.tipo === "binario"
@@ -37,7 +56,11 @@ export function IndicadorRow({ indicador, onOpen }: { indicador: Indicador; onOp
       className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3.5 py-2.5 text-left transition-colors hover:border-foreground/30"
     >
       <span className={`h-2 w-2 shrink-0 rounded-full ${INDICADOR_SAUDE_DOT[saude]}`} />
+      <Avatar name={donoNome} photo={donoMember?.photo} />
       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{indicador.titulo}</span>
+      <span className="hidden shrink-0 truncate text-xs text-muted-foreground sm:block">
+        {donoNome || "Sem dono"}
+      </span>
       <span className="shrink-0 text-xs text-muted-foreground">
         {valor}
         {meta ? ` / ${meta}` : ""}
