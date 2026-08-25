@@ -91,56 +91,103 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
         // então `!==` fazia todo save reenviar itens que não mudaram).
         const prevItem = prevById.get(item.id);
         if (!prevItem || JSON.stringify(prevItem) !== JSON.stringify(item)) {
-          // Supabase's query builder is a lazy thenable — the fetch only
-          // fires once `.then()`/`await` runs on it, so a bare `void
-          // builder` (no .then/.catch) silently never sends the request.
-          supabase
-            .from(table)
-            .upsert({ id: item.id, data: item, updated_at: new Date().toISOString() })
-            .then(({ error }) => {
-              if (!error) return;
-              console.warn(`[${table}] upsert failed`, error);
-              // A optimistic update aplicada acima nunca era desfeita se o
-              // upsert falhasse (RLS, rede, etc.) — o item ficava "salvo"
-              // na tela mas nunca chegava no banco, então sumia de novo
-              // silenciosamente na próxima vez que a página recarregasse.
-              // Reverte pro valor anterior (ou remove, se era um item novo)
-              // e avisa quem chamou, em vez de deixar a UI mentir.
-              const old = prevById.get(item.id);
-              cache = old
-                ? cache.map((x) => (x.id === item.id ? old : x))
-                : cache.filter((x) => x.id !== item.id);
-              emit();
-              onError?.(new Error(error.message));
-            });
+          // `getSession()` primeiro: se o token de sessão expirou (comum em
+          // abas que ficam abertas o dia todo — o refresh automático do
+          // supabase-js roda num timer que o browser pode ter throttled
+          // enquanto a aba estava em segundo plano), isso força o refresh
+          // ANTES da escrita, em vez de mandar a requisição com um JWT
+          // vencido e RLS recusar silenciosamente (0 linhas, sem erro).
+          void supabase.auth.getSession().then(() =>
+            supabase
+              .from(table)
+              .upsert({ id: item.id, data: item, updated_at: new Date().toISOString() })
+              // `.select("id")` é o único jeito de saber se o upsert pegou
+              // alguma linha: RLS bloqueando não gera `error` nenhum — o
+              // Postgrest responde 200 com 0 linhas afetadas.
+              .select("id")
+              .then(({ data, error }) => {
+                if (!error && (data?.length ?? 0) > 0) return;
+                console.warn(`[${table}] upsert failed`, error ?? "0 rows affected (RLS?)");
+                // A optimistic update aplicada acima nunca era desfeita se o
+                // upsert falhasse (RLS, sessão expirada, rede, etc.) — o
+                // item ficava "salvo" na tela mas nunca chegava no banco,
+                // então sumia de novo silenciosamente na próxima vez que a
+                // página recarregasse. Reverte pro valor anterior (ou
+                // remove, se era um item novo) e avisa quem chamou.
+                const old = prevById.get(item.id);
+                cache = old
+                  ? cache.map((x) => (x.id === item.id ? old : x))
+                  : cache.filter((x) => x.id !== item.id);
+                emit();
+                const message =
+                  error?.message ||
+                  "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.";
+                onError?.(new Error(message));
+                void import("sonner").then(({ toast }) =>
+                  toast.error("Não foi possível salvar", { description: message }),
+                );
+              }),
+          );
         }
       }
       for (const id of prevById.keys()) {
         if (!nextIds.has(id)) {
-          supabase
-            .from(table)
-            .delete()
-            .eq("id", id)
-            .then(({ error }) => {
-              // Só um `error` de verdade (RLS negando, rede, etc.) é uma
-              // falha. "0 linhas afetadas" SEM erro não é: DELETE é
-              // idempotente — significa que a linha já não existia mais
-              // (ex.: outro clique/aba/usuário já apagou ela antes). Tratar
-              // isso como falha e "ressuscitar" o item na tela criava um
-              // ciclo: reverte -> item reaparece -> usuário clica de novo
-              // (já que sumiu e voltou) -> acha "0 linhas" nesse id de novo
-              // (porque já tinha sido apagado da primeira vez) -> reverte de
-              // novo — um item que já estava corretamente apagado no banco
-              // nunca ficava apagado na tela.
-              if (!error) return;
-              console.warn(`[${table}] delete failed`, error);
-              const old = prevById.get(id)!;
-              if (!cache.some((x) => x.id === id)) {
-                cache = [...cache, old];
-                emit();
-              }
-              onError?.(new Error(error.message));
-            });
+          void supabase.auth.getSession().then(() =>
+            supabase
+              .from(table)
+              .delete()
+              .eq("id", id)
+              // `.select("id")` é o único jeito de saber se a exclusão
+              // pegou alguma linha: RLS bloqueando não gera `error`
+              // nenhum — o Postgrest responde 200 com 0 linhas afetadas,
+              // então sem isso essa falha passava batido, o item
+              // continuava no banco e reaparecia sozinho no próximo
+              // realtime/reload da página.
+              .select("id")
+              .then(async ({ data, error }) => {
+                if (!error && (data?.length ?? 0) > 0) return;
+                if (error) {
+                  console.warn(`[${table}] delete failed`, error);
+                  const old = prevById.get(id)!;
+                  if (!cache.some((x) => x.id === id)) {
+                    cache = [...cache, old];
+                    emit();
+                  }
+                  onError?.(new Error(error.message));
+                  void import("sonner").then(({ toast }) =>
+                    toast.error("Não foi possível excluir", { description: error.message }),
+                  );
+                  return;
+                }
+                // 0 linhas sem erro nenhum é ambíguo — pode ser RLS
+                // bloqueando (precisa restaurar o item local e avisar) OU
+                // a linha já não existir mais no banco (delete anterior
+                // já tinha funcionado, isso aqui é só um retry/eco de
+                // estado local desatualizado — nesse caso NÃO restaurar,
+                // senão o item nunca sai da tela mesmo já estando
+                // excluído de verdade: "excluo, confirmo, e ele volta
+                // sozinho" pra sempre). Um SELECT rápido desempata os
+                // dois casos.
+                const { data: stillThere } = await supabase
+                  .from(table)
+                  .select("id")
+                  .eq("id", id)
+                  .maybeSingle();
+                if (!stillThere) return;
+                console.warn(`[${table}] delete failed`, "0 rows affected (RLS?)");
+                const old = prevById.get(id)!;
+                if (!cache.some((x) => x.id === id)) {
+                  cache = [...cache, old];
+                  emit();
+                }
+                const message =
+                  "Você pode não ter permissão pra essa ação, ou sua sessão expirou — atualize a página e tente de novo.";
+                onError?.(new Error(message));
+                void import("sonner").then(({ toast }) =>
+                  toast.error("Não foi possível excluir", { description: message }),
+                );
+              }),
+          );
         }
       }
     },
