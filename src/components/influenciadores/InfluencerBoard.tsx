@@ -1686,12 +1686,21 @@ export function InfluencerBoard({
     }
   }, [influs, sortBy]);
 
-  const reprovadosCount = influs.filter((i) => i.clienteReprovacao).length;
+  // `clienteReprovacao` só cobre a reprovação feita PELO CLIENTE no portal —
+  // uma reprovação manual do time (mudar status pra RECUSADO direto,
+  // aprovado ou não antes) limpa esse campo de propósito (ver comentário em
+  // `changeStatus`), mas o influenciador continua reprovado igual. "Ocultar
+  // reprovados" precisa cobrir os dois casos, senão quem foi reprovado
+  // manualmente depois de já ter sido aprovado nunca fica escondido.
+  const isReprovado = (i: Pick<Influ, "status" | "clienteReprovacao">) =>
+    i.status === "RECUSADO" || !!i.clienteReprovacao;
+
+  const reprovadosCount = influs.filter(isReprovado).length;
 
   const filteredInflus = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = sortedInflus;
-    if (hideReprovados) list = list.filter((i) => !i.clienteReprovacao);
+    if (hideReprovados) list = list.filter((i) => !isReprovado(i));
     if (!q) return list;
     return list.filter((i) => i.nome.toLowerCase().includes(q));
   }, [sortedInflus, query, hideReprovados]);
