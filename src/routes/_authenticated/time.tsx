@@ -27,7 +27,7 @@ const InfluenciadoresSection = lazy(() =>
   })),
 );
 const MetasSection = lazy(() =>
-  import("@/components/MetasSection").then((m) => ({ default: m.MetasSection })),
+  import("@/components/metas/MetasSection").then((m) => ({ default: m.MetasSection })),
 );
 const ReunioesSection = lazy(() =>
   import("@/components/ReunioesSection").then((m) => ({ default: m.ReunioesSection })),

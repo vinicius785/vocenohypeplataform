@@ -1,12 +1,87 @@
 import { createTableArrayStore } from "./table-array-store";
 
-export const META_AREAS = ["Marketing", "Operação", "Influenciadores", "Comercial"] as const;
+/**
+ * Objetivos + Indicadores — substitui o modelo antigo de "uma meta com um
+ * número só" (`tipo: "numerica"|"binaria"`, um `responsavel`, um `prazo`).
+ * As duas variantes vivem na MESMA tabela `metas` (uma linha por item,
+ * mesma RLS/realtime de sempre — sem migration de schema, só muda o
+ * formato do `data` JSONB), diferenciadas por `kind`. Um Indicador aponta
+ * pro Objetivo com `objetivoId?` (mesmo padrão de referência solta já
+ * usado em `financeiro-entries.ts`: `clienteId?`/`campanhaId?`) — sem
+ * `objetivoId`, ele é um indicador independente (é exatamente o que toda
+ * meta antiga vira ao ser migrada, ver `normalizeMetaItem`).
+ *
+ * Toda a lógica de cálculo (performance/saúde/peso/progresso do objetivo)
+ * fica em `metas-engine.ts` — este arquivo só cuida de tipos e persistência.
+ */
+
+export const META_AREAS = [
+  "Marketing",
+  "Operação",
+  "Influenciadores",
+  "Comercial",
+  "Financeiro",
+  "Produto",
+  "Creator Management",
+] as const;
 export type MetaArea = (typeof META_AREAS)[number];
+
+export const TRACKING_FREQUENCIES = [
+  "continuo",
+  "semanal",
+  "mensal",
+  "trimestral",
+  "personalizado",
+] as const;
+export type TrackingFrequency = (typeof TRACKING_FREQUENCIES)[number];
+
+export const METRIC_TYPES = [
+  "numero",
+  "percentual",
+  "moeda",
+  "min",
+  "max",
+  "binario",
+  "marco",
+  "manual",
+] as const;
+export type MetricType = (typeof METRIC_TYPES)[number];
+
+export const METRIC_DIRECTIONS = [
+  "aumentar",
+  "reduzir",
+  "manter_abaixo",
+  "manter_acima",
+  "concluir",
+] as const;
+export type MetricDirection = (typeof METRIC_DIRECTIONS)[number];
+
+export const INDICADOR_MARCO_STATUSES = ["nao_iniciado", "em_andamento", "concluido"] as const;
+export type IndicadorMarcoStatus = (typeof INDICADOR_MARCO_STATUSES)[number];
+
+/** Todos opcionais — uma meta simples continua podendo usar só `esperado`
+ * (o "alvo" de sempre). */
+export type MetaNiveis = {
+  baseline?: number;
+  minimo?: number;
+  esperado?: number;
+  excelencia?: number;
+};
+
+/** Solto de propósito (sem FK/junction table) — mesmo padrão já usado em
+ * `financeiro-entries.ts` (`clienteId?`/`campanhaId?`). Todos opcionais:
+ * uma meta da empresa não precisa estar presa a nada. Sem UI de seleção
+ * nesta rodada — só o campo pronto pro futuro. */
+export type MetaVinculos = {
+  projetoId?: string;
+  clienteId?: string;
+  campanhaId?: string;
+};
 
 export type MetaAtualizacao = {
   id: string;
-  /** Valor atual no momento desta atualização (metas numéricas) — junto com
-   * o histórico dá pra ver a evolução, não só o número final. */
+  /** Valor no momento desta atualização — junto com o histórico dá pra ver
+   * a evolução, não só o número final. */
   valor?: number;
   nota?: string;
   author: string;
@@ -15,46 +90,134 @@ export type MetaAtualizacao = {
   createdAt: string;
 };
 
-export type Meta = {
+type MetaBase = {
   id: string;
   titulo: string;
   descricao?: string;
   area: MetaArea;
+  /** Nome do membro do time (mesma fonte de `loadTeamMembers`) — só UM
+   * dono por Objetivo/Indicador. */
+  dono?: string;
+  /** Nomes dos membros que participam/acompanham, sem ser o principal
+   * responsável. */
+  colaboradores?: string[];
+  dataInicio?: string; // YYYY-MM-DD
+  dataFim?: string; // YYYY-MM-DD — prazo final, diferente de `frequencia`
+  frequencia: TrackingFrequency;
+  vinculos?: MetaVinculos;
+  cancelado?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+/** Resultado maior, composto por vários indicadores (`Indicador.objetivoId`
+ * apontando de volta pra ele). O progresso do Objetivo é sempre DERIVADO
+ * (`objetivoProgresso` em `metas-engine.ts`) a partir do desempenho de
+ * cada indicador — nunca um número guardado à parte que possa dessincronizar. */
+export type Objetivo = MetaBase & { kind: "objetivo" };
+
+/** Métrica individual — pode pertencer a um Objetivo (`objetivoId`) ou
+ * existir sozinha. */
+export type Indicador = MetaBase & {
+  kind: "indicador";
+  objetivoId?: string;
+  /** 0-100, só relevante quando `objetivoId` está setado — ver
+   * `indicadorPeso` em `metas-engine.ts` pra como pesos ausentes/inválidos
+   * são tratados (nunca corrompe o cálculo do objetivo). */
+  peso?: number;
+  tipo: MetricType;
+  /** `tipo: "min"`/`"max"` pré-selecionam isso no formulário
+   * (`manter_acima`/`manter_abaixo`), mas o motor de cálculo sempre olha
+   * só pra `direcao` — um único caminho de código pras variantes
+   * numéricas, nunca duas lógicas paralelas por tipo. */
+  direcao: MetricDirection;
+  /** "auto" é reservado pro futuro — sem fonte automática de verdade
+   * implementada ainda, a UI mostra a opção desabilitada. */
+  dataSource: "manual" | "auto";
+  unidade?: string;
+  niveis: MetaNiveis;
+  valorAtual?: number; // numero/percentual/moeda/min/max/manual
+  concluido?: boolean; // binario
+  marcoStatus?: IndicadorMarcoStatus; // marco
+  atualizacoes?: MetaAtualizacao[];
+};
+
+export type MetaItem = Objetivo | Indicador;
+
+/** Formato antigo (pré-Objetivos/Indicadores) — só usado dentro de
+ * `normalizeMetaItem` pra reconhecer e migrar uma linha legada. */
+type LegacyMeta = {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  area: string;
   tipo: "numerica" | "binaria";
-  /** Só faz sentido pra `tipo: "numerica"`. */
   valorAlvo?: number;
   valorAtual?: number;
-  unidade?: string; // ex: "clientes", "R$", "%", "posts"
-  /** Só faz sentido pra `tipo: "binaria"`. */
+  unidade?: string;
   concluida?: boolean;
-  responsavel?: string; // nome do membro do time
-  prazo?: string; // YYYY-MM-DD
+  responsavel?: string;
+  prazo?: string;
   cancelada?: boolean;
   createdAt: string;
   updatedAt?: string;
   atualizacoes?: MetaAtualizacao[];
 };
 
-export type MetaStatus = "em_andamento" | "concluida" | "atrasada" | "cancelada";
-
-/** Deriva o status de exibição a partir dos dados — evita guardar um campo
- * `status` que poderia dessincronizar do progresso/prazo reais. */
-export function metaStatus(m: Meta): MetaStatus {
-  if (m.cancelada) return "cancelada";
-  const concluida =
-    m.tipo === "binaria" ? !!m.concluida : (m.valorAtual ?? 0) >= (m.valorAlvo ?? 0);
-  if (concluida) return "concluida";
-  if (m.prazo && m.prazo < new Date().toISOString().slice(0, 10)) return "atrasada";
-  return "em_andamento";
+function isLegacyMeta(raw: unknown): raw is LegacyMeta {
+  return !!raw && typeof raw === "object" && !("kind" in raw);
 }
 
-export function metaProgresso(m: Meta): number {
-  if (m.tipo === "binaria") return m.concluida ? 100 : 0;
-  if (!m.valorAlvo) return 0;
-  return Math.min(100, Math.round(((m.valorAtual ?? 0) / m.valorAlvo) * 100));
+/** Migra uma linha antiga (`tipo: "numerica"|"binaria"`, sem `kind`) pro
+ * novo formato — sempre vira um Indicador SEM `objetivoId` (é exatamente
+ * a regra pedida: "meta antiga sem Objetivo pai continua existindo como
+ * Indicador independente"). Não-destrutivo: só grava de novo no banco se
+ * o item for editado e salvo depois — até lá, a linha antiga continua no
+ * banco do jeito que estava, só é traduzida na leitura. Um backfill à
+ * parte (rodado uma vez contra o Supabase de produção) já reescreve as
+ * linhas existentes de verdade, mas esta função continua como rede de
+ * segurança pra qualquer linha que escape do backfill. */
+function migrateLegacyMeta(m: LegacyMeta): Indicador {
+  return {
+    kind: "indicador",
+    id: m.id,
+    titulo: m.titulo,
+    descricao: m.descricao,
+    area: (META_AREAS as readonly string[]).includes(m.area) ? (m.area as MetaArea) : "Operação",
+    dono: m.responsavel,
+    colaboradores: undefined,
+    dataInicio: undefined,
+    dataFim: m.prazo,
+    frequencia: "continuo",
+    vinculos: undefined,
+    cancelado: m.cancelada,
+    createdAt: m.createdAt,
+    updatedAt: m.updatedAt,
+    objetivoId: undefined,
+    peso: undefined,
+    tipo: m.tipo === "binaria" ? "binario" : "numero",
+    // Único sentido que o modelo antigo já implicava: valorAtual crescendo
+    // até bater valorAlvo.
+    direcao: "aumentar",
+    dataSource: "manual",
+    unidade: m.unidade,
+    niveis: { esperado: m.valorAlvo },
+    valorAtual: m.valorAtual,
+    concluido: m.concluida,
+    marcoStatus: undefined,
+    atualizacoes: m.atualizacoes,
+  };
 }
 
-const store = createTableArrayStore<Meta>("metas");
+/** Única porta de entrada pra normalizar uma linha da tabela `metas` —
+ * chamada por `loadMetas()`. Formato novo passa direto; formato antigo é
+ * migrado via `migrateLegacyMeta`. */
+export function normalizeMetaItem(raw: unknown): MetaItem {
+  if (isLegacyMeta(raw)) return migrateLegacyMeta(raw);
+  return raw as MetaItem;
+}
+
+const store = createTableArrayStore<MetaItem>("metas");
 
 export function initMetasSync(): Promise<void> {
   const p = store.init();
@@ -62,14 +225,22 @@ export function initMetasSync(): Promise<void> {
   return p;
 }
 
-export function loadMetas(): Meta[] {
-  return store.get();
+export function loadMetas(): MetaItem[] {
+  return store.get().map(normalizeMetaItem);
 }
 
-export function saveMetas(list: Meta[]) {
+export function saveMetas(list: MetaItem[]) {
   store.set(() => list);
 }
 
 export function onMetasChange(callback: () => void): () => void {
   return store.subscribe(callback);
+}
+
+export function loadObjetivos(): Objetivo[] {
+  return loadMetas().filter((m): m is Objetivo => m.kind === "objetivo");
+}
+
+export function loadIndicadores(): Indicador[] {
+  return loadMetas().filter((m): m is Indicador => m.kind === "indicador");
 }
