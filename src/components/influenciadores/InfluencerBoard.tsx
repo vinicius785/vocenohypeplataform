@@ -1430,6 +1430,7 @@ export function InfluencerBoard({
   allowedFields,
   headerExtra,
   defaultCicloMes,
+  cicloMesOptions,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1448,6 +1449,11 @@ export function InfluencerBoard({
    * influenciador criado ficava só com `createdAt`, que sempre bate no mês
    * corrente independente do mês selecionado no filtro. */
   defaultCicloMes?: string;
+  /** Lista de opções de mês (mesma de `buildMesReferenciaOptions`) — quando
+   * presente, o perfil do influenciador ganha um seletor pra mudar
+   * `cicloMes` manualmente (mover pra outro mês). `undefined`/vazio em
+   * campanhas não-recorrentes: sem seletor, nada muda. */
+  cicloMesOptions?: { value: string; label: string }[];
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
@@ -2005,6 +2011,7 @@ export function InfluencerBoard({
         <InfluencerProfileDialog
           influ={viewing}
           has={has}
+          cicloMesOptions={cicloMesOptions}
           onOpenChange={(o) => !o && setViewing(null)}
           onRemove={async () => {
             if (await removeInflu(viewing.id)) setViewing(null);
@@ -3354,6 +3361,7 @@ function InfluVisaoGeralTab({
 function InfluencerProfileDialog({
   influ,
   has,
+  cicloMesOptions,
   onOpenChange,
   onRemove,
   onSetStatus,
@@ -3366,6 +3374,7 @@ function InfluencerProfileDialog({
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
+  cicloMesOptions?: { value: string; label: string }[];
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
@@ -3555,6 +3564,23 @@ function InfluencerProfileDialog({
                         >
                           Enviar para cliente
                         </button>
+                      )}
+                      {cicloMesOptions && cicloMesOptions.length > 0 && (
+                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          Mês
+                          <select
+                            value={influ.cicloMes ?? ""}
+                            onChange={(e) => onPatch({ cicloMes: e.target.value })}
+                            className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
+                          >
+                            {!influ.cicloMes && <option value="">Sem mês definido</option>}
+                            {cicloMesOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       )}
                     </div>
                   </div>
