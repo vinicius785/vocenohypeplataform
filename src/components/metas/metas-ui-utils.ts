@@ -30,6 +30,52 @@ export function fmtDate(iso: string): string {
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("pt-BR");
 }
 
+const MONTH_ABBR = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
+
+/** "2026-09-15" → "Set 2026" — usado nas linhas de período compactas
+ * (cards de objetivo, header da página do objetivo). */
+export function fmtMonthYear(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${MONTH_ABBR[(m || 1) - 1]} ${y}`;
+}
+
+/** Faixa de período pronta pra exibir — "Set 2026 — Dez 2026", só o
+ * início, só o fim, ou `null` quando nenhuma data foi definida. */
+export function fmtPeriodo(dataInicio?: string, dataFim?: string): string | null {
+  if (dataInicio && dataFim) return `${fmtMonthYear(dataInicio)} — ${fmtMonthYear(dataFim)}`;
+  if (dataInicio) return `Desde ${fmtMonthYear(dataInicio)}`;
+  if (dataFim) return `Até ${fmtMonthYear(dataFim)}`;
+  return null;
+}
+
+/** Tempo relativo simples ("hoje", "há 2 dias", "há 3 semanas") — só pra
+ * dar contexto de frescor no "Atualizado há X", sem precisão de horas. */
+export function timeAgo(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "hoje";
+  if (days === 1) return "há 1 dia";
+  if (days < 7) return `há ${days} dias`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return weeks === 1 ? "há 1 semana" : `há ${weeks} semanas`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return months === 1 ? "há 1 mês" : `há ${months} meses`;
+  const years = Math.floor(days / 365);
+  return years === 1 ? "há 1 ano" : `há ${years} anos`;
+}
+
 /** Formata um valor numérico de acordo com o tipo de medição do
  * indicador — única função que decide "63" vira "63%" ou "R$ 63" ou
  * "63 clientes", reaproveitada em todo lugar que mostra um valor de

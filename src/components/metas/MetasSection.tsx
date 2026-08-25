@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, X, ChevronDown, Target, TrendingUp } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ChevronDown, Filter, Plus, Search, Target, TrendingUp, X } from "lucide-react";
 import { SectionHeader } from "../SectionHeader";
 import { useConfirm } from "@/hooks/use-confirm";
 import { getMe } from "@/lib/chat-store";
@@ -14,14 +13,18 @@ import {
   type MetaItem,
   type Objetivo,
   type Indicador,
-  type MetaArea,
   type TrackingFrequency,
 } from "@/lib/metas-store";
 import { indicadorSaude, type IndicadorSaude, INDICADOR_SAUDE_LABEL } from "@/lib/metas-engine";
-import { MetaCard } from "./MetaCard";
-import { ObjetivoDialog } from "./ObjetivoDialog";
-import { IndicadorDialog } from "./IndicadorDialog";
+import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
+import { IndicadorRow } from "./IndicadorRow";
+import { ObjetivoPage } from "./ObjetivoPage";
+import { IndicadorPage } from "./IndicadorPage";
+import { ObjetivoQuickDialog } from "./ObjetivoQuickDialog";
+import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
+import type { IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { colorFor, initialsOf } from "./metas-ui-utils";
+import { useDropdown } from "./use-dropdown";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -31,26 +34,20 @@ const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   personalizado: "Personalizado",
 };
 
-/** Menu suspenso simples fecha ao clicar fora — mesmo padrão já usado em
- * `InfluencerBoard.tsx` (`useDropdown`). */
-function useDropdown() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [open]);
-  return { open, setOpen, ref };
-}
+type MetasView =
+  | { kind: "list" }
+  | { kind: "objetivo"; id: string }
+  | { kind: "indicador"; id: string };
 
 export function MetasSection() {
   const [items, setItems] = useState<MetaItem[]>(() => loadMetas());
   const me = getMe();
   const members = useMemo(() => loadTeamMembers(), []);
+
+  const [viewStack, setViewStack] = useState<MetasView[]>([{ kind: "list" }]);
+  const view = viewStack[viewStack.length - 1];
+  const push = (v: MetasView) => setViewStack((s) => [...s, v]);
+  const pop = () => setViewStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
 
   const [areaFilter, setAreaFilter] = useState("");
   const [donoFilter, setDonoFilter] = useState("");
@@ -60,11 +57,15 @@ export function MetasSection() {
   const [frequenciaFilter, setFrequenciaFilter] = useState<"" | TrackingFrequency>("");
   const [origemFilter, setOrigemFilter] = useState<"" | "manual" | "auto">("");
   const [busca, setBusca] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersRef = useRef<HTMLDivElement>(null);
+  useDropdown(filtersRef, filtersOpen, () => setFiltersOpen(false));
 
   const [objetivoDialog, setObjetivoDialog] = useState<{ data?: Objetivo } | null>(null);
-  const [indicadorDialog, setIndicadorDialog] = useState<{ data?: Indicador } | null>(null);
-  const [updateDialog, setUpdateDialog] = useState<Indicador | null>(null);
-  const novoMenu = useDropdown();
+  const [indicadorCreateDialog, setIndicadorCreateDialog] = useState(false);
+  const novoMenu = useRef<HTMLDivElement>(null);
+  const [novoOpen, setNovoOpen] = useState(false);
+  useDropdown(novoMenu, novoOpen, () => setNovoOpen(false));
   const { confirm, confirmDialog } = useConfirm();
 
   const persist = (next: MetaItem[]) => {
@@ -72,6 +73,18 @@ export function MetasSection() {
     saveMetas(next);
   };
   useEffect(() => onMetasChange(() => setItems(loadMetas())), []);
+
+  // Se o objetivo/indicador aberto sumir (excluído em outra aba, por
+  // exemplo), volta pra lista em vez de ficar preso numa página vazia —
+  // nunca chama setState direto durante o render.
+  useEffect(() => {
+    if (view.kind === "objetivo" && !items.some((x) => x.id === view.id)) {
+      setViewStack([{ kind: "list" }]);
+    }
+    if (view.kind === "indicador" && !items.some((x) => x.id === view.id)) {
+      setViewStack((s) => (s.length > 1 ? s.slice(0, -1) : [{ kind: "list" }]));
+    }
+  }, [view, items]);
 
   const objetivos = useMemo(
     () => items.filter((m): m is Objetivo => m.kind === "objetivo"),
@@ -95,22 +108,17 @@ export function MetasSection() {
     [items],
   );
 
-  // Visão geral: soma de saúde de TODO indicador (dentro de objetivo ou
-  // standalone) — é isso que representa "o estado real da operação",
-  // não só a contagem de objetivos.
   const overview = useMemo(() => {
     let saudaveis = 0,
       atencao = 0,
-      emRisco = 0,
-      concluidos = 0;
+      emRisco = 0;
     for (const ind of indicadores) {
       const s = indicadorSaude(ind);
       if (s === "saudavel") saudaveis++;
       else if (s === "atencao") atencao++;
       else if (s === "em_risco" || s === "atrasado") emRisco++;
-      else if (s === "concluido") concluidos++;
     }
-    return { objetivos: objetivos.length, saudaveis, atencao, emRisco, concluidos };
+    return { objetivos: objetivos.length, saudaveis, atencao, emRisco };
   }, [indicadores, objetivos.length]);
 
   const matchesFilters = (m: MetaItem): boolean => {
@@ -120,13 +128,7 @@ export function MetasSection() {
     if (tipoFilter && m.kind !== tipoFilter) return false;
     if (frequenciaFilter && m.frequencia !== frequenciaFilter) return false;
     if (origemFilter && (m.kind !== "indicador" || m.dataSource !== origemFilter)) return false;
-    if (saudeFilter) {
-      const saude = m.kind === "indicador" ? indicadorSaude(m) : undefined;
-      // Pra objetivo, o filtro de saúde não se aplica diretamente (a
-      // saúde é resumida no card a partir dos indicadores dele) — só
-      // filtra indicadores por esse critério.
-      if (m.kind === "indicador" && saude !== saudeFilter) return false;
-    }
+    if (saudeFilter && m.kind === "indicador" && indicadorSaude(m) !== saudeFilter) return false;
     if (busca.trim() && !m.titulo.toLowerCase().includes(busca.trim().toLowerCase())) return false;
     return true;
   };
@@ -138,8 +140,7 @@ export function MetasSection() {
     tipoFilter ||
     saudeFilter ||
     frequenciaFilter ||
-    origemFilter ||
-    busca;
+    origemFilter;
   const clearFilters = () => {
     setAreaFilter("");
     setDonoFilter("");
@@ -148,18 +149,27 @@ export function MetasSection() {
     setSaudeFilter("");
     setFrequenciaFilter("");
     setOrigemFilter("");
-    setBusca("");
   };
 
-  // "Cards visíveis": objetivos + indicadores standalone que passam nos
-  // filtros — indicador vinculado a um objetivo aparece dentro do card
-  // do objetivo, não como card próprio (evita duplicar a mesma métrica
-  // duas vezes na tela).
-  const visibleCards = useMemo(
-    () => [...objetivos, ...indicadoresStandalone].filter(matchesFilters),
+  const visibleObjetivos = useMemo(
+    () => objetivos.filter(matchesFilters),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       objetivos,
+      areaFilter,
+      donoFilter,
+      colaboradorFilter,
+      tipoFilter,
+      saudeFilter,
+      frequenciaFilter,
+      origemFilter,
+      busca,
+    ],
+  );
+  const visibleIndicadoresStandalone = useMemo(
+    () => indicadoresStandalone.filter(matchesFilters),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
       indicadoresStandalone,
       areaFilter,
       donoFilter,
@@ -172,106 +182,75 @@ export function MetasSection() {
     ],
   );
 
-  const minhasMetas = visibleCards.filter((m) => m.dono === me.name);
-  const outrasMetas = visibleCards.filter((m) => m.dono !== me.name);
-  const porDono = useMemo(() => {
-    const map = new Map<string, MetaItem[]>();
-    for (const m of outrasMetas) {
-      const key = m.dono || "Sem dono";
-      map.set(key, [...(map.get(key) ?? []), m]);
+  const meusObjetivos = visibleObjetivos.filter((o) => o.dono === me.name);
+  const outrosObjetivos = visibleObjetivos.filter((o) => o.dono !== me.name);
+  const objetivosPorDono = useMemo(() => {
+    const map = new Map<string, Objetivo[]>();
+    for (const o of outrosObjetivos) {
+      const key = o.dono || "Sem dono";
+      map.set(key, [...(map.get(key) ?? []), o]);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [outrasMetas]);
+  }, [outrosObjetivos]);
 
-  const renderCard = (item: MetaItem) => (
-    <MetaCard
-      key={item.id}
-      item={item}
-      indicadoresDoObjetivo={
-        item.kind === "objetivo" ? indicadores.filter((i) => i.objetivoId === item.id) : []
-      }
-      members={members}
-      onEdit={(m) =>
-        m.kind === "objetivo" ? setObjetivoDialog({ data: m }) : setIndicadorDialog({ data: m })
-      }
-      onDelete={(m) => void handleDelete(m)}
-      onQuickUpdate={(ind) => setUpdateDialog(ind)}
-      onToggleBinario={(ind) => toggleBinario(ind)}
-      onOpenChild={(ind) => setIndicadorDialog({ data: ind })}
-    />
-  );
+  // --- mutações ---------------------------------------------------------
 
-  const handleDelete = async (m: MetaItem) => {
-    if (m.kind === "objetivo") {
-      const filhos = indicadores.filter((i) => i.objetivoId === m.id);
-      const ok = await confirm(
-        filhos.length > 0
-          ? `Excluir o objetivo "${m.titulo}"? Os ${filhos.length} indicador(es) vinculados continuam existindo, só deixam de fazer parte deste objetivo.`
-          : `Excluir o objetivo "${m.titulo}"?`,
-      );
-      if (!ok) return;
-      persist(
-        items
-          .filter((x) => x.id !== m.id)
-          .map((x) =>
-            x.kind === "indicador" && x.objetivoId === m.id ? { ...x, objetivoId: undefined } : x,
-          ),
-      );
-    } else {
-      const ok = await confirm(`Excluir o indicador "${m.titulo}"?`);
-      if (!ok) return;
-      persist(items.filter((x) => x.id !== m.id));
-    }
-  };
-
-  const saveObjetivo = (objetivo: Objetivo, linkedIndicadores: Indicador[]) => {
-    const linkedIds = new Set(linkedIndicadores.map((i) => i.id));
-    const next = items
-      .filter((x) => x.id !== objetivo.id)
-      .map((x) =>
-        x.kind === "indicador" && x.objetivoId === objetivo.id && !linkedIds.has(x.id)
-          ? { ...x, objetivoId: undefined } // desvinculado nesta edição
-          : x,
-      )
-      .filter((x) => !linkedIndicadores.some((i) => i.id === x.id));
-    persist([...next, objetivo, ...linkedIndicadores]);
+  const saveObjetivoBasic = (obj: Objetivo) => {
+    const isNew = !items.some((x) => x.id === obj.id);
+    persist(isNew ? [...items, obj] : items.map((x) => (x.id === obj.id ? obj : x)));
     setObjetivoDialog(null);
+    if (isNew) push({ kind: "objetivo", id: obj.id });
   };
 
-  const saveIndicador = (ind: Indicador) => {
-    const exists = items.some((x) => x.id === ind.id);
-    persist(exists ? items.map((x) => (x.id === ind.id ? ind : x)) : [...items, ind]);
-    setIndicadorDialog(null);
+  const createIndicadorStandalone = (ind: Indicador) => {
+    persist([...items, ind]);
+    setIndicadorCreateDialog(false);
+    push({ kind: "indicador", id: ind.id });
   };
 
-  const toggleBinario = (ind: Indicador) => {
-    const nextConcluido = !ind.concluido;
-    const entry = {
-      id: crypto.randomUUID(),
-      author: me.name,
-      initials: initialsOf(me.name) || "?",
-      color: colorFor(me.name),
-      nota: nextConcluido ? "Marcou como concluído" : "Reabriu o indicador",
-      createdAt: new Date().toISOString(),
-    };
+  const createIndicadorForObjetivo = (ind: Indicador) => {
+    persist([...items, ind]);
+  };
+
+  const linkIndicador = (objetivoId: string, indId: string) => {
+    const objetivo = objetivos.find((o) => o.id === objetivoId);
     persist(
       items.map((x) =>
-        x.id === ind.id && x.kind === "indicador"
+        x.id === indId && x.kind === "indicador"
           ? {
               ...x,
-              concluido: nextConcluido,
-              updatedAt: entry.createdAt,
-              atualizacoes: [...(x.atualizacoes ?? []), entry],
+              objetivoId,
+              dono: undefined,
+              colaboradores: undefined,
+              dataInicio: undefined,
+              dataFim: undefined,
+              frequencia: objetivo?.frequencia ?? x.frequencia,
             }
           : x,
       ),
     );
   };
 
-  const logUpdate = (ind: Indicador, valor: number | undefined, nota: string) => {
+  const unlinkIndicador = (indId: string) => {
+    persist(
+      items.map((x) =>
+        x.id === indId && x.kind === "indicador" ? { ...x, objetivoId: undefined } : x,
+      ),
+    );
+  };
+
+  const savePesos = (pesos: Record<string, number>) => {
+    persist(
+      items.map((x) =>
+        x.kind === "indicador" && pesos[x.id] != null ? { ...x, peso: pesos[x.id] } : x,
+      ),
+    );
+  };
+
+  const updateIndicadorPatch = (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => {
     const entry = {
       id: crypto.randomUUID(),
-      valor,
+      valor: patch.valorAtual,
       nota: nota.trim() || undefined,
       author: me.name,
       initials: initialsOf(me.name) || "?",
@@ -283,15 +262,98 @@ export function MetasSection() {
         x.id === ind.id && x.kind === "indicador"
           ? {
               ...x,
-              valorAtual: valor ?? x.valorAtual,
+              ...patch,
               updatedAt: entry.createdAt,
               atualizacoes: [...(x.atualizacoes ?? []), entry],
             }
           : x,
       ),
     );
-    setUpdateDialog(null);
   };
+
+  const saveIndicadorAdvanced = (ind: Indicador) => {
+    persist(items.map((x) => (x.id === ind.id ? ind : x)));
+  };
+
+  const handleDeleteObjetivo = async (obj: Objetivo) => {
+    const filhos = indicadores.filter((i) => i.objetivoId === obj.id);
+    const ok = await confirm(
+      filhos.length > 0
+        ? `Excluir o objetivo "${obj.titulo}"? Os ${filhos.length} indicador(es) vinculados continuam existindo, só deixam de fazer parte deste objetivo.`
+        : `Excluir o objetivo "${obj.titulo}"?`,
+    );
+    if (!ok) return;
+    persist(
+      items
+        .filter((x) => x.id !== obj.id)
+        .map((x) =>
+          x.kind === "indicador" && x.objetivoId === obj.id ? { ...x, objetivoId: undefined } : x,
+        ),
+    );
+    if (view.kind === "objetivo" && view.id === obj.id) setViewStack([{ kind: "list" }]);
+  };
+
+  const handleDeleteIndicador = async (ind: Indicador) => {
+    const ok = await confirm(`Excluir o indicador "${ind.titulo}"?`);
+    if (!ok) return;
+    persist(items.filter((x) => x.id !== ind.id));
+    if (view.kind === "indicador" && view.id === ind.id) pop();
+  };
+
+  // --- render -------------------------------------------------------------
+
+  if (view.kind === "objetivo") {
+    const objetivo = objetivos.find((o) => o.id === view.id);
+    if (!objetivo) return null;
+    return (
+      <>
+        <ObjetivoPage
+          objetivo={objetivo}
+          indicadoresDoObjetivo={indicadores.filter((i) => i.objetivoId === objetivo.id)}
+          indicadoresDisponiveis={indicadoresStandalone}
+          members={members}
+          onBack={pop}
+          onOpenIndicador={(id) => push({ kind: "indicador", id })}
+          onEdit={() => setObjetivoDialog({ data: objetivo })}
+          onDelete={() => void handleDeleteObjetivo(objetivo)}
+          onCreateIndicador={createIndicadorForObjetivo}
+          onLinkIndicador={(id) => linkIndicador(objetivo.id, id)}
+          onUnlinkIndicador={unlinkIndicador}
+          onSavePesos={savePesos}
+        />
+        <ObjetivoQuickDialog
+          open={!!objetivoDialog}
+          initial={objetivoDialog?.data}
+          members={members}
+          onClose={() => setObjetivoDialog(null)}
+          onSave={saveObjetivoBasic}
+        />
+        {confirmDialog}
+      </>
+    );
+  }
+
+  if (view.kind === "indicador") {
+    const indicador = indicadores.find((i) => i.id === view.id);
+    if (!indicador) return null;
+    const objetivoPai = indicador.objetivoId
+      ? objetivos.find((o) => o.id === indicador.objetivoId)
+      : undefined;
+    return (
+      <>
+        <IndicadorPage
+          indicador={indicador}
+          objetivo={objetivoPai}
+          members={members}
+          onBack={pop}
+          onDelete={() => void handleDeleteIndicador(indicador)}
+          onUpdate={updateIndicadorPatch}
+          onSaveAdvanced={saveIndicadorAdvanced}
+        />
+        {confirmDialog}
+      </>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -305,45 +367,64 @@ export function MetasSection() {
             value: overview.saudaveis,
             tone: "text-emerald-600 dark:text-emerald-400",
           },
-          { label: "ATENÇÃO", value: overview.atencao, tone: "text-amber-600 dark:text-amber-400" },
+          {
+            label: "EM ATENÇÃO",
+            value: overview.atencao,
+            tone: "text-amber-600 dark:text-amber-400",
+          },
           {
             label: "EM RISCO",
             value: overview.emRisco,
             tone: overview.emRisco > 0 ? "text-rose-600 dark:text-rose-400" : undefined,
           },
-          { label: "CONCLUÍDOS", value: overview.concluidos },
         ]}
         action={
-          <div ref={novoMenu.ref} className="relative">
+          <div ref={novoMenu} className="relative">
             <button
               type="button"
-              onClick={() => novoMenu.setOpen((o) => !o)}
+              onClick={() => setNovoOpen((o) => !o)}
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
             >
-              <Plus className="h-3.5 w-3.5" /> Nova meta
+              <Plus className="h-3.5 w-3.5" /> Criar
               <ChevronDown className="h-3 w-3 opacity-70" />
             </button>
-            {novoMenu.open && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover p-1 shadow-md">
+            {novoOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-border bg-popover p-1 shadow-md">
                 <button
                   type="button"
                   onClick={() => {
                     setObjetivoDialog({});
-                    novoMenu.setOpen(false);
+                    setNovoOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                  className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted"
                 >
-                  <Target className="h-3.5 w-3.5" /> Criar Objetivo
+                  <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block text-xs font-medium text-foreground">
+                      Criar Objetivo
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Um resultado maior acompanhado por um ou mais indicadores.
+                    </span>
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setIndicadorDialog({});
-                    novoMenu.setOpen(false);
+                    setIndicadorCreateDialog(true);
+                    setNovoOpen(false);
                   }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                  className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted"
                 >
-                  <TrendingUp className="h-3.5 w-3.5" /> Criar Indicador
+                  <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block text-xs font-medium text-foreground">
+                      Criar Indicador
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Uma métrica individual para acompanhar.
+                    </span>
+                  </span>
                 </button>
               </div>
             )}
@@ -351,273 +432,220 @@ export function MetasSection() {
         }
       />
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por título..."
-          className="h-9 w-48 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-        <select
-          value={areaFilter}
-          onChange={(e) => setAreaFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Todas as áreas</option>
-          {META_AREAS.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        {donosEmUso.length > 0 && (
-          <select
-            value={donoFilter}
-            onChange={(e) => setDonoFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Todos os donos</option>
-            {donosEmUso.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        )}
-        {colaboradoresEmUso.length > 0 && (
-          <select
-            value={colaboradorFilter}
-            onChange={(e) => setColaboradorFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">Todos os colaboradores</option>
-            {colaboradoresEmUso.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          value={tipoFilter}
-          onChange={(e) => setTipoFilter(e.target.value as typeof tipoFilter)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Objetivos e indicadores</option>
-          <option value="objetivo">Só objetivos</option>
-          <option value="indicador">Só indicadores</option>
-        </select>
-        <select
-          value={saudeFilter}
-          onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Toda saúde</option>
-          {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
-            <option key={s} value={s}>
-              {INDICADOR_SAUDE_LABEL[s]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={frequenciaFilter}
-          onChange={(e) => setFrequenciaFilter(e.target.value as typeof frequenciaFilter)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Toda frequência</option>
-          {TRACKING_FREQUENCIES.map((f) => (
-            <option key={f} value={f}>
-              {FREQUENCY_LABEL[f]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={origemFilter}
-          onChange={(e) => setOrigemFilter(e.target.value as typeof origemFilter)}
-          className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Manual e automático</option>
-          <option value="manual">Só manual</option>
-          <option value="auto">Só automático</option>
-        </select>
-        {hasFilters && (
+      <div className="mt-6 flex items-center gap-2">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar..."
+            className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div ref={filtersRef} className="relative">
           <button
             type="button"
-            onClick={clearFilters}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium ${
+              hasFilters
+                ? "border-foreground bg-muted text-foreground"
+                : "border-border text-muted-foreground hover:bg-muted/40"
+            }`}
           >
-            <X className="h-3.5 w-3.5" /> Limpar filtros
+            <Filter className="h-3.5 w-3.5" /> Filtros
+            {hasFilters && (
+              <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                •
+              </span>
+            )}
           </button>
-        )}
+          {filtersOpen && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-72 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
+              <select
+                value={areaFilter}
+                onChange={(e) => setAreaFilter(e.target.value)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Todas as áreas</option>
+                {META_AREAS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+              {donosEmUso.length > 0 && (
+                <select
+                  value={donoFilter}
+                  onChange={(e) => setDonoFilter(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">Todos os donos</option>
+                  {donosEmUso.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {colaboradoresEmUso.length > 0 && (
+                <select
+                  value={colaboradorFilter}
+                  onChange={(e) => setColaboradorFilter(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">Todos os colaboradores</option>
+                  {colaboradoresEmUso.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={tipoFilter}
+                onChange={(e) => setTipoFilter(e.target.value as typeof tipoFilter)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Objetivos e indicadores</option>
+                <option value="objetivo">Só objetivos</option>
+                <option value="indicador">Só indicadores</option>
+              </select>
+              <select
+                value={saudeFilter}
+                onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Toda saúde</option>
+                {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
+                  <option key={s} value={s}>
+                    {INDICADOR_SAUDE_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={frequenciaFilter}
+                onChange={(e) => setFrequenciaFilter(e.target.value as typeof frequenciaFilter)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Toda frequência</option>
+                {TRACKING_FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {FREQUENCY_LABEL[f]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={origemFilter}
+                onChange={(e) => setOrigemFilter(e.target.value as typeof origemFilter)}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Manual e automático</option>
+                <option value="manual">Só manual</option>
+                <option value="auto">Só automático</option>
+              </select>
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" /> Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {visibleCards.length === 0 ? (
+      {items.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            {items.length === 0
-              ? "Nenhuma meta cadastrada ainda."
-              : "Nenhum resultado pra esse filtro."}
-          </p>
-          {items.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setObjetivoDialog({})}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              <Plus className="h-4 w-4" /> Criar o primeiro objetivo
-            </button>
-          )}
+          <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada ainda.</p>
+          <button
+            type="button"
+            onClick={() => setObjetivoDialog({})}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            <Plus className="h-4 w-4" /> Criar o primeiro objetivo
+          </button>
         </div>
       ) : (
         <div className="mt-8 space-y-10">
-          {minhasMetas.length > 0 && (
+          {meusObjetivos.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-foreground">Minhas metas</h2>
+              <h2 className="text-sm font-semibold text-foreground">Meus objetivos</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {minhasMetas.map(renderCard)}
+                {meusObjetivos.map((o) => (
+                  <ObjetivoSummaryCard
+                    key={o.id}
+                    objetivo={o}
+                    indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                    onOpen={() => push({ kind: "objetivo", id: o.id })}
+                  />
+                ))}
               </div>
             </section>
           )}
 
-          {porDono.length > 0 && (
+          {objetivosPorDono.length > 0 && (
             <section className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Metas do time</h2>
-              {porDono.map(([dono, metas]) => (
+              <h2 className="text-sm font-semibold text-foreground">Objetivos do time</h2>
+              {objetivosPorDono.map(([dono, objs]) => (
                 <div key={dono} className="space-y-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {dono}
                   </h3>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {metas.map(renderCard)}
+                    {objs.map((o) => (
+                      <ObjetivoSummaryCard
+                        key={o.id}
+                        objetivo={o}
+                        indicadores={indicadores.filter((i) => i.objetivoId === o.id)}
+                        onOpen={() => push({ kind: "objetivo", id: o.id })}
+                      />
+                    ))}
                   </div>
                 </div>
               ))}
             </section>
           )}
+
+          {visibleIndicadoresStandalone.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-foreground">Indicadores independentes</h2>
+              <div className="space-y-2">
+                {visibleIndicadoresStandalone.map((ind) => (
+                  <IndicadorRow
+                    key={ind.id}
+                    indicador={ind}
+                    onOpen={() => push({ kind: "indicador", id: ind.id })}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {meusObjetivos.length === 0 &&
+            objetivosPorDono.length === 0 &&
+            visibleIndicadoresStandalone.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum resultado pra esse filtro.</p>
+            )}
         </div>
       )}
 
-      <ObjetivoDialog
+      <ObjetivoQuickDialog
         open={!!objetivoDialog}
         initial={objetivoDialog?.data}
-        indicadoresDoObjetivo={
-          objetivoDialog?.data
-            ? indicadores.filter((i) => i.objetivoId === objetivoDialog.data!.id)
-            : []
-        }
-        indicadoresDisponiveis={indicadoresStandalone}
         members={members}
         onClose={() => setObjetivoDialog(null)}
-        onSave={saveObjetivo}
-        onDelete={
-          objetivoDialog?.data
-            ? () => {
-                void handleDelete(objetivoDialog.data!);
-                setObjetivoDialog(null);
-              }
-            : undefined
-        }
+        onSave={saveObjetivoBasic}
       />
-      <IndicadorDialog
-        open={!!indicadorDialog}
-        initial={indicadorDialog?.data}
+      <IndicadorQuickCreateDialog
+        open={indicadorCreateDialog}
         members={members}
-        onClose={() => setIndicadorDialog(null)}
-        onSave={saveIndicador}
-        onDelete={
-          indicadorDialog?.data
-            ? () => {
-                void handleDelete(indicadorDialog.data!);
-                setIndicadorDialog(null);
-              }
-            : undefined
-        }
-      />
-      <UpdateProgressDialog
-        indicador={updateDialog}
-        onClose={() => setUpdateDialog(null)}
-        onSave={logUpdate}
+        onClose={() => setIndicadorCreateDialog(false)}
+        onCreate={createIndicadorStandalone}
       />
       {confirmDialog}
     </div>
-  );
-}
-
-function UpdateProgressDialog({
-  indicador,
-  onClose,
-  onSave,
-}: {
-  indicador: Indicador | null;
-  onClose: () => void;
-  onSave: (ind: Indicador, valor: number | undefined, nota: string) => void;
-}) {
-  const [valor, setValor] = useState("");
-  const [nota, setNota] = useState("");
-
-  useEffect(() => {
-    if (indicador) {
-      setValor(indicador.valorAtual != null ? String(indicador.valorAtual) : "");
-      setNota("");
-    }
-  }, [indicador]);
-
-  if (!indicador) return null;
-
-  return (
-    <Dialog open={!!indicador} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-          <Target className="h-4 w-4" /> Atualizar indicador
-        </DialogTitle>
-        <DialogDescription className="text-xs text-muted-foreground">
-          {indicador.titulo}
-        </DialogDescription>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground">
-              Valor atual{indicador.unidade ? ` (${indicador.unidade})` : ""}
-            </label>
-            <input
-              type="number"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              autoFocus
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground">
-              Nota (opcional)
-            </label>
-            <input
-              type="text"
-              value={nota}
-              onChange={(e) => setNota(e.target.value)}
-              placeholder="O que mudou desde a última atualização?"
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={() => onSave(indicador, valor ? Number(valor) : undefined, nota)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            Salvar
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
