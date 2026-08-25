@@ -74,7 +74,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
+import { loadBank, type BankInflu } from "@/lib/banco-influs-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
 import { formatSeguidores } from "@/lib/format";
@@ -926,41 +926,6 @@ export const DEFAULT_INFLUENCER_FIELDS: InfluencerFieldKey[] = ["redes", "entreg
 /* ------------------------------------------------------------
  * Helpers
  * ------------------------------------------------------------ */
-function syncToBanco(i: { nome: string; foto?: string; nicho?: string; redes: Rede[] }) {
-  const nome = i.nome.trim();
-  if (!nome) return;
-  try {
-    const list = loadBank();
-    const key = nome.toLowerCase();
-    const idx = list.findIndex((x) => x.nome.trim().toLowerCase() === key);
-    const next =
-      idx >= 0
-        ? list.map((x, j) =>
-            j === idx
-              ? {
-                  ...x,
-                  nome,
-                  foto: i.foto ?? x.foto,
-                  nicho: i.nicho ?? x.nicho,
-                  redes: i.redes?.length ? i.redes : x.redes,
-                }
-              : x,
-          )
-        : [
-            ...list,
-            {
-              id: crypto.randomUUID(),
-              nome,
-              foto: i.foto,
-              nicho: i.nicho,
-              redes: i.redes ?? [],
-            },
-          ];
-    saveBank(next);
-  } catch {
-    /* ignore */
-  }
-}
 
 export function parseMoney(s?: string): number {
   if (!s) return 0;
@@ -1648,7 +1613,6 @@ export function InfluencerBoard({
     const now = new Date().toISOString();
     const withStamps = { ...i, createdAt: now, updatedAt: now, cicloMes: defaultCicloMes };
     applyInflusChange([...latestInflusRef.current, withStamps]);
-    syncToBanco(withStamps);
   };
 
   // Edição imediata de qualquer campo pelo perfil (nome, nicho, contato,
