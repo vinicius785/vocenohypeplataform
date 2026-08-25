@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Info, Plus, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   META_AREAS,
@@ -17,8 +17,8 @@ type Member = { name: string; photo?: string };
 
 const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
-const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
-const HINT_CLS = "mt-1 text-[11px] leading-snug text-muted-foreground";
+const LABEL_CLS = "flex items-center gap-1 text-xs font-medium text-muted-foreground";
+const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-wider text-foreground/70";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -27,6 +27,15 @@ const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   trimestral: "Trimestral",
   personalizado: "Personalizado",
 };
+
+/** Pontinho "i" com dica no hover — evita parágrafo embaixo de cada campo. */
+function Hint({ text }: { text: string }) {
+  return (
+    <span title={text} className="cursor-help text-muted-foreground/60 hover:text-foreground">
+      <Info className="h-3 w-3" />
+    </span>
+  );
+}
 
 export function ObjetivoDialog({
   open,
@@ -64,6 +73,7 @@ export function ObjetivoDialog({
   const [linked, setLinked] = useState<Indicador[]>([]);
   const [vincularOpen, setVincularOpen] = useState(false);
   const [indicadorDialog, setIndicadorDialog] = useState<{ data?: Indicador } | null>(null);
+  const [showDescricao, setShowDescricao] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -76,6 +86,7 @@ export function ObjetivoDialog({
     setDataFim(initial?.dataFim ?? "");
     setFrequencia(initial?.frequencia ?? "continuo");
     setLinked(indicadoresDoObjetivo);
+    setShowDescricao(!!initial?.descricao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
@@ -122,8 +133,7 @@ export function ObjetivoDialog({
         <DialogContent className="flex max-h-[88vh] max-w-lg flex-col">
           <DialogTitle>{indicadorDialog.data ? "Editar indicador" : "Novo indicador"}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Vinculado ao objetivo "{titulo || "sem nome ainda"}". Ao salvar, você volta pro objetivo
-            — nada é gravado de verdade até você salvar o objetivo também.
+            Vinculado ao objetivo "{titulo || "sem nome ainda"}".
           </DialogDescription>
           <IndicadorForm
             initial={indicadorDialog.data}
@@ -149,14 +159,12 @@ export function ObjetivoDialog({
       <DialogContent className="flex max-h-[88vh] max-w-lg flex-col">
         <DialogTitle>{initial ? "Editar objetivo" : "Novo objetivo"}</DialogTitle>
         <DialogDescription className="text-xs text-muted-foreground">
-          Um objetivo agrupa vários indicadores e mostra o progresso combinado deles.
+          Agrupa vários indicadores e mostra o progresso combinado deles.
         </DialogDescription>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+          {/* Sobre */}
           <div className="space-y-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Informações
-            </p>
             <div>
               <label className={LABEL_CLS}>Nome</label>
               <input
@@ -164,84 +172,89 @@ export function ObjetivoDialog({
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="Ex: Escalar a operação sem aumentar a estrutura fixa"
                 className={FIELD_CLS}
+                autoFocus
               />
             </div>
-            <div>
-              <label className={LABEL_CLS}>Descrição (opcional)</label>
-              <textarea
-                value={descricao}
-                onChange={(e) => setDescricao(e.target.value)}
-                rows={2}
-                className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Área</label>
-              <select
-                value={area}
-                onChange={(e) => setArea(e.target.value as MetaArea)}
-                className={FIELD_CLS}
-              >
-                {META_AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-3 border-t border-border pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Responsabilidade
-            </p>
-            <div>
-              <label className={LABEL_CLS}>Dono</label>
-              <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
-                <option value="">Sem dono definido</option>
-                {members.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              <p className={HINT_CLS}>Quem responde pelo objetivo como um todo.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={LABEL_CLS}>Área</label>
+                <select
+                  value={area}
+                  onChange={(e) => setArea(e.target.value as MetaArea)}
+                  className={FIELD_CLS}
+                >
+                  {META_AREAS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Dono</label>
+                <select
+                  value={dono}
+                  onChange={(e) => setDono(e.target.value)}
+                  className={FIELD_CLS}
+                >
+                  <option value="">Sem dono</option>
+                  {members.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             {members.length > 0 && (
-              <div>
-                <label className={LABEL_CLS}>Colaboradores (opcional)</label>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {members
-                    .filter((m) => m.name !== dono)
-                    .map((m) => {
-                      const active = colaboradores.includes(m.name);
-                      return (
-                        <button
-                          key={m.name}
-                          type="button"
-                          onClick={() => toggleColaborador(m.name)}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                            active
-                              ? "border-foreground bg-muted text-foreground"
-                              : "border-border text-muted-foreground hover:bg-muted/40"
-                          }`}
-                        >
-                          {m.name}
-                        </button>
-                      );
-                    })}
-                </div>
-                <p className={HINT_CLS}>
-                  Quem mais participa e pode ser acionado — clique pra marcar/desmarcar.
-                </p>
+              <div className="flex flex-wrap gap-1.5">
+                {members
+                  .filter((m) => m.name !== dono)
+                  .map((m) => {
+                    const active = colaboradores.includes(m.name);
+                    return (
+                      <button
+                        key={m.name}
+                        type="button"
+                        onClick={() => toggleColaborador(m.name)}
+                        title="Colaborador — participa junto, sem ser o dono principal"
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                          active
+                            ? "border-foreground bg-muted text-foreground"
+                            : "border-border text-muted-foreground hover:bg-muted/40"
+                        }`}
+                      >
+                        + {m.name}
+                      </button>
+                    );
+                  })}
               </div>
+            )}
+            {showDescricao ? (
+              <div>
+                <label className={LABEL_CLS}>Descrição</label>
+                <textarea
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  rows={2}
+                  autoFocus
+                  className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowDescricao(true)}
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+              >
+                + Adicionar descrição
+              </button>
             )}
           </div>
 
+          {/* Período */}
           <div className="space-y-3 border-t border-border pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Período
-            </p>
+            <p className={SECTION_TITLE_CLS}>Período</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={LABEL_CLS}>Data inicial</label>
@@ -263,7 +276,9 @@ export function ObjetivoDialog({
               </div>
             </div>
             <div>
-              <label className={LABEL_CLS}>Frequência de acompanhamento</label>
+              <label className={LABEL_CLS}>
+                Frequência <Hint text="De quanto em quanto tempo o objetivo é revisado." />
+              </label>
               <select
                 value={frequencia}
                 onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
@@ -275,26 +290,22 @@ export function ObjetivoDialog({
                   </option>
                 ))}
               </select>
-              <p className={HINT_CLS}>De quanto em quanto tempo o objetivo é revisado.</p>
             </div>
           </div>
 
+          {/* Indicadores */}
           <div className="space-y-3 border-t border-border pt-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Indicadores
+              <p className={SECTION_TITLE_CLS}>
+                Indicadores{" "}
+                <Hint text="O progresso do objetivo é a média do desempenho de cada indicador, ponderada pelo peso de cada um (sem peso, todos contam igual)." />
               </p>
               {pesoSum > 100 && (
                 <span className="text-right text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                  Peso soma {pesoSum}% — será normalizado pra não passar de 100%
+                  Peso soma {pesoSum}% — será normalizado
                 </span>
               )}
             </div>
-            <p className={HINT_CLS}>
-              O progresso deste objetivo é a média do desempenho de cada indicador abaixo, ponderada
-              pelo peso de cada um (defina o peso ao criar/editar o indicador — sem peso, todos
-              contam igual).
-            </p>
 
             {linked.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhum indicador vinculado ainda.</p>
@@ -330,6 +341,7 @@ export function ObjetivoDialog({
                           setPeso(ind.id, e.target.value ? Number(e.target.value) : undefined)
                         }
                         placeholder="peso %"
+                        title="Peso desse indicador no progresso do objetivo"
                         className="h-7 w-16 shrink-0 rounded border border-input bg-background px-1.5 text-[11px]"
                       />
                       <button

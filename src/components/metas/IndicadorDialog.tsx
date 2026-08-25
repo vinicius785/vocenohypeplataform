@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Info, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   META_AREAS,
@@ -19,8 +19,8 @@ type Member = { name: string; photo?: string };
 
 const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
-const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
-const HINT_CLS = "mt-1 text-[11px] leading-snug text-muted-foreground";
+const LABEL_CLS = "flex items-center gap-1 text-xs font-medium text-muted-foreground";
+const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-wider text-foreground/70";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -42,8 +42,8 @@ const METRIC_TYPE_LABEL: Record<MetricType, string> = {
 };
 
 const METRIC_DIRECTION_LABEL: Record<MetricDirection, string> = {
-  aumentar: "Aumentar (quanto mais, melhor)",
-  reduzir: "Reduzir (quanto menos, melhor)",
+  aumentar: "Aumentar (mais é melhor)",
+  reduzir: "Reduzir (menos é melhor)",
   manter_abaixo: "Manter abaixo de um limite",
   manter_acima: "Manter acima de um limite",
   concluir: "Concluir (feito ou não)",
@@ -54,6 +54,17 @@ const MARCO_STATUS_LABEL: Record<IndicadorMarcoStatus, string> = {
   em_andamento: "Em andamento",
   concluido: "Concluído",
 };
+
+/** Pontinho "i" com dica no hover — usado só nos poucos campos que
+ * realmente precisam de explicação, pra não poluir o formulário com
+ * parágrafo embaixo de cada input. */
+function Hint({ text }: { text: string }) {
+  return (
+    <span title={text} className="cursor-help text-muted-foreground/60 hover:text-foreground">
+      <Info className="h-3 w-3" />
+    </span>
+  );
+}
 
 /** `tipo: "min"`/`"max"` pré-selecionam a direção certa — o motor de
  * cálculo só olha pra `direcao`, isso é só conveniência de formulário. */
@@ -108,6 +119,8 @@ export function IndicadorForm({
   const [concluido, setConcluido] = useState(false);
   const [marcoStatus, setMarcoStatus] = useState<IndicadorMarcoStatus>("nao_iniciado");
   const [peso, setPeso] = useState("");
+  const [showDescricao, setShowDescricao] = useState(false);
+  const [showNiveis, setShowNiveis] = useState(false);
 
   useEffect(() => {
     setTitulo(initial?.titulo ?? "");
@@ -130,6 +143,12 @@ export function IndicadorForm({
     setConcluido(initial?.concluido ?? false);
     setMarcoStatus(initial?.marcoStatus ?? "nao_iniciado");
     setPeso(initial?.peso != null ? String(initial.peso) : "");
+    setShowDescricao(!!initial?.descricao);
+    setShowNiveis(
+      initial?.niveis?.baseline != null ||
+        initial?.niveis?.minimo != null ||
+        initial?.niveis?.excelencia != null,
+    );
   }, [initial]);
 
   const toggleColaborador = (name: string) =>
@@ -182,12 +201,9 @@ export function IndicadorForm({
 
   return (
     <>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
-        {/* Informações */}
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+        {/* Sobre */}
         <div className="space-y-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Informações
-          </p>
           <div>
             <label className={LABEL_CLS}>Nome</label>
             <input
@@ -195,86 +211,233 @@ export function IndicadorForm({
               onChange={(e) => setTitulo(e.target.value)}
               placeholder="Ex: Margem média da carteira"
               className={FIELD_CLS}
+              autoFocus
             />
           </div>
-          <div>
-            <label className={LABEL_CLS}>Descrição (opcional)</label>
-            <textarea
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              rows={2}
-              className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLS}>Área</label>
-            <select
-              value={area}
-              onChange={(e) => setArea(e.target.value as MetaArea)}
-              className={FIELD_CLS}
-            >
-              {META_AREAS.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Responsabilidade */}
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Responsabilidade
-          </p>
-          <div>
-            <label className={LABEL_CLS}>Dono</label>
-            <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
-              <option value="">Sem dono definido</option>
-              {members.map((m) => (
-                <option key={m.name} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <p className={HINT_CLS}>Quem responde por esse número no dia a dia.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>Área</label>
+              <select
+                value={area}
+                onChange={(e) => setArea(e.target.value as MetaArea)}
+                className={FIELD_CLS}
+              >
+                {META_AREAS.map((a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL_CLS}>Dono</label>
+              <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
+                <option value="">Sem dono</option>
+                {members.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           {members.length > 0 && (
-            <div>
-              <label className={LABEL_CLS}>Colaboradores (opcional)</label>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {members
-                  .filter((m) => m.name !== dono)
-                  .map((m) => {
-                    const active = colaboradores.includes(m.name);
-                    return (
-                      <button
-                        key={m.name}
-                        type="button"
-                        onClick={() => toggleColaborador(m.name)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
-                          active
-                            ? "border-foreground bg-muted text-foreground"
-                            : "border-border text-muted-foreground hover:bg-muted/40"
-                        }`}
-                      >
-                        {m.name}
-                      </button>
-                    );
-                  })}
-              </div>
-              <p className={HINT_CLS}>
-                Quem mais participa e pode ser acionado — clique pra marcar/desmarcar.
-              </p>
+            <div className="flex flex-wrap gap-1.5">
+              {members
+                .filter((m) => m.name !== dono)
+                .map((m) => {
+                  const active = colaboradores.includes(m.name);
+                  return (
+                    <button
+                      key={m.name}
+                      type="button"
+                      onClick={() => toggleColaborador(m.name)}
+                      title="Colaborador — participa junto, sem ser o dono principal"
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                        active
+                          ? "border-foreground bg-muted text-foreground"
+                          : "border-border text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      + {m.name}
+                    </button>
+                  );
+                })}
             </div>
+          )}
+          {showDescricao ? (
+            <div>
+              <label className={LABEL_CLS}>Descrição</label>
+              <textarea
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                rows={2}
+                autoFocus
+                className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowDescricao(true)}
+              className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+            >
+              + Adicionar descrição
+            </button>
           )}
         </div>
 
-        {/* Período */}
+        {/* Como medir */}
         <div className="space-y-3 border-t border-border pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Período
-          </p>
+          <p className={SECTION_TITLE_CLS}>Como medir</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>Tipo</label>
+              <select
+                value={tipo}
+                onChange={(e) => changeTipo(e.target.value as MetricType)}
+                className={FIELD_CLS}
+              >
+                {METRIC_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {METRIC_TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {NUMERIC_TYPES.includes(tipo) && (
+              <div>
+                <label className={LABEL_CLS}>
+                  Direção{" "}
+                  <Hint text="Define se subir o valor é bom ou ruim — é isso que decide se o indicador está saudável ou em risco." />
+                </label>
+                <select
+                  value={direcao}
+                  onChange={(e) => setDirecao(e.target.value as MetricDirection)}
+                  className={FIELD_CLS}
+                >
+                  {METRIC_DIRECTIONS.map((d) => (
+                    <option key={d} value={d}>
+                      {METRIC_DIRECTION_LABEL[d]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {tipo === "binario" && (
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={concluido}
+                onChange={(e) => setConcluido(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              Já está concluído
+            </label>
+          )}
+          {tipo === "marco" && (
+            <div>
+              <label className={LABEL_CLS}>Etapa atual</label>
+              <select
+                value={marcoStatus}
+                onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
+                className={FIELD_CLS}
+              >
+                {INDICADOR_MARCO_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {MARCO_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {NUMERIC_TYPES.includes(tipo) && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL_CLS}>Valor atual</label>
+                  <input
+                    type="number"
+                    value={valorAtual}
+                    onChange={(e) => setValorAtual(e.target.value)}
+                    className={FIELD_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Unidade</label>
+                  <input
+                    value={unidade}
+                    onChange={(e) => setUnidade(e.target.value)}
+                    placeholder="clientes, R$, %..."
+                    className={FIELD_CLS}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Meta esperada</label>
+                <input
+                  type="number"
+                  value={esperado}
+                  onChange={(e) => setEsperado(e.target.value)}
+                  className={FIELD_CLS}
+                />
+              </div>
+              {showNiveis ? (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className={LABEL_CLS}>
+                      Baseline{" "}
+                      <Hint text="De onde o indicador partiu — usado como referência de início." />
+                    </label>
+                    <input
+                      type="number"
+                      value={baseline}
+                      onChange={(e) => setBaseline(e.target.value)}
+                      className={FIELD_CLS}
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>
+                      Meta mínima <Hint text="Abaixo desse valor, o indicador entra em risco." />
+                    </label>
+                    <input
+                      type="number"
+                      value={minimo}
+                      onChange={(e) => setMinimo(e.target.value)}
+                      className={FIELD_CLS}
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>
+                      Excelência <Hint text="Acima desse valor, o indicador é destaque." />
+                    </label>
+                    <input
+                      type="number"
+                      value={excelencia}
+                      onChange={(e) => setExcelencia(e.target.value)}
+                      className={FIELD_CLS}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowNiveis(true)}
+                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  + Refinar com baseline, meta mínima e excelência
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Quando e origem */}
+        <div className="space-y-3 border-t border-border pt-4">
+          <p className={SECTION_TITLE_CLS}>Quando e origem</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>Data inicial</label>
@@ -295,24 +458,44 @@ export function IndicadorForm({
               />
             </div>
           </div>
-          <div>
-            <label className={LABEL_CLS}>Frequência de acompanhamento</label>
-            <select
-              value={frequencia}
-              onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
-              className={FIELD_CLS}
-            >
-              {TRACKING_FREQUENCIES.map((f) => (
-                <option key={f} value={f}>
-                  {FREQUENCY_LABEL[f]}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>Frequência</label>
+              <select
+                value={frequencia}
+                onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
+                className={FIELD_CLS}
+              >
+                {TRACKING_FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {FREQUENCY_LABEL[f]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL_CLS}>
+                Origem{" "}
+                <Hint text="Por enquanto todo indicador é atualizado manualmente — origem automática ainda não existe." />
+              </label>
+              <select
+                value={dataSource}
+                onChange={() => setDataSource("manual")}
+                className={FIELD_CLS}
+              >
+                <option value="manual">Manual</option>
+                <option value="auto" disabled>
+                  Automática (em breve)
                 </option>
-              ))}
-            </select>
-            <p className={HINT_CLS}>De quanto em quanto tempo esse número costuma ser revisado.</p>
+              </select>
+            </div>
           </div>
           {(objetivoId ?? initial?.objetivoId) ? (
             <div>
-              <label className={LABEL_CLS}>Peso no objetivo (%, opcional)</label>
+              <label className={LABEL_CLS}>
+                Peso no objetivo (%)
+                <Hint text="Quanto esse indicador pesa no progresso do objetivo. Vazio = divide igual entre quem não tem peso." />
+              </label>
               <input
                 type="number"
                 value={peso}
@@ -320,195 +503,9 @@ export function IndicadorForm({
                 placeholder="Vazio = divide igual"
                 className={FIELD_CLS}
               />
-              <p className={HINT_CLS}>
-                Quanto esse indicador pesa no progresso do objetivo. Deixe em branco pra dividir
-                igualmente entre os indicadores sem peso definido.
-              </p>
             </div>
           ) : null}
         </div>
-
-        {/* Como medir */}
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Como medir
-          </p>
-          <div>
-            <label className={LABEL_CLS}>Tipo de medição</label>
-            <select
-              value={tipo}
-              onChange={(e) => changeTipo(e.target.value as MetricType)}
-              className={FIELD_CLS}
-            >
-              {METRIC_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {METRIC_TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {NUMERIC_TYPES.includes(tipo) && (
-            <div>
-              <label className={LABEL_CLS}>Direção</label>
-              <select
-                value={direcao}
-                onChange={(e) => setDirecao(e.target.value as MetricDirection)}
-                className={FIELD_CLS}
-              >
-                {METRIC_DIRECTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {METRIC_DIRECTION_LABEL[d]}
-                  </option>
-                ))}
-              </select>
-              <p className={HINT_CLS}>
-                Define se subir o valor é bom ou ruim — é isso que decide se o indicador está
-                saudável ou em risco.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Origem */}
-        <div className="space-y-3 border-t border-border pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Origem do dado
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setDataSource("manual")}
-              className={`flex-1 rounded-md border px-3 py-1.5 text-xs font-medium ${
-                dataSource === "manual"
-                  ? "border-foreground bg-muted"
-                  : "border-border hover:bg-muted/40"
-              }`}
-            >
-              Manual
-            </button>
-            <button
-              type="button"
-              disabled
-              title="Reservado pro futuro — nenhuma fonte automática existe ainda"
-              className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/60"
-            >
-              Automática (em breve)
-            </button>
-          </div>
-          <p className={HINT_CLS}>Por enquanto todo indicador é atualizado manualmente.</p>
-        </div>
-
-        {/* Desempenho — só os campos relevantes pro tipo escolhido */}
-        {NUMERIC_TYPES.includes(tipo) && (
-          <div className="space-y-3 border-t border-border pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Desempenho
-            </p>
-            <p className={HINT_CLS}>
-              Só a "Meta esperada" é obrigatória pra medir progresso. Os outros níveis são opcionais
-              e refinam a régua de saúde do indicador.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLS}>Valor atual</label>
-                <input
-                  type="number"
-                  value={valorAtual}
-                  onChange={(e) => setValorAtual(e.target.value)}
-                  className={FIELD_CLS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Unidade</label>
-                <input
-                  value={unidade}
-                  onChange={(e) => setUnidade(e.target.value)}
-                  placeholder="clientes, R$, %..."
-                  className={FIELD_CLS}
-                />
-              </div>
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Meta esperada</label>
-              <input
-                type="number"
-                value={esperado}
-                onChange={(e) => setEsperado(e.target.value)}
-                className={FIELD_CLS}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className={LABEL_CLS}>Baseline</label>
-                <input
-                  type="number"
-                  value={baseline}
-                  onChange={(e) => setBaseline(e.target.value)}
-                  placeholder="Opcional"
-                  className={FIELD_CLS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Meta mínima</label>
-                <input
-                  type="number"
-                  value={minimo}
-                  onChange={(e) => setMinimo(e.target.value)}
-                  placeholder="Opcional"
-                  className={FIELD_CLS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLS}>Meta de excelência</label>
-                <input
-                  type="number"
-                  value={excelencia}
-                  onChange={(e) => setExcelencia(e.target.value)}
-                  placeholder="Opcional"
-                  className={FIELD_CLS}
-                />
-              </div>
-            </div>
-            <p className={HINT_CLS}>
-              Baseline: de onde partiu. Meta mínima: abaixo disso entra em risco. Meta de
-              excelência: acima disso é destaque.
-            </p>
-          </div>
-        )}
-        {tipo === "binario" && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Desempenho
-            </p>
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={concluido}
-                onChange={(e) => setConcluido(e.target.checked)}
-                className="h-4 w-4 rounded border-input"
-              />
-              Já concluído
-            </label>
-          </div>
-        )}
-        {tipo === "marco" && (
-          <div className="space-y-2 border-t border-border pt-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Desempenho
-            </p>
-            <select
-              value={marcoStatus}
-              onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
-              className={FIELD_CLS}
-            >
-              {INDICADOR_MARCO_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {MARCO_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-4">
