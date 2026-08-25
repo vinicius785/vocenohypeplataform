@@ -1429,6 +1429,7 @@ export function InfluencerBoard({
   exportName,
   allowedFields,
   headerExtra,
+  defaultCicloMes,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1439,6 +1440,14 @@ export function InfluencerBoard({
    * dialog opens — the dropdown used to auto-close on any click inside it, which unmounted this
    * button (and destroyed its own dialog-open state) before its dialog ever got to render. */
   headerExtra?: (closeMenu: () => void) => ReactNode;
+  /** Mês (`"YYYY-MM"`) a carimbar em `cicloMes` de todo influenciador criado
+   * por aqui (Criar do zero / Adicionar do banco) — só passado por
+   * campanhas recorrentes, com o mês que está selecionado na tela no
+   * momento. `undefined` em qualquer outro caso (campanha não-recorrente,
+   * ou quem mais montar este board, ex. Projetos): sem isso, todo
+   * influenciador criado ficava só com `createdAt`, que sempre bate no mês
+   * corrente independente do mês selecionado no filtro. */
+  defaultCicloMes?: string;
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
@@ -1631,7 +1640,7 @@ export function InfluencerBoard({
   // perfil via `viewing`, que salva imediato campo a campo).
   const create = (i: Influ) => {
     const now = new Date().toISOString();
-    const withStamps = { ...i, createdAt: now, updatedAt: now };
+    const withStamps = { ...i, createdAt: now, updatedAt: now, cicloMes: defaultCicloMes };
     applyInflusChange([...latestInflusRef.current, withStamps]);
     syncToBanco(withStamps);
   };
@@ -2025,6 +2034,7 @@ export function InfluencerBoard({
         onOpenChange={setBankPickerOpen}
         alreadyAdded={influs.map((i) => i.nome.trim().toLowerCase())}
         onAdd={(picked) => {
+          const now = new Date().toISOString();
           applyInflusChange([
             ...latestInflusRef.current,
             ...picked.map(
@@ -2036,6 +2046,9 @@ export function InfluencerBoard({
                 redes: b.redes,
                 entregas: [],
                 status: "EM_CURADORIA",
+                createdAt: now,
+                updatedAt: now,
+                cicloMes: defaultCicloMes,
               }),
             ),
           ]);

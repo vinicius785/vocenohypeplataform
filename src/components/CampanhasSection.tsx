@@ -752,7 +752,12 @@ function CampanhaDetail({
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
-      <InfluencerBoard influs={visibleInflus} onChange={persistVisibleInflus} exportName={c.nome} />
+      <InfluencerBoard
+        influs={visibleInflus}
+        onChange={persistVisibleInflus}
+        exportName={c.nome}
+        defaultCicloMes={isRecorrente ? monthFilter : undefined}
+      />
 
       <GaleriaConteudosSection influs={visibleInflus} />
 

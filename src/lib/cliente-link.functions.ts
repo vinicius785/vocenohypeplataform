@@ -126,6 +126,10 @@ const InfluencerPublic = z.object({
     .optional(),
   criadoEm: z.string().optional(),
   historico: z.array(StatusHistoryEntry).optional(),
+  /** Mês (`"YYYY-MM"`) do ciclo dessa entrada, só relevante pra campanhas
+   * recorrentes — mesmo campo que o kanban interno usa pra separar os
+   * influenciadores por mês. */
+  cicloMes: z.string().optional(),
 });
 
 /** Extrai as mudanças de status do log interno de atividade (`activity`,
@@ -190,6 +194,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
     profileMetrics: influ.profileMetrics,
     criadoEm: influ.createdAt,
     historico: statusHistoryFor(influ),
+    cicloMes: influ.cicloMes,
   };
 }
 
@@ -452,6 +457,8 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           influencers,
           cronograma,
           relatorios,
+          isRecorrente: c.pagClienteTipo === "Recorrente",
+          recorrenteInicio: c.pagClienteRecorrenteInicio,
         };
       }),
     );

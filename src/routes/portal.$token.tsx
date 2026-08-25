@@ -70,6 +70,7 @@ import { formatSeguidores } from "@/lib/format";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { t, usePortalLang, PORTAL_LANGS, type PortalLang } from "@/lib/portal-i18n";
 import { mesLabel } from "@/lib/relatorio-mensal";
+import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 
 /**
  * Portal do cliente (`/portal/$token`) — um link só, com TODAS as campanhas
@@ -211,6 +212,7 @@ type PublicInfluencer = {
   profileMetrics?: { porRede?: Record<string, RedeMetrics> };
   criadoEm?: string;
   historico?: { status: string; at: string }[];
+  cicloMes?: string;
 };
 type PublicCronogramaItem = {
   id: string;
@@ -236,6 +238,8 @@ type PublicCampanha = {
   influencers: PublicInfluencer[];
   cronograma: PublicCronogramaItem[];
   relatorios: PublicRelatorioMensal[];
+  isRecorrente: boolean;
+  recorrenteInicio?: string;
 };
 type PublicArticle = {
   id: string;
@@ -1675,6 +1679,10 @@ function ClientPortalPage() {
   );
   const [activeCampanhaId, setActiveCampanhaId] = useState<string | null>(null);
   const [influTab, setInfluTab] = useState<"todos" | "reprovados">("todos");
+  const [portalMonth, setPortalMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [readingArticleId, setReadingArticleId] = useState<string | null>(null);
   const [readingEngagement, setReadingEngagement] = useState<BlogEngagement | null>(null);
@@ -1695,6 +1703,10 @@ function ClientPortalPage() {
   const [ws, setWs] = useState<Workspace>(loaderData.ws);
   const [lang, setLang] = usePortalLang();
   useEffect(() => setInfluTab("todos"), [activeCampanhaId]);
+  useEffect(() => {
+    const now = new Date();
+    setPortalMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  }, [activeCampanhaId]);
 
   // Recarrega os dados depois de uma ação do cliente (aprovar/reprovar,
   // salvar briefing, etc) — o carregamento inicial já veio pronto do
@@ -1753,16 +1765,31 @@ function ClientPortalPage() {
   }
 
   const activeCampanha = data.campanhas.find((c) => c.id === activeCampanhaId) ?? null;
+  const monthOptions = activeCampanha?.isRecorrente
+    ? buildMesReferenciaOptions(activeCampanha.recorrenteInicio)
+    : [];
+  // Campanha recorrente reaproveita a mesma campanha mês a mês — sem
+  // separar por mês, influenciadores de ciclos diferentes ficariam todos
+  // empilhados juntos. `cicloMes` é o mês de verdade (setado pelo time);
+  // `criadoEm` é só o fallback pra entradas antigas sem esse campo, mesma
+  // lógica já usada no kanban interno (`CampanhasSection.tsx`).
+  const monthFilteredInflus =
+    activeCampanha?.influencers.filter(
+      (i) =>
+        !activeCampanha.isRecorrente ||
+        (i.cicloMes ?? i.criadoEm ?? "").slice(0, 7) === portalMonth,
+    ) ?? [];
   // Reprovado é `status === "RECUSADO"` (inclusive quando o time reverte
   // manualmente uma aprovação — não sobra `clienteReprovacao` nesse caso,
   // já que não foi o cliente quem reprovou) OU uma reprovação de verdade
   // do cliente que ainda não foi reaberta — mesma lógica de `influApproval`
   // acima, só que pra dividir as duas abas em vez de decidir um selo.
-  const reprovados =
-    activeCampanha?.influencers.filter((i) => i.status === "RECUSADO" || i.clienteReprovacao) ?? [];
-  const ativos =
-    activeCampanha?.influencers.filter((i) => i.status !== "RECUSADO" && !i.clienteReprovacao) ??
-    [];
+  const reprovados = monthFilteredInflus.filter(
+    (i) => i.status === "RECUSADO" || i.clienteReprovacao,
+  );
+  const ativos = monthFilteredInflus.filter((i) => i.status !== "RECUSADO" && !i.clienteReprovacao);
+  // Detalhe de um influenciador continua alcançável mesmo fora do mês
+  // selecionado (ex.: link direto, ou trocou de mês com o painel aberto).
   const viewing = activeCampanha?.influencers.find((i) => i.id === viewingId) ?? null;
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
@@ -2065,12 +2092,30 @@ function ClientPortalPage() {
                     <h1 className="text-xl font-semibold tracking-tight text-foreground">
                       {activeCampanha.nome}
                     </h1>
-                    {activeCampanha.prazo && (
-                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Calendar className="h-3.5 w-3.5" /> {t(lang, "prazo")}{" "}
-                        {fmtDate(activeCampanha.prazo)}
-                      </p>
-                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-3">
+                      {activeCampanha.prazo && (
+                        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" /> {t(lang, "prazo")}{" "}
+                          {fmtDate(activeCampanha.prazo)}
+                        </p>
+                      )}
+                      {activeCampanha.isRecorrente && (
+                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          Mês
+                          <select
+                            value={portalMonth}
+                            onChange={(e) => setPortalMonth(e.target.value)}
+                            className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
+                          >
+                            {monthOptions.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                    </div>
                   </div>
                   <PortalDemandButton token={token} campanhaId={activeCampanha.id} lang={lang} />
                 </div>
@@ -2084,22 +2129,22 @@ function ClientPortalPage() {
                   )}
                   <KpiCard
                     label={t(lang, "statInfluenciadores")}
-                    value={activeCampanha.influencers.length.toString()}
+                    value={monthFilteredInflus.length.toString()}
                   />
                   <KpiCard
                     label={t(lang, "aguardandoVoce")}
-                    value={activeCampanha.influencers
+                    value={monthFilteredInflus
                       .filter((i) => pendingReason(i, lang))
                       .length.toString()}
                     tone={
-                      activeCampanha.influencers.some((i) => pendingReason(i, lang))
+                      monthFilteredInflus.some((i) => pendingReason(i, lang))
                         ? "warning"
                         : "default"
                     }
                   />
                   <KpiCard
                     label={t(lang, "postados")}
-                    value={activeCampanha.influencers
+                    value={monthFilteredInflus
                       .reduce(
                         (s, i) => s + i.entregas.filter((e) => e.status === "publicado").length,
                         0,

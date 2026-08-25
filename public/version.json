@@ -1,6 +1,7 @@
 {
-  "version": "1.161.1",
+  "version": "1.162.0",
   "notes": [
+    "Corrige o mês em campanhas recorrentes: influenciadores criados por dentro da plataforma (Criar do zero ou Adicionar do banco) agora ficam de verdade no mês selecionado na tela, em vez de sempre cair no mês corrente. E o painel do cliente ganhou o mesmo seletor de mês do painel interno — antes mostrava todos os influenciadores de todos os meses misturados, sem separar por ciclo.",
     "Ajusta o texto da notificação no sino quando um cliente aprova um influenciador: agora diz \"(Cliente) aprovou (Influenciador) para a campanha (Campanha)\" em vez de só \"(Influenciador) aprovou a seleção pra campanha\".",
     "Excluir ou editar uma reunião recorrente agora pergunta \"só esta ou todas as reuniões da série?\" antes de aplicar a mudança — antes cada ocorrência era tratada isoladamente sem opção. Reuniões avulsas e as recorrentes criadas antes dessa atualização continuam funcionando exatamente como hoje, sem nenhuma pergunta.",
     "Fecha o último buraco de \"excluo o influ e ele volta sozinho\": achei nos logs um influenciador específico que já tinha sido excluído de verdade no banco, mas o app continuava tentando excluir de novo (0 linhas afetadas, sem erro) e, achando que tinha falhado por permissão, restaurava ele na tela outra vez — um loop sem saída. Agora, quando uma exclusão não afeta nenhuma linha, o app confere se o item ainda existe de verdade no banco antes de restaurar: se já não existe (era só um eco de estado desatualizado), deixa excluído; só restaura e avisa quando é uma falha de verdade.",
