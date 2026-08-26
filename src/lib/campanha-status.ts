@@ -1,11 +1,9 @@
 /**
  * Fonte única de verdade para os dois eixos de status do fluxo de
- * campanhas de influenciadores:
+ * campanhas de influenciadores — separados de propósito:
  *
- * - `InfluStatus`: a jornada de SELEÇÃO do influenciador na campanha
- *   (inscrição → curadoria → aprovação do cliente → aprovado/recusado).
- *   Termina em `APROVADO` — produção de conteúdo NÃO é mais um valor
- *   manual deste campo (ver decisão abaixo).
+ * - `InfluStatus`: a jornada do PERFIL do influenciador na campanha
+ *   (inscrição → curadoria → aprovação do cliente → produção → conclusão).
  * - `EntregaStage`: um ÚNICO campo linear com a produção/aprovação de
  *   CADA entrega. Antes existiam dois campos cruzados (`conteudoStatus` +
  *   `etapa`), com o mesmo status reusado tanto pro ciclo de aprovação do
@@ -13,17 +11,6 @@
  *   qual dos dois) — difícil de acompanhar e ambíguo por natureza. Cada
  *   valor de `EntregaStage` já diz sozinho O QUÊ está em jogo (ver
  *   comentário acima do tipo).
- *
- * Antes existiam DUAS máquinas de status quase sem relação:
- * `InfluStatus` tinha valores próprios (`EM_PRODUCAO`/`CONCLUIDO`) pra
- * representar o progresso de produção, só que precisavam ser arrastados
- * manualmente no kanban — `advanceStatusFromEntregas` só rodava uma vez,
- * na criação do influenciador, então o kanban ficava desatualizado assim
- * que uma entrega avançava depois disso. Produção passou a ser SEMPRE
- * derivada das entregas (ver `producaoResumo` em InfluencerBoard.tsx) —
- * nunca mais um valor gravável em `Influ.status`. Uma vez `APROVADO`, o
- * progresso de produção aparece na aba "Produção" da campanha (kanban por
- * ENTREGA, não por influenciador), sempre sincronizado por construção.
  *
  * Puro (sem React/browser), importável tanto do client (InfluencerBoard,
  * CampanhasSection, AppShell) quanto de server functions (cliente-link,
@@ -39,19 +26,21 @@ export const INFLU_STATUSES = [
   "EM_CURADORIA",
   "ENVIADO_AO_CLIENTE",
   "APROVADO",
+  "EM_PRODUCAO",
+  "CONCLUIDO",
   "RECUSADO",
 ] as const;
 export type InfluStatus = (typeof INFLU_STATUSES)[number];
 
 /** Ordem de exibição no Kanban — RECUSADO fica fora do fluxo linear
- * principal (é um estado terminal alternativo, não uma etapa a mais).
- * APROVADO é a última coluna: produção de conteúdo vive na aba "Produção"
- * da campanha, não como mais colunas aqui. */
+ * principal (é um estado terminal alternativo, não uma etapa a mais). */
 export const INFLU_KANBAN_ORDER: InfluStatus[] = [
   "INSCRITO",
   "EM_CURADORIA",
   "ENVIADO_AO_CLIENTE",
   "APROVADO",
+  "EM_PRODUCAO",
+  "CONCLUIDO",
 ];
 
 export const INFLU_STATUS_LABEL: Record<InfluStatus, string> = {
@@ -59,16 +48,21 @@ export const INFLU_STATUS_LABEL: Record<InfluStatus, string> = {
   EM_CURADORIA: "Em curadoria",
   ENVIADO_AO_CLIENTE: "Enviado ao cliente",
   APROVADO: "Aprovado",
+  EM_PRODUCAO: "Em produção",
+  CONCLUIDO: "Concluído",
   RECUSADO: "Recusado",
 };
 
 /** Rótulos simplificados mostrados ao CLIENTE no portal — evita expor
- * vocabulário operacional interno ("curadoria" etc). */
+ * vocabulário operacional interno ("curadoria", "em produção" no sentido
+ * de time interno vs. produção de conteúdo, etc). */
 export const INFLU_STATUS_LABEL_CLIENTE: Record<InfluStatus, string> = {
   INSCRITO: "Em análise",
   EM_CURADORIA: "Em análise",
   ENVIADO_AO_CLIENTE: "Aguardando sua aprovação",
   APROVADO: "Aprovado",
+  EM_PRODUCAO: "Aprovado",
+  CONCLUIDO: "Aprovado",
   RECUSADO: "Recusado",
 };
 
@@ -77,6 +71,8 @@ export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
   EM_CURADORIA: "bg-muted text-muted-foreground",
   ENVIADO_AO_CLIENTE: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   APROVADO: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  EM_PRODUCAO: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  CONCLUIDO: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   RECUSADO: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
@@ -84,6 +80,8 @@ export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
   EM_CURADORIA: "border-muted-foreground/40",
   ENVIADO_AO_CLIENTE: "border-amber-500",
   APROVADO: "border-emerald-500",
+  EM_PRODUCAO: "border-sky-500",
+  CONCLUIDO: "border-violet-500",
   RECUSADO: "border-red-500",
 };
 
@@ -234,31 +232,6 @@ export function entregaFaseConceitual(stage: EntregaStage): EntregaFaseConceitua
   }
 }
 
-/** As 4 colunas do kanban de Produção (aba "Produção" da campanha, um
- * card por ENTREGA) — mesmo reagrupamento de `entregaFaseConceitual`, só
- * que separa `PUBLICADA` numa coluna "Concluído" própria em vez de deixar
- * junto de "Publicação" (que ali significa "aprovado, falta publicar" —
- * confundia ter os dois num popover só). Puramente visual, mesma regra de
- * `entregaFaseConceitual`: não altera `ENTREGA_STAGE_ORDER` nem nenhuma
- * transição. */
-export const ENTREGA_KANBAN_COLUNAS = ["ROTEIRO", "CONTEUDO", "PUBLICACAO", "CONCLUIDO"] as const;
-export type EntregaKanbanColuna = (typeof ENTREGA_KANBAN_COLUNAS)[number];
-
-export const ENTREGA_KANBAN_COLUNA_LABEL: Record<EntregaKanbanColuna, string> = {
-  ROTEIRO: "Roteiro",
-  CONTEUDO: "Conteúdo",
-  PUBLICACAO: "Publicação",
-  CONCLUIDO: "Concluído",
-};
-
-export function entregaKanbanColuna(stage: EntregaStage): EntregaKanbanColuna {
-  if (stage === "PUBLICADA") return "CONCLUIDO";
-  const { fase } = entregaFaseConceitual(stage);
-  if (fase === "Roteiro") return "ROTEIRO";
-  if (fase === "Conteúdo") return "CONTEUDO";
-  return "PUBLICACAO";
-}
-
 // ============================================================
 // Próxima ação — "quem precisa agir?"
 // ============================================================
@@ -278,10 +251,10 @@ export function nextActionForInflu(status: InfluStatus): NextActor {
       return "hype";
     case "ENVIADO_AO_CLIENTE":
       return "cliente";
-    // Aprovado é terminal pra SELEÇÃO — a partir daqui, quem precisa agir
-    // é sobre uma entrega específica (ver `nextActionForEntrega`), não
-    // sobre o influenciador como um todo.
     case "APROVADO":
+    case "EM_PRODUCAO":
+      return "hype";
+    case "CONCLUIDO":
     case "RECUSADO":
       return null;
   }
@@ -315,9 +288,10 @@ const INFLU_TRANSITIONS: Record<InfluStatus, InfluStatus[]> = {
   ENVIADO_AO_CLIENTE: ["EM_CURADORIA", "APROVADO", "RECUSADO"],
   // Time pode reverter uma aprovação (ex: cliente pediu troca depois de já
   // ter aprovado) — volta pra RECUSADO, que por sua vez pode ser reenviado
-  // pro cliente decidir de novo (ver RECUSADO abaixo). Produção não é mais
-  // uma transição manual daqui (ver comentário no topo do arquivo).
-  APROVADO: ["RECUSADO"],
+  // pro cliente decidir de novo (ver RECUSADO abaixo).
+  APROVADO: ["EM_PRODUCAO", "CONCLUIDO", "RECUSADO"],
+  EM_PRODUCAO: ["APROVADO", "CONCLUIDO"],
+  CONCLUIDO: ["EM_PRODUCAO"],
   // RECUSADO → ENVIADO_AO_CLIENTE é o caminho de "reabrir a aprovação":
   // o time ajusta algo na curadoria e manda de volta pro cliente decidir
   // de novo, sem precisar passar por EM_CURADORIA de novo.
@@ -351,32 +325,26 @@ const LEGACY_INFLU_MAP: Record<string, InfluStatus> = {
   Lista: "EM_CURADORIA",
   "Enviado para aprovação": "ENVIADO_AO_CLIENTE",
   Aprovado: "APROVADO",
-  "Aguardando roteiro": "APROVADO",
-  "Aprovação de roteiro": "APROVADO",
-  "Em gravação": "APROVADO",
-  "Aprovação de conteúdo": "APROVADO",
-  "Conteúdo aprovado": "APROVADO",
-  Postado: "APROVADO",
-  Pago: "APROVADO",
-  // `EM_PRODUCAO`/`CONCLUIDO` eram valores de verdade de `InfluStatus`
-  // antes da produção virar sempre derivada das entregas — linhas reais
-  // no banco ainda têm essas strings gravadas; dobra pra APROVADO na
-  // leitura (não-destrutivo; um backfill à parte reescreve de vez).
-  EM_PRODUCAO: "APROVADO",
-  CONCLUIDO: "APROVADO",
+  "Aguardando roteiro": "EM_PRODUCAO",
+  "Aprovação de roteiro": "EM_PRODUCAO",
+  "Em gravação": "EM_PRODUCAO",
+  "Aprovação de conteúdo": "EM_PRODUCAO",
+  "Conteúdo aprovado": "EM_PRODUCAO",
+  Postado: "EM_PRODUCAO", // vira CONCLUIDO em legacyInfluStatus se todas as entregas já publicadas
+  Pago: "CONCLUIDO",
 };
 
 /** Traduz um status de influenciador (novo OU antigo) pro novo enum.
- * `hasReprovacao` resolve o único caso que depende de mais contexto que
- * só a string do status antigo (reprovação registrada por fora do campo
- * de status em si). */
+ * `hasReprovacao`/`allEntregasPublicadas` resolvem os dois casos que
+ * dependem de mais contexto que só a string do status antigo. */
 export function legacyInfluStatus(
   raw: string | undefined,
-  opts: { hasReprovacao?: boolean } = {},
+  opts: { hasReprovacao?: boolean; allEntregasPublicadas?: boolean } = {},
 ): InfluStatus {
   if (!raw) return "INSCRITO";
   if ((INFLU_STATUSES as readonly string[]).includes(raw)) return raw as InfluStatus;
   if (raw === "Enviado para aprovação" && opts.hasReprovacao) return "RECUSADO";
+  if (raw === "Postado") return opts.allEntregasPublicadas ? "CONCLUIDO" : "EM_PRODUCAO";
   return LEGACY_INFLU_MAP[raw] ?? "EM_CURADORIA";
 }
 
