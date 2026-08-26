@@ -13,6 +13,7 @@ import {
   entregaFaseConceitual,
   entregaKanbanColuna,
   type EntregaKanbanColuna,
+  type EntregaStage,
 } from "@/lib/campanha-status";
 import {
   deriveEntregaNextStep,
@@ -25,6 +26,7 @@ import {
   logInfluActivity,
   ENTREGA_ACTION_LOG,
   ENTREGAS_OPTS,
+  todayISO,
   type Influ,
   type Entrega,
   type EntregaActionOpts,
@@ -32,11 +34,14 @@ import {
 
 /**
  * Kanban por ENTREGA (não por influenciador) — aba "Produção" da campanha.
- * Populado automaticamente por todo influenciador `APROVADO`; nunca precisa
- * arrastar nada manualmente, o card muda de coluna sozinho quando a ação
- * certa é executada (ver `entregaKanbanColuna`/`entrega-engine.ts`). Mesmo
- * padrão visual do kanban de tarefas (`tasks/TaskBoard.tsx`): coluna é um
- * cartão único contendo a lista, não uma coluna solta flutuando na página.
+ * Populado automaticamente por todo influenciador `APROVADO`. O botão de
+ * próxima ação avança sozinho seguindo o motor (`entrega-engine.ts`), mas
+ * o card também pode ser arrastado livremente pra qualquer coluna a
+ * qualquer momento — o time decide onde colocar, sem depender de rodar
+ * a ação certa (pedido explícito: mover manualmente pra fase desejada).
+ * Mesmo padrão visual do kanban de tarefas (`tasks/TaskBoard.tsx`): coluna
+ * é um cartão único contendo a lista, não uma coluna solta flutuando na
+ * página.
  */
 
 type EntregaComDono = { influ: Influ; entrega: Entrega };
@@ -48,6 +53,18 @@ const COLUNA_DOT: Record<EntregaKanbanColuna, string> = {
   CONCLUIDO: "bg-emerald-500",
 };
 
+// Estágio "de entrada" de cada coluna — pra onde um card cai ao ser
+// arrastado manualmente pra ela. Só usado quando a coluna de destino é
+// DIFERENTE da atual (mover dentro da mesma coluna não muda o sub-estágio
+// — evita que soltar de volta em "Roteiro" resete um card em "ajustes
+// pedidos" de volta pra "produção").
+const COLUNA_ENTRY_STAGE: Record<EntregaKanbanColuna, EntregaStage> = {
+  ROTEIRO: "ROTEIRO_PRODUCAO",
+  CONTEUDO: "PRODUCAO",
+  PUBLICACAO: "PUBLICACAO",
+  CONCLUIDO: "PUBLICADA",
+};
+
 export function ProducaoBoard({
   influs,
   onChange,
@@ -56,6 +73,7 @@ export function ProducaoBoard({
   onChange: (next: Influ[]) => void;
 }) {
   const [selected, setSelected] = useState<{ influId: string; entregaId: string } | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   const aprovados = useMemo(() => influs.filter((i) => i.status === "APROVADO"), [influs]);
 
@@ -128,6 +146,37 @@ export function ProducaoBoard({
             entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, anexos, ...patch } : e)),
           },
           `${ENTREGA_ACTION_LOG[action]} — "${label}"`,
+          entregaId,
+        );
+      }),
+    );
+  };
+
+  // Mover manualmente pro estágio de entrada da coluna alvo — sem passar
+  // pelo motor de ação, de propósito: o time pode querer colocar uma
+  // entrega numa fase sem ter seguido o passo a passo (ex. já vinha
+  // combinado fora da plataforma). Não valida transição nenhuma.
+  const setEntregaStage = (influId: string, entregaId: string, coluna: EntregaKanbanColuna) => {
+    const stage = COLUNA_ENTRY_STAGE[coluna];
+    onChange(
+      influs.map((x) => {
+        if (x.id !== influId) return x;
+        const entrega = x.entregas.find((e) => e.id === entregaId);
+        if (!entrega) return x;
+        const isPublicada = stage === "PUBLICADA";
+        const patch: Partial<Entrega> = {
+          stage,
+          status: isPublicada
+            ? "publicado"
+            : entrega.status === "publicado"
+              ? "combinado"
+              : entrega.status,
+          publicadoEm: isPublicada ? (entrega.publicadoEm ?? todayISO()) : entrega.publicadoEm,
+        };
+        const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+        return logInfluActivity(
+          { ...x, entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, ...patch } : e)) },
+          `moveu "${label}" pra ${ENTREGA_KANBAN_COLUNA_LABEL[coluna]}`,
           entregaId,
         );
       }),
@@ -232,6 +281,19 @@ export function ProducaoBoard({
           {ENTREGA_KANBAN_COLUNAS.map((coluna) => (
             <div
               key={coluna}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (draggedId) {
+                  const arrastado = itens.find((it) => it.entrega.id === draggedId);
+                  if (
+                    arrastado &&
+                    entregaKanbanColuna(arrastado.entrega.stage ?? "ROTEIRO_PRODUCAO") !== coluna
+                  ) {
+                    setEntregaStage(arrastado.influ.id, arrastado.entrega.id, coluna);
+                  }
+                }
+                setDraggedId(null);
+              }}
               className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
             >
               <div className="mb-3 flex items-center justify-between px-1">
@@ -258,6 +320,7 @@ export function ProducaoBoard({
                       entrega={entrega}
                       onOpen={() => setSelected({ influId: influ.id, entregaId: entrega.id })}
                       onRunAction={(action, opts) => runAction(influ.id, entrega.id, action, opts)}
+                      onDragStart={() => setDraggedId(entrega.id)}
                     />
                   ))
                 )}
@@ -289,11 +352,13 @@ function EntregaCard({
   entrega,
   onOpen,
   onRunAction,
+  onDragStart,
 }: {
   influ: Influ;
   entrega: Entrega;
   onOpen: () => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
+  onDragStart: () => void;
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
@@ -307,6 +372,8 @@ function EntregaCard({
     <article
       role="button"
       tabIndex={0}
+      draggable
+      onDragStart={onDragStart}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -314,7 +381,7 @@ function EntregaCard({
           onOpen();
         }
       }}
-      className="group cursor-pointer rounded-md border border-border bg-background p-3 text-sm shadow-sm transition-colors hover:border-foreground/20 focus:outline-none focus:ring-2 focus:ring-ring"
+      className="group cursor-grab rounded-md border border-border bg-background p-3 text-sm shadow-sm transition-colors hover:border-foreground/20 focus:outline-none focus:ring-2 focus:ring-ring active:cursor-grabbing"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</p>
