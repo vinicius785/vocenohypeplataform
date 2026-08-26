@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { ChevronRight, Plus, User } from "lucide-react";
+import {
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  Columns3,
+  LayoutList,
+  Plus,
+  User,
+  X,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,10 +35,12 @@ import {
   logInfluActivity,
   ENTREGA_ACTION_LOG,
   ENTREGAS_OPTS,
+  producaoResumo,
   todayISO,
   type Influ,
   type Entrega,
   type EntregaActionOpts,
+  type ProducaoResumo,
 } from "@/components/influenciadores/InfluencerBoard";
 
 /**
@@ -38,13 +49,20 @@ import {
  * próxima ação avança sozinho seguindo o motor (`entrega-engine.ts`), mas
  * o card também pode ser arrastado livremente pra qualquer coluna a
  * qualquer momento — o time decide onde colocar, sem depender de rodar
- * a ação certa (pedido explícito: mover manualmente pra fase desejada).
- * Mesmo padrão visual do kanban de tarefas (`tasks/TaskBoard.tsx`): coluna
- * é um cartão único contendo a lista, não uma coluna solta flutuando na
- * página.
+ * a ação certa. Um resumo por influenciador no topo (clicável, filtra a
+ * visão abaixo) e um alternador "Por etapa"/"Por influenciador" cobrem o
+ * caso de querer ver tudo de UM influenciador junto, em vez de espalhado
+ * pelas colunas.
  */
 
 type EntregaComDono = { influ: Influ; entrega: Entrega };
+type Visualizacao = "etapa" | "influenciador";
+type Ordem = "nome" | "pendencias";
+type ResumoInflu = {
+  influ: Influ;
+  resumo: ProducaoResumo;
+  porColuna: Record<EntregaKanbanColuna, number>;
+};
 
 const COLUNA_DOT: Record<EntregaKanbanColuna, string> = {
   ROTEIRO: "bg-muted-foreground/40",
@@ -74,12 +92,20 @@ export function ProducaoBoard({
 }) {
   const [selected, setSelected] = useState<{ influId: string; entregaId: string } | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [visualizacao, setVisualizacao] = useState<Visualizacao>("etapa");
+  const [ordem, setOrdem] = useState<Ordem>("nome");
+  const [filtroInfluId, setFiltroInfluId] = useState<string | null>(null);
 
   const aprovados = useMemo(() => influs.filter((i) => i.status === "APROVADO"), [influs]);
 
   const itens: EntregaComDono[] = useMemo(
     () => aprovados.flatMap((influ) => influ.entregas.map((entrega) => ({ influ, entrega }))),
     [aprovados],
+  );
+
+  const itensFiltrados = useMemo(
+    () => (filtroInfluId ? itens.filter((it) => it.influ.id === filtroInfluId) : itens),
+    [itens, filtroInfluId],
   );
 
   const porColuna = useMemo(() => {
@@ -89,11 +115,46 @@ export function ProducaoBoard({
       PUBLICACAO: [],
       CONCLUIDO: [],
     };
-    for (const item of itens) {
+    for (const item of itensFiltrados) {
       map[entregaKanbanColuna(item.entrega.stage ?? "ROTEIRO_PRODUCAO")].push(item);
     }
     return map;
-  }, [itens]);
+  }, [itensFiltrados]);
+
+  // Resumo por influenciador — mostrado sempre no topo (clicável, filtra
+  // a visão abaixo pra só aquele influenciador) e usado como fonte da
+  // visualização "Por influenciador".
+  const resumos: ResumoInflu[] = useMemo(
+    () =>
+      aprovados.map((influ) => {
+        const porColunaInflu: Record<EntregaKanbanColuna, number> = {
+          ROTEIRO: 0,
+          CONTEUDO: 0,
+          PUBLICACAO: 0,
+          CONCLUIDO: 0,
+        };
+        for (const e of influ.entregas) {
+          porColunaInflu[entregaKanbanColuna(e.stage ?? "ROTEIRO_PRODUCAO")]++;
+        }
+        return { influ, resumo: producaoResumo(influ.entregas), porColuna: porColunaInflu };
+      }),
+    [aprovados],
+  );
+
+  const resumosOrdenados = useMemo(() => {
+    return [...resumos].sort((a, b) => {
+      if (ordem === "pendencias") {
+        const pendA = a.resumo.total - a.resumo.publicadas;
+        const pendB = b.resumo.total - b.resumo.publicadas;
+        if (pendB !== pendA) return pendB - pendA;
+      }
+      return (a.influ.nome || "").localeCompare(b.influ.nome || "", "pt-BR");
+    });
+  }, [resumos, ordem]);
+
+  const resumosFiltrados = filtroInfluId
+    ? resumosOrdenados.filter((r) => r.influ.id === filtroInfluId)
+    : resumosOrdenados;
 
   const selecionado = selected
     ? itens.find((it) => it.influ.id === selected.influId && it.entrega.id === selected.entregaId)
@@ -269,14 +330,125 @@ export function ProducaoBoard({
         </DropdownMenu>
       </div>
 
-      {itens.length === 0 ? (
+      {/* Resumo por influenciador — sempre visível, clique filtra a
+          visão abaixo pra só aquele influenciador (clicar de novo limpa). */}
+      <div>
+        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          Resumo por influenciador
+        </h3>
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+          {resumosOrdenados.map(({ influ, resumo, porColuna: pc }) => {
+            const ativo = filtroInfluId === influ.id;
+            return (
+              <button
+                key={influ.id}
+                type="button"
+                onClick={() => setFiltroInfluId(ativo ? null : influ.id)}
+                className={`flex w-[190px] shrink-0 flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors ${
+                  ativo
+                    ? "border-foreground bg-muted/40"
+                    : "border-border bg-background hover:border-foreground/30"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                    {influ.foto ? (
+                      <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <User className="h-3 w-3 text-muted-foreground" strokeWidth={1.5} />
+                    )}
+                  </div>
+                  <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+                    {influ.nome || "Sem nome"}
+                  </p>
+                </div>
+                <p className="text-[11px] font-medium text-foreground/80">
+                  {resumo.publicadas}/{resumo.total}{" "}
+                  {resumo.total === 1 ? "publicada" : "publicadas"}
+                </p>
+                {resumo.total > 0 && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {ENTREGA_KANBAN_COLUNAS.filter((c) => pc[c] > 0).map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${COLUNA_DOT[c]}`} /> {pc[c]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Controles de visualização/ordenação */}
+      <div className="flex flex-wrap items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              {visualizacao === "etapa" ? (
+                <Columns3 className="h-3.5 w-3.5" />
+              ) : (
+                <LayoutList className="h-3.5 w-3.5" />
+              )}
+              {visualizacao === "etapa" ? "Por etapa" : "Por influenciador"}
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => setVisualizacao("etapa")}>
+              <Columns3 className="mr-2 h-3.5 w-3.5" /> Por etapa
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setVisualizacao("influenciador")}>
+              <LayoutList className="mr-2 h-3.5 w-3.5" /> Por influenciador
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {ordem === "nome" ? "Nome (A-Z)" : "Mais pendências"}
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => setOrdem("nome")}>Nome (A-Z)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setOrdem("pendencias")}>
+              Mais pendências primeiro
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {filtroInfluId && (
+          <button
+            type="button"
+            onClick={() => setFiltroInfluId(null)}
+            className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+          >
+            <X className="h-3 w-3" /> Limpar filtro
+          </button>
+        )}
+      </div>
+
+      {itensFiltrados.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-16 text-center">
           <p className="text-sm font-medium text-foreground">Nenhuma entrega ainda.</p>
           <p className="max-w-sm text-xs text-muted-foreground">
             Use "Adicionar entrega" acima pra criar a primeira entrega de um influenciador aprovado.
           </p>
         </div>
-      ) : (
+      ) : visualizacao === "etapa" ? (
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
           {ENTREGA_KANBAN_COLUNAS.map((coluna) => (
             <div
@@ -326,6 +498,19 @@ export function ProducaoBoard({
                 )}
               </div>
             </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {resumosFiltrados.map(({ influ }) => (
+            <InfluenciadorProducaoCard
+              key={influ.id}
+              influ={influ}
+              onOpenEntrega={(entregaId) => setSelected({ influId: influ.id, entregaId })}
+              onRunAction={(entregaId, action, opts) =>
+                runAction(influ.id, entregaId, action, opts)
+              }
+            />
           ))}
         </div>
       )}
@@ -425,5 +610,115 @@ function EntregaCard({
         )
       )}
     </article>
+  );
+}
+
+// Visualização "Por influenciador" — todas as entregas de UM influenciador
+// juntas num card só, em vez de espalhadas pelas 4 colunas de etapa.
+function InfluenciadorProducaoCard({
+  influ,
+  onOpenEntrega,
+  onRunAction,
+}: {
+  influ: Influ;
+  onOpenEntrega: (entregaId: string) => void;
+  onRunAction: (
+    entregaId: string,
+    action: EntregaEngineActionKind,
+    opts?: EntregaActionOpts,
+  ) => void;
+}) {
+  const { total, publicadas } = producaoResumo(influ.entregas);
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+          {influ.foto ? (
+            <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <User className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+          )}
+        </div>
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+          {influ.nome || "Sem nome"}
+        </p>
+        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">
+          {publicadas}/{total} {total === 1 ? "publicada" : "publicadas"}
+        </span>
+      </div>
+
+      {influ.entregas.length === 0 ? (
+        <p className="px-1 py-3 text-center text-[11px] text-muted-foreground/50">
+          Nenhuma entrega
+        </p>
+      ) : (
+        <div className="divide-y divide-border/60">
+          {influ.entregas.map((entrega) => (
+            <EntregaRow
+              key={entrega.id}
+              entrega={entrega}
+              onOpen={() => onOpenEntrega(entrega.id)}
+              onRunAction={(action, opts) => onRunAction(entrega.id, action, opts)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EntregaRow({
+  entrega,
+  onOpen,
+  onRunAction,
+}: {
+  entrega: Entrega;
+  onOpen: () => void;
+  onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
+}) {
+  const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
+  const step = deriveEntregaNextStep(entrega);
+  const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo || "Sem tipo";
+  const precisaDeArquivo = step.action === "anexar_roteiro" || step.action === "anexar_conteudo";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="flex cursor-pointer items-center gap-2 py-2 text-xs hover:bg-muted/30"
+    >
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full ${COLUNA_DOT[entregaKanbanColuna(stage)]}`}
+      />
+      <p className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</p>
+      <span
+        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
+      >
+        {entregaFaseConceitual(stage).subLabel}
+      </span>
+      {step.action && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (precisaDeArquivo) {
+              onOpen();
+              return;
+            }
+            onRunAction(step.action!);
+          }}
+          className="shrink-0 rounded-md bg-muted/60 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted"
+        >
+          {step.actionLabel}
+        </button>
+      )}
+    </div>
   );
 }
