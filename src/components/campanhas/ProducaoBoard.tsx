@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, User } from "lucide-react";
+import { ChevronRight, Plus, User } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,16 +34,18 @@ import {
  * Kanban por ENTREGA (não por influenciador) — aba "Produção" da campanha.
  * Populado automaticamente por todo influenciador `APROVADO`; nunca precisa
  * arrastar nada manualmente, o card muda de coluna sozinho quando a ação
- * certa é executada (ver `entregaKanbanColuna`/`entrega-engine.ts`).
+ * certa é executada (ver `entregaKanbanColuna`/`entrega-engine.ts`). Mesmo
+ * padrão visual do kanban de tarefas (`tasks/TaskBoard.tsx`): coluna é um
+ * cartão único contendo a lista, não uma coluna solta flutuando na página.
  */
 
 type EntregaComDono = { influ: Influ; entrega: Entrega };
 
-const COLUNA_BORDER: Record<EntregaKanbanColuna, string> = {
-  ROTEIRO: "border-t-muted-foreground/40",
-  CONTEUDO: "border-t-sky-500",
-  PUBLICACAO: "border-t-teal-500",
-  CONCLUIDO: "border-t-emerald-500",
+const COLUNA_DOT: Record<EntregaKanbanColuna, string> = {
+  ROTEIRO: "bg-muted-foreground/40",
+  CONTEUDO: "bg-sky-500",
+  PUBLICACAO: "bg-teal-500",
+  CONCLUIDO: "bg-emerald-500",
 };
 
 export function ProducaoBoard({
@@ -183,22 +185,27 @@ export function ProducaoBoard({
   }
 
   return (
-    <>
+    <section className="space-y-4">
       <datalist id="entregas-tipos">
         {ENTREGAS_OPTS.map((o) => (
           <option key={o} value={o} />
         ))}
       </datalist>
 
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {itens.length} {itens.length === 1 ? "entrega" : "entregas"} em produção
-        </p>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Produção
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {itens.length} {itens.length === 1 ? "entrega" : "entregas"} no total
+          </p>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" /> Adicionar entrega
             </button>
@@ -221,29 +228,34 @@ export function ProducaoBoard({
           </p>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
           {ENTREGA_KANBAN_COLUNAS.map((coluna) => (
-            <div key={coluna} className="flex w-[280px] shrink-0 flex-col gap-2">
-              <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {ENTREGA_KANBAN_COLUNA_LABEL[coluna]}
-                </h3>
-                <span className="text-[11px] font-medium text-muted-foreground">
+            <div
+              key={coluna}
+              className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
+            >
+              <div className="mb-3 flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${COLUNA_DOT[coluna]}`} />
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    {ENTREGA_KANBAN_COLUNA_LABEL[coluna]}
+                  </h3>
+                </div>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
                   {porColuna[coluna].length}
                 </span>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex-1 space-y-2">
                 {porColuna[coluna].length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border/60 py-6 text-center text-[11px] text-muted-foreground">
-                    Vazio
-                  </div>
+                  <p className="px-1 py-4 text-center text-[11px] text-muted-foreground/50">
+                    Nenhuma entrega
+                  </p>
                 ) : (
                   porColuna[coluna].map(({ influ, entrega }) => (
                     <EntregaCard
                       key={entrega.id}
                       influ={influ}
                       entrega={entrega}
-                      coluna={coluna}
                       onOpen={() => setSelected({ influId: influ.id, entregaId: entrega.id })}
                       onRunAction={(action, opts) => runAction(influ.id, entrega.id, action, opts)}
                     />
@@ -268,20 +280,18 @@ export function ProducaoBoard({
           onRemove={() => removeEntrega(selecionado.influ.id, selecionado.entrega.id)}
         />
       )}
-    </>
+    </section>
   );
 }
 
 function EntregaCard({
   influ,
   entrega,
-  coluna,
   onOpen,
   onRunAction,
 }: {
   influ: Influ;
   entrega: Entrega;
-  coluna: EntregaKanbanColuna;
   onOpen: () => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
 }) {
@@ -304,28 +314,27 @@ function EntregaCard({
           onOpen();
         }
       }}
-      className={`flex cursor-pointer flex-col gap-2 rounded-xl border border-t-2 border-border bg-background p-3 shadow-sm transition-colors hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring ${COLUNA_BORDER[coluna]}`}
+      className="group cursor-pointer rounded-md border border-border bg-background p-3 text-sm shadow-sm transition-colors hover:border-foreground/20 focus:outline-none focus:ring-2 focus:ring-ring"
     >
-      <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</p>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
+        >
+          {fase.subLabel}
+        </span>
+      </div>
+
+      <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
           {influ.foto ? (
             <img src={influ.foto} alt="" className="h-full w-full object-cover" />
           ) : (
-            <User className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+            <User className="h-2.5 w-2.5 text-muted-foreground" strokeWidth={1.5} />
           )}
         </div>
-        <p className="min-w-0 truncate text-xs font-semibold text-foreground">
-          {influ.nome || "Sem nome"}
-        </p>
+        <span className="truncate">{influ.nome || "Sem nome"}</span>
       </div>
-
-      <p className="truncate text-sm font-medium text-foreground">{label}</p>
-
-      <span
-        className={`inline-flex w-fit shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
-      >
-        {fase.subLabel}
-      </span>
 
       {step.action ? (
         <button
@@ -338,13 +347,14 @@ function EntregaCard({
             }
             onRunAction(step.action!);
           }}
-          className="mt-1 inline-flex items-center justify-center gap-1 rounded-full bg-foreground px-2.5 py-1.5 text-[11px] font-semibold text-background shadow-sm hover:opacity-90"
+          className="mt-2 flex w-full items-center justify-between gap-1 rounded-md bg-muted/60 px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted"
         >
-          {step.actionLabel}
+          <span className="truncate">{step.actionLabel}</span>
+          <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
         </button>
       ) : (
         step.responsavel === "cliente" && (
-          <p className="text-[11px] text-muted-foreground">Aguardando aprovação do cliente</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">Aguardando aprovação do cliente</p>
         )
       )}
     </article>
