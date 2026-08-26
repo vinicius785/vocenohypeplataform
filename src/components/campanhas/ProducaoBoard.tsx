@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { User } from "lucide-react";
+import { Plus, User } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   ENTREGA_KANBAN_COLUNAS,
   ENTREGA_KANBAN_COLUNA_LABEL,
@@ -18,6 +24,7 @@ import {
   addAnexoComVersao,
   logInfluActivity,
   ENTREGA_ACTION_LOG,
+  ENTREGAS_OPTS,
   type Influ,
   type Entrega,
   type EntregaActionOpts,
@@ -48,12 +55,11 @@ export function ProducaoBoard({
 }) {
   const [selected, setSelected] = useState<{ influId: string; entregaId: string } | null>(null);
 
+  const aprovados = useMemo(() => influs.filter((i) => i.status === "APROVADO"), [influs]);
+
   const itens: EntregaComDono[] = useMemo(
-    () =>
-      influs
-        .filter((i) => i.status === "APROVADO")
-        .flatMap((influ) => influ.entregas.map((entrega) => ({ influ, entrega }))),
-    [influs],
+    () => aprovados.flatMap((influ) => influ.entregas.map((entrega) => ({ influ, entrega }))),
+    [aprovados],
   );
 
   const porColuna = useMemo(() => {
@@ -135,13 +141,42 @@ export function ProducaoBoard({
     setSelected(null);
   };
 
-  if (itens.length === 0) {
+  // Único ponto de criação de entrega pra campanha inteira — a aba
+  // Produção passou a ser a única gestão de entregas (perfil do
+  // influenciador só mostra um resumo, ver `entregasGerenciadasNaProducao`
+  // em InfluencerBoard.tsx), então "adicionar entrega" precisa existir
+  // aqui, não só dentro do perfil.
+  const addEntrega = (influId: string) => {
+    const id = crypto.randomUUID();
+    onChange(
+      influs.map((x) =>
+        x.id === influId
+          ? {
+              ...x,
+              entregas: [
+                ...x.entregas,
+                {
+                  id,
+                  tipo: "Reels",
+                  quantidade: 1,
+                  status: "combinado" as const,
+                  stage: "ROTEIRO_PRODUCAO" as const,
+                },
+              ],
+            }
+          : x,
+      ),
+    );
+    setSelected({ influId, entregaId: id });
+  };
+
+  if (aprovados.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-16 text-center">
-        <p className="text-sm font-medium text-foreground">Nenhuma entrega em produção ainda.</p>
+        <p className="text-sm font-medium text-foreground">Nenhum influenciador aprovado ainda.</p>
         <p className="max-w-sm text-xs text-muted-foreground">
-          Assim que um influenciador for aprovado na aba "Seleção", as entregas dele aparecem aqui
-          automaticamente.
+          Assim que alguém for aprovado na aba "Seleção", ele aparece aqui pra você adicionar as
+          entregas dele.
         </p>
       </div>
     );
@@ -149,38 +184,76 @@ export function ProducaoBoard({
 
   return (
     <>
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {ENTREGA_KANBAN_COLUNAS.map((coluna) => (
-          <div key={coluna} className="flex w-[280px] shrink-0 flex-col gap-2">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {ENTREGA_KANBAN_COLUNA_LABEL[coluna]}
-              </h3>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                {porColuna[coluna].length}
-              </span>
-            </div>
-            <div className="flex flex-col gap-2">
-              {porColuna[coluna].length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/60 py-6 text-center text-[11px] text-muted-foreground">
-                  Vazio
-                </div>
-              ) : (
-                porColuna[coluna].map(({ influ, entrega }) => (
-                  <EntregaCard
-                    key={entrega.id}
-                    influ={influ}
-                    entrega={entrega}
-                    coluna={coluna}
-                    onOpen={() => setSelected({ influId: influ.id, entregaId: entrega.id })}
-                    onRunAction={(action, opts) => runAction(influ.id, entrega.id, action, opts)}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+      <datalist id="entregas-tipos">
+        {ENTREGAS_OPTS.map((o) => (
+          <option key={o} value={o} />
         ))}
+      </datalist>
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {itens.length} {itens.length === 1 ? "entrega" : "entregas"} em produção
+        </p>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border bg-transparent px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar entrega
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {aprovados.map((influ) => (
+              <DropdownMenuItem key={influ.id} onClick={() => addEntrega(influ.id)}>
+                {influ.nome || "Sem nome"}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      {itens.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-16 text-center">
+          <p className="text-sm font-medium text-foreground">Nenhuma entrega ainda.</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Use "Adicionar entrega" acima pra criar a primeira entrega de um influenciador aprovado.
+          </p>
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {ENTREGA_KANBAN_COLUNAS.map((coluna) => (
+            <div key={coluna} className="flex w-[280px] shrink-0 flex-col gap-2">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {ENTREGA_KANBAN_COLUNA_LABEL[coluna]}
+                </h3>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {porColuna[coluna].length}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {porColuna[coluna].length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/60 py-6 text-center text-[11px] text-muted-foreground">
+                    Vazio
+                  </div>
+                ) : (
+                  porColuna[coluna].map(({ influ, entrega }) => (
+                    <EntregaCard
+                      key={entrega.id}
+                      influ={influ}
+                      entrega={entrega}
+                      coluna={coluna}
+                      onOpen={() => setSelected({ influId: influ.id, entregaId: entrega.id })}
+                      onRunAction={(action, opts) => runAction(influ.id, entrega.id, action, opts)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {selecionado && (
         <EntregaDetailSheet

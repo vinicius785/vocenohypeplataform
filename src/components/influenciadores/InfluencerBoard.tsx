@@ -895,7 +895,7 @@ export function PlatformIcon({
   const Icon = PLATFORM_ICONS[plataforma] ?? AtSign;
   return <Icon className={className} />;
 }
-const ENTREGAS_OPTS = [
+export const ENTREGAS_OPTS = [
   "Reels",
   "Stories",
   "Post feed",
@@ -1415,6 +1415,7 @@ export function InfluencerBoard({
   headerExtra,
   defaultCicloMes,
   cicloMesOptions,
+  entregasGerenciadasNaProducao,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1438,6 +1439,12 @@ export function InfluencerBoard({
    * `cicloMes` manualmente (mover pra outro mês). `undefined`/vazio em
    * campanhas não-recorrentes: sem seletor, nada muda. */
   cicloMesOptions?: { value: string; label: string }[];
+  /** Só passado pela Campanhas (que tem a aba "Produção" dedicada por
+   * entrega) — troca a aba "Entregas" do perfil por um resumo somente
+   * leitura, já que a gestão (criar/editar/rodar ação) passa a viver só
+   * na aba Produção da campanha. Projetos (sem aba Produção) nunca passa
+   * isso, e continua com a gestão completa dentro do perfil como sempre. */
+  entregasGerenciadasNaProducao?: boolean;
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
@@ -1975,6 +1982,7 @@ export function InfluencerBoard({
           influ={viewing}
           has={has}
           cicloMesOptions={cicloMesOptions}
+          entregasGerenciadasNaProducao={entregasGerenciadasNaProducao}
           onOpenChange={(o) => !o && setViewing(null)}
           onRemove={async () => {
             if (await removeInflu(viewing.id)) setViewing(null);
@@ -3317,6 +3325,7 @@ function InfluencerProfileDialog({
   influ,
   has,
   cicloMesOptions,
+  entregasGerenciadasNaProducao,
   onOpenChange,
   onRemove,
   onSetStatus,
@@ -3330,6 +3339,7 @@ function InfluencerProfileDialog({
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   cicloMesOptions?: { value: string; label: string }[];
+  entregasGerenciadasNaProducao?: boolean;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
@@ -3601,16 +3611,36 @@ function InfluencerProfileDialog({
             </TabsContent>
 
             <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              {has("entregas") && (
-                <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-                  <EntregasEditor
-                    entregas={influ.entregas}
-                    onChange={(next) => onPatch({ entregas: next })}
-                    influActivity={influ.activity ?? []}
-                    onRunAction={onRunEntregaAction}
-                  />
-                </div>
-              )}
+              {has("entregas") &&
+                (entregasGerenciadasNaProducao ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-6 text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      Gerenciado na aba "Produção"
+                    </p>
+                    <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
+                      Criar, editar e avançar as entregas deste influenciador agora acontece na aba
+                      Produção da campanha, não mais aqui dentro do perfil.
+                    </p>
+                    {influ.entregas.length > 0 &&
+                      (() => {
+                        const { total, publicadas } = producaoResumo(influ.entregas);
+                        return (
+                          <p className="mt-3 text-xs font-medium text-foreground/80">
+                            {publicadas}/{total} publicadas
+                          </p>
+                        );
+                      })()}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+                    <EntregasEditor
+                      entregas={influ.entregas}
+                      onChange={(next) => onPatch({ entregas: next })}
+                      influActivity={influ.activity ?? []}
+                      onRunAction={onRunEntregaAction}
+                    />
+                  </div>
+                ))}
             </TabsContent>
 
             <TabsContent value="perfil" className="mt-0 flex-1 overflow-y-auto px-7 py-6">

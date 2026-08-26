@@ -768,6 +768,7 @@ function CampanhaDetail({
             exportName={c.nome}
             defaultCicloMes={isRecorrente ? monthFilter : undefined}
             cicloMesOptions={isRecorrente ? monthOptions : undefined}
+            entregasGerenciadasNaProducao
           />
         </TabsContent>
         <TabsContent value="producao" className="mt-4">
