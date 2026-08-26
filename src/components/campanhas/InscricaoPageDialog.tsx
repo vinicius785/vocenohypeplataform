@@ -59,13 +59,17 @@ function moveItem<T>(list: T[], index: number, dir: -1 | 1): T[] {
 
 /** Sobe o banner pro bucket `avatars` (Storage) e devolve uma URL assinada
  * — o banner é um anexo de verdade, não um link colado à mão. Mesmo padrão
- * de `uploadInfluFoto` (InfluencerBoard.tsx). */
+ * de `uploadInfluFoto` (InfluencerBoard.tsx): a policy de INSERT do bucket
+ * `avatars` exige que o PRIMEIRO segmento do path seja o uid de quem está
+ * subindo — path com "campanha_banners/" na frente nunca batia com
+ * `auth.uid()`, e o upload falhava silenciosamente por RLS (mesmo bug já
+ * corrigido pra foto de perfil de influenciador, nunca replicado aqui). */
 async function uploadCampanhaBanner(file: File): Promise<string | null> {
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
   if (!uid) return null;
   const ext = (file.name.split(".").pop() || "jpg").replace(/[^\w]+/g, "");
-  const path = `campanha_banners/${uid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `${uid}/campanha-banner-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from("avatars").upload(path, file, {
     contentType: file.type || "image/jpeg",
     upsert: false,
