@@ -1,13 +1,20 @@
 /**
- * Storage da sessão de login (Supabase) baseado em IndexedDB em vez de
- * localStorage — mitigação pra apps instalados no iPhone (PWA "Adicionar à
- * Tela de Início") deslogarem ao serem fechados de vez e reabertos. É um
- * comportamento conhecido do WebKit/iOS com apps standalone: o localStorage
- * do app às vezes não é gravado em disco a tempo antes do processo ser
- * encerrado. IndexedDB tende a ser mais confiável nesse cenário (é a
- * mitigação mais citada por quem enfrenta esse mesmo bug em PWAs no iOS).
- * Não é garantia absoluta — é uma limitação do sistema operacional, não algo
- * 100% controlável pelo código do app.
+ * Storage genérico baseado em IndexedDB (com espelho em localStorage),
+ * originalmente criado pra sessão de login (Supabase) — mitigação pra apps
+ * instalados no iPhone (PWA "Adicionar à Tela de Início") deslogarem ao
+ * serem fechados de vez e reabertos. É um comportamento conhecido do
+ * WebKit/iOS com apps standalone: o localStorage do app às vezes não é
+ * gravado em disco a tempo antes do processo ser encerrado. IndexedDB tende
+ * a ser mais confiável nesse cenário (é a mitigação mais citada por quem
+ * enfrenta esse mesmo bug em PWAs no iOS). Não é garantia absoluta — é uma
+ * limitação do sistema operacional, não algo 100% controlável pelo código
+ * do app.
+ *
+ * A interface é uma KV store qualquer (não amarrada a auth) — reaproveitada
+ * também pra outros dados que precisam sobreviver o app sendo fechado no
+ * meio (ex: quais notificações do sino já foram marcadas como lidas, que
+ * sem isso "voltavam" a aparecer depois de fechar/reabrir o PWA no iPhone,
+ * mesmo já tendo sido gravadas em localStorage segundos antes).
  */
 const DB_NAME = "vnh-auth";
 const STORE_NAME = "kv";

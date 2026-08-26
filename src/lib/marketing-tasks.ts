@@ -9,6 +9,7 @@
  */
 
 import type { KanbanStatus } from "@/lib/projetos";
+import type { TimeEntry } from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
 
 export type MktSourceKind = "projeto" | "campanha";
@@ -36,10 +37,23 @@ export type MktStandalone = {
   id: string;
   title: string;
   status: MktColumn;
+  /** Legado (um só responsável) — mantido só pra tarefas antigas; a UI de
+   * hoje (TaskBoard) sempre grava em `assignees`. */
   assignee?: string;
+  assignees?: string[];
   dueDate?: string;
   note?: string;
   createdAt: string;
+  /** Espelha `Task.timerRunning`/`timerStartedAt`/`timeEntries` — sem
+   * esses campos aqui, o timer que inicia/para sozinho ao mudar de status
+   * (`withStatusChange`, em TaskBoard.tsx) nunca era persistido pra uma
+   * tarefa avulsa do Marketing: a mudança acontecia só no objeto em
+   * memória repassado pro `onChange`, e o patch salvo em
+   * `updateStandalone` não tinha onde guardá-la — na próxima leitura o
+   * timer "voltava" a aparecer rodando (ou nunca aparecia parado). */
+  timerRunning?: boolean;
+  timerStartedAt?: string;
+  timeEntries?: TimeEntry[];
 };
 
 export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [
@@ -174,6 +188,7 @@ export function createStandalone(input: {
   title: string;
   status: MktColumn;
   assignee?: string;
+  assignees?: string[];
   dueDate?: string;
   note?: string;
 }): MktStandalone {
@@ -182,6 +197,7 @@ export function createStandalone(input: {
     title: input.title,
     status: input.status,
     assignee: input.assignee,
+    assignees: input.assignees,
     dueDate: input.dueDate,
     note: input.note,
     createdAt: new Date().toISOString(),

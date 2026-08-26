@@ -41,14 +41,17 @@ function resolveTasks(
       const t = p?.tasks.find((x) => x.id === r.taskId);
       if (!p || !t) continue;
       const id = `ref:${r.id}`;
+      // Carrega a tarefa inteira (não só um subconjunto de campos) — um
+      // recorte manual aqui derrubava assignees/tags/subtasks/comentários/
+      // timer sempre que a tarefa era editada a partir do board do
+      // Marketing. `Task` existe duplicado em projetos.ts (mesmo formato,
+      // `priority`/`createdAt` só que opcionais lá) — daí o cast: os dados
+      // são compatíveis, só a assinatura diverge.
       tasks.push({
+        ...(t as unknown as BoardTask),
         id,
-        title: t.title,
         status: projetoStatusToColumn(t.status) as TaskStatus,
-        priority: (t.priority ?? "Normal") as BoardTask["priority"],
-        dueDate: t.dueDate,
-        assignee: t.assignee,
-        description: t.description,
+        priority: t.priority ?? "Normal",
         createdAt: t.createdAt ?? new Date().toISOString(),
       });
       meta.set(id, { kind: "ref", req: r });
@@ -75,8 +78,12 @@ function resolveTasks(
       priority: "Normal",
       dueDate: s.dueDate,
       assignee: s.assignee,
+      assignees: s.assignees,
       description: s.note,
       createdAt: s.createdAt,
+      timerRunning: s.timerRunning,
+      timerStartedAt: s.timerStartedAt,
+      timeEntries: s.timeEntries,
     });
     meta.set(id, { kind: "standalone", id: s.id });
   }
@@ -84,23 +91,33 @@ function resolveTasks(
   return { tasks, meta };
 }
 
-function moveRef(req: MktRequest, col: TaskStatus) {
+/** Grava a tarefa inteira de volta na origem (projeto_tarefas/
+ * campanha_tarefas, per-row) — precisa ser o objeto completo, não só o
+ * status: o board do Marketing é a única tela usada pra editar essas
+ * tarefas quando "puxadas" pra cá, então título/prioridade/prazo/
+ * responsáveis/descrição editados aqui também precisam persistir na
+ * origem, não só a coluna. Reescreve só a linha alterada (nunca a lista
+ * inteira de projetos) pelo mesmo motivo de sempre: evitar que duas
+ * abas/pessoas editando tarefas diferentes quase ao mesmo tempo
+ * sobrescrevam uma à outra. */
+function updateRef(req: MktRequest, patch: BoardTask) {
   if (req.sourceKind === "projeto") {
-    // Grava só a tarefa alterada (projeto_tarefas, per-row) — nunca a lista
-    // inteira de projetos. Reescrever todos os projetos aqui (como era
-    // antes) corria o risco de sobrescrever, com dados desatualizados,
-    // qualquer edição concorrente feita por outra aba/pessoa entre o
-    // `loadProjetos()` e este save.
     const list = loadProjetoTarefas(req.sourceId);
     const next = list.map((t) =>
-      t.id === req.taskId ? { ...t, status: columnToProjetoStatus(col) } : t,
+      t.id === req.taskId
+        ? { ...patch, id: req.taskId, status: columnToProjetoStatus(patch.status) }
+        : t,
     );
     saveProjetoTarefas(req.sourceId, next);
   } else {
     const list = loadCampanhaTarefas(req.sourceId);
     const next = list.map((t) =>
       t.id === req.taskId
-        ? { ...t, status: columnToCampanhaStatus(col) as BoardTask["status"] }
+        ? {
+            ...patch,
+            id: req.taskId,
+            status: columnToCampanhaStatus(patch.status) as BoardTask["status"],
+          }
         : t,
     );
     saveCampanhaTarefas(req.sourceId, next);
@@ -167,21 +184,25 @@ export function MarketingSection() {
           title: t.title,
           status: t.status,
           assignee: t.assignee,
+          assignees: t.assignees,
           dueDate: t.dueDate,
           note: t.description,
         });
         continue;
       }
       if (m.kind === "ref") {
-        const prev = tasks.find((x) => x.id === t.id);
-        if (prev && prev.status !== t.status) moveRef(m.req, t.status);
+        updateRef(m.req, t);
       } else {
         updateStandalone(m.id, {
           title: t.title,
           status: t.status,
           assignee: t.assignee,
+          assignees: t.assignees,
           dueDate: t.dueDate,
           note: t.description,
+          timerRunning: t.timerRunning,
+          timerStartedAt: t.timerStartedAt,
+          timeEntries: t.timeEntries,
         });
       }
     }

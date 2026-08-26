@@ -61,6 +61,7 @@ import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/noti
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
+import { idbAuthStorage } from "@/lib/idb-auth-storage";
 
 export type SectionKey =
   | "inicio"
@@ -882,6 +883,58 @@ function BellItem({
   );
 }
 
+/** IDs "vistos" (dismissados) do sino de notificações — precisa sobreviver
+ * o app sendo fechado no meio, não só um `localStorage.setItem` puro:
+ * marcar como lida funcionava certinho na hora, mas "voltava" a aparecer
+ * depois de fechar e reabrir o app instalado como PWA no iPhone, porque o
+ * WebKit às vezes mata o processo antes do localStorage ser gravado em
+ * disco (mesmo bug já mitigado pra sessão de login em idb-auth-storage.ts
+ * — reaproveitado aqui). `localStorage` continua sendo a leitura inicial
+ * (síncrona, sem esperar o IndexedDB abrir) pra não atrasar o primeiro
+ * render; o IndexedDB só entra depois, como reforço mais durável, e
+ * qualquer id que só exista lá é mesclado assim que chega. */
+function useDurableSeenIds(key: string): [Set<string>, (ids: string[]) => void] {
+  const [seen, setSeen] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    void idbAuthStorage.getItem(key).then((raw) => {
+      if (cancelled || !raw) return;
+      try {
+        const ids = JSON.parse(raw) as string[];
+        setSeen((prev) => {
+          if (ids.every((id) => prev.has(id))) return prev;
+          return new Set([...prev, ...ids]);
+        });
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+
+  const markSeen = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setSeen((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      void idbAuthStorage.setItem(key, JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
+  return [seen, markSeen];
+}
+
 type ClienteActionItem = {
   key: string;
   influId: string;
@@ -1242,20 +1295,12 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     : [];
 
   // Mentions to me across all convos (dismissed via seen store)
-  const readJSON = <T,>(k: string, fb: T): T => {
-    try {
-      const r = localStorage.getItem(k);
-      return r ? (JSON.parse(r) as T) : fb;
-    } catch {
-      return fb;
-    }
-  };
-  const seenMentions = new Set<string>(readJSON<string[]>("notif:seenMentions", []));
-  const seenTasks = new Set<string>(readJSON<string[]>("notif:seenTasks", []));
-  const seenTaskActivity = new Set<string>(readJSON<string[]>("notif:seenTaskActivity", []));
-  const seenMeetings = new Set<string>(readJSON<string[]>("notif:seenMeetings", []));
-  const seenReuniaoReagendamento = new Set<string>(
-    readJSON<string[]>("notif:seenReuniaoReagendamento", []),
+  const [seenMentions, markMentionsSeen] = useDurableSeenIds("notif:seenMentions");
+  const [seenTasks, markTasksSeen] = useDurableSeenIds("notif:seenTasks");
+  const [seenTaskActivity, markTaskActivitySeen] = useDurableSeenIds("notif:seenTaskActivity");
+  const [seenMeetings, markMeetingsSeen] = useDurableSeenIds("notif:seenMeetings");
+  const [seenReuniaoReagendamento, markReagendamentoSeen] = useDurableSeenIds(
+    "notif:seenReuniaoReagendamento",
   );
 
   const mentionItems = prefs.mencoes
@@ -1368,34 +1413,11 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     setOpen(false);
   };
 
-  const dismissMention = (mid: string) => {
-    seenMentions.add(mid);
-    localStorage.setItem("notif:seenMentions", JSON.stringify(Array.from(seenMentions)));
-    force((n) => n + 1);
-  };
-  const dismissTask = (tid: string) => {
-    seenTasks.add(tid);
-    localStorage.setItem("notif:seenTasks", JSON.stringify(Array.from(seenTasks)));
-    force((n) => n + 1);
-  };
-  const dismissTaskActivity = (aid: string) => {
-    seenTaskActivity.add(aid);
-    localStorage.setItem("notif:seenTaskActivity", JSON.stringify(Array.from(seenTaskActivity)));
-    force((n) => n + 1);
-  };
-  const dismissMeeting = (mid: string) => {
-    seenMeetings.add(mid);
-    localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
-    force((n) => n + 1);
-  };
-  const dismissReschedule = (mid: string) => {
-    seenReuniaoReagendamento.add(mid);
-    localStorage.setItem(
-      "notif:seenReuniaoReagendamento",
-      JSON.stringify(Array.from(seenReuniaoReagendamento)),
-    );
-    force((n) => n + 1);
-  };
+  const dismissMention = (mid: string) => markMentionsSeen([mid]);
+  const dismissTask = (tid: string) => markTasksSeen([tid]);
+  const dismissTaskActivity = (aid: string) => markTaskActivitySeen([aid]);
+  const dismissMeeting = (mid: string) => markMeetingsSeen([mid]);
+  const dismissReschedule = (mid: string) => markReagendamentoSeen([mid]);
   const tarefasCount = taskItems.length + taskActivityItems.length;
   const mensagensCount = chatItems.reduce((s, i) => s + i.count, 0) + mentionItems.length;
   const reunioesCount = meetingItems.length + rescheduleItems.length;
@@ -1403,26 +1425,17 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
 
   const markTab = (t: BellTab) => {
     if (t === "tarefas") {
-      taskItems.forEach((x) => seenTasks.add(x.id));
-      localStorage.setItem("notif:seenTasks", JSON.stringify(Array.from(seenTasks)));
-      taskActivityItems.forEach((a) => seenTaskActivity.add(a.id));
-      localStorage.setItem("notif:seenTaskActivity", JSON.stringify(Array.from(seenTaskActivity)));
+      markTasksSeen(taskItems.map((x) => x.id));
+      markTaskActivitySeen(taskActivityItems.map((a) => a.id));
     } else if (t === "mensagens") {
       chatItems.forEach((i) => void markRead(i.convoId));
-      mentionItems.forEach((m) => seenMentions.add(m.id));
-      localStorage.setItem("notif:seenMentions", JSON.stringify(Array.from(seenMentions)));
+      markMentionsSeen(mentionItems.map((m) => m.id));
     } else if (t === "reunioes") {
-      meetingItems.forEach((m) => seenMeetings.add(m.id));
-      localStorage.setItem("notif:seenMeetings", JSON.stringify(Array.from(seenMeetings)));
-      rescheduleItems.forEach((m) => seenReuniaoReagendamento.add(m.id));
-      localStorage.setItem(
-        "notif:seenReuniaoReagendamento",
-        JSON.stringify(Array.from(seenReuniaoReagendamento)),
-      );
+      markMeetingsSeen(meetingItems.map((m) => m.id));
+      markReagendamentoSeen(rescheduleItems.map((m) => m.id));
     } else if (t === "outros") {
       dismissOutrosItems(outrosItems.map((x) => x.key));
     }
-    force((n) => n + 1);
   };
 
   const BELL_TABS: { key: BellTab; label: string; count: number }[] = [
