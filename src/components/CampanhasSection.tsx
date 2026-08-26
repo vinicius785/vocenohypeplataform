@@ -32,7 +32,7 @@ import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCam
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { SectionHeader } from "./SectionHeader";
-import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
+import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
 import {
   InfluencerBoard,
@@ -101,19 +101,27 @@ export function CampanhasSection() {
 
   // Deep link vindo do indicador de timer ativo (AppShell) — abre direto a
   // campanha + tarefa cujo timer está rodando, em vez de só cair na lista.
+  // Lê no mount (chegando de outra aba) E escuta o evento (já estando aqui
+  // — sem isso, clicar no indicador enquanto já em Campanhas não fazia
+  // nada, já que nenhum remount acontece pra reler o sessionStorage).
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(OPEN_CAMPANHA_TASK_KEY);
-      if (!raw) return;
-      sessionStorage.removeItem(OPEN_CAMPANHA_TASK_KEY);
-      const parsed = JSON.parse(raw) as { campanhaId?: string; taskId?: string };
-      if (parsed.campanhaId) {
-        setOpenId(parsed.campanhaId);
-        setInitialTaskId(parsed.taskId);
+    const openFromSession = () => {
+      try {
+        const raw = sessionStorage.getItem(OPEN_CAMPANHA_TASK_KEY);
+        if (!raw) return;
+        sessionStorage.removeItem(OPEN_CAMPANHA_TASK_KEY);
+        const parsed = JSON.parse(raw) as { campanhaId?: string; taskId?: string };
+        if (parsed.campanhaId) {
+          setOpenId(parsed.campanhaId);
+          setInitialTaskId(parsed.taskId);
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
+    };
+    openFromSession();
+    window.addEventListener(OPEN_CAMPANHA_TASK_EVENT, openFromSession);
+    return () => window.removeEventListener(OPEN_CAMPANHA_TASK_EVENT, openFromSession);
   }, []);
 
   const rows: Row[] = useMemo(

@@ -81,6 +81,11 @@ export type SectionKey =
  * de timer ativo — CampanhasSection lê isso ao montar (não é URL-driven
  * ainda, então esse é o jeito de passar "abre essa tarefa" na navegação). */
 export const OPEN_CAMPANHA_TASK_KEY = "campanhas:openTask";
+/** Disparado junto da escrita em `OPEN_CAMPANHA_TASK_KEY` — cobre o caso de
+ * quem já está na aba Campanhas (o `useEffect` de leitura do sessionStorage
+ * em CampanhasSection só roda no mount, então sem isso um clique repetido
+ * no mesmo destino não abria nada). */
+export const OPEN_CAMPANHA_TASK_EVENT = "campanhas:openTask:event";
 
 type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
 type NavGroup = { title: string; items: NavItem[] };
@@ -826,6 +831,11 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
         } catch {
           /* ignore */
         }
+        // A leitura do sessionStorage acima só roda no MOUNT de
+        // CampanhasSection — se a pessoa já estiver na aba Campanhas
+        // (nenhum remount acontece), clicar não abria nada e não dava pra
+        // saber de onde vinha o timer. Este evento cobre esse caso.
+        window.dispatchEvent(new CustomEvent(OPEN_CAMPANHA_TASK_EVENT));
         onSelect(active.section);
       }}
       title={`Timer ativo: ${active.title}`}
