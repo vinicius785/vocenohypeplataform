@@ -283,6 +283,18 @@ function CampanhaDetail({
     [c.id],
   );
 
+  // Controla a aba Seleção/Produção de fora (não só o clique nas
+  // TabsTrigger) — "Ver na aba Produção" no perfil do influenciador
+  // (dentro do InfluencerBoard) precisa poder trocar pra cá e já filtrar
+  // pelo influenciador de onde veio, sem exigir que o time procure de
+  // novo qual card é o dele em meio a todos os outros.
+  const [campanhaTab, setCampanhaTab] = useState<"selecao" | "producao">("selecao");
+  const [producaoFiltroInfluId, setProducaoFiltroInfluId] = useState<string | null>(null);
+  const goToProducao = (influId?: string) => {
+    if (influId) setProducaoFiltroInfluId(influId);
+    setCampanhaTab("producao");
+  };
+
   const [docs, setDocs] = useState<CampaignDoc[]>(() => loadCampanhaDocs(c.id));
   const persistDocs = (next: CampaignDoc[]) => {
     setDocs(next);
@@ -756,7 +768,7 @@ function CampanhaDetail({
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
-      <Tabs defaultValue="selecao">
+      <Tabs value={campanhaTab} onValueChange={(v) => setCampanhaTab(v as "selecao" | "producao")}>
         <TabsList>
           <TabsTrigger value="selecao">Seleção</TabsTrigger>
           <TabsTrigger value="producao">Produção</TabsTrigger>
@@ -769,10 +781,15 @@ function CampanhaDetail({
             defaultCicloMes={isRecorrente ? monthFilter : undefined}
             cicloMesOptions={isRecorrente ? monthOptions : undefined}
             entregasGerenciadasNaProducao
+            onGoToProducao={goToProducao}
           />
         </TabsContent>
         <TabsContent value="producao" className="mt-4">
-          <ProducaoBoard influs={visibleInflus} onChange={persistVisibleInflus} />
+          <ProducaoBoard
+            influs={visibleInflus}
+            onChange={persistVisibleInflus}
+            initialFiltroInfluId={producaoFiltroInfluId}
+          />
         </TabsContent>
       </Tabs>
 

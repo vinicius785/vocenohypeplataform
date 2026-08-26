@@ -1,14 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
   Columns3,
   LayoutList,
+  Loader2,
+  Pencil,
   Plus,
+  Trash2,
   User,
   X,
 } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +34,12 @@ import {
   type EntregaEngineActionKind,
 } from "@/lib/entrega-engine";
 import {
-  EntregaDetailSheet,
+  EntregaSituacaoBanner,
+  EntregaDateField,
+  EntregaAnexosEditor,
+  AutoSaveInput,
+  MetricsEditor,
+  uploadEntregaAnexo,
   addAnexoComVersao,
   logInfluActivity,
   ENTREGA_ACTION_LOG,
@@ -38,7 +47,9 @@ import {
   producaoResumo,
   todayISO,
   type Influ,
+  type InfluActivity,
   type Entrega,
+  type EntregaAnexoCategoria,
   type EntregaActionOpts,
   type ProducaoResumo,
 } from "@/components/influenciadores/InfluencerBoard";
@@ -86,15 +97,24 @@ const COLUNA_ENTRY_STAGE: Record<EntregaKanbanColuna, EntregaStage> = {
 export function ProducaoBoard({
   influs,
   onChange,
+  initialFiltroInfluId,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
+  /** Setado quando se chega aqui a partir de "Ver na aba Produção", no
+   * perfil de um influenciador (`InfluencerBoard.tsx`) — pré-filtra a
+   * visão pra esse influenciador, em vez de cair na lista inteira sem
+   * contexto de quem o time queria olhar. */
+  initialFiltroInfluId?: string | null;
 }) {
   const [selected, setSelected] = useState<{ influId: string; entregaId: string } | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [visualizacao, setVisualizacao] = useState<Visualizacao>("etapa");
   const [ordem, setOrdem] = useState<Ordem>("nome");
-  const [filtroInfluId, setFiltroInfluId] = useState<string | null>(null);
+  const [filtroInfluId, setFiltroInfluId] = useState<string | null>(initialFiltroInfluId ?? null);
+  useEffect(() => {
+    if (initialFiltroInfluId) setFiltroInfluId(initialFiltroInfluId);
+  }, [initialFiltroInfluId]);
 
   const aprovados = useMemo(() => influs.filter((i) => i.status === "APROVADO"), [influs]);
 
@@ -516,7 +536,8 @@ export function ProducaoBoard({
       )}
 
       {selecionado && (
-        <EntregaDetailSheet
+        <EntregaProducaoSheet
+          influ={selecionado.influ}
           entrega={selecionado.entrega}
           influActivity={selecionado.influ.activity ?? []}
           open={!!selecionado}
@@ -524,6 +545,9 @@ export function ProducaoBoard({
           onChange={(patch) => updateEntrega(selecionado.influ.id, selecionado.entrega.id, patch)}
           onRunAction={(action, opts) =>
             runAction(selecionado.influ.id, selecionado.entrega.id, action, opts)
+          }
+          onSetStage={(coluna) =>
+            setEntregaStage(selecionado.influ.id, selecionado.entrega.id, coluna)
           }
           onRemove={() => removeEntrega(selecionado.influ.id, selecionado.entrega.id)}
         />
@@ -720,5 +744,356 @@ function EntregaRow({
         </button>
       )}
     </div>
+  );
+}
+
+function FieldLabel({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * Painel de detalhe de UMA entrega, desenhado pra aba Produção — desde o
+ * início mostra DE QUEM é a entrega (avatar+nome no topo; o painel
+ * antigo, reaproveitado do perfil do influenciador, nunca precisava disso
+ * porque só abria dentro do perfil de UM influenciador já visível na
+ * tela). Substitui "Situação atual" + "Etapas" + rótulo duplicado da
+ * "Próxima ação" (3 blocos dizendo quase a mesma coisa) por um stepper
+ * único + banner de situação + um botão de ação só. Ganha também "Mover
+ * para", a mesma liberdade de arrastar já existente no board, aqui como
+ * botões — pra quem prefere isso a arrastar.
+ */
+function EntregaProducaoSheet({
+  influ,
+  entrega,
+  influActivity,
+  open,
+  onOpenChange,
+  onChange,
+  onRunAction,
+  onSetStage,
+  onRemove,
+}: {
+  influ: Influ;
+  entrega: Entrega;
+  influActivity: InfluActivity[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (patch: Partial<Entrega>) => void;
+  onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
+  onSetStage: (coluna: EntregaKanbanColuna) => void;
+  onRemove: () => void;
+}) {
+  const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
+  const step = deriveEntregaNextStep(entrega);
+  const colunaAtual = entregaKanbanColuna(stage);
+  const colunaAtualIndex = ENTREGA_KANBAN_COLUNAS.indexOf(colunaAtual);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [editandoCabecalho, setEditandoCabecalho] = useState(false);
+
+  const reprovacao =
+    stage === "ROTEIRO_AJUSTES"
+      ? entrega.roteiroReprovacao
+      : stage === "CONTEUDO_AJUSTES"
+        ? entrega.conteudoReprovacao
+        : undefined;
+
+  const historico = influActivity
+    .filter((a) =>
+      a.entregaId
+        ? a.entregaId === entrega.id
+        : a.action.toLowerCase().includes(entrega.tipo.toLowerCase()),
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const handleActionClick = () => {
+    if (!step.action) return;
+    if (step.action === "anexar_roteiro" || step.action === "anexar_conteudo") {
+      fileRef.current?.click();
+      return;
+    }
+    onRunAction(step.action);
+  };
+
+  const handleFileForAction = async (file: File) => {
+    if (step.action !== "anexar_roteiro" && step.action !== "anexar_conteudo") return;
+    setUploading(true);
+    setUploadError("");
+    try {
+      const url = await uploadEntregaAnexo(file);
+      const categoria: EntregaAnexoCategoria =
+        step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+      >
+        <SheetTitle className="sr-only">
+          Entrega de {influ.nome} · {entrega.tipo}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Detalhes de progresso, prazos, arquivos, aprovação e histórico desta entrega.
+        </SheetDescription>
+
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (fileRef.current) fileRef.current.value = "";
+            if (file) void handleFileForAction(file);
+          }}
+        />
+
+        {/* Cabeçalho — de quem é, o quê é. Sempre visível, é a informação
+            que mais faltava no painel reaproveitado do perfil. */}
+        <div className="flex items-start gap-3 border-b border-border p-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+            {influ.foto ? (
+              <img src={influ.foto} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium text-muted-foreground">{influ.nome}</p>
+            <p className="truncate text-lg font-bold text-foreground">
+              {entrega.tipo || "Sem tipo"}
+              <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
+              </span>
+            </p>
+            {entrega.titulo && !editandoCabecalho && (
+              <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditandoCabecalho((v) => !v)}
+            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Editar tipo, título e quantidade"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {editandoCabecalho && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/30 p-3">
+            <input
+              list="entregas-tipos"
+              value={entrega.tipo}
+              onChange={(ev) => onChange({ tipo: ev.target.value })}
+              placeholder="Tipo (Reels, Stories...)"
+              className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
+            />
+            <input
+              value={entrega.titulo ?? ""}
+              onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
+              placeholder="Título (opcional)"
+              className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex shrink-0 items-center rounded-md bg-background">
+              <button
+                type="button"
+                onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
+                className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+              >
+                −
+              </button>
+              <span className="w-7 text-center text-xs font-medium tabular-nums">
+                {entrega.quantidade}
+              </span>
+              <button
+                type="button"
+                onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
+                className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {/* Progresso — as 4 colunas do board, num stepper único. Não
+              repete "Situação atual"/"Etapas" como dois blocos separados
+              dizendo quase a mesma coisa. */}
+          <div className="space-y-2">
+            <FieldLabel title="Progresso" />
+            <div className="flex items-center gap-1.5">
+              {ENTREGA_KANBAN_COLUNAS.map((c, i) => (
+                <div key={c} className="flex flex-1 flex-col items-center gap-1">
+                  <span
+                    className={`h-1.5 w-full rounded-full ${
+                      i <= colunaAtualIndex ? COLUNA_DOT[c] : "bg-muted"
+                    }`}
+                  />
+                  <span
+                    className={`text-center text-[9px] font-medium ${
+                      i === colunaAtualIndex ? "text-foreground" : "text-muted-foreground/70"
+                    }`}
+                  >
+                    {ENTREGA_KANBAN_COLUNA_LABEL[c]}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
+          </div>
+
+          {/* Próxima ação — um botão só, sem repetir o rótulo por cima. */}
+          {step.action ? (
+            <button
+              type="button"
+              onClick={handleActionClick}
+              disabled={uploading}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Enviando...
+                </>
+              ) : (
+                step.actionLabel
+              )}
+            </button>
+          ) : (
+            stage !== "PUBLICADA" && (
+              <p className="text-xs text-muted-foreground">
+                {step.responsavel === "cliente"
+                  ? "Aguardando aprovação do cliente."
+                  : "Nenhuma ação pendente no momento."}
+              </p>
+            )
+          )}
+          {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+
+          {/* Mover manualmente — a mesma liberdade do arraste no board,
+              aqui como botões (pedido explícito: poder colocar a entrega
+              na fase desejada sem depender da ação certa). */}
+          <div className="space-y-2">
+            <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
+            <div className="grid grid-cols-4 gap-1.5">
+              {ENTREGA_KANBAN_COLUNAS.map((c) => {
+                const ativo = c === colunaAtual;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => onSetStage(c)}
+                    className={`rounded-md border px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors ${
+                      ativo
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                    }`}
+                  >
+                    {ENTREGA_KANBAN_COLUNA_LABEL[c]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Prazos — 3 campos compactos lado a lado, não 3 blocos cheios
+              de largura empilhados. */}
+          <div className="space-y-2">
+            <FieldLabel title="Prazos" />
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+              <EntregaDateField
+                label="Roteiro"
+                value={entrega.dataRecebimentoRoteiro}
+                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
+              />
+              <EntregaDateField
+                label="Conteúdo"
+                value={entrega.dataRecebimentoConteudo}
+                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
+              />
+              <EntregaDateField
+                label="Publicação"
+                value={entrega.dataPostagem}
+                onChange={(v) => onChange({ dataPostagem: v })}
+              />
+            </div>
+          </div>
+
+          {/* Arquivos */}
+          <div className="space-y-2">
+            <FieldLabel title="Arquivos" />
+            <EntregaAnexosEditor
+              anexos={entrega.anexos ?? []}
+              onChange={(anexos) => onChange({ anexos })}
+            />
+          </div>
+
+          {/* Publicação — só quando já concluída (link + métricas). */}
+          {stage === "PUBLICADA" && (
+            <div className="space-y-2 border-t border-border pt-4">
+              <FieldLabel title="Publicação" />
+              <div className="space-y-2">
+                <AutoSaveInput
+                  key={entrega.id}
+                  value={entrega.url ?? ""}
+                  onSave={(v) => onChange({ url: v })}
+                  placeholder="Link do conteúdo publicado"
+                />
+                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
+              </div>
+            </div>
+          )}
+
+          {/* Histórico */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <FieldLabel title="Histórico" />
+            {historico.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground">Nenhum evento registrado ainda.</p>
+            ) : (
+              <div className="space-y-2">
+                {historico.map((a) => (
+                  <div key={a.id} className="text-xs leading-relaxed">
+                    <span className="font-medium text-foreground">{a.author}</span>{" "}
+                    <span className="text-muted-foreground">{a.action}</span>
+                    <div className="text-[10px] text-muted-foreground/70">
+                      {new Date(a.createdAt).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border bg-muted/30 p-3">
+          <button
+            type="button"
+            onClick={onRemove}
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Remover entrega
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
