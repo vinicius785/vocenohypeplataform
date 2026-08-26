@@ -173,8 +173,8 @@ function InscricaoPage() {
         ) : (
           <>
             {page.bannerUrl && (
-              <div className="mx-auto mb-6 w-full max-w-[280px] overflow-hidden rounded-2xl border border-border">
-                <img src={page.bannerUrl} alt="" className="aspect-[9/16] w-full object-cover" />
+              <div className="mb-6 w-full overflow-hidden rounded-2xl border border-border">
+                <img src={page.bannerUrl} alt="" className="aspect-video w-full object-cover" />
               </div>
             )}
 
