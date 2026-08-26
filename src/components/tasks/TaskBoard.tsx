@@ -725,21 +725,30 @@ export function TaskDialog({
     setPreviewAttachment(null);
     setSubtasks(initial?.subtasks ?? []);
     setComments(initial?.comments ?? []);
+    // Só fabrica a entrada "criando esta tarefa" pra tarefa NOVA de
+    // verdade (quem está com o diálogo aberto agora é mesmo quem está
+    // criando). Pra uma tarefa JÁ EXISTENTE sem histórico de atividade
+    // (dado antigo, ou que chegou por um caminho que nunca gravou
+    // `activity`), não inventa um "criou esta tarefa" atribuído a quem
+    // só abriu o diálogo pra olhar — isso atribuía a criação a quem
+    // meramente visualizava, não a quem de fato criou.
     setActivity(
       initial?.activity ??
-        (() => {
-          const me = getCurrentAuthor();
-          return [
-            {
-              id: crypto.randomUUID(),
-              author: me.name,
-              initials: me.initials,
-              color: me.color,
-              action: initial ? "criou esta tarefa" : "está criando esta tarefa",
-              createdAt: initial?.createdAt ?? new Date().toISOString(),
-            },
-          ];
-        })(),
+        (initial
+          ? []
+          : (() => {
+              const me = getCurrentAuthor();
+              return [
+                {
+                  id: crypto.randomUUID(),
+                  author: me.name,
+                  initials: me.initials,
+                  color: me.color,
+                  action: "está criando esta tarefa",
+                  createdAt: new Date().toISOString(),
+                },
+              ];
+            })()),
     );
     setCommentText("");
     setNewSubtaskTitle("");

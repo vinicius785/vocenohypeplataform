@@ -9,7 +9,7 @@
  */
 
 import type { KanbanStatus } from "@/lib/projetos";
-import type { TimeEntry } from "@/components/tasks/TaskBoard";
+import type { TimeEntry, Activity } from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
 
 export type MktSourceKind = "projeto" | "campanha";
@@ -54,6 +54,12 @@ export type MktStandalone = {
   timerRunning?: boolean;
   timerStartedAt?: string;
   timeEntries?: TimeEntry[];
+  /** Sem isso, uma tarefa avulsa reaberta sempre chegava ao diálogo sem
+   * histórico — o diálogo então fabricava um "criou esta tarefa" na hora,
+   * atribuído a quem só estava ABRINDO pra olhar, não a quem realmente
+   * criou. Persistindo o log de verdade aqui, cada evento fica com o
+   * autor certo (`getCurrentAuthor()` no momento real da ação). */
+  activity?: Activity[];
 };
 
 export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [
@@ -191,6 +197,7 @@ export function createStandalone(input: {
   assignees?: string[];
   dueDate?: string;
   note?: string;
+  activity?: Activity[];
 }): MktStandalone {
   const item: MktStandalone = {
     id: crypto.randomUUID(),
@@ -200,6 +207,7 @@ export function createStandalone(input: {
     assignees: input.assignees,
     dueDate: input.dueDate,
     note: input.note,
+    activity: input.activity,
     createdAt: new Date().toISOString(),
   };
   standaloneStore.set((prev) => [...prev, item]);

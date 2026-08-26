@@ -84,6 +84,7 @@ function resolveTasks(
       timerRunning: s.timerRunning,
       timerStartedAt: s.timerStartedAt,
       timeEntries: s.timeEntries,
+      activity: s.activity,
     });
     meta.set(id, { kind: "standalone", id: s.id });
   }
@@ -187,6 +188,7 @@ export function MarketingSection() {
           assignees: t.assignees,
           dueDate: t.dueDate,
           note: t.description,
+          activity: t.activity,
         });
         continue;
       }
@@ -203,6 +205,7 @@ export function MarketingSection() {
           timerRunning: t.timerRunning,
           timerStartedAt: t.timerStartedAt,
           timeEntries: t.timeEntries,
+          activity: t.activity,
         });
       }
     }
