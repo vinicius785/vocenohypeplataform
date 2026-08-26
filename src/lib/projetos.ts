@@ -76,8 +76,8 @@ export const FEATURES: {
   },
   {
     key: "fluxos_email",
-    label: "Fluxos de e-mail",
-    hint: "Sequências automáticas de e-mail por gatilho — leads, clientes e influenciadores.",
+    label: "E-mails",
+    hint: "Campanhas de e-mail: público, sequência de mensagens, disparo e resultados.",
     group: "marketing",
   },
 ];

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { processEmailUnsubscribe } from "@/lib/email-flows.functions";
+import { processEmailUnsubscribe } from "@/lib/email-campaigns.functions";
 
 export const Route = createFileRoute("/email/descadastro/$token")({
   component: EmailUnsubscribePage,

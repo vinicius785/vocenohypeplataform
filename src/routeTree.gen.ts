@@ -17,6 +17,7 @@ import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
+import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
@@ -62,6 +63,11 @@ const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   path: '/email/descadastro/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhooksResendRoute = ApiWebhooksResendRouteImport.update({
+  id: '/api/webhooks/resend',
+  path: '/api/webhooks/resend',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   id: '/api/public/leads',
   path: '/api/public/leads',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRoutesByTo {
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRoutesById {
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRouteTypes {
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/resend'
     | '/email/descadastro/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/resend'
     | '/email/descadastro/$token'
   id:
     | '__root__'
@@ -164,6 +175,7 @@ export interface FileRouteTypes {
     | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/api/webhooks/resend'
     | '/email/descadastro/$token'
   fileRoutesById: FileRoutesById
 }
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
+  ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
   EmailDescadastroTokenRoute: typeof EmailDescadastroTokenRoute
 }
 
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmailDescadastroTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/resend': {
+      id: '/api/webhooks/resend'
+      path: '/api/webhooks/resend'
+      fullPath: '/api/webhooks/resend'
+      preLoaderRoute: typeof ApiWebhooksResendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/leads': {
       id: '/api/public/leads'
       path: '/api/public/leads'
@@ -292,6 +312,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
+  ApiWebhooksResendRoute: ApiWebhooksResendRoute,
   EmailDescadastroTokenRoute: EmailDescadastroTokenRoute,
 }
 export const routeTree = rootRouteImport
