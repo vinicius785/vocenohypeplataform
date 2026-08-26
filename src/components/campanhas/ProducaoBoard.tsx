@@ -886,8 +886,11 @@ function EntregaProducaoSheet({
         />
 
         {/* Cabeçalho — de quem é, o quê é. Sempre visível, é a informação
-            que mais faltava no painel reaproveitado do perfil. */}
-        <div className="flex items-start gap-3 border-b border-border p-5">
+            que mais faltava no painel reaproveitado do perfil. `pr-8`
+            reserva espaço pro X de fechar do Sheet (`SheetContent`, fixo
+            em `right-4 top-4`) — sem isso o botão de editar (parte do
+            fluxo normal do header) cai embaixo dele. */}
+        <div className="flex items-start gap-3 border-b border-border p-5 pr-8">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {influ.foto ? (
               <img src={influ.foto} alt="" className="h-full w-full object-cover" />
