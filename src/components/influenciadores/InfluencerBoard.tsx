@@ -153,6 +153,43 @@ function getCurrentAuthor() {
   return { name: "Você", initials: "VC", color: "bg-foreground text-background" };
 }
 
+/** Mensagem de Atividade por ação do motor de entrega (`entrega-engine.ts`)
+ * — mesmo texto usado pelo perfil e por `ProducaoBoard.tsx`. */
+export const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
+  anexar_roteiro: "anexou o roteiro",
+  enviar_roteiro: "enviou o roteiro pra aprovação do cliente",
+  reconhecer_ajustes_roteiro: "reconheceu os ajustes pedidos no roteiro",
+  anexar_conteudo: "anexou o conteúdo final",
+  enviar_conteudo: "enviou o conteúdo final pra aprovação do cliente",
+  reconhecer_ajustes_conteudo: "reconheceu os ajustes pedidos no conteúdo final",
+  marcar_publicado: "marcou como publicada",
+};
+
+/** Registra uma linha de Atividade no influenciador (autor/hora
+ * automáticos via `getCurrentAuthor`) — única forma de anotar histórico,
+ * usada tanto pelo board principal (perfil, kanban) quanto por
+ * `ProducaoBoard.tsx` (aba "Produção" da campanha, que atua sobre entregas
+ * fora da árvore de componentes do `InfluencerBoard`). */
+export function logInfluActivity(i: Influ, action: string, entregaId?: string): Influ {
+  const me = getCurrentAuthor();
+  return {
+    ...i,
+    updatedAt: new Date().toISOString(),
+    activity: [
+      ...(i.activity ?? []),
+      {
+        id: crypto.randomUUID(),
+        author: me.name,
+        initials: me.initials,
+        color: me.color,
+        action,
+        entregaId,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
 /** Formata dígitos de telefone BR como (DDD) 9XXXX-XXXX (ou XXXX-XXXX pra
  * fixo/8 dígitos), mantendo o texto digitável enquanto o usuário digita —
  * qualquer coisa que não seja número é descartada antes de formatar. */
@@ -595,42 +632,29 @@ export type BankInfo = {
 };
 
 /**
- * O status do influenciador (fluxo geral) e o status de cada entrega são
- * dois controles separados. (1) publicar uma entrega só é permitido a
- * partir de "Aprovado" em diante — evita marcar conteúdo no ar antes da
- * aprovação do perfil; (2) quando todas as entregas ficam publicadas, o
- * status geral avança automaticamente para "Concluído" (ver
- * `advanceStatusFromEntregas`).
+ * Publicar uma entrega só é permitido a partir de "Aprovado" — evita
+ * marcar conteúdo no ar antes da aprovação do perfil. Produção não é
+ * mais um valor manual de `InfluStatus` (ver comentário no topo de
+ * `campanha-status.ts`): uma vez aprovado, o progresso de cada entrega é
+ * sempre lido direto dela mesma (`producaoResumo` abaixo, ou a aba
+ * "Produção" da campanha), nunca mais precisa avançar o influenciador
+ * pra um status à parte.
  */
 export function canPublishEntrega(status: InfluStatus): boolean {
-  return status === "APROVADO" || status === "EM_PRODUCAO" || status === "CONCLUIDO";
+  return status === "APROVADO";
 }
-/**
- * Deriva o status geral do influenciador a partir do status de cada
- * entrega individual (uma entrega já em produção/aprovação puxa o influ
- * pra EM_PRODUCAO; todas publicadas fecham em CONCLUIDO) — só avança a
- * partir de APROVADO/EM_PRODUCAO, nunca sobrescreve RECUSADO/INSCRITO/etc.
- */
-export function advanceStatusFromEntregas(status: InfluStatus, entregas: Entrega[]): InfluStatus {
-  if (status !== "APROVADO" && status !== "EM_PRODUCAO") return status;
-  if (entregas.length === 0) return status;
 
-  const allPublished = entregas.every((e) => e.stage === "PUBLICADA");
-  if (allPublished) return "CONCLUIDO";
+export type ProducaoResumo = { total: number; publicadas: number };
 
-  const IN_PROGRESS_STAGES = new Set<EntregaStage>([
-    "ROTEIRO_PRODUCAO",
-    "ROTEIRO_APROVACAO",
-    "ROTEIRO_AJUSTES",
-    "PRODUCAO",
-    "CONTEUDO_APROVACAO",
-    "CONTEUDO_AJUSTES",
-    "PUBLICACAO",
-  ]);
-  const anyInProgress = entregas.some((e) => IN_PROGRESS_STAGES.has(e.stage));
-  if (anyInProgress) return "EM_PRODUCAO";
-
-  return status;
+/** Resumo de progresso de produção de um influenciador — leitura pura a
+ * partir das entregas dele, nunca gravada em `Influ.status`. Usado só
+ * pra exibir uma legenda tipo "2/3 publicadas" no card do influenciador
+ * aprovado; o detalhe de cada entrega vive na aba "Produção". */
+export function producaoResumo(entregas: Entrega[]): ProducaoResumo {
+  return {
+    total: entregas.length,
+    publicadas: entregas.filter((e) => e.stage === "PUBLICADA").length,
+  };
 }
 
 export const NICHOS = [
@@ -848,12 +872,7 @@ export function normalizeInflus(list: unknown): Influ[] {
       }
     }
     const { conteudos: _drop, valores: _drop2, ...rest } = r;
-    const allEntregasPublicadas =
-      entregas.length > 0 && entregas.every((e) => e.status === "publicado");
-    const status = legacyInfluStatus(rest.status, {
-      hasReprovacao: !!rest.clienteReprovacao,
-      allEntregasPublicadas,
-    });
+    const status = legacyInfluStatus(rest.status, { hasReprovacao: !!rest.clienteReprovacao });
     return { ...rest, status, entregas, pagamento };
   });
 }
@@ -1454,25 +1473,7 @@ export function InfluencerBoard({
     onChange(next);
   };
 
-  const pushActivity = (i: Influ, action: string, entregaId?: string): Influ => {
-    const me = getCurrentAuthor();
-    return {
-      ...i,
-      updatedAt: new Date().toISOString(),
-      activity: [
-        ...(i.activity ?? []),
-        {
-          id: crypto.randomUUID(),
-          author: me.name,
-          initials: me.initials,
-          color: me.color,
-          action,
-          entregaId,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    };
-  };
+  const pushActivity = logInfluActivity;
 
   // Usado pelo drag-and-drop do kanban e pelo dropdown de status do card —
   // os dois únicos lugares fora do perfil (`setInfluStatusFromResumo`, que
@@ -1508,17 +1509,6 @@ export function InfluencerBoard({
           : x,
       ),
     );
-  };
-
-  /** Idem, pra uma entrega — mensagem por ação do motor de entrega. */
-  const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
-    anexar_roteiro: "anexou o roteiro",
-    enviar_roteiro: "enviou o roteiro pra aprovação do cliente",
-    reconhecer_ajustes_roteiro: "reconheceu os ajustes pedidos no roteiro",
-    anexar_conteudo: "anexou o conteúdo final",
-    enviar_conteudo: "enviou o conteúdo final pra aprovação do cliente",
-    reconhecer_ajustes_conteudo: "reconheceu os ajustes pedidos no conteúdo final",
-    marcar_publicado: "marcou como publicada",
   };
 
   // Único ponto que executa uma ação do motor de entrega (`entrega-engine.ts`)
@@ -2061,7 +2051,7 @@ function InfluCard({
   // direto do status/veredito do influ, sem depender de uma tabela à
   // parte (o link público agora escreve nesses mesmos campos).
   const approval: { status: "aprovado" | "reprovado"; motivo?: string } | undefined =
-    influ.status === "APROVADO" || influ.status === "EM_PRODUCAO" || influ.status === "CONCLUIDO"
+    influ.status === "APROVADO"
       ? { status: "aprovado" }
       : influ.status === "RECUSADO" || influ.clienteReprovacao
         ? { status: "reprovado", motivo: influ.clienteReprovacao?.motivo }
@@ -2160,28 +2150,18 @@ function InfluCard({
       )}
 
       {has("entregas") && influ.entregas.length > 0 && (
-        <div className="space-y-1 border-t border-border/60 bg-muted/20 px-4 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Entregas ({influ.entregas.length})
-          </p>
-          <ul className="max-h-32 space-y-1 overflow-y-auto pr-0.5">
-            {influ.entregas.map((e) => {
-              const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo;
-              const stage = e.stage ?? "ROTEIRO_PRODUCAO";
-              return (
-                <li key={e.id} className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="min-w-0 flex-1 truncate text-foreground/80">
-                    {e.quantidade}x {label}
-                  </span>
-                  <span
-                    className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
-                  >
-                    {ENTREGA_STAGE_LABEL[stage]}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+        <div className="border-t border-border/60 bg-muted/20 px-4 py-2.5">
+          {(() => {
+            const { total, publicadas } = producaoResumo(influ.entregas);
+            return (
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="font-medium text-foreground/80">
+                  {publicadas}/{total} publicadas
+                </span>
+                <span className="text-muted-foreground">Ver na aba Produção</span>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -2432,7 +2412,7 @@ function NextActionBadge({ actor }: { actor: NextActor }) {
  * Clicar numa linha abre a view dedicada da entrega (`EntregaDetailSheet`)
  * num painel lateral, em vez de expandir inline — cada entrega tem sua
  * própria tela (cronograma, progresso, arquivos, aprovação, histórico). */
-type EntregaActionOpts = {
+export type EntregaActionOpts = {
   url?: string;
   anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
 };
@@ -2875,8 +2855,10 @@ function EntregaSituacaoBanner({
 
 /** View dedicada de uma entrega — situação atual, próxima ação, etapas,
  * prazos, arquivos e histórico. Abre num Sheet lateral ao clicar numa
- * linha de `EntregasEditor`, em vez de expandir inline. */
-function EntregaDetailSheet({
+ * linha de `EntregasEditor`, em vez de expandir inline. Também reaproveitada
+ * direto por `ProducaoBoard.tsx` (aba "Produção" da campanha) — mesmo
+ * painel de detalhe, sem duplicar upload de anexo/ações. */
+export function EntregaDetailSheet({
   entrega,
   influActivity,
   open,
@@ -3963,7 +3945,7 @@ function InfluenciadorDialog({
       entregas,
       pagamento,
       contrato,
-      status: advanceStatusFromEntregas(status, entregas),
+      status,
       statusUpdatedAt: todayISO(),
       bank,
     });

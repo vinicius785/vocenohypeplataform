@@ -25,11 +25,13 @@ import {
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
+import { ProducaoBoard } from "./campanhas/ProducaoBoard";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { SectionHeader } from "./SectionHeader";
 import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
@@ -754,13 +756,24 @@ function CampanhaDetail({
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
-      <InfluencerBoard
-        influs={visibleInflus}
-        onChange={persistVisibleInflus}
-        exportName={c.nome}
-        defaultCicloMes={isRecorrente ? monthFilter : undefined}
-        cicloMesOptions={isRecorrente ? monthOptions : undefined}
-      />
+      <Tabs defaultValue="selecao">
+        <TabsList>
+          <TabsTrigger value="selecao">Seleção</TabsTrigger>
+          <TabsTrigger value="producao">Produção</TabsTrigger>
+        </TabsList>
+        <TabsContent value="selecao" className="mt-4">
+          <InfluencerBoard
+            influs={visibleInflus}
+            onChange={persistVisibleInflus}
+            exportName={c.nome}
+            defaultCicloMes={isRecorrente ? monthFilter : undefined}
+            cicloMesOptions={isRecorrente ? monthOptions : undefined}
+          />
+        </TabsContent>
+        <TabsContent value="producao" className="mt-4">
+          <ProducaoBoard influs={visibleInflus} onChange={persistVisibleInflus} />
+        </TabsContent>
+      </Tabs>
 
       <GaleriaConteudosSection influs={visibleInflus} />
 
