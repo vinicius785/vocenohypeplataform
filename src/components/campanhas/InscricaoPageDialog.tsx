@@ -409,6 +409,9 @@ export function InscricaoPageDialog({
                   <span className="flex items-center gap-1.5">
                     <ImageIcon className="h-3.5 w-3.5" /> Banner (opcional)
                   </span>
+                  <p className="text-[11px] text-muted-foreground">
+                    Formato vertical, recomendado 1080×1920px (proporção 9:16, tipo Stories).
+                  </p>
                   <input
                     ref={bannerRef}
                     type="file"
@@ -430,7 +433,7 @@ export function InscricaoPageDialog({
                       <img
                         src={bannerUrl}
                         alt=""
-                        className="h-14 w-24 shrink-0 rounded-md object-cover"
+                        className="aspect-[9/16] h-16 shrink-0 rounded-md object-cover"
                       />
                       <div className="flex flex-1 items-center gap-2">
                         <button
@@ -962,7 +965,9 @@ function LivePreview({
         Como vai ficar pro influenciador
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-background text-[11px] shadow-sm">
-        {bannerUrl && <img src={bannerUrl} alt="" className="h-20 w-full object-cover" />}
+        {bannerUrl && (
+          <img src={bannerUrl} alt="" className="aspect-[9/16] w-full max-w-[120px] object-cover" />
+        )}
         <div className="space-y-3 p-3">
           <div>
             {showClientName && (
