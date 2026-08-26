@@ -14,21 +14,10 @@ import type { Task } from "@/components/tasks/TaskBoard";
 
 /** Status "prontos pra ver" pelo cliente — INSCRITO/EM_CURADORIA são
  * planejamento interno, ainda não decidido/comunicado. */
-const VISIBLE_TO_CLIENT = new Set([
-  "ENVIADO_AO_CLIENTE",
-  "APROVADO",
-  "EM_PRODUCAO",
-  "CONCLUIDO",
-  "RECUSADO",
-]);
+const VISIBLE_TO_CLIENT = new Set(["ENVIADO_AO_CLIENTE", "APROVADO", "RECUSADO"]);
 
 function normalizedInfluStatus(influ: Influ) {
-  const allEntregasPublicadas =
-    influ.entregas.length > 0 && influ.entregas.every((e) => e.status === "publicado");
-  return legacyInfluStatus(influ.status, {
-    hasReprovacao: !!influ.clienteReprovacao,
-    allEntregasPublicadas,
-  });
+  return legacyInfluStatus(influ.status, { hasReprovacao: !!influ.clienteReprovacao });
 }
 
 /**
