@@ -1556,6 +1556,36 @@ export function InfluencerBoard({
     setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
   };
 
+  // Mover manualmente pro estágio de entrada da fase alvo — sem passar
+  // pelo motor de ação, de propósito ("sem travas": o time decide onde
+  // colocar, sem depender de rodar a ação certa).
+  const setEntregaStageManual = (influId: string, entregaId: string, coluna: EntregaFaseColuna) => {
+    const stage = ENTREGA_FASE_COLUNA_ENTRY_STAGE[coluna];
+    const next = latestInflusRef.current.map((x) => {
+      if (x.id !== influId) return x;
+      const entrega = x.entregas.find((e) => e.id === entregaId);
+      if (!entrega) return x;
+      const isPublicada = stage === "PUBLICADA";
+      const patch: Partial<Entrega> = {
+        stage,
+        status: isPublicada
+          ? "publicado"
+          : entrega.status === "publicado"
+            ? "combinado"
+            : entrega.status,
+        publicadoEm: isPublicada ? (entrega.publicadoEm ?? todayISO()) : entrega.publicadoEm,
+      };
+      const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+      return pushActivity(
+        { ...x, entregas: x.entregas.map((e) => (e.id === entregaId ? { ...e, ...patch } : e)) },
+        `moveu "${label}" pra ${ENTREGA_FASE_COLUNA_LABEL[coluna]}`,
+        entregaId,
+      );
+    });
+    applyInflusChange(next);
+    setViewing((v) => next.find((x) => x.id === v?.id) ?? null);
+  };
+
   const removeInflu = async (influId: string): Promise<boolean> => {
     const alvo = latestInflusRef.current.find((x) => x.id === influId);
     const ok = await confirm(
@@ -1978,6 +2008,9 @@ export function InfluencerBoard({
           onSetStatus={(status) => setInfluStatusFromResumo(viewing.id, status)}
           onRunEntregaAction={(entregaId, action, opts) =>
             runEntregaAction(viewing.id, entregaId, action, opts)
+          }
+          onSetEntregaStage={(entregaId, coluna) =>
+            setEntregaStageManual(viewing.id, entregaId, coluna)
           }
           onSendToClient={() => sendInfluToClient(viewing.id)}
           onSetChecklist={(checklist) => setInfluChecklist(viewing.id, checklist)}
@@ -2417,11 +2450,19 @@ function EntregasEditor({
   entregas,
   onChange,
   influActivity = [],
+  influNome,
+  influFoto,
   onRunAction,
+  onSetStage,
 }: {
   entregas: Entrega[];
   onChange: (next: Entrega[]) => void;
   influActivity?: InfluActivity[];
+  /** Nome/foto do influenciador dono destas entregas — repassados pro
+   * cabeçalho do painel de detalhe. Ausentes no fluxo de criação (sem
+   * influenciador ainda salvo). */
+  influNome?: string;
+  influFoto?: string;
   /** Se não passado (fluxo de criação, sem influenciador persistido ainda),
    * a própria `EntregasEditor` aplica o motor localmente via `onChange` —
    * sem log de Atividade, que só existe pra um influenciador já salvo. */
@@ -2430,6 +2471,9 @@ function EntregasEditor({
     action: EntregaEngineActionKind,
     opts?: EntregaActionOpts,
   ) => void;
+  /** Mesma ideia de `onRunAction`, mas pro "Mover para" manual (sem
+   * passar pelo motor) — ausente no fluxo de criação, aplica local. */
+  onSetStage?: (entregaId: string, coluna: EntregaFaseColuna) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entregas.find((e) => e.id === selectedId) ?? null;
@@ -2456,6 +2500,22 @@ function EntregasEditor({
     } catch (err) {
       console.warn("[entrega-engine]", err);
     }
+  };
+
+  const setStage = (entregaId: string, coluna: EntregaFaseColuna) => {
+    if (onSetStage) {
+      onSetStage(entregaId, coluna);
+      return;
+    }
+    const e = entregas.find((x) => x.id === entregaId);
+    if (!e) return;
+    const stage = ENTREGA_FASE_COLUNA_ENTRY_STAGE[coluna];
+    const isPublicada = stage === "PUBLICADA";
+    update(entregaId, {
+      stage,
+      status: isPublicada ? "publicado" : e.status === "publicado" ? "combinado" : e.status,
+      publicadoEm: isPublicada ? (e.publicadoEm ?? todayISO()) : e.publicadoEm,
+    });
   };
 
   return (
@@ -2565,12 +2625,15 @@ function EntregasEditor({
 
       {selected && (
         <EntregaDetailSheet
+          influNome={influNome}
+          influFoto={influFoto}
           entrega={selected}
           influActivity={influActivity}
           open={!!selected}
           onOpenChange={(open) => !open && setSelectedId(null)}
           onChange={(patch) => update(selected.id, patch)}
           onRunAction={(action, opts) => runAction(selected.id, action, opts)}
+          onSetStage={(coluna) => setStage(selected.id, coluna)}
           onRemove={() => {
             onChange(entregas.filter((x) => x.id !== selected.id));
             setSelectedId(null);
@@ -2849,29 +2912,71 @@ function EntregaSituacaoBanner({
   );
 }
 
-/** View dedicada de uma entrega — situação atual, próxima ação, etapas,
- * prazos, arquivos e histórico. Abre num Sheet lateral ao clicar numa
- * linha de `EntregasEditor`, em vez de expandir inline. */
+// Agrupamento em 4 fases (não os 8 estágios internos do motor) só pra
+// dar um "Mover para" rápido e um stepper visual no painel de detalhe —
+// pedido explícito: dá pra colocar a entrega na fase desejada direto,
+// sem depender de rodar a ação certa (sem travas). Puramente de
+// apresentação: nunca substitui `ENTREGA_STAGE_ORDER`/transições reais,
+// só decide o estágio de ENTRADA de cada fase quando movido na mão.
+const ENTREGA_FASE_COLUNAS = ["ROTEIRO", "CONTEUDO", "PUBLICACAO", "CONCLUIDO"] as const;
+type EntregaFaseColuna = (typeof ENTREGA_FASE_COLUNAS)[number];
+const ENTREGA_FASE_COLUNA_LABEL: Record<EntregaFaseColuna, string> = {
+  ROTEIRO: "Roteiro",
+  CONTEUDO: "Conteúdo",
+  PUBLICACAO: "Publicação",
+  CONCLUIDO: "Concluído",
+};
+const ENTREGA_FASE_COLUNA_DOT: Record<EntregaFaseColuna, string> = {
+  ROTEIRO: "bg-muted-foreground/40",
+  CONTEUDO: "bg-sky-500",
+  PUBLICACAO: "bg-teal-500",
+  CONCLUIDO: "bg-emerald-500",
+};
+const ENTREGA_FASE_COLUNA_ENTRY_STAGE: Record<EntregaFaseColuna, EntregaStage> = {
+  ROTEIRO: "ROTEIRO_PRODUCAO",
+  CONTEUDO: "PRODUCAO",
+  PUBLICACAO: "PUBLICACAO",
+  CONCLUIDO: "PUBLICADA",
+};
+function entregaFaseColuna(stage: EntregaStage): EntregaFaseColuna {
+  if (stage === "PUBLICADA") return "CONCLUIDO";
+  const { fase } = entregaFaseConceitual(stage);
+  if (fase === "Roteiro") return "ROTEIRO";
+  if (fase === "Conteúdo") return "CONTEUDO";
+  return "PUBLICACAO";
+}
+
+/** View dedicada de uma entrega — de quem é (quando `influNome` é
+ * passado), progresso, próxima ação, prazos, arquivos e histórico. Abre
+ * num Sheet lateral ao clicar numa linha de `EntregasEditor`, em vez de
+ * expandir inline. */
 function EntregaDetailSheet({
+  influNome,
+  influFoto,
   entrega,
   influActivity,
   open,
   onOpenChange,
   onChange,
   onRunAction,
+  onSetStage,
   onRemove,
 }: {
+  influNome?: string;
+  influFoto?: string;
   entrega: Entrega;
   influActivity: InfluActivity[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChange: (patch: Partial<Entrega>) => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
+  onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
-  const fase = entregaFaseConceitual(stage);
+  const colunaAtual = entregaFaseColuna(stage);
+  const colunaAtualIndex = ENTREGA_FASE_COLUNAS.indexOf(colunaAtual);
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -2947,25 +3052,38 @@ function EntregaDetailSheet({
         />
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          {/* Cabeçalho — só o essencial; edição de tipo/título/quantidade
-              fica atrás de "Editar" pra não competir com Situação atual. */}
+          {/* Cabeçalho — de quem é (quando `influNome` é passado) + o quê
+              é; edição de tipo/título/quantidade fica atrás de "Editar"
+              pra não competir com o resto. */}
           <div className="space-y-2 border-b border-border pb-4 pr-8">
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-lg font-bold text-foreground">
-                {entrega.tipo || "Sem tipo"}
-                <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                  · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
-                </span>
-                {entrega.titulo && (
-                  <span className="block text-xs font-normal text-muted-foreground">
-                    {entrega.titulo}
-                  </span>
+            <div className="flex items-start gap-3">
+              {influNome && (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                  {influFoto ? (
+                    <img src={influFoto} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+                  )}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                {influNome && (
+                  <p className="truncate text-xs font-medium text-muted-foreground">{influNome}</p>
                 )}
-              </p>
+                <p className="truncate text-lg font-bold text-foreground">
+                  {entrega.tipo || "Sem tipo"}
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                    · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
+                  </span>
+                </p>
+                {entrega.titulo && (
+                  <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setEditandoCabecalho((v) => !v)}
-                className="inline-flex shrink-0 items-center gap-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label="Editar tipo, título e quantidade"
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -3009,93 +3127,97 @@ function EntregaDetailSheet({
             )}
           </div>
 
-          {/* Situação atual */}
-          <div className="space-y-1.5">
-            <FieldLabel title="Situação atual" />
-            <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
-          </div>
-
-          {/* Próxima ação / Aguardando */}
+          {/* Progresso — as 4 fases num stepper único, sem repetir
+              "Situação atual"/"Etapas" como dois blocos dizendo quase a
+              mesma coisa. */}
           <div className="space-y-2">
-            {step.action ? (
-              <>
-                <FieldLabel title="Próxima ação" />
-                <p className="text-xs text-muted-foreground">{step.actionLabel}</p>
-                <button
-                  type="button"
-                  onClick={handleActionClick}
-                  disabled={uploading}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
-                >
-                  {uploading ? "Enviando..." : step.actionLabel}
-                </button>
-                {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
-              </>
-            ) : stage === "PUBLICADA" ? null : (
-              <>
-                <FieldLabel title="Aguardando" />
-                <p className="text-xs text-muted-foreground">
-                  {step.responsavel === "cliente"
-                    ? "Aguardando aprovação do cliente."
-                    : "Nenhuma ação pendente no momento."}
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Etapas — 3 fases conceituais (roteiro/conteúdo/publicação),
-              não os 6 estágios internos do motor. */}
-          <div className="space-y-2">
-            <FieldLabel title="Etapas" />
-            <div className="flex flex-col gap-1.5">
-              {(["Roteiro", "Conteúdo", "Publicação"] as const).map((nomeFase, i) => (
-                <div key={nomeFase} className="flex items-center gap-2 text-xs">
-                  {i < fase.faseIndex ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  ) : i === fase.faseIndex ? (
-                    <CircleDot className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
-                  ) : (
-                    <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                  )}
+            <FieldLabel title="Progresso" />
+            <div className="flex items-center gap-1.5">
+              {ENTREGA_FASE_COLUNAS.map((c, i) => (
+                <div key={c} className="flex flex-1 flex-col items-center gap-1">
                   <span
-                    className={
-                      i === fase.faseIndex
-                        ? "font-semibold text-foreground"
-                        : "text-muted-foreground"
-                    }
+                    className={`h-1.5 w-full rounded-full ${
+                      i <= colunaAtualIndex ? ENTREGA_FASE_COLUNA_DOT[c] : "bg-muted"
+                    }`}
+                  />
+                  <span
+                    className={`text-center text-[9px] font-medium ${
+                      i === colunaAtualIndex ? "text-foreground" : "text-muted-foreground/70"
+                    }`}
                   >
-                    {nomeFase}
-                  </span>
-                  <span className="text-muted-foreground/70">
-                    ·{" "}
-                    {i < fase.faseIndex
-                      ? "Concluída"
-                      : i === fase.faseIndex
-                        ? fase.subLabel
-                        : "Aguardando etapa anterior"}
+                    {ENTREGA_FASE_COLUNA_LABEL[c]}
                   </span>
                 </div>
               ))}
             </div>
+            <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
           </div>
 
-          {/* Prazos — datas sem indicador de atrasado/no prazo (ver
-              comentário de formatDataCurta/nextPrazoData: essas datas não
-              distinguem "prazo planejado" de "recebimento real"). */}
+          {/* Próxima ação — um botão só, sem repetir o rótulo por cima. */}
+          {step.action ? (
+            <button
+              type="button"
+              onClick={handleActionClick}
+              disabled={uploading}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+            >
+              {uploading ? "Enviando..." : step.actionLabel}
+            </button>
+          ) : (
+            stage !== "PUBLICADA" && (
+              <p className="text-xs text-muted-foreground">
+                {step.responsavel === "cliente"
+                  ? "Aguardando aprovação do cliente."
+                  : "Nenhuma ação pendente no momento."}
+              </p>
+            )
+          )}
+          {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+
+          {/* Mover manualmente — mesma liberdade de arrastar num kanban,
+              aqui como botões: dá pra colocar a entrega na fase desejada
+              direto, sem depender de rodar a ação certa. */}
+          <div className="space-y-2">
+            <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
+            <div className="grid grid-cols-4 gap-1.5">
+              {ENTREGA_FASE_COLUNAS.map((c) => {
+                const ativo = c === colunaAtual;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => onSetStage(c)}
+                    className={`rounded-md border px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors ${
+                      ativo
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                    }`}
+                  >
+                    {ENTREGA_FASE_COLUNA_LABEL[c]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Prazos — grade compacta (rótulo em cima do input, não ao
+              lado), sem indicador de atrasado/no prazo (ver comentário de
+              formatDataCurta/nextPrazoData: essas datas não distinguem
+              "prazo planejado" de "recebimento real"). */}
           <div className="space-y-2">
             <FieldLabel title="Prazos" />
-            <div className="space-y-1.5">
-              <EntregaDateField
+            <div className="grid grid-cols-3 gap-2">
+              <PrazoField
                 label="Roteiro"
                 value={entrega.dataRecebimentoRoteiro}
                 onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
               />
-              <EntregaDateField
-                label="Conteúdo final"
+              <PrazoField
+                label="Conteúdo"
                 value={entrega.dataRecebimentoConteudo}
                 onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
               />
-              <EntregaDateField
+              <PrazoField
                 label="Publicação"
                 value={entrega.dataPostagem}
                 onChange={(v) => onChange({ dataPostagem: v })}
@@ -3315,6 +3437,7 @@ function InfluencerProfileDialog({
   onRemove,
   onSetStatus,
   onRunEntregaAction,
+  onSetEntregaStage,
   onSetChecklist,
   onApplyChecklistToAll,
   onComment,
@@ -3335,6 +3458,7 @@ function InfluencerProfileDialog({
       anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
     },
   ) => void;
+  onSetEntregaStage: (entregaId: string, coluna: EntregaFaseColuna) => void;
   onSetChecklist: (checklist: ChecklistItem[]) => void;
   onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
   onComment: (text: string) => void;
@@ -3601,7 +3725,10 @@ function InfluencerProfileDialog({
                     entregas={influ.entregas}
                     onChange={(next) => onPatch({ entregas: next })}
                     influActivity={influ.activity ?? []}
+                    influNome={influ.nome}
+                    influFoto={influ.foto}
                     onRunAction={onRunEntregaAction}
+                    onSetStage={onSetEntregaStage}
                   />
                 </div>
               )}
@@ -4078,7 +4205,12 @@ function InfluenciadorDialog({
 
           {has("entregas") && (
             <section className="border-t border-border pt-6">
-              <EntregasEditor entregas={entregas} onChange={setEntregas} />
+              <EntregasEditor
+                entregas={entregas}
+                onChange={setEntregas}
+                influNome={nome || undefined}
+                influFoto={foto}
+              />
             </section>
           )}
 
@@ -4633,10 +4765,10 @@ function PagamentoEditor({
  * ela está e sem limite de quantidade por categoria.
  * ============================================================ */
 
-/** Campo de data opcional de uma entrega (roteiro/conteúdo/postagem são
- * controles independentes) — com um "x" pra limpar quando não se aplica
- * àquela entrega em específico, sem afetar as outras datas. */
-function EntregaDateField({
+/** Campo de data compacto (rótulo em cima, não ao lado) — usado em grade
+ * de 3 colunas no painel de detalhe da entrega; rótulo ao lado (largura
+ * fixa) estourava/sobrepunha o input nessa largura estreita. */
+function PrazoField({
   label,
   value,
   onChange,
@@ -4646,25 +4778,14 @@ function EntregaDateField({
   onChange: (v: string | undefined) => void;
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-      <span className="w-40 shrink-0">{label}</span>
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="truncate text-[10px] font-medium text-muted-foreground">{label}</span>
       <input
         type="date"
         value={value ?? ""}
         onChange={(ev) => onChange(ev.target.value || undefined)}
-        className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+        className="w-full min-w-0 rounded-md border border-border bg-background px-1.5 py-1 text-[11px] outline-none focus:ring-1 focus:ring-ring"
       />
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-          aria-label={`Limpar ${label.toLowerCase()}`}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
     </label>
   );
 }
