@@ -35,7 +35,6 @@ import {
 } from "@/lib/entrega-engine";
 import {
   EntregaSituacaoBanner,
-  EntregaDateField,
   EntregaAnexosEditor,
   AutoSaveInput,
   MetricsEditor,
@@ -756,6 +755,31 @@ function FieldLabel({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
+/** Campo de data compacto (rótulo em cima, não ao lado) — cabe numa
+ * coluna estreita de uma grade de 3, diferente da variante de linha
+ * inteira usada no perfil do influenciador. */
+function PrazoField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange: (v: string | undefined) => void;
+}) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="truncate text-[10px] font-medium text-muted-foreground">{label}</span>
+      <input
+        type="date"
+        value={value ?? ""}
+        onChange={(ev) => onChange(ev.target.value || undefined)}
+        className="w-full min-w-0 rounded-md border border-border bg-background px-1.5 py-1 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+      />
+    </label>
+  );
+}
+
 /**
  * Painel de detalhe de UMA entrega, desenhado pra aba Produção — desde o
  * início mostra DE QUEM é a entrega (avatar+nome no topo; o painel
@@ -1010,22 +1034,25 @@ function EntregaProducaoSheet({
             </div>
           </div>
 
-          {/* Prazos — 3 campos compactos lado a lado, não 3 blocos cheios
-              de largura empilhados. */}
+          {/* Prazos — 3 campos compactos com rótulo em cima do input, não
+              ao lado (a variante de linha inteira reservava largura fixa
+              pro rótulo, o que estourava/sobrepunha numa coluna estreita
+              como esta — o painel é um Sheet lateral, não segue a largura
+              da viewport). */}
           <div className="space-y-2">
             <FieldLabel title="Prazos" />
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-              <EntregaDateField
+            <div className="grid grid-cols-3 gap-2">
+              <PrazoField
                 label="Roteiro"
                 value={entrega.dataRecebimentoRoteiro}
                 onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
               />
-              <EntregaDateField
+              <PrazoField
                 label="Conteúdo"
                 value={entrega.dataRecebimentoConteudo}
                 onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
               />
-              <EntregaDateField
+              <PrazoField
                 label="Publicação"
                 value={entrega.dataPostagem}
                 onChange={(v) => onChange({ dataPostagem: v })}
