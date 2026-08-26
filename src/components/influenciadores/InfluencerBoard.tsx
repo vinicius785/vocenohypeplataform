@@ -153,9 +153,8 @@ function getCurrentAuthor() {
   return { name: "Você", initials: "VC", color: "bg-foreground text-background" };
 }
 
-/** Mensagem de Atividade por ação do motor de entrega (`entrega-engine.ts`)
- * — mesmo texto usado pelo perfil e por `ProducaoBoard.tsx`. */
-export const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
+/** Mensagem de Atividade por ação do motor de entrega (`entrega-engine.ts`). */
+const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
   anexar_roteiro: "anexou o roteiro",
   enviar_roteiro: "enviou o roteiro pra aprovação do cliente",
   reconhecer_ajustes_roteiro: "reconheceu os ajustes pedidos no roteiro",
@@ -166,11 +165,8 @@ export const ENTREGA_ACTION_LOG: Record<EntregaEngineActionKind, string> = {
 };
 
 /** Registra uma linha de Atividade no influenciador (autor/hora
- * automáticos via `getCurrentAuthor`) — única forma de anotar histórico,
- * usada tanto pelo board principal (perfil, kanban) quanto por
- * `ProducaoBoard.tsx` (aba "Produção" da campanha, que atua sobre entregas
- * fora da árvore de componentes do `InfluencerBoard`). */
-export function logInfluActivity(i: Influ, action: string, entregaId?: string): Influ {
+ * automáticos via `getCurrentAuthor`) — única forma de anotar histórico. */
+function logInfluActivity(i: Influ, action: string, entregaId?: string): Influ {
   const me = getCurrentAuthor();
   return {
     ...i,
@@ -495,7 +491,6 @@ import {
   ENTREGA_STAGE_DESCRIPTION,
   entregaStatusIcon,
   entregaFaseConceitual,
-  entregaKanbanColuna,
   nextActionForInflu,
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
@@ -505,7 +500,6 @@ import {
   migrateLegacyEntregaStage,
   type InfluStatus,
   type EntregaStage,
-  type EntregaKanbanColuna,
   type NextActor,
 } from "@/lib/campanha-status";
 import {
@@ -639,8 +633,8 @@ export type BankInfo = {
  * mais um valor manual de `InfluStatus` (ver comentário no topo de
  * `campanha-status.ts`): uma vez aprovado, o progresso de cada entrega é
  * sempre lido direto dela mesma (`producaoResumo` abaixo, ou a aba
- * "Produção" da campanha), nunca mais precisa avançar o influenciador
- * pra um status à parte.
+ * "Entregas" do perfil), nunca mais precisa avançar o influenciador pra
+ * um status à parte.
  */
 export function canPublishEntrega(status: InfluStatus): boolean {
   return status === "APROVADO";
@@ -651,7 +645,7 @@ export type ProducaoResumo = { total: number; publicadas: number };
 /** Resumo de progresso de produção de um influenciador — leitura pura a
  * partir das entregas dele, nunca gravada em `Influ.status`. Usado só
  * pra exibir uma legenda tipo "2/3 publicadas" no card do influenciador
- * aprovado; o detalhe de cada entrega vive na aba "Produção". */
+ * aprovado; o detalhe de cada entrega vive na aba "Entregas" do perfil. */
 export function producaoResumo(entregas: Entrega[]): ProducaoResumo {
   return {
     total: entregas.length,
@@ -897,7 +891,7 @@ export function PlatformIcon({
   const Icon = PLATFORM_ICONS[plataforma] ?? AtSign;
   return <Icon className={className} />;
 }
-export const ENTREGAS_OPTS = [
+const ENTREGAS_OPTS = [
   "Reels",
   "Stories",
   "Post feed",
@@ -981,7 +975,7 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function MetricsEditor({
+function MetricsEditor({
   value,
   onChange,
 }: {
@@ -1417,8 +1411,6 @@ export function InfluencerBoard({
   headerExtra,
   defaultCicloMes,
   cicloMesOptions,
-  entregasGerenciadasNaProducao,
-  onGoToProducao,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
@@ -1442,18 +1434,6 @@ export function InfluencerBoard({
    * `cicloMes` manualmente (mover pra outro mês). `undefined`/vazio em
    * campanhas não-recorrentes: sem seletor, nada muda. */
   cicloMesOptions?: { value: string; label: string }[];
-  /** Só passado pela Campanhas (que tem a aba "Produção" dedicada por
-   * entrega) — troca a aba "Entregas" do perfil por um resumo somente
-   * leitura, já que a gestão (criar/editar/rodar ação) passa a viver só
-   * na aba Produção da campanha. Projetos (sem aba Produção) nunca passa
-   * isso, e continua com a gestão completa dentro do perfil como sempre. */
-  entregasGerenciadasNaProducao?: boolean;
-  /** Chamado quando o time clica "Ver na aba Produção" dentro da aba
-   * Entregas do perfil (só existe junto de `entregasGerenciadasNaProducao`)
-   * — o influenciador clicado vem como argumento, pra quem escuta (
-   * `CampanhasSection`) já filtrar a Produção por ele em vez de cair na
-   * lista inteira sem contexto de quem o time queria olhar. */
-  onGoToProducao?: (influId?: string) => void;
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
   const has = (k: InfluencerFieldKey) => fields.includes(k);
@@ -1991,15 +1971,6 @@ export function InfluencerBoard({
           influ={viewing}
           has={has}
           cicloMesOptions={cicloMesOptions}
-          entregasGerenciadasNaProducao={entregasGerenciadasNaProducao}
-          onGoToProducao={
-            onGoToProducao
-              ? () => {
-                  setViewing(null);
-                  onGoToProducao(viewing.id);
-                }
-              : undefined
-          }
           onOpenChange={(o) => !o && setViewing(null)}
           onRemove={async () => {
             if (await removeInflu(viewing.id)) setViewing(null);
@@ -2183,7 +2154,7 @@ function InfluCard({
                 <span className="font-medium text-foreground/80">
                   {publicadas}/{total} publicadas
                 </span>
-                <span className="text-muted-foreground">Ver na aba Produção</span>
+                <span className="text-muted-foreground">Ver na aba Entregas</span>
               </div>
             );
           })()}
@@ -2851,7 +2822,7 @@ function nextPrazoData(entrega: Entrega): { label: string; data: string } | null
  * Nunca dá pra escolher um estágio aqui (isso é o motor quem decide);
  * só traduz o `stage` atual numa frase que qualquer pessoa entende sem
  * precisar saber o nome interno do estado. */
-export function EntregaSituacaoBanner({
+function EntregaSituacaoBanner({
   stage,
   reprovacao,
 }: {
@@ -2880,10 +2851,8 @@ export function EntregaSituacaoBanner({
 
 /** View dedicada de uma entrega — situação atual, próxima ação, etapas,
  * prazos, arquivos e histórico. Abre num Sheet lateral ao clicar numa
- * linha de `EntregasEditor`, em vez de expandir inline. Também reaproveitada
- * direto por `ProducaoBoard.tsx` (aba "Produção" da campanha) — mesmo
- * painel de detalhe, sem duplicar upload de anexo/ações. */
-export function EntregaDetailSheet({
+ * linha de `EntregasEditor`, em vez de expandir inline. */
+function EntregaDetailSheet({
   entrega,
   influActivity,
   open,
@@ -3331,82 +3300,6 @@ function InfluVisaoGeralTab({
   );
 }
 
-const ENTREGAS_RESUMO_COLUNA_DOT: Record<EntregaKanbanColuna, string> = {
-  ROTEIRO: "bg-muted-foreground/40",
-  CONTEUDO: "bg-sky-500",
-  PUBLICACAO: "bg-teal-500",
-  CONCLUIDO: "bg-emerald-500",
-};
-
-/** Conteúdo da aba "Entregas" do perfil, pra Campanhas (que gerencia tudo
- * na aba Produção da campanha) — lista as entregas de verdade (não só um
- * resumo em texto), só que sem nenhuma ação além de abrir a Produção:
- * clicar em qualquer entrega (ou no botão do topo) fecha o perfil e leva
- * pra lá, já filtrado por este influenciador. */
-function EntregasResumoProducao({
-  influ,
-  onGoToProducao,
-}: {
-  influ: Influ;
-  onGoToProducao?: () => void;
-}) {
-  const { total, publicadas } = producaoResumo(influ.entregas);
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-muted/20 p-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">
-            {publicadas}/{total} {total === 1 ? "publicada" : "publicadas"}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Criar, editar e avançar acontece na aba Produção.
-          </p>
-        </div>
-        {onGoToProducao && (
-          <button
-            type="button"
-            onClick={onGoToProducao}
-            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            Ver na aba Produção <ChevronRight className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-
-      {influ.entregas.length === 0 ? (
-        <EmptyHint text="Nenhuma entrega ainda." />
-      ) : (
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-          {influ.entregas.map((e) => {
-            const stage = e.stage ?? "ROTEIRO_PRODUCAO";
-            const coluna = entregaKanbanColuna(stage);
-            const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo";
-            return (
-              <button
-                key={e.id}
-                type="button"
-                onClick={onGoToProducao}
-                disabled={!onGoToProducao}
-                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs hover:bg-muted/30 disabled:cursor-default disabled:hover:bg-transparent"
-              >
-                <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${ENTREGAS_RESUMO_COLUNA_DOT[coluna]}`}
-                />
-                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
-                >
-                  {entregaFaseConceitual(stage).subLabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ============================================================
  * Perfil do influenciador — diálogo único de visualização + edição.
  * Tudo salva imediato (sem botão "Salvar") e toda seção fica sempre
@@ -3418,8 +3311,6 @@ function InfluencerProfileDialog({
   influ,
   has,
   cicloMesOptions,
-  entregasGerenciadasNaProducao,
-  onGoToProducao,
   onOpenChange,
   onRemove,
   onSetStatus,
@@ -3433,8 +3324,6 @@ function InfluencerProfileDialog({
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   cicloMesOptions?: { value: string; label: string }[];
-  entregasGerenciadasNaProducao?: boolean;
-  onGoToProducao?: () => void;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
@@ -3706,19 +3595,16 @@ function InfluencerProfileDialog({
             </TabsContent>
 
             <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              {has("entregas") &&
-                (entregasGerenciadasNaProducao ? (
-                  <EntregasResumoProducao influ={influ} onGoToProducao={onGoToProducao} />
-                ) : (
-                  <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-                    <EntregasEditor
-                      entregas={influ.entregas}
-                      onChange={(next) => onPatch({ entregas: next })}
-                      influActivity={influ.activity ?? []}
-                      onRunAction={onRunEntregaAction}
-                    />
-                  </div>
-                ))}
+              {has("entregas") && (
+                <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
+                  <EntregasEditor
+                    entregas={influ.entregas}
+                    onChange={(next) => onPatch({ entregas: next })}
+                    influActivity={influ.activity ?? []}
+                    onRunAction={onRunEntregaAction}
+                  />
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="perfil" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
@@ -4275,7 +4161,7 @@ function InfluenciadorDialog({
  * várias escritas concorrentes para o mesmo campo podiam se atropelar e
  * fazer a edição "não salvar" (o toast de erro aparecia, ou uma escrita
  * mais rápida sobrescrevia uma mais lenta com um valor antigo). */
-export function AutoSaveInput({
+function AutoSaveInput({
   value,
   onSave,
   placeholder,
@@ -4750,7 +4636,7 @@ function PagamentoEditor({
 /** Campo de data opcional de uma entrega (roteiro/conteúdo/postagem são
  * controles independentes) — com um "x" pra limpar quando não se aplica
  * àquela entrega em específico, sem afetar as outras datas. */
-export function EntregaDateField({
+function EntregaDateField({
   label,
   value,
   onChange,
@@ -4843,7 +4729,7 @@ function formatMB(bytes: number): string {
  * já usado em `uploadChatAttachment` (chat-store.ts). Lança erro (em vez de
  * devolver `null`) com uma mensagem específica pro chamador poder mostrar
  * pra quem tentou o upload, em vez de um "falhou" genérico. */
-export async function uploadEntregaAnexo(file: File): Promise<string> {
+async function uploadEntregaAnexo(file: File): Promise<string> {
   if (file.size > ENTREGA_ANEXO_MAX_BYTES) {
     throw new Error(
       `Arquivo muito grande (${formatMB(file.size)}). O máximo permitido é ${formatMB(ENTREGA_ANEXO_MAX_BYTES)}.`,
@@ -4890,7 +4776,7 @@ function AnexoThumb({ nome, url }: { nome: string; url: string }) {
   );
 }
 
-export function EntregaAnexosEditor({
+function EntregaAnexosEditor({
   anexos,
   onChange,
 }: {

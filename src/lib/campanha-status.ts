@@ -22,8 +22,8 @@
  * que uma entrega avançava depois disso. Produção passou a ser SEMPRE
  * derivada das entregas (ver `producaoResumo` em InfluencerBoard.tsx) —
  * nunca mais um valor gravável em `Influ.status`. Uma vez `APROVADO`, o
- * progresso de produção aparece na aba "Produção" da campanha (kanban por
- * ENTREGA, não por influenciador), sempre sincronizado por construção.
+ * progresso de cada entrega é gerenciado na aba "Entregas" do perfil do
+ * influenciador.
  *
  * Puro (sem React/browser), importável tanto do client (InfluencerBoard,
  * CampanhasSection, AppShell) quanto de server functions (cliente-link,
@@ -45,8 +45,8 @@ export type InfluStatus = (typeof INFLU_STATUSES)[number];
 
 /** Ordem de exibição no Kanban — RECUSADO fica fora do fluxo linear
  * principal (é um estado terminal alternativo, não uma etapa a mais).
- * APROVADO é a última coluna: produção de conteúdo vive na aba "Produção"
- * da campanha, não como mais colunas aqui. */
+ * APROVADO é a última coluna: produção de conteúdo vive na aba "Entregas"
+ * do perfil do influenciador, não como mais colunas aqui. */
 export const INFLU_KANBAN_ORDER: InfluStatus[] = [
   "INSCRITO",
   "EM_CURADORIA",
@@ -232,31 +232,6 @@ export function entregaFaseConceitual(stage: EntregaStage): EntregaFaseConceitua
     case "PUBLICADA":
       return { fase: "Publicação", faseIndex: 2, subLabel: "Publicado" };
   }
-}
-
-/** As 4 colunas do kanban de Produção (aba "Produção" da campanha, um
- * card por ENTREGA) — mesmo reagrupamento de `entregaFaseConceitual`, só
- * que separa `PUBLICADA` numa coluna "Concluído" própria em vez de deixar
- * junto de "Publicação" (que ali significa "aprovado, falta publicar" —
- * confundia ter os dois num popover só). Puramente visual, mesma regra de
- * `entregaFaseConceitual`: não altera `ENTREGA_STAGE_ORDER` nem nenhuma
- * transição. */
-export const ENTREGA_KANBAN_COLUNAS = ["ROTEIRO", "CONTEUDO", "PUBLICACAO", "CONCLUIDO"] as const;
-export type EntregaKanbanColuna = (typeof ENTREGA_KANBAN_COLUNAS)[number];
-
-export const ENTREGA_KANBAN_COLUNA_LABEL: Record<EntregaKanbanColuna, string> = {
-  ROTEIRO: "Roteiro",
-  CONTEUDO: "Conteúdo",
-  PUBLICACAO: "Publicação",
-  CONCLUIDO: "Concluído",
-};
-
-export function entregaKanbanColuna(stage: EntregaStage): EntregaKanbanColuna {
-  if (stage === "PUBLICADA") return "CONCLUIDO";
-  const { fase } = entregaFaseConceitual(stage);
-  if (fase === "Roteiro") return "ROTEIRO";
-  if (fase === "Conteúdo") return "CONTEUDO";
-  return "PUBLICACAO";
 }
 
 // ============================================================

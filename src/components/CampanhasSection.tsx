@@ -25,13 +25,11 @@ import {
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import { type Campaign, type PagTipo, type PagamentoConfig } from "./VincularCampanhaDialog";
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
-import { ProducaoBoard } from "./campanhas/ProducaoBoard";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { SectionHeader } from "./SectionHeader";
 import { OPEN_CAMPANHA_TASK_KEY } from "./AppShell";
@@ -282,18 +280,6 @@ function CampanhaDetail({
     () => onCampanhaInflusChange(() => setInflus(normalizeInflus(loadCampanhaInflus(c.id)))),
     [c.id],
   );
-
-  // Controla a aba Seleção/Produção de fora (não só o clique nas
-  // TabsTrigger) — "Ver na aba Produção" no perfil do influenciador
-  // (dentro do InfluencerBoard) precisa poder trocar pra cá e já filtrar
-  // pelo influenciador de onde veio, sem exigir que o time procure de
-  // novo qual card é o dele em meio a todos os outros.
-  const [campanhaTab, setCampanhaTab] = useState<"selecao" | "producao">("selecao");
-  const [producaoFiltroInfluId, setProducaoFiltroInfluId] = useState<string | null>(null);
-  const goToProducao = (influId?: string) => {
-    if (influId) setProducaoFiltroInfluId(influId);
-    setCampanhaTab("producao");
-  };
 
   const [docs, setDocs] = useState<CampaignDoc[]>(() => loadCampanhaDocs(c.id));
   const persistDocs = (next: CampaignDoc[]) => {
@@ -768,30 +754,13 @@ function CampanhaDetail({
         onInitialOpenTaskHandled={onInitialTaskHandled}
       />
 
-      <Tabs value={campanhaTab} onValueChange={(v) => setCampanhaTab(v as "selecao" | "producao")}>
-        <TabsList>
-          <TabsTrigger value="selecao">Seleção</TabsTrigger>
-          <TabsTrigger value="producao">Produção</TabsTrigger>
-        </TabsList>
-        <TabsContent value="selecao" className="mt-4">
-          <InfluencerBoard
-            influs={visibleInflus}
-            onChange={persistVisibleInflus}
-            exportName={c.nome}
-            defaultCicloMes={isRecorrente ? monthFilter : undefined}
-            cicloMesOptions={isRecorrente ? monthOptions : undefined}
-            entregasGerenciadasNaProducao
-            onGoToProducao={goToProducao}
-          />
-        </TabsContent>
-        <TabsContent value="producao" className="mt-4">
-          <ProducaoBoard
-            influs={visibleInflus}
-            onChange={persistVisibleInflus}
-            initialFiltroInfluId={producaoFiltroInfluId}
-          />
-        </TabsContent>
-      </Tabs>
+      <InfluencerBoard
+        influs={visibleInflus}
+        onChange={persistVisibleInflus}
+        exportName={c.nome}
+        defaultCicloMes={isRecorrente ? monthFilter : undefined}
+        cicloMesOptions={isRecorrente ? monthOptions : undefined}
+      />
 
       <GaleriaConteudosSection influs={visibleInflus} />
 
