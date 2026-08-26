@@ -875,7 +875,12 @@ export function TaskDialog({
           setActivity((a) =>
             pushActivity(a, `${done ? "reabriu" : "concluiu"} subtarefa "${st.title}"`),
           );
-          return { ...st, status: done ? "Aberto" : "Concluído" };
+          // Concluir por aqui é uma troca de status na marra (não passa por
+          // `withStatusChange`) — sem parar o timer da própria subtarefa
+          // manualmente, um timer deixado rodando nela nunca parava,
+          // mesmo com a subtarefa já concluída.
+          const next = !done && st.timerRunning ? stopTaskTimer(st) : st;
+          return { ...next, status: done ? "Aberto" : "Concluído" };
         }
         return st;
       }),

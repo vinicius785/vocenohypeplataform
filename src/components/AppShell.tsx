@@ -765,6 +765,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
     type MinimalTask = {
       id: string;
       title: string;
+      status?: string;
       assignee?: string;
       assignees?: string[];
       timerRunning?: boolean;
@@ -772,30 +773,48 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
       subtasks?: MinimalTask[];
     };
     const isMine = (t: MinimalTask) => getTaskAssignees(t).includes(me.name);
-    const flatten = (list: MinimalTask[]): MinimalTask[] =>
-      list.flatMap((t) => [t, ...flatten(t.subtasks ?? [])]);
+    // Defensivo: uma tarefa/subtarefa concluída nunca deveria ter o timer
+    // ainda ligado (o motor normal já para sozinho ao mudar de status),
+    // mas caminhos que gravam status sem passar por `withStatusChange`
+    // (ex: o checkbox de concluir subtarefa, que só trocava o status na
+    // marra) deixavam esse "vazamento" — sem esse filtro, o indicador
+    // ficava preso pra sempre numa tarefa já terminada.
+    const isActive = (t: MinimalTask) =>
+      !!t.timerRunning && isMine(t) && t.status !== "Concluído" && t.status !== "Arquivado";
+    // Retorna o nó que bateu + o id da tarefa de TOPO — não existe "abrir
+    // só a subtarefa", o diálogo é sempre o da tarefa raiz que a contém.
+    const findActive = (
+      list: MinimalTask[],
+      rootId?: string,
+    ): { node: MinimalTask; rootId: string } | null => {
+      for (const t of list) {
+        const thisRootId = rootId ?? t.id;
+        if (isActive(t)) return { node: t, rootId: thisRootId };
+        const nested = findActive(t.subtasks ?? [], thisRootId);
+        if (nested) return nested;
+      }
+      return null;
+    };
     for (const p of loadProjetos()) {
-      const found = flatten((p.tasks ?? []) as MinimalTask[]).find(
-        (t) => t.timerRunning && isMine(t),
-      );
+      const found = findActive((p.tasks ?? []) as MinimalTask[]);
       if (found) {
         return {
-          title: found.title,
-          startedAt: found.timerStartedAt,
+          title: found.node.title,
+          startedAt: found.node.timerStartedAt,
           section: "projetos" as const,
-          taskId: found.id,
+          taskId: found.rootId,
           projectId: p.id,
         };
       }
     }
     for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
-      const found = (tasks as MinimalTask[]).find((t) => t.timerRunning && isMine(t));
+      const found = findActive(tasks as MinimalTask[]);
       if (found) {
         return {
-          title: found.title,
-          startedAt: found.timerStartedAt,
+          title: found.node.title,
+          startedAt: found.node.timerStartedAt,
           section: "campanhas" as const,
-          taskId: found.id,
+          taskId: found.rootId,
           campanhaId,
         };
       }
