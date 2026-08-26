@@ -11,7 +11,8 @@ export type FeatureKey =
   | "trafego_pago"
   | "blog"
   | "aeo_monitor"
-  | "bugs_sugestoes";
+  | "bugs_sugestoes"
+  | "fluxos_email";
 
 export const FEATURES: {
   key: FeatureKey;
@@ -72,6 +73,12 @@ export const FEATURES: {
     label: "Bugs & Sugestões",
     hint: "Relatos de bug e ideias sobre o HypeApp, com status de resolução.",
     group: "core",
+  },
+  {
+    key: "fluxos_email",
+    label: "Fluxos de e-mail",
+    hint: "Sequências automáticas de e-mail por gatilho — leads, clientes e influenciadores.",
+    group: "marketing",
   },
 ];
 

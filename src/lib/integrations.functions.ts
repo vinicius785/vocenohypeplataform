@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
+export async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
   const { data, error } = await supabase.rpc("is_admin", { _user_id: userId });
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Apenas administradores podem gerenciar integrações.");

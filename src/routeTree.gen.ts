@@ -16,8 +16,10 @@ import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
+import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
+import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -55,6 +57,11 @@ const AuthenticatedPrimeiroAcessoRoute =
     path: '/primeiro-acesso',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
+  id: '/email/descadastro/$token',
+  path: '/email/descadastro/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
   id: '/api/public/leads',
   path: '/api/public/leads',
@@ -63,6 +70,11 @@ const ApiPublicLeadsRoute = ApiPublicLeadsRouteImport.update({
 const ApiGoogleOauthCallbackRoute = ApiGoogleOauthCallbackRouteImport.update({
   id: '/api/google/oauth-callback',
   path: '/api/google/oauth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronEmailFlowsRoute = ApiCronEmailFlowsRouteImport.update({
+  id: '/api/cron/email-flows',
+  path: '/api/cron/email-flows',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
@@ -79,8 +91,10 @@ export interface FileRoutesByFullPath {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,8 +104,10 @@ export interface FileRoutesByTo {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,8 +119,10 @@ export interface FileRoutesById {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
+  '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
+  '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -116,8 +134,10 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
+    | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/email/descadastro/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -127,8 +147,10 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
+    | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/email/descadastro/$token'
   id:
     | '__root__'
     | '/'
@@ -139,8 +161,10 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal/$token'
     | '/_authenticated/projeto/$id'
+    | '/api/cron/email-flows'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
+    | '/email/descadastro/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -149,8 +173,10 @@ export interface RootRouteChildren {
   BugsTokenRoute: typeof BugsTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   PortalTokenRoute: typeof PortalTokenRoute
+  ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
+  EmailDescadastroTokenRoute: typeof EmailDescadastroTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -204,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrimeiroAcessoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/email/descadastro/$token': {
+      id: '/email/descadastro/$token'
+      path: '/email/descadastro/$token'
+      fullPath: '/email/descadastro/$token'
+      preLoaderRoute: typeof EmailDescadastroTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/leads': {
       id: '/api/public/leads'
       path: '/api/public/leads'
@@ -216,6 +249,13 @@ declare module '@tanstack/react-router' {
       path: '/api/google/oauth-callback'
       fullPath: '/api/google/oauth-callback'
       preLoaderRoute: typeof ApiGoogleOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/email-flows': {
+      id: '/api/cron/email-flows'
+      path: '/api/cron/email-flows'
+      fullPath: '/api/cron/email-flows'
+      preLoaderRoute: typeof ApiCronEmailFlowsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/projeto/$id': {
@@ -249,8 +289,10 @@ const rootRouteChildren: RootRouteChildren = {
   BugsTokenRoute: BugsTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   PortalTokenRoute: PortalTokenRoute,
+  ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
+  EmailDescadastroTokenRoute: EmailDescadastroTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

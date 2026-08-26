@@ -5,5 +5,11 @@
       "source": "/version.json",
       "headers": [{ "key": "Cache-Control", "value": "no-store, must-revalidate" }]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/email-flows",
+      "schedule": "0 13 * * *"
+    }
   ]
 }

@@ -17,6 +17,7 @@ import {
   LayoutPanelTop,
   Radar,
   Bug,
+  Mail,
 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { BackButton } from "@/components/BackButton";
@@ -44,6 +45,7 @@ import { EditorialPanel } from "@/components/marketing/EditorialPanel";
 import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
 import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
+import { FluxosEmailPanel } from "@/components/marketing/FluxosEmailPanel";
 import { formatIsoDate } from "@/lib/utils";
 import {
   InfluencerBoard,
@@ -75,6 +77,7 @@ const ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
   blog: Newspaper,
   aeo_monitor: Radar,
   bugs_sugestoes: Bug,
+  fluxos_email: Mail,
 };
 
 function renderPanel(
@@ -104,6 +107,7 @@ function renderPanel(
   if (k === "blog") return <BlogPanel project={project} update={update} />;
   if (k === "aeo_monitor") return <AeoMonitorPanel />;
   if (k === "bugs_sugestoes") return <ProjectBugsPanel project={project} update={update} />;
+  if (k === "fluxos_email") return <FluxosEmailPanel />;
   return <SectionPanel project={project} update={update} featureKey={k} />;
 }
 

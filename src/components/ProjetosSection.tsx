@@ -20,6 +20,7 @@ import {
   LayoutPanelTop,
   Radar,
   Bug,
+  Mail,
 } from "lucide-react";
 import {
   FEATURES,
@@ -47,6 +48,7 @@ const FEATURE_ICONS: Record<FeatureKey, React.ComponentType<{ className?: string
   blog: Newspaper,
   aeo_monitor: Radar,
   bugs_sugestoes: Bug,
+  fluxos_email: Mail,
 };
 
 export function ProjetosSection() {
