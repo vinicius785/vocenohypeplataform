@@ -91,6 +91,30 @@ const EntregaPublic = z.object({
     .optional(),
   roteiroReprovacao: ClienteVeredito.optional(),
   conteudoReprovacao: ClienteVeredito.optional(),
+  /** Linha do tempo da entrega ("roteiro enviado pra sua aprovação em...",
+   * "você aprovou o conteúdo em...") — sem isso o portal só mostrava o
+   * estado atual, sem dizer quando cada etapa realmente aconteceu. `key`
+   * é traduzida no portal via `t()` (i18n do portal) — nunca manda o
+   * rótulo já formatado, senão fica preso em português pra quem usa
+   * es/en. */
+  historico: z
+    .array(
+      z.object({
+        key: z.enum([
+          "histRoteiroEnviado",
+          "histRoteiroAjustesRecebidos",
+          "histConteudoEnviado",
+          "histConteudoAjustesRecebidos",
+          "histPublicado",
+          "histRoteiroAprovado",
+          "histConteudoAprovado",
+          "histRoteiroAjustesSolicitados",
+          "histConteudoAjustesSolicitados",
+        ]),
+        at: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 const StatusHistoryEntry = z.object({ status: z.string(), at: z.string() });
@@ -136,10 +160,56 @@ function statusHistoryFor(influ: Influ): { status: string; at: string }[] {
     .sort((a, b) => a.at.localeCompare(b.at));
 }
 
+type EntregaHistoryKey =
+  | "histRoteiroEnviado"
+  | "histRoteiroAjustesRecebidos"
+  | "histConteudoEnviado"
+  | "histConteudoAjustesRecebidos"
+  | "histPublicado"
+  | "histRoteiroAprovado"
+  | "histConteudoAprovado"
+  | "histRoteiroAjustesSolicitados"
+  | "histConteudoAjustesSolicitados";
+
+/** Traduz o log interno de atividade (`activity`, nunca exposto cru pro
+ * portal) de UMA entrega específica pros marcos que fazem sentido pro
+ * cliente ver — mesma ideia de `statusHistoryFor`, só que por entrega e
+ * casando pelo texto das ações já geradas em InfluencerBoard.tsx
+ * (`ENTREGA_ACTION_LOG`) e campanha-aprovacao.ts (resposta do próprio
+ * cliente). Passos só-internos (anexar arquivo, mover manualmente de
+ * coluna) ficam de fora — não são um marco que o cliente precise ver.
+ * Devolve uma CHAVE (não o texto em português) — quem traduz pro idioma
+ * escolhido no portal é o `t()` do lado do cliente. */
+const ENTREGA_HISTORY_PATTERNS: { test: RegExp; key: EntregaHistoryKey }[] = [
+  { test: /^enviou o roteiro pra aprovação/, key: "histRoteiroEnviado" },
+  { test: /^reconheceu os ajustes pedidos no roteiro/, key: "histRoteiroAjustesRecebidos" },
+  { test: /^enviou o conteúdo final pra aprovação/, key: "histConteudoEnviado" },
+  { test: /^reconheceu os ajustes pedidos no conteúdo/, key: "histConteudoAjustesRecebidos" },
+  { test: /^marcou como publicada/, key: "histPublicado" },
+  { test: /^aprovou o roteiro/, key: "histRoteiroAprovado" },
+  { test: /^aprovou o conteúdo/, key: "histConteudoAprovado" },
+  { test: /^solicitou ajustes em o roteiro/, key: "histRoteiroAjustesSolicitados" },
+  { test: /^solicitou ajustes em o conteúdo/, key: "histConteudoAjustesSolicitados" },
+];
+
+function entregaHistoryFor(
+  influ: Influ,
+  entregaId: string,
+): { key: EntregaHistoryKey; at: string }[] {
+  return (influ.activity ?? [])
+    .filter((a) => a.entregaId === entregaId)
+    .map((a) => {
+      const match = ENTREGA_HISTORY_PATTERNS.find((p) => p.test.test(a.action));
+      return match ? { key: match.key, at: a.createdAt } : null;
+    })
+    .filter((x): x is { key: EntregaHistoryKey; at: string } => !!x)
+    .sort((a, b) => a.at.localeCompare(b.at));
+}
+
 /** Projeta um `Influ` interno (que carrega telefone/email/contrato/bank/
  * comments/activity/checklist/pagamento por entrega) pro subconjunto seguro
  * de mostrar num link público — nunca o objeto cru. */
-function toPublicEntrega(e: Entrega): z.infer<typeof EntregaPublic> {
+function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic> {
   const stage = e.stage ?? "ROTEIRO_PRODUCAO";
   return {
     id: e.id,
@@ -156,6 +226,7 @@ function toPublicEntrega(e: Entrega): z.infer<typeof EntregaPublic> {
     metrics: e.metrics,
     roteiroReprovacao: e.roteiroReprovacao,
     conteudoReprovacao: e.conteudoReprovacao,
+    historico: entregaHistoryFor(influ, e.id),
   };
 }
 
@@ -179,7 +250,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
       handle: r.handle,
       seguidores: r.seguidores,
     })),
-    entregas: influ.entregas.map(toPublicEntrega),
+    entregas: influ.entregas.map((e) => toPublicEntrega(e, influ)),
     profileMetrics: influ.profileMetrics,
     criadoEm: influ.createdAt,
     historico: statusHistoryFor(influ),

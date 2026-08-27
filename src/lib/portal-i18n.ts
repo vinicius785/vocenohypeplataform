@@ -124,6 +124,16 @@ const pt: Dict = {
   acoesPendentes: "Ações pendentes",
   acoesPendentesCount: "{n} aguardando sua aprovação",
   revisar: "Revisar",
+  entregaHistorico: "Histórico",
+  histRoteiroEnviado: "Roteiro enviado para sua aprovação",
+  histRoteiroAjustesRecebidos: "Equipe recebeu seus ajustes no roteiro",
+  histConteudoEnviado: "Conteúdo final enviado para sua aprovação",
+  histConteudoAjustesRecebidos: "Equipe recebeu seus ajustes no conteúdo",
+  histPublicado: "Conteúdo publicado",
+  histRoteiroAprovado: "Você aprovou o roteiro",
+  histConteudoAprovado: "Você aprovou o conteúdo",
+  histRoteiroAjustesSolicitados: "Você pediu ajustes no roteiro",
+  histConteudoAjustesSolicitados: "Você pediu ajustes no conteúdo",
 };
 
 const es: Dict = {
@@ -230,6 +240,16 @@ const es: Dict = {
   acoesPendentes: "Acciones pendientes",
   acoesPendentesCount: "{n} esperando tu aprobación",
   revisar: "Revisar",
+  entregaHistorico: "Historial",
+  histRoteiroEnviado: "Guion enviado para tu aprobación",
+  histRoteiroAjustesRecebidos: "El equipo recibió tus ajustes en el guion",
+  histConteudoEnviado: "Contenido final enviado para tu aprobación",
+  histConteudoAjustesRecebidos: "El equipo recibió tus ajustes en el contenido",
+  histPublicado: "Contenido publicado",
+  histRoteiroAprovado: "Aprobaste el guion",
+  histConteudoAprovado: "Aprobaste el contenido",
+  histRoteiroAjustesSolicitados: "Pediste ajustes en el guion",
+  histConteudoAjustesSolicitados: "Pediste ajustes en el contenido",
 };
 
 const en: Dict = {
@@ -336,6 +356,16 @@ const en: Dict = {
   acoesPendentes: "Pending actions",
   acoesPendentesCount: "{n} waiting for your approval",
   revisar: "Review",
+  entregaHistorico: "History",
+  histRoteiroEnviado: "Script sent for your approval",
+  histRoteiroAjustesRecebidos: "Team received your script feedback",
+  histConteudoEnviado: "Final content sent for your approval",
+  histConteudoAjustesRecebidos: "Team received your content feedback",
+  histPublicado: "Content published",
+  histRoteiroAprovado: "You approved the script",
+  histConteudoAprovado: "You approved the content",
+  histRoteiroAjustesSolicitados: "You requested changes to the script",
+  histConteudoAjustesSolicitados: "You requested changes to the content",
 };
 
 const DICTS: Record<PortalLang, Dict> = { "pt-BR": pt, es, "en-US": en };

@@ -194,6 +194,9 @@ type PublicEntrega = {
   metrics?: PostMetrics;
   roteiroReprovacao?: Veredito;
   conteudoReprovacao?: Veredito;
+  /** `key` traduzida via `t()` — ver ENTREGA_HISTORY_PATTERNS em
+   * cliente-link.functions.ts. */
+  historico?: { key: string; at: string }[];
 };
 type PublicInfluencer = {
   id: string;
@@ -1443,6 +1446,29 @@ function InfluencerDetail({
                               lang={lang}
                               nome={inf.nome}
                             />
+                          </div>
+                        )}
+
+                        {e.historico && e.historico.length > 0 && (
+                          <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                              {t(lang, "entregaHistorico")}
+                            </p>
+                            <div className="space-y-1">
+                              {e.historico.map((h, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between gap-3 text-xs"
+                                >
+                                  <span className="text-foreground">
+                                    {t(lang, h.key as Parameters<typeof t>[1])}
+                                  </span>
+                                  <span className="shrink-0 text-muted-foreground">
+                                    {fmtDateTime(h.at)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
