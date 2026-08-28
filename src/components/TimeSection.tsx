@@ -38,7 +38,12 @@ import {
   BUCKET_ORDER,
   type DashTask,
 } from "@/lib/task-aggregation";
-import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
+import {
+  OPEN_CAMPANHA_TASK_KEY,
+  OPEN_MEMBER_KEY,
+  OPEN_MEMBER_EVENT,
+  type SectionKey,
+} from "@/components/AppShell";
 import { TeamDashboard } from "@/components/team/TeamDashboard";
 import type { AttentionTab } from "@/components/team/AttentionTasks";
 import { avatarAccent, initialsOf, PresenceDot } from "@/components/team/member-ui";
@@ -286,6 +291,30 @@ function DiretorioTab() {
   useEffect(() => onMeetingsChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onStandaloneChange(() => setTick((t) => t + 1)), []);
+
+  // Deep link vindo de uma @menção de pessoa no Chat (mesmo padrão de
+  // OPEN_CAMPANHA_TASK_KEY) — abre o MemberViewDialog já existente em vez de
+  // um popover de perfil novo. `members` carrega assíncrono, então tenta de
+  // novo sempre que a lista mudar.
+  useEffect(() => {
+    const openFromSession = () => {
+      try {
+        const raw = sessionStorage.getItem(OPEN_MEMBER_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { memberId?: string };
+        if (!parsed.memberId) return;
+        const match = members.find((m) => m.id === parsed.memberId);
+        if (!match) return;
+        sessionStorage.removeItem(OPEN_MEMBER_KEY);
+        setViewing(match);
+      } catch {
+        /* ignore */
+      }
+    };
+    openFromSession();
+    window.addEventListener(OPEN_MEMBER_EVENT, openFromSession);
+    return () => window.removeEventListener(OPEN_MEMBER_EVENT, openFromSession);
+  }, [members]);
 
   const clientes = useClientes();
   const campanhaNames = useMemo(() => {

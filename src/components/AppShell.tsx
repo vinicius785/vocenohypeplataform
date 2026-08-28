@@ -87,6 +87,16 @@ export const OPEN_CAMPANHA_TASK_KEY = "campanhas:openTask";
  * no mesmo destino não abria nada). */
 export const OPEN_CAMPANHA_TASK_EVENT = "campanhas:openTask:event";
 
+/** Mesmo padrão acima, pra abrir um cliente específico a partir de uma
+ * @menção no Chat — `ClientesSection` lê isso ao montar/escutar o evento. */
+export const OPEN_CLIENTE_KEY = "clientes:openCliente";
+export const OPEN_CLIENTE_EVENT = "clientes:openCliente:event";
+
+/** Mesmo padrão, pra abrir o perfil de um membro do time a partir de uma
+ * @menção no Chat — `DiretorioTab` (Time) lê isso ao montar/escutar o evento. */
+export const OPEN_MEMBER_KEY = "time:openMember";
+export const OPEN_MEMBER_EVENT = "time:openMember:event";
+
 type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
 type NavGroup = { title: string; items: NavItem[] };
 

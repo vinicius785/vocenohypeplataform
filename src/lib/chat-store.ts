@@ -33,7 +33,11 @@ export const STATUS_LABEL: Record<MemberStatus, string> = {
   offline: "Offline",
 };
 
-export type ChatMention = { kind: "task" | "user"; id: string; label: string };
+export type ChatMention = {
+  kind: "task" | "user" | "project" | "campaign" | "client";
+  id: string;
+  label: string;
+};
 
 export type ChatAttachment = {
   path: string; // storage path in the chat-attachments bucket

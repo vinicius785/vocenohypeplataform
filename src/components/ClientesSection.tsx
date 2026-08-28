@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   ImageIcon,
@@ -26,6 +26,7 @@ import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { loadMembers } from "@/lib/chat-store";
 import { SectionHeader } from "./SectionHeader";
 import { useConfirm } from "@/hooks/use-confirm";
+import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
 
 const emptyForm: Omit<Cliente, "id" | "campanhas"> = {
   photo: undefined,
@@ -65,6 +66,30 @@ export function ClientesSection() {
   const { confirm, confirmDialog } = useConfirm();
 
   const selected = clientes.find((c) => c.id === selectedId) ?? null;
+
+  // Deep link vindo de uma @menção de cliente no Chat (mesmo padrão de
+  // OPEN_CAMPANHA_TASK_KEY em CampanhasSection) — `clientes` só carrega de
+  // forma assíncrona, então tenta de novo sempre que a lista mudar, e só
+  // limpa o sessionStorage quando encontrar o cliente de verdade.
+  useEffect(() => {
+    const openFromSession = () => {
+      try {
+        const raw = sessionStorage.getItem(OPEN_CLIENTE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as { clienteId?: string };
+        if (!parsed.clienteId) return;
+        const match = clientes.find((c) => c.id === parsed.clienteId);
+        if (!match) return;
+        sessionStorage.removeItem(OPEN_CLIENTE_KEY);
+        setSelectedId(match.id);
+      } catch {
+        /* ignore */
+      }
+    };
+    openFromSession();
+    window.addEventListener(OPEN_CLIENTE_EVENT, openFromSession);
+    return () => window.removeEventListener(OPEN_CLIENTE_EVENT, openFromSession);
+  }, [clientes]);
 
   const copyClientLink = (cliente: Cliente) => {
     let token = cliente.publicToken;

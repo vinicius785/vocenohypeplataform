@@ -71,7 +71,21 @@ import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
-import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
+import {
+  OPEN_CAMPANHA_TASK_KEY,
+  OPEN_CLIENTE_KEY,
+  OPEN_MEMBER_KEY,
+  type SectionKey,
+} from "@/components/AppShell";
+import {
+  MENTION_KIND_CONFIG,
+  MENTION_KIND_ORDER,
+  contextBoost,
+  matchScore,
+  type MentionContext,
+  type MentionKind,
+  type MentionOption,
+} from "@/lib/mention-kinds";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
 import { CreateChannelModal } from "@/components/CreateChannelModal";
@@ -154,7 +168,7 @@ export function ChatSection() {
   useEffect(() => onCampanhaTarefasChange(() => forceTasks((n) => n + 1)), []);
   useEffect(() => onStandaloneChange(() => forceTasks((n) => n + 1)), []);
 
-  const tasks = useMemo<ChatTaskInfo[]>(() => {
+  const { tasks, projects } = useMemo<{ tasks: ChatTaskInfo[]; projects: MentionOption[] }>(() => {
     const projs = loadProjetos();
     let marketingProjectId: string | undefined;
     const projectTasks = projs.flatMap((p) => {
@@ -204,7 +218,16 @@ export function ChatSection() {
           assignees: getTaskAssignees(s),
         }))
       : [];
-    return [...projectTasks, ...campanhaTasks, ...standaloneTasks];
+    const projectOptions: MentionOption[] = projs.map((p) => ({
+      kind: "project",
+      id: p.id,
+      label: p.name,
+      hint: "Projeto",
+    }));
+    return {
+      tasks: [...projectTasks, ...campanhaTasks, ...standaloneTasks],
+      projects: projectOptions,
+    };
   }, [campanhaNameMap]);
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const navigate = useNavigate();
@@ -221,6 +244,96 @@ export function ChatSection() {
     }
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId } });
   };
+  const openMemberProfile = (memberId: string) => {
+    sessionStorage.setItem(OPEN_MEMBER_KEY, JSON.stringify({ memberId }));
+    navigate({ to: "/time", search: { section: "time" satisfies SectionKey } });
+  };
+  const openCliente = (clienteId: string) => {
+    sessionStorage.setItem(OPEN_CLIENTE_KEY, JSON.stringify({ clienteId }));
+    navigate({ to: "/time", search: { section: "clientes" satisfies SectionKey } });
+  };
+  const openCampanha = (campanhaId: string) => {
+    sessionStorage.setItem(OPEN_CAMPANHA_TASK_KEY, JSON.stringify({ campanhaId }));
+    navigate({ to: "/time", search: { section: "campanhas" satisfies SectionKey } });
+  };
+  /** Dispatch único de clique em qualquer @menção inline (generaliza o
+   * `openTask` de hoje, que era o único tipo clicável) — cada kind decide
+   * pra onde navegar, sem se preocupar com o resto. */
+  const openMention = (m: ChatMention) => {
+    if (m.kind === "task") return openTask(m.id);
+    if (m.kind === "user") return openMemberProfile(m.id);
+    if (m.kind === "project") {
+      navigate({ to: "/projeto/$id", params: { id: m.id } });
+      return;
+    }
+    if (m.kind === "campaign") return openCampanha(m.id);
+    if (m.kind === "client") return openCliente(m.id);
+  };
+
+  const campaigns = useMemo<MentionOption[]>(() => {
+    const out: MentionOption[] = [];
+    for (const c of clientes) {
+      for (const camp of c.campanhas ?? []) {
+        out.push({
+          kind: "campaign",
+          id: camp.id,
+          label: camp.nome,
+          photo: c.photo,
+          hint: `Campanha · ${c.empresa}`,
+          clienteId: c.id,
+        });
+      }
+    }
+    return out;
+  }, [clientes]);
+
+  const clientMentions = useMemo<MentionOption[]>(
+    () =>
+      clientes.map((c) => ({
+        kind: "client",
+        id: c.id,
+        label: c.empresa,
+        photo: c.photo,
+        hint: "Cliente",
+      })),
+    [clientes],
+  );
+
+  // Contexto do canal ativo, só pra RANKING (nunca limita disponibilidade —
+  // toda entidade continua pesquisável em qualquer canal). Aproximação
+  // honesta de "pessoas envolvidas": responsáveis das tarefas do
+  // canal/campanha atual, já que não existe um conceito real de "membros do
+  // canal" no chat.
+  const mentionContext = useMemo<MentionContext>(() => {
+    const recentUserIds: string[] = [];
+    const seenRecent = new Set<string>();
+    for (let i = convoMessages.length - 1; i >= 0 && recentUserIds.length < 5; i--) {
+      for (const m of convoMessages[i].mentions ?? []) {
+        if (m.kind === "user" && !seenRecent.has(m.id)) {
+          seenRecent.add(m.id);
+          recentUserIds.push(m.id);
+        }
+      }
+    }
+    const contextAssigneeIds: string[] = [];
+    if (activeCampaign || activeProject) {
+      const relevantNames = new Set<string>();
+      for (const t of tasks) {
+        const inCampaign = activeCampaign && t.campanhaId === activeCampaign.id;
+        const inProject = activeProject && t.projectId === activeProject.id && !t.campanhaId;
+        if (inCampaign || inProject) for (const name of t.assignees) relevantNames.add(name);
+      }
+      for (const mem of members) if (relevantNames.has(mem.name)) contextAssigneeIds.push(mem.id);
+    }
+    return {
+      dmPartnerId: activeDmPartner?.id,
+      campanhaId: activeCampaign?.id,
+      projetoId: activeProject?.id,
+      clienteId: activeCampaign?.clienteId,
+      recentUserIds,
+      contextAssigneeIds,
+    };
+  }, [convoMessages, activeCampaign, activeProject, activeDmPartner, tasks, members]);
 
   const messagesById = useMemo(() => {
     const map = new Map<string, ChatMessage>();
@@ -465,10 +578,14 @@ export function ChatSection() {
               allowUserMentions={!isDm}
               members={members}
               tasks={tasks}
+              projects={projects}
+              campaigns={campaigns}
+              clients={clientMentions}
               isDm={isDm}
               otherUserId={activeDmPartner?.id}
               typingUsers={typingUsers}
               onOpenTask={openTask}
+              onOpenMention={openMention}
             />
 
             {!isSelfDm && (
@@ -479,6 +596,10 @@ export function ChatSection() {
                 allowUserMentions={!isDm}
                 members={members}
                 tasks={tasks}
+                projects={projects}
+                campaigns={campaigns}
+                clients={clientMentions}
+                mentionContext={mentionContext}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
                 placeholder={
@@ -928,14 +1049,6 @@ function ChatConversationList({
   );
 }
 
-type MentionOption = {
-  kind: "task" | "user";
-  id: string;
-  label: string;
-  hint?: string;
-  photo?: string;
-};
-
 const CHAT_TASK_STATUS_TONE: Record<string, string> = {
   Aberto: "bg-muted text-muted-foreground",
   "Em andamento": "bg-sky-500/15 text-sky-700 dark:text-sky-400",
@@ -982,11 +1095,17 @@ function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: st
   );
 }
 
-/** Texto da mensagem com @menções inline (pessoa OU tarefa) — sempre um
- * badge de texto simples, nunca um bloco maior aqui dentro, pra não quebrar
- * o fluxo do parágrafo. Cards de tarefa mencionada aparecem à parte, como
- * blocos abaixo do texto (ver `taskMentionsOf`), no estilo ClickUp. */
-function renderText(text: string, mentions: ChatMention[] | undefined) {
+/** Texto da mensagem com @menções inline (pessoa/tarefa/projeto/campanha/
+ * cliente) — sempre um badge de texto simples, nunca um bloco maior aqui
+ * dentro, pra não quebrar o fluxo do parágrafo. Cards de tarefa mencionada
+ * aparecem à parte, como blocos abaixo do texto (ver `taskMentionsOf`).
+ * Cada badge é clicável (`onOpenMention`) — antes só a tarefa tinha uma
+ * forma de abrir (o card separado), a menção inline em si nunca abria nada. */
+function renderText(
+  text: string,
+  mentions: ChatMention[] | undefined,
+  onOpenMention: (m: ChatMention) => void,
+) {
   const parts: (string | ChatMention)[] = !mentions || mentions.length === 0 ? [text] : [text];
   if (mentions && mentions.length > 0) {
     for (const m of mentions) {
@@ -1006,16 +1125,14 @@ function renderText(text: string, mentions: ChatMention[] | undefined) {
   return parts.map((p, i) => {
     if (typeof p === "string") return <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>;
     return (
-      <span
+      <button
         key={i}
-        className={`rounded px-1 py-0.5 text-xs font-medium ${
-          p.kind === "task"
-            ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-            : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-        }`}
+        type="button"
+        onClick={() => onOpenMention(p)}
+        className={`rounded px-1 py-0.5 text-xs font-medium hover:underline ${MENTION_KIND_CONFIG[p.kind].badgeClass}`}
       >
         @{p.label}
-      </span>
+      </button>
     );
   });
 }
@@ -1051,10 +1168,14 @@ function MessageList({
   allowUserMentions,
   members,
   tasks,
+  projects,
+  campaigns,
+  clients,
   isDm,
   otherUserId,
   typingUsers,
   onOpenTask,
+  onOpenMention,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -1067,10 +1188,14 @@ function MessageList({
   allowUserMentions: boolean;
   members: ChatMember[];
   tasks: ChatTaskInfo[];
+  projects: MentionOption[];
+  campaigns: MentionOption[];
+  clients: MentionOption[];
   isDm: boolean;
   otherUserId?: string;
   typingUsers: { userId: string; userName: string }[];
   onOpenTask: (taskId: string) => void;
+  onOpenMention: (m: ChatMention) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1230,6 +1355,9 @@ function MessageList({
                     allowUserMentions={allowUserMentions}
                     members={members}
                     tasks={tasks}
+                    projects={projects}
+                    campaigns={campaigns}
+                    clients={clients}
                     onCancel={() => setEditingId(null)}
                     onSave={(text, mentions) => {
                       onEdit(m.id, text, mentions);
@@ -1240,7 +1368,7 @@ function MessageList({
                   <div className="flex w-full flex-col items-start gap-1.5">
                     {m.text && (
                       <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                        {renderText(m.text, m.mentions)}
+                        {renderText(m.text, m.mentions, onOpenMention)}
                         {m.editedAt && (
                           <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>
                         )}
@@ -1402,26 +1530,52 @@ function formatDayLabel(ts: number) {
   });
 }
 
+type MentionSourceTask = {
+  id: string;
+  label: string;
+  project?: string;
+  campanhaId?: string;
+  projectId?: string;
+};
+
 /**
  * Reusable input with @ mention picker. Extracts mentions used in final text.
+ * Junta os 5 tipos mencionáveis num só array de opções, já com o boost de
+ * contexto (`context`) calculado por opção — sem context, fica sem boost
+ * (usado em edição de mensagem antiga, onde o ranking contextual não é
+ * essencial).
  */
 function useMentions(
   members: ChatMember[],
-  tasks: { id: string; label: string; project?: string }[],
+  tasks: MentionSourceTask[],
+  projects: MentionOption[],
+  campaigns: MentionOption[],
+  clients: MentionOption[],
   allowUserMentions: boolean,
+  context?: MentionContext,
 ) {
   const options = useMemo<MentionOption[]>(() => {
     const t: MentionOption[] = tasks.map((x) => ({
       kind: "task",
       id: x.id,
       label: x.label,
-      hint: x.project,
+      hint: x.project ? `Projeto: ${x.project}` : undefined,
+      campanhaId: x.campanhaId,
+      projectId: x.projectId,
     }));
     const u: MentionOption[] = allowUserMentions
-      ? members.map((m) => ({ kind: "user", id: m.id, label: m.name, photo: m.photo }))
+      ? members.map((m) => ({
+          kind: "user",
+          id: m.id,
+          label: m.name,
+          photo: m.photo,
+          hint: m.role,
+        }))
       : [];
-    return [...t, ...u];
-  }, [members, tasks, allowUserMentions]);
+    const all = [...u, ...t, ...projects, ...campaigns, ...clients];
+    if (!context) return all;
+    return all.map((o) => ({ ...o, boost: contextBoost(o, context) }));
+  }, [members, tasks, projects, campaigns, clients, allowUserMentions, context]);
   return options;
 }
 
@@ -1445,18 +1599,24 @@ function InlineEditor({
   allowUserMentions,
   members,
   tasks,
+  projects,
+  campaigns,
+  clients,
   onSave,
   onCancel,
 }: {
   initialText: string;
   allowUserMentions: boolean;
   members: ChatMember[];
-  tasks: { id: string; label: string; project?: string }[];
+  tasks: MentionSourceTask[];
+  projects: MentionOption[];
+  campaigns: MentionOption[];
+  clients: MentionOption[];
   onSave: (text: string, mentions: ChatMention[]) => void;
   onCancel: () => void;
 }) {
   const [value, setValue] = useState(initialText);
-  const options = useMentions(members, tasks, allowUserMentions);
+  const options = useMentions(members, tasks, projects, campaigns, clients, allowUserMentions);
   return (
     <div className="mt-1">
       <MentionTextarea value={value} onChange={setValue} options={options} autoFocus rows={2} />
@@ -1477,6 +1637,73 @@ function InlineEditor({
     </div>
   );
 }
+
+/** Círculo com foto/inicial (+ bolinha de presença) pra pessoa; ícone lucide
+ * num quadrado colorido (`MENTION_KIND_CONFIG`) pra tudo mais — mesma
+ * convenção "círculo pra pessoa, quadrado pro resto" que a lista já usava,
+ * só trocando a letra "T" solta por um ícone de verdade por kind. */
+function MentionResultIcon({ opt }: { opt: MentionOption }) {
+  if (opt.kind === "user") {
+    const status = getStatus(opt.id);
+    return (
+      <span className="relative h-5 w-5 shrink-0">
+        {opt.photo ? (
+          <img src={opt.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
+        ) : (
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-sky-500/20 text-[9px] font-semibold text-sky-700 dark:text-sky-300">
+            {opt.label.trim()[0]?.toUpperCase() ?? "?"}
+          </span>
+        )}
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ring-1 ring-background ${STATUS_COLOR[status]}`}
+        />
+      </span>
+    );
+  }
+  if (opt.photo) {
+    return <img src={opt.photo} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />;
+  }
+  const { Icon, badgeClass } = MENTION_KIND_CONFIG[opt.kind];
+  return (
+    <span
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded ${badgeClass}`}
+    >
+      <Icon className="h-3 w-3" />
+    </span>
+  );
+}
+
+function MentionResultRow({
+  opt,
+  highlighted,
+  onPick,
+}: {
+  opt: MentionOption;
+  highlighted: boolean;
+  onPick: (opt: MentionOption) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onPick(opt);
+      }}
+      className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
+        highlighted ? "bg-muted" : "hover:bg-muted/60"
+      }`}
+    >
+      <MentionResultIcon opt={opt} />
+      <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+      {opt.hint && (
+        <span className="shrink-0 truncate text-[10px] text-muted-foreground">{opt.hint}</span>
+      )}
+    </button>
+  );
+}
+
+const MENTION_ALL_TAB_CAP = 5;
+const MENTION_KIND_TAB_CAP = 20;
 
 function MentionTextarea({
   value,
@@ -1501,11 +1728,13 @@ function MentionTextarea({
   const [search, setSearch] = useState("");
   const [triggerAt, setTriggerAt] = useState(-1);
   const [highlight, setHighlight] = useState(0);
-  const [tab, setTab] = useState<"user" | "task">("user");
+  const [tab, setTab] = useState<MentionKind | "all">("all");
 
-  const hasUsers = useMemo(() => options.some((o) => o.kind === "user"), [options]);
-  const hasTasks = useMemo(() => options.some((o) => o.kind === "task"), [options]);
-  const showTabs = hasUsers && hasTasks;
+  const kindsWithOptions = useMemo(
+    () => MENTION_KIND_ORDER.filter((k) => options.some((o) => o.kind === k)),
+    [options],
+  );
+  const showTabs = kindsWithOptions.length > 1;
 
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
@@ -1524,18 +1753,49 @@ function MentionTextarea({
   // o "@" na mensagem — deixa procurar uma tarefa/pessoa sem precisar
   // digitar o nome dela dentro da própria mensagem.
   const effectiveQuery = search || query || "";
+  const trimmedQuery = effectiveQuery.trim();
 
-  const filtered = useMemo(() => {
+  // Sem busca (menu recém-aberto com só "@"): ordena só por `boost` de
+  // contexto — é literalmente a seção "Recentes" (pessoas do canal/DM,
+  // tarefas/campanha do canal ativo etc.), sem tabela nova nenhuma. Com
+  // busca: `matchScore` decide primeiro, `boost` só desempata.
+  const scored = useMemo(() => {
     if (query === null) return [];
-    const q = effectiveQuery.toLowerCase();
     return options
-      .filter((o) => o.kind === tab)
-      .filter((o) => o.label.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [query, effectiveQuery, options, tab]);
+      .map((o) => ({ o, score: trimmedQuery ? matchScore(o.label, trimmedQuery) : 0 }))
+      .filter(({ score }) => !trimmedQuery || score > 0)
+      .sort((a, b) => {
+        if (trimmedQuery && a.score !== b.score) return b.score - a.score;
+        return (b.o.boost ?? 0) - (a.o.boost ?? 0);
+      })
+      .map(({ o }) => o);
+  }, [query, options, trimmedQuery]);
 
-  const switchTab = (t: "user" | "task") => {
-    setTab(t);
+  // Aba "Todos": agrupado por tipo, até MENTION_ALL_TAB_CAP por grupo, com
+  // "Ver todos" quando há mais — cada item já carrega o índice plano (`idx`)
+  // usado pra navegação por teclado bater com a ordem visual.
+  const groupedForAll = useMemo(() => {
+    if (tab !== "all") return [];
+    let idx = 0;
+    return MENTION_KIND_ORDER.map((k) => {
+      const inKind = scored.filter((o) => o.kind === k);
+      const items = inKind.slice(0, MENTION_ALL_TAB_CAP).map((o) => ({ o, idx: idx++ }));
+      return { kind: k, items, total: inKind.length };
+    }).filter((g) => g.items.length > 0);
+  }, [scored, tab]);
+
+  const singleKindItems = useMemo(() => {
+    if (tab === "all") return [];
+    return scored.filter((o) => o.kind === tab).slice(0, MENTION_KIND_TAB_CAP);
+  }, [scored, tab]);
+
+  const filtered = useMemo(
+    () => (tab === "all" ? groupedForAll.flatMap((g) => g.items.map((x) => x.o)) : singleKindItems),
+    [tab, groupedForAll, singleKindItems],
+  );
+
+  const goToKind = (k: MentionKind | "all") => {
+    setTab(k);
     setSearch("");
     setHighlight(0);
   };
@@ -1552,10 +1812,10 @@ function MentionTextarea({
     setTriggerAt(at);
     setQuery(q);
     setHighlight(0);
-    // Só define a aba padrão quando o menu está abrindo (não a cada tecla
-    // digitada) — abre em "Pessoas" quando disponível, senão "Tarefas".
+    // Só reseta a aba quando o menu está abrindo (não a cada tecla digitada)
+    // — sempre abre em "Todos", que já mostra tudo agrupado por tipo.
     if (justOpened) {
-      setTab(hasUsers ? "user" : "task");
+      setTab("all");
       setSearch("");
     }
   };
@@ -1620,37 +1880,40 @@ function MentionTextarea({
         placeholder={placeholder}
         className="max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
       />
-      {query !== null && (showTabs || filtered.length > 0) && (
-        <div className="absolute bottom-full left-0 z-20 mb-1 w-64 overflow-hidden rounded-md border border-border bg-background shadow-lg">
+      {query !== null && options.length > 0 && (
+        <div className="absolute bottom-full left-0 z-20 mb-1 flex max-h-[28rem] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-background shadow-lg">
           {showTabs && (
-            <div className="flex border-b border-border">
+            <div className="flex shrink-0 overflow-x-auto border-b border-border">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => switchTab("user")}
-                className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
-                  tab === "user"
+                onClick={() => goToKind("all")}
+                className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium ${
+                  tab === "all"
                     ? "border-b-2 border-foreground text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Pessoas
+                Todos
               </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => switchTab("task")}
-                className={`flex-1 px-2 py-1.5 text-[11px] font-medium ${
-                  tab === "task"
-                    ? "border-b-2 border-foreground text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Tarefas
-              </button>
+              {kindsWithOptions.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => goToKind(k)}
+                  className={`shrink-0 px-2.5 py-1.5 text-[11px] font-medium ${
+                    tab === k
+                      ? "border-b-2 border-foreground text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {MENTION_KIND_CONFIG[k].label}
+                </button>
+              ))}
             </div>
           )}
-          <div className="border-b border-border p-1.5">
+          <div className="shrink-0 border-b border-border p-1.5">
             <input
               ref={searchRef}
               type="text"
@@ -1662,50 +1925,55 @@ function MentionTextarea({
               onKeyDown={(e) => {
                 pickerKeyDown(e);
               }}
-              placeholder={tab === "task" ? "Buscar tarefa..." : "Buscar pessoa..."}
+              placeholder={
+                tab === "all"
+                  ? "Buscar..."
+                  : `Buscar ${MENTION_KIND_CONFIG[tab].label.toLowerCase()}...`
+              }
               className="w-full rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
-          <ul className="max-h-56 overflow-auto">
+          <ul className="min-h-0 flex-1 overflow-auto py-1">
             {filtered.length === 0 ? (
               <li className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                Nada encontrado
+                {trimmedQuery ? `Nenhum resultado para "${trimmedQuery}"` : "Nada encontrado"}
               </li>
+            ) : tab === "all" ? (
+              <>
+                {!trimmedQuery && (
+                  <li className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Recentes
+                  </li>
+                )}
+                {groupedForAll.map((g) => (
+                  <li key={g.kind} className="mb-1 last:mb-0">
+                    <p className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {MENTION_KIND_CONFIG[g.kind].label}
+                    </p>
+                    <ul>
+                      {g.items.map(({ o, idx }) => (
+                        <li key={o.kind + ":" + o.id}>
+                          <MentionResultRow opt={o} highlighted={idx === highlight} onPick={pick} />
+                        </li>
+                      ))}
+                    </ul>
+                    {g.total > g.items.length && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => goToKind(g.kind)}
+                        className="w-full px-2 py-1 text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        Ver todos ({g.total})
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </>
             ) : (
-              filtered.map((o, i) => (
+              singleKindItems.map((o, i) => (
                 <li key={o.kind + ":" + o.id}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      pick(o);
-                    }}
-                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs ${
-                      i === highlight ? "bg-muted" : "hover:bg-muted/60"
-                    }`}
-                  >
-                    {o.kind === "user" ? (
-                      o.photo ? (
-                        <img
-                          src={o.photo}
-                          alt=""
-                          className="h-5 w-5 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500/20 text-[9px] font-semibold text-sky-700 dark:text-sky-300">
-                          {o.label.trim()[0]?.toUpperCase() ?? "?"}
-                        </span>
-                      )
-                    ) : (
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-amber-500/20 text-[9px] font-bold text-amber-700 dark:text-amber-300">
-                        T
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                    {o.hint && (
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{o.hint}</span>
-                    )}
-                  </button>
+                  <MentionResultRow opt={o} highlighted={i === highlight} onPick={pick} />
                 </li>
               ))
             )}
@@ -1934,6 +2202,10 @@ function Composer({
   allowUserMentions,
   members,
   tasks,
+  projects,
+  campaigns,
+  clients,
+  mentionContext,
   replyingTo,
   onCancelReply,
 }: {
@@ -1942,7 +2214,11 @@ function Composer({
   placeholder: string;
   allowUserMentions: boolean;
   members: ChatMember[];
-  tasks: { id: string; label: string; project?: string }[];
+  tasks: MentionSourceTask[];
+  projects: MentionOption[];
+  campaigns: MentionOption[];
+  clients: MentionOption[];
+  mentionContext: MentionContext;
   replyingTo: ChatMessage | null;
   onCancelReply: () => void;
 }) {
@@ -1955,7 +2231,15 @@ function Composer({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const options = useMentions(members, tasks, allowUserMentions);
+  const options = useMentions(
+    members,
+    tasks,
+    projects,
+    campaigns,
+    clients,
+    allowUserMentions,
+    mentionContext,
+  );
 
   const submit = () => {
     if (!value.trim() && pending.length === 0) return;
