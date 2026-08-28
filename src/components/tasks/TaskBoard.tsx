@@ -120,7 +120,7 @@ export const TASK_STATUS_DOT: Record<TaskStatus, string> = {
 
 export type TaskPriority = "Urgente" | "Alta" | "Normal" | "Baixa";
 const TASK_PRIORITIES: TaskPriority[] = ["Urgente", "Alta", "Normal", "Baixa"];
-const PRIORITY_TONE: Record<TaskPriority, string> = {
+export const PRIORITY_TONE: Record<TaskPriority, string> = {
   Urgente: "text-red-600 dark:text-red-400",
   Alta: "text-amber-600 dark:text-amber-400",
   Normal: "text-sky-600 dark:text-sky-400",

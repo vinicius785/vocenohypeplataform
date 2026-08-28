@@ -257,3 +257,106 @@ export function tasksDueToday(items: TaskItem[], today = todayISO()): TaskItem[]
 export function tasksOverdue(items: TaskItem[], today = todayISO()): TaskItem[] {
   return items.filter((t) => !!t.dueDate && t.dueDate < today && OPEN_STATUSES.has(t.status));
 }
+
+/* ============================================================
+ * Entregas por semana — tendência de produtividade do time (painel
+ * "Entregas por semana" da aba Time). Mesma fonte de "quando foi
+ * concluída" que já alimenta o score (`taskCompletionDate`), sem campo
+ * novo nem tabela nova.
+ * ============================================================ */
+export type WeekBucket = { weekStart: string; weekLabel: string; count: number };
+
+const MONTH_ABBR = [
+  "jan",
+  "fev",
+  "mar",
+  "abr",
+  "mai",
+  "jun",
+  "jul",
+  "ago",
+  "set",
+  "out",
+  "nov",
+  "dez",
+];
+
+/** Segunda-feira da semana que contém `dateISO` (semana sempre
+ * segunda→domingo, convenção comum de calendário de trabalho). */
+function startOfWeekISO(dateISO: string): string {
+  const d = new Date(`${dateISO}T00:00:00`);
+  const day = d.getDay(); // 0=dom..6=sáb
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function weekLabel(weekStartISO: string): string {
+  const start = new Date(`${weekStartISO}T00:00:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const sameMonth = start.getMonth() === end.getMonth();
+  return sameMonth
+    ? `${start.getDate()}–${end.getDate()} ${MONTH_ABBR[end.getMonth()]}`
+    : `${start.getDate()} ${MONTH_ABBR[start.getMonth()]}–${end.getDate()} ${MONTH_ABBR[end.getMonth()]}`;
+}
+
+/** Conclusões por semana (segunda a domingo), das últimas `weeks`
+ * semanas até a semana corrente — pra visualizar tendência de
+ * produtividade do time inteiro, não uma métrica de performance
+ * isolada. Recebe os mesmos grupos já montados por quem chama
+ * (`computeMemberScores`/`collectTaskItems`), sem duplicar a leitura de
+ * projetos/campanhas. */
+export function weeklyCompletions(
+  projetos: Project[],
+  campanhaGroups: TaskGroup[] = [],
+  weeks = 8,
+): WeekBucket[] {
+  const currentWeekStart = startOfWeekISO(todayISO());
+  const start = new Date(`${currentWeekStart}T00:00:00`);
+  const buckets: WeekBucket[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const d = new Date(start);
+    d.setDate(d.getDate() - i * 7);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    buckets.push({ weekStart: iso, weekLabel: weekLabel(iso), count: 0 });
+  }
+  const byStart = new Map(buckets.map((b) => [b.weekStart, b]));
+  const earliestStart = buckets[0].weekStart;
+
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
+    for (const t of flatten(p.tasks ?? [])) {
+      if (t.status !== "Concluído") continue;
+      const completedAt = taskCompletionDate(t);
+      if (!completedAt || completedAt < earliestStart) continue;
+      const bucket = byStart.get(startOfWeekISO(completedAt));
+      if (bucket) bucket.count += 1;
+    }
+  }
+  return buckets;
+}
+
+/** Quantas tarefas de UMA pessoa foram concluídas na semana corrente
+ * (segunda a domingo) — usado na visão individual do membro na aba
+ * Time (item "tarefas concluídas na semana"). Mesma fonte de dados de
+ * `weeklyCompletions`, só filtrado por responsável e por uma única
+ * semana, sem precisar carregar `activity` pra fora deste módulo. */
+export function memberCompletionsThisWeek(
+  personName: string,
+  projetos: Project[],
+  campanhaGroups: TaskGroup[] = [],
+): number {
+  const weekStart = startOfWeekISO(todayISO());
+  let count = 0;
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
+    for (const t of flatten(p.tasks ?? [])) {
+      if (t.status !== "Concluído" || !getTaskAssignees(t).includes(personName)) continue;
+      const completedAt = taskCompletionDate(t);
+      if (completedAt && completedAt >= weekStart) count += 1;
+    }
+  }
+  return count;
+}

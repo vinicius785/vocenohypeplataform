@@ -34,6 +34,17 @@ export type DashTask = {
   parentId?: string;
 };
 
+/** Mais urgente primeiro — ordem de prioridade visual reaproveitada em
+ * toda lista de `DashTask` (Início, aba Time, visão individual do
+ * membro), pra não duplicar o mesmo mapa em cada lugar. */
+export const BUCKET_ORDER: Record<DashTask["bucket"], number> = {
+  atrasada: 0,
+  hoje: 1,
+  amanha: 2,
+  semana: 3,
+  outro: 4,
+};
+
 export function bucketFor(
   dueISO: string | undefined,
   status: ProjTask["status"],
@@ -188,6 +199,101 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
  * inteiro à toa. */
 export function loadAllTasks(campanhaNames: Map<string, string>, personName: string): DashTask[] {
   return loadTasksByAssignee(campanhaNames).get(personName) ?? [];
+}
+
+export type DashTaskFlat = DashTask & { assignees: string[] };
+
+/** Mesmo espírito de `collectAssignedTasks`, mas chama `push` uma vez por
+ * TAREFA (não uma vez por responsável) — usado por `loadAllTasksFlat`,
+ * que precisa de uma linha por tarefa com a lista completa de
+ * responsáveis (pra mostrar todos os avatares), ao contrário de
+ * `loadTasksByAssignee` (que espalha a mesma tarefa por nome). */
+function collectAllTasks<T extends CampanhaTaskLike>(
+  items: T[],
+  parentTitle: string | undefined,
+  push: (t: T, parentTitle: string | undefined, assignees: string[]) => void,
+): void {
+  for (const t of items) {
+    push(t, parentTitle, getTaskAssignees(t));
+    if (t.subtasks?.length) {
+      collectAllTasks(t.subtasks as T[], t.title, push);
+    }
+  }
+}
+
+/** Lista achatada de TODAS as tarefas da plataforma (projetos + campanhas
+ * + avulsas do Marketing), uma linha por tarefa (não por responsável),
+ * com `assignees: string[]` completo. Usado pelo dashboard da aba Time
+ * (painel "Tarefas que precisam de atenção" e donut "Tarefas por
+ * status"), que precisa mostrar cada tarefa uma única vez com todos os
+ * avatares dos responsáveis — ao contrário de `loadTasksByAssignee`
+ * (pensado pra "tarefas de UMA pessoa", então espalha por nome). */
+export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFlat[] {
+  const out: DashTaskFlat[] = [];
+
+  const projs = loadProjetos();
+  let marketingProjectId: string | undefined;
+  for (const p of projs) {
+    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+    for (const root of p.tasks ?? []) {
+      collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
+        const b = bucketFor(t.dueDate, t.status);
+        out.push({
+          id: t.id,
+          projectId: p.id,
+          projectName: p.name,
+          title: t.title,
+          bucket: b,
+          due: formatDue(t.dueDate, b),
+          priority: t.priority,
+          status: t.status,
+          parentTitle,
+          parentId: parentTitle ? root.id : undefined,
+          assignees,
+        });
+      });
+    }
+  }
+
+  for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
+    for (const root of tasks as unknown as CampanhaTaskLike[]) {
+      collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
+        const b = bucketFor(t.dueDate, t.status);
+        out.push({
+          id: t.id,
+          projectId: "",
+          projectName: campanhaNames.get(campanhaId) ?? "Campanha",
+          title: t.title,
+          bucket: b,
+          due: formatDue(t.dueDate, b),
+          priority: t.priority,
+          status: t.status,
+          campanhaId,
+          parentTitle,
+          parentId: parentTitle ? root.id : undefined,
+          assignees,
+        });
+      });
+    }
+  }
+
+  if (marketingProjectId) {
+    for (const s of loadStandalone()) {
+      const b = bucketFor(s.dueDate, s.status as ProjTask["status"]);
+      out.push({
+        id: `mkt:${s.id}`,
+        projectId: marketingProjectId,
+        projectName: "Marketing",
+        title: s.title,
+        bucket: b,
+        due: formatDue(s.dueDate, b),
+        status: s.status as ProjTask["status"],
+        assignees: getTaskAssignees(s),
+      });
+    }
+  }
+
+  return out;
 }
 
 /** Grupo de tarefas no formato genérico que `computeMemberScores`/

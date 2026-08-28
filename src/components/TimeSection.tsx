@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
-  X,
   Shield,
   ShieldCheck,
   Mail,
@@ -12,49 +11,37 @@ import {
   KeyRound,
   User,
   Eye,
-  Pencil,
   Copy,
   Clock,
-  Users as UsersIcon,
-  CalendarClock,
-  AlertTriangle,
   ChevronDown,
-  Trophy,
-  Bug,
-  Trash2,
-  ImageIcon,
+  FolderKanban,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
-import {
-  listBugReports,
-  deleteBugReport,
-  getBugScreenshotUrl,
-  type BugReport,
-} from "@/lib/bug-reports";
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
-import { todayISO } from "@/lib/financeiro-entries";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
   computeMemberScores,
-  collectTaskItems,
-  tasksDueToday,
-  tasksOverdue,
-  SCORE_RULES,
+  weeklyCompletions,
+  memberCompletionsThisWeek,
+  OPEN_STATUSES,
   type MemberScore,
-  type TaskItem,
   type TaskGroup,
 } from "@/lib/score";
 import {
   loadTasksByAssignee,
+  loadAllTasksFlat,
   marketingStandaloneAsTaskGroup,
+  BUCKET_ORDER,
   type DashTask,
 } from "@/lib/task-aggregation";
-import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
+import { TeamDashboard } from "@/components/team/TeamDashboard";
+import type { AttentionTab } from "@/components/team/AttentionTasks";
+import { avatarAccent, initialsOf, PresenceDot } from "@/components/team/member-ui";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,13 +58,7 @@ import {
   resetMemberPassword,
   getTeamDirectory,
 } from "@/lib/team.functions";
-import {
-  getStatus,
-  subscribeChat,
-  STATUS_COLOR,
-  STATUS_LABEL,
-  type MemberStatus,
-} from "@/lib/chat-store";
+import { getStatus, subscribeChat, STATUS_LABEL } from "@/lib/chat-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -94,7 +75,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useStorageSync } from "@/lib/use-storage-sync";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -104,24 +85,6 @@ function formatBirthday(value: string): string {
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(value);
   return isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
-}
-
-// Deterministic accent so every avatar fallback isn't the same flat gray.
-const AVATAR_ACCENTS = [
-  "bg-chart-1/15 text-chart-1",
-  "bg-chart-2/15 text-chart-2",
-  "bg-chart-3/15 text-chart-3",
-  "bg-chart-4/15 text-chart-4",
-  "bg-chart-5/15 text-chart-5",
-];
-function avatarAccent(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATAR_ACCENTS[hash % AVATAR_ACCENTS.length];
-}
-function initialsOf(name: string, fallback: string): string {
-  const source = name.trim() || fallback;
-  return source.slice(0, 1).toUpperCase();
 }
 
 // Photos are always shown in the Time tab (not gated by timeView) — a profile
@@ -185,7 +148,6 @@ function DiretorioTab() {
   const [viewing, setViewing] = useState<Member | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createdInfo, setCreatedInfo] = useState<{ email: string; tempPassword: string } | null>(
     null,
   );
@@ -312,7 +274,6 @@ function DiretorioTab() {
     [members, query],
   );
 
-  const adminCount = useMemo(() => members.filter((m) => m.isAdmin).length, [members]);
   const onlineCount = useMemo(
     () => members.filter((m) => getStatus(m.id) === "online").length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -372,10 +333,22 @@ function DiretorioTab() {
     return loadTasksByAssignee(campanhaNames);
   }, [campanhaNames, tick]);
 
-  const taskItems = useMemo(() => {
+  // Lista achatada de TODAS as tarefas (uma linha por tarefa, com todos os
+  // responsáveis) — alimenta o painel "Tarefas que precisam de atenção" e
+  // o donut "Tarefas por status" do dashboard.
+  const allTasksFlat = useMemo(() => {
     void tick;
-    return collectTaskItems(loadProjetos(), groupsWithMarketing);
+    return loadAllTasksFlat(campanhaNames);
+  }, [campanhaNames, tick]);
+
+  // Conclusões por semana do time inteiro — alimenta "Concluídas na
+  // semana" (card) e o gráfico "Entregas por semana".
+  const weeklyData = useMemo(() => {
+    void tick;
+    return weeklyCompletions(loadProjetos(), groupsWithMarketing);
   }, [tick, groupsWithMarketing]);
+
+  const [attentionTab, setAttentionTab] = useState<AttentionTab>("atrasadas");
 
   // Mesmo deep-link (sessionStorage + navegação) já usado em "Meu trabalho"
   // (Início) e no indicador de timer ativo — abrir uma tarefa da lista de
@@ -392,13 +365,6 @@ function DiretorioTab() {
     }
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
   };
-  const today = todayISO();
-  const dueTodayAll = useMemo(() => tasksDueToday(taskItems, today), [taskItems, today]);
-  const overdueAll = useMemo(() => tasksOverdue(taskItems, today), [taskItems, today]);
-  const checkedInToday = useMemo(
-    () => members.filter((m) => m.startTimes?.[today]).length,
-    [members, today],
-  );
 
   const handleSave = async (payload: MemberFormPayload) => {
     try {
@@ -465,67 +431,40 @@ function DiretorioTab() {
     }
   };
 
+  const headerAction = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar membro"
+          className="h-9 w-40 pl-8 text-xs sm:w-56"
+        />
+      </div>
+      {isAdmin && (
+        <Button
+          size="sm"
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+          }}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Novo membro
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-6">
-        <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
-          <div className="flex shrink-0 items-baseline gap-2">
-            <span className="text-lg font-bold text-foreground">{members.length}</span>
-            <span className="text-xs uppercase text-muted-foreground">
-              {members.length === 1 ? "Membro" : "Membros"}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
-            <span className="text-lg font-bold text-foreground">{adminCount}</span>
-            <span className="text-xs uppercase text-muted-foreground">Admins</span>
-          </div>
-          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
-            <span className="text-lg font-bold text-foreground">{onlineCount}</span>
-            <span className="text-xs uppercase text-muted-foreground">Online agora</span>
-          </div>
-          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
-            <span
-              className={`text-lg font-bold ${overdueAll.length > 0 ? "text-destructive" : "text-foreground"}`}
-            >
-              {overdueAll.length}
-            </span>
-            <span className="text-xs uppercase text-muted-foreground">Tarefas atrasadas</span>
-          </div>
-          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
-            <span className="text-lg font-bold text-foreground">{dueTodayAll.length}</span>
-            <span className="text-xs uppercase text-muted-foreground">Vencem hoje</span>
-          </div>
-          <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6">
-            <span className="text-lg font-bold text-foreground">
-              {checkedInToday}/{members.length}
-            </span>
-            <span className="text-xs uppercase text-muted-foreground">Começaram o dia</span>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nome, cargo ou email"
-              className="h-9 w-40 pl-8 text-xs sm:w-56"
-            />
-          </div>
-          {isAdmin && (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Novo membro
-            </Button>
-          )}
-        </div>
+        <SectionHeader
+          title="Time"
+          subtitle="Visão geral da operação, produtividade e carga do time."
+          action={headerAction}
+        />
 
         {error && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
@@ -583,86 +522,28 @@ function DiretorioTab() {
           </div>
         )}
 
-        {(dueTodayAll.length > 0 || overdueAll.length > 0) && (
-          <TeamTasksPanel dueToday={dueTodayAll} overdue={overdueAll} members={members} />
-        )}
-
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1 font-semibold uppercase tracking-wider">
-            <Trophy className="h-3 w-3 text-amber-500" /> Pontuação:
-          </span>
-          {SCORE_RULES.map((r) => (
-            <span key={r.key} className="whitespace-nowrap">
-              {r.label}{" "}
-              <span
-                className={
-                  r.points > 0
-                    ? "font-semibold text-emerald-600 dark:text-emerald-400"
-                    : "font-semibold text-destructive"
-                }
-              >
-                {r.points > 0 ? "+" : ""}
-                {r.points}
-              </span>
-            </span>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[68px] animate-pulse rounded-xl border border-border bg-muted/30"
-              />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-background p-12 text-center">
-            <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              {members.length === 0 ? "Nenhum membro ainda." : "Nenhum resultado para essa busca."}
-            </p>
-            {members.length === 0 && isAdmin && (
-              <button
-                onClick={() => setOpen(true)}
-                className="mt-3 text-xs font-medium text-foreground underline underline-offset-2"
-              >
-                Adicionar o primeiro
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="divide-y divide-border rounded-lg border border-border">
-            {filtered.map((m) => (
-              <PersonRow
-                key={m.id}
-                member={m}
-                score={scoreByMemberId.get(m.id)}
-                tasks={tasksByMember.get(m.name) ?? []}
-                onOpenTask={openTask}
-                isSelf={m.id === meId}
-                isAdmin={isAdmin}
-                expanded={expandedId === m.id}
-                onToggleExpand={() => setExpandedId((id) => (id === m.id ? null : m.id))}
-                onOpenProfile={() => {
-                  if (isAdmin) {
-                    setEditing(m);
-                    setOpen(true);
-                  } else {
-                    setViewing(m);
-                  }
-                }}
-                onEdit={() => {
-                  setEditing(m);
-                  setOpen(true);
-                }}
-                onDelete={() => void handleDelete(m.id)}
-                onReset={() => void handleReset(m.id)}
-              />
-            ))}
-          </div>
-        )}
+        <TeamDashboard
+          allMembers={members}
+          filteredMembers={filtered}
+          scoreByMemberId={scoreByMemberId}
+          allTasksFlat={allTasksFlat}
+          tasksByMember={tasksByMember}
+          weeklyData={weeklyData}
+          onlineCount={onlineCount}
+          meId={meId}
+          isAdmin={isAdmin}
+          loading={loading}
+          attentionTab={attentionTab}
+          onAttentionTabChange={setAttentionTab}
+          onOpenTask={openTask}
+          onOpenMember={(m) => setViewing(m)}
+          onEditMember={(m) => {
+            setEditing(m);
+            setOpen(true);
+          }}
+          onDeleteMember={(id) => void handleDelete(id)}
+          onResetMember={(id) => void handleReset(id)}
+        />
 
         <MemberDialog
           open={open}
@@ -679,6 +560,14 @@ function DiretorioTab() {
           <MemberViewDialog
             member={viewing}
             isSelf={viewing.id === meId}
+            score={scoreByMemberId.get(viewing.id)}
+            tasks={tasksByMember.get(viewing.name) ?? []}
+            weeklyCompleted={memberCompletionsThisWeek(
+              viewing.name,
+              loadProjetos(),
+              groupsWithMarketing,
+            )}
+            onOpenTask={openTask}
             onOpenChange={(v) => {
               if (!v) setViewing(null);
             }}
@@ -690,116 +579,9 @@ function DiretorioTab() {
   );
 }
 
-function PresenceDot({ status }: { status: MemberStatus }) {
-  return (
-    <span
-      title={STATUS_LABEL[status]}
-      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${STATUS_COLOR[status]}`}
-    />
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
 function fmtDateBR(d: string) {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
-}
-
-function TeamTasksPanel({
-  dueToday,
-  overdue,
-  members,
-}: {
-  dueToday: TaskItem[];
-  overdue: TaskItem[];
-  members: Member[];
-}) {
-  const [open, setOpen] = useState(false);
-  const findMember = (name?: string) => members.find((m) => m.name === name);
-
-  const Row = ({ item }: { item: TaskItem }) => {
-    const member = findMember(item.assignee);
-    return (
-      <li className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-        <div className="flex min-w-0 items-center gap-2">
-          <Avatar className="h-6 w-6 shrink-0">
-            {member?.photo && <AvatarImage src={member.photo} alt="" />}
-            <AvatarFallback className="text-[10px]">
-              {initialsOf(member?.name ?? "", item.assignee ?? "?")}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{item.title}</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {item.assignee ?? "Sem responsável"} · {item.projectName}
-            </p>
-          </div>
-        </div>
-        <span className="shrink-0 text-[11px] text-muted-foreground">
-          {item.dueDate ? fmtDateBR(item.dueDate) : "—"}
-        </span>
-      </li>
-    );
-  };
-
-  return (
-    <div className="rounded-lg border border-border">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-      >
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <CalendarClock className="h-3.5 w-3.5" /> Tarefas do time — {dueToday.length} hoje,{" "}
-          {overdue.length} atrasada{overdue.length === 1 ? "" : "s"}
-        </span>
-        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="grid grid-cols-1 gap-0 border-t border-border sm:grid-cols-2 sm:divide-x sm:divide-border">
-          <div>
-            <p className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Hoje
-            </p>
-            {dueToday.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground">Ninguém tem tarefa vencendo hoje.</p>
-            ) : (
-              <ul className="max-h-64 divide-y divide-border overflow-y-auto">
-                {dueToday.map((t) => (
-                  <Row key={t.id} item={t} />
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              <AlertTriangle className="mr-1 inline h-3 w-3 text-destructive" />
-              Atrasadas
-            </p>
-            {overdue.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground">Nenhuma tarefa atrasada. 🎉</p>
-            ) : (
-              <ul className="max-h-64 divide-y divide-border overflow-y-auto">
-                {overdue.map((t) => (
-                  <Row key={t.id} item={t} />
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string> }) {
@@ -839,334 +621,6 @@ function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string>
         </button>
       )}
     </div>
-  );
-}
-
-function PersonRow({
-  member: m,
-  score,
-  tasks,
-  onOpenTask,
-  isSelf,
-  isAdmin,
-  expanded,
-  onToggleExpand,
-  onOpenProfile,
-  onEdit,
-  onDelete,
-  onReset,
-}: {
-  member: Member;
-  score?: MemberScore;
-  /** Todas as tarefas (projeto, campanha, avulsa do Marketing) vinculadas a
-   * esta pessoa — vazio quando ela não tem nenhuma no momento. */
-  tasks: DashTask[];
-  onOpenTask: (t: DashTask) => void;
-  isSelf: boolean;
-  isAdmin: boolean;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  onOpenProfile: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onReset: () => void;
-}) {
-  const canManage = isAdmin;
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
-  const allowed = (f: TimeField) => canManage || isSelf || m.timeView.includes(f);
-  const showName = allowed("name");
-  const showRole = allowed("role");
-  const showEmail = allowed("email");
-  const showBirthday = allowed("birthday");
-  const status = getStatus(m.id);
-  const attendanceTotal = (score?.meetingsAttended ?? 0) + (score?.meetingsMissed ?? 0);
-
-  return (
-    <div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggleExpand}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggleExpand();
-          }
-        }}
-        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset"
-      >
-        <div className="relative shrink-0">
-          <Avatar className="h-10 w-10">
-            {m.photo && <AvatarImage src={m.photo} alt={m.name} />}
-            <AvatarFallback className={`text-sm font-semibold ${avatarAccent(m.id)}`}>
-              {initialsOf(showName ? m.name : "", m.email)}
-            </AvatarFallback>
-          </Avatar>
-          <PresenceDot status={status} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {showName ? m.name || "(sem nome)" : "Membro"}
-            </p>
-            {isSelf && (
-              <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
-                Você
-              </Badge>
-            )}
-            {m.isAdmin && (
-              <Badge
-                variant="outline"
-                className="shrink-0 gap-1 border-foreground/20 px-1.5 py-0 text-[10px] font-medium text-foreground"
-              >
-                <ShieldCheck className="h-2.5 w-2.5" /> Admin
-              </Badge>
-            )}
-          </div>
-          {showRole && m.role && <p className="truncate text-xs text-muted-foreground">{m.role}</p>}
-        </div>
-        {score && (
-          <span
-            className={`shrink-0 text-base font-semibold tabular-nums ${
-              score.score > 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : score.score < 0
-                  ? "text-destructive"
-                  : "text-foreground"
-            }`}
-          >
-            {score.score > 0 ? "+" : ""}
-            {score.score}
-          </span>
-        )}
-        {canManage && (
-          <div className="flex shrink-0 items-center gap-0.5">
-            <IconAction
-              label="Redefinir senha"
-              onClick={(e) => {
-                stop(e);
-                onReset();
-              }}
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-            </IconAction>
-            <IconAction
-              label="Editar"
-              onClick={(e) => {
-                stop(e);
-                onEdit();
-              }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </IconAction>
-            {!isSelf && (
-              <IconAction
-                label="Remover"
-                destructive
-                onClick={(e) => {
-                  stop(e);
-                  onDelete();
-                }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </IconAction>
-            )}
-          </div>
-        )}
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-        />
-      </div>
-
-      {expanded && (
-        <div className="space-y-4 border-t border-border bg-muted/20 px-4 py-4">
-          {(showEmail || (showBirthday && m.birthday)) && (
-            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-              {showEmail && (
-                <div className="flex items-center gap-1.5">
-                  <Mail className="h-3 w-3 shrink-0" />
-                  <span>{m.email}</span>
-                </div>
-              )}
-              {showBirthday && m.birthday && (
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="h-3 w-3 shrink-0" />
-                  <span>{formatBirthday(m.birthday)}</span>
-                </div>
-              )}
-            </dl>
-          )}
-
-          {score ? (
-            <div>
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Score geral
-              </p>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 md:grid-cols-4">
-                <Stat label="No prazo" value={score.tasksOnTime} />
-                <Stat label="Entregue atrasada" value={score.tasksLate} />
-                <Stat label="Atrasada (aberta)" value={score.tasksOverdue} />
-                <Stat label="Abertas agora" value={score.openTasks} />
-                <Stat
-                  label="Atraso médio"
-                  value={
-                    score.avgDelayDays === null
-                      ? "—"
-                      : score.avgDelayDays === 0
-                        ? "no dia"
-                        : score.avgDelayDays > 0
-                          ? `${score.avgDelayDays.toFixed(1)}d atraso`
-                          : `${Math.abs(score.avgDelayDays).toFixed(1)}d adiantado`
-                  }
-                />
-                <Stat label="Reuniões OK" value={score.meetingsAttended} />
-                <Stat label="Reuniões perdidas" value={score.meetingsMissed} />
-                <Stat
-                  label="Presença em reuniões"
-                  value={
-                    attendanceTotal === 0
-                      ? "—"
-                      : `${Math.round((score.meetingsAttended / attendanceTotal) * 100)}%`
-                  }
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Sem dados de pontuação ainda.</p>
-          )}
-
-          <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Tarefas vinculadas ({tasks.length})
-            </p>
-            <PersonTasksList tasks={tasks} onOpenTask={onOpenTask} stopClick={stop} />
-          </div>
-
-          <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Início de dia
-            </p>
-            <StartOfDayHistory startTimes={m.startTimes} />
-          </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              stop(e);
-              onOpenProfile();
-            }}
-            className="text-xs font-medium text-foreground underline underline-offset-2"
-          >
-            {canManage ? "Editar perfil completo" : "Ver perfil completo"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Mais urgente primeiro — mesma ordem de prioridade visual que "Meu
-// trabalho" (Início) já usa pros próprios buckets.
-const TASK_BUCKET_ORDER: Record<DashTask["bucket"], number> = {
-  atrasada: 0,
-  hoje: 1,
-  amanha: 2,
-  semana: 3,
-  outro: 4,
-};
-
-/** Lista de tarefas vinculadas a UMA pessoa, dentro da linha expandida dela
- * na aba Time — antes só existiam contagens agregadas (score), sem nenhum
- * jeito de ver QUAIS tarefas geraram aquele número. */
-function PersonTasksList({
-  tasks,
-  onOpenTask,
-  stopClick,
-}: {
-  tasks: DashTask[];
-  onOpenTask: (t: DashTask) => void;
-  stopClick: (e: React.MouseEvent) => void;
-}) {
-  const sorted = useMemo(
-    () => [...tasks].sort((a, b) => TASK_BUCKET_ORDER[a.bucket] - TASK_BUCKET_ORDER[b.bucket]),
-    [tasks],
-  );
-
-  if (sorted.length === 0) {
-    return <p className="text-xs text-muted-foreground">Nenhuma tarefa vinculada no momento.</p>;
-  }
-
-  return (
-    <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
-      {sorted.map((t) => (
-        <li key={`${t.projectId}_${t.id}`}>
-          <button
-            type="button"
-            onClick={(e) => {
-              stopClick(e);
-              onOpenTask(t);
-            }}
-            className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-foreground group-hover:underline">
-                {t.parentTitle && (
-                  <span
-                    title={`Subtarefa de "${t.parentTitle}"`}
-                    className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
-                  >
-                    Sub
-                  </span>
-                )}
-                <span className="truncate">{t.title}</span>
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">{t.projectName}</p>
-            </div>
-            <span
-              className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
-              {t.status}
-            </span>
-            <span
-              className={`shrink-0 text-[11px] tabular-nums ${
-                t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
-              }`}
-            >
-              {t.due}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function IconAction({
-  label,
-  destructive,
-  onClick,
-  children,
-}: {
-  label: string;
-  destructive?: boolean;
-  onClick: (e: React.MouseEvent) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={label}
-          className={`rounded-md p-1.5 text-muted-foreground hover:bg-muted ${destructive ? "hover:text-destructive" : "hover:text-foreground"}`}
-        >
-          {children}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -1664,13 +1118,59 @@ function Field({
   );
 }
 
+function MiniStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "neutral" | "danger" | "success";
+}) {
+  const valueTone =
+    tone === "danger"
+      ? "text-destructive"
+      : tone === "success"
+        ? "text-emerald-600 dark:text-emerald-400"
+        : "text-foreground";
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`mt-0.5 text-sm font-semibold tabular-nums ${valueTone}`}>{value}</p>
+    </div>
+  );
+}
+
+/**
+ * Visão individual do membro — evolução do antigo diálogo somente-leitura:
+ * ganhou pontuação, tarefas abertas/atrasadas, concluídas na semana,
+ * próximas entregas e projetos/campanhas em que participa (antes só
+ * dados de perfil + "início de dia"). Aberta pelo clique em qualquer
+ * linha do ranking "Performance do time", pra admin ou membro comum —
+ * mesma visibilidade que esses números já tinham na antiga linha
+ * expansível (não é gated por `timeView`, que só controla campos de
+ * perfil pessoal).
+ */
 function MemberViewDialog({
   member,
   isSelf,
+  score,
+  tasks,
+  weeklyCompleted,
+  onOpenTask,
   onOpenChange,
 }: {
   member: Member;
   isSelf: boolean;
+  score?: MemberScore;
+  /** Todas as tarefas (projeto, campanha, avulsa do Marketing) vinculadas a
+   * esta pessoa. */
+  tasks: DashTask[];
+  /** Quantas dessas tarefas foram concluídas na semana corrente. */
+  weeklyCompleted: number;
+  onOpenTask: (t: DashTask) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const tv = member.timeView ?? [];
@@ -1717,16 +1217,16 @@ function MemberViewDialog({
       value: member.salary || "—",
     });
 
-  const startEntries = show("startOfDay")
-    ? Object.entries(member.startTimes ?? {})
-        .filter(([d, h]) => d && h)
-        .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-    : [];
-  const fmtDate = (d: string) => {
-    const [y, m, day] = d.split("-");
-    return `${day}/${m}/${y}`;
-  };
   const status = getStatus(member.id);
+
+  const openTasks = useMemo(() => tasks.filter((t) => OPEN_STATUSES.has(t.status)), [tasks]);
+  const overdueTasks = useMemo(() => openTasks.filter((t) => t.bucket === "atrasada"), [openTasks]);
+  const upcoming = useMemo(
+    () =>
+      [...openTasks].sort((a, b) => BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket]).slice(0, 5),
+    [openTasks],
+  );
+  const projectNames = useMemo(() => Array.from(new Set(tasks.map((t) => t.projectName))), [tasks]);
 
   return (
     <Dialog open={!!member} onOpenChange={onOpenChange}>
@@ -1767,7 +1267,7 @@ function MemberViewDialog({
               </div>
             </div>
 
-            {rows.length === 0 && startEntries.length === 0 ? (
+            {rows.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 Sem informações liberadas para visualização.
               </p>
@@ -1790,18 +1290,92 @@ function MemberViewDialog({
               </dl>
             )}
 
-            {startEntries.length > 0 && (
-              <section className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Clock className="h-3.5 w-3.5" /> Início de dia
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Último registro:{" "}
-                  <span className="font-medium tabular-nums text-foreground">
-                    {fmtDate(startEntries[0][0])} às {startEntries[0][1]}
-                  </span>{" "}
-                  · histórico completo na aba "Início de dia".
+            {score && (
+              <section className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Pontuação
                 </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+                  <MiniStat
+                    label="Pontos"
+                    value={`${score.score > 0 ? "+" : ""}${score.score}`}
+                    tone={score.score > 0 ? "success" : score.score < 0 ? "danger" : "neutral"}
+                  />
+                  <MiniStat label="Abertas" value={openTasks.length} />
+                  <MiniStat
+                    label="Atrasadas"
+                    value={overdueTasks.length}
+                    tone={overdueTasks.length > 0 ? "danger" : "neutral"}
+                  />
+                  <MiniStat label="Concluídas na semana" value={weeklyCompleted} />
+                  <MiniStat label="Reuniões OK" value={score.meetingsAttended} />
+                  <MiniStat
+                    label="Reuniões perdidas"
+                    value={score.meetingsMissed}
+                    tone={score.meetingsMissed > 0 ? "danger" : "neutral"}
+                  />
+                </div>
+              </section>
+            )}
+
+            {upcoming.length > 0 && (
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Próximas entregas
+                </p>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {upcoming.map((t) => (
+                    <li key={`${t.projectId}_${t.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenTask(t);
+                          onOpenChange(false);
+                        }}
+                        className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-xs text-foreground group-hover:underline">
+                          {t.title}
+                        </span>
+                        <span
+                          className={`shrink-0 text-[11px] tabular-nums ${
+                            t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
+                          }`}
+                        >
+                          {t.due}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {projectNames.length > 0 && (
+              <section className="space-y-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Projetos e campanhas
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {projectNames.map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
+                    >
+                      <FolderKanban className="h-3 w-3 text-muted-foreground" />
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {show("startOfDay") && (
+              <section className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <Clock className="h-3 w-3" /> Início de dia
+                </div>
+                <StartOfDayHistory startTimes={member.startTimes} />
               </section>
             )}
           </div>
@@ -1817,278 +1391,21 @@ function MemberViewDialog({
 }
 
 /**
- * "Time" e "Gestão" eram duas seções separadas no menu (diretório de
- * membros vs. métricas/ranking/tarefas/início de dia) mostrando dados
- * sobrepostos (início de dia aparecia em 3 lugares diferentes) e exigindo
- * trocar de tela pra ver o score de alguém que você já estava olhando.
- * Unificadas numa lista única: cada linha é uma pessoa (foto + cargo +
- * score), e expandir mostra o detalhe (tarefas, reuniões, início de dia)
- * sem sair da lista.
+ * "Time" virou um dashboard de gestão (inspirado conceitualmente no
+ * ClickUp, sem copiar o visual): além do diretório de membros, mostra em
+ * poucos segundos como a operação está — tarefas que precisam de
+ * atenção, carga por pessoa, status geral, tendência de entregas e um
+ * ranking de performance que agora é a própria lista de membros. Senhas
+ * esquecidas e bugs reportados viraram uma seção "Administração" mais
+ * discreta no fim da página (`TeamAdminSection`), em vez de competir
+ * visualmente com os indicadores de gestão. `DiretorioTab` continua
+ * sendo a única camada de dados; a grade visual em si vive em
+ * `src/components/team/TeamDashboard.tsx`.
  */
 export function TimeSection() {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
-      <SectionHeader title="Time" subtitle="Membros, métricas e pontuação do time." />
+    <div className="mx-auto w-full max-w-6xl">
       <DiretorioTab />
-      <PasswordResetRequestsPanel />
-      <BugReportsPanel />
-    </div>
-  );
-}
-
-type PasswordResetRequest = {
-  id: string;
-  email: string;
-  created_at: string;
-  resolved: boolean;
-};
-
-/** Painel admin-only com os pedidos de "esqueci minha senha" feitos na tela
- * de login (sem sessão, então não têm como cair direto no perfil de
- * ninguém) — o admin vê o e-mail, reseta manualmente pela aba de membros
- * (KeyRound no perfil) e marca aqui como resolvido. */
-function PasswordResetRequestsPanel() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checked, setChecked] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [requests, setRequests] = useState<PasswordResetRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return setChecked(true);
-      const { data: ok } = await supabase.rpc("is_admin", { _user_id: u.user.id });
-      setIsAdmin(Boolean(ok));
-      setChecked(true);
-    })();
-  }, []);
-
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    const { data, error: err } = await supabase
-      .from("password_reset_requests")
-      .select("id, email, created_at, resolved")
-      .eq("resolved", false)
-      .order("created_at", { ascending: false });
-    if (err) setError(err.message);
-    else setRequests(data ?? []);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (open) void load();
-  }, [open]);
-
-  const resolve = async (id: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-    const { data: u } = await supabase.auth.getUser();
-    const { error: err } = await supabase
-      .from("password_reset_requests")
-      .update({ resolved: true, resolved_at: new Date().toISOString(), resolved_by: u.user?.id })
-      .eq("id", id);
-    if (err) setError(err.message);
-  };
-
-  if (!checked || !isAdmin) return null;
-
-  return (
-    <div className="rounded-xl border border-border bg-card">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left"
-      >
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-foreground">Senhas esquecidas</span>
-          {requests.length > 0 && (
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-              {requests.length}
-            </span>
-          )}
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {open && (
-        <div className="space-y-3 border-t border-border px-5 py-4">
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
-          {!loading && requests.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nenhum pedido pendente.</p>
-          )}
-          {requests.map((r) => (
-            <div
-              key={r.id}
-              className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{r.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(r.created_at).toLocaleString("pt-BR")} · redefina pelo perfil do membro
-                  (ícone de chave)
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void resolve(r.id)}
-                className="shrink-0"
-              >
-                Marcar resolvido
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BugReportsPanel() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checked, setChecked] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [reports, setReports] = useState<BugReport[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [preview, setPreview] = useState<{ id: string; url: string } | null>(null);
-  const { confirm, confirmDialog } = useConfirm();
-
-  useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) return setChecked(true);
-      const { data: ok } = await supabase.rpc("is_admin", { _user_id: u.user.id });
-      setIsAdmin(Boolean(ok));
-      setChecked(true);
-    })();
-  }, []);
-
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setReports(await listBugReports("plataforma"));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar relatos.");
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (open) void load();
-  }, [open]);
-
-  const handleDelete = async (r: BugReport) => {
-    const ok = await confirm("Remover este relato de bug?");
-    if (!ok) return;
-    try {
-      await deleteBugReport(r.id, r.screenshotPath);
-      setReports((prev) => prev.filter((x) => x.id !== r.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao remover.");
-    }
-  };
-
-  const handlePreview = async (r: BugReport) => {
-    if (!r.screenshotPath) return;
-    try {
-      const url = await getBugScreenshotUrl(r.screenshotPath);
-      setPreview({ id: r.id, url });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar print.");
-    }
-  };
-
-  if (!checked || !isAdmin) return null;
-
-  return (
-    <div className="rounded-xl border border-border bg-card">
-      {confirmDialog}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left"
-      >
-        <div className="flex items-center gap-2">
-          <Bug className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-foreground">Bugs reportados</span>
-          {reports.length > 0 && (
-            <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
-              {reports.length}
-            </span>
-          )}
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
-      {open && (
-        <div className="space-y-3 border-t border-border px-5 py-4">
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
-          {!loading && reports.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nenhum bug reportado até agora.</p>
-          )}
-          {reports.map((r) => (
-            <div
-              key={r.id}
-              className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {r.reporterName || r.clientLabel || "Sem nome"}
-                  </span>
-                  <span>{new Date(r.createdAt).toLocaleString("pt-BR")}</span>
-                  {r.pageContext && <span className="truncate">{r.pageContext}</span>}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-foreground">{r.description}</p>
-                {r.screenshotPath && (
-                  <button
-                    type="button"
-                    onClick={() => handlePreview(r)}
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    Ver print
-                  </button>
-                )}
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDelete(r)}
-                className="shrink-0 text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Print anexado</DialogTitle>
-          </DialogHeader>
-          {preview && (
-            <img
-              src={preview.url}
-              alt="Print do bug"
-              className="w-full rounded-md border border-border"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
