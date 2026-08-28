@@ -91,7 +91,10 @@ function renderPanel(
   if (k === "roadmap") return <RoadmapPanel project={project} update={update} />;
   if (k === "kanban")
     return isMarketingProject ? (
-      <MarketingSection />
+      <MarketingSection
+        initialOpenTaskId={initialOpenTaskId}
+        onInitialOpenTaskHandled={onInitialOpenTaskHandled}
+      />
     ) : (
       <KanbanPanel
         project={project}

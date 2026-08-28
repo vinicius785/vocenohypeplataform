@@ -125,7 +125,18 @@ function updateRef(req: MktRequest, patch: BoardTask) {
   }
 }
 
-export function MarketingSection() {
+export function MarketingSection({
+  initialOpenTaskId,
+  onInitialOpenTaskHandled,
+}: {
+  /** Deep-link vindo de "Meu trabalho" (Início) ou do indicador de timer
+   * ativo — mesmo search param `taskId` que `/projeto/$id` já usa pra
+   * projetos normais, só que aqui o id já vem prefixado (`ref:`/`mkt:`,
+   * ver `resolveTasks` acima) porque o board do Marketing mistura
+   * tarefas de fontes diferentes sob um id "achatado" só dele. */
+  initialOpenTaskId?: string;
+  onInitialOpenTaskHandled?: () => void;
+} = {}) {
   const [reqs, setReqs] = useState<MktRequest[]>(() => loadRequests());
   const [standalones, setStandalones] = useState<MktStandalone[]>(() => loadStandalone());
   const [tick, setTick] = useState(0);
@@ -225,6 +236,8 @@ export function MarketingSection() {
         scope={{ kind: "marketing" }}
         breadcrumb="Marketing"
         title="Tarefas do Marketing"
+        initialOpenTaskId={initialOpenTaskId}
+        onInitialOpenTaskHandled={onInitialOpenTaskHandled}
       />
     </div>
   );

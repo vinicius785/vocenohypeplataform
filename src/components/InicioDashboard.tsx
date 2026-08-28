@@ -60,6 +60,7 @@ import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/li
 import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
 import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
 import { todayZipKey } from "@/lib/zip-game";
 
@@ -174,7 +175,9 @@ function collectAssignedTasks<T extends CampanhaTaskLike>(
 function loadAllTasks(campanhaNames: Map<string, string>, meName: string): DashTask[] {
   const projs = loadProjetos();
   const out: DashTask[] = [];
+  let marketingProjectId: string | undefined;
   for (const p of projs) {
+    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAssignedTasks([root], meName, undefined, (t, parentTitle) => {
         const b = bucketFor(t.dueDate, t.status);
@@ -210,6 +213,28 @@ function loadAllTasks(campanhaNames: Map<string, string>, meName: string): DashT
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
         });
+      });
+    }
+  }
+  // Tarefas avulsas do Marketing (criadas direto no board de lá, não
+  // puxadas de nenhum projeto/campanha) vivem à parte, em
+  // `marketing_standalone_tasks` — sem isso, "Meu trabalho" nunca
+  // mostrava tarefas do Marketing que não fossem referências de outro
+  // lugar. `id` fica com o mesmo prefixo `mkt:` que o board usa
+  // internamente (resolveTasks em MarketingSection.tsx), pra o deep-link
+  // (`?taskId=`) achar a tarefa certa lá dentro.
+  if (marketingProjectId) {
+    for (const s of loadStandalone()) {
+      if (!getTaskAssignees(s).includes(meName)) continue;
+      const b = bucketFor(s.dueDate, s.status as ProjTask["status"]);
+      out.push({
+        id: `mkt:${s.id}`,
+        projectId: marketingProjectId,
+        projectName: "Marketing",
+        title: s.title,
+        bucket: b,
+        due: formatDue(s.dueDate, b),
+        status: s.status as ProjTask["status"],
       });
     }
   }
@@ -331,11 +356,13 @@ export function InicioDashboard() {
     // não apareciam nem depois do F5.
     const unsubProjetos = onProjetosChange(refresh);
     const unsubCampanhaTarefas = onCampanhaTarefasChange(refresh);
+    const unsubStandalone = onStandaloneChange(refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       unsubMeetings();
       unsubProjetos();
       unsubCampanhaTarefas();
+      unsubStandalone();
     };
   }, [campanhaNameMap]);
 
