@@ -818,25 +818,49 @@ export async function heartbeat(id: string) {
 }
 
 // ---------- Notification sound ----------
+const NOTIF_SOUND_URL = "/sounds/notification.mp3";
+let notifAudio: HTMLAudioElement | null = null;
+
+function getNotifAudio(): HTMLAudioElement {
+  if (!notifAudio) {
+    notifAudio = new Audio(NOTIF_SOUND_URL);
+    notifAudio.volume = 0.6;
+  }
+  return notifAudio;
+}
+
+/** "Destrava" o áudio de notificação num gesto do usuário (play+pause
+ * mudo, imediato) — Safari/iOS bloqueia `play()` programático sem isso
+ * já ter acontecido antes numa interação real. Chamado uma vez só, no
+ * mesmo gesto que já destravava o AudioContext do lembrete de reunião. */
+export function primeNotifSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const audio = getNotifAudio();
+    audio.muted = true;
+    void audio
+      .play()
+      .then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      })
+      .catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Toca o áudio gravado (ver `public/sounds/notification.mp3`) — mesma
+ * instância reaproveitada a cada chamada (evita rebaixar/re-decodificar
+ * o arquivo a cada notificação), reiniciada do início pra notificações
+ * em sequência rápida nunca ficarem "engasgadas". */
 export function playNotifSound() {
   if (typeof window === "undefined") return;
   try {
-    const AC: typeof AudioContext =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AC();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(880, ctx.currentTime);
-    o.frequency.setValueAtTime(1180, ctx.currentTime + 0.12);
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    o.connect(g).connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.36);
-    o.onended = () => ctx.close().catch(() => {});
+    const audio = getNotifAudio();
+    audio.currentTime = 0;
+    void audio.play().catch(() => {});
   } catch {
     /* ignore */
   }

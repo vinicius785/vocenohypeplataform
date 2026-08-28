@@ -54,6 +54,7 @@ import {
   markRead,
   getActive,
   playNotifSound,
+  primeNotifSound,
 } from "@/lib/chat-store";
 
 import { useClientes, type Cliente } from "@/lib/clientes-store";
@@ -657,6 +658,7 @@ function useIncomingMessageNotifier() {
       } catch {
         /* noop */
       }
+      primeNotifSound();
       if ("Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().catch(() => {});
       }
