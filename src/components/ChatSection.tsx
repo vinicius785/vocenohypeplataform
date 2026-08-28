@@ -70,6 +70,7 @@ import type { ChatMessage } from "@/lib/chat-store";
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
 import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
 import { linkifyText } from "@/lib/linkify";
 import { useConfirm } from "@/hooks/use-confirm";
@@ -151,10 +152,14 @@ export function ChatSection() {
 
   const [, forceTasks] = useState(0);
   useEffect(() => onCampanhaTarefasChange(() => forceTasks((n) => n + 1)), []);
+  useEffect(() => onStandaloneChange(() => forceTasks((n) => n + 1)), []);
 
   const tasks = useMemo<ChatTaskInfo[]>(() => {
-    const projectTasks = loadProjetos().flatMap((p) =>
-      (p.tasks ?? []).map((t) => ({
+    const projs = loadProjetos();
+    let marketingProjectId: string | undefined;
+    const projectTasks = projs.flatMap((p) => {
+      if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+      return (p.tasks ?? []).map((t) => ({
         id: t.id,
         label: t.title,
         project: p.name,
@@ -163,8 +168,8 @@ export function ChatSection() {
         priority: t.priority,
         dueDate: t.dueDate,
         assignees: getTaskAssignees(t),
-      })),
-    );
+      }));
+    });
     const campanhaTasks: ChatTaskInfo[] = [];
     for (const [campanhaId, campTasks] of getAllCampanhaTarefas()) {
       for (const t of campTasks) {
@@ -181,7 +186,25 @@ export function ChatSection() {
         });
       }
     }
-    return [...projectTasks, ...campanhaTasks];
+    // Tarefas avulsas do Marketing (criadas direto no board de lá, sem
+    // vir de nenhum projeto/campanha) viviam à parte, em
+    // `marketing_standalone_tasks` — sem esse terceiro loop, elas nunca
+    // apareciam pra @mencionar no chat, mesmo bug de origem já corrigido
+    // em "Meu trabalho" (Início) e na aba Time nesta sessão. `id` usa o
+    // mesmo prefixo `mkt:` que `MarketingSection.tsx` espera pra resolver
+    // o deep-link (`?taskId=`).
+    const standaloneTasks: ChatTaskInfo[] = marketingProjectId
+      ? loadStandalone().map((s) => ({
+          id: `mkt:${s.id}`,
+          label: s.title,
+          project: "Marketing",
+          projectId: marketingProjectId!,
+          status: s.status,
+          dueDate: s.dueDate,
+          assignees: getTaskAssignees(s),
+        }))
+      : [];
+    return [...projectTasks, ...campanhaTasks, ...standaloneTasks];
   }, [campanhaNameMap]);
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const navigate = useNavigate();
