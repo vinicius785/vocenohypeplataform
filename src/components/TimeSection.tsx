@@ -31,11 +31,13 @@ import {
   getBugScreenshotUrl,
   type BugReport,
 } from "@/lib/bug-reports";
+import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
 import { todayISO } from "@/lib/financeiro-entries";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
   computeMemberScores,
   collectTaskItems,
@@ -46,6 +48,13 @@ import {
   type TaskItem,
   type TaskGroup,
 } from "@/lib/score";
+import {
+  loadTasksByAssignee,
+  marketingStandaloneAsTaskGroup,
+  type DashTask,
+} from "@/lib/task-aggregation";
+import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
+import { OPEN_CAMPANHA_TASK_KEY, type SectionKey } from "@/components/AppShell";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -168,6 +177,7 @@ const MEMBERS_KEY = "time:membros";
 const friendlyError = friendlyNetworkError;
 
 function DiretorioTab() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -314,32 +324,74 @@ function DiretorioTab() {
   useEffect(() => onProjetosChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onMeetingsChange(() => setTick((t) => t + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => setTick((t) => t + 1)), []);
+  useEffect(() => onStandaloneChange(() => setTick((t) => t + 1)), []);
 
   const clientes = useClientes();
-  const campanhaGroups = useMemo<TaskGroup[]>(() => {
+  const campanhaNames = useMemo(() => {
     const names = new Map<string, string>();
     for (const c of clientes) {
       for (const camp of c.campanhas ?? []) names.set(camp.id, camp.nome);
     }
+    return names;
+  }, [clientes]);
+  const campanhaGroups = useMemo<TaskGroup[]>(() => {
     void tick;
     return Array.from(getAllCampanhaTarefas()).map(([id, tasks]) => ({
       id,
-      name: names.get(id) ?? "Campanha",
+      name: campanhaNames.get(id) ?? "Campanha",
       tasks,
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientes, tick]);
+  }, [campanhaNames, tick]);
+  // Tarefas avulsas do Marketing (`marketing_standalone_tasks`) viviam fora
+  // do score/lista de tarefas do time inteiro — mesmo bug de origem já
+  // corrigido em "Meu trabalho" (Início) nesta sessão: sem esse grupo, quem
+  // só tinha tarefa avulsa do Marketing aparecia com "0 tarefas abertas"
+  // mesmo tendo trabalho pendente.
+  const groupsWithMarketing = useMemo<TaskGroup[]>(() => {
+    void tick;
+    return [...campanhaGroups, marketingStandaloneAsTaskGroup()];
+  }, [campanhaGroups, tick]);
 
   const scores = useMemo<MemberScore[]>(() => {
     void tick;
-    return computeMemberScores(loadProjetos(), loadMeetings(), members, undefined, campanhaGroups);
-  }, [members, tick, campanhaGroups]);
+    return computeMemberScores(
+      loadProjetos(),
+      loadMeetings(),
+      members,
+      undefined,
+      groupsWithMarketing,
+    );
+  }, [members, tick, groupsWithMarketing]);
   const scoreByMemberId = useMemo(() => new Map(scores.map((s) => [s.member.id, s])), [scores]);
+
+  // Tarefas vinculadas a CADA pessoa (não só a contagem do score) — uma
+  // passada só sobre todo o trabalho da plataforma, igual "Meu trabalho" no
+  // Início, mas pra todo mundo de uma vez.
+  const tasksByMember = useMemo(() => {
+    void tick;
+    return loadTasksByAssignee(campanhaNames);
+  }, [campanhaNames, tick]);
 
   const taskItems = useMemo(() => {
     void tick;
-    return collectTaskItems(loadProjetos(), campanhaGroups);
-  }, [tick, campanhaGroups]);
+    return collectTaskItems(loadProjetos(), groupsWithMarketing);
+  }, [tick, groupsWithMarketing]);
+
+  // Mesmo deep-link (sessionStorage + navegação) já usado em "Meu trabalho"
+  // (Início) e no indicador de timer ativo — abrir uma tarefa da lista de
+  // alguém na aba Time precisa cair no mesmo lugar.
+  const openTask = (t: DashTask) => {
+    const targetId = t.parentId ?? t.id;
+    if (t.campanhaId) {
+      sessionStorage.setItem(
+        OPEN_CAMPANHA_TASK_KEY,
+        JSON.stringify({ campanhaId: t.campanhaId, taskId: targetId }),
+      );
+      navigate({ to: "/time", search: { section: "campanhas" as SectionKey } });
+      return;
+    }
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
+  };
   const today = todayISO();
   const dueTodayAll = useMemo(() => tasksDueToday(taskItems, today), [taskItems, today]);
   const overdueAll = useMemo(() => tasksOverdue(taskItems, today), [taskItems, today]);
@@ -587,6 +639,8 @@ function DiretorioTab() {
                 key={m.id}
                 member={m}
                 score={scoreByMemberId.get(m.id)}
+                tasks={tasksByMember.get(m.name) ?? []}
+                onOpenTask={openTask}
                 isSelf={m.id === meId}
                 isAdmin={isAdmin}
                 expanded={expandedId === m.id}
@@ -791,6 +845,8 @@ function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string>
 function PersonRow({
   member: m,
   score,
+  tasks,
+  onOpenTask,
   isSelf,
   isAdmin,
   expanded,
@@ -802,6 +858,10 @@ function PersonRow({
 }: {
   member: Member;
   score?: MemberScore;
+  /** Todas as tarefas (projeto, campanha, avulsa do Marketing) vinculadas a
+   * esta pessoa — vazio quando ela não tem nenhuma no momento. */
+  tasks: DashTask[];
+  onOpenTask: (t: DashTask) => void;
   isSelf: boolean;
   isAdmin: boolean;
   expanded: boolean;
@@ -977,6 +1037,13 @@ function PersonRow({
 
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Tarefas vinculadas ({tasks.length})
+            </p>
+            <PersonTasksList tasks={tasks} onOpenTask={onOpenTask} stopClick={stop} />
+          </div>
+
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Início de dia
             </p>
             <StartOfDayHistory startTimes={m.startTimes} />
@@ -995,6 +1062,83 @@ function PersonRow({
         </div>
       )}
     </div>
+  );
+}
+
+// Mais urgente primeiro — mesma ordem de prioridade visual que "Meu
+// trabalho" (Início) já usa pros próprios buckets.
+const TASK_BUCKET_ORDER: Record<DashTask["bucket"], number> = {
+  atrasada: 0,
+  hoje: 1,
+  amanha: 2,
+  semana: 3,
+  outro: 4,
+};
+
+/** Lista de tarefas vinculadas a UMA pessoa, dentro da linha expandida dela
+ * na aba Time — antes só existiam contagens agregadas (score), sem nenhum
+ * jeito de ver QUAIS tarefas geraram aquele número. */
+function PersonTasksList({
+  tasks,
+  onOpenTask,
+  stopClick,
+}: {
+  tasks: DashTask[];
+  onOpenTask: (t: DashTask) => void;
+  stopClick: (e: React.MouseEvent) => void;
+}) {
+  const sorted = useMemo(
+    () => [...tasks].sort((a, b) => TASK_BUCKET_ORDER[a.bucket] - TASK_BUCKET_ORDER[b.bucket]),
+    [tasks],
+  );
+
+  if (sorted.length === 0) {
+    return <p className="text-xs text-muted-foreground">Nenhuma tarefa vinculada no momento.</p>;
+  }
+
+  return (
+    <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border">
+      {sorted.map((t) => (
+        <li key={`${t.projectId}_${t.id}`}>
+          <button
+            type="button"
+            onClick={(e) => {
+              stopClick(e);
+              onOpenTask(t);
+            }}
+            className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-foreground group-hover:underline">
+                {t.parentTitle && (
+                  <span
+                    title={`Subtarefa de "${t.parentTitle}"`}
+                    className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                  >
+                    Sub
+                  </span>
+                )}
+                <span className="truncate">{t.title}</span>
+              </p>
+              <p className="truncate text-[11px] text-muted-foreground">{t.projectName}</p>
+            </div>
+            <span
+              className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
+              {t.status}
+            </span>
+            <span
+              className={`shrink-0 text-[11px] tabular-nums ${
+                t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {t.due}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

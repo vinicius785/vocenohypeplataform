@@ -21,14 +21,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import {
-  loadProjetos,
-  onProjetosChange,
-  getTaskAssignees,
-  loadTeamMembers,
-  type BlogPost,
-  type Task as ProjTask,
-} from "@/lib/projetos";
+import { loadProjetos, onProjetosChange, loadTeamMembers, type BlogPost } from "@/lib/projetos";
 import { renderMarkdownLite, ArticleReader } from "@/components/marketing/BlogPanel";
 import {
   loadEngagementVI,
@@ -59,36 +52,14 @@ import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
 import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
 import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
-import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
-import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
+import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { onStandaloneChange } from "@/lib/marketing-tasks";
 import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
 import { todayZipKey } from "@/lib/zip-game";
-
-type DashTask = {
-  id: string;
-  projectId: string;
-  projectName: string;
-  title: string;
-  bucket: "hoje" | "amanha" | "semana" | "atrasada" | "outro";
-  due: string;
-  priority?: ProjTask["priority"];
-  status: ProjTask["status"];
-  /** Ausente = tarefa de projeto (rota própria); presente = tarefa de
-   * campanha, que não tem rota própria e precisa do deep-link por
-   * sessionStorage já usado pelo indicador de timer ativo. */
-  campanhaId?: string;
-  /** Presente = isso é uma subtarefa (título da tarefa-mãe direta, só pra
-   * exibição). Subtarefas não têm dialog próprio pra abrir sozinhas — só
-   * são editadas de dentro do dialog da tarefa de nível raiz, que é o que
-   * `parentId` aponta (pode ser diferente de um `parentTitle` mais de um
-   * nível acima, se houver subtarefa dentro de subtarefa). */
-  parentTitle?: string;
-  parentId?: string;
-};
+import { loadAllTasks, WEEKDAYS, type DashTask } from "@/lib/task-aggregation";
 
 type PersonalItem = { id: string; text: string; done: boolean };
 
-const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function getGreeting(hour: number) {
@@ -102,143 +73,6 @@ function toISODate(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function bucketFor(dueISO: string | undefined, status: ProjTask["status"]): DashTask["bucket"] {
-  if (status === "Concluído" || status === "Aprovado" || status === "Arquivado") return "outro";
-  if (!dueISO) return "outro";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueISO + "T00:00:00");
-  const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-  if (diff < 0) return "atrasada";
-  if (diff === 0) return "hoje";
-  if (diff === 1) return "amanha";
-  if (diff <= 7) return "semana";
-  return "outro";
-}
-
-function formatDue(dueISO: string | undefined, bucket: DashTask["bucket"]): string {
-  if (!dueISO) return "";
-  const due = new Date(dueISO + "T00:00:00");
-  if (bucket === "hoje") return "Hoje";
-  if (bucket === "amanha") return "Amanhã";
-  if (bucket === "atrasada") {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const d = Math.round((today.getTime() - due.getTime()) / 86400000);
-    return `Atrasada ${d}d`;
-  }
-  return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
-}
-
-type CampanhaTaskLike = {
-  id: string;
-  title: string;
-  dueDate?: string;
-  priority?: ProjTask["priority"];
-  status: ProjTask["status"];
-  assignee?: string;
-  assignees?: string[];
-  subtasks?: CampanhaTaskLike[];
-};
-
-/** `campanhaNames` mapeia campanhaId -> nome, pra dar título nas tarefas de
- * campanha do mesmo jeito que as de projeto já têm `p.name`. Sem isso as
- * tarefas de campanha (guardadas à parte, em `campanha_tarefas`, não em
- * `Project.tasks`) nunca apareciam aqui — só as de projeto.
- *
- * `meName` filtra pra só entrar tarefa onde a pessoa está entre os
- * responsáveis (sozinha ou dividindo com mais alguém) — "Meu trabalho" é
- * pra ser pessoal, não a lista de tarefas de todo mundo. */
-/** Percorre uma tarefa e (recursivamente) suas subtarefas, empurrando uma
- * entrada pra cada uma que tenha a pessoa entre os responsáveis — uma
- * subtarefa pode ter um responsável diferente da tarefa-mãe, então cada
- * nível é checado à parte, não só a raiz. `parentTitle` é o título do pai
- * DIRETO (só pra contexto na lista) — quem chama sempre associa a entrada
- * ao id da tarefa de nível raiz pra navegação, já que subtarefa não tem
- * dialog próprio pra abrir sozinha. */
-function collectAssignedTasks<T extends CampanhaTaskLike>(
-  items: T[],
-  meName: string,
-  parentTitle: string | undefined,
-  push: (t: T, parentTitle: string | undefined) => void,
-): void {
-  for (const t of items) {
-    if (getTaskAssignees(t).includes(meName)) push(t, parentTitle);
-    if (t.subtasks?.length) {
-      collectAssignedTasks(t.subtasks as T[], meName, t.title, push);
-    }
-  }
-}
-
-function loadAllTasks(campanhaNames: Map<string, string>, meName: string): DashTask[] {
-  const projs = loadProjetos();
-  const out: DashTask[] = [];
-  let marketingProjectId: string | undefined;
-  for (const p of projs) {
-    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
-    for (const root of p.tasks ?? []) {
-      collectAssignedTasks([root], meName, undefined, (t, parentTitle) => {
-        const b = bucketFor(t.dueDate, t.status);
-        out.push({
-          id: t.id,
-          projectId: p.id,
-          projectName: p.name,
-          title: t.title,
-          bucket: b,
-          due: formatDue(t.dueDate, b),
-          priority: t.priority,
-          status: t.status,
-          parentTitle,
-          parentId: parentTitle ? root.id : undefined,
-        });
-      });
-    }
-  }
-  for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
-    for (const root of tasks as unknown as CampanhaTaskLike[]) {
-      collectAssignedTasks([root], meName, undefined, (t, parentTitle) => {
-        const b = bucketFor(t.dueDate, t.status);
-        out.push({
-          id: t.id,
-          projectId: "",
-          projectName: campanhaNames.get(campanhaId) ?? "Campanha",
-          title: t.title,
-          bucket: b,
-          due: formatDue(t.dueDate, b),
-          priority: t.priority,
-          status: t.status,
-          campanhaId,
-          parentTitle,
-          parentId: parentTitle ? root.id : undefined,
-        });
-      });
-    }
-  }
-  // Tarefas avulsas do Marketing (criadas direto no board de lá, não
-  // puxadas de nenhum projeto/campanha) vivem à parte, em
-  // `marketing_standalone_tasks` — sem isso, "Meu trabalho" nunca
-  // mostrava tarefas do Marketing que não fossem referências de outro
-  // lugar. `id` fica com o mesmo prefixo `mkt:` que o board usa
-  // internamente (resolveTasks em MarketingSection.tsx), pra o deep-link
-  // (`?taskId=`) achar a tarefa certa lá dentro.
-  if (marketingProjectId) {
-    for (const s of loadStandalone()) {
-      if (!getTaskAssignees(s).includes(meName)) continue;
-      const b = bucketFor(s.dueDate, s.status as ProjTask["status"]);
-      out.push({
-        id: `mkt:${s.id}`,
-        projectId: marketingProjectId,
-        projectName: "Marketing",
-        title: s.title,
-        bucket: b,
-        due: formatDue(s.dueDate, b),
-        status: s.status as ProjTask["status"],
-      });
-    }
-  }
-  return out;
 }
 
 function loadPerfil(): { nome?: string; foto?: string } {
