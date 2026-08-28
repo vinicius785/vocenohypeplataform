@@ -15,7 +15,14 @@ import {
   type Indicador,
   type TrackingFrequency,
 } from "@/lib/metas-store";
-import { indicadorSaude, type IndicadorSaude, INDICADOR_SAUDE_LABEL } from "@/lib/metas-engine";
+import {
+  indicadorSaude,
+  objetivoProgresso,
+  objetivoResumoSaude,
+  objetivoStats,
+  type IndicadorSaude,
+  INDICADOR_SAUDE_LABEL,
+} from "@/lib/metas-engine";
 import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
 import { IndicadorRow } from "./IndicadorRow";
 import { ObjetivoPage } from "./ObjetivoPage";
@@ -23,8 +30,10 @@ import { IndicadorPage } from "./IndicadorPage";
 import { ObjetivoQuickDialog } from "./ObjetivoQuickDialog";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
-import { colorFor, initialsOf } from "./metas-ui-utils";
+import { colorFor, fmtMonthYear, initialsOf } from "./metas-ui-utils";
 import { useDropdown } from "./use-dropdown";
+
+const AGRUPAMENTO_KEY = "metas.agrupamento";
 
 const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
   continuo: "Contínuo",
@@ -59,10 +68,28 @@ export function MetasSection() {
   const [saudeFilter, setSaudeFilter] = useState<"" | IndicadorSaude>("");
   const [frequenciaFilter, setFrequenciaFilter] = useState<"" | TrackingFrequency>("");
   const [origemFilter, setOrigemFilter] = useState<"" | "manual" | "auto">("");
+  const [periodoFilter, setPeriodoFilter] = useState(""); // "YYYY-MM" (mês de dataFim)
   const [busca, setBusca] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersRef = useRef<HTMLDivElement>(null);
   useDropdown(filtersRef, filtersOpen, () => setFiltersOpen(false));
+
+  // "Por pessoa"/"Por objetivo" — persiste só durante a sessão (sessionStorage),
+  // sem precisar de backend nem sobreviver ao fechar a aba.
+  const [agrupamento, setAgrupamento] = useState<"pessoa" | "objetivo">(() => {
+    try {
+      return sessionStorage.getItem(AGRUPAMENTO_KEY) === "objetivo" ? "objetivo" : "pessoa";
+    } catch {
+      return "pessoa";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(AGRUPAMENTO_KEY, agrupamento);
+    } catch {
+      /* ignore */
+    }
+  }, [agrupamento]);
 
   const [objetivoDialog, setObjetivoDialog] = useState<{ data?: Objetivo } | null>(null);
   const [indicadorCreateDialog, setIndicadorCreateDialog] = useState(false);
@@ -111,19 +138,44 @@ export function MetasSection() {
     () => Array.from(new Set(items.flatMap((m) => m.colaboradores ?? []))).sort(),
     [items],
   );
+  // "YYYY-MM" real (de dataFim) → rótulo "Mês Ano" — ordenado
+  // cronologicamente (a chave YYYY-MM já ordena certo como string).
+  const periodosEmUso = useMemo(() => {
+    const yms = new Set<string>();
+    for (const m of items) if (m.dataFim) yms.add(m.dataFim.slice(0, 7));
+    return Array.from(yms)
+      .sort()
+      .map((ym) => ({ value: ym, label: fmtMonthYear(`${ym}-01`) }));
+  }, [items]);
 
-  const overview = useMemo(() => {
-    let saudaveis = 0,
-      atencao = 0,
-      emRisco = 0;
-    for (const ind of indicadores) {
-      const s = indicadorSaude(ind);
-      if (s === "saudavel") saudaveis++;
-      else if (s === "atencao") atencao++;
-      else if (s === "em_risco" || s === "atrasado") emRisco++;
+  // Resumo do topo (item novo): conta OBJETIVOS (não indicadores soltos)
+  // por saúde consolidada + progresso médio real — antes o resumo
+  // tabulava saúde de indicador solto, que não respondia "quantos
+  // objetivos estão em risco".
+  const resumoObjetivos = useMemo(() => {
+    const ativos = objetivos.filter((o) => !o.cancelado);
+    let saudaveis = 0;
+    let emRisco = 0;
+    let progressoSum = 0;
+    let progressoCount = 0;
+    for (const o of ativos) {
+      const stats = objetivoStats(o.id, indicadores);
+      const resumo = objetivoResumoSaude(o, stats);
+      if (resumo === "saudavel") saudaveis++;
+      else if (resumo === "em_risco") emRisco++;
+      const p = objetivoProgresso(o.id, indicadores);
+      if (p != null) {
+        progressoSum += p;
+        progressoCount++;
+      }
     }
-    return { objetivos: objetivos.length, saudaveis, atencao, emRisco };
-  }, [indicadores, objetivos.length]);
+    return {
+      ativos: ativos.length,
+      saudaveis,
+      emRisco,
+      progressoMedio: progressoCount > 0 ? Math.round(progressoSum / progressoCount) : null,
+    };
+  }, [objetivos, indicadores]);
 
   const matchesFilters = (m: MetaItem): boolean => {
     if (areaFilter && m.area !== areaFilter) return false;
@@ -132,7 +184,15 @@ export function MetasSection() {
     if (tipoFilter && m.kind !== tipoFilter) return false;
     if (frequenciaFilter && m.frequencia !== frequenciaFilter) return false;
     if (origemFilter && (m.kind !== "indicador" || m.dataSource !== origemFilter)) return false;
-    if (saudeFilter && m.kind === "indicador" && indicadorSaude(m) !== saudeFilter) return false;
+    if (periodoFilter && m.dataFim?.slice(0, 7) !== periodoFilter) return false;
+    if (saudeFilter) {
+      if (m.kind === "indicador" && indicadorSaude(m) !== saudeFilter) return false;
+      if (
+        m.kind === "objetivo" &&
+        objetivoResumoSaude(m, objetivoStats(m.id, indicadores)) !== saudeFilter
+      )
+        return false;
+    }
     if (busca.trim() && !m.titulo.toLowerCase().includes(busca.trim().toLowerCase())) return false;
     return true;
   };
@@ -144,13 +204,15 @@ export function MetasSection() {
     tipoFilter ||
     saudeFilter ||
     frequenciaFilter ||
-    origemFilter;
+    origemFilter ||
+    periodoFilter;
   const clearFilters = () => {
     setAreaFilter("");
     setDonoFilter("");
     setColaboradorFilter("");
     setTipoFilter("");
     setSaudeFilter("");
+    setPeriodoFilter("");
     setFrequenciaFilter("");
     setOrigemFilter("");
   };
@@ -160,6 +222,7 @@ export function MetasSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       objetivos,
+      indicadores,
       areaFilter,
       donoFilter,
       colaboradorFilter,
@@ -167,6 +230,7 @@ export function MetasSection() {
       saudeFilter,
       frequenciaFilter,
       origemFilter,
+      periodoFilter,
       busca,
     ],
   );
@@ -182,6 +246,7 @@ export function MetasSection() {
       saudeFilter,
       frequenciaFilter,
       origemFilter,
+      periodoFilter,
       busca,
     ],
   );
@@ -253,7 +318,16 @@ export function MetasSection() {
     );
   };
 
-  const updateIndicadorPatch = (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => {
+  const updateIndicadorPatch = (
+    ind: Indicador,
+    patch: IndicadorQuickPatch,
+    nota: string,
+    dataISO: string,
+  ) => {
+    // Meio-dia local (não meia-noite UTC) — mesmo cuidado de fuso já usado
+    // em outras partes do app: uma atualização registrada como "hoje" não
+    // pode virar "ontem" só por causa do UTC-3 do Brasil.
+    const createdAt = new Date(`${dataISO}T12:00:00`).toISOString();
     const entry = {
       id: crypto.randomUUID(),
       valor: patch.valorAtual,
@@ -261,7 +335,7 @@ export function MetasSection() {
       author: me.name,
       initials: initialsOf(me.name) || "?",
       color: colorFor(me.name),
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
     persist(
       items.map((x) =>
@@ -374,21 +448,23 @@ export function MetasSection() {
         title="Metas"
         subtitle="Objetivos e indicadores operacionais do time."
         kpis={[
-          { label: "OBJETIVOS", value: overview.objetivos },
+          { label: "OBJETIVOS ATIVOS", value: resumoObjetivos.ativos },
           {
             label: "SAUDÁVEIS",
-            value: overview.saudaveis,
+            value: resumoObjetivos.saudaveis,
             tone: "text-emerald-600 dark:text-emerald-400",
-          },
-          {
-            label: "EM ATENÇÃO",
-            value: overview.atencao,
-            tone: "text-amber-600 dark:text-amber-400",
+            onClick: () => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel")),
           },
           {
             label: "EM RISCO",
-            value: overview.emRisco,
-            tone: overview.emRisco > 0 ? "text-rose-600 dark:text-rose-400" : undefined,
+            value: resumoObjetivos.emRisco,
+            tone: resumoObjetivos.emRisco > 0 ? "text-rose-600 dark:text-rose-400" : undefined,
+            onClick: () => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco")),
+          },
+          {
+            label: "PROGRESSO MÉDIO",
+            value:
+              resumoObjetivos.progressoMedio == null ? "—" : `${resumoObjetivos.progressoMedio}%`,
           },
         ]}
         action={
@@ -445,8 +521,8 @@ export function MetasSection() {
         }
       />
 
-      <div className="mt-6 flex items-center gap-2">
-        <div className="relative flex-1 max-w-xs">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs sm:flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={busca}
@@ -455,51 +531,79 @@ export function MetasSection() {
             className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
+
+        {donosEmUso.length > 0 && (
+          <select
+            value={donoFilter}
+            onChange={(e) => setDonoFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+          >
+            <option value="">Responsável</option>
+            {donosEmUso.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        )}
+        <select
+          value={areaFilter}
+          onChange={(e) => setAreaFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          <option value="">Área</option>
+          {META_AREAS.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+        <select
+          value={saudeFilter}
+          onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+        >
+          <option value="">Status</option>
+          {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
+            <option key={s} value={s}>
+              {INDICADOR_SAUDE_LABEL[s]}
+            </option>
+          ))}
+        </select>
+        {periodosEmUso.length > 0 && (
+          <select
+            value={periodoFilter}
+            onChange={(e) => setPeriodoFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+          >
+            <option value="">Período</option>
+            {periodosEmUso.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        )}
+
         <div ref={filtersRef} className="relative">
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium ${
-              hasFilters
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium ${
+              colaboradorFilter || tipoFilter || frequenciaFilter || origemFilter
                 ? "border-foreground bg-muted text-foreground"
                 : "border-border text-muted-foreground hover:bg-muted/40"
             }`}
           >
-            <Filter className="h-3.5 w-3.5" /> Filtros
-            {hasFilters && (
+            <Filter className="h-3.5 w-3.5" /> Mais filtros
+            {(colaboradorFilter || tipoFilter || frequenciaFilter || origemFilter) && (
               <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
                 •
               </span>
             )}
           </button>
           {filtersOpen && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-72 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
-              <select
-                value={areaFilter}
-                onChange={(e) => setAreaFilter(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-              >
-                <option value="">Todas as áreas</option>
-                {META_AREAS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-              {donosEmUso.length > 0 && (
-                <select
-                  value={donoFilter}
-                  onChange={(e) => setDonoFilter(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                >
-                  <option value="">Todos os donos</option>
-                  {donosEmUso.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              )}
+            <div className="absolute right-0 top-full z-20 mt-1 w-72 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
               {colaboradoresEmUso.length > 0 && (
                 <select
                   value={colaboradorFilter}
@@ -524,18 +628,6 @@ export function MetasSection() {
                 <option value="indicador">Só indicadores</option>
               </select>
               <select
-                value={saudeFilter}
-                onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-              >
-                <option value="">Toda saúde</option>
-                {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
-                  <option key={s} value={s}>
-                    {INDICADOR_SAUDE_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-              <select
                 value={frequenciaFilter}
                 onChange={(e) => setFrequenciaFilter(e.target.value as typeof frequenciaFilter)}
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
@@ -556,18 +648,19 @@ export function MetasSection() {
                 <option value="manual">Só manual</option>
                 <option value="auto">Só automático</option>
               </select>
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" /> Limpar filtros
-                </button>
-              )}
             </div>
           )}
         </div>
+
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex h-9 items-center gap-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" /> Limpar filtros
+          </button>
+        )}
       </div>
 
       {items.length === 0 ? (
@@ -600,27 +693,68 @@ export function MetasSection() {
             </section>
           )}
 
-          {objetivosPorDono.length > 0 && (
+          {outrosObjetivos.length > 0 && (
             <section className="space-y-6">
-              <h2 className="text-sm font-semibold text-foreground">Objetivos do time</h2>
-              {objetivosPorDono.map(([dono, objs]) => (
-                <div key={dono} className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {dono}
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {objs.map((o) => (
-                      <ObjetivoSummaryCard
-                        key={o.id}
-                        objetivo={o}
-                        indicadores={indicadores.filter((i) => i.objetivoIds?.includes(o.id))}
-                        members={members}
-                        onOpen={() => push({ kind: "objetivo", id: o.id })}
-                      />
-                    ))}
-                  </div>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-foreground">Objetivos do time</h2>
+                <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setAgrupamento("pessoa")}
+                    className={`rounded px-2 py-1 font-medium ${
+                      agrupamento === "pessoa"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Por pessoa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgrupamento("objetivo")}
+                    className={`rounded px-2 py-1 font-medium ${
+                      agrupamento === "objetivo"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Por objetivo
+                  </button>
                 </div>
-              ))}
+              </div>
+
+              {agrupamento === "pessoa" ? (
+                objetivosPorDono.map(([dono, objs]) => (
+                  <div key={dono} className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {dono}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {objs.map((o) => (
+                        <ObjetivoSummaryCard
+                          key={o.id}
+                          objetivo={o}
+                          indicadores={indicadores.filter((i) => i.objetivoIds?.includes(o.id))}
+                          members={members}
+                          onOpen={() => push({ kind: "objetivo", id: o.id })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {outrosObjetivos.map((o) => (
+                    <ObjetivoSummaryCard
+                      key={o.id}
+                      objetivo={o}
+                      indicadores={indicadores.filter((i) => i.objetivoIds?.includes(o.id))}
+                      members={members}
+                      onOpen={() => push({ kind: "objetivo", id: o.id })}
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -632,6 +766,7 @@ export function MetasSection() {
                   <IndicadorRow
                     key={ind.id}
                     indicador={ind}
+                    members={members}
                     onOpen={() => push({ kind: "indicador", id: ind.id })}
                     onQuickUpdate={() => setQuickUpdateTarget(ind)}
                   />
@@ -641,9 +776,11 @@ export function MetasSection() {
           )}
 
           {meusObjetivos.length === 0 &&
-            objetivosPorDono.length === 0 &&
+            outrosObjetivos.length === 0 &&
             visibleIndicadoresStandalone.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum resultado pra esse filtro.</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhum objetivo corresponde aos filtros selecionados.
+              </p>
             )}
         </div>
       )}
@@ -664,9 +801,9 @@ export function MetasSection() {
       <IndicadorQuickUpdate
         indicador={quickUpdateTarget}
         onClose={() => setQuickUpdateTarget(null)}
-        onSave={(ind, patch, nota) => {
+        onSave={(ind, patch, nota, dataISO) => {
           setQuickUpdateTarget(null);
-          updateIndicadorPatch(ind, patch, nota);
+          updateIndicadorPatch(ind, patch, nota, dataISO);
         }}
       />
       {confirmDialog}

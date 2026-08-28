@@ -1,9 +1,19 @@
-import { useRef, useState } from "react";
-import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ArrowLeft, AlertTriangle, MoreHorizontal, Percent, Plus, Trash2, X } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
-import { INDICADOR_SAUDE_BAR, objetivoProgresso, objetivoStats } from "@/lib/metas-engine";
-import { fmtPeriodo } from "./metas-ui-utils";
+import {
+  INDICADOR_SAUDE_BAR,
+  indicadorPeso,
+  indicadorSaude,
+  metaGap,
+  objetivoProgresso,
+  objetivoResumoSaude,
+  objetivoStats,
+  progressoEsperado,
+} from "@/lib/metas-engine";
+import { formatIndicadorValor, fmtPeriodo } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
+import { ExpectedProgressLine } from "./ExpectedProgressLine";
 import { IndicadorRow } from "./IndicadorRow";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
@@ -45,7 +55,12 @@ export function ObjetivoPage({
   onLinkIndicador: (id: string) => void;
   onUnlinkIndicador: (id: string) => void;
   onSavePesos: (pesos: Record<string, number>) => void;
-  onQuickUpdate: (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => void;
+  onQuickUpdate: (
+    ind: Indicador,
+    patch: IndicadorQuickPatch,
+    nota: string,
+    dataISO: string,
+  ) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -59,20 +74,23 @@ export function ObjetivoPage({
 
   const progresso = objetivoProgresso(objetivo.id, indicadoresDoObjetivo);
   const stats = objetivoStats(objetivo.id, indicadoresDoObjetivo);
-  const resumoSaude = objetivo.cancelado
-    ? "cancelado"
-    : stats.emRisco > 0 || stats.atrasados > 0
-      ? "em_risco"
-      : stats.atencao > 0
-        ? "atencao"
-        : stats.total > 0 && stats.concluidos === stats.total
-          ? "concluido"
-          : stats.total === 0
-            ? "nao_iniciado"
-            : "saudavel";
+  const resumoSaude = objetivoResumoSaude(objetivo, stats);
+  const esperado = progressoEsperado(objetivo);
   const periodo = fmtPeriodo(objetivo.dataInicio, objetivo.dataFim);
   const linkable = indicadoresDisponiveis.filter(
     (i) => !indicadoresDoObjetivo.some((l) => l.id === i.id),
+  );
+
+  // "Precisam de atenção" — leitura estruturada dos indicadores já
+  // classificados em risco/atrasado pela regra existente (indicadorSaude),
+  // nunca uma nova heurística. Só aparece quando há pelo menos um.
+  const precisamAtencao = useMemo(
+    () =>
+      indicadoresDoObjetivo.filter((i) => {
+        const s = indicadorSaude(i);
+        return s === "em_risco" || s === "atrasado";
+      }),
+    [indicadoresDoObjetivo],
   );
 
   return (
@@ -148,6 +166,9 @@ export function ObjetivoPage({
           className={`h-full rounded-full transition-[width] duration-300 ${INDICADOR_SAUDE_BAR[resumoSaude]}`}
           style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
         />
+      </div>
+      <div className="mt-2">
+        <ExpectedProgressLine progresso={progresso} esperado={esperado} />
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         {stats.saudaveis > 0 && <span>🟢 {stats.saudaveis} saudáveis</span>}
@@ -250,6 +271,8 @@ export function ObjetivoPage({
             <div key={ind.id} className="group relative">
               <IndicadorRow
                 indicador={ind}
+                peso={indicadorPeso(ind, indicadoresDoObjetivo, objetivo.id)}
+                members={members}
                 onOpen={() => onOpenIndicador(ind.id)}
                 onQuickUpdate={() => setQuickUpdateTarget(ind)}
               />
@@ -267,6 +290,51 @@ export function ObjetivoPage({
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {precisamAtencao.length > 0 && (
+        <div className="mt-9">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            Precisam de atenção
+          </h2>
+          <div className="mt-2.5 divide-y divide-border rounded-lg border border-border">
+            {precisamAtencao.map((ind) => {
+              const gap = metaGap(ind);
+              const valor = formatIndicadorValor(ind.tipo, ind.valorAtual, ind.unidade);
+              const meta =
+                ind.niveis.esperado != null
+                  ? formatIndicadorValor(ind.tipo, ind.niveis.esperado, ind.unidade)
+                  : null;
+              return (
+                <button
+                  key={ind.id}
+                  type="button"
+                  onClick={() => onOpenIndicador(ind.id)}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {ind.titulo}
+                  </span>
+                  {meta && (
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {valor} / {meta}
+                    </span>
+                  )}
+                  {gap && gap.diff !== 0 && (
+                    <span className="shrink-0 text-xs font-medium text-rose-600 dark:text-rose-400">
+                      {gap.diff > 0 ? "↑" : "↓"}{" "}
+                      {ind.tipo === "percentual"
+                        ? `${Math.abs(Math.round(gap.diff))} p.p.`
+                        : formatIndicadorValor(ind.tipo, Math.abs(gap.diff), ind.unidade)}{" "}
+                      {gap.diff > 0 ? "acima" : "abaixo"} da meta
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -294,9 +362,9 @@ export function ObjetivoPage({
       <IndicadorQuickUpdate
         indicador={quickUpdateTarget}
         onClose={() => setQuickUpdateTarget(null)}
-        onSave={(ind, patch, nota) => {
+        onSave={(ind, patch, nota, dataISO) => {
           setQuickUpdateTarget(null);
-          onQuickUpdate(ind, patch, nota);
+          onQuickUpdate(ind, patch, nota, dataISO);
         }}
       />
     </div>

@@ -7,12 +7,25 @@ import {
   INDICADOR_SAUDE_TONE,
   indicadorProgressoExibicao,
   indicadorSaude,
+  indicadorTendencia,
 } from "@/lib/metas-engine";
 import { formatIndicadorValor, timeAgo } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
 import { IndicadorHistorico } from "./IndicadorHistorico";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { IndicadorAdvancedSettings } from "./IndicadorAdvancedSettings";
 import { useDropdown } from "./use-dropdown";
+
+const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
+  melhorando: "text-emerald-600 dark:text-emerald-400",
+  piorando: "text-rose-600 dark:text-rose-400",
+  estavel: "text-muted-foreground",
+};
+const TENDENCIA_ICON: Record<"melhorando" | "piorando" | "estavel", string> = {
+  melhorando: "↑",
+  piorando: "↓",
+  estavel: "=",
+};
 
 type Member = { name: string; photo?: string };
 
@@ -65,7 +78,7 @@ export function IndicadorPage({
   onBack: () => void;
   onOpenObjetivo: (id: string) => void;
   onDelete: () => void;
-  onUpdate: (ind: Indicador, patch: IndicadorQuickPatch, nota: string) => void;
+  onUpdate: (ind: Indicador, patch: IndicadorQuickPatch, nota: string, dataISO: string) => void;
   onSaveAdvanced: (ind: Indicador) => void;
   onUnlinkObjetivo: (objetivoId: string) => void;
 }) {
@@ -77,6 +90,8 @@ export function IndicadorPage({
 
   const saude = indicadorSaude(indicador);
   const progresso = indicadorProgressoExibicao(indicador);
+  const tendencia = indicadorTendencia(indicador);
+  const donoMember = members.find((m) => m.name === indicador.dono);
 
   const valorPrincipal =
     indicador.tipo === "binario"
@@ -146,7 +161,10 @@ export function IndicadorPage({
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
         {indicador.titulo}
       </h1>
-      <p className="mt-2 text-sm text-muted-foreground">{indicador.dono || "Sem dono"}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <Avatar name={indicador.dono} photo={donoMember?.photo} />
+        <p className="text-sm text-muted-foreground">{indicador.dono || "Sem dono"}</p>
+      </div>
       {indicador.descricao && (
         <p className="mt-2 text-sm text-muted-foreground">{indicador.descricao}</p>
       )}
@@ -154,7 +172,15 @@ export function IndicadorPage({
       {/* Valor em destaque */}
       <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-4xl font-light tracking-tight text-foreground">{valorPrincipal}</p>
+          <p className="flex items-baseline gap-2 text-4xl font-light tracking-tight text-foreground">
+            {valorPrincipal}
+            {tendencia && (
+              <span className={`text-sm font-medium ${TENDENCIA_TONE[tendencia.trend]}`}>
+                {TENDENCIA_ICON[tendencia.trend]}{" "}
+                {formatIndicadorValor(indicador.tipo, Math.abs(tendencia.diff), indicador.unidade)}
+              </span>
+            )}
+          </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Atual
             {indicador.calcTotal != null && indicador.calcContagem != null && (
@@ -193,13 +219,17 @@ export function IndicadorPage({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setUpdateOpen(true)}
-        className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
-      >
-        Atualizar indicador
-      </button>
+      {indicador.dataSource === "manual" ? (
+        <button
+          type="button"
+          onClick={() => setUpdateOpen(true)}
+          className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+        >
+          Atualizar indicador
+        </button>
+      ) : (
+        <p className="mt-5 text-xs text-muted-foreground">Sincronizado automaticamente.</p>
+      )}
 
       {/* Desempenho */}
       {niveisRows.length > 0 && (
@@ -219,7 +249,12 @@ export function IndicadorPage({
       <div className="mt-9">
         <h2 className="text-sm font-semibold text-foreground">Acompanhamento</h2>
         <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-          <StatBlock label="Dono">{indicador.dono || "Sem dono"}</StatBlock>
+          <StatBlock label="Dono">
+            <span className="flex items-center gap-1.5">
+              <Avatar name={indicador.dono} photo={donoMember?.photo} />
+              {indicador.dono || "Sem dono"}
+            </span>
+          </StatBlock>
           <StatBlock label="Colaboradores">
             {indicador.colaboradores?.length ? indicador.colaboradores.join(", ") : "Nenhum"}
           </StatBlock>
@@ -258,7 +293,12 @@ export function IndicadorPage({
           {(indicador.atualizacoes ?? []).length === 0 ? (
             <p className="p-3 text-xs text-muted-foreground">Nenhuma atualização ainda.</p>
           ) : (
-            <IndicadorHistorico atualizacoes={indicador.atualizacoes ?? []} />
+            <IndicadorHistorico
+              atualizacoes={indicador.atualizacoes ?? []}
+              tipo={indicador.tipo}
+              unidade={indicador.unidade}
+              metaEsperada={indicador.niveis.esperado}
+            />
           )}
         </div>
       </div>
@@ -289,9 +329,9 @@ export function IndicadorPage({
       <IndicadorQuickUpdate
         indicador={updateOpen ? indicador : null}
         onClose={() => setUpdateOpen(false)}
-        onSave={(ind, patch, nota) => {
+        onSave={(ind, patch, nota, dataISO) => {
           setUpdateOpen(false);
-          onUpdate(ind, patch, nota);
+          onUpdate(ind, patch, nota, dataISO);
         }}
       />
     </div>

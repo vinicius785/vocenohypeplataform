@@ -38,6 +38,17 @@ function ratioToPercent(contagem: number, total: number): number {
  * projetos no prazo" → 20%) — o app faz a conta, ninguém precisa converter
  * na mão. O modo calculado fica salvo no indicador (`calcTotal`/
  * `calcContagem`) e volta pré-preenchido na próxima atualização. */
+/** `YYYY-MM-DD` de hoje, no fuso local — mesmo valor que um `<input
+ * type="date">` já produz, usado como default do campo "Data da
+ * atualização". */
+function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function IndicadorQuickUpdate({
   indicador,
   onClose,
@@ -45,7 +56,9 @@ export function IndicadorQuickUpdate({
 }: {
   indicador: Indicador | null;
   onClose: () => void;
-  onSave: (indicador: Indicador, patch: IndicadorQuickPatch, nota: string) => void;
+  /** `dataISO` (YYYY-MM-DD) é quando a atualização de fato aconteceu —
+   * pode ser retroativa; vira o `createdAt` da entrada no histórico. */
+  onSave: (indicador: Indicador, patch: IndicadorQuickPatch, nota: string, dataISO: string) => void;
 }) {
   const [valor, setValor] = useState("");
   const [concluido, setConcluido] = useState(false);
@@ -54,6 +67,7 @@ export function IndicadorQuickUpdate({
   const [calcTotal, setCalcTotal] = useState("");
   const [calcContagem, setCalcContagem] = useState("");
   const [nota, setNota] = useState("");
+  const [data, setData] = useState(todayLocalISO());
 
   useEffect(() => {
     if (indicador) {
@@ -64,6 +78,7 @@ export function IndicadorQuickUpdate({
       setCalcTotal(indicador.calcTotal != null ? String(indicador.calcTotal) : "");
       setCalcContagem(indicador.calcContagem != null ? String(indicador.calcContagem) : "");
       setNota("");
+      setData(todayLocalISO());
     }
   }, [indicador]);
 
@@ -91,7 +106,7 @@ export function IndicadorQuickUpdate({
         calcContagem: undefined,
       };
     }
-    onSave(indicador, patch, nota.trim() || defaultNota);
+    onSave(indicador, patch, nota.trim() || defaultNota, data);
   };
 
   return (
@@ -212,6 +227,17 @@ export function IndicadorQuickUpdate({
               )}
             </div>
           )}
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground">
+              Data da atualização
+            </label>
+            <input
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground">
               Nota (opcional)

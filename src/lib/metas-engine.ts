@@ -1,4 +1,4 @@
-import type { Indicador, MetricDirection } from "./metas-store";
+import type { Indicador, MetaAtualizacao, MetricDirection, Objetivo } from "./metas-store";
 
 /**
  * Motor de cálculo de Metas — única fonte de verdade pra performance,
@@ -238,6 +238,75 @@ export function objetivoStats(objetivoId: string, indicadores: Indicador[]): Obj
     }
   }
   return stats;
+}
+
+/** Saúde resumida de um Objetivo, derivada da saúde dos seus indicadores
+ * (cascata: cancelado → em risco → atenção → concluído → não iniciado →
+ * saudável) — igual ao que já vinha sendo calculado, duplicado, dentro de
+ * `ObjetivoSummaryCard.tsx` e `ObjetivoPage.tsx`; centralizado aqui pra
+ * essas duas telas (e o resumo do topo da lista) nunca divergirem. */
+export function objetivoResumoSaude(
+  objetivo: Pick<Objetivo, "cancelado">,
+  stats: ObjetivoStats,
+): IndicadorSaude {
+  if (objetivo.cancelado) return "cancelado";
+  if (stats.emRisco > 0 || stats.atrasados > 0) return "em_risco";
+  if (stats.atencao > 0) return "atencao";
+  if (stats.total > 0 && stats.concluidos === stats.total) return "concluido";
+  if (stats.total === 0) return "nao_iniciado";
+  return "saudavel";
+}
+
+/** % do período do objetivo já decorrido até hoje — informação
+ * COMPLEMENTAR ao progresso real, nunca usada pra calcular saúde. `null`
+ * quando não há `dataInicio`/`dataFim` suficientes pra calcular (nunca
+ * inventa um valor) ou quando o período é invertido/zero. */
+export function progressoEsperado(
+  objetivo: Pick<Objetivo, "dataInicio" | "dataFim">,
+): number | null {
+  if (!objetivo.dataInicio || !objetivo.dataFim) return null;
+  const start = new Date(`${objetivo.dataInicio}T00:00:00`).getTime();
+  const end = new Date(`${objetivo.dataFim}T00:00:00`).getTime();
+  if (!(end > start)) return null;
+  const pct = ((Date.now() - start) / (end - start)) * 100;
+  return Math.max(0, Math.min(100, pct));
+}
+
+/** Diferença entre o valor atual do indicador e sua meta esperada, na
+ * unidade original do indicador (não a performance 0-100) — junto com
+ * `favoravel` (se essa diferença é boa ou ruim, considerando `direcao`:
+ * indicador "quanto menor melhor" fica favorável estando ABAIXO da meta,
+ * não acima). `null` sem meta/valor configurados. */
+export function metaGap(
+  ind: Pick<Indicador, "niveis" | "valorAtual" | "direcao">,
+): { diff: number; favoravel: boolean } | null {
+  const meta = ind.niveis.esperado;
+  const atual = ind.valorAtual;
+  if (meta == null || atual == null) return null;
+  const diff = atual - meta;
+  const favoravel = higherIsBetter(ind.direcao) ? diff >= 0 : diff <= 0;
+  return { diff, favoravel };
+}
+
+export type IndicadorTendencia = { trend: "melhorando" | "piorando" | "estavel"; diff: number };
+
+/** Tendência entre as duas últimas atualizações com `valor` definido —
+ * `null` com menos de 2 (nunca assume tendência sem histórico de
+ * verdade). Direção-consciente via `direcao`: pra indicador "quanto menor
+ * melhor", um valor menor que o anterior é "melhorando", não "piorando". */
+export function indicadorTendencia(
+  ind: Pick<Indicador, "atualizacoes" | "direcao">,
+): IndicadorTendencia | null {
+  const valores = (ind.atualizacoes ?? []).filter(
+    (a): a is MetaAtualizacao & { valor: number } => a.valor != null,
+  );
+  if (valores.length < 2) return null;
+  const atual = valores[valores.length - 1].valor;
+  const anterior = valores[valores.length - 2].valor;
+  const diff = atual - anterior;
+  if (diff === 0) return { trend: "estavel", diff };
+  const melhorando = higherIsBetter(ind.direcao) ? diff > 0 : diff < 0;
+  return { trend: melhorando ? "melhorando" : "piorando", diff };
 }
 
 /** Progresso 0-100 pra exibição num card — indicador standalone usa a

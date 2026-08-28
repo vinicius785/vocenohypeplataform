@@ -1,8 +1,15 @@
 import { ChevronRight } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
-import { INDICADOR_SAUDE_BAR, objetivoProgresso, objetivoStats } from "@/lib/metas-engine";
+import {
+  INDICADOR_SAUDE_BAR,
+  objetivoProgresso,
+  objetivoResumoSaude,
+  objetivoStats,
+  progressoEsperado,
+} from "@/lib/metas-engine";
 import { fmtPeriodo } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
+import { ExpectedProgressLine } from "./ExpectedProgressLine";
 
 type Member = { name: string; photo?: string };
 
@@ -24,17 +31,8 @@ export function ObjetivoSummaryCard({
   const donoMember = members.find((m) => m.name === objetivo.dono);
   const progresso = objetivoProgresso(objetivo.id, indicadores);
   const stats = objetivoStats(objetivo.id, indicadores);
-  const resumoSaude = objetivo.cancelado
-    ? "cancelado"
-    : stats.emRisco > 0 || stats.atrasados > 0
-      ? "em_risco"
-      : stats.atencao > 0
-        ? "atencao"
-        : stats.total > 0 && stats.concluidos === stats.total
-          ? "concluido"
-          : stats.total === 0
-            ? "nao_iniciado"
-            : "saudavel";
+  const resumoSaude = objetivoResumoSaude(objetivo, stats);
+  const esperado = progressoEsperado(objetivo);
   const periodo = fmtPeriodo(objetivo.dataInicio, objetivo.dataFim);
 
   return (
@@ -69,6 +67,7 @@ export function ObjetivoSummaryCard({
           style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
         />
       </div>
+      <ExpectedProgressLine progresso={progresso} esperado={esperado} />
 
       <p className="text-[11px] text-muted-foreground">
         {objetivo.area}

@@ -4,6 +4,9 @@ export type SectionKpi = {
   label: string;
   value: number | string;
   tone?: string; // tailwind color classes
+  /** Opcional — quando presente, o tile vira clicável (ex. aplicar um
+   * filtro correspondente). Sem mudança pra quem já usa `kpis` sem isso. */
+  onClick?: () => void;
 };
 
 export function SectionHeader({
@@ -29,17 +32,35 @@ export function SectionHeader({
 
       {kpis && kpis.length > 0 && (
         <div className="mt-5 flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
-          {kpis.map((k, i) => (
-            <div
-              key={k.label}
-              className={`flex shrink-0 items-baseline gap-2 ${i > 0 ? "border-l border-border pl-6" : ""}`}
-            >
-              <span className="text-xl font-semibold tabular-nums text-foreground">{k.value}</span>
-              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                {k.label}
-              </span>
-            </div>
-          ))}
+          {kpis.map((k, i) => {
+            const content = (
+              <>
+                <span
+                  className={`text-xl font-semibold tabular-nums ${k.tone ?? "text-foreground"}`}
+                >
+                  {k.value}
+                </span>
+                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {k.label}
+                </span>
+              </>
+            );
+            const className = `flex shrink-0 items-baseline gap-2 ${i > 0 ? "border-l border-border pl-6" : ""}`;
+            return k.onClick ? (
+              <button
+                key={k.label}
+                type="button"
+                onClick={k.onClick}
+                className={`${className} rounded-sm transition-opacity hover:opacity-70`}
+              >
+                {content}
+              </button>
+            ) : (
+              <div key={k.label} className={className}>
+                {content}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
