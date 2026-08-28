@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Minus, TrendingDown, TrendingUp, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   META_AREAS,
   type Indicador,
@@ -30,6 +31,44 @@ const UNIT_OPTIONS: { unit: Unit; label: string }[] = [
   { unit: "moeda", label: "R$" },
   { unit: "numero", label: "un." },
 ];
+
+/** Campo de meta — ganha formatação pt-BR em tempo real quando a unidade
+ * escolhida é R$ (mesmo padrão do resto da plataforma pra valor
+ * monetário); percentual/un. continuam com o número puro. */
+function MetaValueInput({
+  unit,
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  unit: Unit;
+  value: string;
+  onChange: (s: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  if (unit === "moeda") {
+    return (
+      <FormattedNumberInput
+        mode="currency"
+        value={value.trim() ? Number(value) : undefined}
+        onValueChange={(n) => onChange(n != null ? String(n) : "")}
+        placeholder={placeholder}
+        className={className}
+      />
+    );
+  }
+  return (
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
 
 function howToTipoDirecao(
   how: HowKind,
@@ -180,10 +219,10 @@ export function IndicadorQuickCreateDialog({
             <div>
               <label className={LABEL_CLS}>Meta</label>
               <div className="mt-1 flex gap-2">
-                <input
-                  type="number"
+                <MetaValueInput
+                  unit={unit}
                   value={meta}
-                  onChange={(e) => setMeta(e.target.value)}
+                  onChange={setMeta}
                   placeholder="63"
                   className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
@@ -221,10 +260,10 @@ export function IndicadorQuickCreateDialog({
                 {how === "acima" ? "Manter acima de" : "Manter abaixo de"}
               </label>
               <div className="mt-1 flex gap-2">
-                <input
-                  type="number"
+                <MetaValueInput
+                  unit={unit}
                   value={meta}
-                  onChange={(e) => setMeta(e.target.value)}
+                  onChange={setMeta}
                   placeholder="Ex: 6"
                   className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Calculator, RotateCcw, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   TIERS,
   FORMATOS,
@@ -53,8 +54,8 @@ export function SimuladorPropostaForm({
         }))
       : [newLinha()],
   );
-  const [precoManual, setPrecoManual] = useState<string | null>(
-    initial?.ajustadoManualmente ? String(Math.round(initial.precoFinal)) : null,
+  const [precoManual, setPrecoManual] = useState<number | null>(
+    initial?.ajustadoManualmente ? Math.round(initial.precoFinal) : null,
   );
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export function SimuladorPropostaForm({
   // é sempre derivada DESSE valor exibido — não do preço calculado puro —
   // pra continuar batendo com o percentual mesmo depois de um ajuste manual.
   const editadoManualmente = precoManual !== null;
-  const precoFinalExibido = editadoManualmente ? Number(precoManual) || 0 : precoCalculado;
+  const precoFinalExibido = precoManual ?? precoCalculado;
   const breakdown = {
     imposto: precoFinalExibido * settings.percentuais.imposto,
     comissao: precoFinalExibido * settings.percentuais.comissao,
@@ -210,10 +211,10 @@ export function SimuladorPropostaForm({
             </button>
           )}
         </div>
-        <input
-          type="number"
-          value={precoManual !== null ? precoManual : Math.round(precoCalculado)}
-          onChange={(e) => setPrecoManual(e.target.value)}
+        <FormattedNumberInput
+          mode="currency"
+          value={precoManual ?? Math.round(precoCalculado)}
+          onValueChange={(v) => setPrecoManual(v ?? null)}
           className="mt-2 h-12 w-full rounded-lg border border-border bg-background px-3 text-2xl font-bold outline-none focus:ring-2 focus:ring-ring"
         />
         <p className="mt-1.5 text-[11px] text-muted-foreground">

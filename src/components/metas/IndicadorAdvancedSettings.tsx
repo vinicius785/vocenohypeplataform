@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   META_AREAS,
   TRACKING_FREQUENCIES,
@@ -56,6 +57,46 @@ const MARCO_STATUS_LABEL: Record<IndicadorMarcoStatus, string> = {
 };
 
 const NUMERIC_TYPES: MetricType[] = ["numero", "percentual", "moeda", "min", "max", "manual"];
+
+/** Campo de nível (valor atual/esperado/baseline/mínimo/excelência) —
+ * indicador tipo "moeda" ganha formatação pt-BR em tempo real (separador
+ * de milhar + decimal); os demais tipos continuam com o número puro (não
+ * dá pra saber a magnitude/formato certo de "número"/"manual" genéricos
+ * sem inventar uma regra). */
+function NivelField({
+  tipo,
+  value,
+  onChange,
+  className,
+  placeholder,
+}: {
+  tipo: MetricType;
+  value: string;
+  onChange: (s: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  if (tipo === "moeda") {
+    return (
+      <FormattedNumberInput
+        mode="currency"
+        value={value.trim() ? Number(value) : undefined}
+        onValueChange={(n) => onChange(n != null ? String(n) : "")}
+        className={className}
+        placeholder={placeholder}
+      />
+    );
+  }
+  return (
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+}
 
 /** Painel "Configurações avançadas" da página do indicador — os campos
  * técnicos que a criação rápida (`IndicadorQuickCreateDialog`) não expõe:
@@ -258,10 +299,10 @@ export function IndicadorAdvancedSettings({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>Valor atual</label>
-              <input
-                type="number"
+              <NivelField
+                tipo={tipo}
                 value={valorAtual}
-                onChange={(e) => setValorAtual(e.target.value)}
+                onChange={setValorAtual}
                 className={FIELD_CLS}
               />
             </div>
@@ -278,19 +319,19 @@ export function IndicadorAdvancedSettings({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>Meta esperada</label>
-              <input
-                type="number"
+              <NivelField
+                tipo={tipo}
                 value={esperado}
-                onChange={(e) => setEsperado(e.target.value)}
+                onChange={setEsperado}
                 className={FIELD_CLS}
               />
             </div>
             <div>
               <label className={LABEL_CLS}>Baseline</label>
-              <input
-                type="number"
+              <NivelField
+                tipo={tipo}
                 value={baseline}
-                onChange={(e) => setBaseline(e.target.value)}
+                onChange={setBaseline}
                 placeholder="De onde partiu"
                 className={FIELD_CLS}
               />
@@ -299,20 +340,20 @@ export function IndicadorAdvancedSettings({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>Meta mínima</label>
-              <input
-                type="number"
+              <NivelField
+                tipo={tipo}
                 value={minimo}
-                onChange={(e) => setMinimo(e.target.value)}
+                onChange={setMinimo}
                 placeholder="Vira risco abaixo"
                 className={FIELD_CLS}
               />
             </div>
             <div>
               <label className={LABEL_CLS}>Meta de excelência</label>
-              <input
-                type="number"
+              <NivelField
+                tipo={tipo}
                 value={excelencia}
-                onChange={(e) => setExcelencia(e.target.value)}
+                onChange={setExcelencia}
                 placeholder="Vira destaque acima"
                 className={FIELD_CLS}
               />

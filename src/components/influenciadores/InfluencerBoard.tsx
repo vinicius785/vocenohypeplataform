@@ -67,6 +67,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -998,15 +999,10 @@ function MetricsEditor({
           <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
             {f.label}
           </span>
-          <input
-            type="number"
-            min={0}
-            value={m[f.key] ?? ""}
-            onChange={(e) => {
-              const raw = e.target.value;
-              const n = raw === "" ? undefined : Number(raw);
-              onChange({ ...m, [f.key]: Number.isFinite(n as number) ? (n as number) : undefined });
-            }}
+          <FormattedNumberInput
+            mode="integer"
+            value={m[f.key]}
+            onValueChange={(n) => onChange({ ...m, [f.key]: n })}
             className="h-7 w-full rounded border border-border bg-background px-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
           />
         </label>

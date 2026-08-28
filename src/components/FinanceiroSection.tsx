@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { SectionHeader } from "./SectionHeader";
+import { FormattedNumberInput } from "./ui/formatted-number-input";
 import { useClientes } from "@/lib/clientes-store";
 import { BankFields, type BankInfo } from "./CampanhasSection";
 import {
@@ -697,7 +698,7 @@ function EntryDialog({
   const [date, setDate] = useState(initial?.date ?? todayISO());
   const [description, setDescription] = useState(initial?.description ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
-  const [amount, setAmount] = useState(initial ? String(initial.amount).replace(".", ",") : "");
+  const [amount, setAmount] = useState<number | undefined>(initial?.amount);
   const [clienteId, setClienteId] = useState(initial?.clienteId ?? "");
   const [campanhaId, setCampanhaId] = useState(initial?.campanhaId ?? "");
   const [bank, setBank] = useState<BankInfo>(initial?.bank ?? {});
@@ -735,7 +736,7 @@ function EntryDialog({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = parseMoney(amount);
+    const amt = amount ?? 0;
     if (!description.trim() || amt <= 0 || !date || !category) {
       setError("Preencha descrição, valor, data e categoria.");
       return;
@@ -817,12 +818,12 @@ function EntryDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Valor (R$)">
-              <input
+              <FormattedNumberInput
+                mode="currency"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={setAmount}
                 className={inputCls}
                 placeholder="0,00"
-                inputMode="decimal"
                 required
               />
             </Field>

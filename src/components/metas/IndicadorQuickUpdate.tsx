@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Target } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   INDICADOR_MARCO_STATUSES,
   type Indicador,
@@ -216,13 +217,23 @@ export function IndicadorQuickUpdate({
                     Valor atual
                     {indicador.unidade ? ` (${indicador.unidade})` : isPercentual ? " (%)" : ""}
                   </label>
-                  <input
-                    type="number"
-                    value={valor}
-                    onChange={(e) => setValor(e.target.value)}
-                    autoFocus={!isPercentual}
-                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
+                  {indicador.tipo === "moeda" ? (
+                    <FormattedNumberInput
+                      mode="currency"
+                      value={valor.trim() ? Number(valor) : undefined}
+                      onValueChange={(n) => setValor(n != null ? String(n) : "")}
+                      autoFocus={!isPercentual}
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      value={valor}
+                      onChange={(e) => setValor(e.target.value)}
+                      autoFocus={!isPercentual}
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  )}
                 </div>
               )}
             </div>

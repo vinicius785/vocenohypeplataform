@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Plus, X, Image as ImageIcon, ExternalLink, Megaphone, Upload } from "lucide-react";
 import type { Campaign, CampaignPlatform, CampaignStatus, Creative, Project } from "@/lib/projetos";
 import { resizeImageToDataUrl } from "@/lib/image-upload";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 const PLATFORMS: CampaignPlatform[] = ["Meta", "Google", "TikTok", "LinkedIn", "Outro"];
 const STATUS: { key: CampaignStatus; label: string; cls: string }[] = [
@@ -247,14 +248,10 @@ function CampaignEditor({
         </label>
         <label className="space-y-1 md:col-span-2">
           <span className="text-[11px] font-medium text-muted-foreground">Verba (R$)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={c.budget ?? ""}
-            onChange={(e) =>
-              onChange({ budget: e.target.value === "" ? undefined : Number(e.target.value) })
-            }
+          <FormattedNumberInput
+            mode="currency"
+            value={c.budget}
+            onValueChange={(budget) => onChange({ budget })}
             className={inputCls}
           />
         </label>
