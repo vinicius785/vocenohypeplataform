@@ -250,18 +250,21 @@ function loadPerfil(): { nome?: string; foto?: string } {
   }
 }
 
-const PERSONAL_KEY = "inicio.personal";
-function loadPersonal(): PersonalItem[] {
+// Fonte de verdade é `profiles.personal_list` (por usuário, sincroniza entre
+// dispositivos) — o cache local é só pra pintar a lista instantaneamente no
+// primeiro render, antes da consulta ao Supabase resolver.
+const PERSONAL_CACHE_KEY = "inicio.personal.cache";
+function loadPersonalCache(): PersonalItem[] {
   try {
-    const raw = localStorage.getItem(PERSONAL_KEY);
+    const raw = localStorage.getItem(PERSONAL_CACHE_KEY);
     return raw ? (JSON.parse(raw) as PersonalItem[]) : [];
   } catch {
     return [];
   }
 }
-function savePersonal(items: PersonalItem[]) {
+function cachePersonal(items: PersonalItem[]) {
   try {
-    localStorage.setItem(PERSONAL_KEY, JSON.stringify(items));
+    localStorage.setItem(PERSONAL_CACHE_KEY, JSON.stringify(items));
   } catch {
     /* ignore */
   }
@@ -308,7 +311,7 @@ export function InicioDashboard() {
   const [tasks, setTasks] = useState<DashTask[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
-  const [personal, setPersonal] = useState<PersonalItem[]>([]);
+  const [personal, setPersonal] = useState<PersonalItem[]>(() => loadPersonalCache());
   const [newPersonal, setNewPersonal] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [zipOpen, setZipOpen] = useState(false);
@@ -343,7 +346,6 @@ export function InicioDashboard() {
     const refresh = () => {
       setTasks(loadAllTasks(campanhaNameMap, getMe().name));
       setMeetings(loadMeetings());
-      setPersonal(loadPersonal());
     };
     refresh();
     window.addEventListener("storage", refresh);
@@ -365,6 +367,44 @@ export function InicioDashboard() {
       unsubStandalone();
     };
   }, [campanhaNameMap]);
+
+  // Lista pessoal — vive em `profiles.personal_list` (por usuário), não mais
+  // só em localStorage, pra acompanhar quem logou de outro dispositivo/
+  // navegador. Canal realtime próprio (filtrado pelo id do usuário) reflete
+  // uma edição feita em outra aba/dispositivo sem precisar de F5.
+  useEffect(() => {
+    const userId = getMe().id;
+    if (!userId) return;
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("personal_list")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const items = (data.personal_list as PersonalItem[] | null) ?? [];
+        setPersonal(items);
+        cachePersonal(items);
+      });
+    const channel = supabase
+      .channel(`rt-personal-list-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+        (payload) => {
+          const items = ((payload.new as { personal_list?: PersonalItem[] } | null)
+            ?.personal_list ?? []) as PersonalItem[];
+          setPersonal(items);
+          cachePersonal(items);
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   // "Líder do mês" do box "Jogos do dia" — quem mais venceu o Zip do dia
   // este mês (mais dias com o tempo mais rápido). Atualiza sozinho quando
@@ -506,23 +546,30 @@ export function InicioDashboard() {
     return { receita, despesa, saldo: receita - despesa };
   }, [financeiroEntries]);
 
+  const persistPersonal = (next: PersonalItem[]) => {
+    setPersonal(next);
+    cachePersonal(next);
+    const userId = getMe().id;
+    if (!userId) return;
+    void supabase
+      .from("profiles")
+      .update({ personal_list: next })
+      .eq("id", userId)
+      .then(({ error }) => {
+        if (error) console.warn("[inicio.personal] save failed", error);
+      });
+  };
   const addPersonal = () => {
     const t = newPersonal.trim();
     if (!t) return;
-    const next = [...personal, { id: `p_${Date.now()}`, text: t, done: false }];
-    setPersonal(next);
-    savePersonal(next);
+    persistPersonal([...personal, { id: `p_${Date.now()}`, text: t, done: false }]);
     setNewPersonal("");
   };
   const togglePersonal = (id: string) => {
-    const next = personal.map((p) => (p.id === id ? { ...p, done: !p.done } : p));
-    setPersonal(next);
-    savePersonal(next);
+    persistPersonal(personal.map((p) => (p.id === id ? { ...p, done: !p.done } : p)));
   };
   const removePersonal = (id: string) => {
-    const next = personal.filter((p) => p.id !== id);
-    setPersonal(next);
-    savePersonal(next);
+    persistPersonal(personal.filter((p) => p.id !== id));
   };
 
   const openTask = (t: DashTask) => {
