@@ -9,6 +9,7 @@ export type ArrayStoreTable =
   | "banco_influenciadores"
   | "marketing_tasks"
   | "marketing_standalone_tasks"
+  | "task_tags"
   | "metas"
   | "aeo_prompts"
   | "aeo_respostas";

@@ -30,6 +30,15 @@ import {
 } from "@/lib/marketing-tasks";
 import { loadTeamMembers } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
+import {
+  loadTaskTags,
+  onTaskTagsChange,
+  createTaskTag,
+  updateTaskTagColor,
+  deleteTaskTag,
+  TASK_TAG_COLORS,
+  type TaskTag,
+} from "@/lib/task-tags-store";
 
 /** Best-effort: notifica (push no celular/desktop) quem acabou de ser
  * atribuído a esta tarefa — nunca deve travar/quebrar o salvamento se
@@ -230,6 +239,23 @@ function useTeamMembers(): Member[] {
     };
   }, []);
   return members;
+}
+
+/** Registro compartilhado de etiquetas (nome + cor) — mesmo padrão de
+ * `useTeamMembers`, só que sincronizado via Supabase Realtime
+ * (task-tags-store.ts) em vez de localStorage/evento de storage. */
+function useTaskTags(): TaskTag[] {
+  const [tags, setTags] = useState<TaskTag[]>(() => loadTaskTags());
+  useEffect(() => onTaskTagsChange(() => setTags(loadTaskTags())), []);
+  return tags;
+}
+
+/** Cor de uma etiqueta pelo nome — resolvida do registro compartilhado
+ * quando existe; cai pro hash antigo (`colorFor`) só pra etiqueta que
+ * ainda não foi "confirmada" no registro (texto livre de antes desse
+ * sistema existir), sem exigir migração de dado nenhuma. */
+function colorForTag(name: string, taskTags: TaskTag[]): string {
+  return taskTags.find((t) => t.name === name)?.color ?? colorFor(name);
 }
 function getCurrentAuthor(): Member {
   if (typeof window !== "undefined") {
@@ -433,6 +459,27 @@ function CompactAssigneePicker({
   );
 }
 
+/** Fileira de swatches de cor — reaproveitada tanto pra "criar etiqueta
+ * nova" quanto pra "editar a cor" de uma já existente (o popover que a
+ * envolve decide o resto do layout/título). */
+function TagColorSwatches({ value, onPick }: { value?: string; onPick: (color: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 p-1">
+      {TASK_TAG_COLORS.map((c) => (
+        <button
+          key={c.value}
+          type="button"
+          title={c.label}
+          onClick={() => onPick(c.value)}
+          className={`h-6 w-6 shrink-0 rounded-full ${c.value.split(" ")[0]} ${
+            value === c.value ? "ring-2 ring-offset-2 ring-offset-popover ring-foreground" : ""
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function renderMentions(text: string, members: Member[]) {
   const parts = text.split(/(@[\wÀ-ÿ]+(?:\s[\wÀ-ÿ]+)?)/g);
   return parts.map((p, i) => {
@@ -519,9 +566,11 @@ export function TaskBoard({
 
   // Etiquetas — antes eram só texto livre digitado no diálogo, nunca
   // aparecendo em lugar nenhum do board nem servindo pra filtrar nada
-  // (na prática, invisíveis depois de criadas). `allTags` alimenta tanto
-  // a barra de filtro abaixo quanto as sugestões no diálogo, pra reusar
-  // o nome exato já usado em vez de reinventar ("Cliente" vs "cliente").
+  // (na prática, invisíveis depois de criadas). `allTags` (nomes usados
+  // NESTE board) alimenta a barra de filtro abaixo; a cor de cada uma
+  // vem do registro compartilhado (`task-tags-store.ts`), não mais de um
+  // hash local — mudar a cor lá reflete aqui pra todo mundo.
+  const taskTags = useTaskTags();
   const allTags = useMemo(
     () =>
       Array.from(new Set(tasks.flatMap((t) => t.tags ?? []))).sort((a, b) => a.localeCompare(b)),
@@ -561,7 +610,7 @@ export function TaskBoard({
                 key={tag}
                 type="button"
                 onClick={() => setTagFilter((prev) => (prev === tag ? null : tag))}
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorFor(tag)} ${
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorForTag(tag, taskTags)} ${
                   active ? "" : "opacity-50 hover:opacity-80"
                 }`}
               >
@@ -646,7 +695,7 @@ export function TaskBoard({
                         {t.tags!.map((tag) => (
                           <span
                             key={tag}
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorFor(tag)}`}
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorForTag(tag, taskTags)}`}
                           >
                             {tag}
                           </span>
@@ -746,7 +795,6 @@ export function TaskBoard({
             : undefined
         }
         onToggleTimer={toggleTimer}
-        existingTags={allTags}
       />
     </section>
   );
@@ -767,7 +815,6 @@ export function TaskDialog({
   onSave,
   onDelete,
   onToggleTimer,
-  existingTags = [],
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -779,12 +826,9 @@ export function TaskDialog({
   onSave: (t: Task) => void;
   onDelete?: () => void;
   onToggleTimer?: (taskId: string) => Task | null;
-  /** Etiquetas já usadas em outras tarefas do mesmo board — vira sugestão
-   * de reaproveitar o nome exato em vez de digitar de novo (evita
-   * "Cliente"/"cliente"/"CLIENTE" como três etiquetas diferentes). */
-  existingTags?: string[];
 }) {
   const members = useTeamMembers();
+  const taskTags = useTaskTags();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [descEditing, setDescEditing] = useState(false);
@@ -1060,15 +1104,25 @@ export function TaskDialog({
   };
 
   const [tagSuggestOpen, setTagSuggestOpen] = useState(false);
+  // Nome da etiqueta cuja cor está sendo editada (afeta todo mundo, via
+  // updateTaskTagColor) — null quando nenhum popover de cor está aberto.
+  const [editingTagColor, setEditingTagColor] = useState<string | null>(null);
+  // Nome digitado sem correspondência no registro — aguardando a escolha
+  // de cor antes de virar uma TaskTag de verdade (createTaskTag).
+  const [creatingTagName, setCreatingTagName] = useState<string | null>(null);
   const tagFieldRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!tagSuggestOpen) return;
+    if (!tagSuggestOpen && !editingTagColor && !creatingTagName) return;
     const onDocClick = (e: MouseEvent) => {
-      if (!tagFieldRef.current?.contains(e.target as Node)) setTagSuggestOpen(false);
+      if (!tagFieldRef.current?.contains(e.target as Node)) {
+        setTagSuggestOpen(false);
+        setEditingTagColor(null);
+        setCreatingTagName(null);
+      }
     };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [tagSuggestOpen]);
+  }, [tagSuggestOpen, editingTagColor, creatingTagName]);
 
   const addTag = (raw?: string) => {
     const typed = (raw ?? newTag).trim();
@@ -1076,18 +1130,30 @@ export function TaskDialog({
     // Reaproveita a etiqueta já existente com a MESMA grafia (comparando
     // sem diferenciar maiúsculas) em vez de criar uma quase-duplicata só
     // por causa de "Cliente" vs "cliente".
-    const existing = existingTags.find((t) => t.toLowerCase() === typed.toLowerCase());
-    const t = existing ?? typed;
+    const existing = taskTags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
+    if (existing) {
+      setTagSuggestOpen(false);
+      setNewTag("");
+      if (!tags.includes(existing.name)) setTags((prev) => [...prev, existing.name]);
+      return;
+    }
+    // Nome novo — estilo ClickUp: escolhe a cor antes de criar de fato no
+    // registro compartilhado, em vez de cair numa cor aleatória.
     setTagSuggestOpen(false);
+    setCreatingTagName(typed);
+  };
+  const confirmCreateTag = (color: string) => {
+    if (!creatingTagName) return;
+    const tag = createTaskTag(creatingTagName, color);
+    setTags((prev) => (prev.includes(tag.name) ? prev : [...prev, tag.name]));
+    setCreatingTagName(null);
     setNewTag("");
-    if (tags.includes(t)) return;
-    setTags((prev) => [...prev, t]);
   };
   const removeTag = (t: string) => setTags((prev) => prev.filter((x) => x !== t));
-  const tagSuggestions = existingTags.filter(
+  const tagSuggestions = taskTags.filter(
     (t) =>
-      !tags.includes(t) &&
-      (!newTag.trim() || t.toLowerCase().includes(newTag.trim().toLowerCase())),
+      !tags.includes(t.name) &&
+      (!newTag.trim() || t.name.toLowerCase().includes(newTag.trim().toLowerCase())),
   );
 
   const readAsDataUrl = (file: File): Promise<string> =>
@@ -1417,9 +1483,15 @@ export function TaskDialog({
                     {tags.map((t) => (
                       <span
                         key={t}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorFor(t)}`}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorForTag(t, taskTags)}`}
                       >
-                        {t}
+                        <button
+                          type="button"
+                          title="Editar cor desta etiqueta (reflete pra todo mundo)"
+                          onClick={() => setEditingTagColor(editingTagColor === t ? null : t)}
+                        >
+                          {t}
+                        </button>
                         <button type="button" onClick={() => removeTag(t)}>
                           <X className="h-2.5 w-2.5" />
                         </button>
@@ -1439,22 +1511,72 @@ export function TaskDialog({
                       className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
                     />
                   </div>
-                  {tagSuggestOpen && tagSuggestions.length > 0 && (
-                    <div className="absolute z-10 mt-1 max-h-40 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+
+                  {editingTagColor && (
+                    <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
+                      <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
+                        Cor de "{editingTagColor}" — reflete em todas as tarefas
+                      </p>
+                      <TagColorSwatches
+                        value={taskTags.find((t) => t.name === editingTagColor)?.color}
+                        onPick={(color) => {
+                          const tag = taskTags.find((t) => t.name === editingTagColor);
+                          if (tag) updateTaskTagColor(tag.id, color);
+                          setEditingTagColor(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tag = taskTags.find((t) => t.name === editingTagColor);
+                          if (tag) deleteTaskTag(tag.id);
+                          removeTag(editingTagColor);
+                          setEditingTagColor(null);
+                        }}
+                        className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
+                      >
+                        Excluir etiqueta do registro
+                      </button>
+                    </div>
+                  )}
+
+                  {creatingTagName && (
+                    <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
+                      <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
+                        Escolha uma cor para "{creatingTagName}"
+                      </p>
+                      <TagColorSwatches onPick={confirmCreateTag} />
+                    </div>
+                  )}
+
+                  {tagSuggestOpen && !editingTagColor && !creatingTagName && (
+                    <div className="absolute z-10 mt-1 max-h-48 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
                       {tagSuggestions.map((t) => (
                         <button
-                          key={t}
+                          key={t.id}
                           type="button"
-                          onClick={() => addTag(t)}
+                          onClick={() => addTag(t.name)}
                           className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
                         >
                           <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorFor(t)}`}
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${t.color}`}
                           >
-                            {t}
+                            {t.name}
                           </span>
                         </button>
                       ))}
+                      {newTag.trim() &&
+                        !taskTags.some(
+                          (t) => t.name.toLowerCase() === newTag.trim().toLowerCase(),
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => addTag()}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-primary hover:bg-muted"
+                          >
+                            + Criar etiqueta "{newTag.trim()}"
+                          </button>
+                        )}
                     </div>
                   )}
                 </div>
@@ -1939,7 +2061,6 @@ export function TaskDialog({
             removeSubtask(editSubtask.id);
             setEditSubtask(null);
           }}
-          existingTags={existingTags}
         />
       )}
       <AttachmentPreviewDialog
