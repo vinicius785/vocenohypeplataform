@@ -353,6 +353,77 @@ function Avatar({ member, size = 20 }: { member: Member; size?: number }) {
   );
 }
 
+/** Seletor compacto de vários responsáveis — usado no quick-add de
+ * subtarefa (linha estreita, um `<select>` só permitia escolher UM
+ * responsável ali, diferente da tarefa de nível raiz que já suporta
+ * vários). Mesma ideia do picker de "Responsáveis" do diálogo principal,
+ * só que como botão+dropdown compacto pra caber numa linha apertada. */
+function CompactAssigneePicker({
+  selected,
+  members,
+  onToggle,
+}: {
+  selected: string[];
+  members: Member[];
+  onToggle: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const label =
+    selected.length === 0
+      ? "Responsável"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} responsáveis`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs outline-none hover:bg-muted/40"
+      >
+        <User className="h-3 w-3 text-muted-foreground" />
+        {label}
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-48 w-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+          {members.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">Nenhum membro cadastrado.</div>
+          ) : (
+            members.map((m) => {
+              const checked = selected.includes(m.name);
+              return (
+                <button
+                  key={m.name}
+                  type="button"
+                  onClick={() => onToggle(m.name)}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted ${
+                    checked ? "bg-muted font-medium text-foreground" : ""
+                  }`}
+                >
+                  <Avatar member={m} size={18} />
+                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function renderMentions(text: string, members: Member[]) {
   const parts = text.split(/(@[\wÀ-ÿ]+(?:\s[\wÀ-ÿ]+)?)/g);
   return parts.map((p, i) => {
@@ -665,7 +736,11 @@ export function TaskDialog({
   const [subtasks, setSubtasks] = useState<Task[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskDate, setNewSubtaskDate] = useState("");
-  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState("");
+  const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
+  const toggleNewSubtaskAssignee = (name: string) =>
+    setNewSubtaskAssignees((prev) =>
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
+    );
   const [newSubtaskPriority, setNewSubtaskPriority] = useState<TaskPriority>("Normal");
   const [showSubtaskInput, setShowSubtaskInput] = useState(false);
   const [editSubtask, setEditSubtask] = useState<Task | null>(null);
@@ -753,7 +828,7 @@ export function TaskDialog({
     setCommentText("");
     setNewSubtaskTitle("");
     setNewSubtaskDate("");
-    setNewSubtaskAssignee("");
+    setNewSubtaskAssignees([]);
     setNewSubtaskPriority("Normal");
     setNewTag("");
     setShowSubtaskInput(false);
@@ -865,14 +940,14 @@ export function TaskDialog({
       status: "Aberto",
       priority: newSubtaskPriority,
       dueDate: newSubtaskDate || undefined,
-      assignee: newSubtaskAssignee.trim() || undefined,
+      assignees: newSubtaskAssignees.length ? newSubtaskAssignees : undefined,
       createdAt: new Date().toISOString(),
     };
     setSubtasks((prev) => [...prev, s]);
     setActivity((a) => pushActivity(a, `adicionou subtarefa "${t}"`));
     setNewSubtaskTitle("");
     setNewSubtaskDate("");
-    setNewSubtaskAssignee("");
+    setNewSubtaskAssignees([]);
     setNewSubtaskPriority("Normal");
     setShowSubtaskInput(false);
   };
@@ -1315,7 +1390,7 @@ export function TaskDialog({
                 <div className="ml-1 space-y-1 py-1">
                   {subtasks.map((s) => {
                     const done = s.status === "Concluído";
-                    const member = members.find((m) => m.name === s.assignee);
+                    const subtaskAssignees = getTaskAssignees(s);
                     return (
                       <div
                         key={s.id}
@@ -1370,14 +1445,22 @@ export function TaskDialog({
                           >
                             {s.title}
                           </span>
-                          {member ? (
-                            <Avatar member={member} />
-                          ) : (
-                            s.assignee && (
-                              <span className="shrink-0 truncate text-[11px] text-muted-foreground">
-                                {s.assignee}
-                              </span>
-                            )
+                          {subtaskAssignees.length > 0 && (
+                            <span className="inline-flex shrink-0 items-center -space-x-1.5">
+                              {subtaskAssignees.map((a) => (
+                                <Avatar
+                                  key={a}
+                                  member={
+                                    members.find((m) => m.name === a) ?? {
+                                      name: a,
+                                      initials: initialsOf(a) || "?",
+                                      color: colorFor(a),
+                                    }
+                                  }
+                                  size={16}
+                                />
+                              ))}
+                            </span>
                           )}
                           {s.dueDate && (
                             <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
@@ -1419,18 +1502,11 @@ export function TaskDialog({
                           onChange={(e) => setNewSubtaskDate(e.target.value)}
                           className="rounded border border-border bg-background px-2 py-1 text-xs outline-none"
                         />
-                        <select
-                          value={newSubtaskAssignee}
-                          onChange={(e) => setNewSubtaskAssignee(e.target.value)}
-                          className="rounded border border-border bg-background px-2 py-1 text-xs outline-none"
-                        >
-                          <option value="">Responsável</option>
-                          {members.map((m) => (
-                            <option key={m.name} value={m.name}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
+                        <CompactAssigneePicker
+                          selected={newSubtaskAssignees}
+                          members={members}
+                          onToggle={toggleNewSubtaskAssignee}
+                        />
                         <select
                           value={newSubtaskPriority}
                           onChange={(e) => setNewSubtaskPriority(e.target.value as TaskPriority)}
@@ -1449,7 +1525,7 @@ export function TaskDialog({
                               setShowSubtaskInput(false);
                               setNewSubtaskTitle("");
                               setNewSubtaskDate("");
-                              setNewSubtaskAssignee("");
+                              setNewSubtaskAssignees([]);
                             }}
                             className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
                           >
