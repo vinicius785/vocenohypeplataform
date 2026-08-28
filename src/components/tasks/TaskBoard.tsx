@@ -35,7 +35,15 @@ import { getMe } from "@/lib/chat-store";
  * atribuído a esta tarefa — nunca deve travar/quebrar o salvamento se
  * falhar. Resolve nome -> id via o diretório do time (o campo `assignees`
  * da tarefa guarda nomes, não ids). */
-async function notifyNewAssignees(names: string[], taskTitle: string) {
+/** Tarefa de campanha manda pra "campanhas" — antes ia sempre pra
+ * "projetos" mesmo quando a tarefa era de uma campanha (ou do board do
+ * Marketing, que também mora dentro de Projetos), fazendo quem clicasse
+ * na notificação cair na seção errada. */
+function sectionForScope(scope?: TaskBoardScope): string {
+  return scope?.kind === "campanha" ? "campanhas" : "projetos";
+}
+
+async function notifyNewAssignees(names: string[], taskTitle: string, scope?: TaskBoardScope) {
   if (names.length === 0) return;
   try {
     const me = getMe();
@@ -50,7 +58,7 @@ async function notifyNewAssignees(names: string[], taskTitle: string) {
         userIds: ids,
         title: "Nova tarefa atribuída a você",
         body: taskTitle,
-        url: "/time?section=projetos",
+        url: `/time?section=${sectionForScope(scope)}`,
       },
     });
   } catch (err) {
@@ -509,6 +517,22 @@ export function TaskBoard({
           return updated;
         };
 
+  // Etiquetas — antes eram só texto livre digitado no diálogo, nunca
+  // aparecendo em lugar nenhum do board nem servindo pra filtrar nada
+  // (na prática, invisíveis depois de criadas). `allTags` alimenta tanto
+  // a barra de filtro abaixo quanto as sugestões no diálogo, pra reusar
+  // o nome exato já usado em vez de reinventar ("Cliente" vs "cliente").
+  const allTags = useMemo(
+    () =>
+      Array.from(new Set(tasks.flatMap((t) => t.tags ?? []))).sort((a, b) => a.localeCompare(b)),
+    [tasks],
+  );
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  useEffect(() => {
+    if (tagFilter && !allTags.includes(tagFilter)) setTagFilter(null);
+  }, [tagFilter, allTags]);
+  const visibleTasks = tagFilter ? tasks.filter((t) => t.tags?.includes(tagFilter)) : tasks;
+
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
@@ -527,9 +551,39 @@ export function TaskBoard({
         </button>
       </div>
 
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Tag className="h-3 w-3 shrink-0 text-muted-foreground" />
+          {allTags.map((tag) => {
+            const active = tagFilter === tag;
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setTagFilter((prev) => (prev === tag ? null : tag))}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorFor(tag)} ${
+                  active ? "" : "opacity-50 hover:opacity-80"
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+          {tagFilter && (
+            <button
+              type="button"
+              onClick={() => setTagFilter(null)}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              Limpar filtro
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
         {TASK_STATUSES.map((col) => {
-          const allItems = tasks.filter((t) => t.status === col);
+          const allItems = visibleTasks.filter((t) => t.status === col);
           // Concluído acumula pra sempre — sem limite, uma campanha/projeto
           // antigo vira uma coluna infinita de tarefas que ninguém mais
           // precisa ver no dia a dia. Mostra só as 4 mais recentes por
@@ -587,6 +641,18 @@ export function TaskBoard({
                         <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                       </button>
                     </div>
+                    {(t.tags?.length ?? 0) > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {t.tags!.map((tag) => (
+                          <span
+                            key={tag}
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorFor(tag)}`}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {(t.dueDate ||
                       getTaskAssignees(t).length > 0 ||
                       (t.subtasks?.length ?? 0) > 0) && (
@@ -680,6 +746,7 @@ export function TaskBoard({
             : undefined
         }
         onToggleTimer={toggleTimer}
+        existingTags={allTags}
       />
     </section>
   );
@@ -700,6 +767,7 @@ export function TaskDialog({
   onSave,
   onDelete,
   onToggleTimer,
+  existingTags = [],
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -711,6 +779,10 @@ export function TaskDialog({
   onSave: (t: Task) => void;
   onDelete?: () => void;
   onToggleTimer?: (taskId: string) => Task | null;
+  /** Etiquetas já usadas em outras tarefas do mesmo board — vira sugestão
+   * de reaproveitar o nome exato em vez de digitar de novo (evita
+   * "Cliente"/"cliente"/"CLIENTE" como três etiquetas diferentes). */
+  existingTags?: string[];
 }) {
   const members = useTeamMembers();
   const [title, setTitle] = useState("");
@@ -895,6 +967,7 @@ export function TaskDialog({
         void notifyNewAssignees(
           assignees.filter((a) => !prevAssignees.includes(a)),
           title.trim(),
+          scope,
         );
       }
       if ((initial.dueDate ?? "") !== dueDate)
@@ -902,7 +975,7 @@ export function TaskDialog({
       if ((initial.description ?? "") !== description)
         act = pushActivity(act, "atualizou a descrição");
     } else {
-      void notifyNewAssignees(assignees, title.trim());
+      void notifyNewAssignees(assignees, title.trim(), scope);
     }
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
@@ -986,13 +1059,36 @@ export function TaskDialog({
     if (st) setActivity((a) => pushActivity(a, `removeu subtarefa "${st.title}"`));
   };
 
-  const addTag = () => {
-    const t = newTag.trim();
-    if (!t || tags.includes(t)) return;
-    setTags((prev) => [...prev, t]);
+  const [tagSuggestOpen, setTagSuggestOpen] = useState(false);
+  const tagFieldRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!tagSuggestOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!tagFieldRef.current?.contains(e.target as Node)) setTagSuggestOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [tagSuggestOpen]);
+
+  const addTag = (raw?: string) => {
+    const typed = (raw ?? newTag).trim();
+    if (!typed) return;
+    // Reaproveita a etiqueta já existente com a MESMA grafia (comparando
+    // sem diferenciar maiúsculas) em vez de criar uma quase-duplicata só
+    // por causa de "Cliente" vs "cliente".
+    const existing = existingTags.find((t) => t.toLowerCase() === typed.toLowerCase());
+    const t = existing ?? typed;
+    setTagSuggestOpen(false);
     setNewTag("");
+    if (tags.includes(t)) return;
+    setTags((prev) => [...prev, t]);
   };
   const removeTag = (t: string) => setTags((prev) => prev.filter((x) => x !== t));
+  const tagSuggestions = existingTags.filter(
+    (t) =>
+      !tags.includes(t) &&
+      (!newTag.trim() || t.toLowerCase().includes(newTag.trim().toLowerCase())),
+  );
 
   const readAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -1316,30 +1412,51 @@ export function TaskDialog({
               </Field>
 
               <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
-                <div className="flex w-full flex-wrap items-center gap-1.5">
-                  {tags.map((t) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-                    >
-                      {t}
-                      <button type="button" onClick={() => removeTag(t)}>
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addTag();
-                      }
-                    }}
-                    placeholder={tags.length ? "" : "Adicionar etiqueta"}
-                    className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
-                  />
+                <div className="relative w-full" ref={tagFieldRef}>
+                  <div className="flex w-full flex-wrap items-center gap-1.5">
+                    {tags.map((t) => (
+                      <span
+                        key={t}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorFor(t)}`}
+                      >
+                        {t}
+                        <button type="button" onClick={() => removeTag(t)}>
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onFocus={() => setTagSuggestOpen(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addTag();
+                        }
+                      }}
+                      placeholder={tags.length ? "" : "Adicionar etiqueta"}
+                      className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  {tagSuggestOpen && tagSuggestions.length > 0 && (
+                    <div className="absolute z-10 mt-1 max-h-40 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+                      {tagSuggestions.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => addTag(t)}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                        >
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorFor(t)}`}
+                          >
+                            {t}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </Field>
             </div>
@@ -1822,6 +1939,7 @@ export function TaskDialog({
             removeSubtask(editSubtask.id);
             setEditSubtask(null);
           }}
+          existingTags={existingTags}
         />
       )}
       <AttachmentPreviewDialog

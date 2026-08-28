@@ -465,6 +465,7 @@ function RoadmapPanel({
             });
             setOpenTaskId(null);
           }}
+          existingTags={Array.from(new Set(project.tasks.flatMap((t) => t.tags ?? [])))}
         />
       )}
     </div>
