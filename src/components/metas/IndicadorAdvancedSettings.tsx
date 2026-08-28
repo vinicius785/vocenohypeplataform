@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   META_AREAS,
-  TRACKING_FREQUENCIES,
   METRIC_TYPES,
   METRIC_DIRECTIONS,
   INDICADOR_MARCO_STATUSES,
   type Indicador,
-  type Objetivo,
   type MetaArea,
   type TrackingFrequency,
   type MetricType,
   type MetricDirection,
   type IndicadorMarcoStatus,
 } from "@/lib/metas-store";
+import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
 
 type Member = { name: string; photo?: string };
 
@@ -22,14 +20,6 @@ const FIELD_CLS =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
 const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-wider text-foreground/70";
-
-const FREQUENCY_LABEL: Record<TrackingFrequency, string> = {
-  continuo: "Contínuo",
-  semanal: "Semanal",
-  mensal: "Mensal",
-  trimestral: "Trimestral",
-  personalizado: "Personalizado",
-};
 
 const METRIC_TYPE_LABEL: Record<MetricType, string> = {
   numero: "Número",
@@ -109,19 +99,12 @@ function NivelField({
  * por configurar, não precisa de progressive disclosure aqui dentro. */
 export function IndicadorAdvancedSettings({
   indicador,
-  objetivosVinculados,
   members,
   onSave,
-  onUnlinkObjetivo,
 }: {
   indicador: Indicador;
-  /** Objetivos que este indicador alimenta hoje — só pra exibir a lista e
-   * permitir desvincular daqui também (o mesmo "x" já existe no card
-   * dentro de cada objetivo, isso é só um segundo acesso). */
-  objetivosVinculados: Objetivo[];
   members: Member[];
   onSave: (ind: Indicador) => void;
-  onUnlinkObjetivo: (objetivoId: string) => void;
 }) {
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -366,9 +349,9 @@ export function IndicadorAdvancedSettings({
         <p className={SECTION_TITLE_CLS}>Responsabilidade e período</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={LABEL_CLS}>Dono</label>
+            <label className={LABEL_CLS}>Responsável pela atualização</label>
             <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
-              <option value="">Sem dono</option>
+              <option value="">Sem responsável</option>
               {members.map((m) => (
                 <option key={m.name} value={m.name}>
                   {m.name}
@@ -377,15 +360,15 @@ export function IndicadorAdvancedSettings({
             </select>
           </div>
           <div>
-            <label className={LABEL_CLS}>Frequência</label>
+            <label className={LABEL_CLS}>Cadência de atualização</label>
             <select
               value={frequencia}
               onChange={(e) => setFrequencia(e.target.value as TrackingFrequency)}
               className={FIELD_CLS}
             >
-              {TRACKING_FREQUENCIES.map((f) => (
+              {CADENCE_OPTIONS.map((f) => (
                 <option key={f} value={f}>
-                  {FREQUENCY_LABEL[f]}
+                  {CADENCE_LABEL[f]}
                 </option>
               ))}
             </select>
@@ -455,38 +438,6 @@ export function IndicadorAdvancedSettings({
             Automática (em breve)
           </button>
         </div>
-      </div>
-
-      <div className="space-y-3 border-t border-border pt-4">
-        <p className={SECTION_TITLE_CLS}>Vinculado a</p>
-        {objetivosVinculados.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Nenhum objetivo — este indicador é independente.
-          </p>
-        ) : (
-          <ul className="space-y-1.5">
-            {objetivosVinculados.map((o) => (
-              <li
-                key={o.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5"
-              >
-                <span className="truncate text-xs text-foreground">{o.titulo}</span>
-                <button
-                  type="button"
-                  onClick={() => onUnlinkObjetivo(o.id)}
-                  title="Desvincular deste objetivo"
-                  aria-label="Desvincular deste objetivo"
-                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="text-[11px] text-muted-foreground">
-          Peso em cada objetivo se ajusta em "Ajustar pesos", dentro da página do objetivo.
-        </p>
       </div>
 
       <div className="flex justify-end border-t border-border pt-4">

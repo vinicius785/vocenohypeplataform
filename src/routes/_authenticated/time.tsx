@@ -74,11 +74,17 @@ const VALID: SectionKey[] = [
 export const Route = createFileRoute("/_authenticated/time")({
   component: TimePage,
   head: () => ({ meta: [{ title: "Plataforma VNH" }] }),
-  validateSearch: (s: Record<string, unknown>): { section?: SectionKey } => {
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { section?: SectionKey; metasView?: "objetivos" | "indicadores" } => {
     const v = s.section;
-    return typeof v === "string" && (VALID as string[]).includes(v)
-      ? { section: v as SectionKey }
-      : {};
+    const mv = s.metasView;
+    return {
+      ...(typeof v === "string" && (VALID as string[]).includes(v)
+        ? { section: v as SectionKey }
+        : {}),
+      ...(mv === "objetivos" || mv === "indicadores" ? { metasView: mv } : {}),
+    };
   },
 });
 

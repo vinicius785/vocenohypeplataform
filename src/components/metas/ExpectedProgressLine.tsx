@@ -1,8 +1,9 @@
-/** Linha "Esperado hoje: X% · ↓/↑ Yp.p. abaixo/acima do esperado" —
- * compara progresso real com `progressoEsperado` (metas-engine.ts).
- * Compartilhada entre `ObjetivoSummaryCard` e `ObjetivoPage` pra não
- * duplicar a formatação/cor. Não renderiza nada quando falta progresso
- * real ou esperado (nunca inventa o valor). */
+/** Linha curta comparando progresso real com o ritmo esperado
+ * (`progressoEsperado`, metas-engine.ts) — só aparece quando a
+ * comparação agrega. Compartilhada entre `ObjetivoSummaryCard` e
+ * `ObjetivoPage` pra não duplicar formatação/cor. O valor "esperado"
+ * numérico fica só no `title` (tooltip nativo), não precisa virar texto
+ * sempre-visível pra a linha continuar curta. */
 export function ExpectedProgressLine({
   progresso,
   esperado,
@@ -14,10 +15,16 @@ export function ExpectedProgressLine({
   const diff = Math.round(progresso - esperado);
   const esperadoRounded = Math.round(esperado);
 
+  // Início do período (esperado ainda ~0%): qualquer progresso já
+  // pareceria "muito acima do ritmo", mas isso não é sinal nenhum tão
+  // cedo — evita destacar artificialmente um "+20 p.p." como se fosse
+  // uma conquista no dia 1.
+  if (esperadoRounded <= 0 && diff > 0) return null;
+
   if (diff === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Esperado hoje: {esperadoRounded}% · no ritmo esperado
+      <p className="text-xs text-muted-foreground" title={`Esperado hoje: ${esperadoRounded}%`}>
+        No ritmo
       </p>
     );
   }
@@ -25,12 +32,10 @@ export function ExpectedProgressLine({
   const acima = diff > 0;
   return (
     <p
-      className={`text-xs ${acima ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+      className={`text-xs font-medium ${acima ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+      title={`Esperado hoje: ${esperadoRounded}%`}
     >
-      Esperado hoje: {esperadoRounded}%{" "}
-      <span className="text-muted-foreground">
-        · {acima ? "↑" : "↓"} {Math.abs(diff)} p.p. {acima ? "acima" : "abaixo"} do esperado
-      </span>
+      {acima ? "↑" : "↓"} {Math.abs(diff)} p.p. {acima ? "acima" : "abaixo"} do ritmo
     </p>
   );
 }

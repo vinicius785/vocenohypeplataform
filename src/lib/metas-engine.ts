@@ -4,6 +4,7 @@ import type {
   MetaAtualizacao,
   MetricDirection,
   Objetivo,
+  TrackingFrequency,
 } from "./metas-store";
 
 /**
@@ -439,6 +440,55 @@ export function indicadorTendencia(
   if (diff === 0) return { trend: "estavel", diff };
   const melhorando = higherIsBetter(ind.direcao) ? diff > 0 : diff < 0;
   return { trend: melhorando ? "melhorando" : "piorando", diff };
+}
+
+export type StatusAtualizacao = "atualizado" | "precisa_atualizar" | "muito_desatualizado";
+
+/** Dias esperados entre atualizações, por cadência — só as que têm
+ * cadência de verdade ("continuo"/"personalizado" ficam de fora: sem
+ * expectativa de ritmo, nunca "atrasam"). "Muito desatrasado" = 2x o
+ * prazo normal. Isso é conceito DIFERENTE de `indicadorSaude` (seção 43
+ * do pedido: "não misturar os dois") — nunca entra no cálculo de
+ * progresso/saúde, só informa a rotina de manutenção da aba
+ * Indicadores. */
+const CADENCE_STALE_DAYS: Partial<Record<TrackingFrequency, number>> = {
+  semanal: 7,
+  quinzenal: 14,
+  mensal: 30,
+  trimestral: 90,
+};
+
+/** Status de atualização do indicador — puramente sobre "o dado está
+ * velho pra cadência dele", nunca sobre se o valor atende a meta de
+ * algum objetivo (isso é `indicadorSaudeParaObjetivo`). Sem cadência
+ * definida (`continuo`/`personalizado`) ou sem nenhuma atualização
+ * ainda, sempre `"atualizado"` — não dá pra cobrar ritmo de quem não
+ * tem ritmo esperado. */
+export function indicadorStatusAtualizacao(
+  ind: Pick<Indicador, "frequencia" | "updatedAt" | "createdAt">,
+): StatusAtualizacao {
+  const staleDays = CADENCE_STALE_DAYS[ind.frequencia];
+  if (staleDays == null) return "atualizado";
+  const dias = Math.floor(
+    (Date.now() - new Date(ind.updatedAt ?? ind.createdAt).getTime()) / 86_400_000,
+  );
+  if (dias > staleDays * 2) return "muito_desatualizado";
+  if (dias > staleDays) return "precisa_atualizar";
+  return "atualizado";
+}
+
+/** Prioridade de manutenção pra ordenar a aba Indicadores por padrão —
+ * combina "dado velho" + "quantos objetivos dependem dele" + "quantos
+ * desses estão em risco", maior = mais urgente de olhar primeiro. Só
+ * ordenação, não é saúde nem status de atualização — não persiste em
+ * lugar nenhum. */
+export function indicadorPrioridade(
+  status: StatusAtualizacao,
+  objetivosCount: number,
+  emRiscoCount: number,
+): number {
+  const base = status === "muito_desatualizado" ? 100 : status === "precisa_atualizar" ? 50 : 0;
+  return base + emRiscoCount * 10 + objetivosCount;
 }
 
 /** Progresso 0-100 pra exibição num card — indicador standalone usa a

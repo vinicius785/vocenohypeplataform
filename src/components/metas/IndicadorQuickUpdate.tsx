@@ -6,6 +6,7 @@ import {
   INDICADOR_MARCO_STATUSES,
   type Indicador,
   type IndicadorMarcoStatus,
+  type Objetivo,
 } from "@/lib/metas-store";
 
 const MARCO_STATUS_LABEL: Record<IndicadorMarcoStatus, string> = {
@@ -52,10 +53,16 @@ function todayLocalISO(): string {
 
 export function IndicadorQuickUpdate({
   indicador,
+  objetivosVinculados,
   onClose,
   onSave,
 }: {
   indicador: Indicador | null;
+  /** Objetivos que este indicador alimenta hoje — só pra avisar, quando
+   * há mais de um, que a atualização é compartilhada (o indicador é
+   * universal). Omitido/vazio = nenhum aviso (não vale a pena avisar
+   * sobre um único objetivo óbvio, ou nenhum). */
+  objetivosVinculados?: Pick<Objetivo, "id" | "titulo">[];
   onClose: () => void;
   /** `dataISO` (YYYY-MM-DD) é quando a atualização de fato aconteceu —
    * pode ser retroativa; vira o `createdAt` da entrada no histórico. */
@@ -249,6 +256,20 @@ export function IndicadorQuickUpdate({
               className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
+          {objetivosVinculados && objetivosVinculados.length > 1 && (
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+              <p className="text-xs font-medium text-foreground">
+                Esta atualização impactará {objetivosVinculados.length} objetivos:
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {objetivosVinculados.map((o) => (
+                  <li key={o.id} className="truncate text-xs text-muted-foreground">
+                    {o.titulo}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-muted-foreground">
               Nota (opcional)

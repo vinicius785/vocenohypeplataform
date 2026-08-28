@@ -9,14 +9,20 @@ export type SectionKpi = {
   onClick?: () => void;
 };
 
+export type SectionTab = { key: string; label: string; active: boolean; onClick: () => void };
+
 export function SectionHeader({
   title,
   subtitle,
+  tabs,
   kpis,
   action,
 }: {
   title: string;
   subtitle?: string;
+  /** Sub-abas dentro da seção (ex. Objetivos/Indicadores em Metas) —
+   * opcional, não usado pela maioria das seções. */
+  tabs?: SectionTab[];
   kpis?: SectionKpi[];
   action?: ReactNode;
 }) {
@@ -26,6 +32,24 @@ export function SectionHeader({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+          {tabs && tabs.length > 0 && (
+            <div className="mt-3 inline-flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
+              {tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={t.onClick}
+                  className={`rounded px-2.5 py-1 font-medium ${
+                    t.active
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {action}
       </div>

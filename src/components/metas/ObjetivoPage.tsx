@@ -3,7 +3,6 @@ import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
 import type { ComparisonOperator, Indicador, Objetivo } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_BAR,
-  indicadorPeso,
   indicadorSaudeParaObjetivo,
   objetivoProgresso,
   objetivoResumoSaude,
@@ -31,6 +30,7 @@ export function ObjetivoPage({
   objetivo,
   indicadoresDoObjetivo,
   indicadoresDisponiveis,
+  allObjetivos,
   members,
   onBack,
   onOpenIndicador,
@@ -48,6 +48,10 @@ export function ObjetivoPage({
    * universal, então pode ser vinculado aqui mesmo já estando em outro
    * objetivo. `linkable` abaixo só desconta quem já está NESTE. */
   indicadoresDisponiveis: Indicador[];
+  /** Todos os objetivos do app — só pra resolver a lista de "esta
+   * atualização impactará N objetivos" no modal de atualização rápida
+   * (o indicador pode estar em outros objetivos além deste). */
+  allObjetivos: Objetivo[];
   members: Member[];
   onBack: () => void;
   onOpenIndicador: (id: string) => void;
@@ -105,7 +109,7 @@ export function ObjetivoPage({
     filtro === "em_risco" ? emRisco : filtro === "saudaveis" ? saudaveis : indicadoresDoObjetivo;
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-4xl">
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -257,7 +261,6 @@ export function ObjetivoPage({
               key={ind.id}
               indicador={ind}
               objetivoId={objetivo.id}
-              peso={indicadorPeso(ind, indicadoresDoObjetivo, objetivo.id)}
               onOpen={() => onOpenIndicador(ind.id)}
               onQuickUpdate={() => setQuickUpdateTarget(ind)}
               onUnlink={() => onUnlinkIndicador(ind.id)}
@@ -302,6 +305,11 @@ export function ObjetivoPage({
       />
       <IndicadorQuickUpdate
         indicador={quickUpdateTarget}
+        objetivosVinculados={
+          quickUpdateTarget
+            ? allObjetivos.filter((o) => quickUpdateTarget.objetivoIds?.includes(o.id))
+            : []
+        }
         onClose={() => setQuickUpdateTarget(null)}
         onSave={(ind, patch, nota, dataISO) => {
           setQuickUpdateTarget(null);

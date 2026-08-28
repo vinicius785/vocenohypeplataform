@@ -29,14 +29,12 @@ import { useDropdown } from "./use-dropdown";
 export function ObjetivoIndicadorRow({
   indicador,
   objetivoId,
-  peso,
   onOpen,
   onQuickUpdate,
   onUnlink,
 }: {
   indicador: Indicador;
   objetivoId: string;
-  peso?: number;
   onOpen: () => void;
   onQuickUpdate: () => void;
   onUnlink: () => void;
@@ -45,7 +43,6 @@ export function ObjetivoIndicadorRow({
   const tendencia = indicadorTendencia(indicador);
   const valor = formatValorAtual(indicador);
   const meta = formatMetaVinculo(indicador, objetivoId);
-  const pesoLabel = peso != null ? `${Math.round(peso)}%` : null;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -82,22 +79,18 @@ export function ObjetivoIndicadorRow({
             >
               {INDICADOR_SAUDE_LABEL[saude]}
             </span>
-            {pesoLabel && <span className="text-muted-foreground">Peso: {pesoLabel}</span>}
           </p>
         </div>
         <span className="hidden w-16 shrink-0 text-right text-sm tabular-nums text-foreground sm:block">
           {valor}
         </span>
-        <span className="hidden w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground md:block">
+        <span className="hidden w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground md:block">
           {meta ?? "—"}
         </span>
         <span
           className={`hidden w-24 shrink-0 rounded px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide sm:block ${INDICADOR_SAUDE_TONE[saude]}`}
         >
           {INDICADOR_SAUDE_LABEL[saude]}
-        </span>
-        <span className="hidden w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground lg:block">
-          {pesoLabel ?? "—"}
         </span>
       </button>
       <div className="flex shrink-0 items-center gap-0.5 self-end sm:self-auto sm:opacity-0 sm:group-hover:opacity-100">

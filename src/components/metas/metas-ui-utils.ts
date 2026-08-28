@@ -2,10 +2,35 @@
  * evita duplicar entre `MetasSection`, `MetaCard`, os diálogos etc. */
 
 import { comparadorEfetivo, COMPARISON_OPERATOR_SYMBOL, metaEfetiva } from "@/lib/metas-engine";
-import type { Indicador } from "@/lib/metas-store";
+import type { Indicador, TrackingFrequency } from "@/lib/metas-store";
 
-/** Tom/ícone da tendência — compartilhado entre `IndicadorRow` (card) e
- * `ObjetivoIndicadorRow` (lista densa), pra nunca divergir. */
+/** Rótulo de cadência — "continuo" (valor de sempre no banco) vira "Sem
+ * cadência" na UI; "personalizado" fica fora de `CADENCE_OPTIONS`
+ * (não é mais oferecido como escolha nova) mas continua aqui pra
+ * qualquer indicador antigo que já tenha esse valor não ficar sem
+ * rótulo. */
+export const CADENCE_LABEL: Record<TrackingFrequency, string> = {
+  semanal: "Semanal",
+  quinzenal: "Quinzenal",
+  mensal: "Mensal",
+  trimestral: "Trimestral",
+  continuo: "Sem cadência",
+  personalizado: "Personalizado",
+};
+
+/** Ordem/opções oferecidas nos selects de cadência — closed set pedido
+ * (semanal/quinzenal/mensal/trimestral/sem cadência); "personalizado"
+ * não aparece aqui de propósito, mas o tipo/dado continuam suportando. */
+export const CADENCE_OPTIONS: TrackingFrequency[] = [
+  "semanal",
+  "quinzenal",
+  "mensal",
+  "trimestral",
+  "continuo",
+];
+
+/** Tom/ícone da tendência — compartilhado entre `ObjetivoIndicadorRow` e
+ * `IndicadorGlobalRow` (listas densas), pra nunca divergir. */
 export const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
   melhorando: "text-emerald-600 dark:text-emerald-400",
   piorando: "text-rose-600 dark:text-rose-400",
@@ -95,23 +120,49 @@ export function timeAgo(iso: string): string {
 /** Formata um valor numérico de acordo com o tipo de medição do
  * indicador — única função que decide "63" vira "63%" ou "R$ 63" ou
  * "63 clientes", reaproveitada em todo lugar que mostra um valor de
- * indicador (evita cada card formatando na mão, diferente um do outro). */
+ * indicador (evita cada card formatando na mão, diferente um do outro).
+ *
+ * Checa `unidade === "R$"/"%"` ANTES do `tipo` — indicadores `"min"`/
+ * `"max"` criados com unidade monetária/percentual (ex. "Manter acima
+ * de" + R$) tinham `tipo !== "moeda"/"percentual"` e caíam no branch
+ * genérico, produzindo "37.000 R$"/"91 %" (sufixo cru, sem tratamento).
+ * Checar a unidade primeiro corrige isso na origem, sem precisar mudar
+ * como `tipo`/`unidade` são atribuídos na criação. */
 export function formatIndicadorValor(
   tipo: "numero" | "percentual" | "moeda" | "min" | "max" | "binario" | "marco" | "manual",
   value: number | undefined,
   unidade?: string,
 ): string {
   if (value == null) return "—";
-  if (tipo === "percentual") return `${value.toLocaleString("pt-BR")}%`;
-  if (tipo === "moeda") return `R$ ${value.toLocaleString("pt-BR")}`;
+  if (tipo === "percentual" || unidade === "%") return `${value.toLocaleString("pt-BR")}%`;
+  if (tipo === "moeda" || unidade === "R$") return `R$ ${value.toLocaleString("pt-BR")}`;
   const suffix = unidade ? ` ${unidade}` : "";
   return `${value.toLocaleString("pt-BR")}${suffix}`;
 }
 
+/** Versão compacta pra contextos apertados — só arredonda moeda a
+ * partir de R$ 1.000 ("R$ 37 mil"/"R$ 1,2 mi"); todo o resto (números,
+ * percentuais, outras unidades) usa `formatIndicadorValor` normalmente,
+ * já que não há ambiguidade de magnitude pra eles. */
+export function formatIndicadorValorCompacto(
+  tipo: "numero" | "percentual" | "moeda" | "min" | "max" | "binario" | "marco" | "manual",
+  value: number | undefined,
+  unidade?: string,
+): string {
+  const isMoeda = tipo === "moeda" || unidade === "R$";
+  if (value == null || !isMoeda || Math.abs(value) < 1000) {
+    return formatIndicadorValor(tipo, value, unidade);
+  }
+  if (Math.abs(value) >= 1_000_000) {
+    return `R$ ${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  }
+  return `R$ ${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+}
+
 /** Valor atual formatado do indicador — binário/marco viram rótulo de
  * status ("Concluído"/"Em aberto"/"Em andamento"), o resto passa por
- * `formatIndicadorValor`. Compartilhado entre `IndicadorRow` e
- * `ObjetivoIndicadorRow`, nunca duplicado. */
+ * `formatIndicadorValor`. Compartilhado entre `ObjetivoIndicadorRow` e
+ * `IndicadorGlobalRow`, nunca duplicado. */
 export function formatValorAtual(ind: Indicador): string {
   if (ind.tipo === "binario") return ind.concluido ? "Concluído" : "Em aberto";
   if (ind.tipo === "marco") {
@@ -122,13 +173,18 @@ export function formatValorAtual(ind: Indicador): string {
   return formatIndicadorValor(ind.tipo, ind.valorAtual, ind.unidade);
 }
 
-/** Meta formatada NESTE vínculo (indicador↔objetivo) com o símbolo do
- * operador — ex. "≥ 63%" — ou `null` quando o vínculo não tem meta
- * efetiva configurada (nem por override, nem via `niveis.esperado`). */
+/** Meta formatada NESTE vínculo (indicador↔objetivo), em linguagem
+ * humana — "Meta ≥ 63%" pra metas de piso (aumentar/manter acima/=),
+ * "Limite R$ 37.000" pra metas de teto (reduzir/manter abaixo, sem
+ * símbolo — mais natural pra "não passar de"). `null` quando o vínculo
+ * não tem meta efetiva configurada (nem por override, nem via
+ * `niveis.esperado`). */
 export function formatMetaVinculo(ind: Indicador, objetivoId: string): string | null {
   if (ind.tipo === "binario" || ind.tipo === "marco") return null;
   const meta = metaEfetiva(ind, objetivoId);
   if (meta == null) return null;
-  const simbolo = COMPARISON_OPERATOR_SYMBOL[comparadorEfetivo(ind, objetivoId)];
-  return `${simbolo} ${formatIndicadorValor(ind.tipo, meta, ind.unidade)}`;
+  const comparador = comparadorEfetivo(ind, objetivoId);
+  const valorFmt = formatIndicadorValor(ind.tipo, meta, ind.unidade);
+  if (comparador === "<=" || comparador === "<") return `Limite ${valorFmt}`;
+  return `Meta ${COMPARISON_OPERATOR_SYMBOL[comparador]} ${valorFmt}`;
 }

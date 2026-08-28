@@ -30,6 +30,7 @@ export type MetaArea = (typeof META_AREAS)[number];
 export const TRACKING_FREQUENCIES = [
   "continuo",
   "semanal",
+  "quinzenal",
   "mensal",
   "trimestral",
   "personalizado",
