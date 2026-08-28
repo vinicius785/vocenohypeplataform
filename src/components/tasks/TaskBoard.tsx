@@ -17,6 +17,7 @@ import {
   Check,
   Download,
   ExternalLink,
+  ListChecks,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -586,7 +587,9 @@ export function TaskBoard({
                         <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                       </button>
                     </div>
-                    {(t.dueDate || getTaskAssignees(t).length > 0) && (
+                    {(t.dueDate ||
+                      getTaskAssignees(t).length > 0 ||
+                      (t.subtasks?.length ?? 0) > 0) && (
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                         {getTaskAssignees(t).length > 0 && (
                           <span className="inline-flex items-center -space-x-1.5 truncate">
@@ -609,6 +612,13 @@ export function TaskBoard({
                         {t.dueDate && (
                           <span className="inline-flex items-center gap-1">
                             <Calendar className="h-3 w-3" /> {fmtDate(t.dueDate)}
+                          </span>
+                        )}
+                        {(t.subtasks?.length ?? 0) > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <ListChecks className="h-3 w-3" />
+                            {t.subtasks!.filter((s) => s.status === "Concluído").length}/
+                            {t.subtasks!.length}
                           </span>
                         )}
                       </div>
