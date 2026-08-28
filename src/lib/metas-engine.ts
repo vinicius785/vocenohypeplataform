@@ -1,4 +1,10 @@
-import type { Indicador, MetaAtualizacao, MetricDirection, Objetivo } from "./metas-store";
+import type {
+  ComparisonOperator,
+  Indicador,
+  MetaAtualizacao,
+  MetricDirection,
+  Objetivo,
+} from "./metas-store";
 
 /**
  * Motor de cálculo de Metas — única fonte de verdade pra performance,
@@ -59,6 +65,22 @@ export const INDICADOR_SAUDE_BAR: Record<IndicadorSaude, string> = {
   cancelado: "bg-muted-foreground/20",
 };
 
+export const COMPARISON_OPERATOR_LABEL: Record<ComparisonOperator, string> = {
+  ">=": "Maior ou igual a",
+  "<=": "Menor ou igual a",
+  "=": "Igual a",
+  ">": "Maior que",
+  "<": "Menor que",
+};
+
+export const COMPARISON_OPERATOR_SYMBOL: Record<ComparisonOperator, string> = {
+  ">=": "≥",
+  "<=": "≤",
+  "=": "=",
+  ">": ">",
+  "<": "<",
+};
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -69,6 +91,34 @@ function isPastDate(dateISO?: string): boolean {
 
 function higherIsBetter(direcao: MetricDirection): boolean {
   return direcao !== "reduzir" && direcao !== "manter_abaixo";
+}
+
+/** Operador padrão quando um vínculo não escolheu um explicitamente —
+ * derivado de `direcao`, o mesmo sentido que `higherIsBetter` já usa.
+ * Nunca devolve "=" (só alcançável escolhendo explicitamente num
+ * vínculo novo, nunca em dado existente). */
+export function direcaoParaComparadorPadrao(direcao: MetricDirection): ComparisonOperator {
+  return direcao === "reduzir" || direcao === "manter_abaixo" ? "<=" : ">=";
+}
+
+/** Operador de comparação em uso NESTE vínculo (indicador↔objetivo) —
+ * `ind.alvos?.[objetivoId]?.comparador` quando definido, senão derivado
+ * de `direcao` (mesmo valor que já era implícito antes deste campo
+ * existir). */
+export function comparadorEfetivo(
+  ind: Pick<Indicador, "alvos" | "direcao">,
+  objetivoId: string,
+): ComparisonOperator {
+  return ind.alvos?.[objetivoId]?.comparador ?? direcaoParaComparadorPadrao(ind.direcao);
+}
+
+/** Meta efetiva NESTE vínculo — `ind.alvos?.[objetivoId]?.meta` quando
+ * definida, senão `niveis.esperado` (o valor global de sempre). */
+export function metaEfetiva(
+  ind: Pick<Indicador, "alvos" | "niveis">,
+  objetivoId: string,
+): number | undefined {
+  return ind.alvos?.[objetivoId]?.meta ?? ind.niveis.esperado;
 }
 
 /** Baseline sintético quando nenhum é configurado — pra "aumentar"/
@@ -147,6 +197,65 @@ export function indicadorSaude(ind: Indicador): IndicadorSaude {
   return perf >= 80 ? "atencao" : "em_risco";
 }
 
+/** Performance NESTE vínculo (indicador↔objetivo) — mesmo indicador pode
+ * estar em risco num objetivo e saudável em outro, porque cada um pode
+ * ter sua própria meta/operador (`metaEfetiva`/`comparadorEfetivo`).
+ * Binário/marco delegam pra `indicadorPerformance` (não fazem sentido
+ * por vínculo — "concluído" é do indicador, não do objetivo). Sem
+ * `alvos[objetivoId]`, o resultado é IDÊNTICO a `indicadorPerformance`
+ * (mesma matemática, só resolvida via fallback — ver prova no plano). */
+export function indicadorPerformanceParaObjetivo(
+  ind: Indicador,
+  objetivoId: string,
+): number | null {
+  if (ind.tipo === "binario" || ind.tipo === "marco") return indicadorPerformance(ind);
+  const meta = metaEfetiva(ind, objetivoId);
+  const atual = ind.valorAtual;
+  if (meta == null || atual == null) return null;
+  const comparador = comparadorEfetivo(ind, objetivoId);
+  if (comparador === "=") {
+    // "=" não tem baseline natural (não é "quanto maior/menor melhor") —
+    // 100% só quando bate exato, cai proporcionalmente à distância
+    // relativa até a meta.
+    if (meta === 0) return atual === 0 ? 100 : 0;
+    return Math.max(0, 100 - (Math.abs(atual - meta) / Math.abs(meta)) * 100);
+  }
+  const direcaoEquivalente: MetricDirection =
+    comparador === ">=" || comparador === ">" ? "aumentar" : "reduzir";
+  const baseline = ind.niveis.baseline ?? defaultBaseline(meta, direcaoEquivalente);
+  return Math.max(0, directionalRatio(atual, meta, baseline, direcaoEquivalente));
+}
+
+/** Saúde NESTE vínculo — mesmo shape de `indicadorSaude`, usando a
+ * performance/meta efetivas do vínculo em vez das globais. Sem
+ * `alvos[objetivoId]`, o resultado é idêntico a `indicadorSaude`. */
+export function indicadorSaudeParaObjetivo(ind: Indicador, objetivoId: string): IndicadorSaude {
+  if (ind.cancelado) return "cancelado";
+  const perf = indicadorPerformanceParaObjetivo(ind, objetivoId);
+  if (perf === null) return "nao_iniciado";
+
+  const isOneShot = ind.tipo === "binario" || ind.tipo === "marco";
+  const overdue = isPastDate(ind.dataFim);
+
+  if (perf >= 100) return isOneShot || overdue ? "concluido" : "saudavel";
+  if (overdue) return "atrasado";
+
+  const meta = metaEfetiva(ind, objetivoId);
+  if (ind.niveis.minimo != null && meta != null) {
+    const comparador = comparadorEfetivo(ind, objetivoId);
+    const direcaoEquivalente: MetricDirection =
+      comparador === "="
+        ? ind.direcao
+        : comparador === ">=" || comparador === ">"
+          ? "aumentar"
+          : "reduzir";
+    const baseline = ind.niveis.baseline ?? defaultBaseline(meta, direcaoEquivalente);
+    const perfMin = directionalRatio(ind.niveis.minimo, meta, baseline, direcaoEquivalente);
+    return perf > perfMin ? "atencao" : "em_risco";
+  }
+  return perf >= 80 ? "atencao" : "em_risco";
+}
+
 /** Peso efetivo do indicador dentro do cálculo de UM objetivo específico
  * (0-100) — o mesmo indicador pode pesar diferente em objetivos
  * diferentes, por isso `objetivoId` é sempre explícito (nunca inferido de
@@ -183,7 +292,10 @@ export function indicadorPeso(ind: Indicador, siblings: Indicador[], objetivoId:
 export function objetivoProgresso(objetivoId: string, indicadores: Indicador[]): number | null {
   const group = indicadores.filter((i) => i.objetivoIds?.includes(objetivoId) && !i.cancelado);
   const scored = group
-    .map((i) => ({ perf: indicadorPerformance(i), peso: indicadorPeso(i, group, objetivoId) }))
+    .map((i) => ({
+      perf: indicadorPerformanceParaObjetivo(i, objetivoId),
+      peso: indicadorPeso(i, group, objetivoId),
+    }))
     .filter((x): x is { perf: number; peso: number } => x.perf !== null);
   if (scored.length === 0) return null;
   const totalPeso = scored.reduce((s, x) => s + x.peso, 0);
@@ -214,7 +326,7 @@ export function objetivoStats(objetivoId: string, indicadores: Indicador[]): Obj
     naoIniciados: 0,
   };
   for (const i of group) {
-    switch (indicadorSaude(i)) {
+    switch (indicadorSaudeParaObjetivo(i, objetivoId)) {
       case "saudavel":
         stats.saudaveis++;
         break;
@@ -285,6 +397,26 @@ export function metaGap(
   if (meta == null || atual == null) return null;
   const diff = atual - meta;
   const favoravel = higherIsBetter(ind.direcao) ? diff >= 0 : diff <= 0;
+  return { diff, favoravel };
+}
+
+/** Mesmo que `metaGap`, mas contra a meta/operador EFETIVOS de um
+ * vínculo específico em vez dos globais do indicador. */
+export function metaGapParaObjetivo(
+  ind: Pick<Indicador, "niveis" | "valorAtual" | "direcao" | "alvos">,
+  objetivoId: string,
+): { diff: number; favoravel: boolean } | null {
+  const meta = metaEfetiva(ind, objetivoId);
+  const atual = ind.valorAtual;
+  if (meta == null || atual == null) return null;
+  const comparador = comparadorEfetivo(ind, objetivoId);
+  const diff = atual - meta;
+  const favoravel =
+    comparador === "="
+      ? diff === 0
+      : comparador === ">=" || comparador === ">"
+        ? diff >= 0
+        : diff <= 0;
   return { diff, favoravel };
 }
 

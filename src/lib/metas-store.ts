@@ -60,6 +60,20 @@ export type MetricDirection = (typeof METRIC_DIRECTIONS)[number];
 export const INDICADOR_MARCO_STATUSES = ["nao_iniciado", "em_andamento", "concluido"] as const;
 export type IndicadorMarcoStatus = (typeof INDICADOR_MARCO_STATUSES)[number];
 
+export const COMPARISON_OPERATORS = [">=", "<=", "=", ">", "<"] as const;
+export type ComparisonOperator = (typeof COMPARISON_OPERATORS)[number];
+
+/** Meta/operador de UM vínculo indicador↔objetivo — mesmo espírito de
+ * `pesos` (indexado por `objetivoId`, na `Indicador`), só que pra
+ * "quanto esse indicador precisa alcançar NESTE objetivo" em vez de
+ * "quanto peso ele tem". Puramente aditivo: um indicador sem `alvos[id]`
+ * pra um objetivo cai no fallback de `niveis.esperado`/`direcao` — ver
+ * `metaEfetiva`/`comparadorEfetivo` em `metas-engine.ts`. */
+export type VinculoAlvo = {
+  meta?: number;
+  comparador?: ComparisonOperator;
+};
+
 /** Todos opcionais — uma meta simples continua podendo usar só `esperado`
  * (o "alvo" de sempre). */
 export type MetaNiveis = {
@@ -133,6 +147,11 @@ export type Indicador = MetaBase & {
    * como pesos ausentes/inválidos são tratados (nunca corrompe o cálculo
    * do objetivo). */
   pesos?: Record<string, number>;
+  /** Meta/operador por objetivo, indexado por `objetivoId` — mesmo
+   * padrão de `pesos`. Objetivo sem entrada aqui usa o fallback global
+   * (`niveis.esperado`/`direcao`), então todo indicador criado antes
+   * deste campo existir continua se comportando exatamente como hoje. */
+  alvos?: Record<string, VinculoAlvo>;
   tipo: MetricType;
   /** `tipo: "min"`/`"max"` pré-selecionam isso no formulário
    * (`manter_acima`/`manter_abaixo`), mas o motor de cálculo sempre olha

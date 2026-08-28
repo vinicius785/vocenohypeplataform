@@ -9,21 +9,16 @@ import {
   indicadorSaude,
   indicadorTendencia,
 } from "@/lib/metas-engine";
-import { formatIndicadorValor, timeAgo } from "./metas-ui-utils";
+import {
+  formatIndicadorValor,
+  formatValorAtual,
+  timeAgo,
+  TENDENCIA_ICON,
+  TENDENCIA_TONE,
+} from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 
 type Member = { name: string; photo?: string };
-
-const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
-  melhorando: "text-emerald-600 dark:text-emerald-400",
-  piorando: "text-rose-600 dark:text-rose-400",
-  estavel: "text-muted-foreground",
-};
-const TENDENCIA_ICON: Record<"melhorando" | "piorando" | "estavel", string> = {
-  melhorando: "↑",
-  piorando: "↓",
-  estavel: "=",
-};
 
 /** Card de um Indicador — usado em grade (galeria) tanto na página do
  * Objetivo quanto na seção "Indicadores independentes" da tela principal.
@@ -53,18 +48,7 @@ export function IndicadorRow({
   const progresso = indicadorProgressoExibicao(indicador);
   const tendencia = indicadorTendencia(indicador);
   const donoMember = members?.find((m) => m.name === indicador.dono);
-  const valor =
-    indicador.tipo === "binario"
-      ? indicador.concluido
-        ? "Concluído"
-        : "Em aberto"
-      : indicador.tipo === "marco"
-        ? indicador.marcoStatus === "concluido"
-          ? "Concluído"
-          : indicador.marcoStatus === "em_andamento"
-            ? "Em andamento"
-            : "Não iniciado"
-        : formatIndicadorValor(indicador.tipo, indicador.valorAtual, indicador.unidade);
+  const valor = formatValorAtual(indicador);
   const meta =
     indicador.niveis.esperado != null && indicador.tipo !== "binario" && indicador.tipo !== "marco"
       ? formatIndicadorValor(indicador.tipo, indicador.niveis.esperado, indicador.unidade)

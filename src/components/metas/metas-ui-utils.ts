@@ -1,6 +1,22 @@
 /** Pequenos helpers puros compartilhados entre os componentes de Metas —
  * evita duplicar entre `MetasSection`, `MetaCard`, os diálogos etc. */
 
+import { comparadorEfetivo, COMPARISON_OPERATOR_SYMBOL, metaEfetiva } from "@/lib/metas-engine";
+import type { Indicador } from "@/lib/metas-store";
+
+/** Tom/ícone da tendência — compartilhado entre `IndicadorRow` (card) e
+ * `ObjetivoIndicadorRow` (lista densa), pra nunca divergir. */
+export const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
+  melhorando: "text-emerald-600 dark:text-emerald-400",
+  piorando: "text-rose-600 dark:text-rose-400",
+  estavel: "text-muted-foreground",
+};
+export const TENDENCIA_ICON: Record<"melhorando" | "piorando" | "estavel", string> = {
+  melhorando: "↑",
+  piorando: "↓",
+  estavel: "=",
+};
+
 export function initialsOf(name: string): string {
   return name
     .trim()
@@ -90,4 +106,29 @@ export function formatIndicadorValor(
   if (tipo === "moeda") return `R$ ${value.toLocaleString("pt-BR")}`;
   const suffix = unidade ? ` ${unidade}` : "";
   return `${value.toLocaleString("pt-BR")}${suffix}`;
+}
+
+/** Valor atual formatado do indicador — binário/marco viram rótulo de
+ * status ("Concluído"/"Em aberto"/"Em andamento"), o resto passa por
+ * `formatIndicadorValor`. Compartilhado entre `IndicadorRow` e
+ * `ObjetivoIndicadorRow`, nunca duplicado. */
+export function formatValorAtual(ind: Indicador): string {
+  if (ind.tipo === "binario") return ind.concluido ? "Concluído" : "Em aberto";
+  if (ind.tipo === "marco") {
+    if (ind.marcoStatus === "concluido") return "Concluído";
+    if (ind.marcoStatus === "em_andamento") return "Em andamento";
+    return "Não iniciado";
+  }
+  return formatIndicadorValor(ind.tipo, ind.valorAtual, ind.unidade);
+}
+
+/** Meta formatada NESTE vínculo (indicador↔objetivo) com o símbolo do
+ * operador — ex. "≥ 63%" — ou `null` quando o vínculo não tem meta
+ * efetiva configurada (nem por override, nem via `niveis.esperado`). */
+export function formatMetaVinculo(ind: Indicador, objetivoId: string): string | null {
+  if (ind.tipo === "binario" || ind.tipo === "marco") return null;
+  const meta = metaEfetiva(ind, objetivoId);
+  if (meta == null) return null;
+  const simbolo = COMPARISON_OPERATOR_SYMBOL[comparadorEfetivo(ind, objetivoId)];
+  return `${simbolo} ${formatIndicadorValor(ind.tipo, meta, ind.unidade)}`;
 }

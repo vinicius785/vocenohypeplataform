@@ -1,26 +1,28 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowLeft, AlertTriangle, MoreHorizontal, Percent, Plus, Trash2, X } from "lucide-react";
-import type { Indicador, Objetivo } from "@/lib/metas-store";
+import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
+import type { ComparisonOperator, Indicador, Objetivo } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_BAR,
   indicadorPeso,
-  indicadorSaude,
-  metaGap,
+  indicadorSaudeParaObjetivo,
   objetivoProgresso,
   objetivoResumoSaude,
   objetivoStats,
   progressoEsperado,
 } from "@/lib/metas-engine";
-import { formatIndicadorValor, fmtPeriodo } from "./metas-ui-utils";
+import { fmtPeriodo } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ExpectedProgressLine } from "./ExpectedProgressLine";
-import { IndicadorRow } from "./IndicadorRow";
+import { ObjetivoIndicadorRow } from "./ObjetivoIndicadorRow";
+import { VincularIndicadorDialog } from "./VincularIndicadorDialog";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { AjustarPesosDialog } from "./AjustarPesosDialog";
 import { useDropdown } from "./use-dropdown";
 
 type Member = { name: string; photo?: string };
+
+type IndicadorFiltro = "todos" | "em_risco" | "saudaveis";
 
 /** Página de gestão de um Objetivo — visão geral (progresso/saúde) +
  * lista de indicadores + ações de adicionar/vincular/pesos/editar/excluir.
@@ -52,7 +54,10 @@ export function ObjetivoPage({
   onEdit: () => void;
   onDelete: () => void;
   onCreateIndicador: (ind: Indicador) => void;
-  onLinkIndicador: (id: string) => void;
+  onLinkIndicador: (
+    id: string,
+    cfg?: { peso?: number; meta?: number; comparador?: ComparisonOperator },
+  ) => void;
   onUnlinkIndicador: (id: string) => void;
   onSavePesos: (pesos: Record<string, number>) => void;
   onQuickUpdate: (
@@ -63,14 +68,13 @@ export function ObjetivoPage({
   ) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
+  const [vincularOpen, setVincularOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [pesosOpen, setPesosOpen] = useState(false);
   const [quickUpdateTarget, setQuickUpdateTarget] = useState<Indicador | null>(null);
+  const [filtro, setFiltro] = useState<IndicadorFiltro>("todos");
   const menuRef = useRef<HTMLDivElement>(null);
-  const addRef = useRef<HTMLDivElement>(null);
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
-  useDropdown(addRef, addOpen, () => setAddOpen(false));
 
   const progresso = objetivoProgresso(objetivo.id, indicadoresDoObjetivo);
   const stats = objetivoStats(objetivo.id, indicadoresDoObjetivo);
@@ -81,17 +85,24 @@ export function ObjetivoPage({
     (i) => !indicadoresDoObjetivo.some((l) => l.id === i.id),
   );
 
-  // "Precisam de atenção" — leitura estruturada dos indicadores já
-  // classificados em risco/atrasado pela regra existente (indicadorSaude),
-  // nunca uma nova heurística. Só aparece quando há pelo menos um.
-  const precisamAtencao = useMemo(
-    () =>
-      indicadoresDoObjetivo.filter((i) => {
-        const s = indicadorSaude(i);
-        return s === "em_risco" || s === "atrasado";
-      }),
-    [indicadoresDoObjetivo],
-  );
+  // Filtro Todos/Em risco/Saudáveis — sempre relativo a ESTE objetivo
+  // (`indicadorSaudeParaObjetivo`), nunca a saúde global do indicador.
+  // Substitui a seção "Precisam de atenção" (redundante com isso) e a
+  // linha de resumo em emoji — a própria lista já deixa claro o que
+  // precisa de atenção.
+  const { emRisco, saudaveis } = useMemo(() => {
+    const risco: Indicador[] = [];
+    const bons: Indicador[] = [];
+    for (const i of indicadoresDoObjetivo) {
+      const s = indicadorSaudeParaObjetivo(i, objetivo.id);
+      if (s === "em_risco" || s === "atrasado") risco.push(i);
+      else if (s === "saudavel" || s === "concluido") bons.push(i);
+    }
+    return { emRisco: risco, saudaveis: bons };
+  }, [indicadoresDoObjetivo, objetivo.id]);
+
+  const indicadoresFiltrados =
+    filtro === "em_risco" ? emRisco : filtro === "saudaveis" ? saudaveis : indicadoresDoObjetivo;
 
   return (
     <div className="mx-auto w-full max-w-2xl">
@@ -170,15 +181,6 @@ export function ObjetivoPage({
       <div className="mt-2">
         <ExpectedProgressLine progresso={progresso} esperado={esperado} />
       </div>
-      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-        {stats.saudaveis > 0 && <span>🟢 {stats.saudaveis} saudáveis</span>}
-        {stats.atencao > 0 && <span>🟡 {stats.atencao} atenção</span>}
-        {(stats.emRisco > 0 || stats.atrasados > 0) && (
-          <span>🔴 {stats.emRisco + stats.atrasados} em risco</span>
-        )}
-        {stats.concluidos > 0 && <span>✅ {stats.concluidos} concluídos</span>}
-      </p>
-
       <div className="mt-8 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">
           Indicadores{" "}
@@ -194,150 +196,89 @@ export function ObjetivoPage({
               <Percent className="h-3.5 w-3.5" /> Ajustar pesos
             </button>
           )}
-          <div ref={addRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setAddOpen((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
-            >
-              <Plus className="h-3.5 w-3.5" /> Adicionar
-            </button>
-            {addOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border border-border bg-popover p-1 shadow-md">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddOpen(false);
-                    setCreateOpen(true);
-                  }}
-                  className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  Criar novo indicador
-                </button>
-                <div className="mt-1 border-t border-border pt-1">
-                  <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Vincular existente
-                  </p>
-                  {linkable.length === 0 ? (
-                    <p className="px-2 py-1 text-[11px] text-muted-foreground">
-                      Nenhum outro indicador disponível.
-                    </p>
-                  ) : (
-                    <div className="max-h-40 overflow-y-auto">
-                      {linkable.map((i) => {
-                        const outrosVinculos = i.objetivoIds?.length ?? 0;
-                        return (
-                          <button
-                            key={i.id}
-                            type="button"
-                            onClick={() => {
-                              setAddOpen(false);
-                              onLinkIndicador(i.id);
-                            }}
-                            className="block w-full truncate rounded px-2 py-1.5 text-left hover:bg-muted"
-                          >
-                            <span className="block truncate text-xs">{i.titulo}</span>
-                            {outrosVinculos > 0 && (
-                              <span className="block truncate text-[10px] text-muted-foreground">
-                                já em {outrosVinculos} objetivo{outrosVinculos === 1 ? "" : "s"}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setVincularOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            <Plus className="h-3.5 w-3.5" /> Vincular indicador
+          </button>
         </div>
       </div>
+
+      {stats.total > 0 && (
+        <div className="mt-3 flex items-center gap-1">
+          {(
+            [
+              ["todos", `Todos ${stats.total}`],
+              ["em_risco", `Em risco ${emRisco.length}`],
+              ["saudaveis", `Saudáveis ${saudaveis.length}`],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFiltro(key)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                filtro === key
+                  ? key === "em_risco"
+                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
+                    : key === "saudaveis"
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                      : "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {indicadoresDoObjetivo.length === 0 ? (
         <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">Nenhum indicador ainda.</p>
           <button
             type="button"
-            onClick={() => setCreateOpen(true)}
+            onClick={() => setVincularOpen(true)}
             className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            <Plus className="h-4 w-4" /> Adicionar indicador
+            <Plus className="h-4 w-4" /> Vincular indicador
           </button>
         </div>
+      ) : indicadoresFiltrados.length === 0 ? (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          {filtro === "em_risco" ? "Nenhum indicador em risco." : "Nenhum indicador saudável."}
+        </p>
       ) : (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {indicadoresDoObjetivo.map((ind) => (
-            <div key={ind.id} className="group relative">
-              <IndicadorRow
-                indicador={ind}
-                peso={indicadorPeso(ind, indicadoresDoObjetivo, objetivo.id)}
-                members={members}
-                onOpen={() => onOpenIndicador(ind.id)}
-                onQuickUpdate={() => setQuickUpdateTarget(ind)}
-              />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUnlinkIndicador(ind.id);
-                }}
-                title="Desvincular do objetivo"
-                aria-label="Desvincular do objetivo"
-                className="absolute right-2 top-2 hidden h-5 w-5 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive group-hover:flex"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+        <div className="mt-3">
+          {indicadoresFiltrados.map((ind) => (
+            <ObjetivoIndicadorRow
+              key={ind.id}
+              indicador={ind}
+              objetivoId={objetivo.id}
+              peso={indicadorPeso(ind, indicadoresDoObjetivo, objetivo.id)}
+              onOpen={() => onOpenIndicador(ind.id)}
+              onQuickUpdate={() => setQuickUpdateTarget(ind)}
+              onUnlink={() => onUnlinkIndicador(ind.id)}
+            />
           ))}
         </div>
       )}
 
-      {precisamAtencao.length > 0 && (
-        <div className="mt-9">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-            Precisam de atenção
-          </h2>
-          <div className="mt-2.5 divide-y divide-border rounded-lg border border-border">
-            {precisamAtencao.map((ind) => {
-              const gap = metaGap(ind);
-              const valor = formatIndicadorValor(ind.tipo, ind.valorAtual, ind.unidade);
-              const meta =
-                ind.niveis.esperado != null
-                  ? formatIndicadorValor(ind.tipo, ind.niveis.esperado, ind.unidade)
-                  : null;
-              return (
-                <button
-                  key={ind.id}
-                  type="button"
-                  onClick={() => onOpenIndicador(ind.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
-                >
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                    {ind.titulo}
-                  </span>
-                  {meta && (
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {valor} / {meta}
-                    </span>
-                  )}
-                  {gap && gap.diff !== 0 && (
-                    <span className="shrink-0 text-xs font-medium text-rose-600 dark:text-rose-400">
-                      {gap.diff > 0 ? "↑" : "↓"}{" "}
-                      {ind.tipo === "percentual"
-                        ? `${Math.abs(Math.round(gap.diff))} p.p.`
-                        : formatIndicadorValor(ind.tipo, Math.abs(gap.diff), ind.unidade)}{" "}
-                      {gap.diff > 0 ? "acima" : "abaixo"} da meta
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
+      <VincularIndicadorDialog
+        open={vincularOpen}
+        linkable={linkable}
+        onClose={() => setVincularOpen(false)}
+        onCreateNew={() => {
+          setVincularOpen(false);
+          setCreateOpen(true);
+        }}
+        onLink={(id, cfg) => {
+          setVincularOpen(false);
+          onLinkIndicador(id, cfg);
+        }}
+      />
       <IndicadorQuickCreateDialog
         open={createOpen}
         objetivoId={objetivo.id}

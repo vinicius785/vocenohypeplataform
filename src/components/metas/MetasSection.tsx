@@ -14,12 +14,14 @@ import {
   type Objetivo,
   type Indicador,
   type TrackingFrequency,
+  type ComparisonOperator,
 } from "@/lib/metas-store";
 import {
   indicadorSaude,
   objetivoProgresso,
   objetivoResumoSaude,
   objetivoStats,
+  direcaoParaComparadorPadrao,
   type IndicadorSaude,
   INDICADOR_SAUDE_LABEL,
 } from "@/lib/metas-engine";
@@ -277,20 +279,53 @@ export function MetasSection() {
     push({ kind: "indicador", id: ind.id });
   };
 
-  const createIndicadorForObjetivo = (ind: Indicador) => {
-    persist([...items, ind]);
+  // Indicador criado de dentro de um objetivo já nasce vinculado
+  // (`objetivoIds`/`niveis.esperado` já vêm assim do formulário) — só
+  // falta semear o VÍNCULO com meta/operador explícitos (`alvos`), pra
+  // não depender do fallback global assim que a página do indicador for
+  // aberta a partir deste objetivo. Sem mudança nenhuma no formulário
+  // de criação em si.
+  const createIndicadorForObjetivo = (ind: Indicador, objetivoId: string) => {
+    const withAlvo: Indicador =
+      ind.niveis.esperado != null
+        ? {
+            ...ind,
+            alvos: {
+              ...ind.alvos,
+              [objetivoId]: {
+                meta: ind.niveis.esperado,
+                comparador: direcaoParaComparadorPadrao(ind.direcao),
+              },
+            },
+          }
+        : ind;
+    persist([...items, withAlvo]);
   };
 
   // Indicador é universal: vincular só ADICIONA objetivoId à lista dele
   // (nunca mexe em dono/colaboradores/período — isso é sempre do próprio
-  // indicador agora, não herdado de nenhum objetivo).
-  const linkIndicador = (objetivoId: string, indId: string) => {
+  // indicador agora, não herdado de nenhum objetivo). `cfg` (opcional)
+  // já grava peso/meta/operador do vínculo na mesma tacada, vindo do
+  // novo diálogo "Vincular ao objetivo" — sem `cfg`, o vínculo nasce sem
+  // override nenhum e cai no fallback global (`niveis.esperado`/`direcao`).
+  const linkIndicador = (
+    objetivoId: string,
+    indId: string,
+    cfg?: { peso?: number; meta?: number; comparador?: ComparisonOperator },
+  ) => {
     persist(
-      items.map((x) =>
-        x.id === indId && x.kind === "indicador"
-          ? { ...x, objetivoIds: Array.from(new Set([...(x.objetivoIds ?? []), objetivoId])) }
-          : x,
-      ),
+      items.map((x) => {
+        if (x.id !== indId || x.kind !== "indicador") return x;
+        const next: Indicador = {
+          ...x,
+          objetivoIds: Array.from(new Set([...(x.objetivoIds ?? []), objetivoId])),
+        };
+        if (cfg?.peso != null) next.pesos = { ...x.pesos, [objetivoId]: cfg.peso };
+        if (cfg?.meta != null || cfg?.comparador != null) {
+          next.alvos = { ...x.alvos, [objetivoId]: { meta: cfg.meta, comparador: cfg.comparador } };
+        }
+        return next;
+      }),
     );
   };
 
@@ -299,10 +334,12 @@ export function MetasSection() {
       items.map((x) => {
         if (x.id !== indId || x.kind !== "indicador") return x;
         const { [objetivoId]: _removido, ...restoPesos } = x.pesos ?? {};
+        const { [objetivoId]: _removidoAlvo, ...restoAlvos } = x.alvos ?? {};
         return {
           ...x,
           objetivoIds: (x.objetivoIds ?? []).filter((id) => id !== objetivoId),
           pesos: Object.keys(restoPesos).length ? restoPesos : undefined,
+          alvos: Object.keys(restoAlvos).length ? restoAlvos : undefined,
         };
       }),
     );
@@ -376,7 +413,12 @@ export function MetasSection() {
   };
 
   const handleDeleteIndicador = async (ind: Indicador) => {
-    const ok = await confirm(`Excluir o indicador "${ind.titulo}"?`);
+    const vinculados = objetivos.filter((o) => ind.objetivoIds?.includes(o.id));
+    const ok = await confirm(
+      vinculados.length > 0
+        ? `Excluir o indicador "${ind.titulo}"? Ele está sendo utilizado em ${vinculados.length} objetivo(s): ${vinculados.map((o) => o.titulo).join(", ")}.`
+        : `Excluir o indicador "${ind.titulo}"?`,
+    );
     if (!ok) return;
     persist(items.filter((x) => x.id !== ind.id));
     if (view.kind === "indicador" && view.id === ind.id) pop();
@@ -398,8 +440,8 @@ export function MetasSection() {
           onOpenIndicador={(id) => push({ kind: "indicador", id, fromObjetivoId: objetivo.id })}
           onEdit={() => setObjetivoDialog({ data: objetivo })}
           onDelete={() => void handleDeleteObjetivo(objetivo)}
-          onCreateIndicador={createIndicadorForObjetivo}
-          onLinkIndicador={(id) => linkIndicador(objetivo.id, id)}
+          onCreateIndicador={(ind) => createIndicadorForObjetivo(ind, objetivo.id)}
+          onLinkIndicador={(id, cfg) => linkIndicador(objetivo.id, id, cfg)}
           onUnlinkIndicador={(id) => unlinkIndicador(objetivo.id, id)}
           onSavePesos={(pesos) => savePesos(objetivo.id, pesos)}
           onQuickUpdate={updateIndicadorPatch}
@@ -429,6 +471,7 @@ export function MetasSection() {
           indicador={indicador}
           cameFromObjetivo={cameFromObjetivo}
           objetivosVinculados={objetivosVinculados}
+          allIndicadores={indicadores}
           members={members}
           onBack={pop}
           onOpenObjetivo={(id) => push({ kind: "objetivo", id })}

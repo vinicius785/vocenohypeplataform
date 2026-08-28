@@ -3,40 +3,32 @@ import { ArrowLeft, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from "lucid
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_BAR,
+  INDICADOR_SAUDE_DOT,
   INDICADOR_SAUDE_LABEL,
   INDICADOR_SAUDE_TONE,
+  indicadorPeso,
+  indicadorPerformanceParaObjetivo,
   indicadorProgressoExibicao,
   indicadorSaude,
+  indicadorSaudeParaObjetivo,
   indicadorTendencia,
+  metaEfetiva,
 } from "@/lib/metas-engine";
-import { formatIndicadorValor, timeAgo } from "./metas-ui-utils";
+import {
+  formatIndicadorValor,
+  formatMetaVinculo,
+  formatValorAtual,
+  timeAgo,
+  TENDENCIA_ICON,
+  TENDENCIA_TONE,
+} from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { IndicadorHistorico } from "./IndicadorHistorico";
 import { IndicadorQuickUpdate, type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { IndicadorAdvancedSettings } from "./IndicadorAdvancedSettings";
 import { useDropdown } from "./use-dropdown";
 
-const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
-  melhorando: "text-emerald-600 dark:text-emerald-400",
-  piorando: "text-rose-600 dark:text-rose-400",
-  estavel: "text-muted-foreground",
-};
-const TENDENCIA_ICON: Record<"melhorando" | "piorando" | "estavel", string> = {
-  melhorando: "↑",
-  piorando: "↓",
-  estavel: "=",
-};
-
 type Member = { name: string; photo?: string };
-
-/** Rótulo consistente pro nível "esperado" — usado tanto no destaque do
- * topo quanto na grade de Desempenho, pra nunca chamar o mesmo número de
- * duas coisas diferentes na mesma tela. */
-function metaLabelFor(tipo: Indicador["tipo"]): string {
-  if (tipo === "min") return "Meta (mínimo)";
-  if (tipo === "max") return "Meta (máximo)";
-  return "Meta esperada";
-}
 
 /** Card compacto de estatística — mesmo bloco reaproveitado em Desempenho
  * e Acompanhamento, pra manter os dois grids visualmente idênticos em vez
@@ -59,6 +51,7 @@ export function IndicadorPage({
   indicador,
   cameFromObjetivo,
   objetivosVinculados,
+  allIndicadores,
   members,
   onBack,
   onOpenObjetivo,
@@ -68,12 +61,18 @@ export function IndicadorPage({
   onUnlinkObjetivo,
 }: {
   indicador: Indicador;
-  /** De qual objetivo esta página foi aberta (se foi) — só pra rotular o
-   * botão "voltar"; não é "o" objetivo do indicador, que pode ter vários
-   * (ver `objetivosVinculados`). */
+  /** De qual objetivo esta página foi aberta (se foi) — rotula o botão
+   * "voltar" E dá o contexto pra mostrar meta/status/progresso DESTE
+   * vínculo em vez do fallback global (não é "o" objetivo do indicador,
+   * que pode ter vários — ver `objetivosVinculados`). */
   cameFromObjetivo?: Objetivo;
   /** TODOS os objetivos que este indicador alimenta hoje. */
   objetivosVinculados: Objetivo[];
+  /** Todos os indicadores do app — só pra calcular o peso EFETIVO de
+   * `indicador` dentro de cada objetivo vinculado na tabela "Vinculado
+   * a" (precisa dos "irmãos" daquele objetivo pra saber a divisão igual
+   * quando não há peso explícito, mesma função que `ObjetivoPage` usa). */
+  allIndicadores: Indicador[];
   members: Member[];
   onBack: () => void;
   onOpenObjetivo: (id: string) => void;
@@ -88,35 +87,35 @@ export function IndicadorPage({
   const menuRef = useRef<HTMLDivElement>(null);
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
 
-  const saude = indicadorSaude(indicador);
-  const progresso = indicadorProgressoExibicao(indicador);
+  // Aberto a partir de um objetivo: status/progresso refletem O VÍNCULO
+  // com ELE (mesma meta/operador mostrados na lista densa do objetivo).
+  // Sem contexto (aberto da lista de indicadores independentes), cai no
+  // fallback global do próprio indicador — nunca um "status canônico"
+  // fixo, já que a saúde depende de qual objetivo está sendo olhado.
+  const saude = cameFromObjetivo
+    ? indicadorSaudeParaObjetivo(indicador, cameFromObjetivo.id)
+    : indicadorSaude(indicador);
+  const progresso = cameFromObjetivo
+    ? Math.max(
+        0,
+        Math.min(100, indicadorPerformanceParaObjetivo(indicador, cameFromObjetivo.id) ?? 0),
+      )
+    : indicadorProgressoExibicao(indicador);
   const tendencia = indicadorTendencia(indicador);
   const donoMember = members.find((m) => m.name === indicador.dono);
 
-  const valorPrincipal =
-    indicador.tipo === "binario"
-      ? indicador.concluido
-        ? "Concluído"
-        : "Em aberto"
-      : indicador.tipo === "marco"
-        ? indicador.marcoStatus === "concluido"
-          ? "Concluído"
-          : indicador.marcoStatus === "em_andamento"
-            ? "Em andamento"
-            : "Não iniciado"
-        : formatIndicadorValor(indicador.tipo, indicador.valorAtual, indicador.unidade);
-
+  const valorPrincipal = formatValorAtual(indicador);
   const showProgressBar = indicador.tipo !== "binario" && indicador.tipo !== "marco";
-  const metaLabel = metaLabelFor(indicador.tipo);
-  const metaValor =
-    indicador.niveis.esperado != null
-      ? formatIndicadorValor(indicador.tipo, indicador.niveis.esperado, indicador.unidade)
-      : null;
+  // Meta CONTEXTUAL — só existe quando a página foi aberta a partir de um
+  // objetivo específico. O indicador em si não tem "a" meta (item 19 do
+  // pedido) — cada objetivo pode ter a sua.
+  const metaContextual = cameFromObjetivo
+    ? formatMetaVinculo(indicador, cameFromObjetivo.id)
+    : null;
 
   const niveisRows: { label: string; value: number }[] = [
     { label: "Baseline", value: indicador.niveis.baseline as number },
     { label: "Meta mínima", value: indicador.niveis.minimo as number },
-    { label: metaLabel, value: indicador.niveis.esperado as number },
     { label: "Meta de excelência", value: indicador.niveis.excelencia as number },
   ].filter((r) => r.value != null);
 
@@ -191,12 +190,6 @@ export function IndicadorPage({
             )}
           </p>
         </div>
-        {metaValor && (
-          <div className="text-right">
-            <p className="text-lg font-medium text-foreground">{metaValor}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{metaLabel}</p>
-          </div>
-        )}
       </div>
 
       {showProgressBar && (
@@ -218,6 +211,14 @@ export function IndicadorPage({
           Atualizado {timeAgo(indicador.updatedAt ?? indicador.createdAt)}
         </span>
       </div>
+      {/* Meta CONTEXTUAL — só aparece vindo de um objetivo específico,
+          deixando claro que não é "a" meta do indicador (item 19). */}
+      {cameFromObjetivo && metaContextual && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Meta em <span className="font-medium text-foreground">{cameFromObjetivo.titulo}</span>:{" "}
+          {metaContextual}
+        </p>
+      )}
 
       {indicador.dataSource === "manual" ? (
         <button
@@ -267,21 +268,47 @@ export function IndicadorPage({
         </div>
       </div>
 
-      {/* Vinculado a — pode ser mais de um objetivo, indicador é universal */}
+      {/* Vinculado a — pode ser mais de um objetivo, indicador é universal.
+          Deixa explícito que a mesma métrica é reutilizável: cada objetivo
+          pode ter sua própria meta/peso/status pro MESMO valor atual. */}
       {objetivosVinculados.length > 0 && (
         <div className="mt-9">
-          <h2 className="text-sm font-semibold text-foreground">Vinculado a</h2>
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {objetivosVinculados.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => onOpenObjetivo(o.id)}
-                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
-              >
-                {o.titulo}
-              </button>
-            ))}
+          <h2 className="text-sm font-semibold text-foreground">
+            Usado em {objetivosVinculados.length} objetivo
+            {objetivosVinculados.length === 1 ? "" : "s"}
+          </h2>
+          <div className="mt-2.5 divide-y divide-border rounded-lg border border-border">
+            {objetivosVinculados.map((o) => {
+              const irmaos = allIndicadores.filter((i) => i.objetivoIds?.includes(o.id));
+              const pesoObj = indicadorPeso(indicador, irmaos, o.id);
+              const saudeObj = indicadorSaudeParaObjetivo(indicador, o.id);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => onOpenObjetivo(o.id)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
+                >
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${INDICADOR_SAUDE_DOT[saudeObj]}`}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {o.titulo}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {formatMetaVinculo(indicador, o.id) ?? "—"}
+                  </span>
+                  <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                    {Math.round(pesoObj)}%
+                  </span>
+                  <span
+                    className={`w-20 shrink-0 rounded px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide ${INDICADOR_SAUDE_TONE[saudeObj]}`}
+                  >
+                    {INDICADOR_SAUDE_LABEL[saudeObj]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -297,7 +324,9 @@ export function IndicadorPage({
               atualizacoes={indicador.atualizacoes ?? []}
               tipo={indicador.tipo}
               unidade={indicador.unidade}
-              metaEsperada={indicador.niveis.esperado}
+              metaEsperada={
+                cameFromObjetivo ? metaEfetiva(indicador, cameFromObjetivo.id) : undefined
+              }
             />
           )}
         </div>
