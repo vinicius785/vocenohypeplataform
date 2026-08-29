@@ -163,7 +163,14 @@ export function taskDeadlineHealth(
     delayDays,
   });
 
-  if (t.status === "Concluído" && t.completedAt) {
+  if (t.status === "Concluído") {
+    // Sem `completedAt` (tarefa legada, concluída antes desse campo
+    // existir, ou criada já como "Concluído" sem log de atividade pra
+    // derivar quando) não dá pra saber se foi no prazo ou atrasada — mas
+    // uma coisa é certa: NUNCA é "Atrasada" (esse rótulo é pra tarefa
+    // ainda aberta e vencida). Cair no ramo ao vivo abaixo mostraria uma
+    // tarefa já concluída como se ainda estivesse em aberto e vencida.
+    if (!t.completedAt) return build("concluida_no_prazo", "Concluída");
     const ref = effectivePerformanceDueDate(t.originalDueDate ?? t.dueDate, t.deadlineHistory);
     const { outcome, delayMinutes } = classifyOutcome(ref, t.completedAt);
     if (outcome === "late") {
