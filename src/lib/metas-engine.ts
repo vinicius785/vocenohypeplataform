@@ -6,6 +6,7 @@ import type {
   Objetivo,
   TrackingFrequency,
 } from "./metas-store";
+import { formatDateToIso } from "./utils";
 
 /**
  * Motor de cálculo de Metas — única fonte de verdade pra performance,
@@ -82,8 +83,11 @@ export const COMPARISON_OPERATOR_SYMBOL: Record<ComparisonOperator, string> = {
   "<": "<",
 };
 
+// `toISOString().slice(0, 10)` pega o dia em UTC — sempre segue horário de
+// Brasília (UTC-3): à noite, um objetivo com `dataFim` de hoje já
+// aparecia "atrasado" um dia antes da hora.
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateToIso(new Date());
 }
 
 function isPastDate(dateISO?: string): boolean {

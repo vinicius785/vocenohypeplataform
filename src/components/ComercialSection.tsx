@@ -36,6 +36,7 @@ import {
   upsertProjeto,
 } from "@/lib/projetos";
 import { clientesStore } from "@/lib/clientes-store";
+import { formatDateToIso } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -86,7 +87,7 @@ function convertLeadToClienteEProjeto(lead: Lead): { clienteId: string; projectI
       responsavelInterno: lead.responsible || "",
       email: lead.email || "",
       whatsapp: lead.phone || "",
-      clienteDesde: new Date().toISOString().slice(0, 10),
+      clienteDesde: formatDateToIso(new Date()),
       campanhas: [],
       orcamentoSugerido: lead.proposta?.precoFinal ?? (lead.value > 0 ? lead.value : undefined),
     },

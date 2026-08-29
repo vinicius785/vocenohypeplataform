@@ -35,6 +35,33 @@ export function PresenceDot({ status }: { status: MemberStatus }) {
 
 export { getStatus };
 
+/** Par label+valor compacto, reaproveitado nas grades de estatística da
+ * Performance do Time e da ficha do membro. */
+export function MiniStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "neutral" | "danger" | "success";
+}) {
+  const valueTone =
+    tone === "danger"
+      ? "text-destructive"
+      : tone === "success"
+        ? "text-emerald-600 dark:text-emerald-400"
+        : "text-foreground";
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`mt-0.5 text-sm font-semibold tabular-nums ${valueTone}`}>{value}</p>
+    </div>
+  );
+}
+
 /** Botão de ícone com tooltip — usado nas ações de admin (editar/
  * redefinir senha/remover) tanto na linha de performance quanto nos
  * diálogos de membro. */

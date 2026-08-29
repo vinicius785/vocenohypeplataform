@@ -77,6 +77,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBank, type BankInflu } from "@/lib/banco-influs-store";
+import { formatDateToIso } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
 import { formatSeguidores } from "@/lib/format";
@@ -393,7 +394,7 @@ export function computeReliability(
   const today = todayISO();
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - RECENCY_WINDOW_MONTHS);
-  const cutoffISO = cutoff.toISOString().slice(0, 10);
+  const cutoffISO = formatDateToIso(cutoff);
 
   let reprovacoesAbertas = 0;
   const allEntregas: Entrega[] = [];
@@ -964,7 +965,9 @@ export const fmtDate = (d: string) => {
   const [y, m, day] = d.split("-").map(Number);
   return new Date(y, (m || 1) - 1, day || 1).toLocaleDateString("pt-BR");
 };
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+// `toISOString().slice(0, 10)` pega o dia em UTC — sempre segue horário de
+// Brasília (UTC-3), nunca UTC.
+export const todayISO = () => formatDateToIso(new Date());
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);

@@ -1335,6 +1335,14 @@ export function TaskDialog({
           originalDueDate = dueDate || undefined;
           performanceDueDate = dueDate || undefined;
         } else {
+          // Tarefa legada (já tinha `dueDate` antes do histórico de prazo
+          // existir, então nunca ganhou `originalDueDate`) — sem isso, o
+          // congelamento de `effectivePerformanceDueDate` não tem âncora
+          // pra travar quando este replanejamento for crítico-não-isento (o
+          // `ref` ficaria `undefined` em vez do prazo anterior). Backfill
+          // no momento da 1ª mudança rastreada: a âncora passa a ser o
+          // prazo que a tarefa tinha até agora.
+          if (!originalDueDate) originalDueDate = initial.dueDate;
           const motivo = deadlineCtx?.motivo ?? "replanejamento_operacional";
           const isCritical = isCriticalReplan(initial.dueDate, new Date().toISOString());
           const exempt = DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT[motivo];

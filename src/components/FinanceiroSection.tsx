@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateField } from "@/components/ui/date-field";
+import { formatDateToIso } from "@/lib/utils";
 import {
   Plus,
   X,
@@ -87,7 +88,7 @@ const PERIOD_OPTIONS: { value: PeriodMode; label: string }[] = [
 function isoDaysAgo(days: number) {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return formatDateToIso(d);
 }
 
 export function FinanceiroSection() {

@@ -1,29 +1,35 @@
 import { useMemo, useRef } from "react";
-import { OPEN_STATUSES, type WeekBucket } from "@/lib/score";
+import {
+  OPEN_STATUSES,
+  type WeekBucket,
+  type WeekdayBucket,
+  type WeekdayPeriodMode,
+} from "@/lib/score";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import type {
   ScoreOperacionalResult,
   ScorePeriodMode,
   PerformanceEventLike,
+  PerformanceSettings,
 } from "@/lib/performance-engine";
 import { TeamMetricCard } from "./TeamMetricCard";
 import { AttentionTasks, type AttentionTab } from "./AttentionTasks";
 import { TeamWorkload } from "./TeamWorkload";
-import { TasksByStatus } from "./TasksByStatus";
-import { WeeklyDeliveries } from "./WeeklyDeliveries";
+import { TeamWeekdayProductivity } from "./TeamWeekdayProductivity";
 import { TeamPerformance } from "./TeamPerformance";
-import { TeamXpRanking } from "./TeamXpRanking";
 import { TeamIndicators } from "./TeamIndicators";
-import { TeamAdminSection } from "./TeamAdminSection";
 
 /**
- * Dashboard de gestão do time — substitui a antiga listagem simples de
- * membros. `DiretorioTab` (TimeSection.tsx) continua sendo a camada de
- * dados (todo o fetch/estado/sincronização); este componente só monta a
- * grade visual em cima do que já foi computado lá, delegando cada bloco
- * a um componente próprio (métrica, atenção, carga, status, entregas,
- * performance, administração).
+ * Cockpit operacional do time — identifica rapidamente situação, carga,
+ * produtividade e performance; a explicação detalhada de cada pessoa
+ * vive na ficha individual (`MemberProfileDialog`), aberta a partir de
+ * qualquer linha aqui. `DiretorioTab` (TimeSection.tsx) continua sendo a
+ * camada de dados; este componente só monta a grade visual em cima do
+ * que já foi computado lá, delegando cada bloco a um componente próprio
+ * (métrica, atenção, carga, produtividade por dia da semana,
+ * performance, indicadores). Administração (senhas/bugs/config do
+ * Score) vive em Configurações, não aqui.
  */
 export function TeamDashboard({
   allMembers,
@@ -32,9 +38,13 @@ export function TeamDashboard({
   scorePeriod,
   onScorePeriodChange,
   performanceEvents,
+  performanceSettings,
   allTasksFlat,
   tasksByMember,
   weeklyData,
+  weekdayData,
+  weekdayPeriod,
+  onWeekdayPeriodChange,
   onlineCount,
   meId,
   isAdmin,
@@ -50,19 +60,22 @@ export function TeamDashboard({
   /** Todos os membros (sem filtro de busca) — usado pelos gráficos
    * (carga do time, entregas) que precisam refletir o time inteiro. */
   allMembers: Member[];
-  /** Membros após a busca do header — só a Performance Operacional é
+  /** Membros após a busca do header — só a Performance do Time é
    * filtrada por busca; os gráficos usam `allMembers`. */
   filteredMembers: Member[];
   scoreByMemberId: Map<string, ScoreOperacionalResult>;
   scorePeriod: ScorePeriodMode;
   onScorePeriodChange: (v: ScorePeriodMode) => void;
   /** Eventos do ledger já filtrados ao `scorePeriod` — alimenta os
-   * Indicadores operacionais agregados (o Ranking do mês busca os seus
-   * próprios eventos por mês, à parte). */
+   * Indicadores Operacionais agregados. */
   performanceEvents: PerformanceEventLike[];
+  performanceSettings: PerformanceSettings;
   allTasksFlat: DashTaskFlat[];
   tasksByMember: Map<string, DashTask[]>;
   weeklyData: WeekBucket[];
+  weekdayData: WeekdayBucket[];
+  weekdayPeriod: WeekdayPeriodMode;
+  onWeekdayPeriodChange: (v: WeekdayPeriodMode) => void;
   onlineCount: number;
   meId: string | null;
   isAdmin: boolean;
@@ -103,24 +116,10 @@ export function TeamDashboard({
     return `${pct > 0 ? "+" : ""}${pct}% vs. semana passada`;
   }, [thisWeek, lastWeek]);
 
-  // "Carga do time" — sem conceito real de capacidade no sistema (só o
-  // que existe: quantas tarefas abertas cada um tem), então o card
-  // mostra a média real de tarefas abertas por pessoa + quantos estão
-  // acima dessa média, em vez de inventar uma % de "capacidade".
-  const workload = useMemo(() => {
-    const withTaskCounts = allMembers.map(
-      (m) => (tasksByMember.get(m.name) ?? []).filter((t) => OPEN_STATUSES.has(t.status)).length,
-    );
-    const totalOpen = withTaskCounts.reduce((s, n) => s + n, 0);
-    const avg = allMembers.length > 0 ? totalOpen / allMembers.length : 0;
-    const acimaDaMedia = withTaskCounts.filter((n) => n > avg && avg > 0).length;
-    return { avg, acimaDaMedia };
-  }, [allMembers, tasksByMember]);
-
   return (
     <div className="space-y-4">
-      {/* Linha 1 — 5 cards de indicadores */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Linha 1 — 4 cards de indicadores */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <TeamMetricCard
           label="Membros"
           value={allMembers.length}
@@ -142,15 +141,6 @@ export function TeamDashboard({
           label="Concluídas na semana"
           value={thisWeek?.count ?? 0}
           sublabel={weeklyVariation}
-        />
-        <TeamMetricCard
-          label="Carga do time"
-          value={`${workload.avg.toFixed(1)} tarefas/pessoa`}
-          sublabel={
-            workload.acimaDaMedia > 0
-              ? `${workload.acimaDaMedia} membro${workload.acimaDaMedia === 1 ? "" : "s"} acima da média do time`
-              : "Carga equilibrada entre o time"
-          }
         />
       </div>
 
@@ -174,22 +164,20 @@ export function TeamDashboard({
         </div>
       </div>
 
-      {/* Linha 3 — Entregas por semana (60%) + Tarefas por status (40%) */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <WeeklyDeliveries data={weeklyData} />
-        </div>
-        <div className="lg:col-span-5">
-          <TasksByStatus tasks={allTasksFlat} onOpenTask={onOpenTask} />
-        </div>
-      </div>
+      {/* Linha 3 — Produtividade por dia da semana (100%) */}
+      <TeamWeekdayProductivity
+        data={weekdayData}
+        period={weekdayPeriod}
+        onPeriodChange={onWeekdayPeriodChange}
+      />
 
-      {/* Linha 4 — Performance Operacional (100%) — Score de gestão, NUNCA chamado de "ranking" */}
+      {/* Linha 4 — Performance do Time (100%) — Score de gestão, NUNCA chamado de "ranking" */}
       <TeamPerformance
         members={filteredMembers}
         scoreByMemberId={scoreByMemberId}
         scorePeriod={scorePeriod}
         onScorePeriodChange={onScorePeriodChange}
+        performanceSettings={performanceSettings}
         meId={meId}
         isAdmin={isAdmin}
         loading={loading}
@@ -200,26 +188,8 @@ export function TeamDashboard({
         onReset={onResetMember}
       />
 
-      {/* Linha 4.5 — Ranking do mês (XP, gamificação) + Indicadores operacionais (só admin) */}
-      {isAdmin ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="lg:col-span-7">
-            <TeamXpRanking members={allMembers} />
-          </div>
-          <div className="lg:col-span-5">
-            <TeamIndicators
-              events={performanceEvents}
-              currentlyOverdueCount={overdueCount}
-              isAdmin={isAdmin}
-            />
-          </div>
-        </div>
-      ) : (
-        <TeamXpRanking members={allMembers} />
-      )}
-
-      {/* Linha 5 — Administração (100%) */}
-      <TeamAdminSection isAdmin={isAdmin} />
+      {/* Linha 5 — Indicadores Operacionais (100%) — sempre visível, mesmo período de Performance do Time acima */}
+      <TeamIndicators events={performanceEvents} currentlyOverdueCount={overdueCount} />
     </div>
   );
 }

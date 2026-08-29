@@ -1,22 +1,28 @@
 import { useMemo } from "react";
 import { Info, Gauge, UsersIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { ScoreOperacionalResult, ScorePeriodMode } from "@/lib/performance-engine";
+import type {
+  ScoreOperacionalResult,
+  ScorePeriodMode,
+  PerformanceSettings,
+} from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import { MemberPerformanceRow } from "./MemberPerformanceRow";
 import { ScorePeriodSelector } from "./ScorePeriodSelector";
 
-/** "Performance Operacional" — o Score de cada pessoa (0-100, gestão),
- * que continua sendo a lista de membros da página (decisão confirmada
- * com o usuário: não existe uma lista de gestão separada). É
- * DELIBERADAMENTE diferente do "Ranking do mês" (XP, gamificação,
- * `TeamXpRanking.tsx`) — item 1/5 do pedido: Score mede performance
- * real, XP é o jogo. */
+/** "Performance do Time" — o Score de cada pessoa (0-100, gestão), que
+ * continua sendo a lista de membros da página (decisão confirmada com o
+ * usuário: não existe uma lista de gestão separada). Mostra só o
+ * essencial por linha (avatar, nome, cargo, atrasos, score) — o
+ * detalhamento completo do Score (Execução/Regularidade/Compromissos,
+ * composição) fica na ficha individual do membro: "a página Time
+ * identifica, a ficha individual explica". */
 export function TeamPerformance({
   members,
   scoreByMemberId,
   scorePeriod,
   onScorePeriodChange,
+  performanceSettings,
   meId,
   isAdmin,
   loading,
@@ -30,6 +36,7 @@ export function TeamPerformance({
   scoreByMemberId: Map<string, ScoreOperacionalResult>;
   scorePeriod: ScorePeriodMode;
   onScorePeriodChange: (v: ScorePeriodMode) => void;
+  performanceSettings: PerformanceSettings;
   meId: string | null;
   isAdmin: boolean;
   loading: boolean;
@@ -52,7 +59,7 @@ export function TeamPerformance({
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance Operacional
+          <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance do Time
         </h3>
         <div className="flex items-center gap-1.5">
           <ScorePeriodSelector value={scorePeriod} onChange={onScorePeriodChange} />
@@ -73,20 +80,26 @@ export function TeamPerformance({
               <ul className="space-y-1.5 text-xs text-muted-foreground">
                 <li className="flex items-center justify-between gap-3">
                   <span>Execução — % de tarefas concluídas no prazo</span>
-                  <span className="shrink-0 font-semibold text-foreground">50%</span>
+                  <span className="shrink-0 font-semibold text-foreground">
+                    {Math.round(performanceSettings.weightExecucao * 100)}%
+                  </span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
                   <span>Pendências — proporção atrasada agora + tempo</span>
-                  <span className="shrink-0 font-semibold text-foreground">30%</span>
+                  <span className="shrink-0 font-semibold text-foreground">
+                    {Math.round(performanceSettings.weightPendencias * 100)}%
+                  </span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
                   <span>Compromissos — presença nas reuniões esperadas</span>
-                  <span className="shrink-0 font-semibold text-foreground">20%</span>
+                  <span className="shrink-0 font-semibold text-foreground">
+                    {Math.round(performanceSettings.weightCompromissos * 100)}%
+                  </span>
                 </li>
               </ul>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 Prazos encerram às 19h. Sem dado suficiente no período, o componente é
-                desconsiderado (não vira 0).
+                desconsiderado (não vira 0) e os pesos são redistribuídos entre os demais.
               </p>
             </PopoverContent>
           </Popover>

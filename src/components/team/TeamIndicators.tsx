@@ -15,18 +15,17 @@ import { TeamMetricCard } from "./TeamMetricCard";
  * Indicadores operacionais agregados do time inteiro (item 20) — ajuda a
  * identificar problema de PROCESSO, não só de pessoa (ex.: "40% dos
  * prazos alterados no próprio dia" é um sinal sobre planejamento, mesmo
- * que todo mundo entregue tudo no fim). Só visível pra quem tem
- * `isAdmin` — mesma visibilidade dos outros painéis administrativos do
- * dashboard.
+ * que todo mundo entregue tudo no fim). Sempre visível — os dados aqui
+ * são 100% agregados do time (nenhum recorte por pessoa), sem motivo
+ * pra restringir a admin. Reaproveita o MESMO período selecionado em
+ * "Performance do Time" (não tem seletor próprio).
  */
 export function TeamIndicators({
   events,
   currentlyOverdueCount,
-  isAdmin,
 }: {
   events: PerformanceEventLike[];
   currentlyOverdueCount: number;
-  isAdmin: boolean;
 }) {
   const indicators = useMemo(() => {
     const completions = events
@@ -34,12 +33,15 @@ export function TeamIndicators({
       .map((e) => ({
         outcome: e.data.outcome as TaskOutcome,
         delayMinutes: (e.data.delayMinutes as number) ?? 0,
-        taskId: (e.data.taskId as string) ?? null,
+        // `taskId` é coluna de topo do evento, não `data.taskId` (que
+        // nunca existiu ali — leitura antiga sempre resolvia `null`,
+        // zerando `pctComPrazoAlterado` silenciosamente).
+        taskId: e.taskId,
       }));
     const deadlineChanges = events
       .filter((e) => e.eventType === "task_deadline_changed")
       .map((e) => ({
-        taskId: (e.data.taskId as string) ?? null,
+        taskId: e.taskId,
         isCritical: !!e.data.isCritical,
         motivo: (e.data.motivo as string) ?? undefined,
         exemptFromResponsibility: !!e.data.exemptFromResponsibility,
@@ -47,16 +49,23 @@ export function TeamIndicators({
     return computeAggregateIndicators(completions, deadlineChanges, currentlyOverdueCount);
   }, [events, currentlyOverdueCount]);
 
-  if (!isAdmin) return null;
-
   const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        <BarChart3 className="h-3.5 w-3.5" /> Indicadores operacionais
-      </h3>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <BarChart3 className="h-3.5 w-3.5" /> Indicadores operacionais
+        </h3>
+        <span className="text-[11px] text-muted-foreground">
+          Mesmo período selecionado em Performance do Time acima
+        </span>
+      </div>
+
+      <p className="mb-2 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Execução &amp; prazo
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <TeamMetricCard label="No prazo" value={pct(indicators.pctNoPrazo)} />
         <TeamMetricCard
           label="Concluídas com atraso"
@@ -76,6 +85,12 @@ export function TeamIndicators({
               : `${indicators.tempoMedioAtrasoDias.toFixed(1)}d`
           }
         />
+      </div>
+
+      <p className="mb-2 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Replanejamento
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <TeamMetricCard label="Replanejamentos" value={indicators.qtdReplanejamentos} />
         <TeamMetricCard
           label="Replanejamentos no dia"

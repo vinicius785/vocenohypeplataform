@@ -34,10 +34,19 @@ export function deadlineCutoff(dueISO: string): Date {
 }
 
 /** Uma alteração de prazo é "crítica" quando acontece no mesmo dia local
- * do prazo anterior — replanejamento normal (item 11) é qualquer outra
- * alteração, antes do dia do vencimento. */
+ * do prazo anterior OU DEPOIS DELE — replanejamento normal (item 11) é
+ * qualquer outra alteração, sempre ANTES do dia do vencimento. Antes só
+ * comparava igualdade de data (`===`), o que tratava uma tarefa mudada
+ * de prazo DIAS depois de já vencida como replanejamento "normal" —
+ * `effectivePerformanceDueDate` então avançava a referência livremente
+ * pro novo prazo, apagando o atraso já ocorrido. Comparar `>=` (strings
+ * ISO `YYYY-MM-DD` ordenam cronologicamente) cobre os dois casos que já
+ * eram considerados críticos na intenção original: mudar no próprio dia
+ * do vencimento ("Replanejamento no dia") e mudar depois dele ("Prazo
+ * alterado depois do atraso") — ambos continuam exigindo isenção pra
+ * avançar a referência. */
 export function isCriticalReplan(previousDueDate: string, changedAtISO: string): boolean {
-  return formatDateToIso(new Date(changedAtISO)) === previousDueDate;
+  return formatDateToIso(new Date(changedAtISO)) >= previousDueDate;
 }
 
 export type DeadlineHistoryEntryLike = {
@@ -221,6 +230,22 @@ export function computeExecucao(
 
 export type PerformanceTaskLike = { status: string; dueDate?: string; performanceDueDate?: string };
 
+/** Tarefas abertas ATUALMENTE atrasadas — mesma regra exata que
+ * `computePendencias` usa internamente (`performanceDueDate ?? dueDate`
+ * + corte de 19h), extraída pra função própria pra que a lista clicável
+ * de "Atenção" na ficha do membro NUNCA divirja do número que o Score
+ * mostra (diferente de `DashTask.bucket === "atrasada"`, que compara só
+ * o dia, sempre contra `dueDate`, nunca `performanceDueDate`). */
+export function overdueOpenTasks<T extends PerformanceTaskLike>(
+  openTasksNow: T[],
+  now: Date = new Date(),
+): T[] {
+  return openTasksNow.filter((t) => {
+    const ref = t.performanceDueDate ?? t.dueDate;
+    return !!ref && now.getTime() - deadlineCutoff(ref).getTime() > 0;
+  });
+}
+
 export type PendenciasResult = {
   value: number;
   overdueCount: number;
@@ -241,17 +266,12 @@ export function computePendencias(
 ): PendenciasResult {
   const openCount = openTasksNow.length;
   if (openCount === 0) return { value: 100, overdueCount: 0, openCount: 0, avgDaysOverdue: 0 };
-  let overdueCount = 0;
-  let totalDaysOverdue = 0;
-  for (const t of openTasksNow) {
+  const overdue = overdueOpenTasks(openTasksNow, now);
+  const overdueCount = overdue.length;
+  const totalDaysOverdue = overdue.reduce((sum, t) => {
     const ref = t.performanceDueDate ?? t.dueDate;
-    if (!ref) continue;
-    const diffMs = now.getTime() - deadlineCutoff(ref).getTime();
-    if (diffMs > 0) {
-      overdueCount += 1;
-      totalDaysOverdue += diffMs / (24 * 60 * 60 * 1000);
-    }
-  }
+    return sum + (now.getTime() - deadlineCutoff(ref!).getTime()) / (24 * 60 * 60 * 1000);
+  }, 0);
   const overdueRatio = overdueCount / openCount;
   const avgDaysOverdue = overdueCount > 0 ? totalDaysOverdue / overdueCount : 0;
   const severity = Math.min(1, avgDaysOverdue / diasTeto);
@@ -506,6 +526,8 @@ export type PerformanceEventLike = {
   eventType: string;
   personId: string | null;
   personName: string;
+  taskId: string | null;
+  taskTitle: string | null;
   meetingId: string | null;
   occurredAt: string;
   data: Record<string, unknown>;
@@ -576,4 +598,36 @@ export function rangeForScorePeriod(mode: ScorePeriodMode, now: Date = new Date(
   // "mes" (default)
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   return { from: formatDateToIso(from), to };
+}
+
+// ---------------------------------------------------------------------
+// Seletor de período da FICHA do membro — opções deliberadamente
+// diferentes de `ScorePeriodMode` (que é o seletor da página Time):
+// a ficha precisa de "Mês anterior" (comparação de gestão individual),
+// que não faz sentido no contexto de time inteiro. Estado independente,
+// desacoplado do `scorePeriod` da página.
+// ---------------------------------------------------------------------
+
+export type ProfilePeriodMode = "semana" | "mes" | "mes_anterior" | "90dias";
+
+export const PROFILE_PERIOD_OPTIONS: { value: ProfilePeriodMode; label: string }[] = [
+  { value: "semana", label: "Esta semana" },
+  { value: "mes", label: "Este mês" },
+  { value: "mes_anterior", label: "Mês anterior" },
+  { value: "90dias", label: "Últimos 90 dias" },
+];
+
+export function rangeForProfilePeriod(mode: ProfilePeriodMode, now: Date = new Date()): DateRange {
+  if (mode === "mes_anterior") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = new Date(now.getFullYear(), now.getMonth(), 0); // dia 0 = último dia do mês anterior
+    return { from: formatDateToIso(from), to: formatDateToIso(to) };
+  }
+  if (mode === "90dias") {
+    const to = formatDateToIso(now);
+    const from = new Date(now);
+    from.setDate(from.getDate() - 90);
+    return { from: formatDateToIso(from), to };
+  }
+  return rangeForScorePeriod(mode === "semana" ? "semana" : "mes", now);
 }

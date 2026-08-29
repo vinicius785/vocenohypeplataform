@@ -3,6 +3,7 @@ import { getTaskAssignees, ACTIVITY_STATUS_COMPLETED_ACTION } from "./projetos";
 import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
+import { parseIsoDateLocal, formatDateToIso } from "./utils";
 
 /**
  * Score do time (aba Gestão) — pontuação derivada inteiramente de dados que
@@ -111,15 +112,23 @@ function projetosAsGroups(projetos: Project[]): TaskGroup[] {
   return projetos.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks ?? [] }));
 }
 
-export type PerformanceOpenTask = { status: string; dueDate?: string; performanceDueDate?: string };
+export type PerformanceOpenTask = {
+  id: string;
+  title: string;
+  status: string;
+  dueDate?: string;
+  performanceDueDate?: string;
+};
 
 /** Tarefas ATUALMENTE abertas de cada pessoa (status ∈ `OPEN_STATUSES`),
  * com os campos crus que a Pendências do Score Operacional precisa
  * (`dueDate`/`performanceDueDate`, pra aplicar o corte de 19h) — não dá
  * pra reaproveitar `DashTask` (`task-aggregation.ts`) porque lá `due` já
  * vem formatado como texto ("Hoje"/"Atrasada 2d"), sem a data crua.
- * Mesma travessia de `computeMemberScores`, só devolvendo os objetos em
- * vez de somar pontos. */
+ * `id`/`title` viajam junto pra permitir drill-down ("quais tarefas são
+ * essas 2 atrasadas?") sem precisar de uma segunda consulta. Mesma
+ * travessia de `computeMemberScores`, só devolvendo os objetos em vez de
+ * somar pontos. */
 export function loadOpenTasksByMemberId(
   projetos: Project[],
   members: ChatMember[],
@@ -135,6 +144,8 @@ export function loadOpenTasksByMemberId(
         if (!member) continue;
         const arr = byId.get(member.id) ?? [];
         arr.push({
+          id: t.id,
+          title: t.title,
           status: t.status,
           dueDate: t.dueDate,
           performanceDueDate: t.performanceDueDate,
@@ -372,6 +383,114 @@ export function weeklyCompletions(
     }
   }
   return buckets;
+}
+
+/* ============================================================
+ * Produtividade por dia da semana — substitui "Entregas por semana" na
+ * página Time. Diferente de `weeklyCompletions` (bucket por SEMANA
+ * civil), aqui o bucket é por DIA DA SEMANA (seg-sex), agregando através
+ * de todas as semanas do período — a métrica é a MÉDIA de entregas por
+ * OCORRÊNCIA daquele dia no período (não o total bruto), pra não
+ * distorcer quando o período tem números diferentes de cada dia (ex. 4
+ * segundas mas só 3 sextas). Sábado/domingo nem entram nos buckets
+ * (item 6 do pedido: "não contabilizar" nesta primeira versão).
+ * ============================================================ */
+export type WeekdayPeriodMode = "semana" | "30dias" | "90dias" | "ano";
+
+export const WEEKDAY_PERIOD_OPTIONS: { value: WeekdayPeriodMode; label: string }[] = [
+  { value: "semana", label: "Esta semana" },
+  { value: "30dias", label: "Últimos 30 dias" },
+  { value: "90dias", label: "Últimos 90 dias" },
+  { value: "ano", label: "Este ano" },
+];
+
+export function rangeForWeekdayPeriod(mode: WeekdayPeriodMode, now: Date = new Date()): DateRange {
+  const to = formatDateToIso(now);
+  if (mode === "semana") return { from: startOfWeekISO(to), to };
+  if (mode === "90dias") {
+    const from = new Date(now);
+    from.setDate(from.getDate() - 90);
+    return { from: formatDateToIso(from), to };
+  }
+  if (mode === "ano") {
+    const from = new Date(now.getFullYear(), 0, 1);
+    return { from: formatDateToIso(from), to };
+  }
+  // "30dias" (default)
+  const from = new Date(now);
+  from.setDate(from.getDate() - 30);
+  return { from: formatDateToIso(from), to };
+}
+
+type Weekday = 1 | 2 | 3 | 4 | 5;
+const WEEKDAY_LABEL: Record<Weekday, string> = {
+  1: "Segunda",
+  2: "Terça",
+  3: "Quarta",
+  4: "Quinta",
+  5: "Sexta",
+};
+
+export type WeekdayBucket = {
+  weekday: Weekday;
+  label: string;
+  totalCompletions: number;
+  /** Quantas vezes esse dia da semana caiu dentro do período. */
+  occurrences: number;
+  /** `totalCompletions / occurrences` — `null` (não `0`) quando o dia
+   * nunca ocorreu no período, pra diferenciar visualmente "sem dado" de
+   * "zero entregas nesse dia". */
+  average: number | null;
+};
+
+/** Data real de conclusão, preferindo o campo dedicado `t.completedAt`
+ * (timestamp exato) — cai pro derivado de `activity`
+ * (`taskCompletionDate`) só pra tarefas legadas concluídas antes desse
+ * campo existir. Nunca cai pra `createdAt`: sem confirmação de quando
+ * foi concluída, é melhor excluir a tarefa da estatística do que
+ * atribuí-la a um dia errado. */
+function resolvedCompletionDate(t: Task): string | null {
+  if (t.completedAt) return toLocalDateISO(t.completedAt);
+  return taskCompletionDate(t);
+}
+
+export function weekdayProductivity(
+  projetos: Project[],
+  campanhaGroups: TaskGroup[] = [],
+  range: DateRange,
+): WeekdayBucket[] {
+  const buckets = new Map<Weekday, WeekdayBucket>(
+    ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => [
+      wd,
+      { weekday: wd, label: WEEKDAY_LABEL[wd], totalCompletions: 0, occurrences: 0, average: null },
+    ]),
+  );
+
+  if (range.from && range.to) {
+    const cursor = parseIsoDateLocal(range.from);
+    const end = parseIsoDateLocal(range.to);
+    while (cursor.getTime() <= end.getTime()) {
+      const wd = cursor.getDay();
+      if (wd >= 1 && wd <= 5) buckets.get(wd as Weekday)!.occurrences += 1;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
+    for (const t of flatten(p.tasks ?? [])) {
+      if (t.status !== "Concluído") continue;
+      const completedAt = resolvedCompletionDate(t);
+      if (!completedAt || !inRange(completedAt, range)) continue;
+      const wd = parseIsoDateLocal(completedAt).getDay();
+      if (wd < 1 || wd > 5) continue;
+      buckets.get(wd as Weekday)!.totalCompletions += 1;
+    }
+  }
+
+  for (const bucket of buckets.values()) {
+    bucket.average = bucket.occurrences > 0 ? bucket.totalCompletions / bucket.occurrences : null;
+  }
+  return ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => buckets.get(wd)!);
 }
 
 /** Quantas tarefas de UMA pessoa foram concluídas na semana corrente

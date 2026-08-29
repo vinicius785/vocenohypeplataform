@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { formatDateToIso } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
@@ -46,7 +47,7 @@ const QUESTION_TYPES: CustomQuestionType[] = [
 ];
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateToIso(new Date());
 }
 
 function moveItem<T>(list: T[], index: number, dir: -1 | 1): T[] {

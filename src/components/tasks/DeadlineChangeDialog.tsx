@@ -42,7 +42,7 @@ export function DeadlineChangeDialog({
         <DialogTitle>Por que o prazo está mudando?</DialogTitle>
         <DialogDescription>
           {isCritical
-            ? "Essa mudança está acontecendo no próprio dia do vencimento — fica registrada como replanejamento crítico."
+            ? "Essa mudança está acontecendo no dia do vencimento ou depois dele — fica registrada como replanejamento crítico."
             : "Fica registrado no histórico da tarefa."}
         </DialogDescription>
         <div className="space-y-3">

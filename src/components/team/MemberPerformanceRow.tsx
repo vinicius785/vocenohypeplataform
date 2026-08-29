@@ -1,18 +1,16 @@
-import { ShieldCheck, KeyRound, Pencil, X, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, KeyRound, Pencil, X, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import type { ScoreOperacionalResult } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, IconAction } from "./member-ui";
 
-/** Uma linha da "Performance Operacional" — substitui o antigo
- * `PersonRow` (que expandia inline com score/tarefas/início de dia).
- * Agora a lista de pessoas E o ranking de Score são a mesma coisa
- * (decisão confirmada com o usuário): clicar na linha abre a visão
- * individual do membro (dialog), em vez de expandir inline; as ações de
- * admin (editar/redefinir senha/remover) continuam aqui, idênticas a
- * antes. O Score Operacional (0-100, gestão) é uma métrica DIFERENTE do
- * XP (gamificação, ranking mensal separado — ver `TeamXpRanking.tsx`). */
+/** Uma linha da "Performance do Time" — clicar abre a ficha individual
+ * do membro (dialog de diagnóstico), onde vive o detalhamento completo
+ * do Score. Aqui só o essencial: avatar, nome, cargo, quantidade de
+ * atrasos, Score grande — "a página Time identifica, a ficha individual
+ * explica". Ações de admin (editar/redefinir senha/remover) continuam
+ * aqui, idênticas a antes. */
 export function MemberPerformanceRow({
   member: m,
   score,
@@ -37,7 +35,6 @@ export function MemberPerformanceRow({
   const showName = canManage || isSelf || m.timeView.includes("name");
   const showRole = canManage || isSelf || m.timeView.includes("role");
   const status = getStatus(m.id);
-  const pctNoPrazo = score?.execucao.value != null ? Math.round(score.execucao.value) : null;
   const atrasadas = score?.pendencias.overdueCount ?? 0;
 
   return (
@@ -87,15 +84,6 @@ export function MemberPerformanceRow({
 
       {score && (
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          {pctNoPrazo != null && (
-            <span
-              className="flex items-center gap-1 text-xs text-muted-foreground"
-              title="No prazo (período selecionado)"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              {pctNoPrazo}% no prazo
-            </span>
-          )}
           <span
             className={`flex items-center gap-1 text-xs ${atrasadas > 0 ? "text-destructive" : "text-muted-foreground"}`}
             title="Atrasadas agora"

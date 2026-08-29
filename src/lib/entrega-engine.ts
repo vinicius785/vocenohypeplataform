@@ -5,8 +5,12 @@ import {
   type EntregaStage,
   type NextActor,
 } from "@/lib/campanha-status";
+import { formatDateToIso } from "@/lib/utils";
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// `toISOString().slice(0, 10)` pega o dia em UTC — sempre segue horário de
+// Brasília (UTC-3): à noite, isso fazia uma entrega de "hoje" já contar
+// como amanhã em UTC.
+const todayISO = () => formatDateToIso(new Date());
 
 /**
  * Motor de próxima ação da entrega — ÚNICA fonte de verdade pra estágio

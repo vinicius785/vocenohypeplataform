@@ -3,7 +3,6 @@ import {
   Plus,
   Search,
   Shield,
-  ShieldCheck,
   Mail,
   Calendar,
   Briefcase,
@@ -13,22 +12,21 @@ import {
   Eye,
   Copy,
   Clock,
-  ChevronDown,
-  FolderKanban,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
-import { onMeetingsChange } from "@/lib/reunioes-store";
+import { onMeetingsChange, loadMeetings } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
   weeklyCompletions,
-  memberCompletionsThisWeek,
+  weekdayProductivity,
+  rangeForWeekdayPeriod,
   loadOpenTasksByMemberId,
-  OPEN_STATUSES,
   type TaskGroup,
+  type WeekdayPeriodMode,
 } from "@/lib/score";
 import {
   computeScoreOperacional,
@@ -38,7 +36,6 @@ import {
   rangeForScorePeriod,
   groupEventsByPerson,
   dedupAttendanceEvents,
-  DEFAULT_PERFORMANCE_SETTINGS,
   type ScorePeriodMode,
   type ScoreOperacionalResult,
   type TaskOutcome,
@@ -48,7 +45,6 @@ import {
   loadTasksByAssignee,
   loadAllTasksFlat,
   marketingStandaloneAsTaskGroup,
-  BUCKET_ORDER,
   type DashTask,
 } from "@/lib/task-aggregation";
 import {
@@ -59,7 +55,7 @@ import {
 } from "@/components/AppShell";
 import { TeamDashboard } from "@/components/team/TeamDashboard";
 import type { AttentionTab } from "@/components/team/AttentionTasks";
-import { avatarAccent, initialsOf, PresenceDot } from "@/components/team/member-ui";
+import { MemberProfileDialog } from "@/components/team/MemberProfileDialog";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,7 +104,7 @@ function formatBirthday(value: string): string {
 
 // Photos are always shown in the Time tab (not gated by timeView) — a profile
 // picture isn't sensitive the way birthday/salary/email are.
-type TimeField = "name" | "role" | "birthday" | "salary" | "email" | "startOfDay";
+export type TimeField = "name" | "role" | "birthday" | "salary" | "email" | "startOfDay";
 const TIME_FIELDS: { key: TimeField; label: string }[] = [
   { key: "name", label: "Nome" },
   { key: "role", label: "Cargo" },
@@ -307,7 +303,7 @@ function DiretorioTab() {
   useEffect(() => onStandaloneChange(() => setTick((t) => t + 1)), []);
 
   // Deep link vindo de uma @menção de pessoa no Chat (mesmo padrão de
-  // OPEN_CAMPANHA_TASK_KEY) — abre o MemberViewDialog já existente em vez de
+  // OPEN_CAMPANHA_TASK_KEY) — abre o MemberProfileDialog já existente em vez de
   // um popover de perfil novo. `members` carrega assíncrono, então tenta de
   // novo sempre que a lista mudar.
   useEffect(() => {
@@ -356,8 +352,9 @@ function DiretorioTab() {
     return [...campanhaGroups, marketingStandaloneAsTaskGroup()];
   }, [campanhaGroups, tick]);
 
-  // Score Operacional (0-100, gestão) — SEPARADO do XP/ranking mensal
-  // (gamificação, ver `TeamXpRanking.tsx`). Execução/Compromissos vêm do
+  // Score Operacional (0-100, gestão) — SEPARADO do XP/gamificação (o
+  // "Ranking do mês" saiu da página Time, mas o ledger continua
+  // gravando `xpDelta` normalmente). Execução/Compromissos vêm do
   // ledger `performance_events` filtrado ao período selecionado;
   // Pendências é sempre estado ATUAL (live), nunca filtrado por período
   // (item 2 do pedido: "quantidade ATUALMENTE atrasadas").
@@ -416,19 +413,40 @@ function DiretorioTab() {
   }, [campanhaNames, tick]);
 
   // Lista achatada de TODAS as tarefas (uma linha por tarefa, com todos os
-  // responsáveis) — alimenta o painel "Tarefas que precisam de atenção" e
-  // o donut "Tarefas por status" do dashboard.
+  // responsáveis) — alimenta o painel "Tarefas que precisam de atenção".
   const allTasksFlat = useMemo(() => {
     void tick;
     return loadAllTasksFlat(campanhaNames);
   }, [campanhaNames, tick]);
 
-  // Conclusões por semana do time inteiro — alimenta "Concluídas na
-  // semana" (card) e o gráfico "Entregas por semana".
+  // Conclusões por semana do time inteiro — alimenta só o KPI "Concluídas
+  // na semana" (o gráfico "Entregas por semana" foi substituído por
+  // "Produtividade por dia da semana", abaixo).
   const weeklyData = useMemo(() => {
     void tick;
     return weeklyCompletions(loadProjetos(), groupsWithMarketing);
   }, [tick, groupsWithMarketing]);
+
+  // Produtividade por dia da semana — período PRÓPRIO, independente do
+  // `scorePeriod` da Performance do Time (opções diferentes: Esta
+  // semana/Últimos 30/90 dias/Este ano).
+  const [weekdayPeriod, setWeekdayPeriod] = useState<WeekdayPeriodMode>("30dias");
+  const weekdayData = useMemo(() => {
+    void tick;
+    return weekdayProductivity(
+      loadProjetos(),
+      groupsWithMarketing,
+      rangeForWeekdayPeriod(weekdayPeriod),
+    );
+  }, [tick, groupsWithMarketing, weekdayPeriod]);
+
+  // Resolve título de reunião a partir do id — só usado pra exibir "N
+  // reuniões perdidas" na ficha do membro (o ledger denormaliza
+  // `meetingId`, não `meetingTitle`).
+  const meetingsById = useMemo(() => {
+    void tick;
+    return new Map(loadMeetings().map((m) => [m.id, m]));
+  }, [tick]);
 
   const [attentionTab, setAttentionTab] = useState<AttentionTab>("atrasadas");
 
@@ -611,9 +629,13 @@ function DiretorioTab() {
           scorePeriod={scorePeriod}
           onScorePeriodChange={setScorePeriod}
           performanceEvents={performanceEvents}
+          performanceSettings={performanceSettings}
           allTasksFlat={allTasksFlat}
           tasksByMember={tasksByMember}
           weeklyData={weeklyData}
+          weekdayData={weekdayData}
+          weekdayPeriod={weekdayPeriod}
+          onWeekdayPeriodChange={setWeekdayPeriod}
           onlineCount={onlineCount}
           meId={meId}
           isAdmin={isAdmin}
@@ -642,70 +664,28 @@ function DiretorioTab() {
         />
 
         {viewing && (
-          <MemberViewDialog
+          <MemberProfileDialog
             member={viewing}
             isSelf={viewing.id === meId}
-            score={scoreByMemberId.get(viewing.id)}
-            tasks={tasksByMember.get(viewing.name) ?? []}
-            weeklyCompleted={memberCompletionsThisWeek(
-              viewing.name,
-              loadProjetos(),
-              groupsWithMarketing,
-            )}
+            isAdmin={isAdmin}
+            tasksForMember={tasksByMember.get(viewing.name) ?? []}
+            openTasksForMember={openTasksByMemberId.get(viewing.id) ?? []}
+            performanceSettings={performanceSettings}
+            meetingsById={meetingsById}
             onOpenTask={openTask}
             onOpenChange={(v) => {
               if (!v) setViewing(null);
+            }}
+            onEdit={(m) => {
+              setViewing(null);
+              setEditing(m);
+              setOpen(true);
             }}
           />
         )}
         {confirmDialog}
       </div>
     </TooltipProvider>
-  );
-}
-
-function fmtDateBR(d: string) {
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
-}
-
-function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string> }) {
-  const [expanded, setExpanded] = useState(false);
-  const entries = useMemo(
-    () =>
-      Object.entries(startTimes ?? {})
-        .filter(([d, h]) => d && h)
-        .sort((a, b) => (a[0] < b[0] ? 1 : -1)),
-    [startTimes],
-  );
-  if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground">Nenhum registro de início de dia ainda.</p>;
-  }
-  const visible = expanded ? entries : entries.slice(0, 5);
-  return (
-    <div>
-      <ul className="space-y-1">
-        {visible.map(([d, h]) => (
-          <li
-            key={d}
-            className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5 text-xs"
-          >
-            <span className="text-muted-foreground">{fmtDateBR(d)}</span>
-            <span className="font-medium tabular-nums text-foreground">{h}</span>
-          </li>
-        ))}
-      </ul>
-      {entries.length > 5 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-2 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
-          {expanded ? "Ver só os últimos 5" : `Ver histórico completo (${entries.length})`}
-        </button>
-      )}
-    </div>
   );
 }
 
@@ -1202,314 +1182,17 @@ function Field({
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "neutral" | "danger" | "success";
-}) {
-  const valueTone =
-    tone === "danger"
-      ? "text-destructive"
-      : tone === "success"
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-foreground";
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-0.5 text-sm font-semibold tabular-nums ${valueTone}`}>{value}</p>
-    </div>
-  );
-}
-
 /**
- * Visão individual do membro — evolução do antigo diálogo somente-leitura:
- * ganhou pontuação, tarefas abertas/atrasadas, concluídas na semana,
- * próximas entregas e projetos/campanhas em que participa (antes só
- * dados de perfil + "início de dia"). Aberta pelo clique em qualquer
- * linha do ranking "Performance do time", pra admin ou membro comum —
- * mesma visibilidade que esses números já tinham na antiga linha
- * expansível (não é gated por `timeView`, que só controla campos de
- * perfil pessoal).
- */
-function MemberViewDialog({
-  member,
-  isSelf,
-  score,
-  tasks,
-  weeklyCompleted,
-  onOpenTask,
-  onOpenChange,
-}: {
-  member: Member;
-  isSelf: boolean;
-  score?: ScoreOperacionalResult;
-  /** Todas as tarefas (projeto, campanha, avulsa do Marketing) vinculadas a
-   * esta pessoa. */
-  tasks: DashTask[];
-  /** Quantas dessas tarefas foram concluídas na semana corrente. */
-  weeklyCompleted: number;
-  onOpenTask: (t: DashTask) => void;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const tv = member.timeView ?? [];
-  const show = (f: TimeField) => isSelf || tv.includes(f);
-  const rows: Array<{
-    key: TimeField;
-    label: string;
-    icon: React.ReactNode;
-    value: React.ReactNode;
-  }> = [];
-  if (show("name"))
-    rows.push({
-      key: "name",
-      label: "Nome",
-      icon: <User className="h-3.5 w-3.5" />,
-      value: member.name || "—",
-    });
-  if (show("role"))
-    rows.push({
-      key: "role",
-      label: "Cargo",
-      icon: <Briefcase className="h-3.5 w-3.5" />,
-      value: member.role || "—",
-    });
-  if (show("email"))
-    rows.push({
-      key: "email",
-      label: "Email",
-      icon: <Mail className="h-3.5 w-3.5" />,
-      value: member.email,
-    });
-  if (show("birthday"))
-    rows.push({
-      key: "birthday",
-      label: "Aniversário",
-      icon: <Calendar className="h-3.5 w-3.5" />,
-      value: member.birthday ? formatBirthday(member.birthday) : "—",
-    });
-  if (show("salary"))
-    rows.push({
-      key: "salary",
-      label: "Salário",
-      icon: <DollarSign className="h-3.5 w-3.5" />,
-      value: member.salary || "—",
-    });
-
-  const status = getStatus(member.id);
-
-  const openTasks = useMemo(() => tasks.filter((t) => OPEN_STATUSES.has(t.status)), [tasks]);
-  const overdueTasks = useMemo(() => openTasks.filter((t) => t.bucket === "atrasada"), [openTasks]);
-  const upcoming = useMemo(
-    () =>
-      [...openTasks].sort((a, b) => BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket]).slice(0, 5),
-    [openTasks],
-  );
-  const projectNames = useMemo(() => Array.from(new Set(tasks.map((t) => t.projectName))), [tasks]);
-
-  return (
-    <Dialog open={!!member} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-md flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle>Perfil</DialogTitle>
-        </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-5 px-6 py-5">
-            <div className="flex items-center gap-4">
-              <div className="relative shrink-0">
-                <Avatar className="h-16 w-16">
-                  {member.photo && <AvatarImage src={member.photo} alt={member.name} />}
-                  <AvatarFallback className={`text-lg font-semibold ${avatarAccent(member.id)}`}>
-                    {initialsOf(show("name") ? member.name : "", member.email)}
-                  </AvatarFallback>
-                </Avatar>
-                <PresenceDot status={status} />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {show("name") ? member.name || "(sem nome)" : "Membro"}
-                </p>
-                {show("role") && member.role && (
-                  <p className="truncate text-xs text-muted-foreground">{member.role}</p>
-                )}
-                <div className="mt-1 flex items-center gap-1.5">
-                  {member.isAdmin && (
-                    <Badge
-                      variant="outline"
-                      className="gap-1 border-foreground/20 px-1.5 py-0 text-[10px] font-medium"
-                    >
-                      <ShieldCheck className="h-2.5 w-2.5" /> Admin
-                    </Badge>
-                  )}
-                  <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</span>
-                </div>
-              </div>
-            </div>
-
-            {rows.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Sem informações liberadas para visualização.
-              </p>
-            ) : (
-              <dl className="space-y-2">
-                {rows.map((r) => (
-                  <div
-                    key={r.key}
-                    className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2"
-                  >
-                    <dt className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                      {r.icon}
-                      {r.label}
-                    </dt>
-                    <dd className="break-all text-right text-xs font-medium text-foreground">
-                      {r.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-
-            {score && (
-              <section className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Score Operacional
-                  </p>
-                  <p className="text-2xl font-light tracking-tight text-foreground">
-                    {score.score == null ? "—" : score.score}
-                    <span className="text-sm text-muted-foreground">/100</span>
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <MiniStat
-                    label="Execução"
-                    value={score.execucao.value == null ? "—" : Math.round(score.execucao.value)}
-                  />
-                  <MiniStat
-                    label="Pendências"
-                    value={Math.round(score.pendencias.value)}
-                    tone={score.pendencias.overdueCount > 0 ? "danger" : "neutral"}
-                  />
-                  <MiniStat
-                    label="Compromissos"
-                    value={
-                      score.compromissos.value == null ? "—" : Math.round(score.compromissos.value)
-                    }
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-                  <MiniStat label="Concluídas no período" value={score.execucao.count} />
-                  <MiniStat
-                    label="No prazo"
-                    value={score.execucao.onTimeCount + score.execucao.earlyCount}
-                  />
-                  <MiniStat
-                    label="Com atraso"
-                    value={score.execucao.lateCount}
-                    tone={score.execucao.lateCount > 0 ? "danger" : "neutral"}
-                  />
-                  <MiniStat
-                    label="Atualmente atrasadas"
-                    value={score.pendencias.overdueCount}
-                    tone={score.pendencias.overdueCount > 0 ? "danger" : "neutral"}
-                  />
-                  <MiniStat
-                    label="Reuniões"
-                    value={`${score.compromissos.attended}/${score.compromissos.expected}`}
-                  />
-                  <MiniStat label="Concluídas na semana" value={weeklyCompleted} />
-                </div>
-              </section>
-            )}
-
-            {upcoming.length > 0 && (
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Próximas entregas
-                </p>
-                <ul className="divide-y divide-border rounded-md border border-border">
-                  {upcoming.map((t) => (
-                    <li key={`${t.projectId}_${t.id}`}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenTask(t);
-                          onOpenChange(false);
-                        }}
-                        className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-xs text-foreground group-hover:underline">
-                          {t.title}
-                        </span>
-                        <span
-                          className={`shrink-0 text-[11px] tabular-nums ${
-                            t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
-                          }`}
-                        >
-                          {t.due}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {projectNames.length > 0 && (
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Projetos e campanhas
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {projectNames.map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
-                    >
-                      <FolderKanban className="h-3 w-3 text-muted-foreground" />
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {show("startOfDay") && (
-              <section className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  <Clock className="h-3 w-3" /> Início de dia
-                </div>
-                <StartOfDayHistory startTimes={member.startTimes} />
-              </section>
-            )}
-          </div>
-        </div>
-        <DialogFooter className="border-t border-border bg-muted/30 px-6 py-3">
-          <Button size="sm" onClick={() => onOpenChange(false)}>
-            Fechar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * "Time" virou um dashboard de gestão (inspirado conceitualmente no
- * ClickUp, sem copiar o visual): além do diretório de membros, mostra em
- * poucos segundos como a operação está — tarefas que precisam de
- * atenção, carga por pessoa, status geral, tendência de entregas e um
- * ranking de performance que agora é a própria lista de membros. Senhas
- * esquecidas e bugs reportados viraram uma seção "Administração" mais
- * discreta no fim da página (`TeamAdminSection`), em vez de competir
- * visualmente com os indicadores de gestão. `DiretorioTab` continua
- * sendo a única camada de dados; a grade visual em si vive em
- * `src/components/team/TeamDashboard.tsx`.
+ * "Time" é um cockpit operacional (inspirado conceitualmente no
+ * ClickUp, sem copiar o visual): em poucos segundos mostra como a
+ * operação está — tarefas que precisam de atenção, carga por pessoa,
+ * produtividade por dia da semana, e um ranking de performance que é a
+ * própria lista de membros ("Performance do Time"). A página IDENTIFICA
+ * problemas; a ficha individual do membro (`MemberProfileDialog`)
+ * EXPLICA, com o detalhamento completo do Score. Administração (senhas
+ * esquecidas, bugs, configuração do Score) vive em Configurações, não
+ * aqui. `DiretorioTab` continua sendo a única camada de dados; a grade
+ * visual em si vive em `src/components/team/TeamDashboard.tsx`.
  */
 export function TimeSection() {
   return (
