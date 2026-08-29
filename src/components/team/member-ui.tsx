@@ -35,8 +35,10 @@ export function PresenceDot({ status }: { status: MemberStatus }) {
 
 export { getStatus };
 
-/** Par label+valor compacto, reaproveitado nas grades de estatística da
- * Performance do Time e da ficha do membro. */
+/** Bloco de estatística com contorno próprio — usado nas grades de
+ * Score Operacional da ficha do membro. Cada número ganha seu próprio
+ * "cartão" (borda + fundo leve + respiro) em vez de só texto empilhado,
+ * pra não parecer uma lista apertada de rótulos. */
 export function MiniStat({
   label,
   value,
@@ -53,11 +55,11 @@ export function MiniStat({
         ? "text-emerald-600 dark:text-emerald-400"
         : "text-foreground";
   return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="min-w-0 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-0.5 text-sm font-semibold tabular-nums ${valueTone}`}>{value}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${valueTone}`}>{value}</p>
     </div>
   );
 }

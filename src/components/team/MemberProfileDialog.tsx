@@ -94,8 +94,8 @@ function ProfileCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-border p-3.5">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
+    <section className="rounded-lg border border-border p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           {icon}
           {title}
@@ -351,31 +351,31 @@ export function MemberProfileDialog({
 
   return (
     <Dialog open={!!member} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-lg flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
+      <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-7 py-5">
           <DialogTitle>Perfil</DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-4 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-4">
+          <div className="space-y-5 px-7 py-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-5">
                 <div className="relative shrink-0">
-                  <Avatar className="h-16 w-16">
+                  <Avatar className="h-20 w-20">
                     {member.photo && <AvatarImage src={member.photo} alt={member.name} />}
-                    <AvatarFallback className={`text-lg font-semibold ${avatarAccent(member.id)}`}>
+                    <AvatarFallback className={`text-xl font-semibold ${avatarAccent(member.id)}`}>
                       {initialsOf(show("name") ? member.name : "", member.email)}
                     </AvatarFallback>
                   </Avatar>
                   <PresenceDot status={status} />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">
+                  <p className="truncate text-base font-semibold text-foreground">
                     {show("name") ? member.name || "(sem nome)" : "Membro"}
                   </p>
                   {show("role") && member.role && (
-                    <p className="truncate text-xs text-muted-foreground">{member.role}</p>
+                    <p className="truncate text-sm text-muted-foreground">{member.role}</p>
                   )}
-                  <div className="mt-1 flex items-center gap-1.5">
+                  <div className="mt-1.5 flex items-center gap-1.5">
                     {member.isAdmin && (
                       <Badge
                         variant="outline"
@@ -393,7 +393,7 @@ export function MemberProfileDialog({
               <select
                 value={profilePeriod}
                 onChange={(e) => setProfilePeriod(e.target.value as ProfilePeriodMode)}
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                className="h-9 rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
               >
                 {PROFILE_PERIOD_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -404,23 +404,23 @@ export function MemberProfileDialog({
             </div>
 
             {/* Score Operacional */}
-            <section className="rounded-lg border border-border p-4">
+            <section className="rounded-lg border border-border p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                   <Gauge className="h-3.5 w-3.5" /> Score Operacional
                 </p>
-                <p className={`text-3xl font-light tracking-tight ${scoreTone}`}>
+                <p className={`text-4xl font-light tracking-tight ${scoreTone}`}>
                   {score.score == null ? "—" : score.score}
-                  <span className="text-sm text-muted-foreground">/100</span>
+                  <span className="text-base text-muted-foreground">/100</span>
                 </p>
               </div>
 
-              <div className="mt-4 space-y-4">
+              <div className="mt-5 space-y-5">
                 <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <CheckCircle2 className="h-3 w-3" /> Execução
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <MiniStat label="Concluídas no período" value={execucao.count} />
                     <MiniStat label="No prazo" value={execucao.onTimeCount + execucao.earlyCount} />
                     <MiniStat
@@ -435,11 +435,11 @@ export function MemberProfileDialog({
                     />
                   </div>
                 </div>
-                <div className="border-t border-border pt-4">
-                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="border-t border-border pt-5">
+                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <RefreshCcw className="h-3 w-3" /> Regularidade
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <MiniStat label="Taxa no prazo" value={fmtPct(regularidade.pctNoPrazo)} />
                     <MiniStat
                       label="Tempo médio de atraso"
@@ -457,11 +457,11 @@ export function MemberProfileDialog({
                     />
                   </div>
                 </div>
-                <div className="border-t border-border pt-4">
-                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="border-t border-border pt-5">
+                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <CalendarClock className="h-3 w-3" /> Compromissos
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+                  <div className="grid grid-cols-3 gap-3">
                     <MiniStat
                       label="Reuniões previstas"
                       value={compromissos.expected === 0 ? "—" : compromissos.expected}
@@ -491,7 +491,7 @@ export function MemberProfileDialog({
               <button
                 type="button"
                 onClick={() => setShowComposition((s) => !s)}
-                className="mt-4 flex w-full items-center justify-between border-t border-border pt-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-[11px] font-medium text-muted-foreground hover:text-foreground"
               >
                 Ver composição do score
                 <ChevronDown
@@ -500,7 +500,7 @@ export function MemberProfileDialog({
               </button>
 
               {showComposition && (
-                <div className="mt-3 space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+                <div className="mt-4 space-y-3 rounded-lg border border-border bg-muted/20 p-4 text-xs">
                   {(
                     [
                       {
@@ -630,7 +630,7 @@ export function MemberProfileDialog({
             </section>
 
             {hasAttention && (
-              <section className="space-y-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3.5">
+              <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
                 <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="h-3 w-3" /> Atenção
                 </p>
@@ -743,39 +743,41 @@ export function MemberProfileDialog({
               </ProfileCard>
             )}
 
-            <ProfileCard icon={<ClipboardList className="h-3.5 w-3.5" />} title="Carga atual">
-              <p className="text-xs text-foreground">
-                {openTasksFull.length} tarefa{openTasksFull.length === 1 ? "" : "s"} aberta
-                {openTasksFull.length === 1 ? "" : "s"} · {vencemSemana} vence
-                {vencemSemana === 1 ? "" : "m"} esta semana ·{" "}
-                <span className={overdueNow.length > 0 ? "text-destructive" : ""}>
-                  {overdueNow.length} atrasada{overdueNow.length === 1 ? "" : "s"}
-                </span>
-              </p>
-            </ProfileCard>
-
-            {projectNames.length > 0 && (
-              <ProfileCard
-                icon={<FolderKanban className="h-3.5 w-3.5" />}
-                title="Projetos e campanhas"
-              >
-                <div className="flex flex-wrap gap-1.5">
-                  {projectNames.slice(0, PROJECT_CHIP_LIMIT).map((name) => (
-                    <span
-                      key={name}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                  {projectNames.length > PROJECT_CHIP_LIMIT && (
-                    <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
-                      +{projectNames.length - PROJECT_CHIP_LIMIT}
-                    </span>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <ProfileCard icon={<ClipboardList className="h-3.5 w-3.5" />} title="Carga atual">
+                <p className="text-xs text-foreground">
+                  {openTasksFull.length} tarefa{openTasksFull.length === 1 ? "" : "s"} aberta
+                  {openTasksFull.length === 1 ? "" : "s"} · {vencemSemana} vence
+                  {vencemSemana === 1 ? "" : "m"} esta semana ·{" "}
+                  <span className={overdueNow.length > 0 ? "text-destructive" : ""}>
+                    {overdueNow.length} atrasada{overdueNow.length === 1 ? "" : "s"}
+                  </span>
+                </p>
               </ProfileCard>
-            )}
+
+              {projectNames.length > 0 && (
+                <ProfileCard
+                  icon={<FolderKanban className="h-3.5 w-3.5" />}
+                  title="Projetos e campanhas"
+                >
+                  <div className="flex flex-wrap gap-1.5">
+                    {projectNames.slice(0, PROJECT_CHIP_LIMIT).map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                    {projectNames.length > PROJECT_CHIP_LIMIT && (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+                        +{projectNames.length - PROJECT_CHIP_LIMIT}
+                      </span>
+                    )}
+                  </div>
+                </ProfileCard>
+              )}
+            </div>
 
             {show("startOfDay") && (
               <ProfileCard icon={<Clock className="h-3.5 w-3.5" />} title="Início de dia">
@@ -786,7 +788,7 @@ export function MemberProfileDialog({
             <InfoSection member={member} isAdmin={isAdmin} show={show} onEdit={onEdit} />
           </div>
         </div>
-        <DialogFooter className="border-t border-border bg-muted/30 px-6 py-3">
+        <DialogFooter className="border-t border-border bg-muted/30 px-7 py-4">
           <Button size="sm" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
@@ -854,7 +856,7 @@ function InfoSection({
     });
 
   return (
-    <section className="space-y-2 border-t border-border pt-4">
+    <section className="space-y-2.5 border-t border-border pt-5">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
