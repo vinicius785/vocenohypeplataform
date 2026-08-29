@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { DateField } from "@/components/ui/date-field";
 import {
   Plus,
   X,
@@ -959,10 +960,9 @@ function BlogEditor({
             <span className="text-[11px] font-medium text-muted-foreground">
               Data de publicação
             </span>
-            <input
-              type="date"
-              value={p.publishDate ?? ""}
-              onChange={(e) => patchImmediate({ publishDate: e.target.value || undefined })}
+            <DateField
+              value={p.publishDate ?? undefined}
+              onChange={(v) => patchImmediate({ publishDate: v })}
               className={inputCls}
             />
           </label>

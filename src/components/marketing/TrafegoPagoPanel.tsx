@@ -3,6 +3,7 @@ import { Plus, X, Image as ImageIcon, ExternalLink, Megaphone, Upload } from "lu
 import type { Campaign, CampaignPlatform, CampaignStatus, Creative, Project } from "@/lib/projetos";
 import { resizeImageToDataUrl } from "@/lib/image-upload";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { DateField } from "@/components/ui/date-field";
 
 const PLATFORMS: CampaignPlatform[] = ["Meta", "Google", "TikTok", "LinkedIn", "Outro"];
 const STATUS: { key: CampaignStatus; label: string; cls: string }[] = [
@@ -221,19 +222,19 @@ function CampaignEditor({
         </label>
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground">Início</span>
-          <input
-            type="date"
-            value={c.startDate ?? ""}
-            onChange={(e) => onChange({ startDate: e.target.value || undefined })}
+          <DateField
+            value={c.startDate ?? undefined}
+            onChange={(v) => onChange({ startDate: v })}
+            max={c.endDate ?? undefined}
             className={inputCls}
           />
         </label>
         <label className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground">Fim</span>
-          <input
-            type="date"
-            value={c.endDate ?? ""}
-            onChange={(e) => onChange({ endDate: e.target.value || undefined })}
+          <DateField
+            value={c.endDate ?? undefined}
+            onChange={(v) => onChange({ endDate: v })}
+            min={c.startDate ?? undefined}
             className={inputCls}
           />
         </label>

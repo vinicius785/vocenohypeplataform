@@ -18,6 +18,7 @@ import {
   Video,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import {
   type Meeting,
   type MeetingStatus,
@@ -852,11 +853,10 @@ function DisponibilidadeTab({
             ) : (
               <div className="mt-3">
                 <label className="text-xs font-medium text-muted-foreground">Data</label>
-                <input
-                  type="date"
-                  value={b.data ?? ""}
-                  onChange={(e) => updateBloqueio(b.id, { data: e.target.value })}
-                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                <DateField
+                  value={b.data ?? undefined}
+                  onChange={(v) => updateBloqueio(b.id, { data: v ?? "" })}
+                  className="mt-1"
                 />
               </div>
             )}
@@ -1161,11 +1161,10 @@ function MeetingDialog({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Data</label>
-                <input
-                  type="date"
-                  value={data}
-                  onChange={(e) => setData(e.target.value)}
-                  className={`mt-1 ${fieldCls}`}
+                <DateField
+                  value={data || undefined}
+                  onChange={(v) => setData(v ?? "")}
+                  className="mt-1 h-9"
                 />
               </div>
               <div>
@@ -1209,12 +1208,11 @@ function MeetingDialog({
                 {repeat !== "none" && (
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Repetir até</label>
-                    <input
-                      type="date"
-                      value={repeatUntil}
-                      min={data}
-                      onChange={(e) => setRepeatUntil(e.target.value)}
-                      className={`mt-1 ${fieldCls}`}
+                    <DateField
+                      value={repeatUntil || undefined}
+                      onChange={(v) => setRepeatUntil(v ?? "")}
+                      min={data || undefined}
+                      className="mt-1 h-9"
                     />
                   </div>
                 )}
@@ -1890,11 +1888,10 @@ export function MeetingSummaryDialog({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Nova data</label>
-                  <input
-                    type="date"
-                    value={propData}
-                    onChange={(e) => setPropData(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  <DateField
+                    value={propData || undefined}
+                    onChange={(v) => setPropData(v ?? "")}
+                    className="mt-1"
                   />
                 </div>
                 <div>

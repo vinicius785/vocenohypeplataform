@@ -67,6 +67,7 @@ import { getStatus, subscribeChat, STATUS_LABEL } from "@/lib/chat-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -871,10 +872,9 @@ function MemberDialog({
                     />
                   </Field>
                   <Field label="Aniversário" icon={<Calendar className="h-3.5 w-3.5" />}>
-                    <Input
-                      type="date"
-                      value={birthday}
-                      onChange={(e) => setBirthday(e.target.value)}
+                    <DateField
+                      value={birthday || undefined}
+                      onChange={(v) => setBirthday(v ?? "")}
                       className="h-9 text-sm"
                     />
                   </Field>

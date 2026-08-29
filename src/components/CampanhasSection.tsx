@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import FlowingMenu from "@/components/FlowingMenu";
 import { BackButton } from "@/components/BackButton";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
@@ -1305,12 +1306,7 @@ function CronogramaManualSection({
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-background p-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-medium uppercase text-muted-foreground">Data</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+          <DateField value={date || undefined} onChange={(v) => setDate(v ?? "")} className="h-9" />
         </div>
         <div className="flex min-w-[160px] flex-1 flex-col gap-1">
           <label className="text-[10px] font-medium uppercase text-muted-foreground">Título</label>

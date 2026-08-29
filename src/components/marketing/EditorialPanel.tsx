@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { DateField } from "@/components/ui/date-field";
 import {
   Plus,
   X,
@@ -322,12 +323,10 @@ function PostModal({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
               <span className="text-xs font-medium">Data</span>
-              <input
-                type="date"
-                value={p.date}
-                onChange={(e) => setP({ ...p, date: e.target.value })}
+              <DateField
+                value={p.date || undefined}
+                onChange={(v) => setP({ ...p, date: v ?? "" })}
                 className={inputCls}
-                required
               />
             </label>
             <label className="block space-y-1">

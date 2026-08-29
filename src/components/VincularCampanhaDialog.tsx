@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import type { InscricaoPageConfig } from "@/lib/inscricao-page";
 import type { RelatorioMensal } from "@/lib/relatorio-mensal";
 
@@ -563,18 +564,18 @@ export function VincularCampanhaDialog({
                 </Field>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Início da campanha">
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
+                    <DateField
+                      value={dataInicio || undefined}
+                      onChange={(v) => setDataInicio(v ?? "")}
+                      max={prazo || undefined}
                       className={inputCls}
                     />
                   </Field>
                   <Field label="Prazo para campanha">
-                    <input
-                      type="date"
-                      value={prazo}
-                      onChange={(e) => setPrazo(e.target.value)}
+                    <DateField
+                      value={prazo || undefined}
+                      onChange={(v) => setPrazo(v ?? "")}
+                      min={dataInicio || undefined}
                       className={inputCls}
                     />
                   </Field>
@@ -792,10 +793,9 @@ export function VincularCampanhaDialog({
                 {pagClienteTipo === "À vista" && (
                   <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
                     <Field label="Data do pagamento">
-                      <input
-                        type="date"
-                        value={pagClienteDataUnica}
-                        onChange={(e) => setPagClienteDataUnica(e.target.value)}
+                      <DateField
+                        value={pagClienteDataUnica || undefined}
+                        onChange={(v) => setPagClienteDataUnica(v ?? "")}
                         className={inputCls}
                       />
                     </Field>
@@ -805,18 +805,16 @@ export function VincularCampanhaDialog({
                 {pagClienteTipo === "50/50 (duas datas)" && (
                   <div className="grid grid-cols-1 gap-4 rounded-lg border border-border/70 bg-muted/30 p-4 sm:grid-cols-2">
                     <Field label="Data dos primeiros 50%">
-                      <input
-                        type="date"
-                        value={pagClienteData1}
-                        onChange={(e) => setPagClienteData1(e.target.value)}
+                      <DateField
+                        value={pagClienteData1 || undefined}
+                        onChange={(v) => setPagClienteData1(v ?? "")}
                         className={inputCls}
                       />
                     </Field>
                     <Field label="Data dos últimos 50%">
-                      <input
-                        type="date"
-                        value={pagClienteData2}
-                        onChange={(e) => setPagClienteData2(e.target.value)}
+                      <DateField
+                        value={pagClienteData2 || undefined}
+                        onChange={(v) => setPagClienteData2(v ?? "")}
                         className={inputCls}
                       />
                     </Field>
@@ -826,10 +824,9 @@ export function VincularCampanhaDialog({
                 {pagClienteTipo === "50/50 (segunda na entrega)" && (
                   <div className="rounded-lg border border-border/70 bg-muted/30 p-4">
                     <Field label="Data dos primeiros 50%">
-                      <input
-                        type="date"
-                        value={pagClienteData1}
-                        onChange={(e) => setPagClienteData1(e.target.value)}
+                      <DateField
+                        value={pagClienteData1 || undefined}
+                        onChange={(v) => setPagClienteData1(v ?? "")}
                         className={inputCls}
                       />
                     </Field>
@@ -847,14 +844,11 @@ export function VincularCampanhaDialog({
                         className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]"
                       >
                         <Field label={`Parcela ${i + 1} — data`}>
-                          <input
-                            type="date"
-                            value={p.data}
-                            onChange={(e) =>
+                          <DateField
+                            value={p.data || undefined}
+                            onChange={(v) =>
                               setPagClienteParcelas((arr) =>
-                                arr.map((x) =>
-                                  x.id === p.id ? { ...x, data: e.target.value } : x,
-                                ),
+                                arr.map((x) => (x.id === p.id ? { ...x, data: v ?? "" } : x)),
                               )
                             }
                             className={inputCls}
@@ -918,10 +912,9 @@ export function VincularCampanhaDialog({
                       />
                     </Field>
                     <Field label="Início da recorrência">
-                      <input
-                        type="date"
-                        value={pagClienteRecorrenteInicio}
-                        onChange={(e) => setPagClienteRecorrenteInicio(e.target.value)}
+                      <DateField
+                        value={pagClienteRecorrenteInicio || undefined}
+                        onChange={(v) => setPagClienteRecorrenteInicio(v ?? "")}
                         className={inputCls}
                       />
                     </Field>

@@ -3,11 +3,22 @@
 import * as React from "react";
 import { CalendarIcon } from "lucide-react";
 import type { Matcher } from "react-day-picker";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 import { cn, formatDateToIso, formatIsoDate, parseIsoDateLocal } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+/** react-day-picker usa locale en-US por padrão (nomes de mês/dia em
+ * inglês) se nenhum `locale` for passado — força pt-BR, e capitaliza a
+ * legenda do mês ("agosto 2026" → "Agosto 2026", como o date-fns pt-BR
+ * devolve em minúsculo). */
+function formatCaption(date: Date): string {
+  const s = format(date, "LLLL yyyy", { locale: ptBR });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export type DateFieldProps = {
   value?: string;
@@ -105,6 +116,8 @@ export function DateField({
           selected={selected}
           onSelect={pick}
           defaultMonth={selected}
+          locale={ptBR}
+          formatters={{ formatCaption }}
           disabled={disabledMatchers.length > 0 ? disabledMatchers : undefined}
           modifiers={
             hasRange ? { inRange: { after: rangeStartDate, before: rangeEndDate } } : undefined

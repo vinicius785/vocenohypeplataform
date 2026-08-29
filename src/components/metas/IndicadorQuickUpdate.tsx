@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Target } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { DateField } from "@/components/ui/date-field";
 import {
   INDICADOR_MARCO_STATUSES,
   type Indicador,
@@ -249,11 +250,10 @@ export function IndicadorQuickUpdate({
             <label className="block text-xs font-medium text-muted-foreground">
               Data da atualização
             </label>
-            <input
-              type="date"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            <DateField
+              value={data || undefined}
+              onChange={(v) => setData(v ?? "")}
+              className="mt-1"
             />
           </div>
           {objetivosVinculados && objetivosVinculados.length > 1 && (

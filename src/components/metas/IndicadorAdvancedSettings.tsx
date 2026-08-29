@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
+import { DateField } from "@/components/ui/date-field";
 import {
   META_AREAS,
   METRIC_TYPES,
@@ -400,19 +401,19 @@ export function IndicadorAdvancedSettings({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LABEL_CLS}>Data inicial</label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
+            <DateField
+              value={dataInicio || undefined}
+              onChange={(v) => setDataInicio(v ?? "")}
+              max={dataFim || undefined}
               className={FIELD_CLS}
             />
           </div>
           <div>
             <label className={LABEL_CLS}>Data final</label>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
+            <DateField
+              value={dataFim || undefined}
+              onChange={(v) => setDataFim(v ?? "")}
+              min={dataInicio || undefined}
               className={FIELD_CLS}
             />
           </div>

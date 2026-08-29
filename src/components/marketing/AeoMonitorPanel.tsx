@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DateField } from "@/components/ui/date-field";
 import {
   CartesianGrid,
   Legend,
@@ -167,10 +168,9 @@ function RodadaTab({
           <label className="block text-[11px] font-medium text-muted-foreground">
             Data da rodada
           </label>
-          <input
-            type="date"
-            value={rodadaData}
-            onChange={(e) => setRodadaData(e.target.value)}
+          <DateField
+            value={rodadaData || undefined}
+            onChange={(v) => setRodadaData(v ?? "")}
             className={`${inputCls} mt-1`}
           />
         </div>

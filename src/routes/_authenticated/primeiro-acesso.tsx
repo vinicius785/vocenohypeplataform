@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DateField } from "@/components/ui/date-field";
 
 export const Route = createFileRoute("/_authenticated/primeiro-acesso")({
   component: PrimeiroAcessoPage,
@@ -151,11 +152,9 @@ function PrimeiroAcessoPage() {
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data de aniversário">
-              <input
-                required
-                type="date"
-                value={birthday}
-                onChange={(e) => setBirthday(e.target.value)}
+              <DateField
+                value={birthday || undefined}
+                onChange={(v) => setBirthday(v ?? "")}
                 className={inputCls}
               />
             </Field>

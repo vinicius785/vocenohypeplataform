@@ -11,6 +11,7 @@ import {
 } from "@/lib/comercial";
 import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DateField } from "@/components/ui/date-field";
 import {
   listLeads,
   upsertLead as upsertLeadFn,
@@ -1362,10 +1363,9 @@ function LeadForm({
         >
           <label className={labelCls}>
             <span>Data da reunião</span>
-            <input
-              type="date"
-              value={dataReuniao}
-              onChange={(e) => setDataReuniao(e.target.value)}
+            <DateField
+              value={dataReuniao || undefined}
+              onChange={(v) => setDataReuniao(v ?? "")}
               className={inputCls}
             />
           </label>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateField } from "@/components/ui/date-field";
 import {
   Plus,
   X,
@@ -282,18 +283,18 @@ export function FinanceiroSection() {
             )}
             {periodMode === "personalizado" && (
               <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                <DateField
+                  value={customFrom || undefined}
+                  onChange={(v) => setCustomFrom(v ?? "")}
+                  max={customTo || undefined}
+                  className="h-8 text-xs"
                 />
                 <span className="text-xs text-muted-foreground">até</span>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                <DateField
+                  value={customTo || undefined}
+                  onChange={(v) => setCustomTo(v ?? "")}
+                  min={customFrom || undefined}
+                  className="h-8 text-xs"
                 />
               </div>
             )}
@@ -828,12 +829,10 @@ function EntryDialog({
               />
             </Field>
             <Field label={kind === "despesa" ? "Vencimento" : "Data"}>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
+              <DateField
+                value={date || undefined}
+                onChange={(v) => setDate(v ?? "")}
                 className={inputCls}
-                required
               />
             </Field>
           </div>

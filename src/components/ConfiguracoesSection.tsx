@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { DateField } from "@/components/ui/date-field";
 import {
   User,
   Mic,
@@ -91,7 +92,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.163.0";
+export const APP_VERSION = "1.164.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -1853,10 +1854,9 @@ function PerfilForm({
       </label>
       <label className="space-y-1">
         <span className="text-xs font-medium">Data de aniversário</span>
-        <input
-          type="date"
-          value={p.aniversario}
-          onChange={(e) => setP({ ...p, aniversario: e.target.value })}
+        <DateField
+          value={p.aniversario || undefined}
+          onChange={(v) => setP({ ...p, aniversario: v ?? "" })}
           className={inputCls}
         />
       </label>

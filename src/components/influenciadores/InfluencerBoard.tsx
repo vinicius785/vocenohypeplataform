@@ -67,6 +67,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { DateField } from "@/components/ui/date-field";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {
   DropdownMenu,
@@ -4711,11 +4712,10 @@ function PagamentoEditor({
           />
         </div>
       )}
-      <input
-        type="date"
-        value={norm.data ?? ""}
-        onChange={(e) => update({ data: e.target.value })}
-        className="rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none"
+      <DateField
+        value={norm.data ?? undefined}
+        onChange={(v) => update({ data: v })}
+        className="text-xs"
       />
 
       <div className="space-y-1">
@@ -4776,11 +4776,10 @@ function PrazoField({
   return (
     <label className="flex min-w-0 flex-col gap-1">
       <span className="truncate text-[10px] font-medium text-muted-foreground">{label}</span>
-      <input
-        type="date"
-        value={value ?? ""}
-        onChange={(ev) => onChange(ev.target.value || undefined)}
-        className="w-full min-w-0 rounded-md border border-border bg-background px-1.5 py-1 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+      <DateField
+        value={value ?? undefined}
+        onChange={onChange}
+        className="w-full min-w-0 text-[11px]"
       />
     </label>
   );

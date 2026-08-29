@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Check, Loader2, Paperclip, Plus, X } from "lucide-react";
+import { DateField } from "@/components/ui/date-field";
 import {
   getInscricaoCampanhaData,
   submitInscricaoCampanha,
@@ -515,11 +516,9 @@ function CustomQuestionField({
     return (
       <div>
         <label className="text-xs font-medium text-muted-foreground">{label}</label>
-        <input
-          type="date"
-          value={(value as string) ?? ""}
-          onChange={(e) => onChange(e.target.value)}
-          required={question.required}
+        <DateField
+          value={(value as string) || undefined}
+          onChange={(v) => onChange(v ?? "")}
           className={inputCls}
         />
       </div>

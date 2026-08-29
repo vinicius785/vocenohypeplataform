@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
 import { META_AREAS, type Objetivo, type MetaArea } from "@/lib/metas-store";
 
 type Member = { name: string; photo?: string };
@@ -125,17 +126,15 @@ export function ObjetivoQuickDialog({
           <div>
             <label className={LABEL_CLS}>Período (opcional)</label>
             <div className="mt-1 grid grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              <DateField
+                value={dataInicio || undefined}
+                onChange={(v) => setDataInicio(v ?? "")}
+                max={dataFim || undefined}
               />
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              <DateField
+                value={dataFim || undefined}
+                onChange={(v) => setDataFim(v ?? "")}
+                min={dataInicio || undefined}
               />
             </div>
           </div>

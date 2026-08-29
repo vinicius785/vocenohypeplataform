@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { formatIsoDate } from "@/lib/utils";
 import {
   Dialog,
@@ -313,10 +314,9 @@ export function ClientesSection() {
               </Field>
 
               <Field label="Cliente desde">
-                <input
-                  type="date"
-                  value={form.clienteDesde}
-                  onChange={(e) => update("clienteDesde", e.target.value)}
+                <DateField
+                  value={form.clienteDesde || undefined}
+                  onChange={(v) => update("clienteDesde", v ?? "")}
                   className={inputCls}
                 />
               </Field>
