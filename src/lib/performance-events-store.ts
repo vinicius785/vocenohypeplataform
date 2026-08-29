@@ -100,8 +100,18 @@ export function recordPerformanceEvent(input: NewPerformanceEvent): void {
 }
 
 /** Busca eventos do ledger num range (`occurred_at`), opcionalmente
- * filtrado por pessoa. `range` omitido = sem filtro de data (usado só
- * pra popular a lista de meses disponíveis no Ranking do mês). */
+ * filtrado por pessoa. `range` omitido = sem filtro de data. Sem
+ * realtime aqui de propósito (o ledger cresce indefinidamente e nenhuma
+ * tela precisa de push evento-a-evento) — mas um refetch só-no-mount
+ * deixava a página Time e a ficha do membro travadas em snapshots
+ * diferentes sempre que alguém completava uma tarefa/registrava presença
+ * enquanto as duas telas já estavam abertas (ex.: um backfill rodando
+ * enquanto a página já tinha buscado antes). Repolling a cada 30s (mesmo
+ * intervalo já usado pro diretório do time em `_authenticated/route.tsx`)
+ * garante que as duas convirjam pro mesmo estado em pouco tempo, sem
+ * precisar de infraestrutura de realtime nova. */
+const REFETCH_INTERVAL_MS = 30_000;
+
 export function usePerformanceEvents(
   range?: DateRange,
   personId?: string,
@@ -111,25 +121,30 @@ export function usePerformanceEvents(
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    let query = supabase.from("performance_events").select("*").order("occurred_at", {
-      ascending: true,
-    });
-    if (range?.from) query = query.gte("occurred_at", `${range.from}T00:00:00`);
-    if (range?.to) query = query.lte("occurred_at", `${range.to}T23:59:59`);
-    if (personId) query = query.eq("person_id", personId);
-    void query.then(({ data, error }) => {
-      if (cancelled) return;
-      if (error) {
-        console.warn("[performance_events] fetch failed", error);
-        setEvents([]);
-      } else {
-        setEvents(((data as PerformanceEventRow[] | null) ?? []).map(fromRow));
-      }
-      setLoading(false);
-    });
+    const fetchEvents = (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      let query = supabase.from("performance_events").select("*").order("occurred_at", {
+        ascending: true,
+      });
+      if (range?.from) query = query.gte("occurred_at", `${range.from}T00:00:00`);
+      if (range?.to) query = query.lte("occurred_at", `${range.to}T23:59:59`);
+      if (personId) query = query.eq("person_id", personId);
+      void query.then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn("[performance_events] fetch failed", error);
+          setEvents([]);
+        } else {
+          setEvents(((data as PerformanceEventRow[] | null) ?? []).map(fromRow));
+        }
+        setLoading(false);
+      });
+    };
+    fetchEvents(true);
+    const interval = window.setInterval(() => fetchEvents(false), REFETCH_INTERVAL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [range?.from, range?.to, personId]);
 
