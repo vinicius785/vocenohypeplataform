@@ -198,9 +198,16 @@ export function TaskActivityPanel({
       const important = withKind.filter((a) => IMPORTANT_KINDS.has(a.effectiveKind));
       const minor = withKind.filter((a) => !IMPORTANT_KINDS.has(a.effectiveKind));
 
-      // "deadline"-kind entries e `task.deadlineHistory` são sempre
-      // criados 1:1 no mesmo bloco de `save()` — casar por ORDEM
-      // cronológica (não por timestamp exato, frágil) é seguro.
+      // "deadline"-kind entries e `task.deadlineHistory` NÃO são 1:1: a
+      // 1ª definição de prazo de uma tarefa (`!initial.dueDate` em
+      // `save()`) sempre gera uma atividade "definiu prazo X", mas NUNCA
+      // uma entrada em `deadlineHistory` (só mudanças SUBSEQUENTES
+      // geram). Ou seja, pode haver até 1 atividade "deadline" a mais do
+      // que entradas de histórico — e essa sobra é sempre a(s) MAIS
+      // ANTIGA(S) (a 1ª definição), nunca a mais recente. Pareia da
+      // direita pra esquerda (mais recente com mais recente) em vez de
+      // por índice cru, senão a 1ª definição "rouba" o slot da mudança
+      // real seguinte no feed.
       const deadlineActivities = important
         .filter((a) => a.effectiveKind === "deadline")
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -208,8 +215,10 @@ export function TaskActivityPanel({
         a.changedAt.localeCompare(b.changedAt),
       );
       const deadlineByActivityId = new Map<string, DeadlineChangeEntry>();
+      const offset = Math.max(0, deadlineActivities.length - deadlineEntries.length);
       deadlineActivities.forEach((a, i) => {
-        if (deadlineEntries[i]) deadlineByActivityId.set(a.id, deadlineEntries[i]);
+        const entry = deadlineEntries[i - offset];
+        if (entry) deadlineByActivityId.set(a.id, entry);
       });
 
       for (const a of important) {
