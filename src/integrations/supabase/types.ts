@@ -5,7 +5,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -1091,6 +1091,96 @@ export type Database = {
           resolved?: boolean;
           resolved_at?: string | null;
           resolved_by?: string | null;
+        };
+        Relationships: [];
+      };
+      performance_events: {
+        Row: {
+          actor_id: string;
+          actor_name: string;
+          data: Json;
+          event_type: string;
+          id: string;
+          meeting_id: string | null;
+          occurred_at: string;
+          person_id: string | null;
+          person_name: string;
+          task_id: string | null;
+          task_origin: string | null;
+          task_title: string | null;
+        };
+        Insert: {
+          actor_id: string;
+          actor_name: string;
+          data?: Json;
+          event_type: string;
+          id?: string;
+          meeting_id?: string | null;
+          occurred_at?: string;
+          person_id?: string | null;
+          person_name: string;
+          task_id?: string | null;
+          task_origin?: string | null;
+          task_title?: string | null;
+        };
+        Update: {
+          actor_id?: string;
+          actor_name?: string;
+          data?: Json;
+          event_type?: string;
+          id?: string;
+          meeting_id?: string | null;
+          occurred_at?: string;
+          person_id?: string | null;
+          person_name?: string;
+          task_id?: string | null;
+          task_origin?: string | null;
+          task_title?: string | null;
+        };
+        Relationships: [];
+      };
+      performance_settings: {
+        Row: {
+          id: boolean;
+          motivo_isencao_default: Json;
+          pendencias_dias_teto: number;
+          updated_at: string;
+          weight_compromissos: number;
+          weight_execucao: number;
+          weight_pendencias: number;
+          xp_meeting_attended: number;
+          xp_meeting_missed: number;
+          xp_overdue_dias_teto: number;
+          xp_task_early_bonus: number;
+          xp_task_on_time: number;
+        };
+        Insert: {
+          id?: boolean;
+          motivo_isencao_default?: Json;
+          pendencias_dias_teto?: number;
+          updated_at?: string;
+          weight_compromissos?: number;
+          weight_execucao?: number;
+          weight_pendencias?: number;
+          xp_meeting_attended?: number;
+          xp_meeting_missed?: number;
+          xp_overdue_dias_teto?: number;
+          xp_task_early_bonus?: number;
+          xp_task_on_time?: number;
+        };
+        Update: {
+          id?: boolean;
+          motivo_isencao_default?: Json;
+          pendencias_dias_teto?: number;
+          updated_at?: string;
+          weight_compromissos?: number;
+          weight_execucao?: number;
+          weight_pendencias?: number;
+          xp_meeting_attended?: number;
+          xp_meeting_missed?: number;
+          xp_overdue_dias_teto?: number;
+          xp_task_early_bonus?: number;
+          xp_task_on_time?: number;
         };
         Relationships: [];
       };

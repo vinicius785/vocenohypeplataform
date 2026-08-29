@@ -111,6 +111,41 @@ function projetosAsGroups(projetos: Project[]): TaskGroup[] {
   return projetos.map((p) => ({ id: p.id, name: p.name, tasks: p.tasks ?? [] }));
 }
 
+export type PerformanceOpenTask = { status: string; dueDate?: string; performanceDueDate?: string };
+
+/** Tarefas ATUALMENTE abertas de cada pessoa (status ∈ `OPEN_STATUSES`),
+ * com os campos crus que a Pendências do Score Operacional precisa
+ * (`dueDate`/`performanceDueDate`, pra aplicar o corte de 19h) — não dá
+ * pra reaproveitar `DashTask` (`task-aggregation.ts`) porque lá `due` já
+ * vem formatado como texto ("Hoje"/"Atrasada 2d"), sem a data crua.
+ * Mesma travessia de `computeMemberScores`, só devolvendo os objetos em
+ * vez de somar pontos. */
+export function loadOpenTasksByMemberId(
+  projetos: Project[],
+  members: ChatMember[],
+  campanhaGroups: TaskGroup[] = [],
+): Map<string, PerformanceOpenTask[]> {
+  const byId = new Map<string, PerformanceOpenTask[]>();
+  const byName = new Map(members.map((m) => [m.name, m]));
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
+    for (const t of flatten(p.tasks ?? [])) {
+      if (!OPEN_STATUSES.has(t.status)) continue;
+      for (const name of getTaskAssignees(t)) {
+        const member = byName.get(name);
+        if (!member) continue;
+        const arr = byId.get(member.id) ?? [];
+        arr.push({
+          status: t.status,
+          dueDate: t.dueDate,
+          performanceDueDate: t.performanceDueDate,
+        });
+        byId.set(member.id, arr);
+      }
+    }
+  }
+  return byId;
+}
+
 export function computeMemberScores(
   projetos: Project[],
   meetings: Meeting[],

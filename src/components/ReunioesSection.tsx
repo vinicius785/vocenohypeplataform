@@ -45,6 +45,8 @@ import {
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { linkifyText } from "@/lib/linkify";
+import { recordPerformanceEvent } from "@/lib/performance-events-store";
+import { xpForMeeting, DEFAULT_PERFORMANCE_SETTINGS, isValidUuid } from "@/lib/performance-engine";
 import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
 import { SectionHeader } from "./SectionHeader";
 
@@ -1663,6 +1665,27 @@ export function MeetingSummaryDialog({
       attendanceRecorded: true,
       transcricao: transcricao.trim() || undefined,
     });
+    // "Editar presença" pode rodar mais de uma vez pra mesma reunião — o
+    // ledger não permite corrigir/apagar eventos antigos, então grava
+    // sempre um evento novo por participante; quem lê dedup por
+    // (meeting_id, person_id) tomando o de maior `occurred_at`.
+    if (isValidUuid(me.id)) {
+      for (const id of meeting.participanteIds ?? []) {
+        const attended = attendanceChecked.includes(id);
+        recordPerformanceEvent({
+          eventType: "meeting_attendance_recorded",
+          personId: id,
+          personName: nameFor(id),
+          actorId: me.id,
+          actorName: me.name,
+          taskId: null,
+          taskOrigin: null,
+          taskTitle: null,
+          meetingId: meeting.id,
+          data: { attended, xpDelta: xpForMeeting(attended, DEFAULT_PERFORMANCE_SETTINGS) },
+        });
+      }
+    }
     setEditingAttendance(false);
   };
 

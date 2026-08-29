@@ -1,13 +1,20 @@
 import { useMemo, useRef } from "react";
-import { OPEN_STATUSES, type MemberScore, type WeekBucket } from "@/lib/score";
+import { OPEN_STATUSES, type WeekBucket } from "@/lib/score";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
+import type {
+  ScoreOperacionalResult,
+  ScorePeriodMode,
+  PerformanceEventLike,
+} from "@/lib/performance-engine";
 import { TeamMetricCard } from "./TeamMetricCard";
 import { AttentionTasks, type AttentionTab } from "./AttentionTasks";
 import { TeamWorkload } from "./TeamWorkload";
 import { TasksByStatus } from "./TasksByStatus";
 import { WeeklyDeliveries } from "./WeeklyDeliveries";
 import { TeamPerformance } from "./TeamPerformance";
+import { TeamXpRanking } from "./TeamXpRanking";
+import { TeamIndicators } from "./TeamIndicators";
 import { TeamAdminSection } from "./TeamAdminSection";
 
 /**
@@ -22,6 +29,9 @@ export function TeamDashboard({
   allMembers,
   filteredMembers,
   scoreByMemberId,
+  scorePeriod,
+  onScorePeriodChange,
+  performanceEvents,
   allTasksFlat,
   tasksByMember,
   weeklyData,
@@ -40,10 +50,16 @@ export function TeamDashboard({
   /** Todos os membros (sem filtro de busca) — usado pelos gráficos
    * (carga do time, entregas) que precisam refletir o time inteiro. */
   allMembers: Member[];
-  /** Membros após a busca do header — só o ranking "Performance do
-   * time" é filtrado por busca; os gráficos usam `allMembers`. */
+  /** Membros após a busca do header — só a Performance Operacional é
+   * filtrada por busca; os gráficos usam `allMembers`. */
   filteredMembers: Member[];
-  scoreByMemberId: Map<string, MemberScore>;
+  scoreByMemberId: Map<string, ScoreOperacionalResult>;
+  scorePeriod: ScorePeriodMode;
+  onScorePeriodChange: (v: ScorePeriodMode) => void;
+  /** Eventos do ledger já filtrados ao `scorePeriod` — alimenta os
+   * Indicadores operacionais agregados (o Ranking do mês busca os seus
+   * próprios eventos por mês, à parte). */
+  performanceEvents: PerformanceEventLike[];
   allTasksFlat: DashTaskFlat[];
   tasksByMember: Map<string, DashTask[]>;
   weeklyData: WeekBucket[];
@@ -168,10 +184,12 @@ export function TeamDashboard({
         </div>
       </div>
 
-      {/* Linha 4 — Performance do time (100%) */}
+      {/* Linha 4 — Performance Operacional (100%) — Score de gestão, NUNCA chamado de "ranking" */}
       <TeamPerformance
         members={filteredMembers}
         scoreByMemberId={scoreByMemberId}
+        scorePeriod={scorePeriod}
+        onScorePeriodChange={onScorePeriodChange}
         meId={meId}
         isAdmin={isAdmin}
         loading={loading}
@@ -181,6 +199,24 @@ export function TeamDashboard({
         onDelete={onDeleteMember}
         onReset={onResetMember}
       />
+
+      {/* Linha 4.5 — Ranking do mês (XP, gamificação) + Indicadores operacionais (só admin) */}
+      {isAdmin ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <TeamXpRanking members={allMembers} />
+          </div>
+          <div className="lg:col-span-5">
+            <TeamIndicators
+              events={performanceEvents}
+              currentlyOverdueCount={overdueCount}
+              isAdmin={isAdmin}
+            />
+          </div>
+        </div>
+      ) : (
+        <TeamXpRanking members={allMembers} />
+      )}
 
       {/* Linha 5 — Administração (100%) */}
       <TeamAdminSection isAdmin={isAdmin} />

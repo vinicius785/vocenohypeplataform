@@ -142,6 +142,36 @@ export type TaskActivity = {
   createdAt: string;
 };
 export type TaskTimeEntry = { seconds: number; author: string; endedAt: string };
+
+/** Mesmo shape/regras de `DeadlineChangeMotivo`/`DeadlineChangeEntry` em
+ * `src/components/tasks/TaskBoard.tsx` — replicado aqui (não importado)
+ * seguindo a mesma convenção já usada neste arquivo pra
+ * `TaskActivity`/`TaskComment`/etc. A lógica de quando/como preencher
+ * esses campos vive num único lugar (o `save()` do diálogo de edição em
+ * TaskBoard.tsx, compartilhado pelas 3 origens de tarefa) — aqui é só o
+ * shape de dado. */
+export type DeadlineChangeMotivo =
+  | "dependencia_cliente"
+  | "mudanca_escopo"
+  | "prioridade_lideranca"
+  | "dependencia_interna"
+  | "replanejamento_operacional"
+  | "atraso_responsavel"
+  | "outro";
+
+export type DeadlineChangeEntry = {
+  id: string;
+  from?: string;
+  to?: string;
+  changedAt: string;
+  changedBy: string;
+  isCritical: boolean;
+  motivo?: DeadlineChangeMotivo;
+  observacao?: string;
+  exemptFromResponsibility: boolean;
+  adminOverride?: { exempted: boolean; by: string; at: string };
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -164,6 +194,10 @@ export type Task = {
   timerRunning?: boolean;
   timerStartedAt?: string;
   timeEntries?: TaskTimeEntry[];
+  completedAt?: string;
+  originalDueDate?: string;
+  performanceDueDate?: string;
+  deadlineHistory?: DeadlineChangeEntry[];
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */

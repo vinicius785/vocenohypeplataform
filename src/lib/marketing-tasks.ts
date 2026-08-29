@@ -9,7 +9,7 @@
  */
 
 import type { KanbanStatus } from "@/lib/projetos";
-import type { TimeEntry, Activity } from "@/components/tasks/TaskBoard";
+import type { TimeEntry, Activity, DeadlineChangeEntry } from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
 
 export type MktSourceKind = "projeto" | "campanha";
@@ -60,6 +60,10 @@ export type MktStandalone = {
    * criou. Persistindo o log de verdade aqui, cada evento fica com o
    * autor certo (`getCurrentAuthor()` no momento real da ação). */
   activity?: Activity[];
+  completedAt?: string;
+  originalDueDate?: string;
+  performanceDueDate?: string;
+  deadlineHistory?: DeadlineChangeEntry[];
 };
 
 export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [

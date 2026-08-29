@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, KeyRound, Bug, ImageIcon, Trash2 } from "lucide-react";
+import { ChevronDown, KeyRound, Bug, ImageIcon, Trash2, Sliders } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listBugReports,
@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useConfirm } from "@/hooks/use-confirm";
+import { usePerformanceSettings, savePerformanceSettings } from "@/lib/performance-events-store";
+import type { PerformanceSettings } from "@/lib/performance-engine";
 
 type PasswordResetRequest = {
   id: string;
@@ -246,6 +248,209 @@ function BugReportsPanel({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+const NUM_FIELD_CLS =
+  "h-8 w-20 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring";
+
+/** Configuração dos pesos do Score Operacional e das regras de XP (item
+ * 25 do pedido) — tudo aqui é configurável por Admin, EXCETO o corte de
+ * 19h (fixo/global, hardcoded em `performance-engine.ts`, de propósito
+ * fora deste painel). Singleton `performance_settings`, 1 linha só. */
+function PerformanceSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { settings, loading } = usePerformanceSettings();
+  const [draft, setDraft] = useState<PerformanceSettings>(settings);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!loading) setDraft(settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  if (!isAdmin) return null;
+
+  const weightSum = draft.weightExecucao + draft.weightPendencias + draft.weightCompromissos;
+  const weightSumOk = Math.abs(weightSum - 1) < 0.01;
+
+  const save = async () => {
+    if (!weightSumOk) return;
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    const { error: err } = await savePerformanceSettings(draft);
+    if (err) setError(err);
+    else setSaved(true);
+    setSaving(false);
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Sliders className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold text-foreground">Configuração do Score e XP</span>
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="space-y-4 border-t border-border px-5 py-4">
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <div>
+            <p className="mb-2 text-xs font-medium text-foreground">
+              Pesos do Score Operacional
+              <span
+                className={`ml-2 font-normal ${weightSumOk ? "text-muted-foreground" : "text-destructive"}`}
+              >
+                (soma: {Math.round(weightSum * 100)}%)
+              </span>
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Execução
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(draft.weightExecucao * 100)}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, weightExecucao: Number(e.target.value) / 100 }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+                %
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Pendências
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(draft.weightPendencias * 100)}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, weightPendencias: Number(e.target.value) / 100 }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+                %
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Compromissos
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(draft.weightCompromissos * 100)}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, weightCompromissos: Number(e.target.value) / 100 }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+                %
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-medium text-foreground">Pendências e XP</p>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Teto de dias (Pendências)
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.pendenciasDiasTeto}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, pendenciasDiasTeto: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                XP tarefa no prazo
+                <input
+                  type="number"
+                  value={draft.xpTaskOnTime}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, xpTaskOnTime: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                XP bônus antecipada
+                <input
+                  type="number"
+                  value={draft.xpTaskEarlyBonus}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, xpTaskEarlyBonus: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                XP reunião OK
+                <input
+                  type="number"
+                  value={draft.xpMeetingAttended}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, xpMeetingAttended: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                XP reunião perdida
+                <input
+                  type="number"
+                  value={draft.xpMeetingMissed}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, xpMeetingMissed: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Teto de dias (penalidade XP)
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.xpOverdueDiasTeto}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, xpOverdueDiasTeto: Number(e.target.value) }))
+                  }
+                  className={NUM_FIELD_CLS}
+                />
+              </label>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            O corte de 19h pra vencimento de tarefa é fixo pra toda a plataforma e não é
+            configurável aqui.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => void save()} disabled={saving || !weightSumOk}>
+              {saving ? "Salvando..." : "Salvar"}
+            </Button>
+            {saved && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-400">Salvo!</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** "Administração" — senhas esquecidas e bugs reportados não competem
  * mais visualmente com os indicadores de gestão do time: viram uma
  * seção separada, mais discreta, no fim do dashboard. Cada item
@@ -262,6 +467,7 @@ export function TeamAdminSection({ isAdmin }: { isAdmin: boolean }) {
       <div className="space-y-3">
         <PasswordResetRequestsPanel isAdmin={isAdmin} />
         <BugReportsPanel isAdmin={isAdmin} />
+        <PerformanceSettingsPanel isAdmin={isAdmin} />
       </div>
     </div>
   );

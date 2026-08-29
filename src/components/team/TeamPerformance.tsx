@@ -1,18 +1,22 @@
 import { useMemo } from "react";
-import { Info, Trophy, UsersIcon } from "lucide-react";
+import { Info, Gauge, UsersIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SCORE_RULES, type MemberScore } from "@/lib/score";
+import type { ScoreOperacionalResult, ScorePeriodMode } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import { MemberPerformanceRow } from "./MemberPerformanceRow";
+import { ScorePeriodSelector } from "./ScorePeriodSelector";
 
-/** "Performance do time" — o ranking de pessoas, ordenado por pontuação,
- * que agora É a lista de membros da página (decisão confirmada com o
- * usuário: não existe mais uma lista de gestão separada do ranking). A
- * legenda de pontuação vira um popover atrás de um ícone de informação,
- * em vez de ocupar uma faixa fixa da tela o tempo todo. */
+/** "Performance Operacional" — o Score de cada pessoa (0-100, gestão),
+ * que continua sendo a lista de membros da página (decisão confirmada
+ * com o usuário: não existe uma lista de gestão separada). É
+ * DELIBERADAMENTE diferente do "Ranking do mês" (XP, gamificação,
+ * `TeamXpRanking.tsx`) — item 1/5 do pedido: Score mede performance
+ * real, XP é o jogo. */
 export function TeamPerformance({
   members,
   scoreByMemberId,
+  scorePeriod,
+  onScorePeriodChange,
   meId,
   isAdmin,
   loading,
@@ -23,7 +27,9 @@ export function TeamPerformance({
   onReset,
 }: {
   members: Member[];
-  scoreByMemberId: Map<string, MemberScore>;
+  scoreByMemberId: Map<string, ScoreOperacionalResult>;
+  scorePeriod: ScorePeriodMode;
+  onScorePeriodChange: (v: ScorePeriodMode) => void;
   meId: string | null;
   isAdmin: boolean;
   loading: boolean;
@@ -36,46 +42,55 @@ export function TeamPerformance({
   const ranked = useMemo(
     () =>
       [...members].sort(
-        (a, b) => (scoreByMemberId.get(b.id)?.score ?? 0) - (scoreByMemberId.get(a.id)?.score ?? 0),
+        (a, b) =>
+          (scoreByMemberId.get(b.id)?.score ?? -1) - (scoreByMemberId.get(a.id)?.score ?? -1),
       ),
     [members, scoreByMemberId],
   );
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="flex items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <Trophy className="h-3.5 w-3.5 text-amber-500" /> Performance do time
+          <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance Operacional
         </h3>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Como a pontuação é calculada"
-            >
-              <Info className="h-3.5 w-3.5" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72" align="end">
-            <p className="mb-2 text-xs font-semibold text-foreground">Como a pontuação funciona</p>
-            <ul className="space-y-1.5">
-              {SCORE_RULES.map((r) => (
-                <li key={r.key} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="text-muted-foreground">{r.label}</span>
-                  <span
-                    className={`shrink-0 font-semibold ${
-                      r.points > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
-                    }`}
-                  >
-                    {r.points > 0 ? "+" : ""}
-                    {r.points}
-                  </span>
+        <div className="flex items-center gap-1.5">
+          <ScorePeriodSelector value={scorePeriod} onChange={onScorePeriodChange} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Como o Score é calculado"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72" align="end">
+              <p className="mb-2 text-xs font-semibold text-foreground">
+                Score Operacional (0-100)
+              </p>
+              <ul className="space-y-1.5 text-xs text-muted-foreground">
+                <li className="flex items-center justify-between gap-3">
+                  <span>Execução — % de tarefas concluídas no prazo</span>
+                  <span className="shrink-0 font-semibold text-foreground">50%</span>
                 </li>
-              ))}
-            </ul>
-          </PopoverContent>
-        </Popover>
+                <li className="flex items-center justify-between gap-3">
+                  <span>Pendências — proporção atrasada agora + tempo</span>
+                  <span className="shrink-0 font-semibold text-foreground">30%</span>
+                </li>
+                <li className="flex items-center justify-between gap-3">
+                  <span>Compromissos — presença nas reuniões esperadas</span>
+                  <span className="shrink-0 font-semibold text-foreground">20%</span>
+                </li>
+              </ul>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Prazos encerram às 19h. Sem dado suficiente no período, o componente é
+                desconsiderado (não vira 0).
+              </p>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       <div className="mt-3">

@@ -32,6 +32,17 @@ import {
 } from "@/lib/marketing-tasks";
 import { loadTeamMembers } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
+import { DeadlineChangeDialog } from "@/components/tasks/DeadlineChangeDialog";
+import { recordPerformanceEvent } from "@/lib/performance-events-store";
+import {
+  isCriticalReplan,
+  effectivePerformanceDueDate,
+  classifyOutcome,
+  xpForCompletion,
+  deadlineCutoff,
+  isValidUuid,
+  DEFAULT_PERFORMANCE_SETTINGS,
+} from "@/lib/performance-engine";
 import {
   loadTaskTags,
   onTaskTagsChange,
@@ -147,6 +158,68 @@ export type Activity = {
 };
 export type Attachment = { id: string; name: string; url?: string };
 export type TimeEntry = { seconds: number; author: string; endedAt: string };
+
+/** As 7 opções fixas do motivo de replanejamento — enum fechado (não
+ * texto livre) porque o motivo alimenta `exemptFromResponsibility`
+ * automaticamente, e isso precisa ser previsível. */
+export const DEADLINE_CHANGE_MOTIVOS = [
+  "dependencia_cliente",
+  "mudanca_escopo",
+  "prioridade_lideranca",
+  "dependencia_interna",
+  "replanejamento_operacional",
+  "atraso_responsavel",
+  "outro",
+] as const;
+export type DeadlineChangeMotivo = (typeof DEADLINE_CHANGE_MOTIVOS)[number];
+
+export const DEADLINE_CHANGE_MOTIVO_LABEL: Record<DeadlineChangeMotivo, string> = {
+  dependencia_cliente: "Dependência do cliente",
+  mudanca_escopo: "Mudança de escopo",
+  prioridade_lideranca: "Prioridade alterada pela liderança",
+  dependencia_interna: "Dependência interna",
+  replanejamento_operacional: "Replanejamento operacional",
+  atraso_responsavel: "Atraso do responsável",
+  outro: "Outro",
+};
+
+/** Motivos claramente externos à pessoa responsável isentam a
+ * penalização por padrão, mesmo em replanejamento crítico (mudança no
+ * próprio dia do vencimento) — mas sempre de forma auditável (ver
+ * `DeadlineChangeEntry.adminOverride`), nunca silenciosa. Os demais
+ * mantêm o impacto, pra evitar autojustificativa ("troco o motivo pra
+ * escapar da métrica"). */
+export const DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT: Record<DeadlineChangeMotivo, boolean> = {
+  dependencia_cliente: true,
+  mudanca_escopo: true,
+  prioridade_lideranca: true,
+  dependencia_interna: true,
+  replanejamento_operacional: false,
+  atraso_responsavel: false,
+  outro: false,
+};
+
+/** Uma entrada por alteração real de prazo numa tarefa que já tinha
+ * prazo (primeira definição de prazo nunca gera entrada aqui). "O prazo
+ * pode mudar. O histórico não." — nunca removida/editada depois de
+ * criada. */
+export type DeadlineChangeEntry = {
+  id: string;
+  from?: string;
+  to?: string;
+  changedAt: string;
+  changedBy: string;
+  /** A alteração aconteceu no mesmo dia local do prazo anterior. */
+  isCritical: boolean;
+  motivo?: DeadlineChangeMotivo;
+  observacao?: string;
+  /** Se esta alteração específica isenta a responsabilidade da pessoa
+   * pra fins de performance (derivado do motivo por padrão, corrigível
+   * por um Admin depois via `adminOverride`). */
+  exemptFromResponsibility: boolean;
+  adminOverride?: { exempted: boolean; by: string; at: string };
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -167,6 +240,20 @@ export type Task = {
   timerRunning?: boolean;
   timerStartedAt?: string;
   timeEntries?: TimeEntry[];
+  /** Timestamp ISO exato de quando a tarefa entrou em "Concluído" —
+   * setado por `withStatusChange`, em paralelo à entrada de `activity`
+   * já existente (nunca a substitui). Usado pro Score Operacional
+   * calcular atraso em minutos/horas, não só por dia. */
+  completedAt?: string;
+  /** Congelado no primeiro `dueDate` que a tarefa recebeu — nunca muda
+   * depois, mesmo com replanejamentos. */
+  originalDueDate?: string;
+  /** Data usada pra determinar cumprimento operacional (no prazo x
+   * atrasada) — igual a `dueDate` até a primeira alteração; depois
+   * segue a regra de replanejamento normal x crítico (ver
+   * `effectivePerformanceDueDate` em `src/lib/performance-engine.ts`). */
+  performanceDueDate?: string;
+  deadlineHistory?: DeadlineChangeEntry[];
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -175,18 +262,19 @@ export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): strin
   return t.assignee ? [t.assignee] : [];
 }
 
-/** Quando a tarefa foi concluída — a última vez que o log de atividade
- * registrou "mudou status para Concluído" (mesma derivação de
- * `src/lib/score.ts:taskCompletionDate`, sem campo `completedAt`
- * dedicado). Cai pra `createdAt` se não achar (tarefa concluída sem
- * passar pelo fluxo normal, ou dado antigo sem esse log) — só usado pra
- * ordenar a coluna Concluído da mais recente pra mais antiga. */
+/** Quando a tarefa foi concluída — usa o `completedAt` dedicado quando
+ * presente (tarefas concluídas depois desta rodada); cai pra derivar do
+ * log de atividade, procurando "mudou status para Concluído" (dado
+ * legado, tarefas concluídas antes de `completedAt` existir), e por fim
+ * `createdAt` se nada for encontrado — só usado pra ordenar a coluna
+ * Concluído da mais recente pra mais antiga. */
 function taskCompletedAt(t: Task): string {
+  if (t.completedAt) return t.completedAt;
   const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
   return entries.length > 0 ? entries[entries.length - 1].createdAt : t.createdAt;
 }
 
-type Member = { name: string; initials: string; color: string; photo?: string };
+type Member = { id?: string; name: string; initials: string; color: string; photo?: string };
 
 const AVATAR_COLORS = [
   "bg-rose-500 text-white",
@@ -215,14 +303,22 @@ function readTeamMembers(): Member[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem("time:membros");
-    const arr = raw ? (JSON.parse(raw) as Array<{ name?: string; photo?: string }>) : [];
+    const arr = raw
+      ? (JSON.parse(raw) as Array<{ id?: string; name?: string; photo?: string }>)
+      : [];
     const seen = new Set<string>();
     const out: Member[] = [];
     for (const m of arr) {
       const name = (m.name ?? "").trim();
       if (!name || seen.has(name)) continue;
       seen.add(name);
-      out.push({ name, initials: initialsOf(name) || "?", color: colorFor(name), photo: m.photo });
+      out.push({
+        id: m.id,
+        name,
+        initials: initialsOf(name) || "?",
+        color: colorFor(name),
+        photo: m.photo,
+      });
     }
     return out;
   } catch {
@@ -343,9 +439,17 @@ export function withStatusChange(task: Task, newStatus: TaskStatus): Task {
   if (task.status === newStatus) return task;
   let next = task.timerRunning ? stopTaskTimer(task) : task;
   const me = getCurrentAuthor();
+  const now = new Date().toISOString();
   next = {
     ...next,
     status: newStatus,
+    // `completedAt` é a fonte de verdade estruturada de "quando concluiu"
+    // (Score Operacional precisa de precisão de minuto, não só o dia) —
+    // vive em paralelo à entrada de `activity` abaixo, nunca a
+    // substitui. Some de novo se a tarefa sair de "Concluído"
+    // (reaberta) — deixa de estar concluída agora, mesmo que já tenha
+    // sido no passado (esse fato fica só no ledger de performance).
+    completedAt: newStatus === "Concluído" ? now : undefined,
     activity: [
       ...(next.activity ?? []),
       {
@@ -354,12 +458,79 @@ export function withStatusChange(task: Task, newStatus: TaskStatus): Task {
         initials: me.initials,
         color: me.color,
         action: `mudou status para ${newStatus}`,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       },
     ],
   };
   if (newStatus === "Em andamento") next = startTaskTimer(next);
   return next;
+}
+
+function taskOriginFromScope(scope?: TaskBoardScope): "projeto" | "campanha" | "marketing" | null {
+  return scope?.kind ?? null;
+}
+
+function resolvePersonId(name: string, members: Member[]): string | null {
+  return members.find((m) => m.name === name)?.id ?? null;
+}
+
+/** Emite o(s) evento(s) de performance relevantes quando uma tarefa
+ * conclui ou é reaberta — chamado tanto pelo `save()` do diálogo quanto
+ * pelo drag-and-drop do board, os dois pontos que já passam por
+ * `withStatusChange`. Nunca bloqueia a ação principal: `recordPerformanceEvent`
+ * já é fire-and-forget, e o `me.id` inválido (perfil ainda não
+ * hidratado) simplesmente pula a emissão em vez de tentar gravar lixo. */
+function recordTaskLedgerEventsOnStatusChange(
+  prev: Task,
+  next: Task,
+  ctx: { scope?: TaskBoardScope; members: Member[] },
+) {
+  const me = getMe();
+  if (!isValidUuid(me.id)) return;
+  const actor = getCurrentAuthor();
+  const origin = taskOriginFromScope(ctx.scope);
+  const assigneeNames = getTaskAssignees(next);
+  const targets = assigneeNames.length ? assigneeNames : [actor.name];
+  const enteredConcluido = next.status === "Concluído" && prev.status !== "Concluído";
+  const leftConcluido = prev.status === "Concluído" && next.status !== "Concluído";
+
+  if (enteredConcluido && next.completedAt) {
+    const ref = effectivePerformanceDueDate(
+      next.originalDueDate ?? next.dueDate,
+      next.deadlineHistory,
+    );
+    const { outcome, delayMinutes } = classifyOutcome(ref, next.completedAt);
+    const xpDelta = xpForCompletion(outcome, DEFAULT_PERFORMANCE_SETTINGS, targets.length);
+    for (const name of targets) {
+      recordPerformanceEvent({
+        eventType: "task_completed",
+        personId: resolvePersonId(name, ctx.members),
+        personName: name,
+        actorId: me.id,
+        actorName: actor.name,
+        taskId: next.id,
+        taskOrigin: origin,
+        taskTitle: next.title,
+        meetingId: null,
+        data: { outcome, delayMinutes, performanceDueDateUsed: ref ?? null, xpDelta },
+      });
+    }
+  } else if (leftConcluido) {
+    for (const name of targets) {
+      recordPerformanceEvent({
+        eventType: "task_reopened",
+        personId: resolvePersonId(name, ctx.members),
+        personName: name,
+        actorId: me.id,
+        actorName: actor.name,
+        taskId: next.id,
+        taskOrigin: origin,
+        taskTitle: next.title,
+        meetingId: null,
+        data: {},
+      });
+    }
+  }
 }
 
 function formatWhen(iso: string) {
@@ -652,8 +823,15 @@ export function TaskBoard({
               key={col}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => {
-                if (dragId)
-                  persist(tasks.map((t) => (t.id === dragId ? withStatusChange(t, col) : t)));
+                if (dragId) {
+                  const dragged = tasks.find((t) => t.id === dragId);
+                  if (dragged) {
+                    const updated = withStatusChange(dragged, col);
+                    if (updated !== dragged)
+                      recordTaskLedgerEventsOnStatusChange(dragged, updated, { scope, members });
+                    persist(tasks.map((t) => (t.id === dragId ? updated : t)));
+                  }
+                }
                 setDragId(null);
               }}
               className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
@@ -982,16 +1160,36 @@ export function TaskDialog({
     ];
   };
 
-  const save = () => {
+  // Só verdadeiro quando a tarefa JÁ tinha prazo e ele está mudando pra
+  // outro valor (inclusive removendo) — 1ª definição de prazo nunca pede
+  // motivo (item 5 do pedido de Performance). Intercepta o "Salvar"
+  // exatamente nesse caso, via `attemptSave`.
+  const isRealDeadlineChange = !!(initial?.dueDate && initial.dueDate !== dueDate);
+  const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
+  const [closeAfterSave, setCloseAfterSave] = useState(false);
+  const pendingIsCritical =
+    isRealDeadlineChange && initial?.dueDate
+      ? isCriticalReplan(initial.dueDate, new Date().toISOString())
+      : false;
+
+  const save = (deadlineCtx?: { motivo: DeadlineChangeMotivo; observacao: string }) => {
     if (!canSave) return;
     let act = activity;
     let cmts = comments;
     let nextTimerRunning = timerRunning;
     let nextTimerStartedAt = timerStartedAt;
     let finalTimeEntries = timeEntries;
+    let originalDueDate = initial?.originalDueDate;
+    let performanceDueDate = initial?.performanceDueDate;
+    let deadlineHistory = initial?.deadlineHistory ?? [];
+    let finalCompletedAt = initial?.completedAt;
+    const me = getMe();
+    const actor = getCurrentAuthor();
+    const origin = taskOriginFromScope(scope);
     if (initial) {
       if (initial.title !== title.trim())
         act = pushActivity(act, `renomeou para "${title.trim()}"`);
+      let statusChangedTask: Task | null = null;
       if (initial.status !== status) {
         const withTimer = withStatusChange(
           { ...initial, activity: act, comments: cmts, timerRunning, timerStartedAt, timeEntries },
@@ -1002,6 +1200,8 @@ export function TaskDialog({
         nextTimerRunning = withTimer.timerRunning ?? false;
         nextTimerStartedAt = withTimer.timerStartedAt;
         finalTimeEntries = withTimer.timeEntries ?? finalTimeEntries;
+        finalCompletedAt = withTimer.completedAt;
+        statusChangedTask = withTimer;
       }
       if (initial.priority !== priority) act = pushActivity(act, `definiu prioridade ${priority}`);
       const prevAssignees = getTaskAssignees(initial);
@@ -1015,13 +1215,103 @@ export function TaskDialog({
           title.trim(),
           scope,
         );
+        if (isValidUuid(me.id)) {
+          const ref = initial.performanceDueDate ?? initial.dueDate;
+          const wasOverdueAtChange =
+            initial.status !== "Concluído" && !!ref && Date.now() > deadlineCutoff(ref).getTime();
+          const removed = prevAssignees.filter((a) => !assignees.includes(a));
+          const added = assignees.filter((a) => !prevAssignees.includes(a));
+          for (const name of [...removed, ...added]) {
+            recordPerformanceEvent({
+              eventType: "task_assignee_changed",
+              personId: resolvePersonId(name, members),
+              personName: name,
+              actorId: me.id,
+              actorName: actor.name,
+              taskId: initial.id,
+              taskOrigin: origin,
+              taskTitle: title.trim(),
+              meetingId: null,
+              data: { change: removed.includes(name) ? "removed" : "added", wasOverdueAtChange },
+            });
+          }
+        }
       }
-      if ((initial.dueDate ?? "") !== dueDate)
+      if ((initial.dueDate ?? "") !== dueDate) {
         act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo");
+        if (!initial.dueDate) {
+          // 1ª definição de prazo — sem motivo, sem entrada de histórico.
+          originalDueDate = dueDate || undefined;
+          performanceDueDate = dueDate || undefined;
+        } else {
+          const motivo = deadlineCtx?.motivo ?? "replanejamento_operacional";
+          const isCritical = isCriticalReplan(initial.dueDate, new Date().toISOString());
+          const exempt = DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT[motivo];
+          const entry: DeadlineChangeEntry = {
+            id: crypto.randomUUID(),
+            from: initial.dueDate,
+            to: dueDate || undefined,
+            changedAt: new Date().toISOString(),
+            changedBy: actor.name,
+            isCritical,
+            motivo,
+            observacao: deadlineCtx?.observacao || undefined,
+            exemptFromResponsibility: exempt,
+          };
+          deadlineHistory = [...deadlineHistory, entry];
+          performanceDueDate = effectivePerformanceDueDate(originalDueDate, deadlineHistory);
+          if (isValidUuid(me.id)) {
+            for (const name of getTaskAssignees(initial).length
+              ? getTaskAssignees(initial)
+              : [actor.name]) {
+              recordPerformanceEvent({
+                eventType: "task_deadline_changed",
+                personId: resolvePersonId(name, members),
+                personName: name,
+                actorId: me.id,
+                actorName: actor.name,
+                taskId: initial.id,
+                taskOrigin: origin,
+                taskTitle: title.trim(),
+                meetingId: null,
+                data: {
+                  from: entry.from ?? null,
+                  to: entry.to ?? null,
+                  isCritical: entry.isCritical,
+                  motivo: entry.motivo ?? null,
+                  observacao: entry.observacao ?? null,
+                  exemptFromResponsibility: entry.exemptFromResponsibility,
+                },
+              });
+            }
+          }
+        }
+      }
       if ((initial.description ?? "") !== description)
         act = pushActivity(act, "atualizou a descrição");
+      if (statusChangedTask) {
+        recordTaskLedgerEventsOnStatusChange(
+          initial,
+          {
+            ...statusChangedTask,
+            deadlineHistory,
+            originalDueDate,
+            // `withStatusChange` só recebeu `initial` como base (assignees
+            // antigos) — se responsável e status mudam na mesma edição, o
+            // evento de conclusão precisa creditar quem está sendo salvo
+            // agora, não quem estava atribuído antes.
+            assignees,
+            assignee: undefined,
+          },
+          { scope, members },
+        );
+      }
     } else {
       void notifyNewAssignees(assignees, title.trim(), scope);
+      if (dueDate) {
+        originalDueDate = dueDate;
+        performanceDueDate = dueDate;
+      }
     }
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
@@ -1042,7 +1332,29 @@ export function TaskDialog({
       timerRunning: nextTimerRunning,
       timerStartedAt: nextTimerStartedAt,
       timeEntries: finalTimeEntries,
+      completedAt: finalCompletedAt,
+      originalDueDate,
+      performanceDueDate,
+      deadlineHistory: deadlineHistory.length ? deadlineHistory : undefined,
     });
+  };
+
+  /** Ponto único de entrada pro "Salvar" (botão explícito ou fechar o
+   * diálogo clicando fora/Esc) — intercepta só quando há uma alteração
+   * real de prazo, abrindo o mini-diálogo de motivo antes de continuar.
+   * Qualquer outra edição salva direto, sem fricção (item 26). */
+  const attemptSave = (closeAfter: boolean) => {
+    if (!canSave) {
+      if (closeAfter) onOpenChange(false);
+      return;
+    }
+    if (isRealDeadlineChange) {
+      setCloseAfterSave(closeAfter);
+      setDeadlineDialogOpen(true);
+      return;
+    }
+    save();
+    if (closeAfter) onOpenChange(false);
   };
 
   const toggleTimer = () => {
@@ -1250,7 +1562,10 @@ export function TaskDialog({
   // fecha. O botão "Cancelar" continua descartando de propósito — ele chama
   // `onOpenChange(false)` direto, sem passar por aqui.
   const handleOpenChange = (o: boolean) => {
-    if (!o && canSave) save();
+    if (!o) {
+      attemptSave(true);
+      return;
+    }
     onOpenChange(o);
   };
 
@@ -2045,7 +2360,7 @@ export function TaskDialog({
             </button>
             <button
               type="button"
-              onClick={save}
+              onClick={() => attemptSave(false)}
               disabled={!canSave}
               className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
             >
@@ -2074,6 +2389,16 @@ export function TaskDialog({
       <AttachmentPreviewDialog
         attachment={previewAttachment}
         onClose={() => setPreviewAttachment(null)}
+      />
+      <DeadlineChangeDialog
+        open={deadlineDialogOpen}
+        onOpenChange={setDeadlineDialogOpen}
+        isCritical={pendingIsCritical}
+        onConfirm={(motivo, observacao) => {
+          setDeadlineDialogOpen(false);
+          save({ motivo, observacao });
+          if (closeAfterSave) onOpenChange(false);
+        }}
       />
     </Dialog>
   );

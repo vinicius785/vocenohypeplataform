@@ -1,16 +1,18 @@
 import { ShieldCheck, KeyRound, Pencil, X, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { MemberScore } from "@/lib/score";
+import type { ScoreOperacionalResult } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, IconAction } from "./member-ui";
 
-/** Uma linha do ranking "Performance do time" — substitui o antigo
+/** Uma linha da "Performance Operacional" — substitui o antigo
  * `PersonRow` (que expandia inline com score/tarefas/início de dia).
- * Agora a lista de pessoas E o ranking são a mesma coisa (decisão
- * confirmada com o usuário): clicar na linha abre a visão individual do
- * membro (dialog), em vez de expandir inline; as ações de admin
- * (editar/redefinir senha/remover) continuam aqui, idênticas a antes. */
+ * Agora a lista de pessoas E o ranking de Score são a mesma coisa
+ * (decisão confirmada com o usuário): clicar na linha abre a visão
+ * individual do membro (dialog), em vez de expandir inline; as ações de
+ * admin (editar/redefinir senha/remover) continuam aqui, idênticas a
+ * antes. O Score Operacional (0-100, gestão) é uma métrica DIFERENTE do
+ * XP (gamificação, ranking mensal separado — ver `TeamXpRanking.tsx`). */
 export function MemberPerformanceRow({
   member: m,
   score,
@@ -22,7 +24,7 @@ export function MemberPerformanceRow({
   onReset,
 }: {
   member: Member;
-  score?: MemberScore;
+  score?: ScoreOperacionalResult;
   isSelf: boolean;
   isAdmin: boolean;
   onOpenProfile: () => void;
@@ -35,8 +37,8 @@ export function MemberPerformanceRow({
   const showName = canManage || isSelf || m.timeView.includes("name");
   const showRole = canManage || isSelf || m.timeView.includes("role");
   const status = getStatus(m.id);
-  const concluidas = (score?.tasksOnTime ?? 0) + (score?.tasksLate ?? 0);
-  const atrasadas = score?.tasksOverdue ?? 0;
+  const pctNoPrazo = score?.execucao.value != null ? Math.round(score.execucao.value) : null;
+  const atrasadas = score?.pendencias.overdueCount ?? 0;
 
   return (
     <div
@@ -85,19 +87,21 @@ export function MemberPerformanceRow({
 
       {score && (
         <div className="hidden shrink-0 items-center gap-3 sm:flex">
-          <span
-            className="flex items-center gap-1 text-xs text-muted-foreground"
-            title="Concluídas"
-          >
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            {concluidas}
-          </span>
+          {pctNoPrazo != null && (
+            <span
+              className="flex items-center gap-1 text-xs text-muted-foreground"
+              title="No prazo (período selecionado)"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              {pctNoPrazo}% no prazo
+            </span>
+          )}
           <span
             className={`flex items-center gap-1 text-xs ${atrasadas > 0 ? "text-destructive" : "text-muted-foreground"}`}
-            title="Atrasadas"
+            title="Atrasadas agora"
           >
             <AlertTriangle className="h-3.5 w-3.5" />
-            {atrasadas}
+            {atrasadas} atrasada{atrasadas === 1 ? "" : "s"}
           </span>
         </div>
       )}
@@ -105,15 +109,17 @@ export function MemberPerformanceRow({
       {score && (
         <span
           className={`shrink-0 text-base font-semibold tabular-nums ${
-            score.score > 0
-              ? "text-emerald-600 dark:text-emerald-400"
-              : score.score < 0
-                ? "text-destructive"
-                : "text-foreground"
+            score.score == null
+              ? "text-muted-foreground"
+              : score.score >= 80
+                ? "text-emerald-600 dark:text-emerald-400"
+                : score.score < 50
+                  ? "text-destructive"
+                  : "text-foreground"
           }`}
+          title="Score Operacional"
         >
-          {score.score > 0 ? "+" : ""}
-          {score.score}
+          {score.score == null ? "—" : score.score}
         </span>
       )}
 

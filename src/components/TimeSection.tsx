@@ -19,18 +19,31 @@ import {
 import { SectionHeader } from "./SectionHeader";
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
-import { loadMeetings, onMeetingsChange } from "@/lib/reunioes-store";
+import { onMeetingsChange } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
-  computeMemberScores,
   weeklyCompletions,
   memberCompletionsThisWeek,
+  loadOpenTasksByMemberId,
   OPEN_STATUSES,
-  type MemberScore,
   type TaskGroup,
 } from "@/lib/score";
+import {
+  computeScoreOperacional,
+  computeExecucao,
+  computePendencias,
+  computeCompromissos,
+  rangeForScorePeriod,
+  groupEventsByPerson,
+  dedupAttendanceEvents,
+  DEFAULT_PERFORMANCE_SETTINGS,
+  type ScorePeriodMode,
+  type ScoreOperacionalResult,
+  type TaskOutcome,
+} from "@/lib/performance-engine";
+import { usePerformanceEvents, usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   loadTasksByAssignee,
   loadAllTasksFlat,
@@ -343,17 +356,56 @@ function DiretorioTab() {
     return [...campanhaGroups, marketingStandaloneAsTaskGroup()];
   }, [campanhaGroups, tick]);
 
-  const scores = useMemo<MemberScore[]>(() => {
+  // Score Operacional (0-100, gestão) — SEPARADO do XP/ranking mensal
+  // (gamificação, ver `TeamXpRanking.tsx`). Execução/Compromissos vêm do
+  // ledger `performance_events` filtrado ao período selecionado;
+  // Pendências é sempre estado ATUAL (live), nunca filtrado por período
+  // (item 2 do pedido: "quantidade ATUALMENTE atrasadas").
+  const [scorePeriod, setScorePeriod] = useState<ScorePeriodMode>("mes");
+  const scoreRange = useMemo(() => rangeForScorePeriod(scorePeriod), [scorePeriod]);
+  const { events: performanceEvents } = usePerformanceEvents(scoreRange);
+  const { settings: performanceSettings } = usePerformanceSettings();
+
+  const openTasksByMemberId = useMemo(() => {
     void tick;
-    return computeMemberScores(
-      loadProjetos(),
-      loadMeetings(),
-      members,
-      undefined,
-      groupsWithMarketing,
-    );
+    return loadOpenTasksByMemberId(loadProjetos(), members, groupsWithMarketing);
   }, [members, tick, groupsWithMarketing]);
-  const scoreByMemberId = useMemo(() => new Map(scores.map((s) => [s.member.id, s])), [scores]);
+
+  const eventsByPersonId = useMemo(
+    () => groupEventsByPerson(performanceEvents),
+    [performanceEvents],
+  );
+
+  const scoreByMemberId = useMemo(() => {
+    const map = new Map<string, ScoreOperacionalResult>();
+    for (const m of members) {
+      const personEvents = eventsByPersonId.get(m.id) ?? [];
+      const completions = personEvents
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({
+          outcome: e.data.outcome as TaskOutcome,
+          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+        }));
+      const attendance = dedupAttendanceEvents(
+        personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
+      ).map((e) => ({ attended: !!e.data.attended }));
+      const execucao = computeExecucao(completions);
+      const pendencias = computePendencias(
+        openTasksByMemberId.get(m.id) ?? [],
+        performanceSettings.pendenciasDiasTeto,
+      );
+      const compromissos = computeCompromissos(attendance);
+      map.set(
+        m.id,
+        computeScoreOperacional(execucao, pendencias, compromissos, {
+          execucao: performanceSettings.weightExecucao,
+          pendencias: performanceSettings.weightPendencias,
+          compromissos: performanceSettings.weightCompromissos,
+        }),
+      );
+    }
+    return map;
+  }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings]);
 
   // Tarefas vinculadas a CADA pessoa (não só a contagem do score) — uma
   // passada só sobre todo o trabalho da plataforma, igual "Meu trabalho" no
@@ -556,6 +608,9 @@ function DiretorioTab() {
           allMembers={members}
           filteredMembers={filtered}
           scoreByMemberId={scoreByMemberId}
+          scorePeriod={scorePeriod}
+          onScorePeriodChange={setScorePeriod}
+          performanceEvents={performanceEvents}
           allTasksFlat={allTasksFlat}
           tasksByMember={tasksByMember}
           weeklyData={weeklyData}
@@ -1193,7 +1248,7 @@ function MemberViewDialog({
 }: {
   member: Member;
   isSelf: boolean;
-  score?: MemberScore;
+  score?: ScoreOperacionalResult;
   /** Todas as tarefas (projeto, campanha, avulsa do Marketing) vinculadas a
    * esta pessoa. */
   tasks: DashTask[];
@@ -1320,29 +1375,54 @@ function MemberViewDialog({
             )}
 
             {score && (
-              <section className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Pontuação
-                </p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Score Operacional
+                  </p>
+                  <p className="text-2xl font-light tracking-tight text-foreground">
+                    {score.score == null ? "—" : score.score}
+                    <span className="text-sm text-muted-foreground">/100</span>
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
                   <MiniStat
-                    label="Pontos"
-                    value={`${score.score > 0 ? "+" : ""}${score.score}`}
-                    tone={score.score > 0 ? "success" : score.score < 0 ? "danger" : "neutral"}
+                    label="Execução"
+                    value={score.execucao.value == null ? "—" : Math.round(score.execucao.value)}
                   />
-                  <MiniStat label="Abertas" value={openTasks.length} />
                   <MiniStat
-                    label="Atrasadas"
-                    value={overdueTasks.length}
-                    tone={overdueTasks.length > 0 ? "danger" : "neutral"}
+                    label="Pendências"
+                    value={Math.round(score.pendencias.value)}
+                    tone={score.pendencias.overdueCount > 0 ? "danger" : "neutral"}
+                  />
+                  <MiniStat
+                    label="Compromissos"
+                    value={
+                      score.compromissos.value == null ? "—" : Math.round(score.compromissos.value)
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                  <MiniStat label="Concluídas no período" value={score.execucao.count} />
+                  <MiniStat
+                    label="No prazo"
+                    value={score.execucao.onTimeCount + score.execucao.earlyCount}
+                  />
+                  <MiniStat
+                    label="Com atraso"
+                    value={score.execucao.lateCount}
+                    tone={score.execucao.lateCount > 0 ? "danger" : "neutral"}
+                  />
+                  <MiniStat
+                    label="Atualmente atrasadas"
+                    value={score.pendencias.overdueCount}
+                    tone={score.pendencias.overdueCount > 0 ? "danger" : "neutral"}
+                  />
+                  <MiniStat
+                    label="Reuniões"
+                    value={`${score.compromissos.attended}/${score.compromissos.expected}`}
                   />
                   <MiniStat label="Concluídas na semana" value={weeklyCompleted} />
-                  <MiniStat label="Reuniões OK" value={score.meetingsAttended} />
-                  <MiniStat
-                    label="Reuniões perdidas"
-                    value={score.meetingsMissed}
-                    tone={score.meetingsMissed > 0 ? "danger" : "neutral"}
-                  />
                 </div>
               </section>
             )}
