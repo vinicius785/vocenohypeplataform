@@ -6,6 +6,7 @@ import {
 } from "@/lib/projetos";
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
+import { deadlineCutoff } from "@/lib/performance-engine";
 
 /** Nomes dos dias, compartilhado entre o cabeçalho do Início ("Segunda, 27
  * ago") e a formatação de prazo (`formatDue`) aqui embaixo — um só lugar
@@ -45,34 +46,48 @@ export const BUCKET_ORDER: Record<DashTask["bucket"], number> = {
   outro: 4,
 };
 
+/** "Atrasada" precisa ser a MESMA definição usada pelo Score Operacional
+ * (Pendências/ficha do membro/Indicadores) — senão "Tarefas que precisam
+ * de atenção" e "Atualmente atrasadas" divergem (uma tarefa com
+ * `performanceDueDate` congelado por um replanejamento crítico não-isento
+ * continua atrasada pro Score mesmo que o `dueDate` visível tenha
+ * avançado). Usa `performanceDueDate ?? dueDate` (mesmo fallback do resto
+ * do app) e o corte das 19h via `deadlineCutoff` — nunca meia-noite
+ * pura. */
 export function bucketFor(
   dueISO: string | undefined,
   status: ProjTask["status"],
+  performanceDueDateISO?: string,
 ): DashTask["bucket"] {
   if (status === "Concluído" || status === "Aprovado" || status === "Arquivado") return "outro";
-  if (!dueISO) return "outro";
+  const ref = performanceDueDateISO ?? dueISO;
+  if (!ref) return "outro";
+  if (new Date().getTime() > deadlineCutoff(ref).getTime()) return "atrasada";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueISO + "T00:00:00");
+  const due = new Date(ref + "T00:00:00");
   const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-  if (diff < 0) return "atrasada";
   if (diff === 0) return "hoje";
   if (diff === 1) return "amanha";
   if (diff <= 7) return "semana";
   return "outro";
 }
 
-export function formatDue(dueISO: string | undefined, bucket: DashTask["bucket"]): string {
-  if (!dueISO) return "";
-  const due = new Date(dueISO + "T00:00:00");
+export function formatDue(
+  dueISO: string | undefined,
+  bucket: DashTask["bucket"],
+  performanceDueDateISO?: string,
+): string {
+  const ref = performanceDueDateISO ?? dueISO;
+  if (!ref) return "";
   if (bucket === "hoje") return "Hoje";
   if (bucket === "amanha") return "Amanhã";
   if (bucket === "atrasada") {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const d = Math.round((today.getTime() - due.getTime()) / 86400000);
+    const diffMs = new Date().getTime() - deadlineCutoff(ref).getTime();
+    const d = Math.max(1, Math.ceil(diffMs / 86400000));
     return `Atrasada ${d}d`;
   }
+  const due = new Date(ref + "T00:00:00");
   return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
 }
 
@@ -80,6 +95,7 @@ type CampanhaTaskLike = {
   id: string;
   title: string;
   dueDate?: string;
+  performanceDueDate?: string;
   priority?: ProjTask["priority"];
   status: ProjTask["status"];
   assignee?: string;
@@ -128,14 +144,14 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
     if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
-        const b = bucketFor(t.dueDate, t.status);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
         addFor(assignee, {
           id: t.id,
           projectId: p.id,
           projectName: p.name,
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b),
+          due: formatDue(t.dueDate, b, t.performanceDueDate),
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -148,14 +164,14 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
     for (const root of tasks as unknown as CampanhaTaskLike[]) {
       collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
-        const b = bucketFor(t.dueDate, t.status);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
         addFor(assignee, {
           id: t.id,
           projectId: "",
           projectName: campanhaNames.get(campanhaId) ?? "Campanha",
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b),
+          due: formatDue(t.dueDate, b, t.performanceDueDate),
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -176,14 +192,14 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
       for (const assignee of getTaskAssignees(s)) {
-        const b = bucketFor(s.dueDate, s.status as ProjTask["status"]);
+        const b = bucketFor(s.dueDate, s.status as ProjTask["status"], s.performanceDueDate);
         addFor(assignee, {
           id: `mkt:${s.id}`,
           projectId: marketingProjectId,
           projectName: "Marketing",
           title: s.title,
           bucket: b,
-          due: formatDue(s.dueDate, b),
+          due: formatDue(s.dueDate, b, s.performanceDueDate),
           status: s.status as ProjTask["status"],
         });
       }
@@ -237,14 +253,14 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
     if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
-        const b = bucketFor(t.dueDate, t.status);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
         out.push({
           id: t.id,
           projectId: p.id,
           projectName: p.name,
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b),
+          due: formatDue(t.dueDate, b, t.performanceDueDate),
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -258,14 +274,14 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
     for (const root of tasks as unknown as CampanhaTaskLike[]) {
       collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
-        const b = bucketFor(t.dueDate, t.status);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
         out.push({
           id: t.id,
           projectId: "",
           projectName: campanhaNames.get(campanhaId) ?? "Campanha",
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b),
+          due: formatDue(t.dueDate, b, t.performanceDueDate),
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -279,14 +295,14 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
 
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
-      const b = bucketFor(s.dueDate, s.status as ProjTask["status"]);
+      const b = bucketFor(s.dueDate, s.status as ProjTask["status"], s.performanceDueDate);
       out.push({
         id: `mkt:${s.id}`,
         projectId: marketingProjectId,
         projectName: "Marketing",
         title: s.title,
         bucket: b,
-        due: formatDue(s.dueDate, b),
+        due: formatDue(s.dueDate, b, s.performanceDueDate),
         status: s.status as ProjTask["status"],
         assignees: getTaskAssignees(s),
       });
