@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { DateField } from "@/components/ui/date-field";
+import { formatDateToIso } from "@/lib/utils";
 import { linkifyText } from "@/lib/linkify";
 import {
   isRequested,
@@ -1412,29 +1414,33 @@ export function TaskDialog({
                 <div className="flex w-full items-center gap-2">
                   {startDate !== "" && (
                     <>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="border-0 bg-transparent p-0 text-sm outline-none"
-                        aria-label="Início"
+                      <DateField
+                        variant="inline"
+                        value={startDate || undefined}
+                        onChange={(v) => setStartDate(v ?? "")}
+                        max={dueDate || undefined}
+                        rangeStart={startDate || undefined}
+                        rangeEnd={dueDate || undefined}
+                        ariaLabel="Início"
+                        placeholder="Início"
                       />
                       <span className="text-xs text-muted-foreground">→</span>
                     </>
                   )}
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="border-0 bg-transparent p-0 text-sm outline-none"
-                    aria-label="Entrega"
+                  <DateField
+                    variant="inline"
+                    value={dueDate || undefined}
+                    onChange={(v) => setDueDate(v ?? "")}
+                    min={startDate || undefined}
+                    rangeStart={startDate || undefined}
+                    rangeEnd={dueDate || undefined}
+                    ariaLabel="Entrega"
+                    placeholder="Entrega"
                   />
                   <button
                     type="button"
                     onClick={() =>
-                      setStartDate(
-                        startDate === "" ? dueDate || new Date().toISOString().slice(0, 10) : "",
-                      )
+                      setStartDate(startDate === "" ? dueDate || formatDateToIso(new Date()) : "")
                     }
                     className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
                   >
@@ -1458,7 +1464,7 @@ export function TaskDialog({
                         className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums ${
                           timerRunning
                             ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
-                            : "text-muted-foreground hover:bg-muted"
+                            : "text-foreground/70 hover:bg-muted"
                         }`}
                       >
                         {timerRunning ? (
@@ -1745,11 +1751,13 @@ export function TaskDialog({
                         className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
                       />
                       <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="date"
-                          value={newSubtaskDate}
-                          onChange={(e) => setNewSubtaskDate(e.target.value)}
-                          className="rounded border border-border bg-background px-2 py-1 text-xs outline-none"
+                        <DateField
+                          variant="input"
+                          value={newSubtaskDate || undefined}
+                          onChange={(v) => setNewSubtaskDate(v ?? "")}
+                          placeholder="Data"
+                          ariaLabel="Data da subtarefa"
+                          className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
                         />
                         <CompactAssigneePicker
                           selected={newSubtaskAssignees}
@@ -2174,7 +2182,7 @@ function Field({
 }) {
   return (
     <div className="group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-center gap-3 border-b border-border/60 px-1 transition-colors hover:bg-muted/30 sm:px-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground/70">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
