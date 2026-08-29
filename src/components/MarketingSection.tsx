@@ -79,12 +79,21 @@ function resolveTasks(
       dueDate: s.dueDate,
       assignee: s.assignee,
       assignees: s.assignees,
+      primaryAssignee: s.primaryAssignee,
       description: s.note,
       createdAt: s.createdAt,
       timerRunning: s.timerRunning,
       timerStartedAt: s.timerStartedAt,
       timeEntries: s.timeEntries,
       activity: s.activity,
+      // Sem isso, uma tarefa avulsa do Marketing perdia o histórico de
+      // prazo/performance ao ser aberta a partir deste board — lacuna
+      // pré-existente da rodada anterior, corrigida aqui já que estes
+      // mesmos 3 pontos estão sendo tocados pra `primaryAssignee`.
+      completedAt: s.completedAt,
+      originalDueDate: s.originalDueDate,
+      performanceDueDate: s.performanceDueDate,
+      deadlineHistory: s.deadlineHistory,
     });
     meta.set(id, { kind: "standalone", id: s.id });
   }
@@ -197,6 +206,7 @@ export function MarketingSection({
           status: t.status,
           assignee: t.assignee,
           assignees: t.assignees,
+          primaryAssignee: t.primaryAssignee,
           dueDate: t.dueDate,
           note: t.description,
           activity: t.activity,
@@ -211,12 +221,20 @@ export function MarketingSection({
           status: t.status,
           assignee: t.assignee,
           assignees: t.assignees,
+          primaryAssignee: t.primaryAssignee,
           dueDate: t.dueDate,
           note: t.description,
           timerRunning: t.timerRunning,
           timerStartedAt: t.timerStartedAt,
           timeEntries: t.timeEntries,
           activity: t.activity,
+          // Mesma correção da leitura (`resolveTasks` acima) — sem isso o
+          // histórico de prazo/performance era descartado a cada save
+          // feito a partir do board do Marketing.
+          completedAt: t.completedAt,
+          originalDueDate: t.originalDueDate,
+          performanceDueDate: t.performanceDueDate,
+          deadlineHistory: t.deadlineHistory,
         });
       }
     }

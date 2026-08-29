@@ -96,6 +96,86 @@ export function classifyOutcome(
   };
 }
 
+export type TaskDeadlineHealth =
+  | "sem_prazo"
+  | "no_prazo"
+  | "vence_hoje"
+  | "atrasada"
+  | "concluida_no_prazo"
+  | "concluida_com_atraso";
+
+/** Paleta replicada (não importada) de `src/lib/metas-engine.ts`'s
+ * `INDICADOR_SAUDE_TONE`/`DOT` — mesmo vocabulário emerald/amber/rose/
+ * red, mas Metas e Tarefas são domínios diferentes; acoplar os dois só
+ * por 4 strings de cor custaria mais do que duplicá-las. */
+export const TASK_DEADLINE_HEALTH_TONE: Record<TaskDeadlineHealth, string> = {
+  sem_prazo: "bg-muted text-muted-foreground",
+  no_prazo: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  vence_hoje: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  atrasada: "bg-red-500/10 text-red-700 dark:text-red-400",
+  concluida_no_prazo: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  concluida_com_atraso: "bg-red-500/10 text-red-700 dark:text-red-400",
+};
+export const TASK_DEADLINE_HEALTH_DOT: Record<TaskDeadlineHealth, string> = {
+  sem_prazo: "bg-muted-foreground/40",
+  no_prazo: "bg-emerald-500",
+  vence_hoje: "bg-amber-500",
+  atrasada: "bg-red-500",
+  concluida_no_prazo: "bg-emerald-500",
+  concluida_com_atraso: "bg-red-500",
+};
+
+export type TaskDeadlineHealthLike = {
+  status: string;
+  dueDate?: string;
+  originalDueDate?: string;
+  performanceDueDate?: string;
+  deadlineHistory?: DeadlineHistoryEntryLike[];
+  completedAt?: string;
+};
+
+/**
+ * Saúde do prazo — DIMENSÃO SEPARADA do status operacional (item 7 do
+ * pedido: nunca criar status novos tipo "Concluído atrasado"). "↪
+ * Replanejada" é um fato ORTOGONAL a essa saúde (uma tarefa pode estar
+ * "no prazo" e já ter sido replanejada uma vez pra uma data futura) —
+ * exposto separadamente por `deadlineHistory.length > 0`, não como um
+ * 7º estado aqui, pra não competir com o badge de saúde.
+ */
+export function taskDeadlineHealth(
+  t: TaskDeadlineHealthLike,
+  now: Date = new Date(),
+): { health: TaskDeadlineHealth; label: string; tone: string; dot: string; delayDays?: number } {
+  const build = (health: TaskDeadlineHealth, label: string, delayDays?: number) => ({
+    health,
+    label,
+    tone: TASK_DEADLINE_HEALTH_TONE[health],
+    dot: TASK_DEADLINE_HEALTH_DOT[health],
+    delayDays,
+  });
+
+  if (t.status === "Concluído" && t.completedAt) {
+    const ref = effectivePerformanceDueDate(t.originalDueDate ?? t.dueDate, t.deadlineHistory);
+    const { outcome, delayMinutes } = classifyOutcome(ref, t.completedAt);
+    if (outcome === "late") {
+      const delayDays = Math.max(1, Math.ceil(delayMinutes / (24 * 60)));
+      return build("concluida_com_atraso", `Concluída com atraso · +${delayDays}d`, delayDays);
+    }
+    return build("concluida_no_prazo", "Concluída no prazo");
+  }
+
+  const ref = t.performanceDueDate ?? t.dueDate;
+  if (!ref) return build("sem_prazo", "Sem prazo");
+
+  const diffMs = now.getTime() - deadlineCutoff(ref).getTime();
+  if (diffMs > 0) {
+    const delayDays = Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+    return build("atrasada", `Atrasada · ${delayDays}d`, delayDays);
+  }
+  if (formatDateToIso(now) === ref) return build("vence_hoje", "Vence hoje");
+  return build("no_prazo", "No prazo");
+}
+
 /** Crédito de Execução por tarefa concluída: 1.0 se no prazo/antecipada;
  * se atrasada, crédito parcial decrescente com o atraso (nunca zero
  * plano, nunca pontuação cheia — "não dar pontos positivos por concluir

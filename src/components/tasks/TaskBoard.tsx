@@ -18,9 +18,12 @@ import {
   Download,
   ExternalLink,
   ListChecks,
+  CornerUpRight,
+  Star,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { DateField } from "@/components/ui/date-field";
 import { formatDateToIso } from "@/lib/utils";
 import { linkifyText } from "@/lib/linkify";
@@ -30,9 +33,10 @@ import {
   removeRequest,
   onRequestsChange,
 } from "@/lib/marketing-tasks";
-import { loadTeamMembers } from "@/lib/projetos";
+import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
 import { DeadlineChangeDialog } from "@/components/tasks/DeadlineChangeDialog";
+import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
 import { recordPerformanceEvent } from "@/lib/performance-events-store";
 import {
   isCriticalReplan,
@@ -41,6 +45,7 @@ import {
   xpForCompletion,
   deadlineCutoff,
   isValidUuid,
+  taskDeadlineHealth,
   DEFAULT_PERFORMANCE_SETTINGS,
 } from "@/lib/performance-engine";
 import {
@@ -148,6 +153,21 @@ export type Comment = {
   text: string;
   createdAt: string;
 };
+/** Classificação estrita pra renderização da Activity (ícone, tier
+ * importante x secundário) — SEPARADA de `action` (texto livre, lido
+ * por regex em `taskCompletedAt`/`score.ts`'s `taskCompletionDate` pra
+ * scoring). `kind` nunca é usado por scoring; `action` nunca muda de
+ * conteúdo por causa de `kind`. Aditivo: entradas antigas sem `kind`
+ * caem num classificador de fallback só-pra-exibição. */
+export type ActivityKind =
+  | "completed"
+  | "reopened"
+  | "deadline"
+  | "primary_assignee"
+  | "assignee"
+  | "status"
+  | "minor";
+
 export type Activity = {
   id: string;
   author: string;
@@ -155,6 +175,7 @@ export type Activity = {
   color: string;
   action: string;
   createdAt: string;
+  kind?: ActivityKind;
 };
 export type Attachment = { id: string; name: string; url?: string };
 export type TimeEntry = { seconds: number; author: string; endedAt: string };
@@ -231,6 +252,12 @@ export type Task = {
   estimate?: string;
   assignee?: string;
   assignees?: string[];
+  /** Nome de quem é accountable pela entrega — deve ser um dos
+   * `assignees` (removê-lo dos assignees limpa este campo). Sem
+   * fallback automático em `getTaskPrimaryAssignee`: uma tarefa legada
+   * sem principal definido fica assim até alguém confirmar
+   * explicitamente (nunca inventamos accountability retroativa). */
+  primaryAssignee?: string;
   tags?: string[];
   attachments?: Attachment[];
   createdAt: string;
@@ -262,6 +289,24 @@ export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): strin
   return t.assignee ? [t.assignee] : [];
 }
 
+/** O responsável principal — SEM fallback automático pra `assignees[0]`.
+ * Uma tarefa com múltiplos responsáveis mas sem principal explícito
+ * simplesmente não tem um (a UI pode sugerir visualmente um fallback,
+ * mas essa função — usada por scoring/ledger — não deve inventar
+ * accountability que ninguém confirmou). */
+export function getTaskPrimaryAssignee(t: Pick<Task, "primaryAssignee">): string | undefined {
+  return t.primaryAssignee;
+}
+
+/** Colaboradores = todo mundo em `assignees` menos o principal —
+ * DERIVADO, nunca um array armazenado à parte (evita dessincronia entre
+ * dois arrays sobrepostos). */
+export function getTaskCollaborators(
+  t: Pick<Task, "assignee" | "assignees" | "primaryAssignee">,
+): string[] {
+  return getTaskAssignees(t).filter((a) => a !== t.primaryAssignee);
+}
+
 /** Quando a tarefa foi concluída — usa o `completedAt` dedicado quando
  * presente (tarefas concluídas depois desta rodada); cai pra derivar do
  * log de atividade, procurando "mudou status para Concluído" (dado
@@ -270,11 +315,11 @@ export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): strin
  * Concluído da mais recente pra mais antiga. */
 function taskCompletedAt(t: Task): string {
   if (t.completedAt) return t.completedAt;
-  const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
+  const entries = (t.activity ?? []).filter((a) => a.action === ACTIVITY_STATUS_COMPLETED_ACTION);
   return entries.length > 0 ? entries[entries.length - 1].createdAt : t.createdAt;
 }
 
-type Member = { id?: string; name: string; initials: string; color: string; photo?: string };
+export type Member = { id?: string; name: string; initials: string; color: string; photo?: string };
 
 const AVATAR_COLORS = [
   "bg-rose-500 text-white",
@@ -286,7 +331,7 @@ const AVATAR_COLORS = [
   "bg-fuchsia-500 text-white",
   "bg-orange-500 text-white",
 ];
-function initialsOf(name: string) {
+export function initialsOf(name: string) {
   return name
     .trim()
     .split(/\s+/)
@@ -294,7 +339,7 @@ function initialsOf(name: string) {
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
 }
-function colorFor(name: string) {
+export function colorFor(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
@@ -440,6 +485,9 @@ export function withStatusChange(task: Task, newStatus: TaskStatus): Task {
   let next = task.timerRunning ? stopTaskTimer(task) : task;
   const me = getCurrentAuthor();
   const now = new Date().toISOString();
+  const wasCompleted = task.status === "Concluído";
+  const kind: ActivityKind =
+    newStatus === "Concluído" ? "completed" : wasCompleted ? "reopened" : "status";
   next = {
     ...next,
     status: newStatus,
@@ -457,8 +505,12 @@ export function withStatusChange(task: Task, newStatus: TaskStatus): Task {
         author: me.name,
         initials: me.initials,
         color: me.color,
+        // Texto igual a `ACTIVITY_STATUS_COMPLETED_ACTION` quando
+        // `newStatus === "Concluído"` — nunca mude este formato sem
+        // atualizar a constante e `score.ts`'s `taskCompletionDate`.
         action: `mudou status para ${newStatus}`,
         createdAt: now,
+        kind,
       },
     ],
   };
@@ -490,7 +542,13 @@ function recordTaskLedgerEventsOnStatusChange(
   const actor = getCurrentAuthor();
   const origin = taskOriginFromScope(ctx.scope);
   const assigneeNames = getTaskAssignees(next);
-  const targets = assigneeNames.length ? assigneeNames : [actor.name];
+  // Conclusão/reabertura geram XP — quando há responsável principal
+  // definido, ele é o único alvo (accountability real, item 19 do
+  // pedido). Sem principal (tarefa legada), mantém o comportamento
+  // anterior: distribui entre todos os assignees, sem inventar um
+  // principal arbitrário pra fins de pontuação.
+  const primary = getTaskPrimaryAssignee(next);
+  const targets = primary ? [primary] : assigneeNames.length ? assigneeNames : [actor.name];
   const enteredConcluido = next.status === "Concluído" && prev.status !== "Concluído";
   const leftConcluido = prev.status === "Concluído" && next.status !== "Concluído";
 
@@ -533,7 +591,7 @@ function recordTaskLedgerEventsOnStatusChange(
   }
 }
 
-function formatWhen(iso: string) {
+export function formatWhen(iso: string) {
   const d = new Date(iso);
   const now = new Date();
   const diff = (now.getTime() - d.getTime()) / 1000;
@@ -548,7 +606,7 @@ function formatWhen(iso: string) {
   });
 }
 
-function Avatar({ member, size = 20 }: { member: Member; size?: number }) {
+export function Avatar({ member, size = 20 }: { member: Member; size?: number }) {
   const cls = `flex shrink-0 items-center justify-center overflow-hidden rounded-full text-[9px] font-semibold ${member.photo ? "bg-muted" : member.color}`;
   return (
     <span className={cls} style={{ width: size, height: size }} title={member.name}>
@@ -653,7 +711,7 @@ function TagColorSwatches({ value, onPick }: { value?: string; onPick: (color: s
   );
 }
 
-function renderMentions(text: string, members: Member[]) {
+export function renderMentions(text: string, members: Member[]) {
   const parts = text.split(/(@[\wÀ-ÿ]+(?:\s[\wÀ-ÿ]+)?)/g);
   return parts.map((p, i) => {
     if (p.startsWith("@")) {
@@ -674,7 +732,8 @@ function renderMentions(text: string, members: Member[]) {
 // `new Date("2026-07-29")` (data sem hora) é interpretada como meia-noite UTC;
 // formatar em horário local (Brasil, UTC-3) mostra um dia a menos. Ancorar em
 // meio-dia local evita esse desvio de fuso horário.
-const fmtDate = (d: string) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR") : "—");
+export const fmtDate = (d: string) =>
+  d ? new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR") : "—";
 
 export type TaskBoardScope =
   | { kind: "campanha"; id: string }
@@ -1022,6 +1081,7 @@ export function TaskDialog({
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
+  const [primaryAssignee, setPrimaryAssignee] = useState<string | undefined>();
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const assigneePickerRef = useRef<HTMLDivElement>(null);
   // Sem isso, o dropdown de responsáveis só fechava clicando de novo no
@@ -1053,8 +1113,6 @@ export function TaskDialog({
   const [comments, setComments] = useState<Comment[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [commentText, setCommentText] = useState("");
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const commentRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [, forceTimerTick] = useState(0);
@@ -1101,6 +1159,7 @@ export function TaskDialog({
     setTimerStartedAt(initial?.timerStartedAt);
     setTimeEntries(initial?.timeEntries ?? []);
     setAssignees(initial ? getTaskAssignees(initial) : []);
+    setPrimaryAssignee(initial?.primaryAssignee);
     setTags(initial?.tags ?? []);
     setAttachments(initial?.attachments ?? []);
     setPreviewAttachment(null);
@@ -1138,14 +1197,17 @@ export function TaskDialog({
     setNewSubtaskPriority("Normal");
     setNewTag("");
     setShowSubtaskInput(false);
-    setMentionQuery(null);
     setEditSubtask(null);
     setAssigneePickerOpen(false);
   }, [open, initial, defaultStatus]);
 
   const canSave = title.trim().length > 0;
 
-  const pushActivity = (list: Activity[], action: string): Activity[] => {
+  const pushActivity = (
+    list: Activity[],
+    action: string,
+    kind: ActivityKind = "minor",
+  ): Activity[] => {
     const me = getCurrentAuthor();
     return [
       ...list,
@@ -1156,6 +1218,7 @@ export function TaskDialog({
         color: me.color,
         action,
         createdAt: new Date().toISOString(),
+        kind,
       },
     ];
   };
@@ -1209,6 +1272,7 @@ export function TaskDialog({
         act = pushActivity(
           act,
           assignees.length ? `atribuiu a ${assignees.join(", ")}` : "removeu responsável",
+          "assignee",
         );
         void notifyNewAssignees(
           assignees.filter((a) => !prevAssignees.includes(a)),
@@ -1237,8 +1301,35 @@ export function TaskDialog({
           }
         }
       }
+      if ((initial.primaryAssignee ?? "") !== (primaryAssignee ?? "")) {
+        act = pushActivity(
+          act,
+          primaryAssignee
+            ? `transferiu a responsabilidade principal para ${primaryAssignee}`
+            : "removeu o responsável principal",
+          "primary_assignee",
+        );
+        if (isValidUuid(me.id)) {
+          recordPerformanceEvent({
+            eventType: "task_assignee_changed",
+            personId: primaryAssignee ? resolvePersonId(primaryAssignee, members) : null,
+            personName: primaryAssignee ?? actor.name,
+            actorId: me.id,
+            actorName: actor.name,
+            taskId: initial.id,
+            taskOrigin: origin,
+            taskTitle: title.trim(),
+            meetingId: null,
+            data: {
+              change: "primary_changed",
+              from: initial.primaryAssignee ?? null,
+              to: primaryAssignee ?? null,
+            },
+          });
+        }
+      }
       if ((initial.dueDate ?? "") !== dueDate) {
-        act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo");
+        act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo", "deadline");
         if (!initial.dueDate) {
           // 1ª definição de prazo — sem motivo, sem entrada de histórico.
           originalDueDate = dueDate || undefined;
@@ -1323,6 +1414,7 @@ export function TaskDialog({
       startDate: startDate || undefined,
       estimate: estimate || undefined,
       assignees: assignees.length ? assignees : undefined,
+      primaryAssignee,
       tags: tags.length ? tags : undefined,
       attachments: attachments.length ? attachments : undefined,
       createdAt: initial?.createdAt ?? new Date().toISOString(),
@@ -1512,41 +1604,23 @@ export function TaskDialog({
         createdAt: new Date().toISOString(),
       },
     ]);
-    setActivity((a) => pushActivity(a, "comentou"));
+    // O comentário em si já é o evento no feed — empurrar uma entrada de
+    // activity "comentou" ao lado dele duplicava o mesmo fato duas
+    // vezes (bug corrigido, item 13 do pedido).
     setCommentText("");
-    setMentionQuery(null);
   };
-
-  const onCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    setCommentText(v);
-    const caret = e.target.selectionStart ?? v.length;
-    const before = v.slice(0, caret);
-    const m = before.match(/(?:^|\s)@([\wÀ-ÿ]*)$/);
-    setMentionQuery(m ? m[1] : null);
-  };
-  const insertMention = (name: string) => {
-    const el = commentRef.current;
-    const caret = el?.selectionStart ?? commentText.length;
-    const before = commentText.slice(0, caret).replace(/@([\wÀ-ÿ]*)$/, `@${name} `);
-    const after = commentText.slice(caret);
-    setCommentText(before + after);
-    setMentionQuery(null);
-    setTimeout(() => {
-      el?.focus();
-      el?.setSelectionRange(before.length, before.length);
-    }, 0);
-  };
-  const mentionMatches =
-    mentionQuery !== null
-      ? members.filter((m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
-      : [];
 
   const doneCount = subtasks.filter((s) => s.status === "Concluído").length;
   const toggleAssignee = (name: string) => {
     setAssignees((prev) =>
       prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name],
     );
+    // Remover quem era o principal limpa o campo — nunca deixa apontar
+    // pra alguém que já não está mais na tarefa.
+    setPrimaryAssignee((prev) => (prev === name ? undefined : prev));
+  };
+  const promoteToPrimary = (name: string) => {
+    setPrimaryAssignee((prev) => (prev === name ? undefined : name));
   };
   const rootLabel =
     breadcrumb ??
@@ -1645,66 +1719,103 @@ export function TaskDialog({
                 </select>
               </Field>
 
-              <Field label="Responsáveis" icon={<User className="h-3.5 w-3.5" />}>
+              <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
                 <div className="relative w-full" ref={assigneePickerRef}>
                   <button
                     type="button"
                     onClick={() => setAssigneePickerOpen((v) => !v)}
-                    className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+                    className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
                   >
                     {assignees.length === 0 ? (
-                      <span className="text-muted-foreground">— Selecione responsáveis —</span>
+                      <span className="text-muted-foreground">— Selecionar responsável —</span>
                     ) : (
-                      assignees.map((a) => {
-                        const m = members.find((mm) => mm.name === a);
+                      (() => {
+                        // Sem `primaryAssignee` explícito, o primeiro
+                        // assignee vira um fallback visual só de exibição
+                        // — nunca usado por scoring/ledger (ver
+                        // `getTaskPrimaryAssignee`).
+                        const primaryName = primaryAssignee ?? assignees[0];
+                        const m = members.find((mm) => mm.name === primaryName);
+                        const othersCount = assignees.length - 1;
                         return (
-                          <span
-                            key={a}
-                            className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px]"
-                          >
+                          <>
                             <Avatar
                               member={
-                                m ?? { name: a, initials: initialsOf(a) || "?", color: colorFor(a) }
+                                m ?? {
+                                  name: primaryName,
+                                  initials: initialsOf(primaryName) || "?",
+                                  color: colorFor(primaryName),
+                                }
                               }
-                              size={16}
+                              size={20}
                             />
-                            {a}
-                            <X
-                              className="h-3 w-3 cursor-pointer text-muted-foreground hover:text-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleAssignee(a);
-                              }}
-                            />
-                          </span>
+                            <span className="min-w-0 flex-1 truncate">{primaryName}</span>
+                            {othersCount > 0 && (
+                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                +{othersCount}
+                              </span>
+                            )}
+                          </>
                         );
-                      })
+                      })()
                     )}
                   </button>
                   {assigneePickerOpen && (
-                    <div className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+                    <div className="absolute z-10 mt-1 max-h-64 w-72 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
                       {members.length === 0 ? (
                         <div className="px-2 py-2 text-xs text-muted-foreground">
                           Nenhum membro cadastrado.
                         </div>
                       ) : (
-                        members.map((m) => {
-                          const checked = assignees.includes(m.name);
-                          return (
-                            <button
-                              key={m.name}
-                              type="button"
-                              onClick={() => toggleAssignee(m.name)}
-                              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted ${
-                                checked ? "bg-muted font-medium text-foreground" : ""
-                              }`}
-                            >
-                              <Avatar member={m} size={20} />
-                              <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                              {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                            </button>
-                          );
-                        })
+                        <>
+                          <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Responsável e colaboradores
+                          </p>
+                          {members.map((m) => {
+                            const checked = assignees.includes(m.name);
+                            const isPrimary = primaryAssignee
+                              ? primaryAssignee === m.name
+                              : checked && assignees[0] === m.name;
+                            return (
+                              <div
+                                key={m.name}
+                                className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
+                                  checked ? "bg-muted/60" : ""
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAssignee(m.name)}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
+                                  <Avatar member={m} size={20} />
+                                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                </button>
+                                {checked && (
+                                  <button
+                                    type="button"
+                                    title={
+                                      isPrimary
+                                        ? "Responsável principal"
+                                        : "Tornar responsável principal"
+                                    }
+                                    onClick={() => promoteToPrimary(m.name)}
+                                    className={`shrink-0 rounded p-1 hover:bg-background ${
+                                      isPrimary
+                                        ? "text-amber-500"
+                                        : "text-muted-foreground/50 hover:text-amber-500"
+                                    }`}
+                                  >
+                                    <Star
+                                      className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
                       )}
                     </div>
                   )}
@@ -1726,7 +1837,7 @@ export function TaskDialog({
               </Field>
 
               <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
-                <div className="flex w-full items-center gap-2">
+                <div className="flex w-full flex-wrap items-center gap-2">
                   {startDate !== "" && (
                     <>
                       <DateField
@@ -1752,6 +1863,9 @@ export function TaskDialog({
                     ariaLabel="Entrega"
                     placeholder="Entrega"
                   />
+                  {initial && (dueDate || initial.performanceDueDate) && (
+                    <DeadlineHealthBadge task={initial} />
+                  )}
                   <button
                     type="button"
                     onClick={() =>
@@ -2198,119 +2312,24 @@ export function TaskDialog({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
-            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-              <p className="text-sm font-semibold">Activity</p>
-              <span className="text-[10px] text-muted-foreground">
-                {activity.length + comments.length}
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              <div className="space-y-3">
-                {[
-                  ...activity.map((a) => ({ kind: "activity" as const, item: a })),
-                  ...comments.map((c) => ({ kind: "comment" as const, item: c })),
-                ]
-                  .sort(
-                    (a, b) =>
-                      new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
-                  )
-                  .map((e) =>
-                    e.kind === "activity" ? (
-                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
-                        <Avatar
-                          member={
-                            members.find((m) => m.name === e.item.author) ?? {
-                              name: e.item.author,
-                              initials: e.item.initials,
-                              color: e.item.color,
-                            }
-                          }
-                          size={24}
-                        />
-                        <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                          <span className="font-medium text-foreground">{e.item.author}</span>{" "}
-                          <span className="text-muted-foreground">{e.item.action}</span>
-                          <div className="text-[10px] text-muted-foreground/70">
-                            {formatWhen(e.item.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
-                        <Avatar
-                          member={
-                            members.find((m) => m.name === e.item.author) ?? {
-                              name: e.item.author,
-                              initials: e.item.initials,
-                              color: e.item.color,
-                            }
-                          }
-                          size={24}
-                        />
-                        <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
-                          <div className="mb-0.5 flex items-baseline gap-1.5">
-                            <span className="text-xs font-medium">{e.item.author}</span>
-                            <span className="text-[10px] text-muted-foreground/70">
-                              {formatWhen(e.item.createdAt)}
-                            </span>
-                          </div>
-                          <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                            {renderMentions(e.item.text, members)}
-                          </div>
-                        </div>
-                      </div>
-                    ),
-                  )}
-              </div>
-            </div>
-
-            <div className="relative border-t border-border bg-background p-3">
-              {mentionMatches.length > 0 && (
-                <div className="absolute bottom-full left-3 right-3 mb-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
-                  {mentionMatches.map((m) => (
-                    <button
-                      key={m.name}
-                      type="button"
-                      onClick={() => insertMention(m.name)}
-                      className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
-                    >
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${m.color}`}
-                      >
-                        {m.initials}
-                      </span>
-                      {m.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <textarea
-                ref={commentRef}
-                value={commentText}
-                onChange={onCommentChange}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    postComment();
-                  }
-                }}
-                rows={2}
-                placeholder="Escreva um comentário… use @ para mencionar"
-                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
-              />
-              <div className="mt-1 flex justify-end">
-                <button
-                  type="button"
-                  onClick={postComment}
-                  disabled={!commentText.trim()}
-                  className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                >
-                  Comentar
-                </button>
-              </div>
-            </div>
-          </div>
+          <TaskActivityPanel
+            task={
+              initial ?? {
+                status,
+                dueDate: dueDate || undefined,
+                originalDueDate: undefined,
+                performanceDueDate: undefined,
+                deadlineHistory: undefined,
+                completedAt: undefined,
+              }
+            }
+            activity={activity}
+            comments={comments}
+            members={members}
+            commentText={commentText}
+            onCommentTextChange={setCommentText}
+            onPostComment={postComment}
+          />
         </div>
 
         <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
@@ -2493,6 +2512,77 @@ function AttachmentPreviewDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Badge compacto de saúde do prazo (item 7 do pedido — DIMENSÃO
+ * separada do status operacional, nunca um status novo) + ícone de
+ * replanejamento quando `deadlineHistory` não está vazio (fato
+ * ortogonal à saúde, não um 6º estado concorrente). Clicar/abrir mostra
+ * o popover de contexto (item 17): prazo atual, original, e cada
+ * replanejamento com motivo — lido direto de `deadlineHistory`
+ * estruturado, nunca reconstruído por parsing de texto livre. */
+function DeadlineHealthBadge({ task }: { task: Task }) {
+  const health = taskDeadlineHealth(task);
+  const history = task.deadlineHistory ?? [];
+  const hasHistory = history.length > 0;
+  const showOriginal = task.originalDueDate && task.originalDueDate !== task.dueDate;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${health.tone}`}
+        >
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${health.dot}`} />
+          {health.label}
+          {hasHistory && <CornerUpRight className="h-3 w-3 shrink-0 opacity-70" />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 text-xs" align="start">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Prazo atual</span>
+            <span className="font-medium text-foreground">{fmtDate(task.dueDate ?? "")}</span>
+          </div>
+          {showOriginal && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Prazo original</span>
+              <span className="font-medium text-foreground">{fmtDate(task.originalDueDate!)}</span>
+            </div>
+          )}
+        </div>
+        {hasHistory && (
+          <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Replanejamentos
+            </p>
+            {[...history].reverse().map((h) => {
+              const critico = h.isCritical && !h.exemptFromResponsibility;
+              return (
+                <div key={h.id} className={critico ? "text-red-700 dark:text-red-400" : ""}>
+                  <p className="flex items-center gap-1 font-medium">
+                    <CornerUpRight className="h-3 w-3 shrink-0" />
+                    {h.from ? fmtDate(h.from) : "—"} → {h.to ? fmtDate(h.to) : "—"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {h.changedBy} · {formatWhen(h.changedAt)}
+                    {h.motivo && <> · Motivo: {DEADLINE_CHANGE_MOTIVO_LABEL[h.motivo]}</>}
+                  </p>
+                  {critico && (
+                    <p className="text-[11px] font-medium">Alterado após o prazo operacional</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="mt-2.5 border-t border-border pt-2 text-[10px] text-muted-foreground">
+          Prazos encerram às 19h.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

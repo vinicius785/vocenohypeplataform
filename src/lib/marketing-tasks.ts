@@ -41,6 +41,8 @@ export type MktStandalone = {
    * hoje (TaskBoard) sempre grava em `assignees`. */
   assignee?: string;
   assignees?: string[];
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.primaryAssignee`. */
+  primaryAssignee?: string;
   dueDate?: string;
   note?: string;
   createdAt: string;
@@ -199,6 +201,7 @@ export function createStandalone(input: {
   status: MktColumn;
   assignee?: string;
   assignees?: string[];
+  primaryAssignee?: string;
   dueDate?: string;
   note?: string;
   activity?: Activity[];
@@ -209,6 +212,7 @@ export function createStandalone(input: {
     status: input.status,
     assignee: input.assignee,
     assignees: input.assignees,
+    primaryAssignee: input.primaryAssignee,
     dueDate: input.dueDate,
     note: input.note,
     activity: input.activity,

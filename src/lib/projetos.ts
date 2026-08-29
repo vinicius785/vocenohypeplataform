@@ -133,6 +133,16 @@ export type TaskComment = {
   text: string;
   createdAt: string;
 };
+/** Mesmo shape de `ActivityKind` em `TaskBoard.tsx` — replicado aqui. */
+export type ActivityKind =
+  | "completed"
+  | "reopened"
+  | "deadline"
+  | "primary_assignee"
+  | "assignee"
+  | "status"
+  | "minor";
+
 export type TaskActivity = {
   id: string;
   author: string;
@@ -140,8 +150,17 @@ export type TaskActivity = {
   color: string;
   action: string;
   createdAt: string;
+  kind?: ActivityKind;
 };
 export type TaskTimeEntry = { seconds: number; author: string; endedAt: string };
+
+/** String mágica compartilhada — `TaskBoard.tsx`'s `taskCompletedAt` e
+ * `score.ts`'s `taskCompletionDate` procuram exatamente essa `action`
+ * pra derivar quando uma tarefa foi concluída em dados legados (sem
+ * `completedAt`). Vive numa lib pura (não em `TaskBoard.tsx`) pra
+ * `score.ts` poder importá-la sem puxar o componente React inteiro pro
+ * bundle. Nunca mudar este texto sem atualizar os dois lugares. */
+export const ACTIVITY_STATUS_COMPLETED_ACTION = "mudou status para Concluído";
 
 /** Mesmo shape/regras de `DeadlineChangeMotivo`/`DeadlineChangeEntry` em
  * `src/components/tasks/TaskBoard.tsx` — replicado aqui (não importado)
@@ -183,6 +202,8 @@ export type Task = {
   priority?: TaskPriority;
   assignee?: string;
   assignees?: string[];
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.primaryAssignee`. */
+  primaryAssignee?: string;
   tags?: string[];
   attachments?: TaskAttachment[];
   createdAt?: string;
@@ -204,6 +225,18 @@ export type Task = {
 export function getTaskAssignees(t: Pick<Task, "assignee" | "assignees">): string[] {
   if (t.assignees?.length) return t.assignees;
   return t.assignee ? [t.assignee] : [];
+}
+
+/** Ver `TaskBoard.tsx`'s `getTaskPrimaryAssignee` — sem fallback automático. */
+export function getTaskPrimaryAssignee(t: Pick<Task, "primaryAssignee">): string | undefined {
+  return t.primaryAssignee;
+}
+
+/** Ver `TaskBoard.tsx`'s `getTaskCollaborators` — derivado, nunca armazenado à parte. */
+export function getTaskCollaborators(
+  t: Pick<Task, "assignee" | "assignees" | "primaryAssignee">,
+): string[] {
+  return getTaskAssignees(t).filter((a) => a !== t.primaryAssignee);
 }
 
 export type Milestone = { id: string; title: string; date: string; done: boolean; taskId?: string };

@@ -1,5 +1,5 @@
 import type { Project, Task } from "./projetos";
-import { getTaskAssignees } from "./projetos";
+import { getTaskAssignees, ACTIVITY_STATUS_COMPLETED_ACTION } from "./projetos";
 import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
@@ -81,7 +81,7 @@ function toLocalDateISO(iso: string): string {
 }
 
 function taskCompletionDate(t: Task): string | null {
-  const entries = (t.activity ?? []).filter((a) => a.action === "mudou status para Concluído");
+  const entries = (t.activity ?? []).filter((a) => a.action === ACTIVITY_STATUS_COMPLETED_ACTION);
   if (entries.length === 0) return null;
   return toLocalDateISO(entries[entries.length - 1].createdAt);
 }
