@@ -100,15 +100,29 @@ type CampanhaTaskLike = {
   status: ProjTask["status"];
   assignee?: string;
   assignees?: string[];
+  primaryAssignee?: string;
   subtasks?: CampanhaTaskLike[];
 };
 
+/** De quem é essa tarefa, pra fins de "isso é MEU trabalho"/"minha
+ * carga" (não pra exibição de avatares — `collectAllTasks`, abaixo,
+ * continua mostrando todos os responsáveis). Quando a tarefa tem um
+ * Responsável principal definido, só ele conta — colaboradores deixam
+ * de ver a tarefa em "Meu trabalho"/"Carga por membro" dele. Sem
+ * principal definido (a maioria das tarefas hoje, criadas antes desse
+ * campo existir), cai pro comportamento de sempre: todo mundo listado
+ * em `assignees` conta — decisão explícita do usuário, pra não esvaziar
+ * "Meu trabalho" de ninguém enquanto o time ainda não usa o campo. */
+function taskOwners(t: CampanhaTaskLike): string[] {
+  return t.primaryAssignee ? [t.primaryAssignee] : getTaskAssignees(t);
+}
+
 /** Percorre uma tarefa e (recursivamente) suas subtarefas, chamando `push`
- * pra cada RESPONSÁVEL de cada nível (uma subtarefa pode ter responsáveis
- * diferentes da tarefa-mãe, e uma tarefa pode ter mais de um responsável —
- * cada um recebe sua própria entrada). `parentTitle` é o título do pai
- * DIRETO (só pra exibição); quem chama sempre associa a entrada ao id da
- * tarefa de nível raiz pra navegação, já que subtarefa não tem dialog
+ * pra cada DONO (`taskOwners`) de cada nível (uma subtarefa pode ter
+ * responsáveis diferentes da tarefa-mãe, e uma tarefa pode ter mais de um
+ * dono — cada um recebe sua própria entrada). `parentTitle` é o título do
+ * pai DIRETO (só pra exibição); quem chama sempre associa a entrada ao id
+ * da tarefa de nível raiz pra navegação, já que subtarefa não tem dialog
  * próprio pra abrir sozinha. */
 function collectAssignedTasks<T extends CampanhaTaskLike>(
   items: T[],
@@ -116,7 +130,7 @@ function collectAssignedTasks<T extends CampanhaTaskLike>(
   push: (t: T, parentTitle: string | undefined, assignee: string) => void,
 ): void {
   for (const t of items) {
-    for (const assignee of getTaskAssignees(t)) push(t, parentTitle, assignee);
+    for (const assignee of taskOwners(t)) push(t, parentTitle, assignee);
     if (t.subtasks?.length) {
       collectAssignedTasks(t.subtasks as T[], t.title, push);
     }
