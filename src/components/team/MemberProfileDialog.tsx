@@ -12,6 +12,11 @@ import {
   AlertTriangle,
   Pencil,
   CalendarClock,
+  Gauge,
+  CheckCircle2,
+  RefreshCcw,
+  ListTodo,
+  ClipboardList,
 } from "lucide-react";
 import {
   Dialog,
@@ -71,6 +76,37 @@ function fmtDays(v: number | null): string {
   return v == null ? "—" : `${v.toFixed(1)}d`;
 }
 
+/** Card padrão de seção da ficha — label pequena com ícone no topo,
+ * borda única (a ficha não empilha borda-dentro-de-borda), conteúdo
+ * livre. Reaproveitado por todas as seções de "leitura rápida" (Próximas
+ * entregas/Carga atual/Projetos e campanhas/Início de dia) pra dar um
+ * ritmo visual consistente — hoje cada uma tinha um tratamento
+ * ligeiramente diferente (com/sem borda, com/sem fundo). */
+function ProfileCard({
+  icon,
+  title,
+  action,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-lg border border-border p-3.5">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {icon}
+          {title}
+        </p>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /** Lista colapsável de registros de "Início de dia" — mostra só os 5
  * mais recentes, com "ver histórico completo" pra expandir. */
 function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string> }) {
@@ -113,20 +149,17 @@ function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string>
   );
 }
 
-/** "Início de hoje" — mostra só o registro do dia corrente + um botão
- * "Ver histórico" que revela o `StartOfDayHistory` completo (que já se
- * colapsa internamente em 5 + "ver mais"). Duplo colapso deliberado: a
- * ficha não deve mostrar todos os dias permanentemente. */
-function StartOfDaySection({ startTimes }: { startTimes?: Record<string, string> }) {
+/** Conteúdo de "Início de dia" — só o registro do dia corrente + um
+ * botão "Ver histórico" que revela o `StartOfDayHistory` completo (que
+ * já se colapsa internamente em 5 + "ver mais"). Duplo colapso
+ * deliberado: a ficha não deve mostrar todos os dias permanentemente. */
+function StartOfDayContent({ startTimes }: { startTimes?: Record<string, string> }) {
   const [showHistory, setShowHistory] = useState(false);
   const todayKey = formatDateToIso(new Date());
   const todayTime = startTimes?.[todayKey];
   return (
-    <section className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        <Clock className="h-3 w-3" /> Início de dia
-      </div>
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+    <div>
+      <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-foreground">
           {todayTime ? `Início de hoje: ${todayTime}` : "Sem registro hoje"}
         </span>
@@ -138,8 +171,12 @@ function StartOfDaySection({ startTimes }: { startTimes?: Record<string, string>
           {showHistory ? "Ocultar histórico" : "Ver histórico"}
         </button>
       </div>
-      {showHistory && <StartOfDayHistory startTimes={startTimes} />}
-    </section>
+      {showHistory && (
+        <div className="mt-2">
+          <StartOfDayHistory startTimes={startTimes} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -260,6 +297,14 @@ export function MemberProfileDialog({
     () => computeAggregateIndicators(completions, deadlineChanges, overdueNow.length),
     [completions, deadlineChanges, overdueNow.length],
   );
+  const scoreTone =
+    score.score == null
+      ? "text-muted-foreground"
+      : score.score >= 80
+        ? "text-emerald-600 dark:text-emerald-400"
+        : score.score < 50
+          ? "text-destructive"
+          : "text-foreground";
 
   const [showComposition, setShowComposition] = useState(false);
 
@@ -311,7 +356,7 @@ export function MemberProfileDialog({
           <DialogTitle>Perfil</DialogTitle>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="space-y-5 px-6 py-5">
+          <div className="space-y-4 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">
@@ -359,23 +404,23 @@ export function MemberProfileDialog({
             </div>
 
             {/* Score Operacional */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Score Operacional
+            <section className="rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <Gauge className="h-3.5 w-3.5" /> Score Operacional
                 </p>
-                <p className="text-2xl font-light tracking-tight text-foreground">
+                <p className={`text-3xl font-light tracking-tight ${scoreTone}`}>
                   {score.score == null ? "—" : score.score}
                   <span className="text-sm text-muted-foreground">/100</span>
                 </p>
               </div>
 
-              <div className="space-y-2.5">
+              <div className="mt-4 space-y-4">
                 <div>
-                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Execução
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3" /> Execução
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
                     <MiniStat label="Concluídas no período" value={execucao.count} />
                     <MiniStat label="No prazo" value={execucao.onTimeCount + execucao.earlyCount} />
                     <MiniStat
@@ -390,11 +435,11 @@ export function MemberProfileDialog({
                     />
                   </div>
                 </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Regularidade
+                <div className="border-t border-border pt-4">
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <RefreshCcw className="h-3 w-3" /> Regularidade
                   </p>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
                     <MiniStat label="Taxa no prazo" value={fmtPct(regularidade.pctNoPrazo)} />
                     <MiniStat
                       label="Tempo médio de atraso"
@@ -412,11 +457,11 @@ export function MemberProfileDialog({
                     />
                   </div>
                 </div>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Compromissos
+                <div className="border-t border-border pt-4">
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <CalendarClock className="h-3 w-3" /> Compromissos
                   </p>
-                  <div className="grid grid-cols-3 gap-x-3 gap-y-2">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
                     <MiniStat
                       label="Reuniões previstas"
                       value={compromissos.expected === 0 ? "—" : compromissos.expected}
@@ -446,13 +491,16 @@ export function MemberProfileDialog({
               <button
                 type="button"
                 onClick={() => setShowComposition((s) => !s)}
-                className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                className="mt-4 flex w-full items-center justify-between border-t border-border pt-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
               >
-                {showComposition ? "Ocultar composição do score" : "Ver composição do score"}
+                Ver composição do score
+                <ChevronDown
+                  className={`h-3 w-3 transition-transform ${showComposition ? "rotate-180" : ""}`}
+                />
               </button>
 
               {showComposition && (
-                <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-xs">
+                <div className="mt-3 space-y-3 rounded-lg border border-border bg-muted/20 p-3 text-xs">
                   {(
                     [
                       {
@@ -582,7 +630,7 @@ export function MemberProfileDialog({
             </section>
 
             {hasAttention && (
-              <section className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+              <section className="space-y-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3.5">
                 <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="h-3 w-3" /> Atenção
                 </p>
@@ -666,10 +714,7 @@ export function MemberProfileDialog({
             )}
 
             {upcoming.length > 0 && (
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Próximas entregas
-                </p>
+              <ProfileCard icon={<ListTodo className="h-3.5 w-3.5" />} title="Próximas entregas">
                 <ul className="divide-y divide-border rounded-md border border-border">
                   {upcoming.map((t) => (
                     <li key={`${t.projectId}_${t.id}`}>
@@ -695,13 +740,10 @@ export function MemberProfileDialog({
                     </li>
                   ))}
                 </ul>
-              </section>
+              </ProfileCard>
             )}
 
-            <section className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Carga atual
-              </p>
+            <ProfileCard icon={<ClipboardList className="h-3.5 w-3.5" />} title="Carga atual">
               <p className="text-xs text-foreground">
                 {openTasksFull.length} tarefa{openTasksFull.length === 1 ? "" : "s"} aberta
                 {openTasksFull.length === 1 ? "" : "s"} · {vencemSemana} vence
@@ -710,20 +752,19 @@ export function MemberProfileDialog({
                   {overdueNow.length} atrasada{overdueNow.length === 1 ? "" : "s"}
                 </span>
               </p>
-            </section>
+            </ProfileCard>
 
             {projectNames.length > 0 && (
-              <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Projetos e campanhas
-                </p>
+              <ProfileCard
+                icon={<FolderKanban className="h-3.5 w-3.5" />}
+                title="Projetos e campanhas"
+              >
                 <div className="flex flex-wrap gap-1.5">
                   {projectNames.slice(0, PROJECT_CHIP_LIMIT).map((name) => (
                     <span
                       key={name}
                       className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
                     >
-                      <FolderKanban className="h-3 w-3 text-muted-foreground" />
                       {name}
                     </span>
                   ))}
@@ -733,10 +774,14 @@ export function MemberProfileDialog({
                     </span>
                   )}
                 </div>
-              </section>
+              </ProfileCard>
             )}
 
-            {show("startOfDay") && <StartOfDaySection startTimes={member.startTimes} />}
+            {show("startOfDay") && (
+              <ProfileCard icon={<Clock className="h-3.5 w-3.5" />} title="Início de dia">
+                <StartOfDayContent startTimes={member.startTimes} />
+              </ProfileCard>
+            )}
 
             <InfoSection member={member} isAdmin={isAdmin} show={show} onEdit={onEdit} />
           </div>
@@ -809,7 +854,7 @@ function InfoSection({
     });
 
   return (
-    <section className="space-y-1.5 border-t border-border pt-4">
+    <section className="space-y-2 border-t border-border pt-4">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
@@ -845,7 +890,7 @@ function InfoSection({
         <Button
           size="sm"
           variant="outline"
-          className="mt-1 h-7 gap-1.5 text-[11px]"
+          className="h-7 gap-1.5 text-[11px]"
           onClick={() => onEdit(member)}
         >
           <Pencil className="h-3 w-3" /> Editar membro
