@@ -20,7 +20,23 @@ import {
   ListChecks,
   CornerUpRight,
   Star,
+  MoreHorizontal,
+  Repeat,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  type TaskRecurrence,
+  type TaskRecurrenceUnit,
+  RECURRENCE_UNIT_LABEL,
+  WEEKDAY_SHORT_LABELS,
+  computeNextRecurrenceDueDate,
+  describeRecurrence,
+} from "@/lib/task-recurrence";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -280,6 +296,11 @@ export type Task = {
    * `effectivePerformanceDueDate` em `src/lib/performance-engine.ts`). */
   performanceDueDate?: string;
   deadlineHistory?: DeadlineChangeEntry[];
+  /** Quando definida, a tarefa nunca fica "concluída" de vez — ao entrar
+   * em "Concluído" ela volta sozinha pra "Aberto" com um novo prazo (ver
+   * `applyRecurrenceIfCompleted`), sem duplicar registro, igual ao
+   * ClickUp. */
+  recurrence?: TaskRecurrence;
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -594,6 +615,47 @@ function recordTaskLedgerEventsOnStatusChange(
   }
 }
 
+/** Se `next` acabou de entrar em "Concluído" e tem uma `recurrence`
+ * configurada, o ciclo NUNCA fica concluído de vez — o registro volta
+ * sozinho pra "Aberto" com um novo prazo (calculado a partir da
+ * conclusão), igual ao ClickUp (a tarefa recorrente não duplica, ela
+ * "gira"). Chamado DEPOIS de `recordTaskLedgerEventsOnStatusChange` nos
+ * dois pontos de entrada (drag-and-drop e `save()`), pra que o evento de
+ * conclusão do ciclo que está terminando seja registrado com o prazo
+ * REAL desse ciclo, antes do reset. Histórico de prazo (`deadlineHistory`/
+ * `originalDueDate`/`performanceDueDate`) é zerado a cada novo ciclo —
+ * cada volta da tarefa recorrente começa com uma folha em branco, sem
+ * carregar replanejamentos do ciclo anterior. */
+function applyRecurrenceIfCompleted(prev: Task, next: Task): Task {
+  if (!(next.status === "Concluído" && prev.status !== "Concluído")) return next;
+  if (!next.recurrence) return next;
+  const actor = getCurrentAuthor();
+  const completedAt = next.completedAt ?? new Date().toISOString();
+  const nextDue = computeNextRecurrenceDueDate(completedAt, next.recurrence);
+  return {
+    ...next,
+    status: "Aberto",
+    completedAt: undefined,
+    dueDate: nextDue,
+    startDate: undefined,
+    originalDueDate: nextDue,
+    performanceDueDate: nextDue,
+    deadlineHistory: [],
+    activity: [
+      ...(next.activity ?? []),
+      {
+        id: crypto.randomUUID(),
+        author: actor.name,
+        initials: actor.initials,
+        color: actor.color,
+        action: `tarefa recorrente: novo prazo em ${fmtDate(nextDue)}`,
+        createdAt: new Date().toISOString(),
+        kind: "minor",
+      },
+    ],
+  };
+}
+
 export function formatWhen(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -896,7 +958,8 @@ export function TaskBoard({
                         members,
                         performanceSettings,
                       });
-                    persist(tasks.map((t) => (t.id === dragId ? updated : t)));
+                    const finalTask = applyRecurrenceIfCompleted(dragged, updated);
+                    persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
                   }
                 }
                 setDragId(null);
@@ -1086,6 +1149,8 @@ export function TaskDialog({
   const [dueDate, setDueDate] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [estimate, setEstimate] = useState<string>("");
+  const [recurrence, setRecurrence] = useState<TaskRecurrence | undefined>(undefined);
+  const [recurrenceDialogOpen, setRecurrenceDialogOpen] = useState(false);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -1164,6 +1229,8 @@ export function TaskDialog({
     setDueDate(initial?.dueDate ?? "");
     setStartDate(initial?.startDate ?? "");
     setEstimate(initial?.estimate ?? "");
+    setRecurrence(initial?.recurrence);
+    setRecurrenceDialogOpen(false);
     setTimerRunning(!!initial?.timerRunning);
     setTimerStartedAt(initial?.timerStartedAt);
     setTimeEntries(initial?.timeEntries ?? []);
@@ -1255,6 +1322,9 @@ export function TaskDialog({
     let performanceDueDate = initial?.performanceDueDate;
     let deadlineHistory = initial?.deadlineHistory ?? [];
     let finalCompletedAt = initial?.completedAt;
+    let finalStatus = status;
+    let finalDueDate = dueDate || undefined;
+    let finalStartDate = startDate || undefined;
     const me = getMe();
     const actor = getCurrentAuthor();
     const origin = taskOriginFromScope(scope);
@@ -1400,21 +1470,33 @@ export function TaskDialog({
       if ((initial.description ?? "") !== description)
         act = pushActivity(act, "atualizou a descrição");
       if (statusChangedTask) {
-        recordTaskLedgerEventsOnStatusChange(
-          initial,
-          {
-            ...statusChangedTask,
-            deadlineHistory,
-            originalDueDate,
-            // `withStatusChange` só recebeu `initial` como base (assignees
-            // antigos) — se responsável e status mudam na mesma edição, o
-            // evento de conclusão precisa creditar quem está sendo salvo
-            // agora, não quem estava atribuído antes.
-            assignees,
-            assignee: undefined,
-          },
-          { scope, members, performanceSettings },
-        );
+        const candidateNext: Task = {
+          ...statusChangedTask,
+          deadlineHistory,
+          originalDueDate,
+          // `withStatusChange` só recebeu `initial` como base (assignees
+          // antigos) — se responsável e status mudam na mesma edição, o
+          // evento de conclusão precisa creditar quem está sendo salvo
+          // agora, não quem estava atribuído antes.
+          assignees,
+          assignee: undefined,
+          dueDate: finalDueDate,
+          recurrence,
+        };
+        recordTaskLedgerEventsOnStatusChange(initial, candidateNext, {
+          scope,
+          members,
+          performanceSettings,
+        });
+        const afterRecurrence = applyRecurrenceIfCompleted(initial, candidateNext);
+        finalStatus = afterRecurrence.status;
+        finalCompletedAt = afterRecurrence.completedAt;
+        finalDueDate = afterRecurrence.dueDate;
+        finalStartDate = afterRecurrence.startDate;
+        originalDueDate = afterRecurrence.originalDueDate;
+        performanceDueDate = afterRecurrence.performanceDueDate;
+        deadlineHistory = afterRecurrence.deadlineHistory ?? [];
+        act = afterRecurrence.activity ?? act;
       }
     } else {
       void notifyNewAssignees(assignees, title.trim(), scope);
@@ -1427,10 +1509,10 @@ export function TaskDialog({
       id: initial?.id ?? crypto.randomUUID(),
       title: title.trim(),
       description: description.trim() || undefined,
-      status,
+      status: finalStatus,
       priority,
-      dueDate: dueDate || undefined,
-      startDate: startDate || undefined,
+      dueDate: finalDueDate,
+      startDate: finalStartDate,
       estimate: estimate || undefined,
       assignees: assignees.length ? assignees : undefined,
       primaryAssignee,
@@ -1447,6 +1529,7 @@ export function TaskDialog({
       originalDueDate,
       performanceDueDate,
       deadlineHistory: deadlineHistory.length ? deadlineHistory : undefined,
+      recurrence,
     });
   };
 
@@ -1686,7 +1769,44 @@ export function TaskDialog({
           <span className="text-foreground">
             {initial ? "Editar" : parentTitle ? "Nova subtarefa" : "Nova tarefa"}
           </span>
+          {initial && (
+            <div className="ml-auto mr-6">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Mais opções"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setRecurrenceDialogOpen(true)}>
+                    <Repeat className="h-3.5 w-3.5" />
+                    {recurrence ? "Editar recorrência" : "Tornar recorrente"}
+                  </DropdownMenuItem>
+                  {recurrence && (
+                    <DropdownMenuItem onClick={() => setRecurrence(undefined)}>
+                      <X className="h-3.5 w-3.5" />
+                      Remover recorrência
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
+        {recurrenceDialogOpen && (
+          <RecurrenceDialog
+            initial={recurrence}
+            onCancel={() => setRecurrenceDialogOpen(false)}
+            onSave={(r) => {
+              setRecurrence(r);
+              setRecurrenceDialogOpen(false);
+            }}
+          />
+        )}
 
         <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
           <div className="min-h-0 overflow-y-auto">
@@ -1880,6 +2000,17 @@ export function TaskDialog({
                   />
                   {initial && (dueDate || initial.performanceDueDate) && (
                     <DeadlineHealthBadge task={initial} />
+                  )}
+                  {recurrence && (
+                    <button
+                      type="button"
+                      onClick={() => setRecurrenceDialogOpen(true)}
+                      title="Editar recorrência"
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <Repeat className="h-3 w-3" />
+                      {describeRecurrence(recurrence)}
+                    </button>
                   )}
                 </div>
               </Field>
@@ -2587,10 +2718,118 @@ function DeadlineHealthBadge({ task }: { task: Task }) {
           </div>
         )}
         <p className="mt-2.5 border-t border-border pt-2 text-[10px] text-muted-foreground">
-          Prazos encerram às 19h.
+          Prazos encerram às {performanceSettings.deadlineCutoffHour}h.
         </p>
       </PopoverContent>
     </Popover>
+  );
+}
+
+const RECURRENCE_UNIT_OPTIONS: TaskRecurrenceUnit[] = ["dias", "semanas", "meses"];
+
+/** Diálogo compacto pra configurar (ou editar) a recorrência da tarefa —
+ * mesmo espírito visual de `DeadlineChangeDialog` (overlay + card
+ * centralizado). A tarefa nunca duplica: ao concluir um ciclo, ela volta
+ * sozinha pra "Aberto" com o próximo prazo (`applyRecurrenceIfCompleted`).
+ * Configurar aqui só atualiza o estado local do formulário — persiste de
+ * verdade só quando o usuário clicar em "Salvar" na tarefa, igual a
+ * qualquer outro campo deste diálogo. */
+function RecurrenceDialog({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial?: TaskRecurrence;
+  onCancel: () => void;
+  onSave: (r: TaskRecurrence) => void;
+}) {
+  const [intervalValue, setIntervalValue] = useState(initial?.interval ?? 1);
+  const [unit, setUnit] = useState<TaskRecurrenceUnit>(initial?.unit ?? "semanas");
+  const [weekdays, setWeekdays] = useState<number[]>(initial?.weekdays ?? []);
+
+  const toggleWeekday = (d: number) =>
+    setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+
+  const confirm = () => {
+    onSave({
+      interval: Math.max(1, Math.floor(intervalValue) || 1),
+      unit,
+      weekdays: unit === "semanas" && weekdays.length > 0 ? weekdays : undefined,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-5 shadow-xl">
+        <h3 className="text-sm font-semibold text-foreground">Tornar recorrente</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Ao concluir, a tarefa volta sozinha pra "Aberto" com um novo prazo — nunca cria uma cópia.
+        </p>
+
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">A cada</span>
+          <input
+            type="number"
+            min={1}
+            value={intervalValue}
+            onChange={(e) => setIntervalValue(Number(e.target.value))}
+            className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+          <select
+            value={unit}
+            onChange={(e) => setUnit(e.target.value as TaskRecurrenceUnit)}
+            className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+          >
+            {RECURRENCE_UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {RECURRENCE_UNIT_LABEL[u].plural}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {unit === "semanas" && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[11px] text-muted-foreground">
+              Em dias específicos (opcional — sem isso, repete no mesmo dia da conclusão)
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {WEEKDAY_SHORT_LABELS.map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleWeekday(i)}
+                  className={`h-7 w-10 rounded-md text-[11px] font-medium capitalize transition-colors ${
+                    weekdays.includes(i)
+                      ? "bg-foreground text-background"
+                      : "border border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={confirm}
+            className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

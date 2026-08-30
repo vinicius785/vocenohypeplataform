@@ -1,6 +1,7 @@
 import type { InfluencerFieldKey } from "@/components/influenciadores/InfluencerBoard";
 import { createTableArrayStore } from "./table-array-store";
 import { loadProjetoTarefas, onProjetoTarefasChange } from "./projeto-scoped-store";
+import type { TaskRecurrence } from "@/lib/task-recurrence";
 
 export type FeatureKey =
   | "roadmap"
@@ -219,6 +220,8 @@ export type Task = {
   originalDueDate?: string;
   performanceDueDate?: string;
   deadlineHistory?: DeadlineChangeEntry[];
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.recurrence`. */
+  recurrence?: TaskRecurrence;
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */

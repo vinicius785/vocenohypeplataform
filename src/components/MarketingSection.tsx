@@ -94,6 +94,7 @@ function resolveTasks(
       originalDueDate: s.originalDueDate,
       performanceDueDate: s.performanceDueDate,
       deadlineHistory: s.deadlineHistory,
+      recurrence: s.recurrence,
     });
     meta.set(id, { kind: "standalone", id: s.id });
   }
@@ -235,6 +236,7 @@ export function MarketingSection({
           originalDueDate: t.originalDueDate,
           performanceDueDate: t.performanceDueDate,
           deadlineHistory: t.deadlineHistory,
+          recurrence: t.recurrence,
         });
       }
     }

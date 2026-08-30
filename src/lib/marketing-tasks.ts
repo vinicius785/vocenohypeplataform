@@ -11,6 +11,7 @@
 import type { KanbanStatus } from "@/lib/projetos";
 import type { TimeEntry, Activity, DeadlineChangeEntry } from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
+import type { TaskRecurrence } from "@/lib/task-recurrence";
 
 export type MktSourceKind = "projeto" | "campanha";
 
@@ -66,6 +67,8 @@ export type MktStandalone = {
   originalDueDate?: string;
   performanceDueDate?: string;
   deadlineHistory?: DeadlineChangeEntry[];
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.recurrence`. */
+  recurrence?: TaskRecurrence;
 };
 
 export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [
