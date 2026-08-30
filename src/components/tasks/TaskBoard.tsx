@@ -1128,7 +1128,38 @@ export function TaskDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [descEditing, setDescEditing] = useState(false);
+  const [descMentionQuery, setDescMentionQuery] = useState<string | null>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
+  // Mesmo padrão de @menção do composer de comentário
+  // (`TaskActivityPanel.tsx`'s `onCommentChange`/`insertMention`) —
+  // replicado aqui pra descrição também ganhar autocomplete, não só
+  // exibição.
+  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value;
+    setDescription(v);
+    const caret = e.target.selectionStart ?? v.length;
+    const before = v.slice(0, caret);
+    const m = before.match(/(?:^|\s)@([\wÀ-ÿ]*)$/);
+    setDescMentionQuery(m ? m[1] : null);
+  };
+  const insertDescMention = (name: string) => {
+    const el = descRef.current;
+    const caret = el?.selectionStart ?? description.length;
+    const before = description.slice(0, caret).replace(/@([\wÀ-ÿ]*)$/, `@${name} `);
+    const after = description.slice(caret);
+    setDescription(before + after);
+    setDescMentionQuery(null);
+    setTimeout(() => {
+      el?.focus();
+      el?.setSelectionRange(before.length, before.length);
+    }, 0);
+  };
+  const descMentionMatches =
+    descMentionQuery !== null
+      ? members
+          .filter((m) => m.name.toLowerCase().includes(descMentionQuery.toLowerCase()))
+          .slice(0, 5)
+      : [];
   const [status, setStatus] = useState<TaskStatus>("Aberto");
   const [priority, setPriority] = useState<TaskPriority>("Normal");
   const [dueDate, setDueDate] = useState<string>("");
@@ -2081,18 +2112,50 @@ export function TaskDialog({
 
             <div className="px-8 py-4">
               {descEditing ? (
-                <textarea
-                  ref={descRef}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  onBlur={() => setDescEditing(false)}
-                  placeholder="Escreva algo, adicione detalhes, links…"
-                  rows={10}
-                  className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
-                />
+                <div className="relative">
+                  {descMentionMatches.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+                      {descMentionMatches.map((m) => (
+                        <button
+                          key={m.name}
+                          type="button"
+                          // `onMouseDown` (não `onClick`) pra disparar antes do
+                          // `onBlur` do textarea — senão o dropdown já tinha
+                          // fechado (e a descrição saído de edição) antes do
+                          // clique registrar.
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            insertDescMention(m.name);
+                          }}
+                          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
+                        >
+                          <span
+                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${m.color}`}
+                          >
+                            {m.initials}
+                          </span>
+                          {m.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <textarea
+                    ref={descRef}
+                    value={description}
+                    onChange={onDescriptionChange}
+                    onBlur={() => {
+                      setDescEditing(false);
+                      setDescMentionQuery(null);
+                    }}
+                    placeholder="Escreva algo, adicione detalhes, links, use @ para mencionar…"
+                    rows={10}
+                    className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                  />
+                </div>
               ) : description ? (
-                // Links viram clicáveis só na visualização — o textarea de edição
-                // continua sendo texto puro, senão editar o link vira um problema.
+                // Links e @menções viram clicáveis/destacados só na
+                // visualização — o textarea de edição continua sendo texto
+                // puro, senão editar vira um problema.
                 <div
                   onClick={() => {
                     setDescEditing(true);
@@ -2100,7 +2163,7 @@ export function TaskDialog({
                   }}
                   className="min-h-[220px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
                 >
-                  {linkifyText(description, "task-desc")}
+                  {renderMentions(description, members)}
                 </div>
               ) : (
                 <button
