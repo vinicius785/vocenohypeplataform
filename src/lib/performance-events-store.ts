@@ -162,6 +162,7 @@ type PerformanceSettingsRow = {
   xp_meeting_missed: number;
   xp_overdue_dias_teto: number;
   motivo_isencao_default: Record<string, boolean>;
+  deadline_cutoff_hour: number;
 };
 
 function fromSettingsRow(row: PerformanceSettingsRow): PerformanceSettings {
@@ -176,6 +177,7 @@ function fromSettingsRow(row: PerformanceSettingsRow): PerformanceSettings {
     xpMeetingMissed: row.xp_meeting_missed,
     xpOverdueDiasTeto: row.xp_overdue_dias_teto,
     motivoIsencaoDefault: row.motivo_isencao_default ?? {},
+    deadlineCutoffHour: row.deadline_cutoff_hour ?? DEFAULT_PERFORMANCE_SETTINGS.deadlineCutoffHour,
   };
 }
 
@@ -221,6 +223,7 @@ export async function savePerformanceSettings(
   if (patch.xpMeetingMissed != null) row.xp_meeting_missed = patch.xpMeetingMissed;
   if (patch.xpOverdueDiasTeto != null) row.xp_overdue_dias_teto = patch.xpOverdueDiasTeto;
   if (patch.motivoIsencaoDefault != null) row.motivo_isencao_default = patch.motivoIsencaoDefault;
+  if (patch.deadlineCutoffHour != null) row.deadline_cutoff_hour = patch.deadlineCutoffHour;
   const { error } = await supabase
     .from("performance_settings")
     .update(row as never)

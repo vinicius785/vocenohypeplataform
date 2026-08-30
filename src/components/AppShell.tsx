@@ -26,6 +26,7 @@ import {
   CalendarClock,
   Timer,
   AlertTriangle,
+  Bug,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -34,7 +35,8 @@ import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
 import { setFaviconBadge } from "@/lib/favicon-badge";
-import { SidebarProfile } from "./ConfiguracoesSection";
+import { SidebarProfile, BugsReportadosTab } from "./ConfiguracoesSection";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
@@ -297,6 +299,7 @@ export function AppShell({
   const hasOverdueDespesas = useHasOverdueDespesas();
   const { unseenCount: unseenLeads, markSeen: markLeadsSeen } = useLeadNotifications();
   const access = useMyAccess();
+  const [bugsOpen, setBugsOpen] = useState(false);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -459,9 +462,33 @@ export function AppShell({
               <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
               {showFull && "Configurações"}
             </button>
+            {access?.isAdmin && (
+              <button
+                type="button"
+                onClick={() => setBugsOpen(true)}
+                title={!showFull ? "Bugs reportados" : undefined}
+                className={`mt-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item ${
+                  !showFull ? "justify-center" : ""
+                }`}
+              >
+                <Bug className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {showFull && "Bugs reportados"}
+              </button>
+            )}
           </div>
         </div>
       </aside>
+
+      {access?.isAdmin && (
+        <Dialog open={bugsOpen} onOpenChange={setBugsOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="sr-only">Bugs reportados</DialogTitle>
+            </DialogHeader>
+            <BugsReportadosTab />
+          </DialogContent>
+        </Dialog>
+      )}
 
       <div className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-3 border-b border-border px-6">

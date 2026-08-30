@@ -23,13 +23,20 @@ export function isValidUuid(id: string | undefined | null): id is string {
   return !!id && UUID_RE.test(id);
 }
 
+/** Valor de fábrica — usado como default sempre que uma chamada não
+ * repassa o horário configurado (`PerformanceSettings.deadlineCutoffHour`),
+ * nunca mais hardcoded/fixo (era assim até uma rodada anterior desta
+ * sessão; agora é configurável em Configurações → Score operacional →
+ * Regras de prazo). Manter como parâmetro opcional com este default
+ * garante que nenhum call-site quebra ao não repassar o valor
+ * configurado explicitamente. */
 export const DEADLINE_CUTOFF_HOUR = 19;
 
-/** Regra central: toda tarefa vence às 19h (nunca 23:59) do dia do
- * prazo — fixo/global, não configurável (item 25 do pedido). */
-export function deadlineCutoff(dueISO: string): Date {
+/** Regra central: toda tarefa vence às `cutoffHour`h (nunca 23:59) do
+ * dia do prazo. */
+export function deadlineCutoff(dueISO: string, cutoffHour: number = DEADLINE_CUTOFF_HOUR): Date {
   const d = parseIsoDateLocal(dueISO);
-  d.setHours(DEADLINE_CUTOFF_HOUR, 0, 0, 0);
+  d.setHours(cutoffHour, 0, 0, 0);
   return d;
 }
 
@@ -92,9 +99,10 @@ export type TaskOutcome = "on_time" | "early" | "late";
 export function classifyOutcome(
   performanceDueDateUsed: string | undefined,
   completedAtISO: string,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): { outcome: TaskOutcome; delayMinutes: number } {
   if (!performanceDueDateUsed) return { outcome: "on_time", delayMinutes: 0 };
-  const cutoff = deadlineCutoff(performanceDueDateUsed);
+  const cutoff = deadlineCutoff(performanceDueDateUsed, cutoffHour);
   const completedAt = new Date(completedAtISO);
   const diffMinutes = Math.round((completedAt.getTime() - cutoff.getTime()) / 60000);
   if (diffMinutes > 0) return { outcome: "late", delayMinutes: diffMinutes };
@@ -154,6 +162,7 @@ export type TaskDeadlineHealthLike = {
 export function taskDeadlineHealth(
   t: TaskDeadlineHealthLike,
   now: Date = new Date(),
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): { health: TaskDeadlineHealth; label: string; tone: string; dot: string; delayDays?: number } {
   const build = (health: TaskDeadlineHealth, label: string, delayDays?: number) => ({
     health,
@@ -172,7 +181,7 @@ export function taskDeadlineHealth(
     // tarefa já concluída como se ainda estivesse em aberto e vencida.
     if (!t.completedAt) return build("concluida_no_prazo", "Concluída");
     const ref = effectivePerformanceDueDate(t.originalDueDate ?? t.dueDate, t.deadlineHistory);
-    const { outcome, delayMinutes } = classifyOutcome(ref, t.completedAt);
+    const { outcome, delayMinutes } = classifyOutcome(ref, t.completedAt, cutoffHour);
     if (outcome === "late") {
       const delayDays = Math.max(1, Math.ceil(delayMinutes / (24 * 60)));
       return build("concluida_com_atraso", `Concluída com atraso · +${delayDays}d`, delayDays);
@@ -183,7 +192,7 @@ export function taskDeadlineHealth(
   const ref = t.performanceDueDate ?? t.dueDate;
   if (!ref) return build("sem_prazo", "Sem prazo");
 
-  const diffMs = now.getTime() - deadlineCutoff(ref).getTime();
+  const diffMs = now.getTime() - deadlineCutoff(ref, cutoffHour).getTime();
   if (diffMs > 0) {
     const delayDays = Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
     return build("atrasada", `Atrasada · ${delayDays}d`, delayDays);
@@ -246,10 +255,11 @@ export type PerformanceTaskLike = { status: string; dueDate?: string; performanc
 export function overdueOpenTasks<T extends PerformanceTaskLike>(
   openTasksNow: T[],
   now: Date = new Date(),
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): T[] {
   return openTasksNow.filter((t) => {
     const ref = t.performanceDueDate ?? t.dueDate;
-    return !!ref && now.getTime() - deadlineCutoff(ref).getTime() > 0;
+    return !!ref && now.getTime() - deadlineCutoff(ref, cutoffHour).getTime() > 0;
   });
 }
 
@@ -270,14 +280,17 @@ export function computePendencias(
   openTasksNow: PerformanceTaskLike[],
   diasTeto: number,
   now: Date = new Date(),
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): PendenciasResult {
   const openCount = openTasksNow.length;
   if (openCount === 0) return { value: 100, overdueCount: 0, openCount: 0, avgDaysOverdue: 0 };
-  const overdue = overdueOpenTasks(openTasksNow, now);
+  const overdue = overdueOpenTasks(openTasksNow, now, cutoffHour);
   const overdueCount = overdue.length;
   const totalDaysOverdue = overdue.reduce((sum, t) => {
     const ref = t.performanceDueDate ?? t.dueDate;
-    return sum + (now.getTime() - deadlineCutoff(ref!).getTime()) / (24 * 60 * 60 * 1000);
+    return (
+      sum + (now.getTime() - deadlineCutoff(ref!, cutoffHour).getTime()) / (24 * 60 * 60 * 1000)
+    );
   }, 0);
   const overdueRatio = overdueCount / openCount;
   const avgDaysOverdue = overdueCount > 0 ? totalDaysOverdue / overdueCount : 0;
@@ -382,6 +395,11 @@ export type PerformanceSettings = {
   xpMeetingMissed: number;
   xpOverdueDiasTeto: number;
   motivoIsencaoDefault: Record<string, boolean>;
+  /** Horário (0-23) em que uma tarefa com só DATA de vencimento (sem
+   * horário específico) é considerada vencida naquele dia — antes fixo
+   * em 19h (`DEADLINE_CUTOFF_HOUR`), agora configurável em
+   * Configurações → Score operacional → Regras de prazo. */
+  deadlineCutoffHour: number;
 };
 
 export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
@@ -395,6 +413,7 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
   xpMeetingMissed: -5,
   xpOverdueDiasTeto: 10,
   motivoIsencaoDefault: DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT,
+  deadlineCutoffHour: DEADLINE_CUTOFF_HOUR,
 };
 
 /** XP de conclusão de tarefa: +10 no prazo, +2 de bônus se antecipada, 0

@@ -17,7 +17,20 @@ export type Permission =
   | "configuracoes:perfil"
   | "configuracoes:workspace"
   | "configuracoes:av"
-  | "configuracoes:senhas";
+  | "configuracoes:senhas"
+  /** "Gerenciar membros" — exibida em Configurações → Time e permissões,
+   * mas ainda DECORATIVA: criar/editar/excluir membro e redefinir senha
+   * continuam exigindo `isAdmin` de verdade no servidor
+   * (`team.functions.ts`'s `assertAdmin`). Ligar essa permissão de fato
+   * exigiria separar o campo `role` (promover a admin) num endpoint à
+   * parte antes de liberar pra não-admins — risco de escalação de
+   * privilégio não assumido nesta rodada. Ver CLAUDE.md, "Known
+   * incomplete work". */
+  | "membros"
+  /** Dados bancários (PIX/conta) de influenciador — separado de
+   * `influenciadores` (perfil geral). Aplicado em
+   * `InfluencerBoard.tsx`. */
+  | "influenciadores:bancario";
 
 export const CONFIG_SUB_PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "configuracoes:perfil", label: "Meu Perfil" },
@@ -28,13 +41,19 @@ export const CONFIG_SUB_PERMISSIONS: { key: Permission; label: string }[] = [
 
 export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label: string }[] }[] = [
   {
+    label: "Administração",
+    items: [
+      { key: "configuracoes", label: "Administrar workspace" },
+      { key: "membros", label: "Gerenciar membros" },
+    ],
+  },
+  {
     label: "Operação",
     items: [
       { key: "clientes", label: "Clientes" },
       { key: "campanhas", label: "Campanhas" },
       { key: "projetos", label: "Projetos" },
-      { key: "reunioes", label: "Reuniões" },
-      { key: "influenciadores", label: "Influenciadores" },
+      { key: "influenciadores", label: "Banco de influenciadores" },
     ],
   },
   {
@@ -45,14 +64,21 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     ],
   },
   {
-    label: "Time & Comunicação",
+    label: "Dados sensíveis",
+    items: [{ key: "influenciadores:bancario", label: "Dados bancários de influenciadores" }],
+  },
+  {
+    // Grupo residual — preserva a capacidade de conceder essas 4
+    // permissões granularmente; não fazem parte dos 4 grupos nomeados
+    // no pedido, mas removê-las tiraria funcionalidade já existente.
+    label: "Outros",
     items: [
+      { key: "reunioes", label: "Reuniões" },
       { key: "time", label: "Time" },
       { key: "metas", label: "Metas" },
       { key: "chat", label: "Chat" },
     ],
   },
-  { label: "Administração", items: [{ key: "configuracoes", label: "Configurações" }] },
 ];
 export const ALL_PERMISSIONS: Permission[] = [
   ...PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => i.key)),

@@ -390,6 +390,8 @@ function DiretorioTab() {
       const pendencias = computePendencias(
         openTasksByMemberId.get(m.id) ?? [],
         performanceSettings.pendenciasDiasTeto,
+        undefined,
+        performanceSettings.deadlineCutoffHour,
       );
       const compromissos = computeCompromissos(attendance);
       map.set(
@@ -409,15 +411,15 @@ function DiretorioTab() {
   // Início, mas pra todo mundo de uma vez.
   const tasksByMember = useMemo(() => {
     void tick;
-    return loadTasksByAssignee(campanhaNames);
-  }, [campanhaNames, tick]);
+    return loadTasksByAssignee(campanhaNames, performanceSettings.deadlineCutoffHour);
+  }, [campanhaNames, tick, performanceSettings.deadlineCutoffHour]);
 
   // Lista achatada de TODAS as tarefas (uma linha por tarefa, com todos os
   // responsáveis) — alimenta o painel "Tarefas que precisam de atenção".
   const allTasksFlat = useMemo(() => {
     void tick;
-    return loadAllTasksFlat(campanhaNames);
-  }, [campanhaNames, tick]);
+    return loadAllTasksFlat(campanhaNames, performanceSettings.deadlineCutoffHour);
+  }, [campanhaNames, tick, performanceSettings.deadlineCutoffHour]);
 
   // Conclusões por semana do time inteiro — alimenta só o KPI "Concluídas
   // na semana" (o gráfico "Entregas por semana" foi substituído por
@@ -689,7 +691,7 @@ function DiretorioTab() {
   );
 }
 
-type MemberFormPayload = {
+export type MemberFormPayload = {
   isNew: boolean;
   id?: string;
   email: string;
@@ -703,7 +705,7 @@ type MemberFormPayload = {
   isAdminRole: boolean;
 };
 
-function MemberDialog({
+export function MemberDialog({
   open,
   initial,
   isSelf,
@@ -1091,7 +1093,7 @@ function MemberDialog({
                                   </div>
                                 </div>
                               )}
-                            {group.label === "Time & Comunicação" && canSeeTime && (
+                            {group.label === "Outros" && canSeeTime && (
                               <div className="border-t border-border bg-background px-3 py-2">
                                 <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                                   <Eye className="h-3 w-3" /> Visibilidade na aba Time

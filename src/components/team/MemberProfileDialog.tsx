@@ -275,10 +275,23 @@ export function MemberProfileDialog({
       computeExecucao(completions.map(({ outcome, delayMinutes }) => ({ outcome, delayMinutes }))),
     [completions],
   );
-  const overdueNow = useMemo(() => overdueOpenTasks(openTasksForMember), [openTasksForMember]);
+  const overdueNow = useMemo(
+    () => overdueOpenTasks(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
+    [openTasksForMember, performanceSettings.deadlineCutoffHour],
+  );
   const pendencias = useMemo(
-    () => computePendencias(openTasksForMember, performanceSettings.pendenciasDiasTeto),
-    [openTasksForMember, performanceSettings.pendenciasDiasTeto],
+    () =>
+      computePendencias(
+        openTasksForMember,
+        performanceSettings.pendenciasDiasTeto,
+        undefined,
+        performanceSettings.deadlineCutoffHour,
+      ),
+    [
+      openTasksForMember,
+      performanceSettings.pendenciasDiasTeto,
+      performanceSettings.deadlineCutoffHour,
+    ],
   );
   const compromissos = useMemo(
     () => computeCompromissos(attendance.map((a) => ({ attended: a.attended }))),

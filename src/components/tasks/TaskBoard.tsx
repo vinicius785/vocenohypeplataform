@@ -37,7 +37,7 @@ import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projeto
 import { getMe } from "@/lib/chat-store";
 import { DeadlineChangeDialog } from "@/components/tasks/DeadlineChangeDialog";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
-import { recordPerformanceEvent } from "@/lib/performance-events-store";
+import { recordPerformanceEvent, usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   isCriticalReplan,
   effectivePerformanceDueDate,
@@ -46,7 +46,7 @@ import {
   deadlineCutoff,
   isValidUuid,
   taskDeadlineHealth,
-  DEFAULT_PERFORMANCE_SETTINGS,
+  type PerformanceSettings,
 } from "@/lib/performance-engine";
 import {
   loadTaskTags,
@@ -535,7 +535,7 @@ function resolvePersonId(name: string, members: Member[]): string | null {
 function recordTaskLedgerEventsOnStatusChange(
   prev: Task,
   next: Task,
-  ctx: { scope?: TaskBoardScope; members: Member[] },
+  ctx: { scope?: TaskBoardScope; members: Member[]; performanceSettings: PerformanceSettings },
 ) {
   const me = getMe();
   if (!isValidUuid(me.id)) return;
@@ -557,8 +557,12 @@ function recordTaskLedgerEventsOnStatusChange(
       next.originalDueDate ?? next.dueDate,
       next.deadlineHistory,
     );
-    const { outcome, delayMinutes } = classifyOutcome(ref, next.completedAt);
-    const xpDelta = xpForCompletion(outcome, DEFAULT_PERFORMANCE_SETTINGS, targets.length);
+    const { outcome, delayMinutes } = classifyOutcome(
+      ref,
+      next.completedAt,
+      ctx.performanceSettings.deadlineCutoffHour,
+    );
+    const xpDelta = xpForCompletion(outcome, ctx.performanceSettings, targets.length);
     for (const name of targets) {
       recordPerformanceEvent({
         eventType: "task_completed",
@@ -769,6 +773,7 @@ export function TaskBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
   const members = useTeamMembers();
+  const { settings: performanceSettings } = usePerformanceSettings();
 
   useEffect(() => {
     if (!initialOpenTaskId) return;
@@ -887,7 +892,11 @@ export function TaskBoard({
                   if (dragged) {
                     const updated = withStatusChange(dragged, col);
                     if (updated !== dragged)
-                      recordTaskLedgerEventsOnStatusChange(dragged, updated, { scope, members });
+                      recordTaskLedgerEventsOnStatusChange(dragged, updated, {
+                        scope,
+                        members,
+                        performanceSettings,
+                      });
                     persist(tasks.map((t) => (t.id === dragId ? updated : t)));
                   }
                 }
@@ -1068,6 +1077,7 @@ export function TaskDialog({
 }) {
   const members = useTeamMembers();
   const taskTags = useTaskTags();
+  const { settings: performanceSettings } = usePerformanceSettings();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [descEditing, setDescEditing] = useState(false);
@@ -1282,7 +1292,9 @@ export function TaskDialog({
         if (isValidUuid(me.id)) {
           const ref = initial.performanceDueDate ?? initial.dueDate;
           const wasOverdueAtChange =
-            initial.status !== "Concluído" && !!ref && Date.now() > deadlineCutoff(ref).getTime();
+            initial.status !== "Concluído" &&
+            !!ref &&
+            Date.now() > deadlineCutoff(ref, performanceSettings.deadlineCutoffHour).getTime();
           const removed = prevAssignees.filter((a) => !assignees.includes(a));
           const added = assignees.filter((a) => !prevAssignees.includes(a));
           for (const name of [...removed, ...added]) {
@@ -1402,7 +1414,7 @@ export function TaskDialog({
             assignees,
             assignee: undefined,
           },
-          { scope, members },
+          { scope, members, performanceSettings },
         );
       }
     } else {
@@ -2337,6 +2349,7 @@ export function TaskDialog({
             commentText={commentText}
             onCommentTextChange={setCommentText}
             onPostComment={postComment}
+            deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
           />
         </div>
 
@@ -2531,7 +2544,8 @@ function AttachmentPreviewDialog({
  * replanejamento com motivo — lido direto de `deadlineHistory`
  * estruturado, nunca reconstruído por parsing de texto livre. */
 function DeadlineHealthBadge({ task }: { task: Task }) {
-  const health = taskDeadlineHealth(task);
+  const { settings: performanceSettings } = usePerformanceSettings();
+  const health = taskDeadlineHealth(task, undefined, performanceSettings.deadlineCutoffHour);
   const history = task.deadlineHistory ?? [];
   const hasHistory = history.length > 0;
   const showOriginal = task.originalDueDate && task.originalDueDate !== task.dueDate;

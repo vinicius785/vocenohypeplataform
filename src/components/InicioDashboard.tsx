@@ -57,6 +57,7 @@ import { onStandaloneChange } from "@/lib/marketing-tasks";
 import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
 import { todayZipKey } from "@/lib/zip-game";
 import { loadAllTasks, WEEKDAYS, type DashTask } from "@/lib/task-aggregation";
+import { usePerformanceSettings } from "@/lib/performance-events-store";
 
 type PersonalItem = { id: string; text: string; done: boolean };
 
@@ -129,6 +130,7 @@ type TaskFilter = "hoje" | "atrasada" | "semana";
 export function InicioDashboard() {
   const navigate = useNavigate();
   const clientesForChat = useClientes();
+  const { settings: performanceSettings } = usePerformanceSettings();
   const campanhaNameMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of clientesForChat) {
@@ -178,7 +180,7 @@ export function InicioDashboard() {
     setToday(`${WEEKDAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`);
 
     const refresh = () => {
-      setTasks(loadAllTasks(campanhaNameMap, getMe().name));
+      setTasks(loadAllTasks(campanhaNameMap, getMe().name, performanceSettings.deadlineCutoffHour));
       setMeetings(loadMeetings());
     };
     refresh();
@@ -200,7 +202,7 @@ export function InicioDashboard() {
       unsubCampanhaTarefas();
       unsubStandalone();
     };
-  }, [campanhaNameMap]);
+  }, [campanhaNameMap, performanceSettings.deadlineCutoffHour]);
 
   // Lista pessoal — vive em `profiles.personal_list` (por usuário), não mais
   // só em localStorage, pra acompanhar quem logou de outro dispositivo/

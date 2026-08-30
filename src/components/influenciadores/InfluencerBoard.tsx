@@ -81,6 +81,7 @@ import { formatDateToIso } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
 import { formatSeguidores } from "@/lib/format";
+import { useMyAccess, hasPermission } from "@/lib/permissions";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -1436,7 +1437,13 @@ export function InfluencerBoard({
   cicloMesOptions?: { value: string; label: string }[];
 }) {
   const fields = allowedFields ?? ALL_INFLUENCER_FIELDS;
-  const has = (k: InfluencerFieldKey) => fields.includes(k);
+  const access = useMyAccess();
+  // Dados bancários (PIX/conta) exigem a permissão dedicada
+  // "influenciadores:bancario", separada da geral "influenciadores" — todo
+  // render site que hoje já checa `has("bancario")` fica automaticamente
+  // gated de verdade, sem precisar tocar em cada um.
+  const has = (k: InfluencerFieldKey) =>
+    fields.includes(k) && (k !== "bancario" || hasPermission(access, "influenciadores:bancario"));
   const { confirm, confirmDialog } = useConfirm();
 
   const [creating, setCreating] = useState(false);

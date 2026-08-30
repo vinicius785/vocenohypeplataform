@@ -135,6 +135,7 @@ export function TaskActivityPanel({
   commentText,
   onCommentTextChange,
   onPostComment,
+  deadlineCutoffHour,
 }: {
   /** Só os campos que este painel precisa (saúde do prazo +
    * cross-referência de `deadlineHistory`) — não o `Task` inteiro, pra
@@ -147,6 +148,7 @@ export function TaskActivityPanel({
   commentText: string;
   onCommentTextChange: (v: string) => void;
   onPostComment: () => void;
+  deadlineCutoffHour?: number;
 }) {
   const [tab, setTab] = useState<ActivityTab>("tudo");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -234,7 +236,7 @@ export function TaskActivityPanel({
     return items.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
   }, [tab, activity, comments, task.deadlineHistory]);
 
-  const health = taskDeadlineHealth(task);
+  const health = taskDeadlineHealth(task, undefined, deadlineCutoffHour);
 
   return (
     <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">

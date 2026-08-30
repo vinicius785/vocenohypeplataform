@@ -30,6 +30,8 @@ import {
   DollarSign,
   Bug,
   Sliders,
+  Users,
+  History,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -93,16 +95,18 @@ import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { LockedSection } from "./LockedSection";
 import { loadPricing, fetchPricing, savePricing, type PricingSettings } from "@/lib/pricing-store";
 import { TIERS, FORMATOS, type TierId, type FormatoId } from "@/lib/pricing";
+import { TimePermissoesTab } from "@/components/configuracoes/TimePermissoesTab";
+import { logSettingsAudit } from "@/lib/settings-audit";
 
 type TabKey =
   | "perfil"
-  | "workspace"
-  | "senhas"
   | "preferencias"
+  | "workspace"
   | "integracoes"
   | "precificacao"
-  | "senhas_esquecidas"
-  | "bugs_reportados"
+  | "time_permissoes"
+  | "seguranca"
+  | "dados_backup"
   | "score_operacional";
 
 type Perfil = {
@@ -112,7 +116,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.174.0";
+export const APP_VERSION = "1.175.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -186,14 +190,49 @@ const loadSenhas = (): Senha[] => {
   }
 };
 
-/** Abas administrativas do workspace — exigem a permissão "configuracoes"
- * (ou ser admin). "perfil", "preferencias" e "av" são autoatendimento e
- * ficam sempre acessíveis pra qualquer membro. */
-/** "integracoes" não entra aqui: webhooks continuam admin-only (checado
- * dentro da própria aba), mas o Google Agenda é self-service — todo membro
- * do time precisa conseguir abrir a aba pra conectar a própria conta. */
-const RESTRICTED_TABS: TabKey[] = ["workspace", "senhas", "precificacao"];
-const ADMIN_TABS: TabKey[] = ["senhas_esquecidas", "bugs_reportados", "score_operacional"];
+/** Abas que exigem a permissão "configuracoes" (ou ser admin). "perfil" e
+ * "preferencias" são autoatendimento e ficam sempre acessíveis. "integracoes"
+ * fica de fora: webhooks continuam admin-only (checado dentro da própria
+ * aba), mas o Google Agenda é self-service — todo membro do time precisa
+ * conseguir abrir a aba pra conectar a própria conta. "time_permissoes"
+ * também fica de fora do gate padrão — além de "configuracoes", a permissão
+ * decorativa "membros" já libera a navegação até ela (ver `permissions.ts`). */
+const RESTRICTED_TABS: TabKey[] = ["workspace", "precificacao", "seguranca"];
+/** Só admin de verdade — nada aqui é liberável por permissão granular. */
+const ADMIN_TABS: TabKey[] = ["dados_backup", "score_operacional"];
+
+/** 3 grupos fixos (item 1 do pedido de reorganização): Minha conta,
+ * Workspace, Administração. Navegação vertical (não pílulas horizontais
+ * infinitas) — reaproveita as mesmas classes `pill-nav-item`/
+ * `pill-nav-item-active` já usadas na sidebar principal do app
+ * (`AppShell.tsx`), então não é um padrão visual novo. */
+const SETTINGS_GROUPS: {
+  label: string;
+  tabs: { k: TabKey; label: string; icon: typeof User }[];
+}[] = [
+  {
+    label: "Minha conta",
+    tabs: [
+      { k: "perfil", label: "Meu Perfil", icon: User },
+      { k: "preferencias", label: "Preferências", icon: Bell },
+    ],
+  },
+  {
+    label: "Workspace",
+    tabs: [
+      { k: "workspace", label: "Geral", icon: Building2 },
+      { k: "integracoes", label: "Integrações", icon: Webhook },
+      { k: "precificacao", label: "Custos e precificação", icon: DollarSign },
+      { k: "time_permissoes", label: "Time e permissões", icon: Users },
+      { k: "seguranca", label: "Segurança", icon: Lock },
+      { k: "dados_backup", label: "Dados e backup", icon: Download },
+    ],
+  },
+  {
+    label: "Administração",
+    tabs: [{ k: "score_operacional", label: "Score Operacional", icon: Sliders }],
+  },
+];
 
 export function ConfiguracoesSection() {
   const [tab, setTab] = useState<TabKey>("perfil");
@@ -201,6 +240,7 @@ export function ConfiguracoesSection() {
   const [status, setStatus] = useState<UserStatus>(() => loadStatus());
   const access = useMyAccess();
   const canConfig = hasPermission(access, "configuracoes");
+  const canSeeTimePermissoes = canConfig || hasPermission(access, "membros");
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -217,108 +257,118 @@ export function ConfiguracoesSection() {
     applyPresenceStatus(next);
   };
 
+  const locked = new Set<TabKey>();
+  if (!canConfig) for (const k of RESTRICTED_TABS) locked.add(k);
+  if (!access?.isAdmin) for (const k of ADMIN_TABS) locked.add(k);
+  if (!canSeeTimePermissoes) locked.add("time_permissoes");
+
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6">
+    <div className="mx-auto w-full max-w-5xl">
       <SectionHeader title="Configurações" subtitle="Preferências do workspace." />
 
-      <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border pb-3">
-        <TabGroup
-          label="Minha conta"
-          tab={tab}
-          setTab={setTab}
-          tabs={[
-            { k: "perfil", label: "Meu Perfil", icon: User },
-            { k: "preferencias", label: "Preferências", icon: Bell },
-          ]}
-        />
-        <TabGroup
-          label="Workspace"
-          tab={tab}
-          setTab={setTab}
-          locked={canConfig ? [] : RESTRICTED_TABS}
-          tabs={[
-            { k: "workspace", label: "Identidade", icon: Building2 },
-            { k: "senhas", label: "Senhas", icon: KeyRound },
-            { k: "integracoes", label: "Integrações", icon: Webhook },
-            { k: "precificacao", label: "Precificação", icon: DollarSign },
-          ]}
-        />
-        <TabGroup
-          label="Administração"
-          tab={tab}
-          setTab={setTab}
-          locked={access?.isAdmin ? [] : ADMIN_TABS}
-          tabs={[
-            { k: "senhas_esquecidas", label: "Senhas esquecidas", icon: KeyRound },
-            { k: "bugs_reportados", label: "Bugs reportados", icon: Bug },
-            { k: "score_operacional", label: "Score Operacional", icon: Sliders },
-          ]}
-        />
+      <div className="mt-6 flex flex-col gap-8 sm:flex-row">
+        <SettingsNav tab={tab} setTab={setTab} locked={locked} />
+
+        <div className="min-w-0 flex-1 space-y-6">
+          {tab === "perfil" && <PerfilTab perfil={perfil} setPerfil={setPerfil} />}
+          {tab === "workspace" && (canConfig ? <WorkspaceTab /> : <LockedSection title="Geral" />)}
+          {tab === "preferencias" && <PreferenciasTab />}
+          {tab === "integracoes" && <IntegracoesTab />}
+          {tab === "precificacao" &&
+            (canConfig ? <PrecificacaoTab /> : <LockedSection title="Custos e precificação" />)}
+          {tab === "time_permissoes" &&
+            (canSeeTimePermissoes ? (
+              <TimePermissoesTab />
+            ) : (
+              <LockedSection title="Time e permissões" />
+            ))}
+          {tab === "seguranca" &&
+            (canConfig ? (
+              <SegurancaTab isAdmin={!!access?.isAdmin} />
+            ) : (
+              <LockedSection title="Segurança" />
+            ))}
+          {tab === "dados_backup" &&
+            (access?.isAdmin ? <DadosTab /> : <LockedSection title="Dados e backup" />)}
+          {tab === "score_operacional" &&
+            (access?.isAdmin ? (
+              <ScoreOperacionalTab />
+            ) : (
+              <LockedSection title="Configuração do Score Operacional" />
+            ))}
+
+          <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
+        </div>
       </div>
-
-      {tab === "perfil" && <PerfilTab perfil={perfil} setPerfil={setPerfil} />}
-      {tab === "workspace" &&
-        (canConfig ? <WorkspaceTab /> : <LockedSection title="Identidade do workspace" />)}
-      {tab === "senhas" && (canConfig ? <SenhasTab /> : <LockedSection title="Senhas" />)}
-      {tab === "preferencias" && <PreferenciasTab />}
-      {tab === "integracoes" && <IntegracoesTab />}
-      {tab === "precificacao" &&
-        (canConfig ? <PrecificacaoTab /> : <LockedSection title="Precificação" />)}
-      {tab === "senhas_esquecidas" &&
-        (access?.isAdmin ? <SenhasEsquecidasTab /> : <LockedSection title="Senhas esquecidas" />)}
-      {tab === "bugs_reportados" &&
-        (access?.isAdmin ? <BugsReportadosTab /> : <LockedSection title="Bugs reportados" />)}
-      {tab === "score_operacional" &&
-        (access?.isAdmin ? (
-          <ScoreOperacionalTab />
-        ) : (
-          <LockedSection title="Configuração do Score Operacional" />
-        ))}
-
-      <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
     </div>
   );
 }
 
-function TabGroup({
-  label,
-  tabs,
+function SettingsNav({
   tab,
   setTab,
-  locked = [],
+  locked,
 }: {
-  label: string;
-  tabs: { k: TabKey; label: string; icon: typeof User }[];
   tab: TabKey;
   setTab: (k: TabKey) => void;
-  locked?: TabKey[];
+  locked: Set<TabKey>;
 }) {
   return (
-    <div>
-      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <div className="flex gap-1">
-        {tabs.map(({ k, label: tabLabel, icon: Icon }) => {
-          const isLocked = locked.includes(k);
-          return (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              title={isLocked ? "Sem permissão — apenas visualização bloqueada" : undefined}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
-                isLocked
-                  ? "text-muted-foreground/40 hover:bg-muted/40"
-                  : tab === k
-                    ? "pill-nav-item pill-nav-item-active font-medium"
-                    : "pill-nav-item text-muted-foreground"
-              }`}
-            >
-              {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
-              {tabLabel}
-            </button>
-          );
-        })}
+    <nav className="w-full shrink-0 space-y-5 sm:w-52">
+      {SETTINGS_GROUPS.map((group) => (
+        <div key={group.label}>
+          <p className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {group.label}
+          </p>
+          <div className="flex flex-row gap-1 overflow-x-auto sm:flex-col sm:overflow-visible">
+            {group.tabs.map(({ k, label: tabLabel, icon: Icon }) => {
+              const isLocked = locked.has(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTab(k)}
+                  title={isLocked ? "Sem permissão — apenas visualização bloqueada" : undefined}
+                  className={`flex w-full shrink-0 items-center gap-2 rounded-full px-2.5 py-1.5 text-left text-sm transition-colors sm:shrink ${
+                    isLocked
+                      ? "text-muted-foreground/40 hover:bg-muted/40"
+                      : tab === k
+                        ? "pill-nav-item pill-nav-item-active font-medium"
+                        : "pill-nav-item text-muted-foreground"
+                  }`}
+                >
+                  {isLocked ? <Lock className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                  {tabLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+/** "Senhas" (cofre) + "Senhas esquecidas" (pedidos de reset) como 2 blocos
+ * dentro de uma única aba "Segurança" (item 8 do pedido) — o cofre exige só
+ * "configuracoes"/canConfig (já checado por quem chama este componente),
+ * mas "Senhas esquecidas" é mais sensível (aparece o e-mail de quem pediu) e
+ * continua exigindo admin de verdade, então só esse segundo bloco tem gate
+ * próprio. */
+function SegurancaTab({ isAdmin }: { isAdmin: boolean }) {
+  return (
+    <div className="space-y-6">
+      <SenhasTab />
+      <div>
+        {isAdmin ? (
+          <SenhasEsquecidasTab />
+        ) : (
+          <div className="max-w-lg rounded-lg border border-dashed border-border bg-background p-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              Apenas administradores podem ver pedidos de "esqueci minha senha".
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -417,8 +467,12 @@ function SenhasEsquecidasTab() {
   );
 }
 
-/** Movido de `TeamAdminSection.tsx` — mesmo motivo de `SenhasEsquecidasTab`. */
-function BugsReportadosTab() {
+/** Movido de `TeamAdminSection.tsx` — mesmo motivo de `SenhasEsquecidasTab`.
+ * NÃO faz parte da navegação de Configurações (item 10 do pedido: área
+ * exclusiva de admin/superadmin, fora das configurações normais) —
+ * exportado pra `AppShell.tsx` renderizar num botão próprio no rodapé,
+ * visível só pra admin. */
+export function BugsReportadosTab() {
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -538,10 +592,9 @@ function BugsReportadosTab() {
 const NUM_FIELD_CLS =
   "h-8 w-20 rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring";
 
-/** Configuração dos pesos do Score Operacional e das regras de XP —
- * tudo aqui é configurável por Admin, EXCETO o corte de 19h (fixo/
- * global, hardcoded em `performance-engine.ts`, de propósito fora deste
- * painel). Singleton `performance_settings`, 1 linha só. Movido de
+/** Configuração dos pesos do Score Operacional, das regras de XP e do
+ * horário limite do expediente (deadline efetivo) — tudo aqui é
+ * configurável por Admin. Singleton `performance_settings`, 1 linha só. Movido de
  * `TeamAdminSection.tsx`; renomeado de "Score e XP" pra "Configuração
  * do Score Operacional" — o XP não tem mais uma tela de ranking própria
  * na página Time, mas os campos continuam gravando `xpDelta` no ledger
@@ -707,10 +760,30 @@ function ScoreOperacionalTab() {
           </div>
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
-          O corte de 19h pra vencimento de tarefa é fixo pra toda a plataforma e não é configurável
-          aqui.
-        </p>
+        <div>
+          <p className="mb-2 text-xs font-medium text-foreground">Regras de prazo</p>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            Horário limite do expediente
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={draft.deadlineCutoffHour}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  deadlineCutoffHour: Math.min(23, Math.max(0, Number(e.target.value))),
+                }))
+              }
+              className={NUM_FIELD_CLS}
+            />
+            h
+          </label>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Uma tarefa com prazo hoje só vira "atrasada" depois desse horário — antes disso, ainda
+            conta como dentro do prazo mesmo que o dia já tenha virado.
+          </p>
+        </div>
 
         <div className="flex items-center gap-2">
           <button
@@ -806,10 +879,6 @@ function PreferenciasTab() {
             </label>
           ))}
         </div>
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <DadosTab />
       </div>
     </div>
   );
@@ -918,6 +987,12 @@ function PushNotificationsCard() {
   );
 }
 
+/** Só admin — checado por quem chama este componente
+ * (`ConfiguracoesSection`, gate `access?.isAdmin`), já que o arquivo
+ * gerado contém todo o localStorage sincronizado do workspace (senhas
+ * criptografadas incluídas). Toda exportação fica registrada em
+ * `settings_audit_log` (quem exportou e quando), pra manter rastro de um
+ * dado sensível saindo do navegador. */
 function DadosTab() {
   const [exporting, setExporting] = useState(false);
 
@@ -941,6 +1016,7 @@ function DadosTab() {
       a.download = `vnh-dados-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      logSettingsAudit({ category: "export", action: "Exportou dados do workspace (.json)" });
     } finally {
       setExporting(false);
     }
@@ -948,12 +1024,17 @@ function DadosTab() {
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-background p-4">
+      <div className="flex items-center gap-2">
+        <Download className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold">Dados e backup</h3>
+      </div>
       <div>
-        <h3 className="text-sm font-semibold">Exportação de dados</h3>
+        <p className="mb-1.5 text-xs font-medium text-foreground">O que será exportado</p>
         <p className="text-xs text-muted-foreground">
-          Baixa um arquivo JSON com os dados deste workspace armazenados neste navegador (clientes,
-          projetos, comercial, financeiro, senhas criptografadas, etc.) — útil como backup manual,
-          já que parte da plataforma depende de localStorage sincronizado.
+          Um arquivo JSON com os dados deste workspace armazenados neste navegador: clientes,
+          projetos, comercial, financeiro, senhas (criptografadas), entre outros — útil como backup
+          manual, já que parte da plataforma depende de localStorage sincronizado. Só
+          administradores podem exportar, e cada exportação fica registrada.
         </p>
       </div>
       <button
@@ -1164,6 +1245,13 @@ function GoogleCalendarCard() {
       icon={<GoogleCalendarIcon className="h-5 w-5" />}
       title="Google Agenda"
       description="Conecte sua conta pra ver suas reuniões da plataforma direto no Google Agenda (sincronização de mão única, a cada poucos minutos)."
+      status={
+        status.state === "connected"
+          ? "connected"
+          : status.state === "disconnected"
+            ? "disconnected"
+            : undefined
+      }
     >
       {callbackNotice === "error" && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -1261,6 +1349,13 @@ function SharedGoogleCalendarCard() {
       icon={<GoogleCalendarIcon className="h-5 w-5" />}
       title="Conta compartilhada"
       description="Ao conectar, faça login com a conta contato@vocenohype.com.br na tela do Google — é ela que passa a organizar todas as reuniões, com Meet Pro e convite de verdade pra convidados externos."
+      status={
+        status.state === "connected"
+          ? "connected"
+          : status.state === "disconnected"
+            ? "disconnected"
+            : undefined
+      }
     >
       {callbackNotice === "error" && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -1298,25 +1393,49 @@ function SharedGoogleCalendarCard() {
   );
 }
 
+const INTEGRATION_STATUS_META: Record<
+  "connected" | "disconnected" | "error",
+  { dot: string; label: string }
+> = {
+  connected: { dot: "bg-emerald-500", label: "Conectado" },
+  disconnected: { dot: "bg-muted-foreground/40", label: "Não conectado" },
+  error: { dot: "bg-destructive", label: "Erro" },
+};
+
+/** Indicador visual de status (item 4 do pedido: ●Conectado/○Não
+ * conectado/⚠Erro) — só passado por integrações com um estado real de
+ * conexão (Google Agenda); webhooks (config, não "conectado/desconectado")
+ * não usam este prop. */
 function IntegrationCard({
   icon,
   title,
   description,
+  status,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  status?: "connected" | "disconnected" | "error";
   children: React.ReactNode;
 }) {
+  const statusMeta = status ? INTEGRATION_STATUS_META[status] : null;
   return (
     <div className="space-y-4 rounded-lg border border-border bg-background p-5">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
           {icon}
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            {statusMeta && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
+                {statusMeta.label}
+              </span>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
@@ -1656,7 +1775,7 @@ function WorkspaceTab() {
   return (
     <form onSubmit={save} className="space-y-5 rounded-lg border border-border bg-background p-5">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">Identidade do workspace</h3>
+        <h3 className="text-sm font-semibold text-foreground">Geral</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Aparece no menu lateral e nas telas compartilhadas com o time.
         </p>
@@ -1731,14 +1850,54 @@ function WorkspaceTab() {
  * por Tier×Formato usados pelo Simulador de Proposta (Comercial) — mesmos
  * parâmetros da planilha "Calculadora custos op" do Caio, trazidos pra
  * plataforma. Mesmo padrão de carregar/salvar de `WorkspaceTab`. */
+const PCT_FIELD_LABEL: Record<keyof PricingSettings["percentuais"], string> = {
+  imposto: "Imposto",
+  comissao: "Comissão de vendas",
+  bonificacao: "Bonificação",
+  margem: "Margem de lucro",
+};
+
+/** Resumo textual do que mudou entre duas versões de `PricingSettings`,
+ * pra gravar em `settings_audit_log.detail` (item 5 do pedido: histórico
+ * com valor anterior/novo). Só percentuais entram na descrição — a
+ * matriz de custo tem 72 células, então mudanças ali viram só uma
+ * contagem, não uma linha por célula. */
+function diffPricing(before: PricingSettings, after: PricingSettings): string | null {
+  const parts: string[] = [];
+  for (const key of Object.keys(PCT_FIELD_LABEL) as (keyof PricingSettings["percentuais"])[]) {
+    const from = before.percentuais[key];
+    const to = after.percentuais[key];
+    if (from !== to) {
+      parts.push(
+        `${PCT_FIELD_LABEL[key]}: ${(from * 100).toFixed(1)}% → ${(to * 100).toFixed(1)}%`,
+      );
+    }
+  }
+  let custosChanged = 0;
+  for (const t of TIERS) {
+    for (const f of FORMATOS) {
+      if ((before.custos[t.id]?.[f.id] ?? null) !== (after.custos[t.id]?.[f.id] ?? null)) {
+        custosChanged++;
+      }
+    }
+  }
+  if (custosChanged > 0) parts.push(`${custosChanged} custo(s) por tier/formato`);
+  return parts.length ? parts.join("; ") : null;
+}
+
 function PrecificacaoTab() {
   const [settings, setSettings] = useState<PricingSettings>(() => loadPricing());
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const baselineRef = useRef<PricingSettings | null>(null);
 
   useEffect(() => {
-    void fetchPricing().then(setSettings);
+    void fetchPricing().then((w) => {
+      setSettings(w);
+      baselineRef.current = w;
+    });
   }, []);
 
   const setPct = (key: keyof PricingSettings["percentuais"], percentValue: string) => {
@@ -1777,12 +1936,32 @@ function PrecificacaoTab() {
       setErr(res.error);
       return;
     }
+    const detail = baselineRef.current ? diffPricing(baselineRef.current, settings) : null;
+    if (detail) logSettingsAudit({ category: "pricing", action: "Atualizou precificação", detail });
+    baselineRef.current = settings;
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   return (
     <form onSubmit={save} className="space-y-5">
+      {historyOpen && <PricingHistoryDialog onClose={() => setHistoryOpen(false)} />}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Custos e precificação</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Parâmetros usados pelo Simulador de Proposta (Comercial).
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+        >
+          <History className="h-3.5 w-3.5" />
+          Ver histórico
+        </button>
+      </div>
       <div className="space-y-4 rounded-lg border border-border bg-background p-5">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Percentuais da agência</h3>
@@ -1889,75 +2068,65 @@ function PrecificacaoTab() {
   );
 }
 
-function ProfileHeader({
-  perfil,
-  status,
-  onChangeStatus,
-}: {
-  perfil: Perfil;
-  status: UserStatus;
-  onChangeStatus: (s: UserStatus) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const initials =
-    (perfil.nome || "")
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]?.toUpperCase())
-      .join("") || "?";
-  const meta = STATUS_META[status.status];
-  const ausenteInfo =
-    status.status === "ausente" && status.ausenteAte
-      ? `até ${new Date(status.ausenteAte).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`
-      : null;
+type PricingAuditRow = {
+  id: string;
+  action: string;
+  detail: string | null;
+  actor_name: string;
+  created_at: string;
+};
+
+/** Histórico de alterações de precificação (item 5 do pedido) — lê
+ * `settings_audit_log` filtrado por `category = 'pricing'`, já gravado por
+ * `PrecificacaoTab.save()` a cada mudança de percentual/custo. */
+function PricingHistoryDialog({ onClose }: { onClose: () => void }) {
+  const [rows, setRows] = useState<PricingAuditRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void supabase
+      .from("settings_audit_log")
+      .select("id, action, detail, actor_name, created_at")
+      .eq("category", "pricing")
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (err) setError(err.message);
+        else setRows((data ?? []) as PricingAuditRow[]);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-border bg-background p-4">
-      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
-        {perfil.foto ? (
-          <img src={perfil.foto} alt="Foto de perfil" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
-            {initials}
-          </div>
-        )}
-        <span
-          className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-background ${meta.dot}`}
-          aria-label={meta.label}
-        />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{perfil.nome || "Sem nome"}</p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <span className={`inline-block h-2 w-2 rounded-full ${meta.dot}`} />
-          <span>{meta.label}</span>
-          {ausenteInfo && <span>• {ausenteInfo}</span>}
-          {status.status === "ausente" && status.ausenteMotivo && (
-            <span className="truncate">• {status.ausenteMotivo}</span>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Histórico de alterações — Precificação</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[420px] space-y-2 overflow-y-auto">
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
+          {!loading && rows.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhuma alteração registrada ainda.</p>
           )}
+          {rows.map((r) => (
+            <div key={r.id} className="rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{r.actor_name}</span>
+                <span>{new Date(r.created_at).toLocaleString("pt-BR")}</span>
+              </div>
+              {r.detail && <p className="mt-1 text-xs text-foreground">{r.detail}</p>}
+            </div>
+          ))}
         </div>
-      </div>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-        >
-          Alterar status
-        </button>
-        {open && (
-          <StatusPopover
-            status={status}
-            onClose={() => setOpen(false)}
-            onSave={(s) => {
-              onChangeStatus(s);
-              setOpen(false);
-            }}
-          />
-        )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

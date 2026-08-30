@@ -58,11 +58,12 @@ export function bucketFor(
   dueISO: string | undefined,
   status: ProjTask["status"],
   performanceDueDateISO?: string,
+  cutoffHour?: number,
 ): DashTask["bucket"] {
   if (status === "Concluído" || status === "Aprovado" || status === "Arquivado") return "outro";
   const ref = performanceDueDateISO ?? dueISO;
   if (!ref) return "outro";
-  if (new Date().getTime() > deadlineCutoff(ref).getTime()) return "atrasada";
+  if (new Date().getTime() > deadlineCutoff(ref, cutoffHour).getTime()) return "atrasada";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(ref + "T00:00:00");
@@ -77,13 +78,14 @@ export function formatDue(
   dueISO: string | undefined,
   bucket: DashTask["bucket"],
   performanceDueDateISO?: string,
+  cutoffHour?: number,
 ): string {
   const ref = performanceDueDateISO ?? dueISO;
   if (!ref) return "";
   if (bucket === "hoje") return "Hoje";
   if (bucket === "amanha") return "Amanhã";
   if (bucket === "atrasada") {
-    const diffMs = new Date().getTime() - deadlineCutoff(ref).getTime();
+    const diffMs = new Date().getTime() - deadlineCutoff(ref, cutoffHour).getTime();
     const d = Math.max(1, Math.ceil(diffMs / 86400000));
     return `Atrasada ${d}d`;
   }
@@ -144,7 +146,10 @@ function collectAssignedTasks<T extends CampanhaTaskLike>(
  * responsável ganha a entrada cheia, não dividida). `campanhaNames` mapeia
  * campanhaId → nome, pra dar título nas tarefas de campanha do mesmo jeito
  * que as de projeto já têm `p.name`. */
-export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<string, DashTask[]> {
+export function loadTasksByAssignee(
+  campanhaNames: Map<string, string>,
+  cutoffHour?: number,
+): Map<string, DashTask[]> {
   const byName = new Map<string, DashTask[]>();
   const addFor = (name: string, task: DashTask) => {
     const arr = byName.get(name);
@@ -158,14 +163,14 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
     if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
-        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
         addFor(assignee, {
           id: t.id,
           projectId: p.id,
           projectName: p.name,
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b, t.performanceDueDate),
+          due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -178,14 +183,14 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
     for (const root of tasks as unknown as CampanhaTaskLike[]) {
       collectAssignedTasks([root], undefined, (t, parentTitle, assignee) => {
-        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
         addFor(assignee, {
           id: t.id,
           projectId: "",
           projectName: campanhaNames.get(campanhaId) ?? "Campanha",
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b, t.performanceDueDate),
+          due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -206,14 +211,19 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
       for (const assignee of getTaskAssignees(s)) {
-        const b = bucketFor(s.dueDate, s.status as ProjTask["status"], s.performanceDueDate);
+        const b = bucketFor(
+          s.dueDate,
+          s.status as ProjTask["status"],
+          s.performanceDueDate,
+          cutoffHour,
+        );
         addFor(assignee, {
           id: `mkt:${s.id}`,
           projectId: marketingProjectId,
           projectName: "Marketing",
           title: s.title,
           bucket: b,
-          due: formatDue(s.dueDate, b, s.performanceDueDate),
+          due: formatDue(s.dueDate, b, s.performanceDueDate, cutoffHour),
           status: s.status as ProjTask["status"],
         });
       }
@@ -227,8 +237,12 @@ export function loadTasksByAssignee(campanhaNames: Map<string, string>): Map<str
  * Wrapper fino sobre `loadTasksByAssignee` (mesma passada por baixo dos
  * panos), pra quem só precisa de uma pessoa não ter que montar o mapa
  * inteiro à toa. */
-export function loadAllTasks(campanhaNames: Map<string, string>, personName: string): DashTask[] {
-  return loadTasksByAssignee(campanhaNames).get(personName) ?? [];
+export function loadAllTasks(
+  campanhaNames: Map<string, string>,
+  personName: string,
+  cutoffHour?: number,
+): DashTask[] {
+  return loadTasksByAssignee(campanhaNames, cutoffHour).get(personName) ?? [];
 }
 
 export type DashTaskFlat = DashTask & { assignees: string[] };
@@ -258,7 +272,10 @@ function collectAllTasks<T extends CampanhaTaskLike>(
  * status"), que precisa mostrar cada tarefa uma única vez com todos os
  * avatares dos responsáveis — ao contrário de `loadTasksByAssignee`
  * (pensado pra "tarefas de UMA pessoa", então espalha por nome). */
-export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFlat[] {
+export function loadAllTasksFlat(
+  campanhaNames: Map<string, string>,
+  cutoffHour?: number,
+): DashTaskFlat[] {
   const out: DashTaskFlat[] = [];
 
   const projs = loadProjetos();
@@ -267,14 +284,14 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
     if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
     for (const root of p.tasks ?? []) {
       collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
-        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
         out.push({
           id: t.id,
           projectId: p.id,
           projectName: p.name,
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b, t.performanceDueDate),
+          due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -288,14 +305,14 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
   for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
     for (const root of tasks as unknown as CampanhaTaskLike[]) {
       collectAllTasks([root], undefined, (t, parentTitle, assignees) => {
-        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate);
+        const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
         out.push({
           id: t.id,
           projectId: "",
           projectName: campanhaNames.get(campanhaId) ?? "Campanha",
           title: t.title,
           bucket: b,
-          due: formatDue(t.dueDate, b, t.performanceDueDate),
+          due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -309,14 +326,19 @@ export function loadAllTasksFlat(campanhaNames: Map<string, string>): DashTaskFl
 
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
-      const b = bucketFor(s.dueDate, s.status as ProjTask["status"], s.performanceDueDate);
+      const b = bucketFor(
+        s.dueDate,
+        s.status as ProjTask["status"],
+        s.performanceDueDate,
+        cutoffHour,
+      );
       out.push({
         id: `mkt:${s.id}`,
         projectId: marketingProjectId,
         projectName: "Marketing",
         title: s.title,
         bucket: b,
-        due: formatDue(s.dueDate, b, s.performanceDueDate),
+        due: formatDue(s.dueDate, b, s.performanceDueDate, cutoffHour),
         status: s.status as ProjTask["status"],
         assignees: getTaskAssignees(s),
       });
