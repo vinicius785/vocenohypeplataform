@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Repeat, X } from "lucide-react";
 import type { Matcher } from "react-day-picker";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -10,6 +10,13 @@ import { cn, formatDateToIso, formatIsoDate, parseIsoDateLocal } from "@/lib/uti
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  type TaskRecurrence,
+  type TaskRecurrenceUnit,
+  RECURRENCE_UNIT_LABEL,
+  WEEKDAY_SHORT_LABELS,
+  describeRecurrence,
+} from "@/lib/task-recurrence";
 
 /** react-day-picker usa locale en-US por padrão (nomes de mês/dia em
  * inglês) se nenhum `locale` for passado — força pt-BR, e capitaliza a
@@ -59,6 +66,102 @@ function quickOptionHint(date: Date, today: Date): string {
   return format(date, "d MMM", { locale: ptBR });
 }
 
+const RECURRENCE_UNIT_OPTIONS: TaskRecurrenceUnit[] = ["dias", "semanas", "meses"];
+
+/** Formulário de recorrência — substitui o conteúdo do popover inteiro
+ * enquanto ativo (em vez de abrir um diálogo à parte), no mesmo espírito
+ * do seletor do ClickUp ("Configurar recorrência" dentro do próprio
+ * calendário). Só grava de verdade quando o consumidor confirma
+ * (`onSave`) — nunca no meio da edição. */
+function RecurrenceForm({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial?: TaskRecurrence;
+  onCancel: () => void;
+  onSave: (r: TaskRecurrence) => void;
+}) {
+  const [intervalValue, setIntervalValue] = React.useState(initial?.interval ?? 1);
+  const [unit, setUnit] = React.useState<TaskRecurrenceUnit>(initial?.unit ?? "semanas");
+  const [weekdays, setWeekdays] = React.useState<number[]>(initial?.weekdays ?? []);
+
+  const toggleWeekday = (d: number) =>
+    setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+
+  const confirm = () => {
+    onSave({
+      interval: Math.max(1, Math.floor(intervalValue) || 1),
+      unit,
+      weekdays: unit === "semanas" && weekdays.length > 0 ? weekdays : undefined,
+    });
+  };
+
+  return (
+    <div className="w-72 p-3">
+      <p className="text-xs font-semibold text-foreground">Recorrência</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Ao concluir, a tarefa volta sozinha pra "Aberto" com um novo prazo — nunca cria uma cópia.
+      </p>
+
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">A cada</span>
+        <input
+          type="number"
+          min={1}
+          value={intervalValue}
+          onChange={(e) => setIntervalValue(Number(e.target.value))}
+          className="h-8 w-16 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+        />
+        <select
+          value={unit}
+          onChange={(e) => setUnit(e.target.value as TaskRecurrenceUnit)}
+          className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+        >
+          {RECURRENCE_UNIT_OPTIONS.map((u) => (
+            <option key={u} value={u}>
+              {RECURRENCE_UNIT_LABEL[u].plural}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {unit === "semanas" && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[11px] text-muted-foreground">
+            Em dias específicos (opcional — sem isso, repete no mesmo dia da conclusão)
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {WEEKDAY_SHORT_LABELS.map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => toggleWeekday(i)}
+                className={`h-7 w-9 rounded-md text-[11px] font-medium capitalize transition-colors ${
+                  weekdays.includes(i)
+                    ? "bg-foreground text-background"
+                    : "border border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3">
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="button" size="sm" className="h-7 text-xs" onClick={confirm}>
+          Salvar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export type DateFieldProps = {
   value?: string;
   onChange: (value: string | undefined) => void;
@@ -75,6 +178,13 @@ export type DateFieldProps = {
   variant?: "input" | "inline";
   ariaLabel?: string;
   className?: string;
+  /** Presença de `onRecurrenceChange` liga a seção de recorrência dentro
+   * do popover (item "Configurar recorrência", igual ao ClickUp) — sem
+   * ele, o `DateField` fica exatamente como em qualquer outro lugar do
+   * app (Reuniões, Financeiro, Metas etc.), sem nenhuma UI extra. Hoje só
+   * o campo "Entrega" de tarefas (`TaskBoard.tsx`) passa isso. */
+  recurrence?: TaskRecurrence;
+  onRecurrenceChange?: (r: TaskRecurrence | undefined) => void;
 };
 
 /**
@@ -95,8 +205,11 @@ export function DateField({
   variant = "input",
   ariaLabel,
   className,
+  recurrence,
+  onRecurrenceChange,
 }: DateFieldProps) {
   const [open, setOpen] = React.useState(false);
+  const [showRecurrenceForm, setShowRecurrenceForm] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   const selected = value ? parseIsoDateLocal(value) : undefined;
@@ -128,7 +241,13 @@ export function DateField({
   const quickOptions = buildQuickOptions(today).filter((o) => isAllowed(o.date));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setShowRecurrenceForm(false);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           ref={triggerRef}
@@ -146,49 +265,96 @@ export function DateField({
           {variant === "input" && (
             <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
+          {recurrence && <Repeat className="h-3 w-3 shrink-0" />}
           <span className="truncate">{value ? formatIsoDate(value) : placeholder}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
-        <div className="flex max-w-full">
-          <div className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-1.5">
-            {quickOptions.map((o) => (
+        {showRecurrenceForm && onRecurrenceChange ? (
+          <RecurrenceForm
+            initial={recurrence}
+            onCancel={() => setShowRecurrenceForm(false)}
+            onSave={(r) => {
+              onRecurrenceChange(r);
+              setShowRecurrenceForm(false);
+            }}
+          />
+        ) : (
+          <div className="flex max-w-full">
+            <div className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-1.5">
+              {quickOptions.map((o) => (
+                <Button
+                  key={o.label}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 justify-between px-2 text-xs font-normal"
+                  onClick={() => pick(o.date)}
+                >
+                  <span>{o.label}</span>
+                  <span className="text-muted-foreground">{quickOptionHint(o.date, today)}</span>
+                </Button>
+              ))}
               <Button
-                key={o.label}
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-7 justify-between px-2 text-xs font-normal"
-                onClick={() => pick(o.date)}
+                className="mt-1 h-7 justify-start px-2 text-xs font-normal text-muted-foreground"
+                onClick={() => pick(undefined)}
               >
-                <span>{o.label}</span>
-                <span className="text-muted-foreground">{quickOptionHint(o.date, today)}</span>
+                Limpar
               </Button>
-            ))}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-1 h-7 justify-start px-2 text-xs font-normal text-muted-foreground"
-              onClick={() => pick(undefined)}
-            >
-              Limpar
-            </Button>
+              {onRecurrenceChange && (
+                <div className="mt-1 border-t border-border pt-1">
+                  {recurrence ? (
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowRecurrenceForm(true)}
+                        className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-xs font-normal text-foreground hover:bg-muted"
+                      >
+                        <Repeat className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{describeRecurrence(recurrence)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRecurrenceChange(undefined)}
+                        aria-label="Remover recorrência"
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-muted-foreground"
+                      onClick={() => setShowRecurrenceForm(true)}
+                    >
+                      <Repeat className="h-3 w-3" />
+                      Configurar recorrência
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            <Calendar
+              mode="single"
+              selected={selected}
+              onSelect={pick}
+              defaultMonth={selected}
+              locale={ptBR}
+              formatters={{ formatCaption }}
+              disabled={disabledMatchers.length > 0 ? disabledMatchers : undefined}
+              modifiers={
+                hasRange ? { inRange: { after: rangeStartDate, before: rangeEndDate } } : undefined
+              }
+              modifiersClassNames={hasRange ? { inRange: "bg-accent/50 rounded-none" } : undefined}
+            />
           </div>
-          <Calendar
-            mode="single"
-            selected={selected}
-            onSelect={pick}
-            defaultMonth={selected}
-            locale={ptBR}
-            formatters={{ formatCaption }}
-            disabled={disabledMatchers.length > 0 ? disabledMatchers : undefined}
-            modifiers={
-              hasRange ? { inRange: { after: rangeStartDate, before: rangeEndDate } } : undefined
-            }
-            modifiersClassNames={hasRange ? { inRange: "bg-accent/50 rounded-none" } : undefined}
-          />
-        </div>
+        )}
       </PopoverContent>
     </Popover>
   );
