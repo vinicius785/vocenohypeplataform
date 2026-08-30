@@ -25,7 +25,6 @@ import {
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { DateField } from "@/components/ui/date-field";
-import { formatDateToIso } from "@/lib/utils";
 import { linkifyText } from "@/lib/linkify";
 import {
   isRequested,
@@ -1858,21 +1857,17 @@ export function TaskDialog({
 
               <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
                 <div className="flex w-full flex-wrap items-center gap-2">
-                  {startDate !== "" && (
-                    <>
-                      <DateField
-                        variant="inline"
-                        value={startDate || undefined}
-                        onChange={(v) => setStartDate(v ?? "")}
-                        max={dueDate || undefined}
-                        rangeStart={startDate || undefined}
-                        rangeEnd={dueDate || undefined}
-                        ariaLabel="Início"
-                        placeholder="Início"
-                      />
-                      <span className="text-xs text-muted-foreground">→</span>
-                    </>
-                  )}
+                  <DateField
+                    variant="inline"
+                    value={startDate || undefined}
+                    onChange={(v) => setStartDate(v ?? "")}
+                    max={dueDate || undefined}
+                    rangeStart={startDate || undefined}
+                    rangeEnd={dueDate || undefined}
+                    ariaLabel="Início"
+                    placeholder="Início"
+                  />
+                  <span className="text-xs text-muted-foreground">→</span>
                   <DateField
                     variant="inline"
                     value={dueDate || undefined}
@@ -1886,15 +1881,6 @@ export function TaskDialog({
                   {initial && (dueDate || initial.performanceDueDate) && (
                     <DeadlineHealthBadge task={initial} />
                   )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setStartDate(startDate === "" ? dueDate || formatDateToIso(new Date()) : "")
-                    }
-                    className="ml-auto text-[11px] text-muted-foreground hover:text-foreground"
-                  >
-                    {startDate === "" ? "+ adicionar início" : "só entrega"}
-                  </button>
                 </div>
               </Field>
 

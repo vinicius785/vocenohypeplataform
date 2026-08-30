@@ -20,6 +20,45 @@ function formatCaption(date: Date): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/** Próxima ocorrência (estritamente no futuro, nunca hoje) do dia da
+ * semana `targetDow` (0=domingo...6=sábado) a partir de `from`. */
+function nextWeekday(from: Date, targetDow: number): Date {
+  const add = (targetDow - from.getDay() + 7) % 7 || 7;
+  return addDays(from, add);
+}
+
+/** Atalhos de data no mesmo espírito do seletor do ClickUp — Hoje/Amanhã
+ * pro imediato, "Semana que vem"/"Próximo fim de semana" pros próximos
+ * marcos naturais, e 2/4/8 semanas pra prazos de médio prazo. Cada um só
+ * aparece se a data resultante estiver dentro de `min`/`max` (quando
+ * informados). */
+function buildQuickOptions(today: Date): { label: string; date: Date }[] {
+  return [
+    { label: "Hoje", date: today },
+    { label: "Amanhã", date: addDays(today, 1) },
+    { label: "Semana que vem", date: nextWeekday(today, 1) },
+    { label: "Próximo fim de semana", date: nextWeekday(today, 6) },
+    { label: "2 semanas", date: addDays(today, 14) },
+    { label: "4 semanas", date: addDays(today, 28) },
+    { label: "8 semanas", date: addDays(today, 56) },
+  ];
+}
+
+/** Legenda curta à direita de cada atalho: dia da semana pros próximos 6
+ * dias (como o ClickUp mostra "dom"/"seg"), data curta ("13 set") pros
+ * atalhos mais distantes — nunca os dois ao mesmo tempo. */
+function quickOptionHint(date: Date, today: Date): string {
+  const diffDays = Math.round((date.getTime() - today.getTime()) / 86400000);
+  if (diffDays <= 6) return format(date, "EEE", { locale: ptBR });
+  return format(date, "d MMM", { locale: ptBR });
+}
+
 export type DateFieldProps = {
   value?: string;
   onChange: (value: string | undefined) => void;
@@ -85,8 +124,8 @@ export function DateField({
   };
 
   const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  today.setHours(0, 0, 0, 0);
+  const quickOptions = buildQuickOptions(today).filter((o) => isAllowed(o.date));
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -111,51 +150,44 @@ export function DateField({
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={pick}
-          defaultMonth={selected}
-          locale={ptBR}
-          formatters={{ formatCaption }}
-          disabled={disabledMatchers.length > 0 ? disabledMatchers : undefined}
-          modifiers={
-            hasRange ? { inRange: { after: rangeStartDate, before: rangeEndDate } } : undefined
-          }
-          modifiersClassNames={hasRange ? { inRange: "bg-accent/50 rounded-none" } : undefined}
-        />
-        <div className="flex items-center gap-1 border-t border-border p-2">
-          {isAllowed(today) && (
+        <div className="flex max-w-full">
+          <div className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-1.5">
+            {quickOptions.map((o) => (
+              <Button
+                key={o.label}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 justify-between px-2 text-xs font-normal"
+                onClick={() => pick(o.date)}
+              >
+                <span>{o.label}</span>
+                <span className="text-muted-foreground">{quickOptionHint(o.date, today)}</span>
+              </Button>
+            ))}
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 flex-1 text-xs"
-              onClick={() => pick(today)}
+              className="mt-1 h-7 justify-start px-2 text-xs font-normal text-muted-foreground"
+              onClick={() => pick(undefined)}
             >
-              Hoje
+              Limpar
             </Button>
-          )}
-          {isAllowed(tomorrow) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 flex-1 text-xs"
-              onClick={() => pick(tomorrow)}
-            >
-              Amanhã
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 flex-1 text-xs text-muted-foreground"
-            onClick={() => pick(undefined)}
-          >
-            Limpar
-          </Button>
+          </div>
+          <Calendar
+            mode="single"
+            selected={selected}
+            onSelect={pick}
+            defaultMonth={selected}
+            locale={ptBR}
+            formatters={{ formatCaption }}
+            disabled={disabledMatchers.length > 0 ? disabledMatchers : undefined}
+            modifiers={
+              hasRange ? { inRange: { after: rangeStartDate, before: rangeEndDate } } : undefined
+            }
+            modifiersClassNames={hasRange ? { inRange: "bg-accent/50 rounded-none" } : undefined}
+          />
         </div>
       </PopoverContent>
     </Popover>
