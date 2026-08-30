@@ -281,7 +281,12 @@ export function DateField({
           />
         ) : (
           <div className="flex max-w-full">
-            <div className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-1.5">
+            <div
+              className={cn(
+                "flex shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border p-1.5",
+                onRecurrenceChange ? "w-48" : "w-36",
+              )}
+            >
               {quickOptions.map((o) => (
                 <Button
                   key={o.label}
@@ -311,7 +316,7 @@ export function DateField({
                       <button
                         type="button"
                         onClick={() => setShowRecurrenceForm(true)}
-                        className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-xs font-normal text-foreground hover:bg-muted"
+                        className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 text-left text-[11px] font-normal text-foreground hover:bg-muted"
                       >
                         <Repeat className="h-3 w-3 shrink-0" />
                         <span className="truncate">{describeRecurrence(recurrence)}</span>
@@ -330,11 +335,11 @@ export function DateField({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-normal text-muted-foreground"
+                      className="h-7 w-full justify-start gap-1.5 px-2 text-[11px] font-normal text-muted-foreground"
                       onClick={() => setShowRecurrenceForm(true)}
                     >
-                      <Repeat className="h-3 w-3" />
-                      Configurar recorrência
+                      <Repeat className="h-3 w-3 shrink-0" />
+                      <span className="truncate">Configurar recorrência</span>
                     </Button>
                   )}
                 </div>

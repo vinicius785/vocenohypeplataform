@@ -1141,18 +1141,6 @@ export function TaskDialog({
   const [assignees, setAssignees] = useState<string[]>([]);
   const [primaryAssignee, setPrimaryAssignee] = useState<string | undefined>();
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
-  const assigneePickerRef = useRef<HTMLDivElement>(null);
-  // Sem isso, o dropdown de responsáveis só fechava clicando de novo no
-  // próprio botão — clicar em qualquer outro campo do formulário (Prazo,
-  // Prioridade etc.) ficava bloqueado por ele, sem fechar nada.
-  useEffect(() => {
-    if (!assigneePickerOpen) return;
-    const onClickOutside = (e: MouseEvent) => {
-      if (!assigneePickerRef.current?.contains(e.target as Node)) setAssigneePickerOpen(false);
-    };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [assigneePickerOpen]);
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -1736,7 +1724,7 @@ export function TaskDialog({
           Formulário de tarefa no estilo ClickUp
         </DialogDescription>
 
-        <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 border-b border-border bg-muted/30 py-2.5 pl-4 pr-12 text-[11px] text-muted-foreground">
           <span>{rootLabel}</span>
           <ChevronRight className="h-3 w-3 opacity-60" />
           <span>Tarefas</span>
@@ -1805,106 +1793,105 @@ export function TaskDialog({
               </Field>
 
               <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
-                <div className="relative w-full" ref={assigneePickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setAssigneePickerOpen((v) => !v)}
-                    className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
-                  >
-                    {assignees.length === 0 ? (
-                      <span className="text-muted-foreground">— Selecionar responsável —</span>
-                    ) : (
-                      (() => {
-                        // Sem `primaryAssignee` explícito, o primeiro
-                        // assignee vira um fallback visual só de exibição
-                        // — nunca usado por scoring/ledger (ver
-                        // `getTaskPrimaryAssignee`).
-                        const primaryName = primaryAssignee ?? assignees[0];
-                        const m = members.find((mm) => mm.name === primaryName);
-                        const othersCount = assignees.length - 1;
-                        return (
-                          <>
-                            <Avatar
-                              member={
-                                m ?? {
-                                  name: primaryName,
-                                  initials: initialsOf(primaryName) || "?",
-                                  color: colorFor(primaryName),
-                                }
-                              }
-                              size={20}
-                            />
-                            <span className="min-w-0 flex-1 truncate">{primaryName}</span>
-                            {othersCount > 0 && (
-                              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                +{othersCount}
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()
-                    )}
-                  </button>
-                  {assigneePickerOpen && (
-                    <div className="absolute z-10 mt-1 max-h-64 w-72 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
-                      {members.length === 0 ? (
-                        <div className="px-2 py-2 text-xs text-muted-foreground">
-                          Nenhum membro cadastrado.
-                        </div>
+                <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+                    >
+                      {assignees.length === 0 ? (
+                        <span className="text-muted-foreground">— Selecionar responsável —</span>
                       ) : (
-                        <>
-                          <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Responsável e colaboradores
-                          </p>
-                          {members.map((m) => {
-                            const checked = assignees.includes(m.name);
-                            const isPrimary = primaryAssignee
-                              ? primaryAssignee === m.name
-                              : checked && assignees[0] === m.name;
-                            return (
-                              <div
-                                key={m.name}
-                                className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
-                                  checked ? "bg-muted/60" : ""
-                                }`}
+                        (() => {
+                          // Sem `primaryAssignee` explícito, o primeiro
+                          // assignee vira um fallback visual só de exibição
+                          // — nunca usado por scoring/ledger (ver
+                          // `getTaskPrimaryAssignee`).
+                          const primaryName = primaryAssignee ?? assignees[0];
+                          const m = members.find((mm) => mm.name === primaryName);
+                          const othersCount = assignees.length - 1;
+                          return (
+                            <>
+                              <Avatar
+                                member={
+                                  m ?? {
+                                    name: primaryName,
+                                    initials: initialsOf(primaryName) || "?",
+                                    color: colorFor(primaryName),
+                                  }
+                                }
+                                size={20}
+                              />
+                              <span className="min-w-0 flex-1 truncate">{primaryName}</span>
+                              {othersCount > 0 && (
+                                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{othersCount}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()
+                      )}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="max-h-64 w-72 overflow-auto p-1">
+                    {members.length === 0 ? (
+                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                        Nenhum membro cadastrado.
+                      </div>
+                    ) : (
+                      <>
+                        <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Responsável e colaboradores
+                        </p>
+                        {members.map((m) => {
+                          const checked = assignees.includes(m.name);
+                          const isPrimary = primaryAssignee
+                            ? primaryAssignee === m.name
+                            : checked && assignees[0] === m.name;
+                          return (
+                            <div
+                              key={m.name}
+                              className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
+                                checked ? "bg-muted/60" : ""
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleAssignee(m.name)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
                               >
+                                <Avatar member={m} size={20} />
+                                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                                {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                              </button>
+                              {checked && (
                                 <button
                                   type="button"
-                                  onClick={() => toggleAssignee(m.name)}
-                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                  title={
+                                    isPrimary
+                                      ? "Responsável principal"
+                                      : "Tornar responsável principal"
+                                  }
+                                  onClick={() => promoteToPrimary(m.name)}
+                                  className={`shrink-0 rounded p-1 hover:bg-background ${
+                                    isPrimary
+                                      ? "text-amber-500"
+                                      : "text-muted-foreground/50 hover:text-amber-500"
+                                  }`}
                                 >
-                                  <Avatar member={m} size={20} />
-                                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                  <Star
+                                    className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
+                                  />
                                 </button>
-                                {checked && (
-                                  <button
-                                    type="button"
-                                    title={
-                                      isPrimary
-                                        ? "Responsável principal"
-                                        : "Tornar responsável principal"
-                                    }
-                                    onClick={() => promoteToPrimary(m.name)}
-                                    className={`shrink-0 rounded p-1 hover:bg-background ${
-                                      isPrimary
-                                        ? "text-amber-500"
-                                        : "text-muted-foreground/50 hover:text-amber-500"
-                                    }`}
-                                  >
-                                    <Star
-                                      className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
-                                    />
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </PopoverContent>
+                </Popover>
               </Field>
 
               <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
