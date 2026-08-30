@@ -1,6 +1,7 @@
 {
-  "version": "1.179.0",
+  "version": "1.180.0",
   "notes": [
+    "Fecha a brecha de segurança de permissões enforced só no cliente: clientes, tarefas de projeto, tarefas avulsas do Marketing e metas ainda podiam ser lidos/escritos por qualquer usuário autenticado via chamada direta ao banco, independente da permissão configurada. Agora todas checam a permissão de verdade no banco (RLS), igual às demais áreas já protegidas (financeiro, comercial, campanhas, reuniões, projetos, influenciadores). Nenhum membro atual perde acesso a nada que já usava — a mudança só fecha o desvio via API direta.",
     "Corrige 3 recortes visuais no modal de tarefa: o \"x\" de fechar não fica mais colado na linha do breadcrumb; o seletor de Responsável/colaboradores (que usava posicionamento manual e podia ser cortado pela borda do modal) agora usa o mesmo popover flutuante do resto do app, sem cortes; e o texto \"Configurar recorrência\" no calendário para de ficar truncado.",
     "Move a configuração de recorrência de tarefa pra dentro do próprio calendário (igual ao ClickUp) — remove o menu \"...\" da tarefa; agora é só clicar no campo Entrega e usar \"Configurar recorrência\" no rodapé do seletor de data. Também passa a funcionar já na criação da tarefa, não só depois de salva.",
     "Adiciona tarefas recorrentes, igual ao ClickUp: agora existe um menu \"...\" no canto superior direito de cada tarefa, com a opção \"Tornar recorrente\" (a cada X dias/semanas/meses, com dias específicos da semana quando fizer sentido). Ao concluir um ciclo, a tarefa nunca some — ela volta sozinha para \"Aberto\" com o próximo prazo, sem criar cópia nenhuma.",

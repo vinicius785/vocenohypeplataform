@@ -86,9 +86,12 @@ export const ALL_PERMISSIONS: Permission[] = [
 ];
 
 /** Mapeia cada seção do menu pra permissão exigida. Seções fora deste mapa
- * (ex: "inicio") sempre ficam liberadas. "clientes" e "campanhas" só têm
- * enforcement no cliente — o dado de campanha vive dentro da linha do
- * cliente no banco, então a RLS de `clientes` não separa as duas hoje. */
+ * (ex: "inicio") sempre ficam liberadas. "clientes" e "campanhas" também
+ * têm enforcement real no banco (RLS via `has_permission`), mas na
+ * MESMA policy pras duas — o dado de campanha vive dentro da linha do
+ * cliente, então a RLS de `clientes` aceita quem tem "clientes" OU
+ * "campanhas", sem conseguir separar "editar cliente" de "editar sua
+ * campanha embutida" mais fino que isso (ver CLAUDE.md). */
 export const SECTION_PERMISSION: Record<string, Permission> = {
   clientes: "clientes",
   campanhas: "campanhas",
