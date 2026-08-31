@@ -9,7 +9,12 @@
  */
 
 import type { KanbanStatus } from "@/lib/projetos";
-import type { TimeEntry, Activity, DeadlineChangeEntry } from "@/components/tasks/TaskBoard";
+import type {
+  TimeEntry,
+  Activity,
+  Comment,
+  DeadlineChangeEntry,
+} from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
 import type { TaskRecurrence } from "@/lib/task-recurrence";
 
@@ -63,6 +68,11 @@ export type MktStandalone = {
    * criou. Persistindo o log de verdade aqui, cada evento fica com o
    * autor certo (`getCurrentAuthor()` no momento real da ação). */
   activity?: Activity[];
+  /** Sem isso, todo comentário postado numa tarefa avulsa do Marketing
+   * era descartado silenciosamente a cada save — o tipo nunca ganhou
+   * este campo quando os outros (activity/completedAt/etc.) foram
+   * adicionados. */
+  comments?: Comment[];
   completedAt?: string;
   originalDueDate?: string;
   performanceDueDate?: string;
@@ -208,6 +218,7 @@ export function createStandalone(input: {
   dueDate?: string;
   note?: string;
   activity?: Activity[];
+  comments?: Comment[];
 }): MktStandalone {
   const item: MktStandalone = {
     id: crypto.randomUUID(),
@@ -219,6 +230,7 @@ export function createStandalone(input: {
     dueDate: input.dueDate,
     note: input.note,
     activity: input.activity,
+    comments: input.comments,
     createdAt: new Date().toISOString(),
   };
   standaloneStore.set((prev) => [...prev, item]);

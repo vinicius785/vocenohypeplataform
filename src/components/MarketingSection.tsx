@@ -86,6 +86,9 @@ function resolveTasks(
       timerStartedAt: s.timerStartedAt,
       timeEntries: s.timeEntries,
       activity: s.activity,
+      // Sem isso, todo comentário postado numa tarefa avulsa do
+      // Marketing era descartado — nunca chegava a ser lido de volta.
+      comments: s.comments,
       // Sem isso, uma tarefa avulsa do Marketing perdia o histórico de
       // prazo/performance ao ser aberta a partir deste board — lacuna
       // pré-existente da rodada anterior, corrigida aqui já que estes
@@ -211,6 +214,7 @@ export function MarketingSection({
           dueDate: t.dueDate,
           note: t.description,
           activity: t.activity,
+          comments: t.comments,
         });
         continue;
       }
@@ -229,9 +233,12 @@ export function MarketingSection({
           timerStartedAt: t.timerStartedAt,
           timeEntries: t.timeEntries,
           activity: t.activity,
-          // Mesma correção da leitura (`resolveTasks` acima) — sem isso o
-          // histórico de prazo/performance era descartado a cada save
-          // feito a partir do board do Marketing.
+          // Mesma correção da leitura (`resolveTasks` acima) — sem isso
+          // todo comentário postado numa tarefa avulsa do Marketing era
+          // descartado a cada save.
+          comments: t.comments,
+          // Sem isso o histórico de prazo/performance era descartado a
+          // cada save feito a partir do board do Marketing.
           completedAt: t.completedAt,
           originalDueDate: t.originalDueDate,
           performanceDueDate: t.performanceDueDate,
