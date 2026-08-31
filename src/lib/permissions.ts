@@ -12,6 +12,11 @@ export type Permission =
   | "influenciadores"
   | "metas"
   | "chat"
+  /** "Cofre de senhas" — exibida no seletor de permissões (grupo "Dados
+   * sensíveis"), mas DECORATIVA: o acesso real ao cofre em Configurações
+   * → Segurança continua gated por "configuracoes"
+   * (`configuracoes:senhas`), não por esta. Existia no tipo sem aparecer
+   * em nenhum grupo; só ficou visível, nada de enforcement novo. */
   | "senhas"
   | "configuracoes"
   | "configuracoes:perfil"
@@ -64,19 +69,27 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     ],
   },
   {
-    label: "Dados sensíveis",
-    items: [{ key: "influenciadores:bancario", label: "Dados bancários de influenciadores" }],
-  },
-  {
-    // Grupo residual — preserva a capacidade de conceder essas 4
-    // permissões granularmente; não fazem parte dos 4 grupos nomeados
-    // no pedido, mas removê-las tiraria funcionalidade já existente.
-    label: "Outros",
+    label: "Gestão",
     items: [
-      { key: "reunioes", label: "Reuniões" },
       { key: "time", label: "Time" },
       { key: "metas", label: "Metas" },
+    ],
+  },
+  {
+    label: "Comunicação",
+    items: [
+      { key: "reunioes", label: "Reuniões" },
       { key: "chat", label: "Chat" },
+    ],
+  },
+  {
+    label: "Dados sensíveis",
+    items: [
+      { key: "influenciadores:bancario", label: "Dados bancários de influenciadores" },
+      // "senhas" já existia no tipo `Permission` mas nunca aparecia em
+      // nenhum grupo — só fica exposta aqui (não é enforced em nenhuma
+      // tela hoje, igual a "membros"); não inventa permissão nova.
+      { key: "senhas", label: "Cofre de senhas" },
     ],
   },
 ];

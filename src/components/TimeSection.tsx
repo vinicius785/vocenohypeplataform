@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
-  Shield,
   Mail,
   Calendar,
   Briefcase,
@@ -11,7 +10,8 @@ import {
   User,
   Eye,
   Copy,
-  Clock,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { useNavigate } from "@tanstack/react-router";
@@ -72,14 +72,13 @@ import {
   resetMemberPassword,
   getTeamDirectory,
 } from "@/lib/team.functions";
-import { getStatus, subscribeChat, STATUS_LABEL } from "@/lib/chat-store";
+import { getStatus, subscribeChat, STATUS_LABEL, STATUS_COLOR } from "@/lib/chat-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -705,6 +704,29 @@ export type MemberFormPayload = {
   isAdminRole: boolean;
 };
 
+type AccessType = "padrao" | "personalizado" | "admin";
+
+function accessTypeFor(isAdmin: boolean, permissions: Permission[]): AccessType {
+  if (isAdmin) return "admin";
+  return isDefaultPermissionSet(permissions);
+}
+
+function memberInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+const ACCESS_TYPE_OPTIONS: { key: AccessType; label: string; hint: string }[] = [
+  { key: "padrao", label: "Membro padrão", hint: "Permissões padrão da equipe." },
+  {
+    key: "personalizado",
+    label: "Personalizado",
+    hint: "Escolha quais áreas este membro pode acessar.",
+  },
+  { key: "admin", label: "Administrador", hint: "Acesso completo ao workspace." },
+];
+
 export function MemberDialog({
   open,
   initial,
@@ -725,10 +747,15 @@ export function MemberDialog({
   const [salary, setSalary] = useState("");
   const [email, setEmail] = useState("");
   const [tempPassword, setTempPassword] = useState("");
+  // `permissions` guarda sempre o conjunto EDITÁVEL (usado de verdade só
+  // quando `accessType === "personalizado"`) — pra padrão/admin, o
+  // conjunto efetivo é calculado (`MEMBER_DEFAULT_PERMISSIONS`/
+  // `ALL_PERMISSIONS`) só na hora de salvar, sem precisar ficar
+  // sincronizado com este estado o tempo todo.
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [timeView, setTimeView] = useState<TimeField[]>(DEFAULT_TIME_VIEW);
-  const [isAdminRole, setIsAdminRole] = useState(false);
-  const [preset, setPreset] = useState<PermissionPreset>("padrao");
+  const [accessType, setAccessType] = useState<AccessType>("padrao");
+  const [showIncluded, setShowIncluded] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -741,19 +768,20 @@ export function MemberDialog({
     setSalary(initial?.salary ?? "");
     setEmail(initial?.email ?? "");
     setTempPassword("");
-    setPermissions(initial ? initial.permissions : MEMBER_DEFAULT_PERMISSIONS);
+    const seedPermissions = initial ? initial.permissions : MEMBER_DEFAULT_PERMISSIONS;
+    setPermissions(seedPermissions);
     setTimeView(initial?.timeView ?? DEFAULT_TIME_VIEW);
-    setIsAdminRole(initial?.isAdmin ?? false);
-    // Abre no preset "Membro padrão" se as permissões salvas baterem
-    // exatamente com o padrão; senão abre em Personalizado mostrando as
-    // permissões reais. Sem isso, um membro salvo como padrão sempre
-    // reabria marcado como Personalizado, parecendo que a troca não salvou.
-    setPreset(isDefaultPermissionSet(initial ? initial.permissions : MEMBER_DEFAULT_PERMISSIONS));
+    // Abre no tipo de acesso que já bate com os dados salvos — sem isso,
+    // um membro padrão sempre reabria marcado como Personalizado,
+    // parecendo que a troca não salvou.
+    setAccessType(accessTypeFor(!!initial?.isAdmin, seedPermissions));
+    setShowIncluded(false);
     setError("");
   }, [open, initial]);
 
-  const applyPreset = (next: PermissionPreset) => {
-    setPreset(next);
+  const selectAccessType = (next: AccessType) => {
+    if (isSelf) return;
+    setAccessType(next);
     if (next === "padrao") setPermissions(MEMBER_DEFAULT_PERMISSIONS);
   };
 
@@ -783,6 +811,13 @@ export function MemberDialog({
       if (tempPassword.length < 6)
         return setError("Senha temporária precisa ter pelo menos 6 caracteres.");
     }
+    const isAdminRole = accessType === "admin";
+    const finalPermissions =
+      accessType === "admin"
+        ? ALL_PERMISSIONS
+        : accessType === "padrao"
+          ? MEMBER_DEFAULT_PERMISSIONS
+          : permissions;
     setSubmitting(true);
     try {
       await onSave({
@@ -794,7 +829,7 @@ export function MemberDialog({
         role: role.trim(),
         birthday,
         salary,
-        permissions,
+        permissions: finalPermissions,
         timeView,
         isAdminRole,
       });
@@ -803,28 +838,63 @@ export function MemberDialog({
     }
   };
 
+  const presenceStatus = initial ? getStatus(initial.id) : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle>{isNew ? "Novo membro" : "Editar membro"}</DialogTitle>
-          <DialogDescription>
-            {isNew
-              ? "Cadastre o email e uma senha temporária. O membro completará foto, nome, aniversário, telefone e nova senha no primeiro acesso."
-              : "Atualize dados do membro."}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0">
+        {isNew ? (
+          <DialogHeader className="border-b border-border px-6 py-4 pr-10">
+            <DialogTitle>Adicionar membro</DialogTitle>
+            <DialogDescription>Cadastre os dados e defina o acesso deste membro.</DialogDescription>
+          </DialogHeader>
+        ) : (
+          <div className="flex items-center gap-3 border-b border-border px-6 py-4 pr-10">
+            <Avatar className="h-11 w-11 shrink-0">
+              <AvatarImage src={initial?.photo} alt={initial?.name} />
+              <AvatarFallback className="text-sm">
+                {memberInitials(initial?.name || "?")}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-base">
+                {initial?.name || "Sem nome"}
+              </DialogTitle>
+              <DialogDescription className="mt-0.5 truncate text-xs">
+                {[initial?.role, initial?.email].filter(Boolean).join(" · ") ||
+                  "Sem cargo definido"}
+              </DialogDescription>
+            </div>
+            {presenceStatus && (
+              <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[presenceStatus]}`} />
+                {STATUS_LABEL[presenceStatus]}
+              </span>
+            )}
+          </div>
+        )}
 
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-6 px-6 py-5">
               <section className="space-y-3">
-                <SectionTitle
-                  icon={<KeyRound className="h-3.5 w-3.5" />}
-                  title="Acesso"
-                  hint="Credenciais para o primeiro login."
-                />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <SectionTitle title="Dados do membro" />
+                <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                  <Field label="Nome" icon={<User className="h-3.5 w-3.5" />}>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </Field>
+                  <Field label="Cargo" icon={<Briefcase className="h-3.5 w-3.5" />}>
+                    <Input
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      className="h-9 text-sm"
+                      placeholder="Ex: Designer"
+                    />
+                  </Field>
                   <Field label="Email" icon={<Mail className="h-3.5 w-3.5" />}>
                     <Input
                       type="email"
@@ -835,7 +905,7 @@ export function MemberDialog({
                       disabled={!isNew}
                     />
                   </Field>
-                  {isNew && (
+                  {isNew ? (
                     <Field label="Senha temporária" icon={<KeyRound className="h-3.5 w-3.5" />}>
                       <div className="flex gap-1.5">
                         <Input
@@ -855,66 +925,24 @@ export function MemberDialog({
                         </Button>
                       </div>
                     </Field>
+                  ) : (
+                    <Field label="Aniversário" icon={<Calendar className="h-3.5 w-3.5" />}>
+                      <DateField
+                        value={birthday || undefined}
+                        onChange={(v) => setBirthday(v ?? "")}
+                        className="h-9 text-sm"
+                      />
+                    </Field>
                   )}
-                </div>
-                <label
-                  className={`mt-1 flex items-start justify-between gap-3 rounded-lg border px-3.5 py-3 transition-colors ${
-                    isSelf ? "cursor-not-allowed opacity-70" : "cursor-pointer"
-                  } ${isAdminRole ? "border-foreground/30 bg-muted/60" : "border-border hover:bg-muted/30"}`}
-                >
-                  <span className="flex items-start gap-2.5">
-                    <Shield className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
-                    <span>
-                      <span className="block text-sm font-medium text-foreground">
-                        Administrador
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {isSelf
-                          ? "Você não pode remover seu próprio acesso de admin."
-                          : "Admins podem gerenciar o time, criar/editar membros e acessar tudo."}
-                      </span>
-                    </span>
-                  </span>
-                  <Switch
-                    checked={isAdminRole}
-                    onCheckedChange={setIsAdminRole}
-                    disabled={isSelf}
-                    className="mt-0.5 shrink-0"
-                  />
-                </label>
-              </section>
-
-              <Separator />
-
-              <section className="space-y-3">
-                <SectionTitle
-                  icon={<User className="h-3.5 w-3.5" />}
-                  title="Dados opcionais"
-                  hint="Podem ser preenchidos agora ou pelo próprio membro."
-                />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Field label="Nome" icon={<User className="h-3.5 w-3.5" />}>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-9 text-sm"
-                    />
-                  </Field>
-                  <Field label="Cargo" icon={<Briefcase className="h-3.5 w-3.5" />}>
-                    <Input
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
-                      className="h-9 text-sm"
-                      placeholder="Ex: Designer"
-                    />
-                  </Field>
-                  <Field label="Aniversário" icon={<Calendar className="h-3.5 w-3.5" />}>
-                    <DateField
-                      value={birthday || undefined}
-                      onChange={(v) => setBirthday(v ?? "")}
-                      className="h-9 text-sm"
-                    />
-                  </Field>
+                  {isNew && (
+                    <Field label="Aniversário" icon={<Calendar className="h-3.5 w-3.5" />}>
+                      <DateField
+                        value={birthday || undefined}
+                        onChange={(v) => setBirthday(v ?? "")}
+                        className="h-9 text-sm"
+                      />
+                    </Field>
+                  )}
                   <Field label="Salário" icon={<DollarSign className="h-3.5 w-3.5" />}>
                     <Input
                       value={salary}
@@ -927,83 +955,90 @@ export function MemberDialog({
                 </div>
               </section>
 
-              {!isNew && (
-                <>
-                  <Separator />
-                  <section className="space-y-2">
-                    <SectionTitle
-                      icon={<Clock className="h-3.5 w-3.5" />}
-                      title="Início de dia"
-                      hint="Horário em que o membro tocou 'Começar o dia'."
-                    />
-                    {(() => {
-                      const entries = Object.entries(initial?.startTimes ?? {}).filter(
-                        ([d, h]) => d && h,
-                      );
-                      if (entries.length === 0) {
-                        return (
-                          <p className="text-xs text-muted-foreground">Sem registros ainda.</p>
-                        );
-                      }
-                      const [lastDate, lastTime] = entries.sort((a, b) =>
-                        a[0] < b[0] ? 1 : -1,
-                      )[0];
-                      const [y, m, day] = lastDate.split("-");
-                      return (
-                        <p className="text-xs text-muted-foreground">
-                          Último registro:{" "}
-                          <span className="font-medium tabular-nums text-foreground">
-                            {day}/{m}/{y} às {lastTime}
-                          </span>{" "}
-                          · histórico completo na aba "Início de dia".
-                        </p>
-                      );
-                    })()}
-                  </section>
-                </>
-              )}
-
               <Separator />
 
-              <section className="space-y-3">
+              <section className="space-y-2.5">
                 <SectionTitle
-                  icon={<Shield className="h-3.5 w-3.5" />}
-                  title="Permissões"
-                  hint="O que este membro pode acessar."
+                  title="Tipo de acesso"
+                  hint={
+                    isSelf
+                      ? "Você não pode alterar seu próprio nível de acesso."
+                      : "O que este membro pode acessar na plataforma."
+                  }
                 />
-
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("padrao")}
-                    className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                      preset === "padrao"
-                        ? "border-foreground/40 bg-muted"
-                        : "border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="block font-medium text-foreground">Membro padrão</span>
-                    <span className="text-muted-foreground">
-                      Clientes, campanhas, projetos, reuniões, influenciadores, time e chat.
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyPreset("personalizado")}
-                    className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                      preset === "personalizado"
-                        ? "border-foreground/40 bg-muted"
-                        : "border-border hover:bg-muted/50"
-                    }`}
-                  >
-                    <span className="block font-medium text-foreground">Personalizado</span>
-                    <span className="text-muted-foreground">
-                      Escolher área por área (inclui comercial, financeiro, configurações...).
-                    </span>
-                  </button>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {ACCESS_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={isSelf}
+                      onClick={() => selectAccessType(opt.key)}
+                      className={`rounded-lg border px-3 py-2.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        accessType === opt.key
+                          ? "border-foreground/40 bg-muted"
+                          : "border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="block font-medium text-foreground">{opt.label}</span>
+                      <span className="text-muted-foreground">{opt.hint}</span>
+                    </button>
+                  ))}
                 </div>
 
-                {preset === "personalizado" && (
+                {accessType === "padrao" && (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3.5 py-3">
+                    <p className="text-xs text-muted-foreground">
+                      Este membro utilizará as permissões padrão do workspace.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowIncluded((v) => !v)}
+                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-foreground hover:underline"
+                    >
+                      <ChevronDown
+                        className={`h-3 w-3 transition-transform ${showIncluded ? "rotate-180" : ""}`}
+                      />
+                      {showIncluded ? "Ocultar permissões incluídas" : "Ver permissões incluídas"}
+                    </button>
+                    {showIncluded && (
+                      <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 border-t border-border/60 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {PERMISSION_GROUPS.map((group) => {
+                          const items = group.items.filter((i) =>
+                            MEMBER_DEFAULT_PERMISSIONS.includes(i.key),
+                          );
+                          if (items.length === 0) return null;
+                          return (
+                            <div key={group.label}>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {group.label}
+                              </p>
+                              <ul className="mt-1 space-y-0.5">
+                                {items.map((i) => (
+                                  <li
+                                    key={i.key}
+                                    className="flex items-center gap-1.5 text-xs text-foreground"
+                                  >
+                                    <Check className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                    {i.label}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {accessType === "admin" && (
+                  <p className="rounded-lg border border-border/60 bg-muted/20 px-3.5 py-3 text-xs text-muted-foreground">
+                    Administradores possuem acesso completo ao workspace, incluindo configurações e
+                    gerenciamento de membros.
+                  </p>
+                )}
+
+                {accessType === "personalizado" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-end gap-2">
                       <Button
@@ -1025,7 +1060,7 @@ export function MemberDialog({
                         Nenhuma
                       </Button>
                     </div>
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
                       {PERMISSION_GROUPS.map((group) => {
                         const groupKeys = group.items.map((i) => i.key);
                         const allOn = groupKeys.every((k) => permissions.includes(k));
@@ -1036,26 +1071,26 @@ export function MemberDialog({
                               : Array.from(new Set([...prev, ...groupKeys])),
                           );
                         return (
-                          <div key={group.label} className="rounded-lg border border-border">
-                            <div className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5">
+                          <div key={group.label}>
+                            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
                               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                 {group.label}
                               </span>
                               <button
                                 type="button"
                                 onClick={toggleGroup}
-                                className="text-[10px] text-muted-foreground hover:text-foreground"
+                                className="text-[11px] text-muted-foreground hover:text-foreground"
                               >
-                                {allOn ? "Desmarcar grupo" : "Marcar grupo"}
+                                {allOn ? "Desmarcar tudo" : "Selecionar tudo"}
                               </button>
                             </div>
-                            <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3">
+                            <div className="mt-2 space-y-1">
                               {group.items.map((p) => {
                                 const checked = permissions.includes(p.key);
                                 return (
                                   <label
                                     key={p.key}
-                                    className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-xs ${checked ? "border-foreground/40 bg-muted" : "border-border hover:bg-muted/50"}`}
+                                    className="flex cursor-pointer items-center gap-2 py-0.5 text-xs text-foreground"
                                   >
                                     <Checkbox
                                       checked={checked}
@@ -1069,17 +1104,17 @@ export function MemberDialog({
                             </div>
                             {group.label === "Administração" &&
                               permissions.includes("configuracoes") && (
-                                <div className="border-t border-border bg-background px-3 py-2">
-                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                    Abas de Configurações permitidas
+                                <div className="mt-2 border-t border-border/60 pt-2">
+                                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                    Abas de Configurações
                                   </p>
-                                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                                  <div className="space-y-1">
                                     {CONFIG_SUB_PERMISSIONS.map((sp) => {
                                       const on = permissions.includes(sp.key);
                                       return (
                                         <label
                                           key={sp.key}
-                                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-[11px] ${on ? "border-foreground/40 bg-muted" : "border-border hover:bg-muted/50"}`}
+                                          className="flex cursor-pointer items-center gap-2 py-0.5 text-[11px] text-foreground"
                                         >
                                           <Checkbox
                                             checked={on}
@@ -1093,18 +1128,18 @@ export function MemberDialog({
                                   </div>
                                 </div>
                               )}
-                            {group.label === "Outros" && canSeeTime && (
-                              <div className="border-t border-border bg-background px-3 py-2">
-                                <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  <Eye className="h-3 w-3" /> Visibilidade na aba Time
+                            {group.label === "Gestão" && canSeeTime && (
+                              <div className="mt-2 border-t border-border/60 pt-2">
+                                <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+                                  <Eye className="h-2.5 w-2.5" /> Visibilidade na aba Time
                                 </p>
-                                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                                <div className="space-y-1">
                                   {TIME_FIELDS.map((f) => {
                                     const checked = timeView.includes(f.key);
                                     return (
                                       <label
                                         key={f.key}
-                                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-[11px] ${checked ? "border-foreground/40 bg-muted" : "border-border hover:bg-muted/50"}`}
+                                        className="flex cursor-pointer items-center gap-2 py-0.5 text-[11px] text-foreground"
                                       >
                                         <Checkbox
                                           checked={checked}
@@ -1135,7 +1170,7 @@ export function MemberDialog({
               Cancelar
             </Button>
             <Button type="submit" size="sm" disabled={submitting}>
-              {submitting ? "Salvando..." : isNew ? "Criar membro" : "Salvar alterações"}
+              {submitting ? "Salvando..." : isNew ? "Adicionar membro" : "Salvar alterações"}
             </Button>
           </DialogFooter>
         </form>
@@ -1149,13 +1184,13 @@ function SectionTitle({
   title,
   hint,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   title: string;
   hint?: string;
 }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-foreground">
         {icon}
         {title}
       </div>
