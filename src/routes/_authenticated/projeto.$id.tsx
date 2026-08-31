@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DateField } from "@/components/ui/date-field";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   X,
@@ -128,6 +128,21 @@ function ProjetoPage() {
         taskId && project.features.includes("kanban") ? "kanban" : (project.features[0] ?? null),
       );
   }, [project, tab, taskId]);
+
+  // Força a troca pra aba Kanban toda vez que chega um `taskId` NOVO via
+  // deep-link (ex.: clique no indicador global de timer ativo) — sem
+  // isso, se a pessoa já estivesse nesta mesma página de projeto numa
+  // aba diferente (ex. Documentos), o efeito acima nunca reagia de novo
+  // (só roda quando `tab` ainda é null, ou seja, só no primeiro
+  // carregamento) e o parâmetro de busca mudava sem a tela visivelmente
+  // reagir — parecia que "clicar não abria nada".
+  const prevTaskIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (taskId && taskId !== prevTaskIdRef.current && project?.features.includes("kanban")) {
+      setTab("kanban");
+    }
+    prevTaskIdRef.current = taskId;
+  }, [taskId, project]);
 
   const clearTaskId = () => {
     navigate({ to: "/projeto/$id", params: { id }, search: {}, replace: true });

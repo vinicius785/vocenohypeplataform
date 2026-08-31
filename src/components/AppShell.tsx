@@ -31,6 +31,7 @@ import {
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
+import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
 import type { Task } from "@/components/tasks/TaskBoard";
 import { supabase } from "@/integrations/supabase/client";
 import { getTheme, setTheme } from "@/lib/theme";
@@ -795,6 +796,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
   const [, forceNow] = useState(0);
   useEffect(() => onProjetosChange(() => forceData((n) => n + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => forceData((n) => n + 1)), []);
+  useEffect(() => onStandaloneChange(() => forceData((n) => n + 1)), []);
   useEffect(() => {
     const iv = setInterval(() => forceNow((n) => n + 1), 1000);
     return () => clearInterval(iv);
@@ -834,7 +836,9 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
       }
       return null;
     };
+    let marketingProjectId: string | undefined;
     for (const p of loadProjetos()) {
+      if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
       const found = findActive((p.tasks ?? []) as MinimalTask[]);
       if (found) {
         return {
@@ -856,6 +860,24 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
           taskId: found.rootId,
           campanhaId,
         };
+      }
+    }
+    // Tarefas avulsas do Marketing (criadas direto no board de lá, sem
+    // projeto/campanha por trás) — sem isso, um timer rodando numa delas
+    // nunca aparecia aqui, já que essa 3ª origem nunca era escaneada. O id
+    // precisa do mesmo prefixo `mkt:` que `resolveTasks` usa em
+    // MarketingSection.tsx, senão o deep-link não acha a tarefa lá dentro.
+    if (marketingProjectId) {
+      for (const s of loadStandalone() as unknown as MinimalTask[]) {
+        if (isActive(s)) {
+          return {
+            title: s.title,
+            startedAt: s.timerStartedAt,
+            section: "projetos" as const,
+            taskId: `mkt:${s.id}`,
+            projectId: marketingProjectId,
+          };
+        }
       }
     }
     return null;
