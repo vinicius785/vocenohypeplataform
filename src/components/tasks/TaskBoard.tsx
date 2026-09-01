@@ -20,6 +20,7 @@ import {
   ListChecks,
   CornerUpRight,
   Star,
+  ArrowUpDown,
 } from "lucide-react";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
 
@@ -144,6 +145,41 @@ export const PRIORITY_TONE: Record<TaskPriority, string> = {
   Normal: "text-sky-600 dark:text-sky-400",
   Baixa: "text-muted-foreground",
 };
+
+/** Ordenação combinável do board — pedido explícito de dar pra escolher
+ * prioridade e/ou prazo, com um servindo de desempate do outro. "Nenhum"
+ * mantém a ordem natural (do jeito que já era antes desta opção existir). */
+export type TaskSortKey = "none" | "priority" | "dueDate";
+export const TASK_SORT_KEY_LABEL: Record<TaskSortKey, string> = {
+  none: "Nenhum",
+  priority: "Prioridade",
+  dueDate: "Prazo",
+};
+
+function compareTasksByKey(a: Task, b: Task, key: TaskSortKey): number {
+  if (key === "priority") {
+    return TASK_PRIORITIES.indexOf(a.priority) - TASK_PRIORITIES.indexOf(b.priority);
+  }
+  if (key === "dueDate") {
+    // Sem prazo sempre por último, não importa a direção do desempate.
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  }
+  return 0;
+}
+
+/** Aplica o critério principal e usa o secundário só como desempate —
+ * nunca reordena o que o principal já decidiu. */
+export function sortTasksBy(items: Task[], primary: TaskSortKey, secondary: TaskSortKey): Task[] {
+  if (primary === "none") return items;
+  return [...items].sort((a, b) => {
+    const byPrimary = compareTasksByKey(a, b, primary);
+    if (byPrimary !== 0) return byPrimary;
+    return compareTasksByKey(a, b, secondary);
+  });
+}
 
 export type Comment = {
   id: string;
@@ -865,6 +901,14 @@ export function TaskBoard({
   }, [tagFilter, allTags]);
   const visibleTasks = tagFilter ? tasks.filter((t) => t.tags?.includes(tagFilter)) : tasks;
 
+  // Ordenação combinável de cada coluna do kanban — pedido explícito de
+  // poder ordenar por prioridade e/ou prazo, um servindo de desempate do
+  // outro. Fica de fora da coluna "Concluído", que já tem sua própria
+  // ordenação por data de conclusão (mais recente primeiro).
+  const [sortPrimary, setSortPrimary] = useState<TaskSortKey>("none");
+  const [sortSecondary, setSortSecondary] = useState<TaskSortKey>("none");
+  const [sortOpen, setSortOpen] = useState(false);
+
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
@@ -874,13 +918,87 @@ export function TaskBoard({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">{tasks.length} no total</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setTaskDialog({ mode: "new" })}
-          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-        >
-          <Plus className="h-3.5 w-3.5" /> Nova Tarefa
-        </button>
+        <div className="flex items-center gap-2">
+          <Popover open={sortOpen} onOpenChange={setSortOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
+                  sortPrimary !== "none" ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                <ArrowUpDown className="h-3.5 w-3.5" />
+                Ordenar
+                {sortPrimary !== "none" && (
+                  <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                    {sortSecondary !== "none" ? 2 : 1}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 space-y-3 p-3">
+              <div>
+                <label className="block text-[11px] font-medium text-muted-foreground">
+                  Ordenar por
+                </label>
+                <select
+                  value={sortPrimary}
+                  onChange={(e) => {
+                    const next = e.target.value as TaskSortKey;
+                    setSortPrimary(next);
+                    if (next === "none" || next === sortSecondary) setSortSecondary("none");
+                  }}
+                  className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                >
+                  {(["none", "priority", "dueDate"] as TaskSortKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {TASK_SORT_KEY_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {sortPrimary !== "none" && (
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Depois por (desempate)
+                  </label>
+                  <select
+                    value={sortSecondary}
+                    onChange={(e) => setSortSecondary(e.target.value as TaskSortKey)}
+                    className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {(["none", "priority", "dueDate"] as TaskSortKey[])
+                      .filter((k) => k === "none" || k !== sortPrimary)
+                      .map((k) => (
+                        <option key={k} value={k}>
+                          {TASK_SORT_KEY_LABEL[k]}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+              {sortPrimary !== "none" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortPrimary("none");
+                    setSortSecondary("none");
+                  }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Limpar ordenação
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
+          <button
+            type="button"
+            onClick={() => setTaskDialog({ mode: "new" })}
+            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          >
+            <Plus className="h-3.5 w-3.5" /> Nova Tarefa
+          </button>
+        </div>
       </div>
 
       {allTags.length > 0 && (
@@ -925,7 +1043,7 @@ export function TaskBoard({
           const isDone = col === "Concluído";
           const sortedItems = isDone
             ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
-            : allItems;
+            : sortTasksBy(allItems, sortPrimary, sortSecondary);
           const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
           const hiddenCount = allItems.length - items.length;
           return (
