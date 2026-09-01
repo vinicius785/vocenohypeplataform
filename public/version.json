@@ -1,6 +1,7 @@
 {
-  "version": "1.197.0",
+  "version": "1.198.0",
   "notes": [
+    "Corrige o Score da aba Time subcontando tarefas concluídas: mudar o status de uma subtarefa direto pelo círculo (dentro do diálogo da tarefa-mãe) agora também conta pro Score — antes só contava concluir arrastando no board ou salvando a tarefa-mãe inteira. Corrige também \"Tarefas que precisam de atenção\" não mostrando tarefas com status \"Aprovado\" vencendo hoje — esse status era tratado como já finalizado na classificação de prazo, mesmo contando como aberto em todo o resto do Score.",
     "Clicar numa subtarefa (no card do board ou na prévia expandida) agora abre a subtarefa direto, não mais a tarefa-mãe. \"Comentários atribuídos\" no Início passa a mostrar também menções (@nome) dentro de comentários de tarefa (Projetos/Campanhas/Marketing), não só menções de chat. A Agenda do Início agora só mostra reuniões em que você é criador ou convidado, igual já era na tela de Reuniões.",
     "Ordenação e filtros dos kanbans agora ficam salvos (valem em qualquer board — Projetos/Campanhas/Marketing). Subtarefas dentro da tarefa ganharam visual novo (círculo colorido pelo status, bandeira de prioridade, ícone de descrição). No card do board, dá pra expandir a lista de subtarefas direto ali (sem abrir a tarefa) clicando na seta ao lado da contagem.",
     "Redesenho visual dos cards do Kanban (Projetos/Campanhas/Marketing): hierarquia clara entre título, prazo, responsáveis, prioridade/subtarefas e etiquetas/comentários/anexos, avatares em vez de nomes, menu de ações rápidas e melhor destaque visual ao arrastar cards — sem alterar nenhuma regra de negócio.",

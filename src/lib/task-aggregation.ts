@@ -60,7 +60,12 @@ export function bucketFor(
   performanceDueDateISO?: string,
   cutoffHour?: number,
 ): DashTask["bucket"] {
-  if (status === "Concluído" || status === "Aprovado" || status === "Arquivado") return "outro";
+  // "Aprovado" continua ABERTO pro Score (`OPEN_STATUSES` em `score.ts`
+  // inclui "Aprovado") — tratá-lo como terminal aqui fazia uma tarefa
+  // aprovada com prazo hoje nunca aparecer em "Tarefas que precisam de
+  // atenção" (sempre caía em "outro"), mesmo contando como pendência em
+  // todo outro lugar do Score.
+  if (status === "Concluído" || status === "Arquivado") return "outro";
   const ref = performanceDueDateISO ?? dueISO;
   if (!ref) return "outro";
   if (new Date().getTime() > deadlineCutoff(ref, cutoffHour).getTime()) return "atrasada";

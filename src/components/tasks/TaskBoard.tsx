@@ -2866,14 +2866,30 @@ export function TaskDialog({
                               // o novo status for "Em andamento") — sem
                               // passar por ela aqui, um timer preso rodando
                               // nunca parava só porque o status mudou.
+                              const updated = withStatusChange(s, next);
                               setSubtasks((prev) =>
-                                prev.map((st) =>
-                                  st.id === s.id ? withStatusChange(st, next) : st,
-                                ),
+                                prev.map((st) => (st.id === s.id ? updated : st)),
                               );
                               setActivity((a) =>
                                 pushActivity(a, `mudou status de "${s.title}" para ${next}`),
                               );
+                              // Sem isso, concluir/reabrir uma subtarefa por
+                              // aqui (o caminho mais usado, direto na linha)
+                              // nunca gerava o evento de XP/"concluídas
+                              // hoje" — só concluir a tarefa-mãe (drag no
+                              // board ou Salvar no diálogo) ou abrir a
+                              // subtarefa em seu próprio diálogo passavam
+                              // por `recordTaskLedgerEventsOnStatusChange`.
+                              // Isso fazia o Score subcontar completions de
+                              // verdade (ex.: 10 concluídas no dia, só 3
+                              // contadas).
+                              if (updated !== s) {
+                                recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                  scope,
+                                  members,
+                                  performanceSettings,
+                                });
+                              }
                             }}
                             title={s.status}
                             aria-label={`Status: ${s.status}`}
