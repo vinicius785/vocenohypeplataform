@@ -150,6 +150,8 @@ export function ReunioesSection() {
   const { confirm: confirmDelete, confirmDialog: deleteConfirmDialog } = useConfirm();
   const { confirmChoice: confirmDeleteChoice, confirmChoiceDialog: deleteChoiceDialog } =
     useConfirmChoice<"this" | "all">();
+  const { confirmChoice: confirmSeriesChoice, confirmChoiceDialog: seriesChoiceDialog } =
+    useConfirmChoice<"this" | "all">();
 
   // Único ponto que exclui uma reunião — usado tanto pelo formulário
   // (`MeetingDialog`) quanto pelo resumo (`MeetingSummaryDialog`), pra não
@@ -184,6 +186,57 @@ export function ReunioesSection() {
     }
     setDialog(null);
     setSummary(null);
+  };
+
+  // Mesmo espírito de `requestDeleteMeeting` — usado tanto pela lista de
+  // Solicitações quanto pelo resumo, pra "é série ou não" não ficar
+  // duplicado nos dois. Confirmar/recusar uma ocorrência que faz parte de
+  // uma série pergunta se é só aquela ou a série inteira; avulsa continua
+  // confirmando/recusando direto, sem pergunta.
+  const requestConfirmMeeting = async (m: Meeting) => {
+    const siblings = m.seriesId ? meetings.filter((x) => x.seriesId === m.seriesId) : [];
+    if (siblings.length > 1) {
+      const choice = await confirmSeriesChoice(
+        `"${m.titulo}" faz parte de uma série de ${siblings.length} reuniões recorrentes. Confirmar presença em:`,
+        [
+          { value: "this", label: "Só esta" },
+          { value: "all", label: `Todas (${siblings.length})` },
+        ],
+      );
+      if (!choice) return;
+      persist(
+        meetings.map((x) =>
+          (choice === "all" ? x.seriesId === m.seriesId : x.id === m.id)
+            ? confirmMeetingFor(x, me.id)
+            : x,
+        ),
+      );
+    } else {
+      persist(meetings.map((x) => (x.id === m.id ? confirmMeetingFor(x, me.id) : x)));
+    }
+  };
+
+  const requestDeclineMeeting = async (m: Meeting) => {
+    const siblings = m.seriesId ? meetings.filter((x) => x.seriesId === m.seriesId) : [];
+    if (siblings.length > 1) {
+      const choice = await confirmSeriesChoice(
+        `"${m.titulo}" faz parte de uma série de ${siblings.length} reuniões recorrentes. Recusar:`,
+        [
+          { value: "this", label: "Só esta" },
+          { value: "all", label: `Todas (${siblings.length})` },
+        ],
+      );
+      if (!choice) return;
+      persist(
+        meetings.map((x) =>
+          (choice === "all" ? x.seriesId === m.seriesId : x.id === m.id)
+            ? declineMeetingFor(x, me.id)
+            : x,
+        ),
+      );
+    } else {
+      persist(meetings.map((x) => (x.id === m.id ? declineMeetingFor(x, me.id) : x)));
+    }
   };
 
   // Só reuniões onde a pessoa é criadora ou foi convidada — o calendário
@@ -371,12 +424,8 @@ export function ReunioesSection() {
           meetings={myMeetings}
           me={me}
           onOpen={(m) => setSummary(m)}
-          onConfirm={(m) =>
-            persist(meetings.map((x) => (x.id === m.id ? confirmMeetingFor(x, me.id) : x)))
-          }
-          onDecline={(m) =>
-            persist(meetings.map((x) => (x.id === m.id ? declineMeetingFor(x, me.id) : x)))
-          }
+          onConfirm={(m) => void requestConfirmMeeting(m)}
+          onDecline={(m) => void requestDeclineMeeting(m)}
         />
       )}
 
@@ -443,11 +492,14 @@ export function ReunioesSection() {
           setDialog({ mode: "edit", data: m });
         }}
         onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
+        onConfirm={(m) => void requestConfirmMeeting(m)}
+        onDecline={(m) => void requestDeclineMeeting(m)}
         onDelete={(id) => void requestDeleteMeeting(id)}
       />
 
       {deleteConfirmDialog}
       {deleteChoiceDialog}
+      {seriesChoiceDialog}
     </div>
   );
 }
@@ -1577,6 +1629,8 @@ export function MeetingSummaryDialog({
   onClose,
   onEdit,
   onChange,
+  onConfirm,
+  onDecline,
   onDelete,
 }: {
   meeting: Meeting | null;
@@ -1584,6 +1638,8 @@ export function MeetingSummaryDialog({
   onClose: () => void;
   onEdit: (m: Meeting) => void;
   onChange: (m: Meeting) => void;
+  onConfirm: (m: Meeting) => void;
+  onDecline: (m: Meeting) => void;
   onDelete: (id: string) => void;
 }) {
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -1624,8 +1680,8 @@ export function MeetingSummaryDialog({
     id === me.id ? `${me.name} (você)` : (memberFor(id)?.name ?? id);
   const isFinished = meetingEndTime(meeting) < Date.now();
 
-  const confirm = () => onChange(confirmMeetingFor(meeting, me.id));
-  const decline = () => onChange(declineMeetingFor(meeting, me.id));
+  const confirm = () => onConfirm(meeting);
+  const decline = () => onDecline(meeting);
   const sendProposal = () => {
     if (!propData || !propHora) return;
     const proposal: RescheduleProposal = {

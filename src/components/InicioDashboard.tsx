@@ -49,7 +49,14 @@ import { legacyStage } from "@/lib/comercial-engine";
 import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
 import type { SectionKey } from "@/components/AppShell";
 import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
-import { loadMeetings, saveMeetings, onMeetingsChange, type Meeting } from "@/lib/reunioes-store";
+import {
+  loadMeetings,
+  saveMeetings,
+  onMeetingsChange,
+  confirmMeetingFor,
+  declineMeetingFor,
+  type Meeting,
+} from "@/lib/reunioes-store";
 import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
@@ -870,6 +877,16 @@ export function InicioDashboard() {
         }}
         onChange={(m) => {
           const next = meetings.map((x) => (x.id === m.id ? m : x));
+          setMeetings(next);
+          saveMeetings(next);
+        }}
+        onConfirm={(m) => {
+          const next = meetings.map((x) => (x.id === m.id ? confirmMeetingFor(x, getMe().id) : x));
+          setMeetings(next);
+          saveMeetings(next);
+        }}
+        onDecline={(m) => {
+          const next = meetings.map((x) => (x.id === m.id ? declineMeetingFor(x, getMe().id) : x));
           setMeetings(next);
           saveMeetings(next);
         }}
