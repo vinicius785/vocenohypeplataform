@@ -173,7 +173,17 @@ function compareTasksByKey(a: Task, b: Task, key: TaskSortKey): number {
 
 /** Aplica o critério principal e usa o secundário só como desempate —
  * nunca reordena o que o principal já decidiu. */
-export function sortTasksBy(items: Task[], primary: TaskSortKey, secondary: TaskSortKey): Task[] {
+/** Um card do board é uma tarefa de nível raiz OU (quando "Exibir
+ * subtarefas no board" está ligado) uma subtarefa "achatada" pra dentro
+ * da coluna do seu próprio status — `__parentTask` marca esse segundo
+ * caso, pra saber que clique/exclusão devem afetar a tarefa-mãe. */
+type BoardItem = Task & { __parentTask?: Task };
+
+export function sortTasksBy<T extends Task>(
+  items: T[],
+  primary: TaskSortKey,
+  secondary: TaskSortKey,
+): T[] {
   if (primary === "none") return items;
   return [...items].sort((a, b) => {
     const byPrimary = compareTasksByKey(a, b, primary);
@@ -927,7 +937,7 @@ export function TaskBoard({
       : 0;
   const toggleIn = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
-  const visibleTasks = tasks.filter((t) => {
+  const taskMatchesFilters = (t: Task) => {
     if (assigneeFilters.length > 0) {
       const assignees = getTaskAssignees(t);
       if (!assigneeFilters.some((a) => assignees.includes(a))) return false;
@@ -937,7 +947,38 @@ export function TaskBoard({
     }
     if (priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
     return true;
+  };
+  const visibleTasks = tasks.filter(taskMatchesFilters);
+
+  // "Exibir subtarefas no board" — preferência pessoal, persistida (não é
+  // por-board: a mesma escolha vale em qualquer kanban, já que é o mesmo
+  // componente compartilhado). Quando ligado, cada subtarefa aparece como
+  // um card próprio na coluna do SEU status (não só como contador "N/M"
+  // dentro do card da tarefa-mãe) — passa pelos mesmos filtros/ordenação
+  // que as tarefas de nível raiz, já que uma subtarefa é uma `Task`
+  // completa. Clicar nela abre o diálogo da tarefa-mãe (subtarefa nunca
+  // teve diálogo próprio no board — só é editável de dentro da tarefa
+  // raiz que a contém).
+  const [showSubtasksInline, setShowSubtasksInline] = useState(() => {
+    try {
+      return localStorage.getItem("taskboard:showSubtasksInline") === "1";
+    } catch {
+      return false;
+    }
   });
+  useEffect(() => {
+    try {
+      if (showSubtasksInline) localStorage.setItem("taskboard:showSubtasksInline", "1");
+      else localStorage.removeItem("taskboard:showSubtasksInline");
+    } catch {
+      /* ignore */
+    }
+  }, [showSubtasksInline]);
+  const allSubtasksFlat = useMemo(
+    () =>
+      tasks.flatMap((parent) => (parent.subtasks ?? []).map((subtask) => ({ subtask, parent }))),
+    [tasks],
+  );
 
   // Ordenação combinável de cada coluna do kanban — pedido explícito de
   // poder ordenar por prioridade e/ou prazo, um servindo de desempate do
@@ -1128,6 +1169,16 @@ export function TaskBoard({
                 </div>
               </div>
 
+              <label className="flex items-center gap-2 border-t border-border pt-3 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={showSubtasksInline}
+                  onChange={(e) => setShowSubtasksInline(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border accent-foreground"
+                />
+                Exibir subtarefas no board
+              </label>
+
               {activeFilterCount > 0 && (
                 <button
                   type="button"
@@ -1155,7 +1206,13 @@ export function TaskBoard({
 
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
         {TASK_STATUSES.map((col) => {
-          const allItems = visibleTasks.filter((t) => t.status === col);
+          const rootItems: BoardItem[] = visibleTasks.filter((t) => t.status === col);
+          const subtaskItems: BoardItem[] = showSubtasksInline
+            ? allSubtasksFlat
+                .filter(({ subtask }) => subtask.status === col && taskMatchesFilters(subtask))
+                .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
+            : [];
+          const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
           // Concluído acumula pra sempre — sem limite, uma campanha/projeto
           // antigo vira uma coluna infinita de tarefas que ninguém mais
           // precisa ver no dia a dia. Mostra só as 4 mais recentes por
@@ -1206,18 +1263,47 @@ export function TaskBoard({
                 {items.map((t) => (
                   <div
                     key={t.id}
-                    draggable
-                    onDragStart={() => setDragId(t.id)}
-                    onClick={() => setTaskDialog({ mode: "edit", data: t })}
+                    draggable={!t.__parentTask}
+                    onDragStart={() => !t.__parentTask && setDragId(t.id)}
+                    onClick={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
                     className="group cursor-pointer rounded-md border border-border bg-background p-3 text-sm shadow-sm hover:border-foreground/20"
                   >
                     <div className="flex items-start gap-2">
+                      <span
+                        className="mt-0.5 shrink-0"
+                        title={`Prioridade ${t.priority}`}
+                        aria-label={`Prioridade ${t.priority}`}
+                      >
+                        <Flag className={`h-3.5 w-3.5 ${PRIORITY_TONE[t.priority]}`} />
+                      </span>
+                      {t.__parentTask && (
+                        <span
+                          title={`Subtarefa de "${t.__parentTask.title}"`}
+                          className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                        >
+                          Sub
+                        </span>
+                      )}
                       <span className="flex-1 text-foreground">{t.title}</span>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          persist(tasks.filter((x) => x.id !== t.id));
+                          if (t.__parentTask) {
+                            const parent = t.__parentTask;
+                            persist(
+                              tasks.map((x) =>
+                                x.id === parent.id
+                                  ? {
+                                      ...x,
+                                      subtasks: (x.subtasks ?? []).filter((s) => s.id !== t.id),
+                                    }
+                                  : x,
+                              ),
+                            );
+                          } else {
+                            persist(tasks.filter((x) => x.id !== t.id));
+                          }
                         }}
                         className="opacity-0 transition-opacity group-hover:opacity-100"
                         aria-label="Remover"
