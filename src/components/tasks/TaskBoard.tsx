@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   MessageSquare,
   MoreHorizontal,
+  Search,
 } from "lucide-react";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
 
@@ -69,6 +70,8 @@ import {
   TASK_TAG_COLORS,
   type TaskTag,
 } from "@/lib/task-tags-store";
+import { bucketFor } from "@/lib/task-aggregation";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 /** Best-effort: notifica (push no celular/desktop) quem acabou de ser
  * atribuído a esta tarefa — nunca deve travar/quebrar o salvamento se
@@ -159,26 +162,144 @@ export const PRIORITY_TONE: Record<TaskPriority, string> = {
 
 /** Ordenação combinável do board — pedido explícito de dar pra escolher
  * prioridade e/ou prazo, com um servindo de desempate do outro. "Nenhum"
- * mantém a ordem natural (do jeito que já era antes desta opção existir). */
-export type TaskSortKey = "none" | "priority" | "dueDate";
-export const TASK_SORT_KEY_LABEL: Record<TaskSortKey, string> = {
-  none: "Nenhum",
-  priority: "Prioridade",
+ * (= "Manual") mantém a ordem natural, a mesma que já respeita a posição
+ * arrastada de cada card (o drag-and-drop só "gruda" quando não há
+ * ordenação ativa). Cada critério carrega a direção no próprio valor
+ * (`_asc`/`_desc`) — antes a direção era fixa por critério; virou
+ * explícita pra caber as 4 categorias (Prazo/Prioridade/Criação/Nome) do
+ * novo menu compacto, cada uma com as duas direções. */
+export type TaskSortKey =
+  | "none"
+  | "dueDate_asc"
+  | "dueDate_desc"
+  | "priority_desc"
+  | "priority_asc"
+  | "createdAt_desc"
+  | "createdAt_asc"
+  | "title_asc"
+  | "title_desc";
+
+type TaskSortCategory = "dueDate" | "priority" | "createdAt" | "title";
+
+/** A categoria de um critério — usada pra filtrar o desempate (não faz
+ * sentido desempatar por prazo quando o principal já é prazo). */
+function sortKeyCategory(key: TaskSortKey): TaskSortCategory | null {
+  if (key === "none") return null;
+  if (key.startsWith("dueDate")) return "dueDate";
+  if (key.startsWith("priority")) return "priority";
+  if (key.startsWith("createdAt")) return "createdAt";
+  return "title";
+}
+
+function sortKeyDirection(key: TaskSortKey): "asc" | "desc" | null {
+  if (key === "none") return null;
+  return key.endsWith("_asc") ? "asc" : "desc";
+}
+
+/** Texto compacto pro botão ("Prazo", "Prioridade"...) — o menu inteiro
+ * usa `TASK_SORT_MENU_GROUPS` abaixo pro texto completo de cada opção. */
+const TASK_SORT_CATEGORY_LABEL: Record<TaskSortCategory, string> = {
   dueDate: "Prazo",
+  priority: "Prioridade",
+  createdAt: "Criação",
+  title: "Nome",
 };
 
+/** Estrutura do menu "Ordenar" — cada grupo vira uma seção com cabeçalho,
+ * cada opção um item de menu (nunca um `<select>`). */
+export const TASK_SORT_MENU_GROUPS: {
+  category: TaskSortCategory;
+  label: string;
+  options: { key: TaskSortKey; label: string }[];
+}[] = [
+  {
+    category: "dueDate",
+    label: "PRAZO",
+    options: [
+      { key: "dueDate_asc", label: "Prazo — mais próximo" },
+      { key: "dueDate_desc", label: "Prazo — mais distante" },
+    ],
+  },
+  {
+    category: "priority",
+    label: "PRIORIDADE",
+    options: [
+      { key: "priority_desc", label: "Prioridade — maior primeiro" },
+      { key: "priority_asc", label: "Prioridade — menor primeiro" },
+    ],
+  },
+  {
+    category: "createdAt",
+    label: "CRIAÇÃO",
+    options: [
+      { key: "createdAt_desc", label: "Mais recentes" },
+      { key: "createdAt_asc", label: "Mais antigas" },
+    ],
+  },
+  {
+    category: "title",
+    label: "NOME",
+    options: [
+      { key: "title_asc", label: "Nome — A → Z" },
+      { key: "title_desc", label: "Nome — Z → A" },
+    ],
+  },
+];
+
 function compareTasksByKey(a: Task, b: Task, key: TaskSortKey): number {
-  if (key === "priority") {
-    return TASK_PRIORITIES.indexOf(a.priority) - TASK_PRIORITIES.indexOf(b.priority);
+  switch (key) {
+    case "priority_desc":
+      return TASK_PRIORITIES.indexOf(a.priority) - TASK_PRIORITIES.indexOf(b.priority);
+    case "priority_asc":
+      return TASK_PRIORITIES.indexOf(b.priority) - TASK_PRIORITIES.indexOf(a.priority);
+    case "dueDate_asc":
+    case "dueDate_desc": {
+      // Sem prazo sempre por último, não importa a direção.
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return key === "dueDate_asc"
+        ? a.dueDate.localeCompare(b.dueDate)
+        : b.dueDate.localeCompare(a.dueDate);
+    }
+    case "createdAt_desc":
+      return b.createdAt.localeCompare(a.createdAt);
+    case "createdAt_asc":
+      return a.createdAt.localeCompare(b.createdAt);
+    case "title_asc":
+      return a.title.localeCompare(b.title, "pt-BR");
+    case "title_desc":
+      return b.title.localeCompare(a.title, "pt-BR");
+    default:
+      return 0;
   }
-  if (key === "dueDate") {
-    // Sem prazo sempre por último, não importa a direção do desempate.
-    if (!a.dueDate && !b.dueDate) return 0;
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return a.dueDate.localeCompare(b.dueDate);
-  }
-  return 0;
+}
+
+/** Filtro por período de prazo — nova seção do popover "Filtrar", pedido
+ * explícito de gestão operacional (ver rapidamente atrasadas/vencendo
+ * hoje/na semana/sem prazo). Reaproveita `bucketFor` (já usado pra essa
+ * mesma classificação em "Meu trabalho"/"Tarefas que precisam de
+ * atenção", com o mesmo corte de 19h configurável) em vez de duplicar a
+ * matemática de dias — só adiciona a checagem de "sem prazo" (que
+ * `bucketFor` não distingue de "prazo daqui a mais de 7 dias", já que
+ * as duas caem em "outro") e agrupa "amanhã" dentro de "esta semana"
+ * (o pedido só tem 4 opções, não uma pra amanhã à parte). */
+export type DeadlinePeriodFilter = "atrasada" | "hoje" | "semana" | "sem_prazo";
+
+export const DEADLINE_PERIOD_FILTER_LABEL: Record<DeadlinePeriodFilter, string> = {
+  atrasada: "Atrasadas",
+  hoje: "Vencem hoje",
+  semana: "Esta semana",
+  sem_prazo: "Sem prazo",
+};
+
+function matchesDeadlinePeriod(t: Task, key: DeadlinePeriodFilter, cutoffHour?: number): boolean {
+  if (key === "sem_prazo") return !t.dueDate && !t.performanceDueDate;
+  if (t.status === "Concluído" || t.status === "Arquivado") return false;
+  const bucket = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
+  if (key === "atrasada") return bucket === "atrasada";
+  if (key === "hoje") return bucket === "hoje";
+  return bucket === "amanha" || bucket === "semana";
 }
 
 /** Aplica o critério principal e usa o secundário só como desempate —
@@ -1137,6 +1258,10 @@ export function TaskBoard({
     "taskboard:priorityFilters",
     [],
   );
+  const [deadlineFilters, setDeadlineFilters] = usePersistedState<DeadlinePeriodFilter[]>(
+    "taskboard:deadlineFilters",
+    [],
+  );
   const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
     setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
@@ -1144,12 +1269,12 @@ export function TaskBoard({
   useEffect(() => {
     setTagFilters((prev) => prev.filter((t) => allTags.includes(t)));
   }, [allTags, setTagFilters]);
-  const activeFilterCount =
-    assigneeFilters.length + tagFilters.length + priorityFilters.length > 0
-      ? [assigneeFilters.length > 0, tagFilters.length > 0, priorityFilters.length > 0].filter(
-          Boolean,
-        ).length
-      : 0;
+  const activeFilterCount = [
+    assigneeFilters.length > 0,
+    tagFilters.length > 0,
+    priorityFilters.length > 0,
+    deadlineFilters.length > 0,
+  ].filter(Boolean).length;
   const toggleIn = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
   const taskMatchesFilters = (t: Task) => {
@@ -1161,9 +1286,55 @@ export function TaskBoard({
       if (!tagFilters.some((tag) => t.tags?.includes(tag))) return false;
     }
     if (priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
+    if (
+      deadlineFilters.length > 0 &&
+      !deadlineFilters.some((key) =>
+        matchesDeadlinePeriod(t, key, performanceSettings.deadlineCutoffHour),
+      )
+    )
+      return false;
     return true;
   };
   const visibleTasks = tasks.filter(taskMatchesFilters);
+
+  // Uma linha de chips removíveis abaixo da barra de controles — mostra
+  // cada VALOR ativo (não cada categoria), sempre visível enquanto
+  // houver algo filtrado, pra não depender de abrir o popover de novo
+  // só pra ver/tirar um filtro.
+  const activeFilterChips = useMemo(
+    () => [
+      ...assigneeFilters.map((name) => ({
+        id: `assignee:${name}`,
+        label: name,
+        onRemove: () => setAssigneeFilters((prev) => prev.filter((x) => x !== name)),
+      })),
+      ...tagFilters.map((tag) => ({
+        id: `tag:${tag}`,
+        label: tag,
+        onRemove: () => setTagFilters((prev) => prev.filter((x) => x !== tag)),
+      })),
+      ...priorityFilters.map((p) => ({
+        id: `priority:${p}`,
+        label: p,
+        onRemove: () => setPriorityFilters((prev) => prev.filter((x) => x !== p)),
+      })),
+      ...deadlineFilters.map((key) => ({
+        id: `deadline:${key}`,
+        label: DEADLINE_PERIOD_FILTER_LABEL[key],
+        onRemove: () => setDeadlineFilters((prev) => prev.filter((x) => x !== key)),
+      })),
+    ],
+    [
+      assigneeFilters,
+      tagFilters,
+      priorityFilters,
+      deadlineFilters,
+      setAssigneeFilters,
+      setTagFilters,
+      setPriorityFilters,
+      setDeadlineFilters,
+    ],
+  );
 
   // "Exibir subtarefas no board" — preferência pessoal, persistida (não é
   // por-board: a mesma escolha vale em qualquer kanban, já que é o mesmo
@@ -1207,6 +1378,12 @@ export function TaskBoard({
     "taskboard:sortSecondary",
     "none",
   );
+  // Estado só de UI do popover de Filtrar — nunca persiste, reseta
+  // sozinho quando o popover fecha e reabre (comportamento normal de um
+  // campo de busca/expandir).
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const isMobile = useIsMobile();
   const [sortOpen, setSortOpen] = useState(false);
 
   return (
@@ -1229,66 +1406,109 @@ export function TaskBoard({
                   }`}
                 >
                   <ArrowUpDown className="h-3.5 w-3.5" />
-                  Ordenar
-                  {sortPrimary !== "none" && (
+                  {sortPrimary === "none" ? (
+                    "Ordenar"
+                  ) : (
+                    <>
+                      {TASK_SORT_CATEGORY_LABEL[sortKeyCategory(sortPrimary)!]}
+                      <span aria-hidden>{sortKeyDirection(sortPrimary) === "asc" ? "↑" : "↓"}</span>
+                    </>
+                  )}
+                  {sortSecondary !== "none" && (
                     <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
-                      {sortSecondary !== "none" ? 2 : 1}
+                      2
                     </span>
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-64 space-y-3 p-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground">
-                    Ordenar por
-                  </label>
-                  <select
-                    value={sortPrimary}
-                    onChange={(e) => {
-                      const next = e.target.value as TaskSortKey;
-                      setSortPrimary(next);
-                      if (next === "none" || next === sortSecondary) setSortSecondary("none");
-                    }}
-                    className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    {(["none", "priority", "dueDate"] as TaskSortKey[]).map((k) => (
-                      <option key={k} value={k}>
-                        {TASK_SORT_KEY_LABEL[k]}
-                      </option>
+              <PopoverContent align="end" className="w-64 space-y-0.5 p-2">
+                <p className="px-2 py-1 text-[11px] font-semibold text-foreground">
+                  Ordenar tarefas
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortPrimary("none");
+                    setSortSecondary("none");
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 ${
+                    sortPrimary === "none" ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                    {sortPrimary === "none" && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  Manual
+                </button>
+                {TASK_SORT_MENU_GROUPS.map((group) => (
+                  <div key={group.category} className="pt-1.5">
+                    <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                      {group.label}
+                    </p>
+                    {group.options.map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          setSortPrimary(opt.key);
+                          if (sortKeyCategory(opt.key) === sortKeyCategory(sortSecondary)) {
+                            setSortSecondary("none");
+                          }
+                        }}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 ${
+                          sortPrimary === opt.key ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                          {sortPrimary === opt.key && <Check className="h-3.5 w-3.5" />}
+                        </span>
+                        {opt.label}
+                      </button>
                     ))}
-                  </select>
-                </div>
-                {sortPrimary !== "none" && (
-                  <div>
-                    <label className="block text-[11px] font-medium text-muted-foreground">
-                      Depois por (desempate)
-                    </label>
-                    <select
-                      value={sortSecondary}
-                      onChange={(e) => setSortSecondary(e.target.value as TaskSortKey)}
-                      className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      {(["none", "priority", "dueDate"] as TaskSortKey[])
-                        .filter((k) => k === "none" || k !== sortPrimary)
-                        .map((k) => (
-                          <option key={k} value={k}>
-                            {TASK_SORT_KEY_LABEL[k]}
-                          </option>
-                        ))}
-                    </select>
                   </div>
-                )}
+                ))}
                 {sortPrimary !== "none" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortPrimary("none");
-                      setSortSecondary("none");
-                    }}
-                    className="text-[11px] text-muted-foreground hover:text-foreground"
-                  >
-                    Limpar ordenação
-                  </button>
+                  <div className="mt-1 border-t border-border pt-1.5">
+                    <p className="px-2 py-1 text-[11px] font-semibold text-foreground">Desempate</p>
+                    <button
+                      type="button"
+                      onClick={() => setSortSecondary("none")}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 ${
+                        sortSecondary === "none" ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                        {sortSecondary === "none" && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                      Nenhum
+                    </button>
+                    {TASK_SORT_MENU_GROUPS.filter(
+                      (g) => g.category !== sortKeyCategory(sortPrimary),
+                    ).map((group) => (
+                      <div key={group.category} className="pt-1.5">
+                        <p className="px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                          {group.label}
+                        </p>
+                        {group.options.map((opt) => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setSortSecondary(opt.key)}
+                            className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60 ${
+                              sortSecondary === opt.key
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                              {sortSecondary === opt.key && <Check className="h-3.5 w-3.5" />}
+                            </span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </PopoverContent>
             </Popover>
@@ -1311,46 +1531,113 @@ export function TaskBoard({
               </PopoverTrigger>
               <PopoverContent
                 align="end"
-                className="max-h-[70vh] w-72 space-y-4 overflow-y-auto p-3"
+                className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-3"
               >
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold text-foreground">Filtrar tarefas</p>
+                  <button
+                    type="button"
+                    disabled={activeFilterCount === 0}
+                    onClick={() => {
+                      setAssigneeFilters([]);
+                      setTagFilters([]);
+                      setPriorityFilters([]);
+                      setDeadlineFilters([]);
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground"
+                  >
+                    Limpar
+                  </button>
+                </div>
+
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground">
-                    Responsável
-                  </label>
+                  <p className="text-[11px] font-medium text-muted-foreground">Responsável</p>
                   {allAssignees.length === 0 ? (
                     <p className="mt-1 text-xs text-muted-foreground">Nenhuma tarefa atribuída.</p>
                   ) : (
-                    <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-                      {allAssignees.map((name) => {
-                        const active = assigneeFilters.includes(name);
-                        return (
-                          <button
-                            key={name}
-                            type="button"
-                            onClick={() => setAssigneeFilters((prev) => toggleIn(prev, name))}
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                              active
-                                ? "bg-foreground text-background"
-                                : "bg-muted text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <>
+                      {allAssignees.length > 6 && (
+                        <div className="relative mt-1.5">
+                          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            type="search"
+                            value={assigneeSearch}
+                            onChange={(e) => setAssigneeSearch(e.target.value)}
+                            placeholder="Buscar membro..."
+                            className="h-7 w-full rounded-md border border-border bg-background pl-7 pr-2 text-xs outline-none focus:ring-1 focus:ring-ring"
+                          />
+                        </div>
+                      )}
+                      <div className="mt-1.5 max-h-36 space-y-0.5 overflow-y-auto">
+                        {allAssignees
+                          .filter((name) =>
+                            name.toLowerCase().includes(assigneeSearch.trim().toLowerCase()),
+                          )
+                          .map((name) => {
+                            const active = assigneeFilters.includes(name);
+                            const member = members.find((m) => m.name === name) ?? {
+                              name,
+                              initials: initialsOf(name) || "?",
+                              color: colorFor(name),
+                            };
+                            return (
+                              <button
+                                key={name}
+                                type="button"
+                                onClick={() => setAssigneeFilters((prev) => toggleIn(prev, name))}
+                                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
+                              >
+                                <input
+                                  type="checkbox"
+                                  readOnly
+                                  checked={active}
+                                  className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
+                                />
+                                <Avatar member={member} size={18} />
+                                <span
+                                  className={active ? "text-foreground" : "text-muted-foreground"}
+                                >
+                                  {name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground">
-                    Etiquetas
-                  </label>
+                  <p className="text-[11px] font-medium text-muted-foreground">Prioridade</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {TASK_PRIORITIES.map((p) => {
+                      const active = priorityFilters.includes(p);
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPriorityFilters((prev) => toggleIn(prev, p))}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                            active
+                              ? `bg-muted ${PRIORITY_TONE[p]}`
+                              : "bg-muted/50 text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Flag className="h-3 w-3" />
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground">Etiquetas</p>
                   {allTags.length === 0 ? (
                     <p className="mt-1 text-xs text-muted-foreground">Nenhuma etiqueta em uso.</p>
                   ) : (
-                    <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-                      {allTags.map((tag) => {
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {(tagsExpanded ? allTags : allTags.slice(0, 8)).map((tag) => {
                         const active = tagFilters.includes(tag);
                         return (
                           <button
@@ -1365,32 +1652,45 @@ export function TaskBoard({
                           </button>
                         );
                       })}
+                      {!tagsExpanded && allTags.length > 8 && (
+                        <button
+                          type="button"
+                          onClick={() => setTagsExpanded(true)}
+                          className="rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          Ver todas ({allTags.length})
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground">
-                    Prioridade
-                  </label>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {TASK_PRIORITIES.map((p) => {
-                      const active = priorityFilters.includes(p);
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPriorityFilters((prev) => toggleIn(prev, p))}
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                            active
-                              ? "bg-foreground text-background"
-                              : "bg-muted text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      );
-                    })}
+                  <p className="text-[11px] font-medium text-muted-foreground">Prazo</p>
+                  <div className="mt-1.5 space-y-0.5">
+                    {(["atrasada", "hoje", "semana", "sem_prazo"] as DeadlinePeriodFilter[]).map(
+                      (key) => {
+                        const active = deadlineFilters.includes(key);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setDeadlineFilters((prev) => toggleIn(prev, key))}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
+                          >
+                            <input
+                              type="checkbox"
+                              readOnly
+                              checked={active}
+                              className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
+                            />
+                            <span className={active ? "text-foreground" : "text-muted-foreground"}>
+                              {DEADLINE_PERIOD_FILTER_LABEL[key]}
+                            </span>
+                          </button>
+                        );
+                      },
+                    )}
                   </div>
                 </div>
 
@@ -1403,20 +1703,6 @@ export function TaskBoard({
                   />
                   Exibir subtarefas no board
                 </label>
-
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAssigneeFilters([]);
-                      setTagFilters([]);
-                      setPriorityFilters([]);
-                    }}
-                    className="text-[11px] text-muted-foreground hover:text-foreground"
-                  >
-                    Limpar filtros
-                  </button>
-                )}
               </PopoverContent>
             </Popover>
             <button
@@ -1428,6 +1714,48 @@ export function TaskBoard({
             </button>
           </div>
         </div>
+
+        {activeFilterChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(isMobile ? activeFilterChips.slice(0, 2) : activeFilterChips).map((chip) => (
+              <span
+                key={chip.id}
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={chip.onRemove}
+                  aria-label={`Remover filtro ${chip.label}`}
+                  className="hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {isMobile && activeFilterChips.length > 2 && (
+              <button
+                type="button"
+                onClick={() => setFilterOpen(true)}
+                className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                +{activeFilterChips.length - 2}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setAssigneeFilters([]);
+                setTagFilters([]);
+                setPriorityFilters([]);
+                setDeadlineFilters([]);
+              }}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              Limpar tudo
+            </button>
+          </div>
+        )}
 
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
           {TASK_STATUSES.map((col) => {
@@ -1839,7 +2167,7 @@ export function TaskDialog({
   // último) — pedido explícito; a ordem de criação/`subtasks` em si não
   // muda, só a lista mostrada na tela.
   const sortedSubtasks = useMemo(
-    () => [...subtasks].sort((a, b) => compareTasksByKey(a, b, "dueDate")),
+    () => [...subtasks].sort((a, b) => compareTasksByKey(a, b, "dueDate_asc")),
     [subtasks],
   );
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
