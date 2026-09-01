@@ -1489,28 +1489,12 @@ export function TaskBoard({
                         />
                       </div>
 
-                      {/* Nível 2 — prazo/situação do prazo */}
-                      {(t.dueDate || t.performanceDueDate) && (
-                        <div className="mt-2">
-                          <CardDeadlineBadge task={t} />
-                        </div>
-                      )}
-
-                      {/* Nível 3 — responsáveis (só avatares) */}
-                      {getTaskAssignees(t).length > 0 && (
-                        <div className="mt-2">
-                          <AssigneeStack names={getTaskAssignees(t)} members={members} />
-                        </div>
-                      )}
-
-                      {/* Nível 4 — prioridade (só quando != Normal) + subtarefas */}
-                      {(t.priority !== "Normal" || (t.subtasks?.length ?? 0) > 0) && (
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                          {t.priority !== "Normal" && (
-                            <span
-                              className={`inline-flex items-center gap-1 font-medium ${PRIORITY_TONE[t.priority]}`}
-                            >
-                              <Flag className="h-3 w-3" /> {t.priority}
+                      {/* Nível 2 — indicadores rápidos: descrição preenchida, subtarefas */}
+                      {(!!t.description || (t.subtasks?.length ?? 0) > 0) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          {!!t.description && (
+                            <span title="Tem descrição">
+                              <FileText className="h-3 w-3" />
                             </span>
                           )}
                           {(t.subtasks?.length ?? 0) > 0 && (
@@ -1523,13 +1507,29 @@ export function TaskBoard({
                         </div>
                       )}
 
-                      {/* Nível 5 — etiquetas / comentários / anexos */}
+                      {/* Nível 3 — responsáveis + prazo + prioridade, numa única linha */}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        {getTaskAssignees(t).length > 0 && (
+                          <AssigneeStack names={getTaskAssignees(t)} members={members} />
+                        )}
+                        {(t.dueDate || t.performanceDueDate) && <CardDeadlineBadge task={t} />}
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] font-medium ${PRIORITY_TONE[t.priority]}`}
+                        >
+                          <Flag className="h-3 w-3" /> {t.priority}
+                        </span>
+                      </div>
+
+                      {/* Nível 4 — etiquetas / comentários / anexos */}
                       {((t.tags?.length ?? 0) > 0 ||
                         (t.comments?.length ?? 0) > 0 ||
                         (t.attachments?.length ?? 0) > 0) && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                           {(t.tags?.length ?? 0) > 0 && (
-                            <CardTags tags={t.tags!} taskTags={taskTags} />
+                            <>
+                              <Tag className="h-3 w-3 shrink-0" />
+                              <CardTags tags={t.tags!} taskTags={taskTags} />
+                            </>
                           )}
                           {(t.comments?.length ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1">
