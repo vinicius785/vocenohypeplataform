@@ -210,23 +210,32 @@ export function loadTasksByAssignee(
   // deep-link (`?taskId=`) achar a tarefa certa lá dentro.
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
-      for (const assignee of getTaskAssignees(s)) {
-        const b = bucketFor(
-          s.dueDate,
-          s.status as ProjTask["status"],
-          s.performanceDueDate,
-          cutoffHour,
-        );
-        addFor(assignee, {
-          id: `mkt:${s.id}`,
-          projectId: marketingProjectId,
-          projectName: "Marketing",
-          title: s.title,
-          bucket: b,
-          due: formatDue(s.dueDate, b, s.performanceDueDate, cutoffHour),
-          status: s.status as ProjTask["status"],
-        });
-      }
+      // Sem passar por `collectAssignedTasks` aqui, as SUBTAREFAS de uma
+      // tarefa avulsa do Marketing nunca apareciam em "Meu trabalho" —
+      // este laço só olhava a tarefa de nível raiz (`s`) direto, ao
+      // contrário dos laços de projeto/campanha acima, que já recursam.
+      // `parentId` precisa do mesmo prefixo `mkt:` que o id de raiz usa
+      // (não o id cru da subtarefa), já que é isso que o deep-link
+      // (`openTask`) usa pra abrir — subtarefa nunca tem dialog próprio.
+      collectAssignedTasks(
+        [s as unknown as CampanhaTaskLike],
+        undefined,
+        (t, parentTitle, assignee) => {
+          const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
+          addFor(assignee, {
+            id: parentTitle ? t.id : `mkt:${s.id}`,
+            projectId: marketingProjectId,
+            projectName: "Marketing",
+            title: t.title,
+            bucket: b,
+            due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            priority: t.priority,
+            status: t.status,
+            parentTitle,
+            parentId: parentTitle ? `mkt:${s.id}` : undefined,
+          });
+        },
+      );
     }
   }
 
@@ -326,22 +335,30 @@ export function loadAllTasksFlat(
 
   if (marketingProjectId) {
     for (const s of loadStandalone()) {
-      const b = bucketFor(
-        s.dueDate,
-        s.status as ProjTask["status"],
-        s.performanceDueDate,
-        cutoffHour,
+      // Mesma correção de `loadTasksByAssignee` acima — sem
+      // `collectAllTasks`, subtarefas de uma tarefa avulsa do Marketing
+      // nunca entravam na lista achatada (usada pelo painel "Tarefas que
+      // precisam de atenção" e pelo donut de status na aba Time).
+      collectAllTasks(
+        [s as unknown as CampanhaTaskLike],
+        undefined,
+        (t, parentTitle, assignees) => {
+          const b = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
+          out.push({
+            id: parentTitle ? t.id : `mkt:${s.id}`,
+            projectId: marketingProjectId,
+            projectName: "Marketing",
+            title: t.title,
+            bucket: b,
+            due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            priority: t.priority,
+            status: t.status,
+            parentTitle,
+            parentId: parentTitle ? `mkt:${s.id}` : undefined,
+            assignees,
+          });
+        },
       );
-      out.push({
-        id: `mkt:${s.id}`,
-        projectId: marketingProjectId,
-        projectName: "Marketing",
-        title: s.title,
-        bucket: b,
-        due: formatDue(s.dueDate, b, s.performanceDueDate, cutoffHour),
-        status: s.status as ProjTask["status"],
-        assignees: getTaskAssignees(s),
-      });
     }
   }
 
