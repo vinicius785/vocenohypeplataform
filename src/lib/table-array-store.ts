@@ -12,7 +12,8 @@ export type ArrayStoreTable =
   | "task_tags"
   | "metas"
   | "aeo_prompts"
-  | "aeo_respostas";
+  | "aeo_respostas"
+  | "aeo_rodadas";
 
 /**
  * Backs a "list of entities" module (clientes, projetos, reunioes, ...) with

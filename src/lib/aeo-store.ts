@@ -15,8 +15,36 @@ export type AeoIdioma = (typeof AEO_IDIOMAS)[number];
 export const AEO_IAS = ["ChatGPT", "Perplexity", "Gemini", "Claude"] as const;
 export type AeoIa = (typeof AEO_IAS)[number];
 
-export const AEO_POSICOES = ["1", "2", "3", "Não apareceu"] as const;
+export const AEO_POSICOES = ["1", "2", "3", "4", "5+", "nao_se_aplica"] as const;
 export type AeoPosicao = (typeof AEO_POSICOES)[number];
+export const AEO_POSICAO_LABEL: Record<AeoPosicao, string> = {
+  "1": "1ª",
+  "2": "2ª",
+  "3": "3ª",
+  "4": "4ª",
+  "5+": "5ª+",
+  nao_se_aplica: "Não se aplica",
+};
+
+export const AEO_NARRATIVAS = ["positiva", "neutra", "negativa"] as const;
+export type AeoNarrativa = (typeof AEO_NARRATIVAS)[number];
+export const AEO_NARRATIVA_LABEL: Record<AeoNarrativa, string> = {
+  positiva: "Positiva",
+  neutra: "Neutra",
+  negativa: "Negativa",
+};
+
+/** Uma rodada de monitoramento — antes era só uma string de data solta
+ * dentro de cada resposta (`rodadaData`), sem linha própria. Status e
+ * contagens NUNCA são armazenados aqui: são sempre computados ao vivo por
+ * `computeRodadaProgresso` (aeo-engine.ts) a partir das respostas reais —
+ * guardar isso junto reintroduziria a mesma classe de bug (dado derivado
+ * que pode dessincronizar) que motivou esta refatoração. */
+export type AeoRodada = {
+  id: string;
+  dataRodada: string; // YYYY-MM-DD
+  createdAt: string;
+};
 
 export type AeoPrompt = {
   id: string;
@@ -30,30 +58,79 @@ export type AeoPrompt = {
 
 export type AeoResposta = {
   id: string;
-  rodadaData: string; // YYYY-MM-DD
+  rodadaId: string;
   promptId: string;
   ia: AeoIa;
   citada: boolean;
+  /** undefined = ainda não respondida; forçado pra "nao_se_aplica" sempre
+   * que citada=false (nunca fica solto/undefined nesse caso). */
   posicao?: AeoPosicao;
+  /** Resposta bruta colada da IA — não existia antes desta refatoração. */
+  rawResposta?: string;
   descricao?: string;
-  fonte?: string;
-  concorrentes?: string;
-  narrativeScore?: number; // 1-5, manual
-  evidenciaNome?: string;
+  /** Era `fonte?: string` (texto livre). Agora tags reais. */
+  fontes: string[];
+  /** Era uma string separada por vírgula. Agora tags reais. */
+  concorrentes: string[];
+  narrativa?: AeoNarrativa;
+  /** LEGADO — data: URL base64 de antes desta refatoração. Nunca mais
+   * escrita; convive com `evidenciaPath` pra não perder evidência antiga. */
   evidenciaUrl?: string;
+  /** Path no bucket `aeo-evidencias` — usado por todo upload novo. */
+  evidenciaPath?: string;
   createdAt: string;
   updatedAt?: string;
 };
 
+/** Normaliza uma linha que porventura ainda esteja no formato antigo (ex.:
+ * criada na janela entre o backfill e o deploy do frontend novo) — mesmo
+ * espírito de `normalizeMetaItem`. O backfill via SQL já convergiu os
+ * dados reais; isso é só rede de segurança. */
+function normalizeAeoResposta(raw: unknown): AeoResposta {
+  const r = raw as Partial<AeoResposta> & {
+    fonte?: string;
+    rodadaData?: string;
+  };
+  return {
+    ...r,
+    fontes: Array.isArray(r.fontes) ? r.fontes : r.fonte ? [r.fonte] : [],
+    concorrentes: Array.isArray(r.concorrentes) ? r.concorrentes : [],
+    rodadaId: r.rodadaId ?? "",
+  } as AeoResposta;
+}
+
+const rodadasStore = createTableArrayStore<AeoRodada>("aeo_rodadas");
 const promptsStore = createTableArrayStore<AeoPrompt>("aeo_prompts");
 const respostasStore = createTableArrayStore<AeoResposta>("aeo_respostas");
 
 export function initAeoSync(): Promise<void> {
-  const p1 = promptsStore.init();
-  const p2 = respostasStore.init();
+  const p1 = rodadasStore.init();
+  const p2 = promptsStore.init();
+  const p3 = respostasStore.init();
+  rodadasStore.subscribeRealtime();
   promptsStore.subscribeRealtime();
   respostasStore.subscribeRealtime();
-  return Promise.all([p1, p2]).then(() => undefined);
+  return Promise.all([p1, p2, p3]).then(() => undefined);
+}
+
+export function loadAeoRodadas(): AeoRodada[] {
+  return rodadasStore.get();
+}
+export function saveAeoRodadas(list: AeoRodada[]) {
+  rodadasStore.set(() => list);
+}
+export function onAeoRodadasChange(callback: () => void): () => void {
+  return rodadasStore.subscribe(callback);
+}
+
+export function createRodada(dataRodada: string): AeoRodada {
+  const nova: AeoRodada = {
+    id: crypto.randomUUID(),
+    dataRodada,
+    createdAt: new Date().toISOString(),
+  };
+  saveAeoRodadas([...loadAeoRodadas(), nova]);
+  return nova;
 }
 
 export function loadAeoPrompts(): AeoPrompt[] {
@@ -67,7 +144,7 @@ export function onAeoPromptsChange(callback: () => void): () => void {
 }
 
 export function loadAeoRespostas(): AeoResposta[] {
-  return respostasStore.get();
+  return respostasStore.get().map(normalizeAeoResposta);
 }
 export function saveAeoRespostas(list: AeoResposta[]) {
   respostasStore.set(() => list);
@@ -76,112 +153,38 @@ export function onAeoRespostasChange(callback: () => void): () => void {
   return respostasStore.subscribe(callback);
 }
 
-/** Todas as datas de rodada já registradas, mais recente primeiro. */
-export function aeoRodadas(respostas: AeoResposta[]): string[] {
-  return Array.from(new Set(respostas.map((r) => r.rodadaData))).sort((a, b) => b.localeCompare(a));
-}
-
-/** % de prompts respondidos nessa rodada+IA onde a VNH foi citada. */
-export function aiVisibilityScore(respostas: AeoResposta[], rodada: string, ia: AeoIa): number {
-  const subset = respostas.filter((r) => r.rodadaData === rodada && r.ia === ia);
-  if (subset.length === 0) return 0;
-  const citadas = subset.filter((r) => r.citada).length;
-  return Math.round((citadas / subset.length) * 100);
-}
-
-/** % das citações (citada=true) em que a VNH ficou em 1º lugar. */
-export function shareOfAnswers(respostas: AeoResposta[], rodada: string, ia: AeoIa): number {
-  const citadas = respostas.filter((r) => r.rodadaData === rodada && r.ia === ia && r.citada);
-  if (citadas.length === 0) return 0;
-  const primeiro = citadas.filter((r) => r.posicao === "1").length;
-  return Math.round((primeiro / citadas.length) * 100);
-}
-
-/** Visibility score por categoria (A/B/C), pra uma rodada — todas as IAs juntas. */
-export function categoryScore(
-  respostas: AeoResposta[],
-  prompts: AeoPrompt[],
-  rodada: string,
-): Record<AeoCategoria, number> {
-  const promptById = new Map(prompts.map((p) => [p.id, p]));
-  const result: Record<AeoCategoria, number> = { A: 0, B: 0, C: 0 };
-  for (const cat of AEO_CATEGORIAS) {
-    const subset = respostas.filter(
-      (r) => r.rodadaData === rodada && promptById.get(r.promptId)?.categoria === cat,
-    );
-    if (subset.length === 0) continue;
-    const citadas = subset.filter((r) => r.citada).length;
-    result[cat] = Math.round((citadas / subset.length) * 100);
+/** Único ponto de escrita de uma resposta — usado hoje pelo drawer de
+ * edição manual e, no futuro, seria o mesmo ponto chamado por um webhook
+ * de preenchimento automático (`POST /api/aeo/responses`), sem duplicar a
+ * lógica de upsert-por-chave-natural em nenhum outro lugar. Chave natural:
+ * rodadaId + promptId + ia. */
+export function upsertAeoResposta(
+  rodadaId: string,
+  promptId: string,
+  ia: AeoIa,
+  patch: Partial<Omit<AeoResposta, "id" | "rodadaId" | "promptId" | "ia" | "createdAt">>,
+): AeoResposta {
+  const all = loadAeoRespostas();
+  const existing = all.find(
+    (r) => r.rodadaId === rodadaId && r.promptId === promptId && r.ia === ia,
+  );
+  const now = new Date().toISOString();
+  if (existing) {
+    const next: AeoResposta = { ...existing, ...patch, updatedAt: now };
+    saveAeoRespostas(all.map((r) => (r.id === existing.id ? next : r)));
+    return next;
   }
-  return result;
-}
-
-/** Prompts que nunca tiveram a VNH citada em nenhuma rodada/IA — maior oportunidade. */
-export function promptsZero(respostas: AeoResposta[], prompts: AeoPrompt[]): AeoPrompt[] {
-  const everCited = new Set(respostas.filter((r) => r.citada).map((r) => r.promptId));
-  const everAsked = new Set(respostas.map((r) => r.promptId));
-  return prompts.filter((p) => everAsked.has(p.id) && !everCited.has(p.id));
-}
-
-/** Ranking de prompts por nº de citações (mais citado primeiro). */
-export function rankingPrompts(
-  respostas: AeoResposta[],
-  prompts: AeoPrompt[],
-): { prompt: AeoPrompt; citacoes: number; total: number }[] {
-  const promptById = new Map(prompts.map((p) => [p.id, p]));
-  const counts = new Map<string, { citacoes: number; total: number }>();
-  for (const r of respostas) {
-    const c = counts.get(r.promptId) ?? { citacoes: 0, total: 0 };
-    c.total += 1;
-    if (r.citada) c.citacoes += 1;
-    counts.set(r.promptId, c);
-  }
-  return Array.from(counts.entries())
-    .map(([promptId, c]) => ({ prompt: promptById.get(promptId), ...c }))
-    .filter((x): x is { prompt: AeoPrompt; citacoes: number; total: number } => !!x.prompt)
-    .sort((a, b) => b.citacoes - a.citacoes);
-}
-
-/** Concorrentes citados junto (texto livre, separado por vírgula) — contagem de frequência. */
-export function competitorFrequency(respostas: AeoResposta[]): { nome: string; vezes: number }[] {
-  const counts = new Map<string, number>();
-  for (const r of respostas) {
-    if (!r.concorrentes) continue;
-    for (const raw of r.concorrentes.split(",")) {
-      const nome = raw.trim();
-      if (!nome) continue;
-      counts.set(nome, (counts.get(nome) ?? 0) + 1);
-    }
-  }
-  return Array.from(counts.entries())
-    .map(([nome, vezes]) => ({ nome, vezes }))
-    .sort((a, b) => b.vezes - a.vezes);
-}
-
-/** Recomendação automática simples: aponta a pior combinação categoria×idioma
- * (visibility 0% com pelo menos uma resposta registrada). */
-export function recomendacaoAutomatica(
-  respostas: AeoResposta[],
-  prompts: AeoPrompt[],
-  rodada: string,
-): string | null {
-  const promptById = new Map(prompts.map((p) => [p.id, p]));
-  let pior: { categoria: AeoCategoria; idioma: AeoIdioma; score: number; total: number } | null =
-    null;
-  for (const cat of AEO_CATEGORIAS) {
-    for (const idioma of AEO_IDIOMAS) {
-      const subset = respostas.filter((r) => {
-        if (r.rodadaData !== rodada) return false;
-        const p = promptById.get(r.promptId);
-        return p?.categoria === cat && p?.idioma === idioma;
-      });
-      if (subset.length === 0) continue;
-      const citadas = subset.filter((r) => r.citada).length;
-      const score = Math.round((citadas / subset.length) * 100);
-      if (!pior || score < pior.score)
-        pior = { categoria: cat, idioma, score, total: subset.length };
-    }
-  }
-  if (!pior || pior.score > 20) return null;
-  return `Categoria ${pior.categoria} (${AEO_CATEGORIA_LABEL[pior.categoria]}) em ${pior.idioma === "EN" ? "inglês" : "português"} está com ${pior.score}% de visibilidade — priorizar conteúdo AEO nesse recorte.`;
+  const novo: AeoResposta = {
+    id: crypto.randomUUID(),
+    rodadaId,
+    promptId,
+    ia,
+    citada: false,
+    fontes: [],
+    concorrentes: [],
+    createdAt: now,
+    ...patch,
+  };
+  saveAeoRespostas([...all, novo]);
+  return novo;
 }

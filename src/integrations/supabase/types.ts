@@ -63,6 +63,30 @@ export type Database = {
         }
         Relationships: []
       }
+      aeo_rodadas: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       banco_influenciadores: {
         Row: {
           created_at: string
