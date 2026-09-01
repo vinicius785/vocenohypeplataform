@@ -1588,25 +1588,20 @@ export function TaskDialog({
     setNewSubtaskPriority("Normal");
     setShowSubtaskInput(false);
   };
-  const toggleSubtask = (id: string) => {
-    setSubtasks((prev) =>
-      prev.map((st) => {
-        if (st.id === id) {
-          const done = st.status === "Concluído";
-          setActivity((a) =>
-            pushActivity(a, `${done ? "reabriu" : "concluiu"} subtarefa "${st.title}"`),
-          );
-          // Concluir por aqui é uma troca de status na marra (não passa por
-          // `withStatusChange`) — sem parar o timer da própria subtarefa
-          // manualmente, um timer deixado rodando nela nunca parava,
-          // mesmo com a subtarefa já concluída.
-          const next = !done && st.timerRunning ? stopTaskTimer(st) : st;
-          return { ...next, status: done ? "Aberto" : "Concluído" };
-        }
-        return st;
-      }),
-    );
-  };
+  // Toggle manual do timer de uma subtarefa, a partir do seu próprio
+  // diálogo aninhado — sem isso, o campo "Timer" ali só mostrava "—",
+  // sem nenhum jeito de parar um timer preso rodando numa subtarefa
+  // (só dava pra ver o problema, nunca resolvê-lo pela UI).
+  const toggleSubtaskTimer =
+    scope?.kind === "marketing"
+      ? undefined
+      : (subtaskId: string): Task | null => {
+          const st = subtasks.find((s) => s.id === subtaskId);
+          if (!st) return null;
+          const updated = st.timerRunning ? stopTaskTimer(st) : startTaskTimer(st);
+          setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? updated : s)));
+          return updated;
+        };
   const removeSubtask = (id: string) => {
     const st = subtasks.find((x) => x.id === id);
     setSubtasks((s) => s.filter((x) => x.id !== id));
@@ -2211,8 +2206,13 @@ export function TaskDialog({
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             const next = e.target.value as TaskStatus;
+                            // `withStatusChange` já para o timer da
+                            // subtarefa se ele estava rodando (e inicia se
+                            // o novo status for "Em andamento") — sem
+                            // passar por ela aqui, um timer preso rodando
+                            // nunca parava só porque o status mudou.
                             setSubtasks((prev) =>
-                              prev.map((st) => (st.id === s.id ? { ...st, status: next } : st)),
+                              prev.map((st) => (st.id === s.id ? withStatusChange(st, next) : st)),
                             );
                             setActivity((a) =>
                               pushActivity(a, `mudou status de "${s.title}" para ${next}`),
@@ -2528,6 +2528,7 @@ export function TaskDialog({
             removeSubtask(editSubtask.id);
             setEditSubtask(null);
           }}
+          onToggleTimer={toggleSubtaskTimer}
         />
       )}
       <AttachmentPreviewDialog
