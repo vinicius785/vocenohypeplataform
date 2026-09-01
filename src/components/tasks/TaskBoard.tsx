@@ -47,11 +47,11 @@ import {
 } from "@/lib/marketing-tasks";
 import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
-import { DeadlineChangeDialog } from "@/components/tasks/DeadlineChangeDialog";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
 import { recordPerformanceEvent, usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   isCriticalReplan,
+  isCriticalDeadlineMove,
   effectivePerformanceDueDate,
   classifyOutcome,
   xpForCompletion,
@@ -1805,6 +1805,23 @@ export function TaskDialog({
   const [priority, setPriority] = useState<TaskPriority>("Normal");
   const [dueDate, setDueDate] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
+  // Elevados de `let`s recalculados a cada `save()` pra estado de
+  // verdade — precisam refletir mudanças de prazo já confirmadas NESTA
+  // sessão (silenciosas ou via formulário) antes mesmo do "Salvar" do
+  // diálogo inteiro, senão o feed do Activity mostraria o evento sem
+  // seus detalhes (motivo/isCritical) enquanto o diálogo ainda está
+  // aberto.
+  const [originalDueDate, setOriginalDueDate] = useState<string | undefined>();
+  const [performanceDueDate, setPerformanceDueDate] = useState<string | undefined>();
+  const [deadlineHistory, setDeadlineHistory] = useState<DeadlineChangeEntry[]>([]);
+  // Mudança de prazo crítica (vence hoje/atrasada, sendo adiada) ainda
+  // não confirmada — o campo já mostra a nova data (feedback visual
+  // imediato), mas nada foi persistido: o formulário inline no Activity
+  // decide se vira `deadlineHistory` de verdade ou é descartado.
+  const [pendingDeadlineChange, setPendingDeadlineChange] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
   const [estimate, setEstimate] = useState<string>("");
   const [recurrence, setRecurrence] = useState<TaskRecurrence | undefined>(undefined);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -1879,6 +1896,10 @@ export function TaskDialog({
     setPriority(initial?.priority ?? "Normal");
     setDueDate(initial?.dueDate ?? "");
     setStartDate(initial?.startDate ?? "");
+    setOriginalDueDate(initial?.originalDueDate);
+    setPerformanceDueDate(initial?.performanceDueDate);
+    setDeadlineHistory(initial?.deadlineHistory ?? []);
+    setPendingDeadlineChange(null);
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
     setTimerRunning(!!initial?.timerRunning);
@@ -1952,31 +1973,95 @@ export function TaskDialog({
     ];
   };
 
-  // Só verdadeiro quando a tarefa JÁ tinha prazo e ele está mudando pra
-  // outro valor (inclusive removendo) — 1ª definição de prazo nunca pede
-  // motivo (item 5 do pedido de Performance). Intercepta o "Salvar"
-  // exatamente nesse caso, via `attemptSave`.
-  const isRealDeadlineChange = !!(initial?.dueDate && initial.dueDate !== dueDate);
-  const [deadlineDialogOpen, setDeadlineDialogOpen] = useState(false);
-  const [closeAfterSave, setCloseAfterSave] = useState(false);
-  const pendingIsCritical =
-    isRealDeadlineChange && initial?.dueDate
-      ? isCriticalReplan(initial.dueDate, new Date().toISOString())
-      : false;
+  /** Grava uma mudança de prazo de verdade (tarefa que já tinha prazo)
+   * direto no estado local — chamada tanto no caminho silencioso
+   * (antecipar, ou tarefa com prazo futuro, sem `justification`) quanto
+   * na confirmação do formulário inline do Activity (`justification`
+   * presente). NUNCA emite o evento de ledger aqui — isso fica só
+   * dentro de `save()` (ver comentário lá), pra "Cancelar" (que
+   * descarta tudo sem passar por `save()`) nunca deixar um evento órfão
+   * gravado no Supabase. */
+  const commitDeadlineChange = (
+    to: string,
+    justification?: { motivo: DeadlineChangeMotivo; observacao?: string },
+  ) => {
+    if (!initial?.dueDate) return;
+    const from = initial.dueDate;
+    const nowISO = new Date().toISOString();
+    setActivity((a) => pushActivity(a, to ? `definiu prazo ${to}` : "removeu prazo", "deadline"));
+    // Tarefa legada sem `originalDueDate` (backfill, mesma lógica de
+    // sempre): a âncora passa a ser o prazo que ela tinha até agora.
+    const anchor = originalDueDate ?? from;
+    const motivo = justification?.motivo ?? "replanejamento_operacional";
+    const critical = isCriticalReplan(from, nowISO);
+    const entry: DeadlineChangeEntry = {
+      id: crypto.randomUUID(),
+      from,
+      to: to || undefined,
+      changedAt: nowISO,
+      changedBy: getCurrentAuthor().name,
+      isCritical: critical,
+      motivo,
+      observacao: justification?.observacao || undefined,
+      exemptFromResponsibility: DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT[motivo],
+    };
+    const nextHistory = [...deadlineHistory, entry];
+    setOriginalDueDate(anchor);
+    setDeadlineHistory(nextHistory);
+    setPerformanceDueDate(effectivePerformanceDueDate(anchor, nextHistory));
+  };
 
-  const save = (deadlineCtx?: { motivo: DeadlineChangeMotivo; observacao: string }) => {
+  const discardPendingDeadlineChange = () => {
+    setPendingDeadlineChange((pending) => {
+      if (pending) setDueDate(pending.from);
+      return null;
+    });
+  };
+
+  /** Único ponto de entrada pro campo "Entrega" — decide se a mudança
+   * salva direto (silenciosa) ou fica pendente aguardando o formulário
+   * inline do Activity (crítica: vence hoje/atrasada E sendo adiada). */
+  const handleDueDateChange = (v?: string) => {
+    const next = v ?? "";
+    if (!initial?.dueDate || next === initial.dueDate) {
+      // 1ª definição de prazo, tarefa nova, ou voltou pro valor original
+      // (cancela qualquer pendência obsoleta).
+      setDueDate(next);
+      setPendingDeadlineChange(null);
+      return;
+    }
+    if (isCriticalDeadlineMove(initial.dueDate, next, new Date().toISOString())) {
+      setDueDate(next); // feedback visual imediato — ainda não persistido
+      setPendingDeadlineChange({ from: initial.dueDate, to: next });
+      return;
+    }
+    setDueDate(next);
+    setPendingDeadlineChange(null);
+    commitDeadlineChange(next);
+  };
+
+  const save = (dueDateOverride?: string) => {
     if (!canSave) return;
     let act = activity;
     let cmts = comments;
     let nextTimerRunning = timerRunning;
     let nextTimerStartedAt = timerStartedAt;
     let finalTimeEntries = timeEntries;
-    let originalDueDate = initial?.originalDueDate;
-    let performanceDueDate = initial?.performanceDueDate;
-    let deadlineHistory = initial?.deadlineHistory ?? [];
+    // `originalDueDate`/`performanceDueDate`/`deadlineHistory` já são
+    // estado (ver acima) — mudanças de prazo desta sessão (silenciosas
+    // ou confirmadas via formulário) já estão refletidas neles antes de
+    // "Salvar" rodar, então `save()` só precisa LER, nunca recalcular.
+    let finalOriginalDueDate = originalDueDate;
+    let finalPerformanceDueDate = performanceDueDate;
+    let finalDeadlineHistory = deadlineHistory;
     let finalCompletedAt = initial?.completedAt;
     let finalStatus = status;
-    let finalDueDate = dueDate || undefined;
+    // `dueDateOverride` cobre o caso de uma pendência crítica descartada
+    // no exato momento de salvar (`attemptSave`) — `dueDate` (estado)
+    // ainda não refletiu a reversão síncrona quando `save()` roda logo
+    // em seguida, então o valor certo precisa vir por parâmetro, não do
+    // estado.
+    let finalDueDate = (dueDateOverride ?? dueDate) || undefined;
     let finalStartDate = startDate || undefined;
     const me = getMe();
     const actor = getCurrentAuthor();
@@ -2062,61 +2147,49 @@ export function TaskDialog({
           });
         }
       }
-      if ((initial.dueDate ?? "") !== dueDate) {
-        act = pushActivity(act, dueDate ? `definiu prazo ${dueDate}` : "removeu prazo", "deadline");
-        if (!initial.dueDate) {
-          // 1ª definição de prazo — sem motivo, sem entrada de histórico.
-          originalDueDate = dueDate || undefined;
-          performanceDueDate = dueDate || undefined;
-        } else {
-          // Tarefa legada (já tinha `dueDate` antes do histórico de prazo
-          // existir, então nunca ganhou `originalDueDate`) — sem isso, o
-          // congelamento de `effectivePerformanceDueDate` não tem âncora
-          // pra travar quando este replanejamento for crítico-não-isento (o
-          // `ref` ficaria `undefined` em vez do prazo anterior). Backfill
-          // no momento da 1ª mudança rastreada: a âncora passa a ser o
-          // prazo que a tarefa tinha até agora.
-          if (!originalDueDate) originalDueDate = initial.dueDate;
-          const motivo = deadlineCtx?.motivo ?? "replanejamento_operacional";
-          const isCritical = isCriticalReplan(initial.dueDate, new Date().toISOString());
-          const exempt = DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT[motivo];
-          const entry: DeadlineChangeEntry = {
-            id: crypto.randomUUID(),
-            from: initial.dueDate,
-            to: dueDate || undefined,
-            changedAt: new Date().toISOString(),
-            changedBy: actor.name,
-            isCritical,
-            motivo,
-            observacao: deadlineCtx?.observacao || undefined,
-            exemptFromResponsibility: exempt,
-          };
-          deadlineHistory = [...deadlineHistory, entry];
-          performanceDueDate = effectivePerformanceDueDate(originalDueDate, deadlineHistory);
-          if (isValidUuid(me.id)) {
-            for (const name of getTaskAssignees(initial).length
-              ? getTaskAssignees(initial)
-              : [actor.name]) {
-              recordPerformanceEvent({
-                eventType: "task_deadline_changed",
-                personId: resolvePersonId(name, members),
-                personName: name,
-                actorId: me.id,
-                actorName: actor.name,
-                taskId: initial.id,
-                taskOrigin: origin,
-                taskTitle: title.trim(),
-                meetingId: null,
-                data: {
-                  from: entry.from ?? null,
-                  to: entry.to ?? null,
-                  isCritical: entry.isCritical,
-                  motivo: entry.motivo ?? null,
-                  observacao: entry.observacao ?? null,
-                  exemptFromResponsibility: entry.exemptFromResponsibility,
-                },
-              });
-            }
+      if (!initial.dueDate && finalDueDate) {
+        // 1ª definição de prazo — sem motivo, sem entrada de histórico
+        // (qualquer mudança SUBSEQUENTE já passou por
+        // `commitDeadlineChange`, silenciosa ou via formulário, antes
+        // mesmo do "Salvar" rodar).
+        act = pushActivity(act, `definiu prazo ${finalDueDate}`, "deadline");
+        finalOriginalDueDate = finalDueDate;
+        finalPerformanceDueDate = finalDueDate;
+      }
+      // Emite o(s) evento(s) de ledger só aqui (nunca em
+      // `commitDeadlineChange`) — por diff contra o histórico ORIGINAL
+      // da tarefa, pra cobrir tanto o caminho silencioso quanto o
+      // confirmado com uma única emissão, e pra "Cancelar" (que descarta
+      // tudo sem passar por `save()`) nunca deixar um evento gravado no
+      // Supabase pra uma edição que nunca foi salva.
+      const priorDeadlineEntryIds = new Set((initial.deadlineHistory ?? []).map((e) => e.id));
+      const newDeadlineEntries = finalDeadlineHistory.filter(
+        (e) => !priorDeadlineEntryIds.has(e.id),
+      );
+      if (newDeadlineEntries.length && isValidUuid(me.id)) {
+        for (const entry of newDeadlineEntries) {
+          for (const name of getTaskAssignees(initial).length
+            ? getTaskAssignees(initial)
+            : [actor.name]) {
+            recordPerformanceEvent({
+              eventType: "task_deadline_changed",
+              personId: resolvePersonId(name, members),
+              personName: name,
+              actorId: me.id,
+              actorName: actor.name,
+              taskId: initial.id,
+              taskOrigin: origin,
+              taskTitle: title.trim(),
+              meetingId: null,
+              data: {
+                from: entry.from ?? null,
+                to: entry.to ?? null,
+                isCritical: entry.isCritical,
+                motivo: entry.motivo ?? null,
+                observacao: entry.observacao ?? null,
+                exemptFromResponsibility: entry.exemptFromResponsibility,
+              },
+            });
           }
         }
       }
@@ -2125,8 +2198,8 @@ export function TaskDialog({
       if (statusChangedTask) {
         const candidateNext: Task = {
           ...statusChangedTask,
-          deadlineHistory,
-          originalDueDate,
+          deadlineHistory: finalDeadlineHistory,
+          originalDueDate: finalOriginalDueDate,
           // `withStatusChange` só recebeu `initial` como base (assignees
           // antigos) — se responsável e status mudam na mesma edição, o
           // evento de conclusão precisa creditar quem está sendo salvo
@@ -2146,16 +2219,16 @@ export function TaskDialog({
         finalCompletedAt = afterRecurrence.completedAt;
         finalDueDate = afterRecurrence.dueDate;
         finalStartDate = afterRecurrence.startDate;
-        originalDueDate = afterRecurrence.originalDueDate;
-        performanceDueDate = afterRecurrence.performanceDueDate;
-        deadlineHistory = afterRecurrence.deadlineHistory ?? [];
+        finalOriginalDueDate = afterRecurrence.originalDueDate;
+        finalPerformanceDueDate = afterRecurrence.performanceDueDate;
+        finalDeadlineHistory = afterRecurrence.deadlineHistory ?? [];
         act = afterRecurrence.activity ?? act;
       }
     } else {
       void notifyNewAssignees(assignees, title.trim(), scope);
       if (dueDate) {
-        originalDueDate = dueDate;
-        performanceDueDate = dueDate;
+        finalOriginalDueDate = dueDate;
+        finalPerformanceDueDate = dueDate;
       }
     }
     onSave({
@@ -2179,28 +2252,30 @@ export function TaskDialog({
       timerStartedAt: nextTimerStartedAt,
       timeEntries: finalTimeEntries,
       completedAt: finalCompletedAt,
-      originalDueDate,
-      performanceDueDate,
-      deadlineHistory: deadlineHistory.length ? deadlineHistory : undefined,
+      originalDueDate: finalOriginalDueDate,
+      performanceDueDate: finalPerformanceDueDate,
+      deadlineHistory: finalDeadlineHistory.length ? finalDeadlineHistory : undefined,
       recurrence,
     });
   };
 
   /** Ponto único de entrada pro "Salvar" (botão explícito ou fechar o
-   * diálogo clicando fora/Esc) — intercepta só quando há uma alteração
-   * real de prazo, abrindo o mini-diálogo de motivo antes de continuar.
-   * Qualquer outra edição salva direto, sem fricção (item 26). */
+   * diálogo clicando fora/Esc). Qualquer mudança de prazo já foi
+   * resolvida antes de chegar aqui (`handleDueDateChange`/formulário
+   * inline do Activity) — se ainda houver uma pendência não confirmada
+   * nesse momento, ela é descartada (revertida) e o resto da edição
+   * salva normalmente, sem bloquear nada (item 14 do pedido). */
   const attemptSave = (closeAfter: boolean) => {
     if (!canSave) {
       if (closeAfter) onOpenChange(false);
       return;
     }
-    if (isRealDeadlineChange) {
-      setCloseAfterSave(closeAfter);
-      setDeadlineDialogOpen(true);
-      return;
-    }
-    save();
+    // `pendingDeadlineChange` só reverte via `setState` (assíncrono) —
+    // `save()` não pode confiar em `dueDate` já refletir isso quando
+    // roda logo em seguida, por isso o valor de volta é passado direto.
+    const dueDateOverride = pendingDeadlineChange?.from;
+    discardPendingDeadlineChange();
+    save(dueDateOverride);
     if (closeAfter) onOpenChange(false);
   };
 
@@ -2601,7 +2676,7 @@ export function TaskDialog({
                   <DateField
                     variant="inline"
                     value={dueDate || undefined}
-                    onChange={(v) => setDueDate(v ?? "")}
+                    onChange={handleDueDateChange}
                     min={startDate || undefined}
                     rangeStart={startDate || undefined}
                     rangeEnd={dueDate || undefined}
@@ -3131,16 +3206,14 @@ export function TaskDialog({
           </div>
 
           <TaskActivityPanel
-            task={
-              initial ?? {
-                status,
-                dueDate: dueDate || undefined,
-                originalDueDate: undefined,
-                performanceDueDate: undefined,
-                deadlineHistory: undefined,
-                completedAt: undefined,
-              }
-            }
+            task={{
+              status,
+              dueDate: dueDate || undefined,
+              originalDueDate,
+              performanceDueDate,
+              deadlineHistory,
+              completedAt: initial?.completedAt,
+            }}
             activity={activity}
             comments={comments}
             members={members}
@@ -3148,6 +3221,13 @@ export function TaskDialog({
             onCommentTextChange={setCommentText}
             onPostComment={postComment}
             deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
+            pendingDeadlineChange={pendingDeadlineChange}
+            onConfirmDeadlineChange={(motivo, observacao) => {
+              if (!pendingDeadlineChange) return;
+              commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
+              setPendingDeadlineChange(null);
+            }}
+            onCancelDeadlineChange={discardPendingDeadlineChange}
           />
         </div>
 
@@ -3228,16 +3308,6 @@ export function TaskDialog({
       <AttachmentPreviewDialog
         attachment={previewAttachment}
         onClose={() => setPreviewAttachment(null)}
-      />
-      <DeadlineChangeDialog
-        open={deadlineDialogOpen}
-        onOpenChange={setDeadlineDialogOpen}
-        isCritical={pendingIsCritical}
-        onConfirm={(motivo, observacao) => {
-          setDeadlineDialogOpen(false);
-          save({ motivo, observacao });
-          if (closeAfterSave) onOpenChange(false);
-        }}
       />
     </Dialog>
   );

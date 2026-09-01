@@ -56,6 +56,23 @@ export function isCriticalReplan(previousDueDate: string, changedAtISO: string):
   return formatDateToIso(new Date(changedAtISO)) >= previousDueDate;
 }
 
+/** Só exige justificativa quando a tarefa vence hoje/já está atrasada
+ * (`isCriticalReplan`) E o novo prazo está sendo ADIADO — `isCriticalReplan`
+ * sozinha não sabe a direção da mudança (uma tarefa atrasada movida pra
+ * uma data ainda mais cedo continuaria "crítica" por ela, mesmo sem
+ * fazer sentido pedir motivo pra quem está antecipando). Antecipar
+ * prazo, ou mudar uma tarefa com prazo futuro, nunca interrompe o
+ * fluxo — sempre salva silenciosamente. */
+export function isCriticalDeadlineMove(
+  previousDueDate: string,
+  nextDueDate: string,
+  nowISO: string,
+): boolean {
+  return (
+    !!nextDueDate && nextDueDate > previousDueDate && isCriticalReplan(previousDueDate, nowISO)
+  );
+}
+
 export type DeadlineHistoryEntryLike = {
   to?: string;
   isCritical: boolean;

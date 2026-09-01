@@ -13,11 +13,13 @@ import {
   formatWhen,
   fmtDate,
   renderMentions,
+  DEADLINE_CHANGE_MOTIVOS,
   DEADLINE_CHANGE_MOTIVO_LABEL,
   type Activity,
   type ActivityKind,
   type Comment,
   type DeadlineChangeEntry,
+  type DeadlineChangeMotivo,
   type Member,
 } from "@/components/tasks/TaskBoard";
 import { ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
@@ -136,6 +138,9 @@ export function TaskActivityPanel({
   onCommentTextChange,
   onPostComment,
   deadlineCutoffHour,
+  pendingDeadlineChange,
+  onConfirmDeadlineChange,
+  onCancelDeadlineChange,
 }: {
   /** Só os campos que este painel precisa (saúde do prazo +
    * cross-referência de `deadlineHistory`) — não o `Task` inteiro, pra
@@ -149,6 +154,12 @@ export function TaskActivityPanel({
   onCommentTextChange: (v: string) => void;
   onPostComment: () => void;
   deadlineCutoffHour?: number;
+  /** Mudança de prazo crítica aguardando confirmação (vence hoje/está
+   * atrasada, sendo adiada) — enquanto presente, mostra o formulário
+   * inline abaixo do feed (nunca modal/popup/drawer). */
+  pendingDeadlineChange?: { from: string; to: string } | null;
+  onConfirmDeadlineChange?: (motivo: DeadlineChangeMotivo, observacao: string) => void;
+  onCancelDeadlineChange?: () => void;
 }) {
   const [tab, setTab] = useState<ActivityTab>("tudo");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -326,7 +337,12 @@ export function TaskActivityPanel({
                         </p>
                         {f.deadlineEntry.motivo && (
                           <p className="text-[11px]">
-                            Motivo: {DEADLINE_CHANGE_MOTIVO_LABEL[f.deadlineEntry.motivo]}
+                            {DEADLINE_CHANGE_MOTIVO_LABEL[f.deadlineEntry.motivo]}
+                          </p>
+                        )}
+                        {f.deadlineEntry.observacao && (
+                          <p className="text-[11px] italic text-muted-foreground">
+                            "{f.deadlineEntry.observacao}"
                           </p>
                         )}
                         {f.deadlineEntry.isCritical &&
@@ -362,6 +378,14 @@ export function TaskActivityPanel({
             // minor_group
             return <MinorGroupRow key={f.items[0].id} group={f.items} members={members} />;
           })}
+          {pendingDeadlineChange && onConfirmDeadlineChange && onCancelDeadlineChange && (
+            <DeadlinePendingForm
+              from={pendingDeadlineChange.from}
+              to={pendingDeadlineChange.to}
+              onConfirm={onConfirmDeadlineChange}
+              onCancel={onCancelDeadlineChange}
+            />
+          )}
         </div>
       </div>
 
@@ -448,6 +472,94 @@ function MinorGroupRow({ group, members }: { group: Activity[]; members: Member[
             ))}
           </ul>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Formulário inline pra justificar um replanejamento crítico (tarefa
+ * vencendo hoje/já atrasada, prazo sendo adiado) — vive dentro do
+ * próprio Activity, nunca como modal/popup/drawer. Some assim que
+ * confirmado ou cancelado; enquanto aberto, a mudança de prazo ainda
+ * não foi persistida (ver `TaskBoard.tsx`'s `pendingDeadlineChange`).
+ */
+function DeadlinePendingForm({
+  from,
+  to,
+  onConfirm,
+  onCancel,
+}: {
+  from: string;
+  to: string;
+  onConfirm: (motivo: DeadlineChangeMotivo, observacao: string) => void;
+  onCancel: () => void;
+}) {
+  const [motivo, setMotivo] = useState<DeadlineChangeMotivo>("replanejamento_operacional");
+  const [observacao, setObservacao] = useState("");
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const precisaObservacao = motivo === "outro";
+
+  useEffect(() => {
+    selectRef.current?.focus();
+  }, []);
+
+  const confirm = () => {
+    if (precisaObservacao && !observacao.trim()) return;
+    onConfirm(motivo, observacao.trim());
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+      <div>
+        <p className="text-xs font-semibold text-foreground">Alteração de prazo</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {fmtDate(from)} → {fmtDate(to)}
+        </p>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">Motivo</span>
+        <select
+          ref={selectRef}
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value as DeadlineChangeMotivo)}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        >
+          {DEADLINE_CHANGE_MOTIVOS.map((m) => (
+            <option key={m} value={m}>
+              {DEADLINE_CHANGE_MOTIVO_LABEL[m]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Contexto{precisaObservacao ? "" : " (opcional)"}
+        </span>
+        <textarea
+          value={observacao}
+          onChange={(e) => setObservacao(e.target.value)}
+          rows={2}
+          placeholder="Explique brevemente o motivo da alteração..."
+          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        />
+      </label>
+      <div className="flex justify-end gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={precisaObservacao && !observacao.trim()}
+          className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+        >
+          Confirmar alteração
+        </button>
       </div>
     </div>
   );
