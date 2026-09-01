@@ -75,7 +75,15 @@ function resolveTasks(
       id,
       title: s.title,
       status: s.status as TaskStatus,
-      priority: "Normal",
+      // Sem isso, toda tarefa avulsa do Marketing sempre "resetava" pra
+      // Normal ao ser lida — a prioridade escolhida na UI nunca tinha
+      // onde ser persistida (mesma lacuna dos campos abaixo).
+      priority: s.priority ?? "Normal",
+      tags: s.tags,
+      attachments: s.attachments,
+      subtasks: s.subtasks,
+      startDate: s.startDate,
+      estimate: s.estimate,
       dueDate: s.dueDate,
       assignee: s.assignee,
       assignees: s.assignees,
@@ -211,6 +219,15 @@ export function MarketingSection({
           assignee: t.assignee,
           assignees: t.assignees,
           primaryAssignee: t.primaryAssignee,
+          // Mesma lacuna dos campos abaixo (ver updateStandalone) — sem
+          // isso, prioridade/etiquetas/anexos/subtarefas/início nunca
+          // chegavam a ser gravados nem na criação da tarefa.
+          priority: t.priority,
+          tags: t.tags,
+          attachments: t.attachments,
+          subtasks: t.subtasks,
+          startDate: t.startDate,
+          estimate: t.estimate,
           dueDate: t.dueDate,
           note: t.description,
           activity: t.activity,
@@ -227,6 +244,17 @@ export function MarketingSection({
           assignee: t.assignee,
           assignees: t.assignees,
           primaryAssignee: t.primaryAssignee,
+          // Sem isso, prioridade/etiquetas/anexos/subtarefas/início
+          // editados numa tarefa avulsa do Marketing nunca persistiam —
+          // a UI (TaskBoard) já editava todos eles normalmente, só não
+          // havia onde salvar (mesma classe de bug já corrigida aqui
+          // pra timer/comentários/prazo).
+          priority: t.priority,
+          tags: t.tags,
+          attachments: t.attachments,
+          subtasks: t.subtasks,
+          startDate: t.startDate,
+          estimate: t.estimate,
           dueDate: t.dueDate,
           note: t.description,
           timerRunning: t.timerRunning,

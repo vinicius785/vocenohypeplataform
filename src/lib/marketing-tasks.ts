@@ -14,6 +14,9 @@ import type {
   Activity,
   Comment,
   DeadlineChangeEntry,
+  TaskPriority,
+  Attachment,
+  Task,
 } from "@/components/tasks/TaskBoard";
 import { createTableArrayStore } from "@/lib/table-array-store";
 import type { TaskRecurrence } from "@/lib/task-recurrence";
@@ -49,6 +52,17 @@ export type MktStandalone = {
   assignees?: string[];
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.primaryAssignee`. */
   primaryAssignee?: string;
+  /** Sem estes 5 campos, uma tarefa avulsa do Marketing nunca guardava
+   * prioridade/etiquetas/anexos/subtarefas/início de verdade — cada um
+   * "resetava" pro padrão (prioridade sempre "Normal", resto sempre
+   * vazio) a cada leitura, porque o tipo nunca tinha onde persisti-los,
+   * mesmo a UI (TaskBoard) já editando todos eles normalmente. */
+  priority?: TaskPriority;
+  tags?: string[];
+  attachments?: Attachment[];
+  subtasks?: Task[];
+  startDate?: string;
+  estimate?: string;
   dueDate?: string;
   note?: string;
   createdAt: string;
@@ -215,6 +229,12 @@ export function createStandalone(input: {
   assignee?: string;
   assignees?: string[];
   primaryAssignee?: string;
+  priority?: TaskPriority;
+  tags?: string[];
+  attachments?: Attachment[];
+  subtasks?: Task[];
+  startDate?: string;
+  estimate?: string;
   dueDate?: string;
   note?: string;
   activity?: Activity[];
@@ -227,6 +247,12 @@ export function createStandalone(input: {
     assignee: input.assignee,
     assignees: input.assignees,
     primaryAssignee: input.primaryAssignee,
+    priority: input.priority,
+    tags: input.tags,
+    attachments: input.attachments,
+    subtasks: input.subtasks,
+    startDate: input.startDate,
+    estimate: input.estimate,
     dueDate: input.dueDate,
     note: input.note,
     activity: input.activity,

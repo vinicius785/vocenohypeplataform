@@ -1,6 +1,7 @@
 {
-  "version": "1.189.0",
+  "version": "1.190.0",
   "notes": [
+    "Corrige tarefas avulsas do Marketing (criadas direto no board de lá, sem projeto/campanha por trás) que perdiam prioridade, etiquetas, anexos, subtarefas e datas de início/estimativa a cada leitura — o registro dessas tarefas nunca tinha onde guardar esses 5 campos, então prioridade sempre \"resetava\" pra Normal e os outros quatro simplesmente nunca chegavam a salvar, mesmo editando normalmente pela tela. Tarefas de projeto/campanha puxadas pro Marketing já funcionavam certo — o problema era só nas nativas do board de lá.",
     "Todos os kanbans de tarefas ganham um botão \"Filtrar\" ao lado de \"Ordenar\": filtra por Responsável, Etiquetas e Prioridade, combinando quantos critérios quiser (marcar mais de um responsável mostra tarefas de qualquer um deles; combinar com prioridade só mostra quem bate nos dois). O antigo filtro rápido de etiquetas (linha de chips acima do board) foi incorporado a este mesmo painel.",
     "Todos os kanbans de tarefas (Projetos, Campanhas e Marketing — é o mesmo board compartilhado) ganham um botão \"Ordenar\": escolha ordenar por Prioridade ou por Prazo, e opcionalmente um segundo critério pra desempatar quando o primeiro repete (ex.: Prazo e, entre os que vencem no mesmo dia, Prioridade). A ordenação vale só pra visualização — não muda os dados nem a coluna \"Concluído\", que continua mostrando as mais recentes primeiro.",
     "Aceitar (ou recusar) o convite de uma reunião recorrente agora pergunta se é só aquela ocorrência ou a série inteira de uma vez — antes era preciso confirmar cada data separadamente, uma por uma. Vale tanto no botão rápido da lista de Solicitações pendentes quanto no resumo da própria reunião.",
