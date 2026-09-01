@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   ChevronRight,
+  ChevronDown,
   Clock,
   FileText,
   Flag,
@@ -17,7 +18,6 @@ import {
   Check,
   Download,
   ExternalLink,
-  ListChecks,
   CornerUpRight,
   Star,
   ArrowUpDown,
@@ -1010,6 +1010,29 @@ function CardQuickActions({
   );
 }
 
+/** Preferência de ordenação/filtro do board — persistida em localStorage
+ * (mesmo par chave/JSON em todo lugar que usa), não é por-board: a mesma
+ * escolha vale em qualquer kanban, já que é o mesmo componente
+ * compartilhado (mesmo raciocínio já usado em `showSubtasksInline`). */
+function usePersistedState<T>(key: string, initial: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw !== null ? (JSON.parse(raw) as T) : initial;
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* ignore */
+    }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 /* ============================================================
  * TaskBoard — Kanban (same shape as Campanhas)
  * ============================================================ */
@@ -1042,6 +1065,10 @@ export function TaskBoard({
   // `onDrop` de cada coluna).
   const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
+  // Expandir subtarefas direto no card do board (fora da tarefa) — pedido
+  // explícito de dar pra ver as subtarefas sem abrir a tarefa-mãe. Estado
+  // só de sessão (não persiste), igual a qualquer accordion aberto/fechado.
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const members = useTeamMembers();
   const { settings: performanceSettings } = usePerformanceSettings();
 
@@ -1096,16 +1123,22 @@ export function TaskBoard({
   // mesma categoria é "ou" (qualquer etiqueta marcada já inclui a
   // tarefa); entre categorias diferentes é "e" (só entra quem bate em
   // TODAS as categorias com algo marcado).
-  const [assigneeFilters, setAssigneeFilters] = useState<string[]>([]);
-  const [tagFilters, setTagFilters] = useState<string[]>([]);
-  const [priorityFilters, setPriorityFilters] = useState<TaskPriority[]>([]);
+  const [assigneeFilters, setAssigneeFilters] = usePersistedState<string[]>(
+    "taskboard:assigneeFilters",
+    [],
+  );
+  const [tagFilters, setTagFilters] = usePersistedState<string[]>("taskboard:tagFilters", []);
+  const [priorityFilters, setPriorityFilters] = usePersistedState<TaskPriority[]>(
+    "taskboard:priorityFilters",
+    [],
+  );
   const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
     setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
-  }, [allAssignees]);
+  }, [allAssignees, setAssigneeFilters]);
   useEffect(() => {
     setTagFilters((prev) => prev.filter((t) => allTags.includes(t)));
-  }, [allTags]);
+  }, [allTags, setTagFilters]);
   const activeFilterCount =
     assigneeFilters.length + tagFilters.length + priorityFilters.length > 0
       ? [assigneeFilters.length > 0, tagFilters.length > 0, priorityFilters.length > 0].filter(
@@ -1161,8 +1194,14 @@ export function TaskBoard({
   // poder ordenar por prioridade e/ou prazo, um servindo de desempate do
   // outro. Fica de fora da coluna "Concluído", que já tem sua própria
   // ordenação por data de conclusão (mais recente primeiro).
-  const [sortPrimary, setSortPrimary] = useState<TaskSortKey>("none");
-  const [sortSecondary, setSortSecondary] = useState<TaskSortKey>("none");
+  const [sortPrimary, setSortPrimary] = usePersistedState<TaskSortKey>(
+    "taskboard:sortPrimary",
+    "none",
+  );
+  const [sortSecondary, setSortSecondary] = usePersistedState<TaskSortKey>(
+    "taskboard:sortSecondary",
+    "none",
+  );
   const [sortOpen, setSortOpen] = useState(false);
 
   return (
@@ -1498,11 +1537,27 @@ export function TaskBoard({
                             </span>
                           )}
                           {(t.subtasks?.length ?? 0) > 0 && (
-                            <span className="inline-flex items-center gap-1">
-                              <ListChecks className="h-3 w-3" />
-                              {t.subtasks!.filter((s) => s.status === "Concluído").length}/
-                              {t.subtasks!.length}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedCards((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(t.id)) next.delete(t.id);
+                                  else next.add(t.id);
+                                  return next;
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 hover:text-foreground"
+                            >
+                              {expandedCards.has(t.id) ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                              {t.subtasks!.length}{" "}
+                              {t.subtasks!.length === 1 ? "subtarefa" : "subtarefas"}
+                            </button>
                           )}
                         </div>
                       )}
@@ -1541,6 +1596,55 @@ export function TaskBoard({
                               <Paperclip className="h-3 w-3" /> {t.attachments!.length}
                             </span>
                           )}
+                        </div>
+                      )}
+
+                      {/* Subtarefas expandidas direto no card — cada uma como uma
+                          prévia compacta; clicar nela abre a tarefa-mãe (mesma
+                          convenção de "subtarefa não tem diálogo próprio" já usada
+                          em `showSubtasksInline`). */}
+                      {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
+                        <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                          {t.subtasks!.map((s) => (
+                            <div
+                              key={s.id}
+                              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
+                            >
+                              <span
+                                className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}
+                                title={s.status}
+                              />
+                              <span
+                                className={`min-w-0 flex-1 truncate ${s.status === "Concluído" ? "text-muted-foreground line-through" : "text-foreground"}`}
+                              >
+                                {s.title}
+                              </span>
+                              {!!s.description && (
+                                <span
+                                  title="Tem descrição"
+                                  className="shrink-0 text-muted-foreground"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                </span>
+                              )}
+                              {getTaskAssignees(s).length > 0 && (
+                                <AssigneeStack names={getTaskAssignees(s)} members={members} />
+                              )}
+                              {s.dueDate && (
+                                <span className="shrink-0 text-muted-foreground">
+                                  {fmtDateCompact(s.dueDate)}
+                                </span>
+                              )}
+                              <span
+                                className={`inline-flex shrink-0 items-center gap-1 font-medium ${PRIORITY_TONE[s.priority]}`}
+                              >
+                                <Flag className="h-3 w-3" /> {s.priority}
+                              </span>
+                              {(s.attachments?.length ?? 0) > 0 && (
+                                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -2718,49 +2822,45 @@ export function TaskDialog({
                         className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
                       >
                         {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
-                            não um item de checklist — status muda direto aqui, sem checkbox. */}
-                        <select
-                          value={s.status}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => {
-                            const next = e.target.value as TaskStatus;
-                            // `withStatusChange` já para o timer da
-                            // subtarefa se ele estava rodando (e inicia se
-                            // o novo status for "Em andamento") — sem
-                            // passar por ela aqui, um timer preso rodando
-                            // nunca parava só porque o status mudou.
-                            setSubtasks((prev) =>
-                              prev.map((st) => (st.id === s.id ? withStatusChange(st, next) : st)),
-                            );
-                            setActivity((a) =>
-                              pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                            );
-                          }}
-                          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[s.status]}`}
-                        >
-                          {TASK_STATUSES.map((st) => (
-                            <option key={st} value={st} className="bg-background text-foreground">
-                              {st}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={s.priority}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => {
-                            const next = e.target.value as TaskPriority;
-                            setSubtasks((prev) =>
-                              prev.map((st) => (st.id === s.id ? { ...st, priority: next } : st)),
-                            );
-                          }}
-                          className={`shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide outline-none ${PRIORITY_TONE[s.priority]}`}
-                        >
-                          {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
-                            <option key={p} value={p} className="bg-background text-foreground">
-                              {p}
-                            </option>
-                          ))}
-                        </select>
+                            não um item de checklist — status muda direto aqui, sem passar pela
+                            subtarefa. A cor do círculo é o status (mesma paleta de sempre,
+                            TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
+                            visualmente reduzido a um círculo (texto transparente). */}
+                        <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                          <select
+                            value={s.status}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const next = e.target.value as TaskStatus;
+                              // `withStatusChange` já para o timer da
+                              // subtarefa se ele estava rodando (e inicia se
+                              // o novo status for "Em andamento") — sem
+                              // passar por ela aqui, um timer preso rodando
+                              // nunca parava só porque o status mudou.
+                              setSubtasks((prev) =>
+                                prev.map((st) =>
+                                  st.id === s.id ? withStatusChange(st, next) : st,
+                                ),
+                              );
+                              setActivity((a) =>
+                                pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                              );
+                            }}
+                            title={s.status}
+                            aria-label={`Status: ${s.status}`}
+                            className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
+                          >
+                            {TASK_STATUSES.map((st) => (
+                              <option key={st} value={st} className="bg-background text-foreground">
+                                {st}
+                              </option>
+                            ))}
+                          </select>
+                          {done && (
+                            <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
+                          )}
+                        </span>
+
                         <button
                           type="button"
                           onClick={() => setEditSubtask(s)}
@@ -2771,6 +2871,11 @@ export function TaskDialog({
                           >
                             {s.title}
                           </span>
+                          {!!s.description && (
+                            <span title="Tem descrição" className="shrink-0 text-muted-foreground">
+                              <FileText className="h-3 w-3" />
+                            </span>
+                          )}
                           {subtaskAssignees.length > 0 && (
                             <span className="inline-flex shrink-0 items-center -space-x-1.5">
                               {subtaskAssignees.map((a) => (
@@ -2788,13 +2893,39 @@ export function TaskDialog({
                               ))}
                             </span>
                           )}
-                          {s.dueDate && (
-                            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {fmtDate(s.dueDate)}
-                            </span>
-                          )}
                         </button>
+
+                        {/* Prioridade — mesmo truque do status: select funcional por baixo,
+                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
+                        <span className="relative inline-flex shrink-0 items-center">
+                          <Flag
+                            className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                          />
+                          <select
+                            value={s.priority}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const next = e.target.value as TaskPriority;
+                              setSubtasks((prev) =>
+                                prev.map((st) => (st.id === s.id ? { ...st, priority: next } : st)),
+                              );
+                            }}
+                            className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
+                          >
+                            {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
+                              <option key={p} value={p} className="bg-background text-foreground">
+                                {p}
+                              </option>
+                            ))}
+                          </select>
+                        </span>
+
+                        {s.dueDate && (
+                          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {fmtDate(s.dueDate)}
+                          </span>
+                        )}
 
                         <button
                           type="button"

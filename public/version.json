@@ -1,6 +1,7 @@
 {
-  "version": "1.195.0",
+  "version": "1.196.0",
   "notes": [
+    "Ordenação e filtros dos kanbans agora ficam salvos (valem em qualquer board — Projetos/Campanhas/Marketing). Subtarefas dentro da tarefa ganharam visual novo (círculo colorido pelo status, bandeira de prioridade, ícone de descrição). No card do board, dá pra expandir a lista de subtarefas direto ali (sem abrir a tarefa) clicando na seta ao lado da contagem.",
     "Redesenho visual dos cards do Kanban (Projetos/Campanhas/Marketing): hierarquia clara entre título, prazo, responsáveis, prioridade/subtarefas e etiquetas/comentários/anexos, avatares em vez de nomes, menu de ações rápidas e melhor destaque visual ao arrastar cards — sem alterar nenhuma regra de negócio.",
     "Corrige subtarefas de tarefas avulsas do Marketing (criadas direto no board de lá) que nunca apareciam em \"Meu trabalho\" na tela de Início, nem no painel \"Tarefas que precisam de atenção\" da aba Time — só a tarefa-mãe entrava nessas listas, as subtarefas eram ignoradas. Tarefas puxadas de projeto/campanha já mostravam subtarefas normalmente; o problema era só nas nativas do board do Marketing.",
     "A lista de subtarefas dentro de uma tarefa agora aparece sempre ordenada por prazo (mais próxima primeiro, sem prazo por último) — antes ficava na ordem em que cada uma foi criada.",
