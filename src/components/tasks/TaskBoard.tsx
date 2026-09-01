@@ -22,11 +22,21 @@ import {
   Star,
   ArrowUpDown,
   Filter,
+  AlertTriangle,
+  MessageSquare,
+  MoreHorizontal,
 } from "lucide-react";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DateField } from "@/components/ui/date-field";
 import { linkifyText } from "@/lib/linkify";
 import {
@@ -832,10 +842,173 @@ export function renderMentions(text: string, members: Member[]) {
 export const fmtDate = (d: string) =>
   d ? new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR") : "—";
 
+/** Formato compacto pro card do kanban: "04 set" (ano só quando
+ * diferente do atual, ex. "04 set 2027") — evita repetir o ano óbvio na
+ * maioria dos casos sem esconder informação quando o prazo é de outro
+ * ano. Mesmo ancoramento em horário local de `fmtDate`, pro mesmo
+ * desvio de fuso não se repetir aqui. */
+export const fmtDateCompact = (d: string) => {
+  if (!d) return "—";
+  const date = new Date(`${d}T00:00:00`);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date
+    .toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: sameYear ? undefined : "numeric",
+    })
+    .replace(".", "");
+};
+
 export type TaskBoardScope =
   | { kind: "campanha"; id: string }
   | { kind: "projeto"; id: string }
   | { kind: "marketing" };
+
+/* ============================================================
+ * Componentes do card do kanban — extraídos pra deixar o card em si
+ * (dentro de TaskBoard) mais enxuto. Cada um só lê dados que a tarefa já
+ * tem — nenhuma lógica de negócio nova, só apresentação.
+ * ============================================================ */
+
+/** Versão leve de `DeadlineHealthBadge` (mais abaixo, usada só dentro do
+ * diálogo de edição com Popover + histórico de replanejamento) — mesma
+ * fonte de verdade (`taskDeadlineHealth`, mesmo `deadlineCutoffHour`),
+ * sem o Popover, só o rótulo compacto pro card. Nunca discorda do
+ * diálogo porque chama exatamente a mesma função com os mesmos
+ * parâmetros. */
+function CardDeadlineBadge({ task }: { task: Task }) {
+  const { settings: performanceSettings } = usePerformanceSettings();
+  const health = taskDeadlineHealth(task, undefined, performanceSettings.deadlineCutoffHour);
+  const isOverdue = health.health === "atrasada";
+  const isDueToday = health.health === "vence_hoje";
+  const Icon = isOverdue ? AlertTriangle : Calendar;
+
+  let text: string;
+  if (isOverdue && health.delayDays) {
+    text = `${health.delayDays} ${health.delayDays === 1 ? "dia" : "dias"} atrasada`;
+  } else if (isDueToday) {
+    text = "Hoje";
+  } else if (task.status === "Concluído") {
+    text = health.label;
+  } else if (task.dueDate) {
+    text = fmtDateCompact(task.dueDate);
+  } else {
+    text = health.label;
+  }
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${health.tone}`}
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {text}
+    </span>
+  );
+}
+
+/** Pilha de avatares sobrepostos — sem nomes escritos no card (poluía
+ * visualmente); os nomes completos ficam num único Tooltip pra pilha
+ * inteira, em vez de um `title` nativo por avatar (que só mostraria um
+ * nome de cada vez). */
+function AssigneeStack({ names, members }: { names: string[]; members: Member[] }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center -space-x-1.5">
+          {names.map((a) => (
+            <Avatar
+              key={a}
+              member={
+                members.find((m) => m.name === a) ?? {
+                  name: a,
+                  initials: initialsOf(a) || "?",
+                  color: colorFor(a),
+                }
+              }
+              size={18}
+            />
+          ))}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{names.join(", ")}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Etiquetas do card — no máximo 2 pills, o resto vira um badge neutro
+ * "+N" com Tooltip listando as demais (evita o card crescer sem limite
+ * quando há muitas etiquetas). */
+function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
+  const shown = tags.slice(0, 2);
+  const overflow = tags.slice(2);
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {shown.map((tag) => (
+        <span
+          key={tag}
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorForTag(tag, taskTags)}`}
+        >
+          {tag}
+        </span>
+      ))}
+      {overflow.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              +{overflow.length}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{overflow.join(", ")}</TooltipContent>
+        </Tooltip>
+      )}
+    </span>
+  );
+}
+
+/** Menu "•••" de ações rápidas do card, revelado só no hover — substitui
+ * o antigo botão de lixeira solto. "Abrir tarefa" é a mesma ação de
+ * clicar no card (não existe um modo de visualização separado do de
+ * edição nesta plataforma); "Excluir" reaproveita exatamente a mesma
+ * distinção subtarefa-vs-tarefa-raiz que o botão antigo já fazia.
+ * "Duplicar"/"Mover" ficam fora desta rodada — não existe essa lógica em
+ * nenhum lugar do código hoje, e criá-la é além do escopo de uma
+ * refatoração visual. */
+function CardQuickActions({
+  onOpen,
+  onDelete,
+}: {
+  onOpen: () => void;
+  onDelete: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Mais ações"
+          className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Abrir tarefa
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+          <Trash2 className="h-3.5 w-3.5" /> Excluir
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 /* ============================================================
  * TaskBoard — Kanban (same shape as Campanhas)
@@ -864,6 +1037,10 @@ export function TaskBoard({
     defaultStatus?: TaskStatus;
   } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Coluna que está recebendo o drag no momento — só feedback visual, não
+  // participa da lógica de mudança de status (que continua inteira no
+  // `onDrop` de cada coluna).
+  const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
   const members = useTeamMembers();
   const { settings: performanceSettings } = usePerformanceSettings();
@@ -989,435 +1166,443 @@ export function TaskBoard({
   const [sortOpen, setSortOpen] = useState(false);
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            {title}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">{tasks.length} no total</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Popover open={sortOpen} onOpenChange={setSortOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
-                  sortPrimary !== "none" ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <ArrowUpDown className="h-3.5 w-3.5" />
-                Ordenar
-                {sortPrimary !== "none" && (
-                  <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
-                    {sortSecondary !== "none" ? 2 : 1}
-                  </span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-3 p-3">
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground">
-                  Ordenar por
-                </label>
-                <select
-                  value={sortPrimary}
-                  onChange={(e) => {
-                    const next = e.target.value as TaskSortKey;
-                    setSortPrimary(next);
-                    if (next === "none" || next === sortSecondary) setSortSecondary("none");
-                  }}
-                  className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {(["none", "priority", "dueDate"] as TaskSortKey[]).map((k) => (
-                    <option key={k} value={k}>
-                      {TASK_SORT_KEY_LABEL[k]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {sortPrimary !== "none" && (
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground">
-                    Depois por (desempate)
-                  </label>
-                  <select
-                    value={sortSecondary}
-                    onChange={(e) => setSortSecondary(e.target.value as TaskSortKey)}
-                    className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    {(["none", "priority", "dueDate"] as TaskSortKey[])
-                      .filter((k) => k === "none" || k !== sortPrimary)
-                      .map((k) => (
-                        <option key={k} value={k}>
-                          {TASK_SORT_KEY_LABEL[k]}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
-              {sortPrimary !== "none" && (
+    <TooltipProvider delayDuration={200}>
+      <section className="space-y-4">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {title}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">{tasks.length} no total</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Popover open={sortOpen} onOpenChange={setSortOpen}>
+              <PopoverTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSortPrimary("none");
-                    setSortSecondary("none");
-                  }}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                  className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
+                    sortPrimary !== "none" ? "text-foreground" : "text-muted-foreground"
+                  }`}
                 >
-                  Limpar ordenação
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  Ordenar
+                  {sortPrimary !== "none" && (
+                    <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                      {sortSecondary !== "none" ? 2 : 1}
+                    </span>
+                  )}
                 </button>
-              )}
-            </PopoverContent>
-          </Popover>
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
-                  activeFilterCount > 0 ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <Filter className="h-3.5 w-3.5" />
-                Filtrar
-                {activeFilterCount > 0 && (
-                  <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
-                    {activeFilterCount}
-                  </span>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 space-y-3 p-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Ordenar por
+                  </label>
+                  <select
+                    value={sortPrimary}
+                    onChange={(e) => {
+                      const next = e.target.value as TaskSortKey;
+                      setSortPrimary(next);
+                      if (next === "none" || next === sortSecondary) setSortSecondary("none");
+                    }}
+                    className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {(["none", "priority", "dueDate"] as TaskSortKey[]).map((k) => (
+                      <option key={k} value={k}>
+                        {TASK_SORT_KEY_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {sortPrimary !== "none" && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-muted-foreground">
+                      Depois por (desempate)
+                    </label>
+                    <select
+                      value={sortSecondary}
+                      onChange={(e) => setSortSecondary(e.target.value as TaskSortKey)}
+                      className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      {(["none", "priority", "dueDate"] as TaskSortKey[])
+                        .filter((k) => k === "none" || k !== sortPrimary)
+                        .map((k) => (
+                          <option key={k} value={k}>
+                            {TASK_SORT_KEY_LABEL[k]}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="max-h-[70vh] w-72 space-y-4 overflow-y-auto p-3">
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground">
-                  Responsável
-                </label>
-                {allAssignees.length === 0 ? (
-                  <p className="mt-1 text-xs text-muted-foreground">Nenhuma tarefa atribuída.</p>
-                ) : (
-                  <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-                    {allAssignees.map((name) => {
-                      const active = assigneeFilters.includes(name);
+                {sortPrimary !== "none" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortPrimary("none");
+                      setSortSecondary("none");
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Limpar ordenação
+                  </button>
+                )}
+              </PopoverContent>
+            </Popover>
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
+                    activeFilterCount > 0 ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Filtrar
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="max-h-[70vh] w-72 space-y-4 overflow-y-auto p-3"
+              >
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Responsável
+                  </label>
+                  {allAssignees.length === 0 ? (
+                    <p className="mt-1 text-xs text-muted-foreground">Nenhuma tarefa atribuída.</p>
+                  ) : (
+                    <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                      {allAssignees.map((name) => {
+                        const active = assigneeFilters.includes(name);
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => setAssigneeFilters((prev) => toggleIn(prev, name))}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              active
+                                ? "bg-foreground text-background"
+                                : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Etiquetas
+                  </label>
+                  {allTags.length === 0 ? (
+                    <p className="mt-1 text-xs text-muted-foreground">Nenhuma etiqueta em uso.</p>
+                  ) : (
+                    <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                      {allTags.map((tag) => {
+                        const active = tagFilters.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setTagFilters((prev) => toggleIn(prev, tag))}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorForTag(tag, taskTags)} ${
+                              active ? "" : "opacity-40 hover:opacity-70"
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Prioridade
+                  </label>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {TASK_PRIORITIES.map((p) => {
+                      const active = priorityFilters.includes(p);
                       return (
                         <button
-                          key={name}
+                          key={p}
                           type="button"
-                          onClick={() => setAssigneeFilters((prev) => toggleIn(prev, name))}
+                          onClick={() => setPriorityFilters((prev) => toggleIn(prev, p))}
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
                             active
                               ? "bg-foreground text-background"
                               : "bg-muted text-muted-foreground hover:text-foreground"
                           }`}
                         >
-                          {name}
+                          {p}
                         </button>
                       );
                     })}
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground">
-                  Etiquetas
-                </label>
-                {allTags.length === 0 ? (
-                  <p className="mt-1 text-xs text-muted-foreground">Nenhuma etiqueta em uso.</p>
-                ) : (
-                  <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
-                    {allTags.map((tag) => {
-                      const active = tagFilters.includes(tag);
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setTagFilters((prev) => toggleIn(prev, tag))}
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorForTag(tag, taskTags)} ${
-                            active ? "" : "opacity-40 hover:opacity-70"
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground">
-                  Prioridade
-                </label>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {TASK_PRIORITIES.map((p) => {
-                    const active = priorityFilters.includes(p);
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPriorityFilters((prev) => toggleIn(prev, p))}
-                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                          active
-                            ? "bg-foreground text-background"
-                            : "bg-muted text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    );
-                  })}
                 </div>
-              </div>
 
-              <label className="flex items-center gap-2 border-t border-border pt-3 text-xs text-foreground">
-                <input
-                  type="checkbox"
-                  checked={showSubtasksInline}
-                  onChange={(e) => setShowSubtasksInline(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-border accent-foreground"
-                />
-                Exibir subtarefas no board
-              </label>
+                <label className="flex items-center gap-2 border-t border-border pt-3 text-xs text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={showSubtasksInline}
+                    onChange={(e) => setShowSubtasksInline(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-foreground"
+                  />
+                  Exibir subtarefas no board
+                </label>
 
-              {activeFilterCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssigneeFilters([]);
-                    setTagFilters([]);
-                    setPriorityFilters([]);
-                  }}
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Limpar filtros
-                </button>
-              )}
-            </PopoverContent>
-          </Popover>
-          <button
-            type="button"
-            onClick={() => setTaskDialog({ mode: "new" })}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <Plus className="h-3.5 w-3.5" /> Nova Tarefa
-          </button>
-        </div>
-      </div>
-
-      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
-        {TASK_STATUSES.map((col) => {
-          const rootItems: BoardItem[] = visibleTasks.filter((t) => t.status === col);
-          const subtaskItems: BoardItem[] = showSubtasksInline
-            ? allSubtasksFlat
-                .filter(({ subtask }) => subtask.status === col && taskMatchesFilters(subtask))
-                .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
-            : [];
-          const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
-          // Concluído acumula pra sempre — sem limite, uma campanha/projeto
-          // antigo vira uma coluna infinita de tarefas que ninguém mais
-          // precisa ver no dia a dia. Mostra só as 4 mais recentes por
-          // padrão (derivado do log de atividade, ver `taskCompletedAt`),
-          // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
-          // completo.
-          const isDone = col === "Concluído";
-          const sortedItems = isDone
-            ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
-            : sortTasksBy(allItems, sortPrimary, sortSecondary);
-          const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
-          const hiddenCount = allItems.length - items.length;
-          return (
-            <div
-              key={col}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (dragId) {
-                  const dragged = tasks.find((t) => t.id === dragId);
-                  if (dragged) {
-                    const updated = withStatusChange(dragged, col);
-                    if (updated !== dragged)
-                      recordTaskLedgerEventsOnStatusChange(dragged, updated, {
-                        scope,
-                        members,
-                        performanceSettings,
-                      });
-                    const finalTask = applyRecurrenceIfCompleted(dragged, updated);
-                    persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
-                  }
-                }
-                setDragId(null);
-              }}
-              className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-background p-3"
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssigneeFilters([]);
+                      setTagFilters([]);
+                      setPriorityFilters([]);
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </PopoverContent>
+            </Popover>
+            <button
+              type="button"
+              onClick={() => setTaskDialog({ mode: "new" })}
+              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
             >
-              <div className="mb-3 flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[col]}`} />
-                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    {col}
-                  </h3>
-                </div>
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {allItems.length}
-                </span>
-              </div>
-              <div className="flex-1 space-y-2">
-                {items.map((t) => (
-                  <div
-                    key={t.id}
-                    draggable={!t.__parentTask}
-                    onDragStart={() => !t.__parentTask && setDragId(t.id)}
-                    onClick={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
-                    className="group cursor-pointer rounded-md border border-border bg-background p-3 text-sm shadow-sm hover:border-foreground/20"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span
-                        className="mt-0.5 shrink-0"
-                        title={`Prioridade ${t.priority}`}
-                        aria-label={`Prioridade ${t.priority}`}
-                      >
-                        <Flag className={`h-3.5 w-3.5 ${PRIORITY_TONE[t.priority]}`} />
-                      </span>
-                      {t.__parentTask && (
-                        <span
-                          title={`Subtarefa de "${t.__parentTask.title}"`}
-                          className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
-                        >
-                          Sub
-                        </span>
-                      )}
-                      <span className="flex-1 text-foreground">{t.title}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (t.__parentTask) {
-                            const parent = t.__parentTask;
-                            persist(
-                              tasks.map((x) =>
-                                x.id === parent.id
-                                  ? {
-                                      ...x,
-                                      subtasks: (x.subtasks ?? []).filter((s) => s.id !== t.id),
-                                    }
-                                  : x,
-                              ),
-                            );
-                          } else {
-                            persist(tasks.filter((x) => x.id !== t.id));
-                          }
-                        }}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Remover"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                      </button>
-                    </div>
-                    {(t.tags?.length ?? 0) > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {t.tags!.map((tag) => (
-                          <span
-                            key={tag}
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorForTag(tag, taskTags)}`}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {(t.dueDate ||
-                      getTaskAssignees(t).length > 0 ||
-                      (t.subtasks?.length ?? 0) > 0) && (
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                        {getTaskAssignees(t).length > 0 && (
-                          <span className="inline-flex items-center -space-x-1.5 truncate">
-                            {getTaskAssignees(t).map((a) => (
-                              <Avatar
-                                key={a}
-                                member={
-                                  members.find((m) => m.name === a) ?? {
-                                    name: a,
-                                    initials: initialsOf(a) || "?",
-                                    color: colorFor(a),
-                                  }
-                                }
-                                size={16}
-                              />
-                            ))}
-                            <span className="ml-2 truncate">{getTaskAssignees(t).join(", ")}</span>
-                          </span>
-                        )}
-                        {t.dueDate && (
-                          <span className="inline-flex items-center gap-1">
-                            <Calendar className="h-3 w-3" /> {fmtDate(t.dueDate)}
-                          </span>
-                        )}
-                        {(t.subtasks?.length ?? 0) > 0 && (
-                          <span className="inline-flex items-center gap-1">
-                            <ListChecks className="h-3 w-3" />
-                            {t.subtasks!.filter((s) => s.status === "Concluído").length}/
-                            {t.subtasks!.length}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {isDone && hiddenCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllDone(true)}
-                    className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  >
-                    Mostrar tudo ({allItems.length})
-                  </button>
-                )}
-                {isDone && showAllDone && allItems.length > 4 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllDone(false)}
-                    className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  >
-                    Mostrar só as recentes
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setTaskDialog({ mode: "new", defaultStatus: col })}
-                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                >
-                  <Plus className="h-3 w-3" /> Adicionar
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              <Plus className="h-3.5 w-3.5" /> Nova Tarefa
+            </button>
+          </div>
+        </div>
 
-      <TaskDialog
-        open={!!taskDialog}
-        onOpenChange={(o) => !o && setTaskDialog(null)}
-        initial={taskDialog?.data}
-        defaultStatus={taskDialog?.defaultStatus}
-        scope={scope}
-        breadcrumb={breadcrumb}
-        onSave={(t) => {
-          if (taskDialog?.mode === "edit") {
-            persist(tasks.map((x) => (x.id === t.id ? t : x)));
-          } else {
-            persist([...tasks, t]);
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
+          {TASK_STATUSES.map((col) => {
+            const rootItems: BoardItem[] = visibleTasks.filter((t) => t.status === col);
+            const subtaskItems: BoardItem[] = showSubtasksInline
+              ? allSubtasksFlat
+                  .filter(({ subtask }) => subtask.status === col && taskMatchesFilters(subtask))
+                  .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
+              : [];
+            const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
+            // Concluído acumula pra sempre — sem limite, uma campanha/projeto
+            // antigo vira uma coluna infinita de tarefas que ninguém mais
+            // precisa ver no dia a dia. Mostra só as 4 mais recentes por
+            // padrão (derivado do log de atividade, ver `taskCompletedAt`),
+            // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
+            // completo.
+            const isDone = col === "Concluído";
+            const sortedItems = isDone
+              ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
+              : sortTasksBy(allItems, sortPrimary, sortSecondary);
+            const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
+            const hiddenCount = allItems.length - items.length;
+            return (
+              <div
+                key={col}
+                onDragOver={(e) => e.preventDefault()}
+                onDragEnter={() => setDragOverCol(col)}
+                onDragLeave={() => setDragOverCol((cur) => (cur === col ? null : cur))}
+                onDrop={() => {
+                  if (dragId) {
+                    const dragged = tasks.find((t) => t.id === dragId);
+                    if (dragged) {
+                      const updated = withStatusChange(dragged, col);
+                      if (updated !== dragged)
+                        recordTaskLedgerEventsOnStatusChange(dragged, updated, {
+                          scope,
+                          members,
+                          performanceSettings,
+                        });
+                      const finalTask = applyRecurrenceIfCompleted(dragged, updated);
+                      persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
+                    }
+                  }
+                  setDragId(null);
+                  setDragOverCol(null);
+                }}
+                className={`flex w-[288px] shrink-0 flex-col rounded-xl border p-3 transition-colors ${dragOverCol === col ? "border-foreground/30 bg-muted/10" : "border-border bg-background"}`}
+              >
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[col]}`} />
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      {col}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {allItems.length}
+                  </span>
+                </div>
+                <div className="flex-1 space-y-2.5">
+                  {items.map((t) => (
+                    <div
+                      key={t.id}
+                      draggable={!t.__parentTask}
+                      onDragStart={() => !t.__parentTask && setDragId(t.id)}
+                      onDragEnd={() => setDragId(null)}
+                      onClick={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
+                      className={`group relative cursor-pointer rounded-lg border border-border bg-card p-3.5 text-sm shadow-sm transition-all hover:border-foreground/30 hover:shadow-md ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+                    >
+                      {/* Nível 1 — título (maior peso visual do card) */}
+                      <div className="flex items-start gap-2">
+                        {t.__parentTask && (
+                          <span
+                            title={`Subtarefa de "${t.__parentTask.title}"`}
+                            className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                          >
+                            Sub
+                          </span>
+                        )}
+                        <span className="flex-1 font-semibold leading-snug text-foreground">
+                          {t.title}
+                        </span>
+                        <CardQuickActions
+                          onOpen={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
+                          onDelete={(e) => {
+                            e.stopPropagation();
+                            if (t.__parentTask) {
+                              const parent = t.__parentTask;
+                              persist(
+                                tasks.map((x) =>
+                                  x.id === parent.id
+                                    ? {
+                                        ...x,
+                                        subtasks: (x.subtasks ?? []).filter((s) => s.id !== t.id),
+                                      }
+                                    : x,
+                                ),
+                              );
+                            } else {
+                              persist(tasks.filter((x) => x.id !== t.id));
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Nível 2 — prazo/situação do prazo */}
+                      {(t.dueDate || t.performanceDueDate) && (
+                        <div className="mt-2">
+                          <CardDeadlineBadge task={t} />
+                        </div>
+                      )}
+
+                      {/* Nível 3 — responsáveis (só avatares) */}
+                      {getTaskAssignees(t).length > 0 && (
+                        <div className="mt-2">
+                          <AssigneeStack names={getTaskAssignees(t)} members={members} />
+                        </div>
+                      )}
+
+                      {/* Nível 4 — prioridade (só quando != Normal) + subtarefas */}
+                      {(t.priority !== "Normal" || (t.subtasks?.length ?? 0) > 0) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          {t.priority !== "Normal" && (
+                            <span
+                              className={`inline-flex items-center gap-1 font-medium ${PRIORITY_TONE[t.priority]}`}
+                            >
+                              <Flag className="h-3 w-3" /> {t.priority}
+                            </span>
+                          )}
+                          {(t.subtasks?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <ListChecks className="h-3 w-3" />
+                              {t.subtasks!.filter((s) => s.status === "Concluído").length}/
+                              {t.subtasks!.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Nível 5 — etiquetas / comentários / anexos */}
+                      {((t.tags?.length ?? 0) > 0 ||
+                        (t.comments?.length ?? 0) > 0 ||
+                        (t.attachments?.length ?? 0) > 0) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {(t.tags?.length ?? 0) > 0 && (
+                            <CardTags tags={t.tags!} taskTags={taskTags} />
+                          )}
+                          {(t.comments?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" /> {t.comments!.length}
+                            </span>
+                          )}
+                          {(t.attachments?.length ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <Paperclip className="h-3 w-3" /> {t.attachments!.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {isDone && hiddenCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDone(true)}
+                      className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    >
+                      Mostrar tudo ({allItems.length})
+                    </button>
+                  )}
+                  {isDone && showAllDone && allItems.length > 4 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDone(false)}
+                      className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    >
+                      Mostrar só as recentes
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTaskDialog({ mode: "new", defaultStatus: col })}
+                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  >
+                    <Plus className="h-3 w-3" /> Adicionar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <TaskDialog
+          open={!!taskDialog}
+          onOpenChange={(o) => !o && setTaskDialog(null)}
+          initial={taskDialog?.data}
+          defaultStatus={taskDialog?.defaultStatus}
+          scope={scope}
+          breadcrumb={breadcrumb}
+          onSave={(t) => {
+            if (taskDialog?.mode === "edit") {
+              persist(tasks.map((x) => (x.id === t.id ? t : x)));
+            } else {
+              persist([...tasks, t]);
+            }
+            setTaskDialog(null);
+          }}
+          onDelete={
+            taskDialog?.mode === "edit" && taskDialog.data
+              ? () => {
+                  persist(tasks.filter((x) => x.id !== taskDialog.data!.id));
+                  setTaskDialog(null);
+                }
+              : undefined
           }
-          setTaskDialog(null);
-        }}
-        onDelete={
-          taskDialog?.mode === "edit" && taskDialog.data
-            ? () => {
-                persist(tasks.filter((x) => x.id !== taskDialog.data!.id));
-                setTaskDialog(null);
-              }
-            : undefined
-        }
-        onToggleTimer={toggleTimer}
-      />
-    </section>
+          onToggleTimer={toggleTimer}
+        />
+      </section>
+    </TooltipProvider>
   );
 }
 
