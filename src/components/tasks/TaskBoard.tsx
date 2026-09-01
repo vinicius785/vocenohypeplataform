@@ -21,6 +21,7 @@ import {
   CornerUpRight,
   Star,
   ArrowUpDown,
+  Filter,
 } from "lucide-react";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
 
@@ -885,21 +886,58 @@ export function TaskBoard({
 
   // Etiquetas — antes eram só texto livre digitado no diálogo, nunca
   // aparecendo em lugar nenhum do board nem servindo pra filtrar nada
-  // (na prática, invisíveis depois de criadas). `allTags` (nomes usados
-  // NESTE board) alimenta a barra de filtro abaixo; a cor de cada uma
-  // vem do registro compartilhado (`task-tags-store.ts`), não mais de um
-  // hash local — mudar a cor lá reflete aqui pra todo mundo.
+  // (na prática, invisíveis depois de criadas). `allTags` alimenta o
+  // filtro de etiquetas; a cor de cada uma vem do registro compartilhado
+  // (`task-tags-store.ts`), não mais de um hash local — mudar a cor lá
+  // reflete aqui pra todo mundo.
   const taskTags = useTaskTags();
   const allTags = useMemo(
     () =>
       Array.from(new Set(tasks.flatMap((t) => t.tags ?? []))).sort((a, b) => a.localeCompare(b)),
     [tasks],
   );
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const allAssignees = useMemo(
+    () =>
+      Array.from(new Set(tasks.flatMap((t) => getTaskAssignees(t)))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [tasks],
+  );
+
+  // Filtro combinável — pedido explícito de filtrar por responsável,
+  // etiquetas etc., podendo combinar mais de um critério. Dentro de uma
+  // mesma categoria é "ou" (qualquer etiqueta marcada já inclui a
+  // tarefa); entre categorias diferentes é "e" (só entra quem bate em
+  // TODAS as categorias com algo marcado).
+  const [assigneeFilters, setAssigneeFilters] = useState<string[]>([]);
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [priorityFilters, setPriorityFilters] = useState<TaskPriority[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
-    if (tagFilter && !allTags.includes(tagFilter)) setTagFilter(null);
-  }, [tagFilter, allTags]);
-  const visibleTasks = tagFilter ? tasks.filter((t) => t.tags?.includes(tagFilter)) : tasks;
+    setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
+  }, [allAssignees]);
+  useEffect(() => {
+    setTagFilters((prev) => prev.filter((t) => allTags.includes(t)));
+  }, [allTags]);
+  const activeFilterCount =
+    assigneeFilters.length + tagFilters.length + priorityFilters.length > 0
+      ? [assigneeFilters.length > 0, tagFilters.length > 0, priorityFilters.length > 0].filter(
+          Boolean,
+        ).length
+      : 0;
+  const toggleIn = <T,>(list: T[], value: T): T[] =>
+    list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+  const visibleTasks = tasks.filter((t) => {
+    if (assigneeFilters.length > 0) {
+      const assignees = getTaskAssignees(t);
+      if (!assigneeFilters.some((a) => assignees.includes(a))) return false;
+    }
+    if (tagFilters.length > 0) {
+      if (!tagFilters.some((tag) => t.tags?.includes(tag))) return false;
+    }
+    if (priorityFilters.length > 0 && !priorityFilters.includes(t.priority)) return false;
+    return true;
+  });
 
   // Ordenação combinável de cada coluna do kanban — pedido explícito de
   // poder ordenar por prioridade e/ou prazo, um servindo de desempate do
@@ -991,6 +1029,120 @@ export function TaskBoard({
               )}
             </PopoverContent>
           </Popover>
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
+                  activeFilterCount > 0 ? "text-foreground" : "text-muted-foreground"
+                }`}
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Filtrar
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="max-h-[70vh] w-72 space-y-4 overflow-y-auto p-3">
+              <div>
+                <label className="block text-[11px] font-medium text-muted-foreground">
+                  Responsável
+                </label>
+                {allAssignees.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Nenhuma tarefa atribuída.</p>
+                ) : (
+                  <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                    {allAssignees.map((name) => {
+                      const active = assigneeFilters.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => setAssigneeFilters((prev) => toggleIn(prev, name))}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                            active
+                              ? "bg-foreground text-background"
+                              : "bg-muted text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-muted-foreground">
+                  Etiquetas
+                </label>
+                {allTags.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Nenhuma etiqueta em uso.</p>
+                ) : (
+                  <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                    {allTags.map((tag) => {
+                      const active = tagFilters.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setTagFilters((prev) => toggleIn(prev, tag))}
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorForTag(tag, taskTags)} ${
+                            active ? "" : "opacity-40 hover:opacity-70"
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-muted-foreground">
+                  Prioridade
+                </label>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {TASK_PRIORITIES.map((p) => {
+                    const active = priorityFilters.includes(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPriorityFilters((prev) => toggleIn(prev, p))}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                          active
+                            ? "bg-foreground text-background"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigneeFilters([]);
+                    setTagFilters([]);
+                    setPriorityFilters([]);
+                  }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Limpar filtros
+                </button>
+              )}
+            </PopoverContent>
+          </Popover>
           <button
             type="button"
             onClick={() => setTaskDialog({ mode: "new" })}
@@ -1000,36 +1152,6 @@ export function TaskBoard({
           </button>
         </div>
       </div>
-
-      {allTags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Tag className="h-3 w-3 shrink-0 text-muted-foreground" />
-          {allTags.map((tag) => {
-            const active = tagFilter === tag;
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setTagFilter((prev) => (prev === tag ? null : tag))}
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity ${colorForTag(tag, taskTags)} ${
-                  active ? "" : "opacity-50 hover:opacity-80"
-                }`}
-              >
-                {tag}
-              </button>
-            );
-          })}
-          {tagFilter && (
-            <button
-              type="button"
-              onClick={() => setTagFilter(null)}
-              className="text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              Limpar filtro
-            </button>
-          )}
-        </div>
-      )}
 
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
         {TASK_STATUSES.map((col) => {
