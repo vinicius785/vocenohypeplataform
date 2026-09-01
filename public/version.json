@@ -1,6 +1,7 @@
 {
-  "version": "1.192.0",
+  "version": "1.193.0",
   "notes": [
+    "A lista de subtarefas dentro de uma tarefa agora aparece sempre ordenada por prazo (mais próxima primeiro, sem prazo por último) — antes ficava na ordem em que cada uma foi criada.",
     "O painel \"Filtrar\" dos kanbans ganha a opção \"Exibir subtarefas no board\" — quando ligada, cada subtarefa aparece como um card próprio na coluna do seu status (com um selo \"SUB\" indicando de qual tarefa ela é), em vez de só o contador \"N/M\" escondido dentro do card da tarefa-mãe. Clicar numa subtarefa abre a tarefa-mãe (onde ela é editada). A preferência fica salva no navegador — continua ligada/desligada da próxima vez que você abrir qualquer kanban.",
     "A prioridade da tarefa agora aparece direto no card do kanban (ícone de bandeira colorido ao lado do título, mesma cor já usada no seletor de prioridade dentro da tarefa) — antes só dava pra ver abrindo a tarefa.",
     "Corrige tarefas avulsas do Marketing (criadas direto no board de lá, sem projeto/campanha por trás) que perdiam prioridade, etiquetas, anexos, subtarefas e datas de início/estimativa a cada leitura — o registro dessas tarefas nunca tinha onde guardar esses 5 campos, então prioridade sempre \"resetava\" pra Normal e os outros quatro simplesmente nunca chegavam a salvar, mesmo editando normalmente pela tela. Tarefas de projeto/campanha puxadas pro Marketing já funcionavam certo — o problema era só nas nativas do board de lá.",

@@ -1503,6 +1503,13 @@ export function TaskDialog({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [subtasks, setSubtasks] = useState<Task[]>([]);
+  // Exibição sempre por prazo (mais próxima primeiro, sem prazo por
+  // último) — pedido explícito; a ordem de criação/`subtasks` em si não
+  // muda, só a lista mostrada na tela.
+  const sortedSubtasks = useMemo(
+    () => [...subtasks].sort((a, b) => compareTasksByKey(a, b, "dueDate")),
+    [subtasks],
+  );
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskDate, setNewSubtaskDate] = useState("");
   const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
@@ -2517,7 +2524,7 @@ export function TaskDialog({
 
               {(showSubtaskInput || subtasks.length > 0) && (
                 <div className="ml-1 space-y-1 py-1">
-                  {subtasks.map((s) => {
+                  {sortedSubtasks.map((s) => {
                     const done = s.status === "Concluído";
                     const subtaskAssignees = getTaskAssignees(s);
                     return (
