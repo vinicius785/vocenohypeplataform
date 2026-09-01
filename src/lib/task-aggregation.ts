@@ -93,6 +93,8 @@ export function formatDue(
   return `${WEEKDAYS[due.getDay()].slice(0, 3)} ${due.getDate()}/${due.getMonth() + 1}`;
 }
 
+type CommentLike = { id: string; author: string; text: string; createdAt: string };
+
 type CampanhaTaskLike = {
   id: string;
   title: string;
@@ -104,6 +106,7 @@ type CampanhaTaskLike = {
   assignees?: string[];
   primaryAssignee?: string;
   subtasks?: CampanhaTaskLike[];
+  comments?: CommentLike[];
 };
 
 /** De quem é essa tarefa, pra fins de "isso é MEU trabalho"/"minha
@@ -381,4 +384,100 @@ export function marketingStandaloneAsTaskGroup(): {
     name: "Marketing",
     tasks: loadStandalone() as unknown as Project["tasks"],
   };
+}
+
+/** Extrai os nomes citados num texto de comentário ("@Nome Completo") —
+ * mesma regra de casamento (regex + `startsWith`) que `renderMentions`
+ * (TaskBoard.tsx) já usa pra destacar a menção visualmente. Comentário de
+ * tarefa não tem um campo `mentions` estruturado como mensagem de chat
+ * (`Comment.text` é só texto livre), então a extração precisa acontecer
+ * aqui, na leitura. */
+function extractMentionedNames(text: string): string[] {
+  const matches = text.match(/@[\wÀ-ÿ]+(?:\s[\wÀ-ÿ]+)?/g) ?? [];
+  return matches.map((m) => m.slice(1));
+}
+
+export type TaskCommentMention = {
+  /** Id do comentário — chave estável pra dedupe/"visto" (localStorage). */
+  commentId: string;
+  /** Mesma convenção de `DashTask`: id do nó (tarefa OU subtarefa) só pra
+   * exibição/key; a navegação (`openTask`) sempre resolve via `parentId`
+   * quando presente (subtarefa não tem diálogo próprio). */
+  id: string;
+  projectId: string;
+  campanhaId?: string;
+  parentId?: string;
+  taskTitle: string;
+  parentTitle?: string;
+  commentText: string;
+  author: string;
+  createdAt: string;
+};
+
+/** Mesma passada de `loadAllTasksFlat` (projetos + campanhas + avulsas do
+ * Marketing, recursando em subtarefas), mas procurando comentários que
+ * mencionam `myName` em vez de montar `DashTask`s — usado pelo card
+ * "Comentários atribuídos" do Início, que até aqui só olhava menções de
+ * CHAT (`chat-store.ts`); comentário de tarefa nunca alimentou
+ * notificação nenhuma, em nenhum board. */
+export function collectTaskCommentMentions(myName: string): TaskCommentMention[] {
+  const myNameLower = myName.trim().toLowerCase();
+  const out: TaskCommentMention[] = [];
+  if (!myNameLower) return out;
+
+  const mentionsMe = (text: string) =>
+    extractMentionedNames(text).some((n) => myNameLower.startsWith(n.toLowerCase()));
+
+  const collectFrom = (
+    root: CampanhaTaskLike,
+    projectId: string,
+    rootId: string,
+    campanhaId?: string,
+  ) => {
+    const walk = (items: CampanhaTaskLike[], parentTitle: string | undefined) => {
+      for (const t of items) {
+        for (const c of t.comments ?? []) {
+          if (c.author === myName) continue; // não notifica o próprio autor
+          if (!mentionsMe(c.text)) continue;
+          out.push({
+            commentId: c.id,
+            id: t.id,
+            projectId,
+            campanhaId,
+            parentId: parentTitle ? rootId : undefined,
+            taskTitle: t.title,
+            parentTitle,
+            commentText: c.text,
+            author: c.author,
+            createdAt: c.createdAt,
+          });
+        }
+        if (t.subtasks?.length) walk(t.subtasks, t.title);
+      }
+    };
+    walk([root], undefined);
+  };
+
+  const projs = loadProjetos();
+  let marketingProjectId: string | undefined;
+  for (const p of projs) {
+    if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+    for (const root of (p.tasks ?? []) as unknown as CampanhaTaskLike[]) {
+      collectFrom(root, p.id, root.id);
+    }
+  }
+
+  for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
+    for (const root of tasks as unknown as CampanhaTaskLike[]) {
+      collectFrom(root, "", root.id, campanhaId);
+    }
+  }
+
+  if (marketingProjectId) {
+    for (const s of loadStandalone() as unknown as CampanhaTaskLike[]) {
+      collectFrom(s, marketingProjectId, `mkt:${s.id}`);
+    }
+  }
+
+  return out.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }

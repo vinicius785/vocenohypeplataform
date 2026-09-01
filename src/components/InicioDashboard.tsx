@@ -63,7 +63,13 @@ import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
 import { todayZipKey } from "@/lib/zip-game";
-import { loadAllTasks, WEEKDAYS, type DashTask } from "@/lib/task-aggregation";
+import {
+  loadAllTasks,
+  WEEKDAYS,
+  type DashTask,
+  collectTaskCommentMentions,
+  type TaskCommentMention,
+} from "@/lib/task-aggregation";
 import { usePerformanceSettings } from "@/lib/performance-events-store";
 
 type PersonalItem = { id: string; text: string; done: boolean };
@@ -152,6 +158,7 @@ export function InicioDashboard() {
   const [filter, setFilter] = useState<TaskFilter>("hoje");
   const [manageOpen, setManageOpen] = useState(false);
   const [tasks, setTasks] = useState<DashTask[]>([]);
+  const [taskCommentMentions, setTaskCommentMentions] = useState<TaskCommentMention[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
   const [personal, setPersonal] = useState<PersonalItem[]>(() => loadPersonalCache());
@@ -188,6 +195,7 @@ export function InicioDashboard() {
 
     const refresh = () => {
       setTasks(loadAllTasks(campanhaNameMap, getMe().name, performanceSettings.deadlineCutoffHour));
+      setTaskCommentMentions(collectTaskCommentMentions(getMe().name));
       setMeetings(loadMeetings());
     };
     refresh();
@@ -293,13 +301,16 @@ export function InicioDashboard() {
   }, [filter, tasks]);
 
   const todayISO = toISODate(new Date());
-  const todaysMeetings = useMemo(
-    () =>
-      meetings
-        .filter((m) => m.data === todayISO && m.status !== "Cancelada")
-        .sort((a, b) => a.hora.localeCompare(b.hora)),
-    [meetings, todayISO],
-  );
+  const todaysMeetings = useMemo(() => {
+    const me = getMe();
+    // Mesmo critério de "sou participante" já usado em ReunioesSection.tsx
+    // (criador OU convidado) — sem isso, a Agenda do Início mostrava TODA
+    // reunião marcada pra hoje no workspace inteiro, não só as minhas.
+    const isMine = (m: Meeting) => m.criadorId === me.id || m.participanteIds?.includes(me.id);
+    return meetings
+      .filter((m) => m.data === todayISO && m.status !== "Cancelada" && isMine(m))
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [meetings, todayISO]);
 
   // Comentários atribuídos — menções a mim em qualquer conversa do chat.
   // "Limpar" (por pessoa/item ou tudo de uma vez) grava em `notif:seenMentions`
@@ -354,6 +365,30 @@ export function InicioDashboard() {
     setActiveConvo(convoId);
     navigate({ to: "/time", search: { section: "chat" as SectionKey } });
   };
+
+  // Menções em COMENTÁRIOS DE TAREFA (@Nome dentro de uma tarefa qualquer,
+  // Projetos/Campanhas/Marketing) — sistema à parte das menções de chat
+  // acima; "visto" grava numa chave própria (`notif:seenTaskCommentMentions`)
+  // pra não colidir com os ids de mensagem de chat.
+  const readSeenTaskCommentMentions = (): Set<string> => {
+    try {
+      const raw = localStorage.getItem("notif:seenTaskCommentMentions");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      return new Set();
+    }
+  };
+  const dismissTaskCommentMentions = (ids: string[]) => {
+    const seen = readSeenTaskCommentMentions();
+    ids.forEach((id) => seen.add(id));
+    localStorage.setItem("notif:seenTaskCommentMentions", JSON.stringify(Array.from(seen)));
+    setSeenTick((t) => t + 1);
+  };
+  const taskCommentMentionItems = useMemo(() => {
+    const seen = readSeenTaskCommentMentions();
+    return taskCommentMentions.filter((m) => !seen.has(m.commentId)).slice(0, 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskCommentMentions, seenTick]);
 
   // Funil comercial — leads reais (tabela Supabase via server function)
   const listLeadsFn = useServerFn(listLeads);
@@ -415,7 +450,7 @@ export function InicioDashboard() {
     persistPersonal(personal.filter((p) => p.id !== id));
   };
 
-  const openTask = (t: DashTask) => {
+  const openTask = (t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">) => {
     // Subtarefa não tem dialog próprio pra abrir sozinha (só é editada de
     // dentro do dialog da tarefa-mãe de nível raiz) — abre o pai em vez
     // dela; a subtarefa aparece logo na lista de subtarefas já expandida.
@@ -634,9 +669,12 @@ export function InicioDashboard() {
               icon={<MessageSquare className="h-4 w-4" />}
               title="Comentários atribuídos"
               action={
-                mentionItems.length > 0 && (
+                (mentionItems.length > 0 || taskCommentMentionItems.length > 0) && (
                   <button
-                    onClick={() => dismissMentions(mentionItems.map((m) => m.id))}
+                    onClick={() => {
+                      dismissMentions(mentionItems.map((m) => m.id));
+                      dismissTaskCommentMentions(taskCommentMentionItems.map((m) => m.commentId));
+                    }}
                     className="text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     Limpar tudo
@@ -644,7 +682,7 @@ export function InicioDashboard() {
                 )
               }
             />
-            {mentionItems.length === 0 ? (
+            {mentionItems.length === 0 && taskCommentMentionItems.length === 0 ? (
               <p className="px-4 py-8 text-center text-xs text-muted-foreground">
                 Sem menções no momento.
               </p>
@@ -672,6 +710,35 @@ export function InicioDashboard() {
                       className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
                       aria-label={`Limpar menção de ${m.authorName}`}
                       title={`Limpar menção de ${m.authorName}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {taskCommentMentionItems.map((m) => (
+                  <div key={m.commentId} className="group flex items-start gap-1 px-4 py-2.5">
+                    <button
+                      onClick={() => openTask(m)}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-foreground">
+                          {m.author}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            mencionou você em {m.taskTitle}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {m.commentText}
+                        </p>
+                      </div>
+                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </button>
+                    <button
+                      onClick={() => dismissTaskCommentMentions([m.commentId])}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                      aria-label={`Limpar menção de ${m.author}`}
+                      title={`Limpar menção de ${m.author}`}
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

@@ -1058,6 +1058,11 @@ export function TaskBoard({
     mode: "new" | "edit";
     data?: Task;
     defaultStatus?: TaskStatus;
+    // Quando se clica numa subtarefa (card achatado ou prévia expandida no
+    // board), `data` continua sendo a tarefa-mãe (é ela quem tem o
+    // diálogo) mas isso diz pro diálogo abrir já direto na subtarefa —
+    // sem isso, clicar numa subtarefa mostrava a tarefa-mãe em vez dela.
+    openSubtaskId?: string;
   } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   // Coluna que está recebendo o drag no momento — só feedback visual, não
@@ -1489,7 +1494,13 @@ export function TaskBoard({
                       draggable={!t.__parentTask}
                       onDragStart={() => !t.__parentTask && setDragId(t.id)}
                       onDragEnd={() => setDragId(null)}
-                      onClick={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
+                      onClick={() =>
+                        setTaskDialog({
+                          mode: "edit",
+                          data: t.__parentTask ?? t,
+                          openSubtaskId: t.__parentTask ? t.id : undefined,
+                        })
+                      }
                       className={`group relative cursor-pointer rounded-lg border border-border bg-card p-3.5 text-sm shadow-sm transition-all hover:border-foreground/30 hover:shadow-md ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
                     >
                       {/* Nível 1 — título (maior peso visual do card) */}
@@ -1506,7 +1517,13 @@ export function TaskBoard({
                           {t.title}
                         </span>
                         <CardQuickActions
-                          onOpen={() => setTaskDialog({ mode: "edit", data: t.__parentTask ?? t })}
+                          onOpen={() =>
+                            setTaskDialog({
+                              mode: "edit",
+                              data: t.__parentTask ?? t,
+                              openSubtaskId: t.__parentTask ? t.id : undefined,
+                            })
+                          }
                           onDelete={(e) => {
                             e.stopPropagation();
                             if (t.__parentTask) {
@@ -1600,14 +1617,18 @@ export function TaskBoard({
                       )}
 
                       {/* Subtarefas expandidas direto no card — cada uma como uma
-                          prévia compacta; clicar nela abre a tarefa-mãe (mesma
-                          convenção de "subtarefa não tem diálogo próprio" já usada
-                          em `showSubtasksInline`). */}
+                          prévia compacta; clicar nela abre a própria subtarefa
+                          (o diálogo é sempre o da tarefa-mãe por baixo, mas já
+                          chega direto na subtarefa — ver `openSubtaskId`). */}
                       {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
                         <div className="mt-2 space-y-1.5 border-t border-border pt-2">
                           {t.subtasks!.map((s) => (
                             <div
                               key={s.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
+                              }}
                               className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
                             >
                               <span
@@ -1685,6 +1706,7 @@ export function TaskBoard({
           onOpenChange={(o) => !o && setTaskDialog(null)}
           initial={taskDialog?.data}
           defaultStatus={taskDialog?.defaultStatus}
+          initialEditSubtaskId={taskDialog?.openSubtaskId}
           scope={scope}
           breadcrumb={breadcrumb}
           onSave={(t) => {
@@ -1725,6 +1747,7 @@ export function TaskDialog({
   onSave,
   onDelete,
   onToggleTimer,
+  initialEditSubtaskId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -1736,6 +1759,9 @@ export function TaskDialog({
   onSave: (t: Task) => void;
   onDelete?: () => void;
   onToggleTimer?: (taskId: string) => Task | null;
+  /** Abre o diálogo já direto na subtarefa indicada (clique numa subtarefa
+      no board não deve mostrar a tarefa-mãe primeiro). */
+  initialEditSubtaskId?: string;
 }) {
   const members = useTeamMembers();
   const taskTags = useTaskTags();
@@ -1897,9 +1923,12 @@ export function TaskDialog({
     setNewSubtaskPriority("Normal");
     setNewTag("");
     setShowSubtaskInput(false);
-    setEditSubtask(null);
+    setEditSubtask(
+      (initialEditSubtaskId && initial?.subtasks?.find((s) => s.id === initialEditSubtaskId)) ||
+        null,
+    );
     setAssigneePickerOpen(false);
-  }, [open, initial, defaultStatus]);
+  }, [open, initial, defaultStatus, initialEditSubtaskId]);
 
   const canSave = title.trim().length > 0;
 
