@@ -173,6 +173,13 @@ type SlimMeeting = {
   participanteIds?: string[];
   convidadosExternos?: { nome: string; email: string }[];
   origem?: string;
+  /** Id do evento já criado no Google pra essa reunião — gravado na
+   * primeira sincronização de saída e reutilizado depois, pra nunca mais
+   * depender de buscar por `privateExtendedProperty` (esse filtro do
+   * Google tem atraso de indexação: um evento recém-criado pode não
+   * aparecer na busca por alguns ciclos, fazendo o sync pensar que não
+   * existe e criar outro — duplicando o evento a cada ciclo). */
+  googleEventId?: string;
 };
 
 // `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
@@ -189,22 +196,54 @@ function meetingTimeRange(m: SlimMeeting) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+/** Busca o evento do Google já criado pra essa reunião. Também
+ * autocura duplicatas: se a mesma reunião foi criada mais de uma vez no
+ * Google (ex: corrida entre 2 sessões sincronizando ao mesmo tempo, cada
+ * uma sem ver ainda o evento que a outra estava criando), mantém só a
+ * cópia mais antiga e apaga as demais — roda a cada ciclo de sync
+ * (3min), então qualquer duplicata futura se autolimpa sozinha. */
 async function findGoogleEventId(accessToken: string, meetingId: string): Promise<string | null> {
   const url = new URL(EVENTS_URL);
   url.searchParams.set("privateExtendedProperty", `vnhMeetingId=${meetingId}`);
-  url.searchParams.set("maxResults", "1");
+  url.searchParams.set("maxResults", "10");
+  url.searchParams.set("orderBy", "updated");
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!res.ok) return null;
-  const json = (await res.json()) as { items?: { id: string }[] };
-  return json.items?.[0]?.id ?? null;
+  const json = (await res.json()) as { items?: { id: string; created?: string }[] };
+  const items = json.items ?? [];
+  if (items.length === 0) return null;
+  const sorted = [...items].sort((a, b) => (a.created ?? "").localeCompare(b.created ?? ""));
+  const [keep, ...duplicates] = sorted;
+  for (const dup of duplicates) {
+    await fetch(`${EVENTS_URL}/${dup.id}?sendUpdates=all`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => {});
+  }
+  return keep.id;
 }
 
 async function syncOneMeeting(
+  admin: AdminClient,
   accessToken: string,
   m: SlimMeeting,
   emailById: Map<string, string>,
 ): Promise<void> {
-  const existingId = await findGoogleEventId(accessToken, m.id);
+  // Fonte de verdade é o id já gravado na própria reunião — nunca busca
+  // por `privateExtendedProperty` quando já sabemos o id (esse filtro do
+  // Google é eventualmente consistente e pode não achar um evento recém
+  // criado, fazendo o sync recriar duplicado a cada ciclo). Só cai pra
+  // busca (com autocura de duplicatas) em reuniões antigas que ainda não
+  // tinham esse campo gravado.
+  let existingId = m.googleEventId ?? null;
+  if (existingId) {
+    const check = await fetch(`${EVENTS_URL}/${existingId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (check.status === 404 || check.status === 410) existingId = null;
+  } else {
+    existingId = await findGoogleEventId(accessToken, m.id);
+  }
 
   if (m.status === "Cancelada") {
     if (existingId) {
@@ -254,6 +293,14 @@ async function syncOneMeeting(
   });
   if (!res.ok) {
     console.warn(`[google-calendar] sync failed for meeting ${m.id}`, await res.text());
+    return;
+  }
+  if (!existingId) {
+    const created = (await res.json()) as { id: string };
+    await admin
+      .from("reunioes")
+      .update({ data: { ...m, googleEventId: created.id }, updated_at: new Date().toISOString() })
+      .eq("id", m.id);
   }
 }
 
@@ -307,7 +354,7 @@ export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
       const accessToken = await getValidAccessToken(supabaseAdmin, conn);
       if (!accessToken) continue;
       for (const m of creatorMeetings) {
-        await syncOneMeeting(accessToken, m, emailById);
+        await syncOneMeeting(supabaseAdmin, accessToken, m, emailById);
         synced++;
       }
     }
