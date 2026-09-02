@@ -5,14 +5,10 @@ import {
   Check,
   Pencil,
   CalendarClock,
-  Calendar,
-  Clock,
-  User,
-  StickyNote,
   Video,
   LogIn,
-  CalendarDays,
-  Repeat,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DateField } from "@/components/ui/date-field";
@@ -32,29 +28,6 @@ import { joinUrlFor } from "./MeetingLine";
 import { AvatarStack } from "./AvatarStack";
 import { loadTeam, type TeamMember } from "./team";
 
-/** Cabeçalho de seção + divisor sutil acima — substitui os cards
- * fechados que existiam antes (`border` em volta de cada bloco). A
- * reunião deve ler como uma entidade contínua, não uma pilha de caixas. */
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-t border-border/60 pt-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        {action}
-      </div>
-      <div className="mt-2.5">{children}</div>
-    </div>
-  );
-}
-
 function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: string }) {
   if (member?.photo) {
     return <img src={member.photo} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />;
@@ -65,6 +38,13 @@ function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: strin
       {label.trim()[0]?.toUpperCase() ?? "?"}
     </span>
   );
+}
+
+/** Fim (HH:MM) a partir do início + duração — usado só pra exibir
+ * "10:00–10:30" numa linha só, nunca pra cálculo de negócio. */
+function endTimeLabel(meeting: Meeting): string {
+  const end = new Date(meetingStartTime(meeting) + meeting.duracao * 60_000);
+  return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
 }
 
 const PARTICIPANTS_PREVIEW = 5;
@@ -101,6 +81,7 @@ export function MeetingSummaryDialog({
   const [attendanceChecked, setAttendanceChecked] = useState<string[]>([]);
   const [transcricao, setTranscricao] = useState("");
   const [showAllParticipants, setShowAllParticipants] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Depois que a pessoa já respondeu (confirmou/recusou), os botões de
   // ação ficam escondidos atrás de "Alterar" — reduz o ruído do modal em
   // vez de deixar Confirmar/Recusar competindo pra sempre com "Entrar
@@ -119,6 +100,7 @@ export function MeetingSummaryDialog({
     setTranscricao(meeting.transcricao ?? "");
     setChangingResponse(false);
     setShowAllParticipants(false);
+    setDetailsOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meeting?.id]);
 
@@ -145,6 +127,12 @@ export function MeetingSummaryDialog({
     : declinedBy.includes(me.id)
       ? "declined"
       : null;
+  // "Sua resposta" (abaixo) já representa a mesma informação que um
+  // badge de status no header mostraria pra quem é participante ativo —
+  // mostrar os dois seria repetir o mesmo dado duas vezes. O header só
+  // carrega o badge quando essa seção não existe (reunião cancelada,
+  // encerrada, ou eu não sou participante).
+  const showsResponseSection = isParticipant && !isFinished && meeting.status !== "Cancelada";
 
   const confirm = () => {
     onConfirm(meeting);
@@ -227,95 +215,72 @@ export function MeetingSummaryDialog({
     .map((id) => ({ id, name: nameFor(id), photo: memberFor(id)?.photo }))
     .filter((p) => p.name);
 
+  const hasDetails =
+    !!meeting.seriesId ||
+    meeting.origem === "google" ||
+    !!meeting.meetLink ||
+    (!!meeting.local && !meeting.meetLink) ||
+    !!meeting.notas;
+
   return (
     <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[85vh] w-full max-w-[560px] flex-col gap-0 overflow-hidden rounded-2xl p-0">
-        {/* Header */}
-        <div className="flex items-start gap-3 px-6 pb-4 pt-6">
+      <DialogContent className="flex max-h-[85vh] w-full max-w-[520px] flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        {/* Header — título, data+hora numa linha só, status só quando
+            "Sua resposta" (abaixo) não existir pra representar esse dado. */}
+        <div className="flex items-start gap-3 px-6 pb-1 pt-6">
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <Video className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <DialogTitle className="truncate text-lg font-semibold leading-tight">
+            <DialogTitle className="truncate text-base font-semibold leading-tight">
               {meeting.titulo}
             </DialogTitle>
             <DialogDescription className="sr-only">Resumo da reunião</DialogDescription>
-            <p className="mt-1 text-sm text-muted-foreground">{formatBR(meeting.data)}</p>
-            <p className="text-sm text-muted-foreground" title={`Duração: ${meeting.duracao} min`}>
-              {meeting.hora} –{" "}
-              {(() => {
-                const end = new Date(meetingStartTime(meeting) + meeting.duracao * 60_000);
-                return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-              })()}
+            <p className="mt-1 truncate text-sm text-muted-foreground">
+              {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)}
             </p>
-            <span
-              className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
-              {displayStatus}
-            </span>
+            {!showsResponseSection && (
+              <span
+                className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
+                {displayStatus}
+              </span>
+            )}
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          {/* Criador/organizador — sempre visível, nunca em Mais detalhes */}
+          {meeting.criadorId && (
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground">Criada por</p>
+              <div className="mt-1 flex items-center gap-2">
+                <MiniAvatar
+                  member={memberFor(meeting.criadorId)}
+                  fallback={nameFor(meeting.criadorId)}
+                />
+                <span className="text-sm text-foreground">{nameFor(meeting.criadorId)}</span>
+              </div>
+            </div>
+          )}
+
           {/* CTA principal */}
           {joinUrl && (
-            <a href={joinUrl} target="_blank" rel="noreferrer" className="inline-block">
-              <Button size="lg" className="px-6">
+            <a href={joinUrl} target="_blank" rel="noreferrer" className="mt-4 block">
+              <Button size="lg" className="w-full">
                 <LogIn className="h-4 w-4" />
                 {isNow ? "Entrar agora" : "Entrar na reunião"}
               </Button>
             </a>
           )}
 
-          {/* Informações — sem card, só ícone + texto */}
-          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <p className="flex items-center gap-2.5">
-              <Calendar className="h-4 w-4 shrink-0" /> {formatBR(meeting.data)}
+          {/* Participantes — sempre visível, sem card */}
+          <div className="mt-5">
+            <p className="text-sm font-semibold text-foreground">
+              Participantes · {participantIds.length}
             </p>
-            <p className="flex items-center gap-2.5">
-              <Clock className="h-4 w-4 shrink-0" /> {meeting.hora} –{" "}
-              {(() => {
-                const end = new Date(meetingStartTime(meeting) + meeting.duracao * 60_000);
-                return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-              })()}
-            </p>
-            {meeting.seriesId && (
-              <p className="flex items-center gap-2.5">
-                <Repeat className="h-4 w-4 shrink-0" /> Reunião recorrente
-              </p>
-            )}
-            {meeting.criadorId && (
-              <p className="flex items-center gap-2.5">
-                <User className="h-4 w-4 shrink-0" /> Criada por {nameFor(meeting.criadorId)}
-              </p>
-            )}
-            {meeting.local && !meeting.meetLink && (
-              <p className="flex items-start gap-2.5 break-words">
-                <Video className="mt-0.5 h-4 w-4 shrink-0" /> {linkifyText(meeting.local)}
-              </p>
-            )}
-            {meeting.origem === "google" && (
-              <p className="flex items-center gap-2.5">
-                <CalendarDays className="h-4 w-4 shrink-0" /> Importada do Google Calendar
-              </p>
-            )}
-          </div>
-
-          {meeting.notas && (
-            <div className="mt-4">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <StickyNote className="h-3 w-3" /> Pauta
-              </p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
-                {linkifyText(meeting.notas)}
-              </p>
-            </div>
-          )}
-
-          {/* Participantes */}
-          <Section title={`Participantes · ${participantIds.length}`}>
-            <ul className="-mx-2">
+            <ul className="-mx-2 mt-1.5">
               {(meeting.convidadosExternos?.length ?? 0) > 0
                 ? meeting.convidadosExternos!.map((g) => (
                     <li
@@ -373,56 +338,65 @@ export function MeetingSummaryDialog({
                 Ver todos os {participantIds.length}
               </button>
             )}
-          </Section>
+          </div>
 
-          {/* Sua resposta */}
-          {isParticipant && !isFinished && meeting.status !== "Cancelada" && (
-            <Section title="Sua resposta">
-              {myResponse && !changingResponse ? (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                    <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    {myResponse === "confirmed" ? "Confirmado" : "Recusado"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setChangingResponse(true)}
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
-                  >
-                    Alterar
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
+          <div className="mt-5 space-y-4 border-t border-border/60 pt-4">
+            {/* Sua resposta — uma linha só quando já respondido */}
+            {showsResponseSection && (
+              <div>
+                {myResponse && !changingResponse ? (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-muted-foreground">Ainda não respondeu</span>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={confirm}>
-                        <Check className="h-3.5 w-3.5" /> Confirmar
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={decline}>
-                        <X className="h-3.5 w-3.5" /> Recusar
-                      </Button>
+                    <span className="text-sm font-semibold text-foreground">Sua resposta</span>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        {myResponse === "confirmed" ? "Confirmado" : "Recusado"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setChangingResponse(true)}
+                        className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        Alterar
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setProposing((v) => !v)}
-                    className={`inline-flex items-center gap-1 text-xs font-medium ${
-                      proposing ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <CalendarClock className="h-3 w-3" /> Sugerir outro horário
-                  </button>
-                </div>
-              )}
-            </Section>
-          )}
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground">Sua resposta</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={confirm}>
+                          <Check className="h-3.5 w-3.5" /> Confirmar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={decline}>
+                          <X className="h-3.5 w-3.5" /> Recusar
+                        </Button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setProposing((v) => !v)}
+                      className={`inline-flex items-center gap-1 text-xs font-medium ${
+                        proposing
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <CalendarClock className="h-3 w-3" /> Sugerir outro horário
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {meeting.rescheduleProposal && (
-            <Section title="Novo horário sugerido">
+            {meeting.rescheduleProposal && (
               <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm">
-                <p className="text-foreground">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  Novo horário sugerido
+                </div>
+                <p className="mt-1.5 text-foreground">
                   {formatBR(meeting.rescheduleProposal.data)} às {meeting.rescheduleProposal.hora}
                   {meeting.rescheduleProposal.proposedByName &&
                     ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
@@ -451,134 +425,196 @@ export function MeetingSummaryDialog({
                   </div>
                 )}
               </div>
-            </Section>
-          )}
+            )}
 
-          {proposing && (
-            <Section title="Sugerir novo horário">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Nova data</label>
-                  <DateField
-                    value={propData || undefined}
-                    onChange={(v) => setPropData(v ?? "")}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Nova hora</label>
-                  <input
-                    type="time"
-                    value={propHora}
-                    onChange={(e) => setPropHora(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              </div>
-              <input
-                type="text"
-                value={propNote}
-                onChange={(e) => setPropNote(e.target.value)}
-                placeholder="Observação (opcional)"
-                className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" onClick={sendProposal}>
-                  Enviar sugestão
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setProposing(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </Section>
-          )}
-
-          {/* Presença — intenção (resposta) vs. quem de fato participou */}
-          {meeting.status !== "Cancelada" && (
-            <Section title="Presença">
-              {!editingAttendance ? (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    {meeting.attendanceRecorded ? (
-                      <div className="flex items-center gap-2.5">
-                        <AvatarStack people={attendedPeople} max={4} />
-                        <span className="text-sm text-muted-foreground">
-                          {attendedPeople.map((p) => p.name).join(", ")}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Ainda não registrada.</span>
-                    )}
-                    {isCreator && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingAttendance(true)}
-                        className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
-                      >
-                        {meeting.attendanceRecorded ? "Editar presença" : "Marcar presença"}
-                      </button>
-                    )}
-                  </div>
-                  {meeting.transcricao && (
-                    <div className="rounded-lg bg-muted/40 p-2.5">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Transcrição
-                      </p>
-                      <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">
-                        {meeting.transcricao}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Selecione quem participou — sai da lista de pendentes e conta na pontuação.
-                  </p>
-                  <ul className="-mx-2 space-y-0.5">
-                    {(meeting.participanteIds ?? []).map((id) => {
-                      const checked = attendanceChecked.includes(id);
-                      return (
-                        <li key={id}>
-                          <button
-                            type="button"
-                            onClick={() => toggleAttendance(id)}
-                            className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50 ${
-                              checked ? "text-foreground" : "text-muted-foreground"
-                            }`}
-                          >
-                            <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
-                            <span className="min-w-0 flex-1 truncate">{nameFor(id)}</span>
-                            {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            {proposing && (
+              <div>
+                <p className="text-sm font-semibold text-foreground">Sugerir novo horário</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Transcrição (opcional)
-                    </label>
-                    <textarea
-                      value={transcricao}
-                      onChange={(e) => setTranscricao(e.target.value)}
-                      rows={4}
-                      placeholder="Cole aqui a transcrição da reunião..."
-                      className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    <label className="text-xs font-medium text-muted-foreground">Nova data</label>
+                    <DateField
+                      value={propData || undefined}
+                      onChange={(v) => setPropData(v ?? "")}
+                      className="mt-1"
                     />
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={saveAttendance}>
-                      <Check className="h-3.5 w-3.5" /> Salvar presença
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setEditingAttendance(false)}>
-                      Cancelar
-                    </Button>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Nova hora</label>
+                    <input
+                      type="time"
+                      value={propHora}
+                      onChange={(e) => setPropHora(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
                   </div>
                 </div>
-              )}
-            </Section>
-          )}
+                <input
+                  type="text"
+                  value={propNote}
+                  onChange={(e) => setPropNote(e.target.value)}
+                  placeholder="Observação (opcional)"
+                  className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" onClick={sendProposal}>
+                    Enviar sugestão
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setProposing(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Presença — funcional e discreta, uma linha quando possível */}
+            {meeting.status !== "Cancelada" && (
+              <div>
+                {!editingAttendance ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-foreground">Presença</span>
+                    <div className="flex items-center gap-2.5">
+                      {meeting.attendanceRecorded ? (
+                        <>
+                          <AvatarStack people={attendedPeople} max={4} />
+                          <span className="text-sm text-muted-foreground">
+                            {attendedPeople.length} participou
+                            {attendedPeople.length === 1 ? "" : "ram"}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Ainda não registrada</span>
+                      )}
+                      {isCreator && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAttendance(true)}
+                          className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          {meeting.attendanceRecorded ? "Editar" : "Marcar"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">Presença</p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecione quem participou — sai da lista de pendentes e conta na pontuação.
+                    </p>
+                    <ul className="-mx-2 space-y-0.5">
+                      {(meeting.participanteIds ?? []).map((id) => {
+                        const checked = attendanceChecked.includes(id);
+                        return (
+                          <li key={id}>
+                            <button
+                              type="button"
+                              onClick={() => toggleAttendance(id)}
+                              className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50 ${
+                                checked ? "text-foreground" : "text-muted-foreground"
+                              }`}
+                            >
+                              <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
+                              <span className="min-w-0 flex-1 truncate">{nameFor(id)}</span>
+                              {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Transcrição (opcional)
+                      </label>
+                      <textarea
+                        value={transcricao}
+                        onChange={(e) => setTranscricao(e.target.value)}
+                        rows={4}
+                        placeholder="Cole aqui a transcrição da reunião..."
+                        className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={saveAttendance}>
+                        <Check className="h-3.5 w-3.5" /> Salvar presença
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingAttendance(false)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {meeting.transcricao && !editingAttendance && (
+                  <div className="mt-2 rounded-lg bg-muted/40 p-2.5">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Transcrição
+                    </p>
+                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">
+                      {meeting.transcricao}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mais detalhes — secundário, fechado por padrão */}
+            {hasDetails && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen((v) => !v)}
+                  className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Mais detalhes
+                  {detailsOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {detailsOpen && (
+                  <div className="mt-2.5 space-y-3 text-sm">
+                    {meeting.seriesId && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Recorrência</p>
+                        <p className="text-foreground">Reunião recorrente</p>
+                      </div>
+                    )}
+                    {meeting.origem === "google" && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Origem</p>
+                        <p className="text-foreground">Importada do Google Calendar</p>
+                      </div>
+                    )}
+                    {meeting.meetLink && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Videoconferência</p>
+                        <p className="text-foreground">Google Meet</p>
+                      </div>
+                    )}
+                    {meeting.local && !meeting.meetLink && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Local / link</p>
+                        <p className="break-words text-foreground">{linkifyText(meeting.local)}</p>
+                      </div>
+                    )}
+                    {meeting.notas && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Pauta</p>
+                        <p className="whitespace-pre-wrap break-words text-foreground">
+                          {linkifyText(meeting.notas)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}
