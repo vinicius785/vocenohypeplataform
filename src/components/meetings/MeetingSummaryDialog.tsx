@@ -61,7 +61,7 @@ export function MeetingSummaryDialog({
   onDelete,
 }: {
   meeting: Meeting | null;
-  me: { id: string; name: string };
+  me: { id: string; name: string; photo?: string };
   /** Abre o modal já com o painel "Sugerir novo horário" expandido — usado
    * pela aba Solicitações, que oferece essa ação direto na lista. */
   initialProposing?: boolean;
@@ -116,7 +116,8 @@ export function MeetingSummaryDialog({
       ...(meeting.participanteIds ?? []),
     ]),
   );
-  const memberFor = (id: string) => team.find((t) => t.id === id);
+  const memberFor = (id: string) =>
+    id === me.id ? { id: me.id, name: me.name, photo: me.photo } : team.find((t) => t.id === id);
   const nameFor = (id: string) =>
     id === me.id ? `${me.name} (você)` : (memberFor(id)?.name ?? id);
   const isFinished = meetingEndTime(meeting) < Date.now();

@@ -13,13 +13,13 @@ type TeamMember = { id: string; name: string; photo?: string };
 export function peopleFor(
   m: Meeting,
   team: TeamMember[],
-  me: { id: string; name: string },
+  me: { id: string; name: string; photo?: string },
 ): AvatarPerson[] {
   const ids = Array.from(
     new Set([...(m.criadorId ? [m.criadorId] : []), ...(m.participanteIds ?? [])]),
   );
   const fromIds = ids.map((id) => {
-    if (id === me.id) return { id, name: me.name };
+    if (id === me.id) return { id, name: me.name, photo: me.photo };
     const t = team.find((x) => x.id === id);
     return { id, name: t?.name ?? id, photo: t?.photo };
   });
