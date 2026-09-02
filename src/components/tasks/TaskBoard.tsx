@@ -3355,6 +3355,9 @@ export function TaskDialog({
               </div>
 
               <div className="px-8 py-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Descrição
+                </p>
                 {descEditing ? (
                   <div className="relative">
                     {descMentionMatches.length > 0 && (
@@ -3393,7 +3396,7 @@ export function TaskDialog({
                       }}
                       placeholder="Escreva algo, adicione detalhes, links, use @ para mencionar…"
                       rows={10}
-                      className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                      className="min-h-[120px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
                     />
                   </div>
                 ) : description ? (
@@ -3405,7 +3408,7 @@ export function TaskDialog({
                       setDescEditing(true);
                       setTimeout(() => descRef.current?.focus(), 0);
                     }}
-                    className="min-h-[220px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                    className="min-h-[120px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
                   >
                     {renderMentions(description, members)}
                   </div>
@@ -3416,7 +3419,7 @@ export function TaskDialog({
                       setDescEditing(true);
                       setTimeout(() => descRef.current?.focus(), 0);
                     }}
-                    className="min-h-[220px] w-full text-left text-sm text-muted-foreground/70"
+                    className="min-h-[60px] w-full text-left text-sm text-muted-foreground/70"
                   >
                     Escreva algo, adicione detalhes, links…
                   </button>
@@ -3424,362 +3427,399 @@ export function TaskDialog({
               </div>
 
               {initial && (
-                <div ref={depsSectionRef} className="space-y-2 px-8 py-3">
-                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Link2 className="h-3.5 w-3.5" /> Dependências
+                <div className="space-y-4 border-t border-border px-8 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Relações
                   </p>
 
-                  {dependsOn.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Aguardando
-                      </p>
-                      {dependsOn.map((id) => {
-                        const dep = allDeps.find(
-                          (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
-                        );
-                        const entry = directoryByRawId.get(id);
-                        if (!dep) return null;
-                        return (
-                          <DependencyRow
-                            key={dep.id}
-                            entry={entry}
-                            fallbackId={id}
-                            onOpen={() => pushTaskModal(id)}
-                            onRemove={() => void handleRemoveDependency(dep, entry?.label ?? id)}
-                          />
-                        );
-                      })}
+                  <div ref={depsSectionRef} className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs font-medium text-foreground">Dependências</span>
+                      {dependsOn.length + blocks.length > 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {dependsOn.length + blocks.length}
+                        </span>
+                      )}
                     </div>
-                  )}
 
-                  {blocks.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Bloqueia
-                      </p>
-                      {blocks.map((id) => {
-                        const dep = allDeps.find(
-                          (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
-                        );
-                        const entry = directoryByRawId.get(id);
-                        if (!dep) return null;
-                        return (
-                          <DependencyRow
-                            key={dep.id}
-                            entry={entry}
-                            fallbackId={id}
-                            onOpen={() => pushTaskModal(id)}
-                            onRemove={() => void handleRemoveDependency(dep, entry?.label ?? id)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
+                    {dependsOn.length === 0 && blocks.length === 0 ? (
+                      <p className="pl-5 text-xs text-muted-foreground">Nenhuma dependência</p>
+                    ) : (
+                      <div className="space-y-2 pl-5">
+                        {dependsOn.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Depende de
+                            </p>
+                            {dependsOn.map((id) => {
+                              const dep = allDeps.find(
+                                (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
+                              );
+                              const entry = directoryByRawId.get(id);
+                              if (!dep) return null;
+                              return (
+                                <DependencyRow
+                                  key={dep.id}
+                                  entry={entry}
+                                  fallbackId={id}
+                                  onOpen={() => pushTaskModal(id)}
+                                  onRemove={() =>
+                                    void handleRemoveDependency(dep, entry?.label ?? id)
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
 
-                  <Popover
-                    open={depPopover !== null}
-                    onOpenChange={(o) => !o && setDepPopover(null)}
-                  >
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => setDepPopover("menu")}
-                        className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                        {blocks.length > 0 && (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Bloqueia
+                            </p>
+                            {blocks.map((id) => {
+                              const dep = allDeps.find(
+                                (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
+                              );
+                              const entry = directoryByRawId.get(id);
+                              if (!dep) return null;
+                              return (
+                                <DependencyRow
+                                  key={dep.id}
+                                  entry={entry}
+                                  fallbackId={id}
+                                  onOpen={() => pushTaskModal(id)}
+                                  onRemove={() =>
+                                    void handleRemoveDependency(dep, entry?.label ?? id)
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="pl-5">
+                      <Popover
+                        open={depPopover !== null}
+                        onOpenChange={(o) => !o && setDepPopover(null)}
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar dependência
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      side="bottom"
-                      align="start"
-                      sideOffset={6}
-                      collisionPadding={16}
-                      className={depPopover === "menu" ? "w-56 p-1" : "w-[380px] max-w-[90vw] p-0"}
-                    >
-                      {depPopover === "menu" && (
-                        <div className="space-y-0.5">
+                        <PopoverTrigger asChild>
                           <button
                             type="button"
-                            onClick={() => setDepPopover("depends")}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                            onClick={() => setDepPopover("menu")}
+                            className="flex items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground"
                           >
-                            ← Esta tarefa depende de...
+                            <Plus className="h-3.5 w-3.5" />
+                            Adicionar dependência
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDepPopover("blocks")}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                          >
-                            → Esta tarefa bloqueia...
-                          </button>
-                        </div>
-                      )}
-                      {(depPopover === "depends" || depPopover === "blocks") && (
-                        <TaskPicker
-                          excludeTaskId={depTaskId ?? ""}
-                          currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
-                          currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
-                          onSelect={(picked) => void handlePickDependency(depPopover, picked)}
-                        />
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
-
-              <div className="space-y-0 px-8 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSubtaskInput((v) => !v)}
-                  className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Adicionar subtarefa
-                  {subtasks.length > 0 && (
-                    <span className="ml-1 text-[11px] text-muted-foreground">
-                      ({doneCount}/{subtasks.length})
-                    </span>
-                  )}
-                </button>
-
-                {(showSubtaskInput || subtasks.length > 0) && (
-                  <div className="ml-1 space-y-1 py-1">
-                    {sortedSubtasks.map((s) => {
-                      const done = s.status === "Concluído";
-                      const subtaskAssignees = getTaskAssignees(s);
-                      return (
-                        <div
-                          key={s.id}
-                          className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                        </PopoverTrigger>
+                        <PopoverContent
+                          side="bottom"
+                          align="start"
+                          sideOffset={6}
+                          collisionPadding={16}
+                          className={
+                            depPopover === "menu" ? "w-56 p-1" : "w-[380px] max-w-[90vw] p-0"
+                          }
                         >
-                          {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
+                          {depPopover === "menu" && (
+                            <div className="space-y-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setDepPopover("depends")}
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                              >
+                                ← Esta tarefa depende de...
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDepPopover("blocks")}
+                                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                              >
+                                → Esta tarefa bloqueia...
+                              </button>
+                            </div>
+                          )}
+                          {(depPopover === "depends" || depPopover === "blocks") && (
+                            <TaskPicker
+                              excludeTaskId={depTaskId ?? ""}
+                              currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
+                              currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
+                              onSelect={(picked) => void handlePickDependency(depPopover, picked)}
+                            />
+                          )}
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium text-foreground">Subtarefas</span>
+                      {subtasks.length > 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {doneCount}/{subtasks.length}
+                        </span>
+                      )}
+                    </div>
+
+                    {(showSubtaskInput || subtasks.length > 0) && (
+                      <div className="space-y-1 pl-5">
+                        {sortedSubtasks.map((s) => {
+                          const done = s.status === "Concluído";
+                          const subtaskAssignees = getTaskAssignees(s);
+                          return (
+                            <div
+                              key={s.id}
+                              className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                            >
+                              {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
                             não um item de checklist — status muda direto aqui, sem passar pela
                             subtarefa. A cor do círculo é o status (mesma paleta de sempre,
                             TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
                             visualmente reduzido a um círculo (texto transparente). */}
-                          <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                            <select
-                              value={s.status}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                const next = e.target.value as TaskStatus;
-                                // `withStatusChange` já para o timer da
-                                // subtarefa se ele estava rodando (e inicia se
-                                // o novo status for "Em andamento") — sem
-                                // passar por ela aqui, um timer preso rodando
-                                // nunca parava só porque o status mudou.
-                                const updated = withStatusChange(s, next);
-                                setSubtasks((prev) =>
-                                  prev.map((st) => (st.id === s.id ? updated : st)),
-                                );
-                                setActivity((a) =>
-                                  pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                                );
-                                // Sem isso, concluir/reabrir uma subtarefa por
-                                // aqui (o caminho mais usado, direto na linha)
-                                // nunca gerava o evento de XP/"concluídas
-                                // hoje" — só concluir a tarefa-mãe (drag no
-                                // board ou Salvar no diálogo) ou abrir a
-                                // subtarefa em seu próprio diálogo passavam
-                                // por `recordTaskLedgerEventsOnStatusChange`.
-                                // Isso fazia o Score subcontar completions de
-                                // verdade (ex.: 10 concluídas no dia, só 3
-                                // contadas).
-                                if (updated !== s) {
-                                  recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                    scope,
-                                    members,
-                                    performanceSettings,
-                                  });
+                              <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                                <select
+                                  value={s.status}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const next = e.target.value as TaskStatus;
+                                    // `withStatusChange` já para o timer da
+                                    // subtarefa se ele estava rodando (e inicia se
+                                    // o novo status for "Em andamento") — sem
+                                    // passar por ela aqui, um timer preso rodando
+                                    // nunca parava só porque o status mudou.
+                                    const updated = withStatusChange(s, next);
+                                    setSubtasks((prev) =>
+                                      prev.map((st) => (st.id === s.id ? updated : st)),
+                                    );
+                                    setActivity((a) =>
+                                      pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                                    );
+                                    // Sem isso, concluir/reabrir uma subtarefa por
+                                    // aqui (o caminho mais usado, direto na linha)
+                                    // nunca gerava o evento de XP/"concluídas
+                                    // hoje" — só concluir a tarefa-mãe (drag no
+                                    // board ou Salvar no diálogo) ou abrir a
+                                    // subtarefa em seu próprio diálogo passavam
+                                    // por `recordTaskLedgerEventsOnStatusChange`.
+                                    // Isso fazia o Score subcontar completions de
+                                    // verdade (ex.: 10 concluídas no dia, só 3
+                                    // contadas).
+                                    if (updated !== s) {
+                                      recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                        scope,
+                                        members,
+                                        performanceSettings,
+                                      });
+                                    }
+                                  }}
+                                  title={s.status}
+                                  aria-label={`Status: ${s.status}`}
+                                  className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
+                                >
+                                  {TASK_STATUSES.map((st) => (
+                                    <option
+                                      key={st}
+                                      value={st}
+                                      className="bg-background text-foreground"
+                                    >
+                                      {st}
+                                    </option>
+                                  ))}
+                                </select>
+                                {done && (
+                                  <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
+                                )}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => setEditSubtask(s)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                              >
+                                <span
+                                  className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
+                                >
+                                  {s.title}
+                                </span>
+                                {!!s.description && (
+                                  <span
+                                    title="Tem descrição"
+                                    className="shrink-0 text-muted-foreground"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                  </span>
+                                )}
+                                {subtaskAssignees.length > 0 && (
+                                  <span className="inline-flex shrink-0 items-center -space-x-1.5">
+                                    {subtaskAssignees.map((a) => (
+                                      <Avatar
+                                        key={a}
+                                        member={
+                                          members.find((m) => m.name === a) ?? {
+                                            name: a,
+                                            initials: initialsOf(a) || "?",
+                                            color: colorFor(a),
+                                          }
+                                        }
+                                        size={16}
+                                      />
+                                    ))}
+                                  </span>
+                                )}
+                              </button>
+
+                              {/* Prioridade — mesmo truque do status: select funcional por baixo,
+                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
+                              <span className="relative inline-flex shrink-0 items-center">
+                                <Flag
+                                  className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                                />
+                                <select
+                                  value={s.priority}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const next = e.target.value as TaskPriority;
+                                    setSubtasks((prev) =>
+                                      prev.map((st) =>
+                                        st.id === s.id ? { ...st, priority: next } : st,
+                                      ),
+                                    );
+                                  }}
+                                  className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
+                                >
+                                  {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
+                                    (p) => (
+                                      <option
+                                        key={p}
+                                        value={p}
+                                        className="bg-background text-foreground"
+                                      >
+                                        {p}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </span>
+
+                              {s.dueDate && (
+                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                                  <Calendar className="h-3 w-3" />
+                                  {fmtDate(s.dueDate)}
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => removeSubtask(s.id)}
+                                className="opacity-0 transition group-hover:opacity-100"
+                              >
+                                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {showSubtaskInput && (
+                          <div className="rounded-md border border-border bg-background p-2">
+                            <input
+                              autoFocus
+                              value={newSubtaskTitle}
+                              onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addSubtask();
                                 }
                               }}
-                              title={s.status}
-                              aria-label={`Status: ${s.status}`}
-                              className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
-                            >
-                              {TASK_STATUSES.map((st) => (
-                                <option
-                                  key={st}
-                                  value={st}
-                                  className="bg-background text-foreground"
-                                >
-                                  {st}
-                                </option>
-                              ))}
-                            </select>
-                            {done && (
-                              <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
-                            )}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditSubtask(s)}
-                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                          >
-                            <span
-                              className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
-                            >
-                              {s.title}
-                            </span>
-                            {!!s.description && (
-                              <span
-                                title="Tem descrição"
-                                className="shrink-0 text-muted-foreground"
-                              >
-                                <FileText className="h-3 w-3" />
-                              </span>
-                            )}
-                            {subtaskAssignees.length > 0 && (
-                              <span className="inline-flex shrink-0 items-center -space-x-1.5">
-                                {subtaskAssignees.map((a) => (
-                                  <Avatar
-                                    key={a}
-                                    member={
-                                      members.find((m) => m.name === a) ?? {
-                                        name: a,
-                                        initials: initialsOf(a) || "?",
-                                        color: colorFor(a),
-                                      }
-                                    }
-                                    size={16}
-                                  />
-                                ))}
-                              </span>
-                            )}
-                          </button>
-
-                          {/* Prioridade — mesmo truque do status: select funcional por baixo,
-                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
-                          <span className="relative inline-flex shrink-0 items-center">
-                            <Flag
-                              className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                              placeholder="Nome da subtarefa"
+                              className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
                             />
-                            <select
-                              value={s.priority}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => {
-                                const next = e.target.value as TaskPriority;
-                                setSubtasks((prev) =>
-                                  prev.map((st) =>
-                                    st.id === s.id ? { ...st, priority: next } : st,
+                            <div className="flex flex-wrap items-center gap-2">
+                              <DateField
+                                variant="input"
+                                value={newSubtaskDate || undefined}
+                                onChange={(v) => setNewSubtaskDate(v ?? "")}
+                                placeholder="Data"
+                                ariaLabel="Data da subtarefa"
+                                className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                              />
+                              <CompactAssigneePicker
+                                selected={newSubtaskAssignees}
+                                members={members}
+                                onToggle={toggleNewSubtaskAssignee}
+                              />
+                              <select
+                                value={newSubtaskPriority}
+                                onChange={(e) =>
+                                  setNewSubtaskPriority(e.target.value as TaskPriority)
+                                }
+                                className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
+                              >
+                                {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
+                                  (p) => (
+                                    <option
+                                      key={p}
+                                      value={p}
+                                      className="bg-background text-foreground"
+                                    >
+                                      {p}
+                                    </option>
                                   ),
-                                );
-                              }}
-                              className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
-                            >
-                              {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
-                                (p) => (
-                                  <option
-                                    key={p}
-                                    value={p}
-                                    className="bg-background text-foreground"
-                                  >
-                                    {p}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          </span>
-
-                          {s.dueDate && (
-                            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {fmtDate(s.dueDate)}
-                            </span>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => removeSubtask(s.id)}
-                            className="opacity-0 transition group-hover:opacity-100"
-                          >
-                            <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {showSubtaskInput && (
-                      <div className="rounded-md border border-border bg-background p-2">
-                        <input
-                          autoFocus
-                          value={newSubtaskTitle}
-                          onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              addSubtask();
-                            }
-                          }}
-                          placeholder="Nome da subtarefa"
-                          className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
-                        />
-                        <div className="flex flex-wrap items-center gap-2">
-                          <DateField
-                            variant="input"
-                            value={newSubtaskDate || undefined}
-                            onChange={(v) => setNewSubtaskDate(v ?? "")}
-                            placeholder="Data"
-                            ariaLabel="Data da subtarefa"
-                            className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
-                          />
-                          <CompactAssigneePicker
-                            selected={newSubtaskAssignees}
-                            members={members}
-                            onToggle={toggleNewSubtaskAssignee}
-                          />
-                          <select
-                            value={newSubtaskPriority}
-                            onChange={(e) => setNewSubtaskPriority(e.target.value as TaskPriority)}
-                            className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
-                          >
-                            {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
-                              <option key={p} value={p} className="bg-background text-foreground">
-                                {p}
-                              </option>
-                            ))}
-                          </select>
-                          <div className="ml-auto flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowSubtaskInput(false);
-                                setNewSubtaskTitle("");
-                                setNewSubtaskDate("");
-                                setNewSubtaskAssignees([]);
-                              }}
-                              className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                            >
-                              Cancelar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={addSubtask}
-                              disabled={!newSubtaskTitle.trim()}
-                              className="rounded bg-foreground px-2 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                            >
-                              Adicionar
-                            </button>
+                                )}
+                              </select>
+                              <div className="ml-auto flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowSubtaskInput(false);
+                                    setNewSubtaskTitle("");
+                                    setNewSubtaskDate("");
+                                    setNewSubtaskAssignees([]);
+                                  }}
+                                  className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={addSubtask}
+                                  disabled={!newSubtaskTitle.trim()}
+                                  className="rounded bg-foreground px-2 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                                >
+                                  Adicionar
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
 
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  <Paperclip className="h-3.5 w-3.5" />
-                  Anexos{" "}
+                    <button
+                      type="button"
+                      onClick={() => setShowSubtaskInput((v) => !v)}
+                      className="flex items-center gap-2 py-1 pl-5 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar subtarefa
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2 border-t border-border px-8 py-4">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Anexos
+                  </p>
                   {attachments.length > 0 && (
-                    <span className="text-[11px]">({attachments.length})</span>
+                    <span className="text-[11px] text-muted-foreground">{attachments.length}</span>
                   )}
-                </button>
+                </div>
                 <input
                   ref={fileRef}
                   type="file"
@@ -3792,7 +3832,7 @@ export function TaskDialog({
                 />
 
                 {attachments.length > 0 && (
-                  <div className="ml-5 space-y-1 py-1">
+                  <div className="space-y-1">
                     {attachments.map((a) => (
                       <div
                         key={a.id}
@@ -3828,24 +3868,24 @@ export function TaskDialog({
                     ))}
                   </div>
                 )}
-              </div>
 
-              <div
-                className="mx-8 mb-6 mt-2 rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  void addFiles(e.dataTransfer.files);
-                }}
-              >
-                Arraste arquivos aqui ou{" "}
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="text-primary hover:underline"
+                <div
+                  className="rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    void addFiles(e.dataTransfer.files);
+                  }}
                 >
-                  procure nos arquivos
-                </button>
+                  Arraste arquivos aqui ou{" "}
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="text-primary hover:underline"
+                  >
+                    procure nos arquivos
+                  </button>
+                </div>
               </div>
             </div>
 
