@@ -151,7 +151,7 @@ export function FluxoVisual({
                     {STEP_STATUS_LABEL[step.status] ?? step.status}
                   </span>
                   <Trash2
-                    className="h-3.5 w-3.5 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+                    className="h-3.5 w-3.5 cursor-pointer text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       void remove(step.id);
