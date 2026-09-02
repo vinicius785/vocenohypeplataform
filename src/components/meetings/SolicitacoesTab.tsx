@@ -54,7 +54,7 @@ export function SolicitacoesTab({
         Reuniões que você ainda não confirmou nem recusou — responda direto por aqui.
       </p>
       {pend.length === 0 ? (
-        <div className="mt-6 flex flex-col items-center gap-1 py-10 text-center">
+        <div className="mt-6 flex max-w-md flex-col items-center gap-1 rounded-xl border border-border bg-card px-8 py-10 text-center">
           <Users className="h-5 w-5 text-muted-foreground/60" />
           <p className="mt-2 text-sm font-medium text-foreground">Nenhuma solicitação pendente</p>
           <p className="text-xs text-muted-foreground">

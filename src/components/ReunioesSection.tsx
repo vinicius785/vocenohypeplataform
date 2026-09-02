@@ -10,7 +10,6 @@ import {
   loadMeetings,
   saveMeetings,
   onMeetingsChange,
-  meetingDisplayStatus,
   meetingNeedsMyAction,
   confirmMeetingFor,
   declineMeetingFor,
@@ -60,6 +59,11 @@ export function ReunioesSection() {
     [disponibilidades, me.id],
   );
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
+  const [newMeetingDate, setNewMeetingDate] = useState<string>(() => toISODate(new Date()));
+  const openNewMeeting = (dateIso?: string) => {
+    setNewMeetingDate(dateIso ?? toISODate(new Date()));
+    setDialog({ mode: "new" });
+  };
   const [summary, setSummary] = useState<Meeting | null>(null);
   const [summaryProposing, setSummaryProposing] = useState(false);
 
@@ -192,9 +196,21 @@ export function ReunioesSection() {
   }, [meetings, summary?.id]);
 
   const today = toISODate(new Date());
-  const proximas = myMeetings.filter((m) => m.data >= today && m.status !== "Cancelada").length;
-  const confirmadas = myMeetings.filter(
-    (m) => m.data >= today && meetingDisplayStatus(m) === "Confirmada",
+  // "Confirmadas" saiu do KPI: `meetingDisplayStatus` só considera uma
+  // reunião "Confirmada" com 2+ confirmações, um critério pensado pra
+  // convites entre pessoas na plataforma — não faz sentido pra reuniões
+  // importadas do Google (ex: uma daily onde só o dono da conta usa a
+  // plataforma), e misturado com "Pendentes" dava números que pareciam
+  // inconsistentes (muitas "próximas", nenhuma "confirmada"). Métricas
+  // novas são contagens diretas, sem depender desse critério.
+  const semanaLimite = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 6);
+    return toISODate(d);
+  })();
+  const hojeCount = myMeetings.filter((m) => m.data === today && m.status !== "Cancelada").length;
+  const semanaCount = myMeetings.filter(
+    (m) => m.data >= today && m.data <= semanaLimite && m.status !== "Cancelada",
   ).length;
   const pendentes = myMeetings.filter((m) => meetingNeedsMyAction(m, me.id)).length;
 
@@ -208,19 +224,19 @@ export function ReunioesSection() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-[1000px]">
       <SectionHeader
         title="Reuniões"
         subtitle="Sua agenda, reuniões e disponibilidade em um só lugar."
         kpis={[
-          { label: "PRÓXIMAS", value: proximas },
-          { label: "CONFIRMADAS", value: confirmadas },
+          { label: "HOJE", value: hojeCount },
+          { label: "ESTA SEMANA", value: semanaCount },
           { label: "PENDENTES", value: pendentes },
         ]}
         action={
           <div className="flex items-center gap-2">
             <JoinByLinkDialog />
-            <Button size="sm" onClick={() => setDialog({ mode: "new" })}>
+            <Button size="sm" onClick={() => openNewMeeting()}>
               <Plus className="h-3.5 w-3.5" /> Nova reunião
             </Button>
           </div>
@@ -252,7 +268,7 @@ export function ReunioesSection() {
           team={team}
           myAvail={myAvail}
           onOpen={openSummary}
-          onNewMeeting={() => setDialog({ mode: "new" })}
+          onNewMeeting={(iso) => openNewMeeting(iso)}
         />
       )}
 
@@ -279,7 +295,7 @@ export function ReunioesSection() {
             ? meetings.filter((m) => m.seriesId === dialog.data!.seriesId).length
             : 0
         }
-        defaultDate={today}
+        defaultDate={newMeetingDate}
         me={me}
         disponibilidades={disponibilidades}
         onClose={() => setDialog(null)}

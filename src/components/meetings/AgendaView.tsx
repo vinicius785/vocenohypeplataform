@@ -47,6 +47,7 @@ export function AgendaView({
   const hero = acontecendoAgora ?? proximaReuniao;
   const heroPeople = hero ? peopleFor(hero, team, me) : [];
   const heroUrl = hero ? joinUrlFor(hero) : null;
+  const heroRelative = hero ? relativeTime(meetingStartTime(hero)) : null;
 
   const todayMeetings = useMemo(() => sorted.filter((m) => m.data === today), [sorted, today]);
 
@@ -83,10 +84,10 @@ export function AgendaView({
   }
 
   return (
-    <div className="mt-6 max-w-3xl space-y-8">
+    <div className="mt-6 space-y-7">
       {hero && (
         <div
-          className={`rounded-2xl border p-5 ${
+          className={`group rounded-2xl border p-6 transition-colors ${
             acontecendoAgora ? "border-emerald-500/30 bg-emerald-500/5" : "border-border bg-card"
           }`}
         >
@@ -104,39 +105,46 @@ export function AgendaView({
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold tabular-nums tracking-tight">
-                  {hero.hora}
-                </span>
-                {relativeTime(meetingStartTime(hero)) && (
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {relativeTime(meetingStartTime(hero))}
-                  </span>
-                )}
+          <div className="mt-3 flex flex-wrap items-center gap-6">
+            <div className="shrink-0">
+              <div className="text-4xl font-semibold tabular-nums tracking-tight text-foreground">
+                {hero.hora}
               </div>
-              <p className="mt-0.5 truncate text-lg font-medium text-foreground">{hero.titulo}</p>
-              <div className="mt-2 flex items-center gap-2">
+              {heroRelative && (
+                <div className="mt-0.5 text-sm font-medium text-muted-foreground">
+                  {heroRelative}
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xl font-medium text-foreground">{hero.titulo}</p>
+              <div className="mt-2.5 flex items-center gap-2.5">
                 <AvatarStack people={heroPeople} max={4} size="md" />
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(meetingDisplayStatus(hero))}`}
                 >
                   {meetingDisplayStatus(hero)}
                 </span>
-                <span className="text-xs text-muted-foreground">{hero.duracao} min</span>
+                <span className="text-xs text-muted-foreground">· {hero.duracao} min</span>
               </div>
             </div>
-            <div className="flex shrink-0 gap-2">
+
+            <div className="flex w-full shrink-0 gap-2 sm:w-auto">
               {heroUrl && (
-                <a href={heroUrl} target="_blank" rel="noreferrer">
-                  <Button size="sm">
+                <a href={heroUrl} target="_blank" rel="noreferrer" className="flex-1 sm:flex-none">
+                  <Button size="sm" className="w-full">
                     <LogIn className="h-3.5 w-3.5" />
                     {acontecendoAgora ? "Entrar agora" : "Entrar na reunião"}
                   </Button>
                 </a>
               )}
-              <Button size="sm" variant="outline" onClick={() => onOpen(hero)}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 sm:flex-none"
+                onClick={() => onOpen(hero)}
+              >
                 Ver detalhes
               </Button>
             </div>
@@ -145,12 +153,14 @@ export function AgendaView({
       )}
 
       <div>
-        <h2 className="text-sm font-semibold">Hoje</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">{formatBR(today)}</p>
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-sm font-semibold">Hoje</h2>
+          <span className="text-xs text-muted-foreground">{formatBR(today)}</span>
+        </div>
         {todayMeetings.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">Nenhuma reunião hoje.</p>
+          <p className="mt-2 text-sm text-muted-foreground/70">Nenhuma reunião hoje.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-border/60">
+          <ul className="mt-1 divide-y divide-border/60">
             {todayMeetings.map((m) => (
               <MeetingLine
                 key={m.id}
@@ -167,14 +177,14 @@ export function AgendaView({
       {upcomingByDate.size > 0 && (
         <div>
           <h2 className="text-sm font-semibold">Próximos dias</h2>
-          <div className="mt-3 space-y-5">
+          <div className="mt-2 space-y-3">
             {Array.from(upcomingByDate.entries()).map(([iso, list]) => (
               <div key={iso}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="border-b border-border/60 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {iso === tomorrowIso ? "Amanhã · " : ""}
                   {formatBR(iso)}
                 </p>
-                <ul className="mt-1 divide-y divide-border/60">
+                <ul className="divide-y divide-border/60">
                   {list.map((m) => (
                     <MeetingLine
                       key={m.id}

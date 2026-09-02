@@ -77,7 +77,7 @@ export function DisponibilidadeTab({
   );
 
   return (
-    <div className="mt-6 max-w-xl">
+    <div className="mt-6 max-w-2xl">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">Disponibilidade</h2>
