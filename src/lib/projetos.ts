@@ -41,7 +41,7 @@ export const FEATURES: {
   },
   {
     key: "documentos",
-    label: "Documentos",
+    label: "Arquivos e links",
     hint: "Links para briefings, contratos e materiais de referência.",
     group: "core",
   },
@@ -243,7 +243,42 @@ export function getTaskCollaborators(
 }
 
 export type Milestone = { id: string; title: string; date: string; done: boolean; taskId?: string };
-export type DocItem = { id: string; name: string; url: string };
+
+/** De onde veio o link — detectado pela URL (`detectSourceType` em
+ * `projeto.$id.tsx`), nunca perguntado ao usuário. */
+export type DocSourceType =
+  | "google_docs"
+  | "google_sheets"
+  | "google_slides"
+  | "google_drive"
+  | "figma"
+  | "miro"
+  | "notion"
+  | "canva"
+  | "link";
+
+export type DocCategory =
+  | "briefing"
+  | "planejamento"
+  | "apresentacao"
+  | "relatorio"
+  | "contrato"
+  | "referencia"
+  | "outro";
+
+/** `category`/`isPinned`/`sourceType` são aditivos — um registro antigo
+ * (só `id`/`name`/`url`, de antes desses campos existirem) continua
+ * válido: a leitura trata a ausência como `category: "outro"`,
+ * `isPinned: false`, `sourceType` recalculado da própria `url`. Nunca é
+ * necessário migrar/reescrever os registros existentes. */
+export type DocItem = {
+  id: string;
+  name: string;
+  url: string;
+  category?: DocCategory;
+  isPinned?: boolean;
+  sourceType?: DocSourceType;
+};
 export type SectionItem = { id: string; title: string; note?: string; date?: string; url?: string };
 
 export type EditorialStatus = "ideia" | "producao" | "agendado" | "publicado";
