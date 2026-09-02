@@ -602,7 +602,14 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
           .from("reunioes")
           .insert({ id: meeting.id, data: meeting });
         if (insertError) {
-          console.warn("[google-calendar] import insert failed", insertError.message);
+          // 23505 = violação do índice único em googleEventId — outro
+          // ciclo de sync concorrente (rodando em paralelo, ex: 2 abas
+          // abertas) já importou essa mesma ocorrência entre a checagem
+          // e esse INSERT. Não é falha nenhuma, só perdeu a corrida —
+          // nunca loga como erro nem duplica.
+          if (insertError.code !== "23505") {
+            console.warn("[google-calendar] import insert failed", insertError.message);
+          }
           continue;
         }
         // Evita reimportar de novo no mesmo ciclo se o mesmo evento
