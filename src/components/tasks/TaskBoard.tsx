@@ -3449,51 +3449,9 @@ export function TaskDialog({
 
               {initial && (
                 <div ref={depsSectionRef} className="space-y-2 px-8 py-3">
-                  <div className="flex items-center justify-between">
-                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      <Link2 className="h-3.5 w-3.5" /> Dependências
-                    </p>
-                    <Popover
-                      open={depPopover !== null}
-                      onOpenChange={(o) => !o && setDepPopover(null)}
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => setDepPopover("menu")}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          <Plus className="h-3.5 w-3.5" /> Adicionar dependência
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-56 p-1">
-                        {depPopover === "menu" && (
-                          <div className="space-y-0.5">
-                            <button
-                              type="button"
-                              onClick={() => setDepPopover("depends")}
-                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                            >
-                              ← Esta tarefa depende de...
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDepPopover("blocks")}
-                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                            >
-                              → Esta tarefa bloqueia...
-                            </button>
-                          </div>
-                        )}
-                        {(depPopover === "depends" || depPopover === "blocks") && (
-                          <TaskPicker
-                            excludeTaskId={depTaskId ?? ""}
-                            onSelect={(picked) => void handlePickDependency(depPopover, picked)}
-                          />
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Link2 className="h-3.5 w-3.5" /> Dependências
+                  </p>
 
                   {dependsOn.length > 0 && (
                     <div className="space-y-1">
@@ -3542,6 +3500,54 @@ export function TaskDialog({
                       })}
                     </div>
                   )}
+
+                  <Popover
+                    open={depPopover !== null}
+                    onOpenChange={(o) => !o && setDepPopover(null)}
+                  >
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setDepPopover("menu")}
+                        className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar dependência
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      side="bottom"
+                      align="start"
+                      sideOffset={6}
+                      collisionPadding={16}
+                      className={depPopover === "menu" ? "w-56 p-1" : "w-[380px] max-w-[90vw] p-0"}
+                    >
+                      {depPopover === "menu" && (
+                        <div className="space-y-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setDepPopover("depends")}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                          >
+                            ← Esta tarefa depende de...
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDepPopover("blocks")}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                          >
+                            → Esta tarefa bloqueia...
+                          </button>
+                        </div>
+                      )}
+                      {(depPopover === "depends" || depPopover === "blocks") && (
+                        <TaskPicker
+                          excludeTaskId={depTaskId ?? ""}
+                          onSelect={(picked) => void handlePickDependency(depPopover, picked)}
+                        />
+                      )}
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
 
