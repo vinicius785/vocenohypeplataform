@@ -5,6 +5,7 @@ import {
   Users,
   Lock,
   Phone,
+  PhoneMissed,
   Pencil,
   Trash2,
   AtSign,
@@ -309,22 +310,39 @@ export function ChatSection() {
     if (activeId) void markRead(activeId);
   }, [activeId, messages.length]);
 
-  // Log system message when a call ends (for the initiator's active DM).
+  // Registra o card de chamada no histórico do Chat quando a ligação termina.
+  // Usa `detail.conversationId` (carregado pela chamada desde o convite,
+  // ver call-controller.ts) em vez de depender de qual conversa está aberta
+  // na tela — antes disso, só chamadas 1:1 registravam, e só se a pessoa
+  // não tivesse navegado pra outro lugar antes do fim; agora funciona pra
+  // DM, canal, campanha ou projeto, mesmo com o Chat fechado ou noutra tela.
   useEffect(() => {
     const onEnded = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ peerId: string; connected: boolean; seconds: number }>)
-        .detail;
-      if (!detail || !activeDmPartner || detail.peerId !== activeDmPartner.id) return;
-      const mm = String(Math.floor(detail.seconds / 60)).padStart(2, "0");
-      const ss = String(detail.seconds % 60).padStart(2, "0");
-      const text = detail.connected
-        ? `📞 Chamada encerrada · duração ${mm}:${ss}`
-        : `📞 Chamada perdida`;
-      void sendMessageDb({ convoId: activeId, text, system: true });
+      const detail = (
+        ev as CustomEvent<{
+          conversationId?: string;
+          connected: boolean;
+          reason: "answered" | "rejected" | "missed" | "cancelled";
+          seconds: number;
+          endedAt: number;
+        }>
+      ).detail;
+      if (!detail?.conversationId) return;
+      let text: string;
+      if (detail.reason === "answered") {
+        const mm = String(Math.floor(detail.seconds / 60)).padStart(2, "0");
+        const ss = String(detail.seconds % 60).padStart(2, "0");
+        text = `📞 Chamada encerrada · duração ${mm}:${ss}`;
+      } else if (detail.reason === "cancelled") {
+        text = "📞 Chamada não atendida";
+      } else {
+        text = "📞 Chamada perdida";
+      }
+      void sendMessageDb({ convoId: detail.conversationId, text, system: true });
     };
     window.addEventListener("call:ended", onEnded);
     return () => window.removeEventListener("call:ended", onEnded);
-  }, [activeId, activeDmPartner]);
+  }, []);
 
   const [callPickerOpen, setCallPickerOpen] = useState(false);
   const [callPickerSelected, setCallPickerSelected] = useState<Set<string>>(new Set());
@@ -447,13 +465,16 @@ export function ChatSection() {
               <button
                 onClick={() => {
                   if (callState.status !== "idle") return;
-                  void startCall([
-                    {
-                      id: activeDmPartner.id,
-                      name: activeDmPartner.name,
-                      photo: activeDmPartner.photo,
-                    },
-                  ]);
+                  void startCall(
+                    [
+                      {
+                        id: activeDmPartner.id,
+                        name: activeDmPartner.name,
+                        photo: activeDmPartner.photo,
+                      },
+                    ],
+                    activeId,
+                  );
                 }}
                 disabled={callState.status !== "idle"}
                 aria-label="Iniciar chamada"
@@ -647,7 +668,10 @@ export function ChatSection() {
                       callPickerSelected.has(m.id),
                     );
                     setCallPickerOpen(false);
-                    void startCall(chosen.map((m) => ({ id: m.id, name: m.name, photo: m.photo })));
+                    void startCall(
+                      chosen.map((m) => ({ id: m.id, name: m.name, photo: m.photo })),
+                      activeId,
+                    );
                   }}
                   className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1200,6 +1224,11 @@ function MessageList({
         const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
         const editing = editingId === m.id;
         if (m.authorId === "system") {
+          // Registro de chamada (📞) tem hierarquia própria — ainda discreto,
+          // mas com ícone e leve destaque, pra não parecer o mesmo aviso
+          // cinza genérico de "sistema" usado pra outras notificações.
+          const isCallRecord = m.text.startsWith("📞");
+          const isMissedOrNotAnswered = isCallRecord && !m.text.includes("duração");
           return (
             <div key={m.id}>
               {showDayDivider && (
@@ -1212,15 +1241,32 @@ function MessageList({
                 </div>
               )}
               <div className="my-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
-                  {m.text}
-                  <span className="ml-2 text-[10px] opacity-70">
-                    {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                {isCallRecord ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 shadow-sm">
+                    {isMissedOrNotAnswered ? (
+                      <PhoneMissed className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                    ) : (
+                      <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    )}
+                    <span className="font-medium text-foreground">{m.text.replace("📞 ", "")}</span>
+                    <span className="text-[10px] opacity-70">
+                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
+                    {m.text}
+                    <span className="ml-2 text-[10px] opacity-70">
+                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           );
