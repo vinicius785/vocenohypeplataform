@@ -287,7 +287,11 @@ export function ReunioesSection() {
       )}
 
       {view === "disponibilidade" && (
-        <DisponibilidadeTab avail={myAvail} onChange={(next) => saveMyDisponibilidade(next)} />
+        <DisponibilidadeTab
+          avail={myAvail}
+          meetings={meetings}
+          onChange={(next) => saveMyDisponibilidade(next)}
+        />
       )}
 
       <MeetingDialog
