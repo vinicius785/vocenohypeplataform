@@ -76,14 +76,25 @@ export const Route = createFileRoute("/_authenticated/time")({
   head: () => ({ meta: [{ title: "Plataforma VNH" }] }),
   validateSearch: (
     s: Record<string, unknown>,
-  ): { section?: SectionKey; metasView?: "objetivos" | "indicadores" } => {
+  ): {
+    section?: SectionKey;
+    metasView?: "objetivos" | "indicadores";
+    reunioesView?: "agenda" | "calendario" | "solicitacoes" | "disponibilidade";
+  } => {
     const v = s.section;
     const mv = s.metasView;
+    const rv = s.reunioesView;
     return {
       ...(typeof v === "string" && (VALID as string[]).includes(v)
         ? { section: v as SectionKey }
         : {}),
       ...(mv === "objetivos" || mv === "indicadores" ? { metasView: mv } : {}),
+      ...(rv === "agenda" ||
+      rv === "calendario" ||
+      rv === "solicitacoes" ||
+      rv === "disponibilidade"
+        ? { reunioesView: rv }
+        : {}),
     };
   },
 });
