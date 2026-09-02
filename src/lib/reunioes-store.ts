@@ -55,6 +55,10 @@ export type Meeting = {
    * criada na própria plataforma (todas as reuniões existentes antes
    * deste campo continuam válidas, tratadas como "da plataforma"). */
   origem?: "google";
+  /** Link do Google Meet — preenchido só em reuniões importadas do
+   * Google Calendar (`event.hangoutLink`), pra aparecer na plataforma
+   * mesmo quando a reunião foi criada direto por lá. */
+  meetLink?: string;
 };
 
 /** Horário em que a reunião começa (data+hora), como epoch ms. */

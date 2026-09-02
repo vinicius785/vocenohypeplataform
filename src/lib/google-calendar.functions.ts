@@ -320,6 +320,7 @@ type GoogleEvent = {
   end?: { date?: string; dateTime?: string };
   attendees?: { email?: string; displayName?: string; self?: boolean }[];
   extendedProperties?: { private?: Record<string, string> };
+  hangoutLink?: string;
 };
 
 /** Converte um instante absoluto (`Date`/ISO) nos dois campos que `Meeting`
@@ -396,11 +397,21 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
       string,
       {
         id: string;
-        data: SlimMeeting & { googleEventId?: string; origem?: string; status: string };
+        data: SlimMeeting & {
+          googleEventId?: string;
+          origem?: string;
+          status: string;
+          meetLink?: string;
+        };
       }
     >();
     for (const r of rows ?? []) {
-      const m = r.data as SlimMeeting & { googleEventId?: string; origem?: string; status: string };
+      const m = r.data as SlimMeeting & {
+        googleEventId?: string;
+        origem?: string;
+        status: string;
+        meetLink?: string;
+      };
       if (m.googleEventId) byGoogleEventId.set(m.googleEventId, { id: r.id, data: m });
     }
 
@@ -457,6 +468,7 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
             notas: event.description,
             participanteIds,
             convidadosExternos,
+            meetLink: event.hangoutLink,
             status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
           };
           if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
@@ -483,6 +495,7 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
           convidadosExternos,
           local: event.location ?? "",
           notas: event.description,
+          meetLink: event.hangoutLink,
           status: "Confirmada",
           googleEventId: dedupeKey,
           origem: "google",

@@ -1781,6 +1781,19 @@ export function MeetingSummaryDialog({
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
+          {meeting.meetLink && (
+            <SummarySection title="Google Meet" icon={<Video className="h-3.5 w-3.5" />}>
+              <a
+                href={meeting.meetLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                Entrar na chamada
+              </a>
+            </SummarySection>
+          )}
+
           {meeting.local && (
             <SummarySection title="Local / Link" icon={<MapPin className="h-3.5 w-3.5" />}>
               <p className="break-words text-sm text-foreground">{linkifyText(meeting.local)}</p>
