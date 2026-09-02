@@ -675,6 +675,14 @@ async function handle(signal: Signal) {
   if (signal.type === "answer" && signal.sdp) {
     const link = peers.get(signal.fromUserId);
     if (!link) return;
+    // Resposta atrasada de uma oferta já abandonada (o outro lado colidiu
+    // com uma oferta minha e resolveu a colisão com um rollback, ver o
+    // ramo "offer" acima) — nesse ponto a conexão já voltou pra "stable" e
+    // não está mais esperando resposta nenhuma; aplicar essa answer de
+    // qualquer jeito é exatamente o "Called in wrong state: stable" que
+    // aparecia como erro visível na chamada. Só aceita a resposta se ainda
+    // há uma oferta local pendente de fato.
+    if (link.pc.signalingState !== "have-local-offer") return;
     await link.pc.setRemoteDescription(signal.sdp).catch(fail);
     return;
   }
