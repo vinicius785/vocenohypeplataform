@@ -1820,6 +1820,16 @@ export function TaskBoard({
                 onDrop={() => {
                   if (dragId) {
                     const dragged = tasks.find((t) => t.id === dragId);
+                    if (
+                      dragged &&
+                      col === "Em andamento" &&
+                      (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
+                    ) {
+                      toast.error("Esta tarefa depende de outra ainda não concluída.");
+                      setDragId(null);
+                      setDragOverCol(null);
+                      return;
+                    }
                     if (dragged) {
                       const updated = withStatusChange(dragged, col);
                       if (updated !== dragged)
@@ -3056,7 +3066,23 @@ export function TaskDialog({
                 <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    onChange={(e) => {
+                      const next = e.target.value as TaskStatus;
+                      // Uma tarefa que ainda depende de outra não pode ser
+                      // colocada "Em andamento" — a dependência pendente
+                      // precisa ser resolvida primeiro. Diferente de
+                      // concluir (que só avisa e deixa seguir), aqui a
+                      // troca é bloqueada de verdade.
+                      if (next === "Em andamento" && dependsOnPending.length > 0) {
+                        toast.error("Esta tarefa depende de outra ainda não concluída.");
+                        depsSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                        return;
+                      }
+                      setStatus(next);
+                    }}
                     className={`h-6 cursor-pointer rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[status]}`}
                   >
                     {TASK_STATUSES.map((s) => (
