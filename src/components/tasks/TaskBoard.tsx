@@ -2009,7 +2009,7 @@ export function TaskBoard({
                                 e.stopPropagation();
                                 setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
                               }}
-                              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
+                              className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
                             >
                               <span
                                 className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}

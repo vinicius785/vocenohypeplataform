@@ -255,7 +255,7 @@ export default function DriftWall({
       </span>
     );
     const commonProps = {
-      className: `drift-wall__tile${activeId === id ? " is-active" : ""}`,
+      className: `drift-wall__tile${activeId === id ? " is-active" : ""}${item.onClick ? " cursor-pointer" : ""}`,
       "data-tile-id": id,
       "data-col": colIndex,
       onFocus: () => {
