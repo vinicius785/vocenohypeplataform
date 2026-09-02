@@ -1,6 +1,7 @@
 {
-  "version": "1.203.0",
+  "version": "1.204.0",
   "notes": [
+    "Corrige o alinhamento dos rótulos de campo (Prazo, Etiquetas) no diálogo da tarefa — quando o conteúdo tinha mais de uma linha (badge \"No prazo\", etiquetas quebrando linha), o rótulo ficava centralizado no meio do bloco em vez de alinhado com a primeira linha.",
     "Corrige o texto do botão de voltar na página de Projeto, que mostrava \"Projetos\" em vez de \"Voltar\".",
     "Enviar um bug/sugestão em Bugs & Sugestões (projeto HypeApp) agora mostra uma confirmação visual animada — o botão vira um check verde \"Enviado!\" e aparece uma faixa de sucesso, deixando claro que o relato foi registrado.",
     "Redesenha a seção \"Documentos\" do Projeto para \"Arquivos e links\": some o formulário permanente, lista compacta com ícone por origem (Google Docs/Sheets/Slides/Drive, Figma, Miro, Notion, Canva ou link externo, detectados automaticamente pela URL) e categoria (Briefing, Planejamento, Apresentação, Relatório, Contrato, Referência, Outro). Novo botão \"+ Adicionar\" com popover compacto pra link (upload de arquivo aparece desabilitado, sem infraestrutura ainda). Cada material ganha um menu \"...\" (Abrir/Editar/Fixar/Copiar link/Excluir) — itens fixados sobem para o topo. Dados existentes preservados integralmente.",

@@ -3815,12 +3815,14 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-center gap-3 border-b border-border/60 px-1 transition-colors hover:bg-muted/30 sm:px-2">
+    <div className="group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-start gap-3 border-b border-border/60 px-1 py-2.5 transition-colors hover:bg-muted/30 sm:px-2">
       <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground/70">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
-      <div className="flex min-w-0 items-center text-sm text-foreground">{children}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-foreground">
+        {children}
+      </div>
     </div>
   );
 }
