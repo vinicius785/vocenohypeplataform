@@ -507,7 +507,18 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
         // sempre tem hora, fora de escopo aqui.
         if (!event.start?.dateTime || !event.end?.dateTime) continue;
 
-        const dedupeKey = event.iCalUID ?? event.id;
+        // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
+        // aqui) — `iCalUID` parecia mais robusto (mesmo evento, ids
+        // diferentes em cada calendário de cada convidado), mas o Google
+        // usa o MESMO `iCalUID` pra TODA ocorrência de uma recorrência.
+        // Usar só `iCalUID` fazia cada ocorrência nova "atualizar" a
+        // mesma linha em vez de criar uma por dia, sobrando só a última
+        // ocorrência da janela. `id` também é o valor que precisamos pra
+        // apagar o evento certo depois (exclusão espelhada), então vira
+        // a única chave — dedupe entre contas conectadas diferentes pro
+        // mesmo evento fica sem cobertura, uma perda aceitável perto do
+        // bug que isso corrige.
+        const dedupeKey = event.id;
         seen.add(dedupeKey);
         const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
         const duracao = Math.max(

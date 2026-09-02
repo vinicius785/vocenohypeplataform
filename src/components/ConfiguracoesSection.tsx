@@ -113,7 +113,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.212.1";
+export const APP_VERSION = "1.212.2";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
