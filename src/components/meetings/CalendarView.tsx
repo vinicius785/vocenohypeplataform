@@ -42,7 +42,7 @@ export function CalendarView({
   team: TeamMember[];
   disponibilidades: Availability[];
   onOpen: (m: Meeting) => void;
-  onNewMeeting: (dateIso: string) => void;
+  onNewMeeting: (dateIso: string, hora?: string) => void;
   /** Chamado só quando a pessoa exclui um bloqueio PRÓPRIO clicado no
    * calendário — mesma função que a aba Disponibilidade já usa
    * (upsert na própria linha; RLS não permite escrever a de outro
@@ -240,7 +240,7 @@ function DayDrawer({
   disponibilidades: Availability[];
   onClose: () => void;
   onOpenMeeting: (m: Meeting) => void;
-  onNewMeeting: (dateIso: string) => void;
+  onNewMeeting: (dateIso: string, hora?: string) => void;
   onRemoveBlock: (ownerId: string, blockId: string) => void;
 }) {
   const dayMeetings = useMemo(

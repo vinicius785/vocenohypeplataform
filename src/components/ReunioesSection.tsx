@@ -60,8 +60,10 @@ export function ReunioesSection() {
   );
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
   const [newMeetingDate, setNewMeetingDate] = useState<string>(() => toISODate(new Date()));
-  const openNewMeeting = (dateIso?: string) => {
+  const [newMeetingHora, setNewMeetingHora] = useState<string | undefined>(undefined);
+  const openNewMeeting = (dateIso?: string, hora?: string) => {
     setNewMeetingDate(dateIso ?? toISODate(new Date()));
+    setNewMeetingHora(hora);
     setDialog({ mode: "new" });
   };
   const [summary, setSummary] = useState<Meeting | null>(null);
@@ -268,7 +270,7 @@ export function ReunioesSection() {
           team={team}
           disponibilidades={disponibilidades}
           onOpen={openSummary}
-          onNewMeeting={(iso) => openNewMeeting(iso)}
+          onNewMeeting={(iso, hora) => openNewMeeting(iso, hora)}
           onSaveAvailability={(next) => saveMyDisponibilidade(next)}
         />
       )}
@@ -297,8 +299,10 @@ export function ReunioesSection() {
             : 0
         }
         defaultDate={newMeetingDate}
+        defaultHora={newMeetingHora}
         me={me}
         disponibilidades={disponibilidades}
+        meetings={meetings}
         onClose={() => setDialog(null)}
         onDelete={(id) => void requestDeleteMeeting(id)}
         onSave={(saved, opts) => {
