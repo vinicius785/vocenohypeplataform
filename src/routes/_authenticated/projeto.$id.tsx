@@ -221,7 +221,7 @@ function ProjetoPage() {
   return (
     <AppShell active="projetos" onSelect={goToSection}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
-        <BackButton onClick={() => goToSection("projetos")} label="Projetos" />
+        <BackButton onClick={() => goToSection("projetos")} />
 
         {/* Header — foto/ícone + nome + descrição */}
         <header className="flex items-center gap-5">
