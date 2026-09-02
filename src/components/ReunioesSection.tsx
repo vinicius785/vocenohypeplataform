@@ -403,7 +403,14 @@ export function ReunioesSection() {
                           {meetingDisplayStatus(m)}
                         </span>
                       </div>
-                      <div className="mt-1 truncate text-sm text-foreground">{m.titulo}</div>
+                      <div className="mt-1 flex items-center gap-1 truncate text-sm text-foreground">
+                        <span className="truncate">{m.titulo}</span>
+                        {m.origem === "google" && (
+                          <span title="Importada do Google Calendar" className="shrink-0">
+                            <CalendarDays className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        )}
+                      </div>
                       {m.com && (
                         <div className="truncate text-xs text-muted-foreground">com {m.com}</div>
                       )}

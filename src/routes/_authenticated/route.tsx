@@ -21,7 +21,10 @@ import { initCampanhaScopedSync } from "@/lib/campanha-scoped-store";
 import { initProjetoScopedSync } from "@/lib/projeto-scoped-store";
 import { initTaskDependenciesSync } from "@/lib/task-dependencies-store";
 import { initCallController, shutdownCallController } from "@/lib/call-controller";
-import { syncAllMeetingsToGoogle } from "@/lib/google-calendar.functions";
+import {
+  syncAllMeetingsToGoogle,
+  importGoogleEventsToMeetings,
+} from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -159,17 +162,25 @@ function AuthenticatedLayout() {
     };
   }, [fetchDirectory]);
 
-  // Empurra TODAS as reuniões da plataforma pro Google Agenda da conta
-  // compartilhada (contato@vocenohype.com.br) — sync de mão única,
-  // plataforma sempre vence. A própria server function é barata quando a
-  // conta ainda não foi conectada (só lê a conexão e retorna); dispara em
-  // qualquer sessão logada porque não há infraestrutura de job/cron aqui.
+  // Sincroniza com o Google Agenda da conta compartilhada
+  // (contato@vocenohype.com.br) nos dois sentidos: empurra todas as
+  // reuniões da plataforma pra lá (plataforma sempre vence nesse
+  // sentido), e importa de volta qualquer evento criado DIRETO no
+  // Google (nunca reimporta o que a própria saída acabou de criar, ver
+  // `importGoogleEventsToMeetings`). Ambas as server functions são
+  // baratas quando a conta ainda não foi conectada (só leem a conexão e
+  // retornam); disparam em qualquer sessão logada porque não há
+  // infraestrutura de job/cron aqui.
   const syncGoogleFn = useServerFn(syncAllMeetingsToGoogle);
+  const importGoogleFn = useServerFn(importGoogleEventsToMeetings);
   useEffect(() => {
     let cancelled = false;
     const sync = () => {
       syncGoogleFn().catch((e) => {
         if (!cancelled) console.warn("[google-calendar] sync failed", e);
+      });
+      importGoogleFn().catch((e) => {
+        if (!cancelled) console.warn("[google-calendar] import failed", e);
       });
     };
     sync();
@@ -178,7 +189,7 @@ function AuthenticatedLayout() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [syncGoogleFn]);
+  }, [syncGoogleFn, importGoogleFn]);
 
   return (
     <>

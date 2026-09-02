@@ -5,13 +5,14 @@ import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
- * Integração Google Calendar. A plataforma é sempre a fonte da verdade — a
- * sincronização é unidirecional (reuniões daqui -> eventos no Google), nunca
- * o contrário. O upsert é idempotente via `extendedProperties.private.vnhMeetingId`
- * (marca cada evento do Google com o id da reunião), então não precisamos
- * guardar o id do evento do Google em lugar nenhum do nosso lado — evita
- * qualquer risco de condição de corrida ao gravar de volta no registro da
- * reunião.
+ * Integração Google Calendar. Sincronização em dois sentidos:
+ * - Saída (reuniões da plataforma -> eventos no Google): a plataforma é a
+ *   fonte da verdade, upsert idempotente via
+ *   `extendedProperties.private.vnhMeetingId`
+ * - Entrada (`importGoogleEventsToMeetings`, mais abaixo): eventos criados
+ *   DIRETO no Google (sem esse marcador) viram Reunião na plataforma,
+ *   marcados com `origem: "google"` + `googleEventId` (dedupe do lado de
+ *   cá) — nunca reimporta um evento que a própria plataforma criou.
  *
  * TODAS as reuniões saem de uma única conta compartilhada (ex.:
  * contato@vocenohype.com.br, `shared_calendar_connection`), conectada por um
@@ -360,4 +361,181 @@ export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
       await syncOneMeeting(accessToken, m, emailById);
     }
     return { synced: meetings.length, connected: true as const };
+  });
+
+type GoogleEvent = {
+  id: string;
+  status?: string; // "confirmed" | "cancelled" | ...
+  summary?: string;
+  description?: string;
+  location?: string;
+  start?: { date?: string; dateTime?: string };
+  end?: { date?: string; dateTime?: string };
+  attendees?: { email?: string; displayName?: string; self?: boolean }[];
+  extendedProperties?: { private?: Record<string, string> };
+};
+
+/** Converte um instante absoluto (`Date`/ISO) nos dois campos que `Meeting`
+ * guarda em horário de Brasília — via `Intl.DateTimeFormat`, então funciona
+ * certo não importa qual offset o Google mandou (diferente do truque de
+ * string fixa usado só na saída, onde a plataforma controla o instante). */
+function isoToSaoPauloParts(iso: string): { data: string; hora: string } {
+  const instant = new Date(iso);
+  const dateFmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const timeFmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return { data: dateFmt.format(instant), hora: timeFmt.format(instant) };
+}
+
+async function listSharedGoogleEvents(accessToken: string): Promise<GoogleEvent[]> {
+  const timeMin = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString();
+  const timeMax = new Date(Date.now() + 120 * 24 * 60 * 60_000).toISOString();
+  const events: GoogleEvent[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    const url = new URL(EVENTS_URL);
+    url.searchParams.set("timeMin", timeMin);
+    url.searchParams.set("timeMax", timeMax);
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("maxResults", "250");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      console.warn("[google-calendar] events.list failed", await res.text());
+      break;
+    }
+    const json = (await res.json()) as { items?: GoogleEvent[]; nextPageToken?: string };
+    events.push(...(json.items ?? []));
+    if (!json.nextPageToken) break;
+    pageToken = json.nextPageToken;
+  }
+  return events;
+}
+
+/** Caminho inverso de `syncAllMeetingsToGoogle`: eventos criados DIRETO no
+ * Google Calendar da conta compartilhada (sem o marcador
+ * `vnhMeetingId` — esses já são donos de uma Reunião e são ignorados aqui)
+ * viram Reunião na plataforma. Dedupe via `googleEventId` guardado na
+ * própria Reunião; eventos editados/cancelados no Google atualizam a
+ * Reunião já importada em vez de duplicar. */
+export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const accessToken = await getValidSharedAccessToken(supabaseAdmin);
+    if (!accessToken) return { imported: 0, updated: 0, connected: false as const };
+
+    const { data: rows, error } = await supabaseAdmin.from("reunioes").select("id, data");
+    if (error) throw new Error(error.message);
+
+    const byGoogleEventId = new Map<
+      string,
+      {
+        id: string;
+        data: SlimMeeting & { googleEventId?: string; origem?: string; status: string };
+      }
+    >();
+    for (const r of rows ?? []) {
+      const m = r.data as SlimMeeting & { googleEventId?: string; origem?: string; status: string };
+      if (m.googleEventId) byGoogleEventId.set(m.googleEventId, { id: r.id, data: m });
+    }
+
+    const { data: profiles } = await supabaseAdmin.from("profiles").select("id, email");
+    const idByEmail = new Map<string, string>();
+    for (const p of profiles ?? []) if (p.email) idByEmail.set(p.email.toLowerCase(), p.id);
+
+    const events = await listSharedGoogleEvents(accessToken);
+
+    let imported = 0;
+    let updated = 0;
+    for (const event of events) {
+      // Já é uma reunião da plataforma (foi a própria `syncOneMeeting` que
+      // criou esse evento) — nunca reimportar de volta.
+      if (event.extendedProperties?.private?.vnhMeetingId) continue;
+      // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião sempre
+      // tem hora, fora de escopo aqui.
+      if (!event.start?.dateTime || !event.end?.dateTime) continue;
+
+      const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
+      const duracao = Math.max(
+        1,
+        Math.round(
+          (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) /
+            60_000,
+        ),
+      );
+
+      const participanteIds: string[] = [];
+      const convidadosExternos: { nome: string; email: string }[] = [];
+      for (const a of event.attendees ?? []) {
+        if (!a.email || a.self) continue;
+        const uid = idByEmail.get(a.email.toLowerCase());
+        if (uid) participanteIds.push(uid);
+        else convidadosExternos.push({ nome: a.displayName || a.email, email: a.email });
+      }
+
+      const existing = byGoogleEventId.get(event.id);
+      const cancelled = event.status === "cancelled";
+
+      if (existing) {
+        const next = {
+          ...existing.data,
+          titulo: event.summary || existing.data.titulo,
+          data: dataStr,
+          hora,
+          duracao,
+          local: event.location,
+          notas: event.description,
+          participanteIds,
+          convidadosExternos,
+          status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
+        };
+        if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
+          await supabaseAdmin
+            .from("reunioes")
+            .update({ data: next, updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+          updated++;
+        }
+        continue;
+      }
+
+      if (cancelled) continue; // nunca vimos esse evento — nada a importar
+
+      const meeting = {
+        id: crypto.randomUUID(),
+        titulo: event.summary || "Reunião",
+        data: dataStr,
+        hora,
+        duracao,
+        com: "",
+        participanteIds,
+        convidadosExternos,
+        local: event.location ?? "",
+        notas: event.description,
+        status: "Confirmada",
+        googleEventId: event.id,
+        origem: "google",
+      };
+      const { error: insertError } = await supabaseAdmin
+        .from("reunioes")
+        .insert({ id: meeting.id, data: meeting });
+      if (insertError) {
+        console.warn("[google-calendar] import insert failed", insertError.message);
+        continue;
+      }
+      imported++;
+    }
+
+    return { imported, updated, connected: true as const };
   });

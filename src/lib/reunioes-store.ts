@@ -44,6 +44,17 @@ export type Meeting = {
   attendedBy?: string[]; // ids de quem efetivamente participou (marcado depois do horário)
   attendanceRecorded?: boolean; // true assim que o criador confirma a presença
   transcricao?: string; // colada pelo criador junto com o registro de presença
+  /** Id do evento no Google Calendar — presente só em reuniões
+   * importadas de lá (criadas direto no Google, não pela plataforma).
+   * Chave de dedupe do import (`importGoogleEventsToMeetings`, em
+   * `google-calendar.functions.ts`) — nunca usado pro sync de saída
+   * (que já é idempotente via `extendedProperties.private.vnhMeetingId`
+   * no lado do Google, sem precisar guardar nada aqui). */
+  googleEventId?: string;
+  /** "google" = importada do Google Calendar; ausente/undefined =
+   * criada na própria plataforma (todas as reuniões existentes antes
+   * deste campo continuam válidas, tratadas como "da plataforma"). */
+  origem?: "google";
 };
 
 /** Horário em que a reunião começa (data+hora), como epoch ms. */
