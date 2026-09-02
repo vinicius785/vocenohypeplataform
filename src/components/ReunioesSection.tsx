@@ -266,9 +266,10 @@ export function ReunioesSection() {
           meetings={myMeetings}
           me={me}
           team={team}
-          myAvail={myAvail}
+          disponibilidades={disponibilidades}
           onOpen={openSummary}
           onNewMeeting={(iso) => openNewMeeting(iso)}
+          onSaveAvailability={(next) => saveMyDisponibilidade(next)}
         />
       )}
 
