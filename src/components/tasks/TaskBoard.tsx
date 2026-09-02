@@ -136,44 +136,20 @@ async function notifyNewAssignees(names: string[], taskTitle: string, scope?: Ta
  * Types & constants (shared task model — same as Campanhas)
  * ============================================================ */
 
-export type TaskStatus =
-  | "Aberto"
-  | "Em andamento"
-  | "Em aprovação"
-  | "Em ajustes"
-  | "Aprovado"
-  | "Concluído"
-  | "Arquivado";
-
-export const TASK_STATUSES: TaskStatus[] = [
-  "Aberto",
-  "Em andamento",
-  "Em aprovação",
-  "Em ajustes",
-  "Aprovado",
-  "Concluído",
-  "Arquivado",
-];
-
-export const TASK_STATUS_TONE: Record<TaskStatus, string> = {
-  Aberto: "bg-muted text-muted-foreground",
-  "Em andamento": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  "Em aprovação": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  "Em ajustes": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
-  Aprovado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  Concluído: "bg-foreground text-background",
-  Arquivado: "bg-muted/60 text-muted-foreground line-through",
-};
-
-export const TASK_STATUS_DOT: Record<TaskStatus, string> = {
-  Aberto: "bg-muted-foreground/50",
-  "Em andamento": "bg-sky-500",
-  "Em aprovação": "bg-amber-500",
-  "Em ajustes": "bg-orange-500",
-  Aprovado: "bg-emerald-500",
-  Concluído: "bg-foreground",
-  Arquivado: "bg-muted-foreground/30",
-};
+// `TaskStatus`/`TASK_STATUSES`/`TASK_STATUS_TONE`/`TASK_STATUS_DOT` vivem em
+// `src/lib/task-status.ts` (única fonte de verdade, reaproveitada também
+// pelo `TaskPicker` de Dependências sem criar import circular entre os
+// dois arquivos). Importados aqui pro resto do arquivo continuar usando
+// os mesmos nomes, e reexportados pra quem já importava daqui de fora
+// (`MarketingSection.tsx` etc.) não precisar mudar nada.
+import {
+  type TaskStatus,
+  TASK_STATUSES,
+  TASK_STATUS_TONE,
+  TASK_STATUS_DOT,
+} from "@/lib/task-status";
+export type { TaskStatus };
+export { TASK_STATUSES, TASK_STATUS_TONE, TASK_STATUS_DOT };
 
 export type TaskPriority = "Urgente" | "Alta" | "Normal" | "Baixa";
 const TASK_PRIORITIES: TaskPriority[] = ["Urgente", "Alta", "Normal", "Baixa"];
@@ -3543,6 +3519,8 @@ export function TaskDialog({
                       {(depPopover === "depends" || depPopover === "blocks") && (
                         <TaskPicker
                           excludeTaskId={depTaskId ?? ""}
+                          currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
+                          currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
                           onSelect={(picked) => void handlePickDependency(depPopover, picked)}
                         />
                       )}
