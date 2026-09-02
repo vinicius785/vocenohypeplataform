@@ -172,6 +172,7 @@ type SlimMeeting = {
   criadorId?: string;
   participanteIds?: string[];
   convidadosExternos?: { nome: string; email: string }[];
+  origem?: string;
 };
 
 // `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
@@ -290,6 +291,10 @@ export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
     const meetingsByCreator = new Map<string, SlimMeeting[]>();
     for (const m of meetings) {
       if (!m.criadorId) continue;
+      // Reunião importada do Google (nasceu de lá, não na plataforma) —
+      // reenviar pro Google criaria um evento duplicado, já que ela não
+      // carrega o marcador vnhMeetingId no evento original.
+      if (m.origem === "google") continue;
       const list = meetingsByCreator.get(m.criadorId) ?? [];
       list.push(m);
       meetingsByCreator.set(m.criadorId, list);
