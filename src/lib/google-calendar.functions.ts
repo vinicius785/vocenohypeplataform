@@ -181,6 +181,14 @@ type SlimMeeting = {
    * aparecer na busca por alguns ciclos, fazendo o sync pensar que não
    * existe e criar outro — duplicando o evento a cada ciclo). */
   googleEventId?: string;
+  /** Link do Google Meet gerado pro evento — nasce vazio (`syncOneMeeting`
+   * cria o evento sem esperar a resposta trazer o link antes desse campo
+   * existir) e antes ficava vazio pra sempre: o import de entrada pula de
+   * propósito qualquer evento com `vnhMeetingId` (pra não reimportar como
+   * duplicata), então nunca havia uma segunda chance de capturar o link.
+   * Agora `syncOneMeeting` também lê e grava esse campo, tanto na criação
+   * quanto em toda atualização seguinte (auto-cura reuniões antigas). */
+  meetLink?: string;
 };
 
 // `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
@@ -296,11 +304,24 @@ async function syncOneMeeting(
     console.warn(`[google-calendar] sync failed for meeting ${m.id}`, await res.text());
     return;
   }
-  if (!existingId) {
-    const created = (await res.json()) as { id: string };
+  // A resposta do POST/PATCH já traz o evento completo, incluindo o link
+  // do Google Meet gerado (`hangoutLink`) — antes só o `id` era lido daqui,
+  // então o link nunca chegava a ser salvo na reunião (ficava "preso" só
+  // no Google, o join na plataforma nunca funcionava pra reuniões criadas
+  // por ela). Roda em toda sincronização, não só na criação, pra também
+  // auto-curar reuniões antigas que já sincronizaram sem capturar o link.
+  const synced = (await res.json()) as { id: string; hangoutLink?: string };
+  const next = {
+    ...m,
+    ...(existingId ? null : { googleEventId: synced.id }),
+    ...(synced.hangoutLink && synced.hangoutLink !== m.meetLink
+      ? { meetLink: synced.hangoutLink }
+      : null),
+  };
+  if (JSON.stringify(next) !== JSON.stringify(m)) {
     await admin
       .from("reunioes")
-      .update({ data: { ...m, googleEventId: created.id }, updated_at: new Date().toISOString() })
+      .update({ data: next, updated_at: new Date().toISOString() })
       .eq("id", m.id);
   }
 }
