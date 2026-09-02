@@ -162,6 +162,7 @@ async function getValidAccessToken(
 
 type SlimMeeting = {
   id: string;
+  seriesId?: string;
   titulo: string;
   data: string;
   hora: string;
@@ -373,6 +374,11 @@ type GoogleEvent = {
   attendees?: { email?: string; displayName?: string; self?: boolean }[];
   extendedProperties?: { private?: Record<string, string> };
   hangoutLink?: string;
+  /** Presente só em ocorrências de um evento recorrente — mesmo valor
+   * (id do evento mestre da série) em toda ocorrência, então serve
+   * direto como `Meeting.seriesId` sem precisar gerar nada: a plataforma
+   * já sabe tratar "só esta / todas" sempre que `seriesId` é compartilhado. */
+  recurringEventId?: string;
 };
 
 /** Converte um instante absoluto (`Date`/ISO) nos dois campos que `Meeting`
@@ -546,6 +552,9 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
                 participanteIds,
                 convidadosExternos,
                 meetLink: event.hangoutLink,
+                // Backfill pra reuniões importadas antes desse campo
+                // existir — nunca troca um seriesId já gravado.
+                seriesId: existing.data.seriesId ?? event.recurringEventId,
                 status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
               };
           if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
@@ -562,6 +571,7 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
 
         const meeting = {
           id: crypto.randomUUID(),
+          seriesId: event.recurringEventId,
           titulo: event.summary || "Reunião",
           data: dataStr,
           hora,
