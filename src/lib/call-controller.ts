@@ -54,6 +54,12 @@ type Signal =
       /** Roster completo (todo mundo convidado, exceto quem recebe este invite) — permite
        * a UI de "chamando" mostrar todo mundo que está sendo chamado, mesmo em grupo. */
       roster: { userId: string; name: string; photo?: string }[];
+      /** Id da conversa do Chat de onde a chamada partiu (DM, canal, campanha
+       * ou projeto) — carregado desde o início pra todo mundo que recebe o
+       * invite já saber onde registrar o card de chamada no histórico, sem
+       * precisar recalcular (ex: `dmId(...)`) nem depender de qual conversa
+       * a pessoa está com a tela aberta no momento em que a chamada termina. */
+      conversationId?: string;
     }
   | { type: "accept" | "reject" | "hangup"; callId: string; fromUserId: string; toUserId: string }
   | {
@@ -90,7 +96,12 @@ type Signal =
       peer: { userId: string; name: string; photo?: string };
     };
 
-export type CallParticipantStatus = "ringing" | "connecting" | "connected" | "failed";
+export type CallParticipantStatus =
+  | "ringing"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "failed";
 export type CallParticipant = {
   userId: string;
   name: string;
@@ -104,6 +115,7 @@ type CallBase = {
   hostId: string;
   hostName: string;
   hostPhoto?: string;
+  conversationId?: string;
   startedAt: number;
   connectedAt?: number;
   minimized: boolean;
@@ -143,6 +155,14 @@ const setState = (next: CallState) => {
 const patch = (next: Partial<Exclude<CallState, { status: "idle" }>>) => {
   if (state.status !== "idle") setState({ ...state, ...next } as CallState);
 };
+/** Lê `state.status` numa função à parte, de propósito — dentro de um bloco
+ * já estreitado por `signal.type === "accept" && (state.status === "..." )`,
+ * o TypeScript trata `state` como se não pudesse mais mudar de status pelo
+ * resto da função (ele não enxerga que `setState`/`patch`, chamadas por um
+ * `await` no meio do caminho, reatribuem a variável do módulo), e recusa
+ * comparar de novo com "idle" ("no overlap"). Uma função separada relê o
+ * valor atual sem herdar esse estreitamento falso. */
+const isCallIdle = () => state.status === "idle";
 const patchParticipant = (peerId: string, next: Partial<CallParticipant>) => {
   if (state.status === "idle") return;
   const existing = state.participants[peerId];
@@ -165,6 +185,7 @@ let userName = "";
 let userPhoto: string | undefined;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let ready: Promise<void> | null = null;
+let pagehideHandler: (() => void) | null = null;
 
 /** Um link WebRTC com um único outro participante — em chamada 1:1 há só um;
  * em grupo, um por participante conectado (mesh: todo mundo com todo mundo). */
@@ -179,6 +200,7 @@ type PeerLink = {
   ignoreOffer: boolean;
   iceFailureRetried: boolean;
   connectTimeout: number | null;
+  qualityTimer: number | null;
 };
 const peers = new Map<string, PeerLink>();
 
@@ -271,6 +293,9 @@ function closePeer(peerId: string) {
   const link = peers.get(peerId);
   if (!link) return;
   clearConnectTimeout(link);
+  if (link.qualityTimer !== null) window.clearInterval(link.qualityTimer);
+  unwatchSpeaking(peerId);
+  clearQuality(peerId);
   link.pc.close();
   link.remoteStream.getTracks().forEach((t) => t.stop());
   link.remoteScreenStream?.getTracks().forEach((t) => t.stop());
@@ -281,6 +306,7 @@ function cleanup() {
   if (callTimeout !== null) window.clearTimeout(callTimeout);
   callTimeout = null;
   for (const peerId of Array.from(peers.keys())) closePeer(peerId);
+  unwatchSpeaking(LOCAL_SPEAKING_ID);
   localStream?.getTracks().forEach((track) => track.stop());
   screenStream?.getTracks().forEach((track) => track.stop());
   localStream = null;
@@ -288,6 +314,148 @@ function cleanup() {
 }
 function mediaChanged() {
   if (state.status !== "idle") patch({ mediaVersion: state.mediaVersion + 1 });
+}
+
+/** Id fixo usado nos stores de fala/qualidade pra representar o próprio
+ * usuário local (não é um `userId` de verdade, só uma chave estável). */
+export const LOCAL_SPEAKING_ID = "__me__";
+
+/**
+ * Quem está falando agora, por id de participante (ou `LOCAL_SPEAKING_ID`) —
+ * store separado do `CallState` de propósito: reavaliar isso a cada ~200ms
+ * não pode re-renderizar a árvore inteira da chamada (vídeo, controles, etc)
+ * a cada frame, só quem realmente precisa mostrar o destaque de fala.
+ */
+const speakingListeners = new Set<() => void>();
+let speakingIds: ReadonlySet<string> = new Set();
+const emitSpeaking = () => speakingListeners.forEach((l) => l());
+export function useSpeakingPeerIds(): ReadonlySet<string> {
+  return useSyncExternalStore(
+    (listener) => {
+      speakingListeners.add(listener);
+      return () => speakingListeners.delete(listener);
+    },
+    () => speakingIds,
+    () => speakingIds,
+  );
+}
+type SpeakingWatcher = { ctx: AudioContext; timer: number };
+const speakingWatchers = new Map<string, SpeakingWatcher>();
+const SPEAKING_VOLUME_THRESHOLD = 14; // média 0-255 da FFT — empírico, acima do ruído de fundo típico de mic
+function watchSpeaking(id: string, stream: MediaStream) {
+  if (speakingWatchers.has(id) || stream.getAudioTracks().length === 0) return;
+  try {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AC();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let wasSpeaking = false;
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (const v of data) sum += v;
+      const isSpeaking = sum / data.length > SPEAKING_VOLUME_THRESHOLD;
+      if (isSpeaking !== wasSpeaking) {
+        wasSpeaking = isSpeaking;
+        const next = new Set(speakingIds);
+        if (isSpeaking) next.add(id);
+        else next.delete(id);
+        speakingIds = next;
+        emitSpeaking();
+      }
+      watcher.timer = window.setTimeout(tick, 200);
+    };
+    const watcher: SpeakingWatcher = { ctx, timer: window.setTimeout(tick, 200) };
+    speakingWatchers.set(id, watcher);
+  } catch {
+    /* Web Audio indisponível — só perde o destaque de fala, chamada segue normal */
+  }
+}
+function unwatchSpeaking(id: string) {
+  const watcher = speakingWatchers.get(id);
+  if (!watcher) return;
+  window.clearTimeout(watcher.timer);
+  void watcher.ctx.close().catch(() => undefined);
+  speakingWatchers.delete(id);
+  if (speakingIds.has(id)) {
+    const next = new Set(speakingIds);
+    next.delete(id);
+    speakingIds = next;
+    emitSpeaking();
+  }
+}
+
+export type ConnectionQuality = "good" | "unstable" | "bad";
+/**
+ * Qualidade de conexão por participante — também um store separado do
+ * `CallState`, pelo mesmo motivo do indicador de fala (poll de `getStats()`
+ * a cada ~3s não deveria re-renderizar tudo, só o badge que de fato lê isso).
+ * "unstable"/"bad" só quando os números de fato pioram — no caso comum
+ * (conexão boa) nada é emitido além do valor inicial "good" implícito.
+ */
+const qualityListeners = new Set<() => void>();
+let qualityByPeer: ReadonlyMap<string, ConnectionQuality> = new Map();
+const emitQuality = () => qualityListeners.forEach((l) => l());
+export function useConnectionQuality(peerId: string): ConnectionQuality {
+  return useSyncExternalStore(
+    (listener) => {
+      qualityListeners.add(listener);
+      return () => qualityListeners.delete(listener);
+    },
+    () => qualityByPeer.get(peerId) ?? "good",
+    () => qualityByPeer.get(peerId) ?? "good",
+  );
+}
+function setQuality(peerId: string, quality: ConnectionQuality) {
+  if (qualityByPeer.get(peerId) === quality) return;
+  const next = new Map(qualityByPeer);
+  next.set(peerId, quality);
+  qualityByPeer = next;
+  emitQuality();
+}
+function clearQuality(peerId: string) {
+  if (!qualityByPeer.has(peerId)) return;
+  const next = new Map(qualityByPeer);
+  next.delete(peerId);
+  qualityByPeer = next;
+  emitQuality();
+}
+function watchQuality(peerId: string, pc: RTCPeerConnection): number {
+  return window.setInterval(async () => {
+    if (pc.connectionState !== "connected") return;
+    try {
+      const stats = await pc.getStats();
+      let rttMs: number | undefined;
+      let packetsLost = 0;
+      let packetsReceived = 0;
+      stats.forEach((report) => {
+        if (report.type === "candidate-pair" && report.state === "succeeded" && report.nominated) {
+          if (typeof report.currentRoundTripTime === "number")
+            rttMs = report.currentRoundTripTime * 1000;
+        }
+        if (report.type === "inbound-rtp" && !report.isRemote) {
+          packetsLost += report.packetsLost ?? 0;
+          packetsReceived += report.packetsReceived ?? 0;
+        }
+      });
+      const lossRatio = packetsReceived > 0 ? packetsLost / (packetsLost + packetsReceived) : 0;
+      const quality: ConnectionQuality =
+        (rttMs ?? 0) > 400 || lossRatio > 0.08
+          ? "bad"
+          : (rttMs ?? 0) > 200 || lossRatio > 0.03
+            ? "unstable"
+            : "good";
+      setQuality(peerId, quality);
+    } catch {
+      /* getStats indisponível/falhou — não é motivo pra marcar "bad" */
+    }
+  }, 3_000);
 }
 
 /**
@@ -313,8 +481,10 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
     ignoreOffer: false,
     iceFailureRetried: false,
     connectTimeout: null,
+    qualityTimer: null,
   };
   peers.set(peerId, link);
+  link.qualityTimer = watchQuality(peerId, pc);
 
   pc.onicecandidate = ({ candidate }) => {
     if (candidate)
@@ -330,6 +500,7 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
     if (link.remoteStreamId === null || incoming.id === link.remoteStreamId) {
       link.remoteStreamId = incoming.id;
       link.remoteStream = incoming;
+      if (track.kind === "audio") watchSpeaking(peerId, link.remoteStream);
     } else {
       link.remoteScreenStream = incoming;
       track.onended = () => {
@@ -365,6 +536,13 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
     if (pc.connectionState === "failed") {
       if (!link.iceFailureRetried) {
         link.iceFailureRetried = true;
+        patchParticipant(peerId, { status: "reconnecting" });
+        // Sem rearmar aqui, o timeout de 20s já tinha sido consumido pela
+        // tentativa original — se o restart também travasse sem nunca virar
+        // "connected" nem "failed" de novo (comum atrás de NAT difícil),
+        // a pessoa ficava presa em "reconectando" pra sempre, sem rede de
+        // segurança nenhuma.
+        armConnectTimeout(peerId, link);
         pc.restartIce();
       } else {
         clearConnectTimeout(link);
@@ -425,6 +603,8 @@ async function recoverLocalAudio(endedTrack: MediaStreamTrack) {
     localStream ??= new MediaStream();
     localStream.addTrack(next);
     next.onended = () => void recoverLocalAudio(next);
+    unwatchSpeaking(LOCAL_SPEAKING_ID);
+    watchSpeaking(LOCAL_SPEAKING_ID, localStream);
     mediaChanged();
   } catch (err) {
     console.warn("[call] não foi possível readquirir o microfone", err);
@@ -446,6 +626,7 @@ async function acquireAudio() {
     track.enabled = state.status !== "idle" ? !state.muted : true;
     track.onended = () => void recoverLocalAudio(track);
   });
+  watchSpeaking(LOCAL_SPEAKING_ID, localStream);
   mediaChanged();
 }
 /** Garante que um peer recém-criado já saia com as tracks locais atuais
@@ -519,6 +700,7 @@ async function handle(signal: Signal) {
       hostId: signal.fromUserId,
       hostName: signal.fromName || "Membro",
       hostPhoto: signal.fromPhoto,
+      conversationId: signal.conversationId,
       startedAt: Date.now(),
       minimized: false,
       muted: false,
@@ -586,6 +768,7 @@ async function handle(signal: Signal) {
         const joinedName = state.participants[signal.fromUserId]?.name || "Membro";
         const joinedPhoto = state.participants[signal.fromUserId]?.photo;
         for (const id of already) {
+          if (isCallIdle()) break;
           await send({
             type: "peer-joined",
             callId: state.callId,
@@ -604,6 +787,12 @@ async function handle(signal: Signal) {
   if (signal.type === "peer-list") {
     // Recém-chegado: conecta (e inicia oferta) com todo mundo que já estava.
     for (const p of signal.peers) {
+      // A cada iteração `await connectToExistingPeer` cede o controle — se a
+      // chamada terminar no meio dessa lista (endCall/finish já rodou
+      // cleanup(), fechando todos os PeerLinks), continuar criando PeerLink
+      // novo pra quem sobrou na lista deixa uma RTCPeerConnection aberta que
+      // nunca é fechada (a limpeza já passou por aqui antes dela existir).
+      if (isCallIdle()) return;
       if (!state.participants[p.userId]) {
         patch({
           participants: {
@@ -684,6 +873,13 @@ async function handle(signal: Signal) {
     // há uma oferta local pendente de fato.
     if (link.pc.signalingState !== "have-local-offer") return;
     await link.pc.setRemoteDescription(signal.sdp).catch(fail);
+    // O ramo de "offer" já esvazia `pendingIce` depois de aplicar a SDP
+    // remota (candidatos só podem ser adicionados depois disso) — este
+    // ramo fazia a mesma coisa (`setRemoteDescription`) mas nunca dava
+    // flush, então qualquer candidato ICE que chegasse enquanto esperava
+    // a resposta ficava preso em `pendingIce` pra sempre.
+    for (const candidate of link.pendingIce.splice(0))
+      await link.pc.addIceCandidate(candidate).catch(() => undefined);
     return;
   }
   if (signal.type === "ice" && signal.candidate) {
@@ -717,7 +913,12 @@ export async function initCallController(id: string, name: string, photo?: strin
   // trocada ou minimizada — não escutamos "visibilitychange" de propósito),
   // avisa quem está na chamada em vez de deixar a pessoa "pendurada" até o
   // timeout de 45s ou a conexão falhar sozinha.
-  window.addEventListener("pagehide", () => {
+  //
+  // Guardamos a referência porque `initCallController` pode rodar de novo
+  // (ex: troca de usuário sem recarregar a página inteira) — sem remover o
+  // listener anterior em `shutdownCallController`, cada chamada empilhava
+  // mais um `addEventListener("pagehide", ...)` que nunca era removido.
+  pagehideHandler = () => {
     if (state.status === "idle") return;
     if (state.isHost) {
       for (const peerId of Object.keys(state.participants))
@@ -728,11 +929,16 @@ export async function initCallController(id: string, name: string, photo?: strin
         if (peerId !== state.hostId)
           sendBestEffort({ type: "hangup", callId: state.callId, toUserId: peerId });
     }
-  });
+  };
+  window.addEventListener("pagehide", pagehideHandler);
 }
 export async function shutdownCallController() {
   cleanup();
   setState({ status: "idle" });
+  if (pagehideHandler) {
+    window.removeEventListener("pagehide", pagehideHandler);
+    pagehideHandler = null;
+  }
   if (channel) await supabase.removeChannel(channel);
   channel = null;
   ready = null;
@@ -741,7 +947,10 @@ export async function shutdownCallController() {
 
 /** Liga pra uma ou mais pessoas — uma única pessoa é uma chamada 1:1 comum;
  * mais de uma é uma chamada em grupo (mesh, até `MAX_GROUP_PARTICIPANTS`). */
-export async function startCall(invitees: { id: string; name: string; photo?: string }[]) {
+export async function startCall(
+  invitees: { id: string; name: string; photo?: string }[],
+  conversationId?: string,
+) {
   if (!userId || !channel) throw new Error("Chamadas ainda estão inicializando.");
   const targets = invitees.filter((i) => i.id !== userId).slice(0, MAX_GROUP_PARTICIPANTS);
   if (targets.length === 0 || state.status !== "idle") return;
@@ -756,6 +965,7 @@ export async function startCall(invitees: { id: string; name: string; photo?: st
     hostId: userId,
     hostName: userName,
     hostPhoto: userPhoto,
+    conversationId,
     startedAt: Date.now(),
     minimized: false,
     muted: false,
@@ -777,6 +987,7 @@ export async function startCall(invitees: { id: string; name: string; photo?: st
           fromName: userName,
           fromPhoto: userPhoto,
           roster: roster.filter((r) => r.userId !== t.id),
+          conversationId,
         }),
       ),
     );
@@ -823,7 +1034,7 @@ export async function acceptCall() {
 export function rejectCall() {
   if (state.status === "ringing-in")
     void send({ type: "reject", callId: state.callId, toUserId: state.hostId });
-  finish();
+  finish("rejected");
 }
 export function endCall(notify = true) {
   if (state.status === "idle") return;
@@ -846,23 +1057,52 @@ export function endCall(notify = true) {
   }
   finish();
 }
-function finish() {
+/** Motivo de fim de chamada, do ponto de vista de QUEM está rodando este
+ * cliente (cada lado gera o próprio evento local, então cada um enxerga o
+ * fim da chamada da sua própria perspectiva — não precisa sincronizar nada
+ * entre os dois pra cada um postar a mensagem certa no histórico):
+ * - "answered": conectou de verdade em algum momento.
+ * - "rejected": EU recusei (só setado explicitamente por `rejectCall`).
+ * - "missed": eu estava recebendo (`ringing-in`) e a chamada acabou sem eu
+ *   ter agido (a pessoa desistiu, ou meu próprio timeout de 45s expirou).
+ * - "cancelled": eu estava ligando (`ringing-out`) e ninguém atendeu a
+ *   tempo (recusaram todos, ou meu timeout de 45s desistiu). */
+export type CallEndReason = "answered" | "rejected" | "missed" | "cancelled";
+function finish(explicitReason?: CallEndReason) {
   if (state.status === "idle") return;
   const previous = state;
-  const connected = previous.status === "in-call";
+  const connected = previous.status === "in-call" && !!previous.connectedAt;
+  const endedAt = Date.now();
   const seconds =
-    connected && previous.connectedAt ? Math.floor((Date.now() - previous.connectedAt) / 1_000) : 0;
+    connected && previous.connectedAt ? Math.floor((endedAt - previous.connectedAt) / 1_000) : 0;
   const others = Object.values(previous.participants);
   const peerNames = others.map((p) => p.name).join(", ") || previous.hostName;
   // Do meu ponto de vista, "a outra pessoa" é quem eu liguei (se sou o
-  // host, numa 1:1) ou quem me ligou (se não sou o host) — usado só pra
-  // decidir em qual DM registrar a mensagem de chamada encerrada/perdida.
+  // host, numa 1:1) ou quem me ligou (se não sou o host) — mantido por
+  // compatibilidade com quem já consome só `peerId`.
   const primaryPeerId = previous.isHost ? (others[0]?.userId ?? previous.hostId) : previous.hostId;
+  const participantIds = [previous.hostId, ...others.map((p) => p.userId)].filter(
+    (id) => id !== userId,
+  );
+  const reason: CallEndReason =
+    explicitReason ?? (connected ? "answered" : previous.isHost ? "cancelled" : "missed");
   cleanup();
   setState({ status: "idle" });
   window.dispatchEvent(
     new CustomEvent("call:ended", {
-      detail: { peerId: primaryPeerId, peerName: peerNames, connected, seconds },
+      detail: {
+        callId: previous.callId,
+        conversationId: previous.conversationId,
+        peerId: primaryPeerId,
+        peerName: peerNames,
+        participantIds,
+        connected,
+        reason,
+        startedAt: previous.startedAt,
+        connectedAt: previous.connectedAt,
+        endedAt,
+        seconds,
+      },
     }),
   );
 }
