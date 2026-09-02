@@ -73,6 +73,10 @@ export function ProjectBugsPanel({
   const [description, setDescription] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Confirmação visual de que o envio deu certo — sem isso, depois de
+  // clicar "Enviar" o formulário só esvaziava silenciosamente, sem
+  // nenhum sinal de que o relato realmente foi registrado.
+  const [justSubmittedKind, setJustSubmittedKind] = useState<BugReportKind | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -117,6 +121,8 @@ export function ProjectBugsPanel({
       setScreenshot(null);
       if (fileRef.current) fileRef.current.value = "";
       await load();
+      setJustSubmittedKind(kind);
+      setTimeout(() => setJustSubmittedKind(null), 2600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao enviar.");
     } finally {
@@ -338,14 +344,34 @@ export function ProjectBugsPanel({
           </div>
           <button
             type="submit"
-            disabled={submitting || !description.trim()}
-            className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-4 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-50"
+            disabled={submitting || (!description.trim() && !justSubmittedKind)}
+            className={`inline-flex items-center gap-1.5 rounded-full border-2 px-4 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-50 ${
+              justSubmittedKind
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
+            }`}
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Enviar
+            {justSubmittedKind ? (
+              <>
+                <Check className="h-3.5 w-3.5 duration-300 animate-in zoom-in-50" /> Enviado!
+              </>
+            ) : (
+              "Enviar"
+            )}
           </button>
         </div>
       </form>
+
+      {justSubmittedKind && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700 duration-300 animate-in fade-in-0 slide-in-from-top-1 dark:text-emerald-400">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white duration-500 animate-in zoom-in-50">
+            <Check className="h-3 w-3" />
+          </span>
+          {justSubmittedKind === "bug" ? "Bug enviado!" : "Sugestão enviada!"} Nosso time vai dar
+          uma olhada.
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
