@@ -68,9 +68,7 @@ import { useClientes } from "@/lib/clientes-store";
 import type { ChatMessage } from "@/lib/chat-store";
 
 import { useNavigate } from "@tanstack/react-router";
-import { loadProjetos, getTaskAssignees } from "@/lib/projetos";
-import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
-import { loadStandalone, onStandaloneChange } from "@/lib/marketing-tasks";
+import { loadProjetos } from "@/lib/projetos";
 import {
   OPEN_CAMPANHA_TASK_KEY,
   OPEN_CLIENTE_KEY,
@@ -96,18 +94,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatIsoDate } from "@/lib/utils";
+import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory";
 
-type ChatTaskInfo = {
-  id: string;
-  label: string;
-  project?: string;
-  projectId: string;
-  campanhaId?: string;
-  status: string;
-  priority?: string;
-  dueDate?: string;
-  assignees: string[];
-};
+/** Alias — a lógica de montagem desse array (antes um `useMemo` inline
+ * aqui) foi extraída pra `useTaskDirectory()` (`src/lib/task-directory.ts`)
+ * pra também ser reaproveitada pelo `TaskPicker` de dependências entre
+ * tarefas, sem duplicar a busca nas 3 fontes (projetos/campanhas/
+ * avulsas do Marketing). Mesmo shape de sempre, só o nome do tipo mudou. */
+type ChatTaskInfo = TaskDirectoryEntry;
 
 export function ChatSection() {
   const [, force] = useState(0);
@@ -156,79 +150,18 @@ export function ChatSection() {
     [convoMessages, searchQuery],
   );
 
-  const campanhaNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of clientes) {
-      for (const camp of c.campanhas ?? []) map.set(camp.id, camp.nome);
-    }
-    return map;
-  }, [clientes]);
-
-  const [, forceTasks] = useState(0);
-  useEffect(() => onCampanhaTarefasChange(() => forceTasks((n) => n + 1)), []);
-  useEffect(() => onStandaloneChange(() => forceTasks((n) => n + 1)), []);
-
-  const { tasks, projects } = useMemo<{ tasks: ChatTaskInfo[]; projects: MentionOption[] }>(() => {
-    const projs = loadProjetos();
-    let marketingProjectId: string | undefined;
-    const projectTasks = projs.flatMap((p) => {
-      if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
-      return (p.tasks ?? []).map((t) => ({
-        id: t.id,
-        label: t.title,
-        project: p.name,
-        projectId: p.id,
-        status: t.status,
-        priority: t.priority,
-        dueDate: t.dueDate,
-        assignees: getTaskAssignees(t),
-      }));
-    });
-    const campanhaTasks: ChatTaskInfo[] = [];
-    for (const [campanhaId, campTasks] of getAllCampanhaTarefas()) {
-      for (const t of campTasks) {
-        campanhaTasks.push({
-          id: t.id,
-          label: t.title,
-          project: campanhaNameMap.get(campanhaId),
-          projectId: "",
-          campanhaId,
-          status: t.status,
-          priority: t.priority,
-          dueDate: t.dueDate,
-          assignees: getTaskAssignees(t),
-        });
-      }
-    }
-    // Tarefas avulsas do Marketing (criadas direto no board de lá, sem
-    // vir de nenhum projeto/campanha) viviam à parte, em
-    // `marketing_standalone_tasks` — sem esse terceiro loop, elas nunca
-    // apareciam pra @mencionar no chat, mesmo bug de origem já corrigido
-    // em "Meu trabalho" (Início) e na aba Time nesta sessão. `id` usa o
-    // mesmo prefixo `mkt:` que `MarketingSection.tsx` espera pra resolver
-    // o deep-link (`?taskId=`).
-    const standaloneTasks: ChatTaskInfo[] = marketingProjectId
-      ? loadStandalone().map((s) => ({
-          id: `mkt:${s.id}`,
-          label: s.title,
-          project: "Marketing",
-          projectId: marketingProjectId!,
-          status: s.status,
-          dueDate: s.dueDate,
-          assignees: getTaskAssignees(s),
-        }))
-      : [];
-    const projectOptions: MentionOption[] = projs.map((p) => ({
-      kind: "project",
-      id: p.id,
-      label: p.name,
-      hint: "Projeto",
-    }));
-    return {
-      tasks: [...projectTasks, ...campanhaTasks, ...standaloneTasks],
-      projects: projectOptions,
-    };
-  }, [campanhaNameMap]);
+  const tasks = useTaskDirectory();
+  const projects = useMemo<MentionOption[]>(
+    () =>
+      loadProjetos().map((p) => ({
+        kind: "project",
+        id: p.id,
+        label: p.name,
+        hint: "Projeto",
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks],
+  );
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
   const navigate = useNavigate();
   const openTask = (taskId: string) => {
@@ -1642,7 +1575,7 @@ function InlineEditor({
  * num quadrado colorido (`MENTION_KIND_CONFIG`) pra tudo mais — mesma
  * convenção "círculo pra pessoa, quadrado pro resto" que a lista já usava,
  * só trocando a letra "T" solta por um ícone de verdade por kind. */
-function MentionResultIcon({ opt }: { opt: MentionOption }) {
+export function MentionResultIcon({ opt }: { opt: MentionOption }) {
   if (opt.kind === "user") {
     const status = getStatus(opt.id);
     return (
@@ -1673,7 +1606,7 @@ function MentionResultIcon({ opt }: { opt: MentionOption }) {
   );
 }
 
-function MentionResultRow({
+export function MentionResultRow({
   opt,
   highlighted,
   onPick,

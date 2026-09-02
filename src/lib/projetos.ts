@@ -142,6 +142,7 @@ export type ActivityKind =
   | "primary_assignee"
   | "assignee"
   | "status"
+  | "dependency"
   | "minor";
 
 export type TaskActivity = {

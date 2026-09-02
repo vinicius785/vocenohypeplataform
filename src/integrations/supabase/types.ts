@@ -1562,6 +1562,30 @@ export type Database = {
         }
         Relationships: []
       }
+      task_dependencies: {
+        Row: {
+          blocked_task_id: string
+          blocking_task_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+        }
+        Insert: {
+          blocked_task_id: string
+          blocking_task_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+        }
+        Update: {
+          blocked_task_id?: string
+          blocking_task_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       task_tags: {
         Row: {
           created_at: string

@@ -19,6 +19,7 @@ import { initMarketingTasksSync } from "@/lib/marketing-tasks";
 import { initTaskTagsSync } from "@/lib/task-tags-store";
 import { initCampanhaScopedSync } from "@/lib/campanha-scoped-store";
 import { initProjetoScopedSync } from "@/lib/projeto-scoped-store";
+import { initTaskDependenciesSync } from "@/lib/task-dependencies-store";
 import { initCallController, shutdownCallController } from "@/lib/call-controller";
 import { syncAllMeetingsToGoogle } from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
@@ -71,6 +72,7 @@ export const Route = createFileRoute("/_authenticated")({
         initTaskTagsSync(),
         initCampanhaScopedSync(),
         initProjetoScopedSync(),
+        initTaskDependenciesSync(),
       ]);
     }
     return { userId };

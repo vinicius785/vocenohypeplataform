@@ -66,6 +66,7 @@ import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reun
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
+import { TaskModalStack } from "@/components/tasks/TaskModalStack";
 
 export type SectionKey =
   | "inicio"
@@ -526,6 +527,7 @@ export function AppShell({
 
         <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8">{children}</main>
       </div>
+      <TaskModalStack />
     </div>
   );
 }

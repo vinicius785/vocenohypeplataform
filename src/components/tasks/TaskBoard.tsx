@@ -26,10 +26,34 @@ import {
   MessageSquare,
   MoreHorizontal,
   Search,
+  Link2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
+import {
+  useTaskDependencies,
+  dependenciesOf,
+  createDependency,
+  removeDependency,
+  cleanupDependenciesForTask,
+  type TaskDependency,
+} from "@/lib/task-dependencies-store";
+import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory";
+import { pushTaskModal } from "@/lib/task-modal-stack";
+import { TaskPicker } from "@/components/tasks/TaskPicker";
+import { formatIsoDate } from "@/lib/utils";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -344,6 +368,7 @@ export type ActivityKind =
   | "primary_assignee"
   | "assignee"
   | "status"
+  | "dependency"
   | "minor";
 
 export type Activity = {
@@ -1185,6 +1210,38 @@ export function TaskBoard({
     // sem isso, clicar numa subtarefa mostrava a tarefa-mãe em vez dela.
     openSubtaskId?: string;
   } | null>(null);
+  // Dependências pendentes por tarefa — só pra alimentar o indicador
+  // discreto "⛓ N" no card (item que a própria `Task` não guarda, já que
+  // a relação vive numa tabela à parte, sem FK real, ver
+  // `task-dependencies-store.ts`).
+  const allDepsForCards = useTaskDependencies();
+  const pendingDepCountByTaskId = useMemo(() => {
+    // `task_dependencies` só conhece o id real (sem prefixo) — o board do
+    // Marketing mistura tarefas próprias com avulsas, cujo `t.id` aqui
+    // carrega o prefixo "mkt:" (convenção de deep-link, ver
+    // `TaskDirectoryEntry.rawId` em `task-directory.ts`). Normaliza antes
+    // de consultar, senão a contagem nunca bate pra essas tarefas.
+    const rawId = (id: string) => id.replace(/^mkt:/, "");
+    const map = new Map<string, number>();
+    for (const t of tasks) {
+      const { dependsOn } = dependenciesOf(rawId(t.id), allDepsForCards);
+      const pending = dependsOn.filter((id) => {
+        // Só conta quem realmente não está concluído — procura o status
+        // real na própria lista de tarefas deste board se existir ali,
+        // senão assume pendente (conservador: card nunca esconde um
+        // bloqueio real por falta de dado local).
+        const local = tasks.find(
+          (x) => rawId(x.id) === id || x.subtasks?.some((s) => rawId(s.id) === id),
+        );
+        if (!local) return true;
+        const sub =
+          rawId(local.id) === id ? local : local.subtasks?.find((s) => rawId(s.id) === id);
+        return sub?.status !== "Concluído";
+      }).length;
+      if (pending > 0) map.set(t.id, pending);
+    }
+    return map;
+  }, [tasks, allDepsForCards]);
   const [dragId, setDragId] = useState<string | null>(null);
   // Coluna que está recebendo o drag no momento — só feedback visual, não
   // participa da lógica de mudança de status (que continua inteira no
@@ -1920,10 +1977,11 @@ export function TaskBoard({
                         </span>
                       </div>
 
-                      {/* Nível 4 — etiquetas / comentários / anexos */}
+                      {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
                       {((t.tags?.length ?? 0) > 0 ||
                         (t.comments?.length ?? 0) > 0 ||
-                        (t.attachments?.length ?? 0) > 0) && (
+                        (t.attachments?.length ?? 0) > 0 ||
+                        (pendingDepCountByTaskId.get(t.id) ?? 0) > 0) && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                           {(t.tags?.length ?? 0) > 0 && (
                             <>
@@ -1939,6 +1997,14 @@ export function TaskBoard({
                           {(t.attachments?.length ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1">
                               <Paperclip className="h-3 w-3" /> {t.attachments!.length}
+                            </span>
+                          )}
+                          {(pendingDepCountByTaskId.get(t.id) ?? 0) > 0 && (
+                            <span
+                              className="inline-flex items-center gap-1"
+                              title={`${pendingDepCountByTaskId.get(t.id)} dependências pendentes`}
+                            >
+                              <Link2 className="h-3 w-3" /> {pendingDepCountByTaskId.get(t.id)}
                             </span>
                           )}
                         </div>
@@ -2049,6 +2115,7 @@ export function TaskBoard({
             taskDialog?.mode === "edit" && taskDialog.data
               ? () => {
                   persist(tasks.filter((x) => x.id !== taskDialog.data!.id));
+                  void cleanupDependenciesForTask(taskDialog.data!.id);
                   setTaskDialog(null);
                 }
               : undefined
@@ -2057,6 +2124,72 @@ export function TaskBoard({
         />
       </section>
     </TooltipProvider>
+  );
+}
+
+/** Uma linha de dependência (seção Dependências do `TaskDialog`) — status
+ * (bolinha colorida, mesma paleta do resto do board), título, projeto,
+ * prazo quando houver, e um "•••" só visível no hover pra remover. Se a
+ * tarefa referenciada não existir mais no diretório (raro — ex. dado
+ * ainda propagando), cai num rótulo mínimo em vez de sumir a linha. */
+function DependencyRow({
+  entry,
+  fallbackId,
+  onOpen,
+  onRemove,
+}: {
+  entry?: TaskDirectoryEntry;
+  fallbackId: string;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  const done = entry?.status === "Concluído";
+  return (
+    <div className="group flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+      >
+        {done ? (
+          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        ) : (
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
+          />
+        )}
+        <span
+          className={`min-w-0 truncate text-xs ${done ? "text-muted-foreground line-through" : "text-foreground"}`}
+        >
+          {entry?.label ?? fallbackId}
+        </span>
+        {entry?.project && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{entry.project}</span>
+        )}
+        {entry?.dueDate && !done && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {formatIsoDate(entry.dueDate)}
+          </span>
+        )}
+        <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Mais opções"
+            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onRemove} className="text-destructive focus:text-destructive">
+            Remover dependência
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -2191,6 +2324,64 @@ export function TaskDialog({
     const iv = setInterval(() => forceTimerTick((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, [timerRunning]);
+
+  // Dependências entre tarefas — a relação em si vive numa tabela própria
+  // (`task_dependencies`, sem FK real: `Task` mora em 3 tabelas diferentes
+  // conforme o escopo), carregada globalmente e mantida por realtime
+  // (`useTaskDependencies`), nunca dentro do próprio `Task`. `directory`
+  // resolve os ids das duas pontas pra título/projeto/status/prazo — mesmo
+  // diretório usado pelo `TaskPicker` e pelo @menção do Chat.
+  const allDeps = useTaskDependencies();
+  const taskDirectory = useTaskDirectory();
+  const directoryByRawId = useMemo(
+    () => new Map(taskDirectory.map((t) => [t.rawId, t])),
+    [taskDirectory],
+  );
+  // Nesta board (o projeto especial "Marketing" mistura tarefas próprias
+  // com avulsas do Marketing) `initial.id` pode vir com o prefixo "mkt:"
+  // (convenção de deep-link, não um id de banco de verdade — ver
+  // `TaskDirectoryEntry.rawId` em `task-directory.ts`). `task_dependencies`
+  // só aceita o uuid real, então qualquer operação de dependência sobre
+  // "esta tarefa" precisa passar por esse id normalizado, nunca `initial.id`
+  // direto.
+  const depTaskId = initial?.id.replace(/^mkt:/, "");
+  const { dependsOn, blocks } = depTaskId
+    ? dependenciesOf(depTaskId, allDeps)
+    : { dependsOn: [], blocks: [] };
+  const dependsOnPending = dependsOn.filter(
+    (id) => directoryByRawId.get(id)?.status !== "Concluído",
+  );
+  const [depPopover, setDepPopover] = useState<null | "menu" | "depends" | "blocks">(null);
+  const depsSectionRef = useRef<HTMLDivElement>(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [pendingSaveCloseAfter, setPendingSaveCloseAfter] = useState(false);
+
+  const handlePickDependency = async (mode: "depends" | "blocks", picked: TaskDirectoryEntry) => {
+    if (!depTaskId) return;
+    const blockingId = mode === "depends" ? picked.rawId : depTaskId;
+    const blockedId = mode === "depends" ? depTaskId : picked.rawId;
+    const { error } = await createDependency(blockingId, blockedId);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    toast.success("Dependência adicionada.");
+    setActivity((a) =>
+      pushActivity(
+        a,
+        mode === "depends"
+          ? `adicionou uma dependência: aguardando "${picked.label}"`
+          : `definiu que esta tarefa bloqueia "${picked.label}"`,
+        "dependency",
+      ),
+    );
+    setDepPopover(null);
+  };
+
+  const handleRemoveDependency = async (dep: TaskDependency, label: string) => {
+    await removeDependency(dep.id);
+    setActivity((a) => pushActivity(a, `removeu a dependência "${label}"`, "dependency"));
+  };
 
   const mktScope = scope && (scope.kind === "campanha" || scope.kind === "projeto") ? scope : null;
   const [mktRequested, setMktRequested] = useState(
@@ -2593,11 +2784,7 @@ export function TaskDialog({
    * inline do Activity) — se ainda houver uma pendência não confirmada
    * nesse momento, ela é descartada (revertida) e o resto da edição
    * salva normalmente, sem bloquear nada (item 14 do pedido). */
-  const attemptSave = (closeAfter: boolean) => {
-    if (!canSave) {
-      if (closeAfter) onOpenChange(false);
-      return;
-    }
+  const doSave = (closeAfter: boolean) => {
     // `pendingDeadlineChange` só reverte via `setState` (assíncrono) —
     // `save()` não pode confiar em `dueDate` já refletir isso quando
     // roda logo em seguida, por isso o valor de volta é passado direto.
@@ -2605,6 +2792,23 @@ export function TaskDialog({
     discardPendingDeadlineChange();
     save(dueDateOverride);
     if (closeAfter) onOpenChange(false);
+  };
+
+  const attemptSave = (closeAfter: boolean) => {
+    if (!canSave) {
+      if (closeAfter) onOpenChange(false);
+      return;
+    }
+    // Dependência não bloqueia a conclusão de verdade — só avisa. Uma
+    // tarefa com dependência ainda pendente sendo marcada "Concluído"
+    // pausa aqui pra confirmar, em vez de impedir (a modelagem de
+    // dependência pode estar errada, e travar duro seria pior).
+    if (status === "Concluído" && dependsOnPending.length > 0) {
+      setPendingSaveCloseAfter(closeAfter);
+      setShowCompleteConfirm(true);
+      return;
+    }
+    doSave(closeAfter);
   };
 
   const toggleTimer = () => {
@@ -2797,568 +3001,755 @@ export function TaskDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
-        <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
-        <DialogDescription className="sr-only">
-          Formulário de tarefa no estilo ClickUp
-        </DialogDescription>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
+          <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Formulário de tarefa no estilo ClickUp
+          </DialogDescription>
 
-        <div className="flex items-center gap-2 border-b border-border bg-muted/30 py-2.5 pl-4 pr-12 text-[11px] text-muted-foreground">
-          <span>{rootLabel}</span>
-          <ChevronRight className="h-3 w-3 opacity-60" />
-          <span>Tarefas</span>
-          {parentTitle && (
-            <>
-              <ChevronRight className="h-3 w-3 opacity-60" />
-              <span className="max-w-[240px] truncate" title={parentTitle}>
-                {parentTitle}
-              </span>
-            </>
-          )}
-          <ChevronRight className="h-3 w-3 opacity-60" />
-          <span className="text-foreground">
-            {initial ? "Editar" : parentTitle ? "Nova subtarefa" : "Nova tarefa"}
-          </span>
-        </div>
-
-        <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
-          <div className="min-h-0 overflow-y-auto">
-            <div className="px-8 pb-3 pt-6">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${TASK_STATUS_TONE[status]}`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[status]}`} />
-                  {parentTitle ? "Subtarefa" : "Tarefa"}
+          <div className="flex items-center gap-2 border-b border-border bg-muted/30 py-2.5 pl-4 pr-12 text-[11px] text-muted-foreground">
+            <span>{rootLabel}</span>
+            <ChevronRight className="h-3 w-3 opacity-60" />
+            <span>Tarefas</span>
+            {parentTitle && (
+              <>
+                <ChevronRight className="h-3 w-3 opacity-60" />
+                <span className="max-w-[240px] truncate" title={parentTitle}>
+                  {parentTitle}
                 </span>
-                {parentTitle && (
-                  <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
-                    de{" "}
-                    <span
-                      className="max-w-[220px] truncate font-medium text-foreground"
-                      title={parentTitle}
-                    >
-                      {parentTitle}
-                    </span>
+              </>
+            )}
+            <ChevronRight className="h-3 w-3 opacity-60" />
+            <span className="text-foreground">
+              {initial ? "Editar" : parentTitle ? "Nova subtarefa" : "Nova tarefa"}
+            </span>
+          </div>
+
+          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
+            <div className="min-h-0 overflow-y-auto">
+              <div className="px-8 pb-3 pt-6">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${TASK_STATUS_TONE[status]}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[status]}`} />
+                    {parentTitle ? "Subtarefa" : "Tarefa"}
                   </span>
+                  {dependsOnPending.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        depsSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                    >
+                      <Link2 className="h-3 w-3" /> Bloqueada por {dependsOnPending.length}
+                    </button>
+                  )}
+                  {parentTitle && (
+                    <span className="inline-flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
+                      de{" "}
+                      <span
+                        className="max-w-[220px] truncate font-medium text-foreground"
+                        title={parentTitle}
+                      >
+                        {parentTitle}
+                      </span>
+                    </span>
+                  )}
+                </div>
+
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
+                  }}
+                  placeholder="Nome da tarefa"
+                  className="w-full border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/50"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 border-y border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
+                <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    className={`h-6 cursor-pointer rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[status]}`}
+                  >
+                    {TASK_STATUSES.map((s) => (
+                      <option key={s} value={s} className="bg-background text-foreground">
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
+                  <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+                      >
+                        {assignees.length === 0 ? (
+                          <span className="text-muted-foreground">— Selecionar responsável —</span>
+                        ) : (
+                          (() => {
+                            // Sem `primaryAssignee` explícito, o primeiro
+                            // assignee vira um fallback visual só de exibição
+                            // — nunca usado por scoring/ledger (ver
+                            // `getTaskPrimaryAssignee`).
+                            const primaryName = primaryAssignee ?? assignees[0];
+                            const m = members.find((mm) => mm.name === primaryName);
+                            const othersCount = assignees.length - 1;
+                            return (
+                              <>
+                                <Avatar
+                                  member={
+                                    m ?? {
+                                      name: primaryName,
+                                      initials: initialsOf(primaryName) || "?",
+                                      color: colorFor(primaryName),
+                                    }
+                                  }
+                                  size={20}
+                                />
+                                <span className="min-w-0 flex-1 truncate">{primaryName}</span>
+                                {othersCount > 0 && (
+                                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    +{othersCount}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="max-h-64 w-72 overflow-auto p-1">
+                      {members.length === 0 ? (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          Nenhum membro cadastrado.
+                        </div>
+                      ) : (
+                        <>
+                          <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Responsável e colaboradores
+                          </p>
+                          {members.map((m) => {
+                            const checked = assignees.includes(m.name);
+                            const isPrimary = primaryAssignee
+                              ? primaryAssignee === m.name
+                              : checked && assignees[0] === m.name;
+                            return (
+                              <div
+                                key={m.name}
+                                className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
+                                  checked ? "bg-muted/60" : ""
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAssignee(m.name)}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
+                                  <Avatar member={m} size={20} />
+                                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                </button>
+                                {checked && (
+                                  <button
+                                    type="button"
+                                    title={
+                                      isPrimary
+                                        ? "Responsável principal"
+                                        : "Tornar responsável principal"
+                                    }
+                                    onClick={() => promoteToPrimary(m.name)}
+                                    className={`shrink-0 rounded p-1 hover:bg-background ${
+                                      isPrimary
+                                        ? "text-amber-500"
+                                        : "text-muted-foreground/50 hover:text-amber-500"
+                                    }`}
+                                  >
+                                    <Star
+                                      className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </Field>
+
+                <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                    className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
+                  >
+                    {TASK_PRIORITIES.map((p) => (
+                      <option key={p} value={p} className="text-foreground">
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
+                  <div className="flex w-full flex-wrap items-center gap-2">
+                    <DateField
+                      variant="inline"
+                      value={startDate || undefined}
+                      onChange={(v) => setStartDate(v ?? "")}
+                      max={dueDate || undefined}
+                      rangeStart={startDate || undefined}
+                      rangeEnd={dueDate || undefined}
+                      ariaLabel="Início"
+                      placeholder="Início"
+                    />
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <DateField
+                      variant="inline"
+                      value={dueDate || undefined}
+                      onChange={handleDueDateChange}
+                      min={startDate || undefined}
+                      rangeStart={startDate || undefined}
+                      rangeEnd={dueDate || undefined}
+                      ariaLabel="Entrega"
+                      placeholder="Entrega"
+                      recurrence={recurrence}
+                      onRecurrenceChange={setRecurrence}
+                    />
+                    {initial && (dueDate || initial.performanceDueDate) && (
+                      <DeadlineHealthBadge task={initial} />
+                    )}
+                  </div>
+                </Field>
+
+                <Field label="Timer" icon={<Clock className="h-3.5 w-3.5" />}>
+                  {initial && onToggleTimer ? (
+                    (() => {
+                      const accumulated = timeEntries.reduce((s, e) => s + e.seconds, 0);
+                      const running = timerRunning
+                        ? (Date.now() - Date.parse(timerStartedAt ?? "")) / 1000
+                        : 0;
+                      const total = accumulated + running;
+                      return (
+                        <button
+                          type="button"
+                          onClick={toggleTimer}
+                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums ${
+                            timerRunning
+                              ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
+                              : "text-foreground/70 hover:bg-muted"
+                          }`}
+                        >
+                          {timerRunning ? (
+                            <Pause className="h-3.5 w-3.5" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
+                          )}
+                          {total > 0 ? formatDuration(total) : "Iniciar"}
+                        </button>
+                      );
+                    })()
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      {initial ? "—" : "Disponível após criar a tarefa"}
+                    </span>
+                  )}
+                </Field>
+
+                <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
+                  <div className="relative w-full" ref={tagFieldRef}>
+                    <div className="flex w-full flex-wrap items-center gap-1.5">
+                      {tags.map((t) => (
+                        <span
+                          key={t}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorForTag(t, taskTags)}`}
+                        >
+                          <button
+                            type="button"
+                            title="Editar cor desta etiqueta (reflete pra todo mundo)"
+                            onClick={() => setEditingTagColor(editingTagColor === t ? null : t)}
+                          >
+                            {t}
+                          </button>
+                          <button type="button" onClick={() => removeTag(t)}>
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onFocus={() => setTagSuggestOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addTag();
+                          }
+                        }}
+                        placeholder={tags.length ? "" : "Adicionar etiqueta"}
+                        className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
+                      />
+                    </div>
+
+                    {editingTagColor && (
+                      <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
+                        <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
+                          Cor de "{editingTagColor}" — reflete em todas as tarefas
+                        </p>
+                        <TagColorSwatches
+                          value={taskTags.find((t) => t.name === editingTagColor)?.color}
+                          onPick={(color) => {
+                            const tag = taskTags.find((t) => t.name === editingTagColor);
+                            if (tag) updateTaskTagColor(tag.id, color);
+                            setEditingTagColor(null);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const tag = taskTags.find((t) => t.name === editingTagColor);
+                            if (tag) deleteTaskTag(tag.id);
+                            removeTag(editingTagColor);
+                            setEditingTagColor(null);
+                          }}
+                          className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
+                        >
+                          Excluir etiqueta do registro
+                        </button>
+                      </div>
+                    )}
+
+                    {creatingTagName && (
+                      <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
+                        <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
+                          Escolha uma cor para "{creatingTagName}"
+                        </p>
+                        <TagColorSwatches onPick={confirmCreateTag} />
+                      </div>
+                    )}
+
+                    {tagSuggestOpen && !editingTagColor && !creatingTagName && (
+                      <div className="absolute z-10 mt-1 max-h-48 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
+                        {tagSuggestions.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => addTag(t.name)}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                          >
+                            <span
+                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${t.color}`}
+                            >
+                              {t.name}
+                            </span>
+                          </button>
+                        ))}
+                        {newTag.trim() &&
+                          !taskTags.some(
+                            (t) => t.name.toLowerCase() === newTag.trim().toLowerCase(),
+                          ) && (
+                            <button
+                              type="button"
+                              onClick={() => addTag()}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-primary hover:bg-muted"
+                            >
+                              + Criar etiqueta "{newTag.trim()}"
+                            </button>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                </Field>
+              </div>
+
+              <div className="px-8 py-4">
+                {descEditing ? (
+                  <div className="relative">
+                    {descMentionMatches.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+                        {descMentionMatches.map((m) => (
+                          <button
+                            key={m.name}
+                            type="button"
+                            // `onMouseDown` (não `onClick`) pra disparar antes do
+                            // `onBlur` do textarea — senão o dropdown já tinha
+                            // fechado (e a descrição saído de edição) antes do
+                            // clique registrar.
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              insertDescMention(m.name);
+                            }}
+                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
+                          >
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${m.color}`}
+                            >
+                              {m.initials}
+                            </span>
+                            {m.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <textarea
+                      ref={descRef}
+                      value={description}
+                      onChange={onDescriptionChange}
+                      onBlur={() => {
+                        setDescEditing(false);
+                        setDescMentionQuery(null);
+                      }}
+                      placeholder="Escreva algo, adicione detalhes, links, use @ para mencionar…"
+                      rows={10}
+                      className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
+                    />
+                  </div>
+                ) : description ? (
+                  // Links e @menções viram clicáveis/destacados só na
+                  // visualização — o textarea de edição continua sendo texto
+                  // puro, senão editar vira um problema.
+                  <div
+                    onClick={() => {
+                      setDescEditing(true);
+                      setTimeout(() => descRef.current?.focus(), 0);
+                    }}
+                    className="min-h-[220px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+                  >
+                    {renderMentions(description, members)}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDescEditing(true);
+                      setTimeout(() => descRef.current?.focus(), 0);
+                    }}
+                    className="min-h-[220px] w-full text-left text-sm text-muted-foreground/70"
+                  >
+                    Escreva algo, adicione detalhes, links…
+                  </button>
                 )}
               </div>
 
-              <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
-                }}
-                placeholder="Nome da tarefa"
-                className="w-full border-0 bg-transparent p-0 text-2xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/50"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 border-y border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
-              <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className={`h-6 cursor-pointer rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[status]}`}
-                >
-                  {TASK_STATUSES.map((s) => (
-                    <option key={s} value={s} className="bg-background text-foreground">
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
-                <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
+              {initial && (
+                <div ref={depsSectionRef} className="space-y-2 px-8 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <Link2 className="h-3.5 w-3.5" /> Dependências
+                    </p>
+                    <Popover
+                      open={depPopover !== null}
+                      onOpenChange={(o) => !o && setDepPopover(null)}
                     >
-                      {assignees.length === 0 ? (
-                        <span className="text-muted-foreground">— Selecionar responsável —</span>
-                      ) : (
-                        (() => {
-                          // Sem `primaryAssignee` explícito, o primeiro
-                          // assignee vira um fallback visual só de exibição
-                          // — nunca usado por scoring/ledger (ver
-                          // `getTaskPrimaryAssignee`).
-                          const primaryName = primaryAssignee ?? assignees[0];
-                          const m = members.find((mm) => mm.name === primaryName);
-                          const othersCount = assignees.length - 1;
-                          return (
-                            <>
-                              <Avatar
-                                member={
-                                  m ?? {
-                                    name: primaryName,
-                                    initials: initialsOf(primaryName) || "?",
-                                    color: colorFor(primaryName),
-                                  }
-                                }
-                                size={20}
-                              />
-                              <span className="min-w-0 flex-1 truncate">{primaryName}</span>
-                              {othersCount > 0 && (
-                                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                  +{othersCount}
-                                </span>
-                              )}
-                            </>
-                          );
-                        })()
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="max-h-64 w-72 overflow-auto p-1">
-                    {members.length === 0 ? (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                        Nenhum membro cadastrado.
-                      </div>
-                    ) : (
-                      <>
-                        <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          Responsável e colaboradores
-                        </p>
-                        {members.map((m) => {
-                          const checked = assignees.includes(m.name);
-                          const isPrimary = primaryAssignee
-                            ? primaryAssignee === m.name
-                            : checked && assignees[0] === m.name;
-                          return (
-                            <div
-                              key={m.name}
-                              className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
-                                checked ? "bg-muted/60" : ""
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => toggleAssignee(m.name)}
-                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                              >
-                                <Avatar member={m} size={20} />
-                                <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                                {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                              </button>
-                              {checked && (
-                                <button
-                                  type="button"
-                                  title={
-                                    isPrimary
-                                      ? "Responsável principal"
-                                      : "Tornar responsável principal"
-                                  }
-                                  onClick={() => promoteToPrimary(m.name)}
-                                  className={`shrink-0 rounded p-1 hover:bg-background ${
-                                    isPrimary
-                                      ? "text-amber-500"
-                                      : "text-muted-foreground/50 hover:text-amber-500"
-                                  }`}
-                                >
-                                  <Star
-                                    className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
-                                  />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </Field>
-
-              <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                  className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
-                >
-                  {TASK_PRIORITIES.map((p) => (
-                    <option key={p} value={p} className="text-foreground">
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
-                <div className="flex w-full flex-wrap items-center gap-2">
-                  <DateField
-                    variant="inline"
-                    value={startDate || undefined}
-                    onChange={(v) => setStartDate(v ?? "")}
-                    max={dueDate || undefined}
-                    rangeStart={startDate || undefined}
-                    rangeEnd={dueDate || undefined}
-                    ariaLabel="Início"
-                    placeholder="Início"
-                  />
-                  <span className="text-xs text-muted-foreground">→</span>
-                  <DateField
-                    variant="inline"
-                    value={dueDate || undefined}
-                    onChange={handleDueDateChange}
-                    min={startDate || undefined}
-                    rangeStart={startDate || undefined}
-                    rangeEnd={dueDate || undefined}
-                    ariaLabel="Entrega"
-                    placeholder="Entrega"
-                    recurrence={recurrence}
-                    onRecurrenceChange={setRecurrence}
-                  />
-                  {initial && (dueDate || initial.performanceDueDate) && (
-                    <DeadlineHealthBadge task={initial} />
-                  )}
-                </div>
-              </Field>
-
-              <Field label="Timer" icon={<Clock className="h-3.5 w-3.5" />}>
-                {initial && onToggleTimer ? (
-                  (() => {
-                    const accumulated = timeEntries.reduce((s, e) => s + e.seconds, 0);
-                    const running = timerRunning
-                      ? (Date.now() - Date.parse(timerStartedAt ?? "")) / 1000
-                      : 0;
-                    const total = accumulated + running;
-                    return (
-                      <button
-                        type="button"
-                        onClick={toggleTimer}
-                        className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums ${
-                          timerRunning
-                            ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
-                            : "text-foreground/70 hover:bg-muted"
-                        }`}
-                      >
-                        {timerRunning ? (
-                          <Pause className="h-3.5 w-3.5" />
-                        ) : (
-                          <Play className="h-3.5 w-3.5" />
-                        )}
-                        {total > 0 ? formatDuration(total) : "Iniciar"}
-                      </button>
-                    );
-                  })()
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    {initial ? "—" : "Disponível após criar a tarefa"}
-                  </span>
-                )}
-              </Field>
-
-              <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
-                <div className="relative w-full" ref={tagFieldRef}>
-                  <div className="flex w-full flex-wrap items-center gap-1.5">
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorForTag(t, taskTags)}`}
-                      >
+                      <PopoverTrigger asChild>
                         <button
                           type="button"
-                          title="Editar cor desta etiqueta (reflete pra todo mundo)"
-                          onClick={() => setEditingTagColor(editingTagColor === t ? null : t)}
+                          onClick={() => setDepPopover("menu")}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                         >
-                          {t}
+                          <Plus className="h-3.5 w-3.5" /> Adicionar dependência
                         </button>
-                        <button type="button" onClick={() => removeTag(t)}>
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </span>
-                    ))}
-                    <input
-                      value={newTag}
-                      onChange={(e) => setNewTag(e.target.value)}
-                      onFocus={() => setTagSuggestOpen(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addTag();
-                        }
-                      }}
-                      placeholder={tags.length ? "" : "Adicionar etiqueta"}
-                      className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
-                    />
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-56 p-1">
+                        {depPopover === "menu" && (
+                          <div className="space-y-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setDepPopover("depends")}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                            >
+                              ← Esta tarefa depende de...
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDepPopover("blocks")}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                            >
+                              → Esta tarefa bloqueia...
+                            </button>
+                          </div>
+                        )}
+                        {(depPopover === "depends" || depPopover === "blocks") && (
+                          <TaskPicker
+                            excludeTaskId={depTaskId ?? ""}
+                            onSelect={(picked) => void handlePickDependency(depPopover, picked)}
+                          />
+                        )}
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
-                  {editingTagColor && (
-                    <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
-                      <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
-                        Cor de "{editingTagColor}" — reflete em todas as tarefas
+                  {dependsOn.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Aguardando
                       </p>
-                      <TagColorSwatches
-                        value={taskTags.find((t) => t.name === editingTagColor)?.color}
-                        onPick={(color) => {
-                          const tag = taskTags.find((t) => t.name === editingTagColor);
-                          if (tag) updateTaskTagColor(tag.id, color);
-                          setEditingTagColor(null);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tag = taskTags.find((t) => t.name === editingTagColor);
-                          if (tag) deleteTaskTag(tag.id);
-                          removeTag(editingTagColor);
-                          setEditingTagColor(null);
-                        }}
-                        className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
-                      >
-                        Excluir etiqueta do registro
-                      </button>
+                      {dependsOn.map((id) => {
+                        const dep = allDeps.find(
+                          (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
+                        );
+                        const entry = directoryByRawId.get(id);
+                        if (!dep) return null;
+                        return (
+                          <DependencyRow
+                            key={dep.id}
+                            entry={entry}
+                            fallbackId={id}
+                            onOpen={() => pushTaskModal(id)}
+                            onRemove={() => void handleRemoveDependency(dep, entry?.label ?? id)}
+                          />
+                        );
+                      })}
                     </div>
                   )}
 
-                  {creatingTagName && (
-                    <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
-                      <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
-                        Escolha uma cor para "{creatingTagName}"
+                  {blocks.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Bloqueia
                       </p>
-                      <TagColorSwatches onPick={confirmCreateTag} />
+                      {blocks.map((id) => {
+                        const dep = allDeps.find(
+                          (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
+                        );
+                        const entry = directoryByRawId.get(id);
+                        if (!dep) return null;
+                        return (
+                          <DependencyRow
+                            key={dep.id}
+                            entry={entry}
+                            fallbackId={id}
+                            onOpen={() => pushTaskModal(id)}
+                            onRemove={() => void handleRemoveDependency(dep, entry?.label ?? id)}
+                          />
+                        );
+                      })}
                     </div>
                   )}
+                </div>
+              )}
 
-                  {tagSuggestOpen && !editingTagColor && !creatingTagName && (
-                    <div className="absolute z-10 mt-1 max-h-48 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
-                      {tagSuggestions.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => addTag(t.name)}
-                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                        >
-                          <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${t.color}`}
-                          >
-                            {t.name}
-                          </span>
-                        </button>
-                      ))}
-                      {newTag.trim() &&
-                        !taskTags.some(
-                          (t) => t.name.toLowerCase() === newTag.trim().toLowerCase(),
-                        ) && (
-                          <button
-                            type="button"
-                            onClick={() => addTag()}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-primary hover:bg-muted"
-                          >
-                            + Criar etiqueta "{newTag.trim()}"
-                          </button>
-                        )}
-                    </div>
-                  )}
-                </div>
-              </Field>
-            </div>
-
-            <div className="px-8 py-4">
-              {descEditing ? (
-                <div className="relative">
-                  {descMentionMatches.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
-                      {descMentionMatches.map((m) => (
-                        <button
-                          key={m.name}
-                          type="button"
-                          // `onMouseDown` (não `onClick`) pra disparar antes do
-                          // `onBlur` do textarea — senão o dropdown já tinha
-                          // fechado (e a descrição saído de edição) antes do
-                          // clique registrar.
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            insertDescMention(m.name);
-                          }}
-                          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
-                        >
-                          <span
-                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${m.color}`}
-                          >
-                            {m.initials}
-                          </span>
-                          {m.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <textarea
-                    ref={descRef}
-                    value={description}
-                    onChange={onDescriptionChange}
-                    onBlur={() => {
-                      setDescEditing(false);
-                      setDescMentionQuery(null);
-                    }}
-                    placeholder="Escreva algo, adicione detalhes, links, use @ para mencionar…"
-                    rows={10}
-                    className="min-h-[220px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
-                  />
-                </div>
-              ) : description ? (
-                // Links e @menções viram clicáveis/destacados só na
-                // visualização — o textarea de edição continua sendo texto
-                // puro, senão editar vira um problema.
-                <div
-                  onClick={() => {
-                    setDescEditing(true);
-                    setTimeout(() => descRef.current?.focus(), 0);
-                  }}
-                  className="min-h-[220px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
-                >
-                  {renderMentions(description, members)}
-                </div>
-              ) : (
+              <div className="space-y-0 px-8 pb-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setDescEditing(true);
-                    setTimeout(() => descRef.current?.focus(), 0);
-                  }}
-                  className="min-h-[220px] w-full text-left text-sm text-muted-foreground/70"
+                  onClick={() => setShowSubtaskInput((v) => !v)}
+                  className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                 >
-                  Escreva algo, adicione detalhes, links…
+                  <Plus className="h-3.5 w-3.5" />
+                  Adicionar subtarefa
+                  {subtasks.length > 0 && (
+                    <span className="ml-1 text-[11px] text-muted-foreground">
+                      ({doneCount}/{subtasks.length})
+                    </span>
+                  )}
                 </button>
-              )}
-            </div>
 
-            <div className="space-y-0 px-8 pb-2">
-              <button
-                type="button"
-                onClick={() => setShowSubtaskInput((v) => !v)}
-                className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Adicionar subtarefa
-                {subtasks.length > 0 && (
-                  <span className="ml-1 text-[11px] text-muted-foreground">
-                    ({doneCount}/{subtasks.length})
-                  </span>
-                )}
-              </button>
-
-              {(showSubtaskInput || subtasks.length > 0) && (
-                <div className="ml-1 space-y-1 py-1">
-                  {sortedSubtasks.map((s) => {
-                    const done = s.status === "Concluído";
-                    const subtaskAssignees = getTaskAssignees(s);
-                    return (
-                      <div
-                        key={s.id}
-                        className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
-                      >
-                        {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
+                {(showSubtaskInput || subtasks.length > 0) && (
+                  <div className="ml-1 space-y-1 py-1">
+                    {sortedSubtasks.map((s) => {
+                      const done = s.status === "Concluído";
+                      const subtaskAssignees = getTaskAssignees(s);
+                      return (
+                        <div
+                          key={s.id}
+                          className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                        >
+                          {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
                             não um item de checklist — status muda direto aqui, sem passar pela
                             subtarefa. A cor do círculo é o status (mesma paleta de sempre,
                             TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
                             visualmente reduzido a um círculo (texto transparente). */}
-                        <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                          <select
-                            value={s.status}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const next = e.target.value as TaskStatus;
-                              // `withStatusChange` já para o timer da
-                              // subtarefa se ele estava rodando (e inicia se
-                              // o novo status for "Em andamento") — sem
-                              // passar por ela aqui, um timer preso rodando
-                              // nunca parava só porque o status mudou.
-                              const updated = withStatusChange(s, next);
-                              setSubtasks((prev) =>
-                                prev.map((st) => (st.id === s.id ? updated : st)),
-                              );
-                              setActivity((a) =>
-                                pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                              );
-                              // Sem isso, concluir/reabrir uma subtarefa por
-                              // aqui (o caminho mais usado, direto na linha)
-                              // nunca gerava o evento de XP/"concluídas
-                              // hoje" — só concluir a tarefa-mãe (drag no
-                              // board ou Salvar no diálogo) ou abrir a
-                              // subtarefa em seu próprio diálogo passavam
-                              // por `recordTaskLedgerEventsOnStatusChange`.
-                              // Isso fazia o Score subcontar completions de
-                              // verdade (ex.: 10 concluídas no dia, só 3
-                              // contadas).
-                              if (updated !== s) {
-                                recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                  scope,
-                                  members,
-                                  performanceSettings,
-                                });
-                              }
-                            }}
-                            title={s.status}
-                            aria-label={`Status: ${s.status}`}
-                            className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
-                          >
-                            {TASK_STATUSES.map((st) => (
-                              <option key={st} value={st} className="bg-background text-foreground">
-                                {st}
-                              </option>
-                            ))}
-                          </select>
-                          {done && (
-                            <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
-                          )}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => setEditSubtask(s)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                        >
-                          <span
-                            className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
-                          >
-                            {s.title}
-                          </span>
-                          {!!s.description && (
-                            <span title="Tem descrição" className="shrink-0 text-muted-foreground">
-                              <FileText className="h-3 w-3" />
-                            </span>
-                          )}
-                          {subtaskAssignees.length > 0 && (
-                            <span className="inline-flex shrink-0 items-center -space-x-1.5">
-                              {subtaskAssignees.map((a) => (
-                                <Avatar
-                                  key={a}
-                                  member={
-                                    members.find((m) => m.name === a) ?? {
-                                      name: a,
-                                      initials: initialsOf(a) || "?",
-                                      color: colorFor(a),
-                                    }
-                                  }
-                                  size={16}
-                                />
+                          <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                            <select
+                              value={s.status}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const next = e.target.value as TaskStatus;
+                                // `withStatusChange` já para o timer da
+                                // subtarefa se ele estava rodando (e inicia se
+                                // o novo status for "Em andamento") — sem
+                                // passar por ela aqui, um timer preso rodando
+                                // nunca parava só porque o status mudou.
+                                const updated = withStatusChange(s, next);
+                                setSubtasks((prev) =>
+                                  prev.map((st) => (st.id === s.id ? updated : st)),
+                                );
+                                setActivity((a) =>
+                                  pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                                );
+                                // Sem isso, concluir/reabrir uma subtarefa por
+                                // aqui (o caminho mais usado, direto na linha)
+                                // nunca gerava o evento de XP/"concluídas
+                                // hoje" — só concluir a tarefa-mãe (drag no
+                                // board ou Salvar no diálogo) ou abrir a
+                                // subtarefa em seu próprio diálogo passavam
+                                // por `recordTaskLedgerEventsOnStatusChange`.
+                                // Isso fazia o Score subcontar completions de
+                                // verdade (ex.: 10 concluídas no dia, só 3
+                                // contadas).
+                                if (updated !== s) {
+                                  recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                    scope,
+                                    members,
+                                    performanceSettings,
+                                  });
+                                }
+                              }}
+                              title={s.status}
+                              aria-label={`Status: ${s.status}`}
+                              className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
+                            >
+                              {TASK_STATUSES.map((st) => (
+                                <option
+                                  key={st}
+                                  value={st}
+                                  className="bg-background text-foreground"
+                                >
+                                  {st}
+                                </option>
                               ))}
+                            </select>
+                            {done && (
+                              <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
+                            )}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditSubtask(s)}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          >
+                            <span
+                              className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
+                            >
+                              {s.title}
+                            </span>
+                            {!!s.description && (
+                              <span
+                                title="Tem descrição"
+                                className="shrink-0 text-muted-foreground"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </span>
+                            )}
+                            {subtaskAssignees.length > 0 && (
+                              <span className="inline-flex shrink-0 items-center -space-x-1.5">
+                                {subtaskAssignees.map((a) => (
+                                  <Avatar
+                                    key={a}
+                                    member={
+                                      members.find((m) => m.name === a) ?? {
+                                        name: a,
+                                        initials: initialsOf(a) || "?",
+                                        color: colorFor(a),
+                                      }
+                                    }
+                                    size={16}
+                                  />
+                                ))}
+                              </span>
+                            )}
+                          </button>
+
+                          {/* Prioridade — mesmo truque do status: select funcional por baixo,
+                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
+                          <span className="relative inline-flex shrink-0 items-center">
+                            <Flag
+                              className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                            />
+                            <select
+                              value={s.priority}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const next = e.target.value as TaskPriority;
+                                setSubtasks((prev) =>
+                                  prev.map((st) =>
+                                    st.id === s.id ? { ...st, priority: next } : st,
+                                  ),
+                                );
+                              }}
+                              className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
+                            >
+                              {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
+                                (p) => (
+                                  <option
+                                    key={p}
+                                    value={p}
+                                    className="bg-background text-foreground"
+                                  >
+                                    {p}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </span>
+
+                          {s.dueDate && (
+                            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                              <Calendar className="h-3 w-3" />
+                              {fmtDate(s.dueDate)}
                             </span>
                           )}
-                        </button>
 
-                        {/* Prioridade — mesmo truque do status: select funcional por baixo,
-                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
-                        <span className="relative inline-flex shrink-0 items-center">
-                          <Flag
-                            className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                          <button
+                            type="button"
+                            onClick={() => removeSubtask(s.id)}
+                            className="opacity-0 transition group-hover:opacity-100"
+                          >
+                            <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {showSubtaskInput && (
+                      <div className="rounded-md border border-border bg-background p-2">
+                        <input
+                          autoFocus
+                          value={newSubtaskTitle}
+                          onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addSubtask();
+                            }
+                          }}
+                          placeholder="Nome da subtarefa"
+                          className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <DateField
+                            variant="input"
+                            value={newSubtaskDate || undefined}
+                            onChange={(v) => setNewSubtaskDate(v ?? "")}
+                            placeholder="Data"
+                            ariaLabel="Data da subtarefa"
+                            className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                          />
+                          <CompactAssigneePicker
+                            selected={newSubtaskAssignees}
+                            members={members}
+                            onToggle={toggleNewSubtaskAssignee}
                           />
                           <select
-                            value={s.priority}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const next = e.target.value as TaskPriority;
-                              setSubtasks((prev) =>
-                                prev.map((st) => (st.id === s.id ? { ...st, priority: next } : st)),
-                              );
-                            }}
-                            className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
+                            value={newSubtaskPriority}
+                            onChange={(e) => setNewSubtaskPriority(e.target.value as TaskPriority)}
+                            className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
                           >
                             {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
                               <option key={p} value={p} className="bg-background text-foreground">
@@ -3366,278 +3757,254 @@ export function TaskDialog({
                               </option>
                             ))}
                           </select>
-                        </span>
-
-                        {s.dueDate && (
-                          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            {fmtDate(s.dueDate)}
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => removeSubtask(s.id)}
-                          className="opacity-0 transition group-hover:opacity-100"
-                        >
-                          <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {showSubtaskInput && (
-                    <div className="rounded-md border border-border bg-background p-2">
-                      <input
-                        autoFocus
-                        value={newSubtaskTitle}
-                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addSubtask();
-                          }
-                        }}
-                        placeholder="Nome da subtarefa"
-                        className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
-                      />
-                      <div className="flex flex-wrap items-center gap-2">
-                        <DateField
-                          variant="input"
-                          value={newSubtaskDate || undefined}
-                          onChange={(v) => setNewSubtaskDate(v ?? "")}
-                          placeholder="Data"
-                          ariaLabel="Data da subtarefa"
-                          className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
-                        />
-                        <CompactAssigneePicker
-                          selected={newSubtaskAssignees}
-                          members={members}
-                          onToggle={toggleNewSubtaskAssignee}
-                        />
-                        <select
-                          value={newSubtaskPriority}
-                          onChange={(e) => setNewSubtaskPriority(e.target.value as TaskPriority)}
-                          className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
-                        >
-                          {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map((p) => (
-                            <option key={p} value={p} className="bg-background text-foreground">
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="ml-auto flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowSubtaskInput(false);
-                              setNewSubtaskTitle("");
-                              setNewSubtaskDate("");
-                              setNewSubtaskAssignees([]);
-                            }}
-                            className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={addSubtask}
-                            disabled={!newSubtaskTitle.trim()}
-                            className="rounded bg-foreground px-2 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                          >
-                            Adicionar
-                          </button>
+                          <div className="ml-auto flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowSubtaskInput(false);
+                                setNewSubtaskTitle("");
+                                setNewSubtaskDate("");
+                                setNewSubtaskAssignees([]);
+                              }}
+                              className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={addSubtask}
+                              disabled={!newSubtaskTitle.trim()}
+                              className="rounded bg-foreground px-2 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                            >
+                              Adicionar
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <Paperclip className="h-3.5 w-3.5" />
-                Anexos{" "}
-                {attachments.length > 0 && (
-                  <span className="text-[11px]">({attachments.length})</span>
+                    )}
+                  </div>
                 )}
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  void addFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
 
-              {attachments.length > 0 && (
-                <div className="ml-5 space-y-1 py-1">
-                  {attachments.map((a) => (
-                    <div
-                      key={a.id}
-                      className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setPreviewAttachment(a)}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex w-full items-center gap-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Anexos{" "}
+                  {attachments.length > 0 && (
+                    <span className="text-[11px]">({attachments.length})</span>
+                  )}
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void addFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+
+                {attachments.length > 0 && (
+                  <div className="ml-5 space-y-1 py-1">
+                    {attachments.map((a) => (
+                      <div
+                        key={a.id}
+                        className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
                       >
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="flex-1 truncate">{a.name}</span>
-                      </button>
-                      {a.url && (
-                        <a
-                          href={a.url}
-                          download={a.name}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Baixar ${a.name}`}
-                          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment(a)}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(a.id)}
-                        className="shrink-0 opacity-0 transition group-hover:opacity-100"
-                      >
-                        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 truncate">{a.name}</span>
+                        </button>
+                        {a.url && (
+                          <a
+                            href={a.url}
+                            download={a.name}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Baixar ${a.name}`}
+                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(a.id)}
+                          className="shrink-0 opacity-0 transition group-hover:opacity-100"
+                        >
+                          <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="mx-8 mb-6 mt-2 rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  void addFiles(e.dataTransfer.files);
+                }}
+              >
+                Arraste arquivos aqui ou{" "}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="text-primary hover:underline"
+                >
+                  procure nos arquivos
+                </button>
+              </div>
             </div>
 
-            <div
-              className="mx-8 mb-6 mt-2 rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                void addFiles(e.dataTransfer.files);
+            <TaskActivityPanel
+              task={{
+                status,
+                dueDate: dueDate || undefined,
+                originalDueDate,
+                performanceDueDate,
+                deadlineHistory,
+                completedAt: initial?.completedAt,
+              }}
+              activity={activity}
+              comments={comments}
+              members={members}
+              commentText={commentText}
+              onCommentTextChange={setCommentText}
+              onPostComment={postComment}
+              deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
+              pendingDeadlineChange={pendingDeadlineChange}
+              onConfirmDeadlineChange={(motivo, observacao) => {
+                if (!pendingDeadlineChange) return;
+                commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
+                setPendingDeadlineChange(null);
+              }}
+              onCancelDeadlineChange={discardPendingDeadlineChange}
+            />
+          </div>
+
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
+            <div>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {mktScope && initial && (
+                <button
+                  type="button"
+                  onClick={toggleMarketing}
+                  disabled={justRequested}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-300 ${
+                    justRequested
+                      ? "scale-105 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                      : mktRequested
+                        ? "bg-muted text-foreground hover:bg-muted/70"
+                        : "border border-border text-foreground hover:bg-muted"
+                  }`}
+                >
+                  {justRequested ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 animate-in zoom-in duration-300" />
+                      Solicitado!
+                    </>
+                  ) : mktRequested ? (
+                    "Remover do Marketing"
+                  ) : (
+                    "Solicitar para o Marketing"
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => attemptSave(false)}
+                disabled={!canSave}
+                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+              >
+                {initial ? "Salvar" : "Criar tarefa"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+        {editSubtask && (
+          <TaskDialog
+            open={!!editSubtask}
+            onOpenChange={(o) => !o && setEditSubtask(null)}
+            initial={editSubtask ?? undefined}
+            parentTitle={title || "Tarefa mãe"}
+            onSave={(t) => {
+              setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));
+              setActivity((a) => pushActivity(a, `atualizou subtarefa "${t.title}"`));
+              setEditSubtask(null);
+            }}
+            onDelete={() => {
+              removeSubtask(editSubtask.id);
+              setEditSubtask(null);
+            }}
+            onToggleTimer={toggleSubtaskTimer}
+          />
+        )}
+        <AttachmentPreviewDialog
+          attachment={previewAttachment}
+          onClose={() => setPreviewAttachment(null)}
+        />
+      </Dialog>
+      <AlertDialog
+        open={showCompleteConfirm}
+        onOpenChange={(o) => !o && setShowCompleteConfirm(false)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Esta tarefa ainda possui dependências pendentes</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Aguardando:</p>
+                <ul className="list-disc pl-4">
+                  {dependsOnPending.map((id) => (
+                    <li key={id}>{directoryByRawId.get(id)?.label ?? id}</li>
+                  ))}
+                </ul>
+                <p>Tem certeza que deseja concluir mesmo assim?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowCompleteConfirm(false)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowCompleteConfirm(false);
+                doSave(pendingSaveCloseAfter);
               }}
             >
-              Arraste arquivos aqui ou{" "}
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="text-primary hover:underline"
-              >
-                procure nos arquivos
-              </button>
-            </div>
-          </div>
-
-          <TaskActivityPanel
-            task={{
-              status,
-              dueDate: dueDate || undefined,
-              originalDueDate,
-              performanceDueDate,
-              deadlineHistory,
-              completedAt: initial?.completedAt,
-            }}
-            activity={activity}
-            comments={comments}
-            members={members}
-            commentText={commentText}
-            onCommentTextChange={setCommentText}
-            onPostComment={postComment}
-            deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
-            pendingDeadlineChange={pendingDeadlineChange}
-            onConfirmDeadlineChange={(motivo, observacao) => {
-              if (!pendingDeadlineChange) return;
-              commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
-              setPendingDeadlineChange(null);
-            }}
-            onCancelDeadlineChange={discardPendingDeadlineChange}
-          />
-        </div>
-
-        <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
-          <div>
-            {onDelete && (
-              <button
-                type="button"
-                onClick={onDelete}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Excluir
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {mktScope && initial && (
-              <button
-                type="button"
-                onClick={toggleMarketing}
-                disabled={justRequested}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-300 ${
-                  justRequested
-                    ? "scale-105 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                    : mktRequested
-                      ? "bg-muted text-foreground hover:bg-muted/70"
-                      : "border border-border text-foreground hover:bg-muted"
-                }`}
-              >
-                {justRequested ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 animate-in zoom-in duration-300" />
-                    Solicitado!
-                  </>
-                ) : mktRequested ? (
-                  "Remover do Marketing"
-                ) : (
-                  "Solicitar para o Marketing"
-                )}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => attemptSave(false)}
-              disabled={!canSave}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-            >
-              {initial ? "Salvar" : "Criar tarefa"}
-            </button>
-          </div>
-        </div>
-      </DialogContent>
-      {editSubtask && (
-        <TaskDialog
-          open={!!editSubtask}
-          onOpenChange={(o) => !o && setEditSubtask(null)}
-          initial={editSubtask ?? undefined}
-          parentTitle={title || "Tarefa mãe"}
-          onSave={(t) => {
-            setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));
-            setActivity((a) => pushActivity(a, `atualizou subtarefa "${t.title}"`));
-            setEditSubtask(null);
-          }}
-          onDelete={() => {
-            removeSubtask(editSubtask.id);
-            setEditSubtask(null);
-          }}
-          onToggleTimer={toggleSubtaskTimer}
-        />
-      )}
-      <AttachmentPreviewDialog
-        attachment={previewAttachment}
-        onClose={() => setPreviewAttachment(null)}
-      />
-    </Dialog>
+              Concluir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
