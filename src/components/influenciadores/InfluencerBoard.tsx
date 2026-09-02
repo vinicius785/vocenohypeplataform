@@ -76,7 +76,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
-import { loadBank, type BankInflu } from "@/lib/banco-influs-store";
+import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { formatDateToIso } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
@@ -1636,6 +1636,25 @@ export function InfluencerBoard({
     const now = new Date().toISOString();
     const withStamps = { ...i, createdAt: now, updatedAt: now, cicloMes: defaultCicloMes };
     applyInflusChange([...latestInflusRef.current, withStamps]);
+    addToBankIfMissing(withStamps);
+  };
+
+  // Um influenciador criado direto de dentro de uma campanha só ficava
+  // salvo em `campanha_influenciadores` — nunca chegava no Banco de
+  // Influenciadores geral, então "sumia" pra quem esperava achá-lo lá
+  // (só o caminho inverso existia, `BankPickerDialog` abaixo). Dedupe por
+  // nome — mesmo critério já usado por `alreadyAdded` no picker — evita
+  // duplicar quando o nome já existe no banco (edição depois só acontece
+  // no banco em si, não fica ressincronizando a cada mudança aqui).
+  const addToBankIfMissing = (i: Influ) => {
+    const key = i.nome.trim().toLowerCase();
+    if (!key) return;
+    const bank = loadBank();
+    if (bank.some((b) => b.nome.trim().toLowerCase() === key)) return;
+    saveBank([
+      ...bank,
+      { id: crypto.randomUUID(), nome: i.nome, foto: i.foto, nicho: i.nicho, redes: i.redes },
+    ]);
   };
 
   // Edição imediata de qualquer campo pelo perfil (nome, nicho, contato,
