@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { deleteGoogleEventsForMeetings } from "@/lib/google-calendar.functions";
 import {
   CalendarDays,
   Users,
@@ -144,6 +146,17 @@ export function ReunioesSection() {
     setMeetings(next);
     saveMeetings(next);
   };
+  const deleteGoogleEventsFn = useServerFn(deleteGoogleEventsForMeetings);
+  // Excluir na plataforma também apaga o evento correspondente no Google
+  // (se houver) — best-effort, nunca bloqueia a exclusão que já aconteceu
+  // localmente/no banco.
+  const cleanupGoogleEvents = (removed: Meeting[]) => {
+    const targets = removed
+      .filter((m) => m.criadorId)
+      .map((m) => ({ meetingId: m.id, criadorId: m.criadorId, googleEventId: m.googleEventId }));
+    if (targets.length === 0) return;
+    deleteGoogleEventsFn({ data: targets }).catch(() => {});
+  };
   useEffect(() => onMeetingsChange(() => setMeetings(loadMeetings())), []);
   useEffect(() => onDisponibilidadesChange(() => setDisponibilidades(loadDisponibilidades())), []);
 
@@ -172,17 +185,20 @@ export function ReunioesSection() {
         ],
       );
       if (!choice) return;
+      const removed = choice === "all" ? siblings : [alvo];
       persist(
         choice === "all"
           ? meetings.filter((m) => m.seriesId !== alvo.seriesId)
           : meetings.filter((m) => m.id !== id),
       );
+      cleanupGoogleEvents(removed);
     } else {
       const ok = await confirmDelete(
         `Excluir a reunião "${alvo.titulo}"? Essa ação não pode ser desfeita.`,
       );
       if (!ok) return;
       persist(meetings.filter((m) => m.id !== id));
+      cleanupGoogleEvents([alvo]);
     }
     setDialog(null);
     setSummary(null);
