@@ -102,9 +102,16 @@ export function CallOverlay() {
       const hiddenAudio = hiddenAudioRefs.current.get(peerId);
       if (hiddenAudio) {
         hiddenAudio.srcObject = getRemoteCallStream(peerId);
-        void setCallAudioOutput(hiddenAudio)
-          .then(() => hiddenAudio.play())
-          .catch(() => undefined);
+        // Trocar a saída de áudio (setSinkId) e tocar o áudio precisam ser
+        // independentes — antes, play() só rodava dentro do .then() do
+        // setSinkId, então se o dispositivo salvo nas preferências não
+        // existisse mais (fone desconectado, outro computador, etc.),
+        // setSinkId rejeitava, o play() nunca chegava a rodar, e a
+        // ligação inteira ficava muda sem erro nenhum visível (o .catch()
+        // escondia tudo). Agora uma falha de setSinkId no máximo deixa a
+        // saída no dispositivo padrão do sistema — nunca impede o áudio.
+        void setCallAudioOutput(hiddenAudio).catch(() => undefined);
+        void hiddenAudio.play().catch(() => undefined);
       }
       const remoteScreen = remoteScreenRefs.current.get(peerId);
       const screenStream = getRemoteScreenStream(peerId);
