@@ -315,7 +315,7 @@ export type Campaign = {
   notes?: string;
 };
 
-export type BlogStatus = "agendado" | "publicado" | "despublicado";
+export type BlogStatus = "rascunho" | "agendado" | "publicado" | "despublicado";
 export type BlogPost = {
   id: string;
   title: string;
@@ -325,7 +325,15 @@ export type BlogPost = {
   cover?: string;
   category?: string;
   status: BlogStatus;
+  /** ISO datetime completo (data+hora) usado tanto pra "publicar às" quanto
+   * pra "agendar para". Artigos antigos podem ter só a data
+   * (ex. "2026-09-03") — `new Date(...)` interpreta isso como meia-noite
+   * local, então continuam funcionando sem qualquer conversão. */
   publishDate?: string;
+  /** Preenchido quando o status vira "publicado" pela primeira vez — é o
+   * que o header do editor mostra como "Publicado em". Campo novo,
+   * opcional, não quebra artigos antigos (cai no fallback de exibição). */
+  publishedAt?: string;
   excerpt?: string;
   content?: string;
   /** Um artigo pode ir pra mais de um destino ao mesmo tempo (ex: Site +
