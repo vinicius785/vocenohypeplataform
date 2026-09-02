@@ -78,7 +78,19 @@ export function TaskPicker({
           className="h-6 w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
         />
       </div>
-      <div className="max-h-64 overflow-y-auto p-1">
+      <div
+        className="max-h-64 overflow-y-auto p-1"
+        // O modal de tarefa (Dialog) trava o scroll da página inteira
+        // enquanto está aberto; como este popover é renderizado num Portal
+        // fora da árvore do Dialog, o navegador não associa esta lista à
+        // área "com permissão pra rolar" e o wheel do mouse era ignorado
+        // aqui (mesmo a lista tendo overflow real). Aplica o delta do
+        // wheel manualmente no scroll da própria lista.
+        onWheel={(e) => {
+          e.currentTarget.scrollTop += e.deltaY;
+          e.stopPropagation();
+        }}
+      >
         {!query.trim() && (
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Tarefas recentes
