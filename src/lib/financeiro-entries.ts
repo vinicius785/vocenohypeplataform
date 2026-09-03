@@ -457,6 +457,72 @@ function onOverridesChange(callback: () => void): () => void {
   return () => overridesListeners.delete(callback);
 }
 
+/** Influenciadores por campanha, lidos da tabela real
+ * `campanha_influenciadores` (Supabase) — substitui aos poucos a leitura
+ * antiga de `localStorage["campanha:influs:*"]`. `buildEntries()` faz um
+ * MERGE dos dois (real primeiro, local só supre nomes que ainda não
+ * existem no real) em vez de um corte seco: o localStorage nunca foi
+ * sincronizado entre navegadores, então pode haver participações que só
+ * existem lá — descartar essa leitura de uma vez arriscaria fazer
+ * despesas de influenciador desaparecerem silenciosamente pra quem só
+ * tinha o dado local. */
+let influsCache: Record<string, InfluPersisted[]> = {};
+let influsLoaded = false;
+const influsListeners = new Set<() => void>();
+const emitInflus = () => influsListeners.forEach((l) => l());
+
+let influsChannel: ReturnType<typeof supabase.channel> | null = null;
+function subscribeInflusRealtime() {
+  if (influsChannel) return;
+  influsChannel = supabase
+    .channel(`rt-financeiro-campanha_influenciadores-${Math.random().toString(36).slice(2)}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "campanha_influenciadores" },
+      () => {
+        // Qualquer mudança (insert/update/delete) recarrega a tabela
+        // inteira — é uma tabela pequena (uma linha por participação em
+        // campanha), não vale a pena reconstruir o patch incremental por
+        // campanha aqui.
+        void loadInflusFromServer();
+      },
+    )
+    .subscribe();
+}
+
+async function loadInflusFromServer(): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from("campanha_influenciadores")
+      .select("campanha_id,data");
+    if (error) throw error;
+    const next: Record<string, InfluPersisted[]> = {};
+    for (const row of data ?? []) {
+      const list = next[row.campanha_id] ?? (next[row.campanha_id] = []);
+      list.push(row.data as InfluPersisted);
+    }
+    influsCache = next;
+  } catch (e) {
+    console.warn("[campanha_influenciadores] load failed", e);
+  } finally {
+    influsLoaded = true;
+    emitInflus();
+  }
+}
+
+export async function initInflusSync(): Promise<void> {
+  if (!influsLoaded) await loadInflusFromServer();
+  subscribeInflusRealtime();
+}
+
+function loadInflusByCampanha(): Record<string, InfluPersisted[]> {
+  return influsCache;
+}
+function onInflusChange(callback: () => void): () => void {
+  influsListeners.add(callback);
+  return () => influsListeners.delete(callback);
+}
+
 export async function upsertStatusOverride(id: string, override: StatusOverride): Promise<void> {
   const { error } = await supabase
     .from("financeiro_status_overrides")
@@ -495,6 +561,7 @@ function buildEntries(
   clientes: Cliente[],
   manual: ManualEntry[],
   overrides: Record<string, StatusOverride>,
+  influsByCampanha: Record<string, InfluPersisted[]>,
 ): Entry[] {
   const out: Entry[] = [];
 
@@ -551,7 +618,12 @@ function buildEntries(
         pushReceita(`camp-rec:${camp.id}`, dt, amount);
       }
 
-      const influs = (() => {
+      // Fonte real (campanha_influenciadores) primeiro; o localStorage
+      // antigo só supre nomes que ainda não existem na fonte real — ver
+      // comentário em `loadInflusByCampanha` sobre por que isso é um
+      // merge, não um corte seco.
+      const realInflus = influsByCampanha[camp.id] ?? [];
+      const localInflus = (() => {
         try {
           const raw = localStorage.getItem(influsKey(camp.id));
           return raw ? (JSON.parse(raw) as InfluPersisted[]) : [];
@@ -559,6 +631,8 @@ function buildEntries(
           return [];
         }
       })();
+      const realNomes = new Set(realInflus.map((i) => i.nome));
+      const influs = [...realInflus, ...localInflus.filter((i) => !realNomes.has(i.nome))];
       for (const inf of influs) {
         const p = normalizePagamento(inf.pagamento);
         // Só vira despesa real no Financeiro depois que o pagamento é aceito —
@@ -683,32 +757,39 @@ export function useFinanceiroEntries(): Entry[] {
   const clientes = useClientes();
   const [manual, setManual] = useState<ManualEntry[]>(() => loadManual());
   const [overrides, setOverrides] = useState<Record<string, StatusOverride>>(() => loadOverrides());
+  const [influs, setInflus] = useState<Record<string, InfluPersisted[]>>(() =>
+    loadInflusByCampanha(),
+  );
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     void reconcilePaidMapOnce();
     void ensureRecurrenceOccurrences(loadManual());
+    void initInflusSync();
     const onStorage = () => {
       setManual(loadManual());
       setOverrides(loadOverrides());
+      setInflus(loadInflusByCampanha());
       setTick((t) => t + 1);
     };
     window.addEventListener("storage", onStorage);
     const int = window.setInterval(onStorage, 1500);
     const unsubManual = onManualChange(onStorage);
     const unsubOverrides = onOverridesChange(onStorage);
+    const unsubInflus = onInflusChange(onStorage);
     return () => {
       window.removeEventListener("storage", onStorage);
       window.clearInterval(int);
       unsubManual();
       unsubOverrides();
+      unsubInflus();
     };
   }, []);
 
   return useMemo(() => {
     void tick;
-    return buildEntries(clientes, manual, overrides);
-  }, [clientes, manual, overrides, tick]);
+    return buildEntries(clientes, manual, overrides, influs);
+  }, [clientes, manual, overrides, influs, tick]);
 }
 
 /** Roda uma vez por navegador: lê o `PaidMap` legado (localStorage) e, pra
