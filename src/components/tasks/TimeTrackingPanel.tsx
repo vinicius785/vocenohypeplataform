@@ -60,14 +60,54 @@ function liveSeconds(entry: TimeEntry): number {
   return (Date.now() - Date.parse(entry.startedAt)) / 1000;
 }
 
+/** Registros são salvos como instante UTC (`toISOString()`, ver
+ * `time-entries.ts`) — exibir/editar precisa sempre passar pelo fuso de
+ * Brasília explicitamente, nunca fatiar a string ISO direto (isso mostra
+ * a hora em UTC) nem usar `Date.getHours()`/`getMinutes()` (isso mostra a
+ * hora no fuso do SISTEMA OPERACIONAL de quem está usando, que pode não
+ * ser Brasília) — sem isso os horários batiam só por coincidência, quando
+ * o computador da pessoa já estava configurado pra Brasília. */
+const TIME_ZONE = "America/Sao_Paulo";
+
 function toDateInput(iso: string): string {
-  return iso.slice(0, 10);
+  // Locale en-CA formata como YYYY-MM-DD, o mesmo formato que <input type="date"> espera.
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TIME_ZONE });
 }
 function toTimeInput(iso: string): string {
-  return iso.slice(11, 16);
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    timeZone: TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
-function combine(date: string, time: string): string {
-  return new Date(`${date}T${time}:00`).toISOString();
+/** Inverso de `toDateInput`/`toTimeInput`: interpreta `date`+`time` como
+ * horário de parede em Brasília (não no fuso do sistema operacional) e
+ * devolve o instante UTC correspondente. Funciona pra qualquer fuso IANA
+ * (inclusive com horário de verão, se algum dia voltar a existir) — pega
+ * o instante "como se fosse UTC", vê como esse instante seria lido em
+ * Brasília, e corrige pela diferença entre os dois. */
+function combine(date: string, time: string, timeZone: string = TIME_ZONE): string {
+  const asUtc = new Date(`${date}T${time}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+    .formatToParts(asUtc)
+    .reduce<Record<string, string>>((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+  const readAsIfUtc = new Date(
+    `${parts.year}-${parts.month}-${parts.day}T${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}:${parts.second}Z`,
+  );
+  const offsetMs = asUtc.getTime() - readAsIfUtc.getTime();
+  return new Date(asUtc.getTime() + offsetMs).toISOString();
 }
 function addMinutesToTime(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -119,12 +159,10 @@ type EntryDraft = {
 
 function draftFromEntry(entry?: TimeEntry): EntryDraft {
   if (!entry || !entry.endedAt) {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const start = `${hh}:${mm}`;
+    const nowIso = new Date().toISOString();
+    const start = toTimeInput(nowIso);
     return {
-      date: toDateInput(now.toISOString()),
+      date: toDateInput(nowIso),
       start,
       end: start,
       durationText: "0min",

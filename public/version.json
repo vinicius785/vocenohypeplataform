@@ -1,6 +1,7 @@
 {
-  "version": "1.250.0",
+  "version": "1.251.0",
   "notes": [
+    "Corrige registros de tempo (cronômetro de tarefas) mostrando o horário errado — apareciam em UTC (ou no fuso do computador de quem usava), em vez de sempre Brasília. Datas/horários de início, fim e do formulário de registro manual agora convertem para o horário de Brasília de verdade, não importa o fuso do computador.",
     "Corrige comentários (e outras edições não salvas) sumindo do diálogo de tarefa: qualquer atualização em tempo real dessa mesma tarefa — inclusive vinda do próprio timer de tempo — resetava o formulário inteiro pro último estado salvo, descartando um comentário digitado/postado mas ainda não salvo. Agora o formulário só recarrega do zero quando o diálogo é aberto (ou troca de tarefa), nunca enquanto já está aberto.",
     "Remove a função \"Solicitar para o Marketing\" das tarefas de projetos e campanhas (botão que \"puxava\" uma tarefa pro kanban do Marketing). O kanban do Marketing continua funcionando normalmente com suas próprias tarefas avulsas.",
     "Corrige anexos do Financeiro (nota fiscal legada em base64) que não abriam em outra aba — o navegador bloqueia abrir uma URL base64 direto (about:blank em branco); agora ela é convertida pra um arquivo temporário antes de abrir, mesma solução já usada nos anexos de tarefas.",
