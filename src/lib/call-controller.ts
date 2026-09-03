@@ -61,7 +61,17 @@ type Signal =
        * a pessoa está com a tela aberta no momento em que a chamada termina. */
       conversationId?: string;
     }
-  | { type: "accept" | "reject" | "hangup"; callId: string; fromUserId: string; toUserId: string }
+  | { type: "accept" | "hangup"; callId: string; fromUserId: string; toUserId: string }
+  | {
+      type: "reject";
+      callId: string;
+      fromUserId: string;
+      toUserId: string;
+      /** true quando a recusa é automática porque a pessoa já está em outra
+       * chamada (não uma recusa manual) — deixa "Chamada recusada" e
+       * "Ocupado" distinguíveis na tela de quem ligou. */
+      busy?: boolean;
+    }
   | {
       type: "offer" | "answer";
       callId: string;
@@ -202,6 +212,10 @@ let userPhoto: string | undefined;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 let ready: Promise<void> | null = null;
 let pagehideHandler: (() => void) | null = null;
+/** true quando ALGUÉM recusou porque já estava em outra chamada — resetado a
+ * cada `startCall` novo, consultado só em `finish()` pra distinguir
+ * "Ocupado" de "Chamada recusada" no evento `call:ended`. */
+let sawBusyReject = false;
 
 /** Um link WebRTC com um único outro participante — em chamada 1:1 há só um;
  * em grupo, um por participante conectado (mesh: todo mundo com todo mundo). */
@@ -697,9 +711,15 @@ async function handle(signal: Signal) {
   if (signal.type === "invite") {
     if (state.status !== "idle") {
       if (state.callId !== signal.callId)
-        void send({ type: "reject", callId: signal.callId, toUserId: signal.fromUserId });
+        void send({
+          type: "reject",
+          callId: signal.callId,
+          toUserId: signal.fromUserId,
+          busy: true,
+        });
       return;
     }
+    sawBusyReject = false;
     const participants: Record<string, CallParticipant> = {
       [signal.fromUserId]: {
         userId: signal.fromUserId,
@@ -754,6 +774,7 @@ async function handle(signal: Signal) {
     return;
   }
   if (signal.type === "reject") {
+    if (signal.busy) sawBusyReject = true;
     patchParticipant(signal.fromUserId, { status: "failed" });
     // Se ninguém atendeu (todo mundo recusou) e a chamada nunca conectou,
     // encerra sozinha em vez de esperar o timeout de 45s.
@@ -980,6 +1001,7 @@ export async function startCall(
   if (!userId || !channel) throw new Error("Chamadas ainda estão inicializando.");
   const targets = invitees.filter((i) => i.id !== userId).slice(0, MAX_GROUP_PARTICIPANTS);
   if (targets.length === 0 || state.status !== "idle") return;
+  sawBusyReject = false;
   const callId = crypto.randomUUID();
   const participants: Record<string, CallParticipant> = {};
   for (const t of targets)
@@ -1112,6 +1134,10 @@ function finish(explicitReason?: CallEndReason) {
   );
   const reason: CallEndReason =
     explicitReason ?? (connected ? "answered" : previous.isHost ? "cancelled" : "missed");
+  // "Ocupado" só faz sentido do ponto de vista de quem ligou, quando a
+  // chamada nunca conectou — quem recebeu sabe que já estava em outra
+  // ligação, isso não é uma informação nova pra mostrar do lado dele.
+  const busy = previous.isHost && !connected && sawBusyReject;
   cleanup();
   setState({ status: "idle" });
   window.dispatchEvent(
@@ -1124,6 +1150,7 @@ function finish(explicitReason?: CallEndReason) {
         participantIds,
         connected,
         reason,
+        busy,
         startedAt: previous.startedAt,
         connectedAt: previous.connectedAt,
         endedAt,

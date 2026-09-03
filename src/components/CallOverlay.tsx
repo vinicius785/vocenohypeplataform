@@ -43,7 +43,6 @@ import {
   useCallState,
   useConnectionQuality,
   useSpeakingPeerIds,
-  type ActiveCallState,
   type CallDevices,
   type CallParticipant,
   type CallState,
@@ -64,9 +63,17 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Estado que já tem `CallBase` (participantes, mudo, câmera, etc) — usado
- * pelas telas de "chamando" e pelo player compacto, que aparecem tanto em
- * `ringing-out` quanto em `in-call`. */
+ * pela tela unificada de chamando/em-chamada e pelo player compacto, que
+ * aparecem tanto em `ringing-out` quanto em `in-call`. */
 type RingingOrActiveCallState = Extract<CallState, { status: "ringing-out" | "in-call" }>;
+
+type TerminalKind = "missed" | "rejected" | "busy";
+type TerminalOutcome = {
+  name: string;
+  photo?: string;
+  kind: TerminalKind;
+  retryInvitees: { id: string; name: string; photo?: string }[];
+};
 
 const EMPTY: CallDevices = { microphones: [], cameras: [], speakers: [] };
 const PIP_POS_KEY = "call:pipPos";
@@ -96,6 +103,7 @@ export function CallOverlay() {
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(false);
   const [endedSummary, setEndedSummary] = useState<{ title: string; label: string } | null>(null);
+  const [terminalOutcome, setTerminalOutcome] = useState<TerminalOutcome | null>(null);
   const [remoteVideoOn, setRemoteVideoOn] = useState<Record<string, boolean>>({});
   const localRef = useRef<HTMLVideoElement>(null);
   const localScreenRef = useRef<HTMLVideoElement>(null);
@@ -108,11 +116,18 @@ export function CallOverlay() {
   // visualmente ocultos, e tocam independente do estado de minimizado.
   const hiddenAudioRefs = useRef(new Map<string, HTMLAudioElement>());
 
-  // Ref sempre atualizado com o `call` mais recente — os atalhos de teclado
-  // (M/V) só se registram uma vez (não a cada mudança de mudo/câmera), então
-  // precisam ler o estado atual por fora do closure da primeira renderização.
+  // Refs sempre atualizados com os valores mais recentes — o listener de
+  // `call:ended` (registrado uma única vez, deps `[]`) precisa ler o estado
+  // atual no momento em que o evento chega, não o que existia quando o
+  // efeito rodou pela primeira vez (fecharia sobre dados velhos/vazios).
   const callRef = useRef(call);
   callRef.current = call;
+  const participants = useMemo(
+    () => (call.status === "idle" ? [] : Object.values(call.participants)),
+    [call.status === "idle" ? null : call.participants],
+  );
+  const participantsRef = useRef(participants);
+  participantsRef.current = participants;
 
   useEffect(() => {
     if (call.status !== "in-call") return;
@@ -127,6 +142,7 @@ export function CallOverlay() {
       setParticipantsOpen(false);
       return;
     }
+    setTerminalOutcome(null);
     void listCallDevices()
       .then(setDevices)
       .catch(() => setDevices(EMPTY));
@@ -151,24 +167,45 @@ export function CallOverlay() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Banner breve de "chamada encerrada" — o `call:ended` do engine já reseta
-  // `call.status` pra "idle" antes desse evento chegar aqui, então o resumo
-  // precisa ser guardado à parte pra não sumir instantaneamente sem feedback.
+  // Fim de chamada: o `call:ended` do engine já reseta `call.status` pra
+  // "idle" antes desse evento chegar aqui — chamada atendida vira um banner
+  // breve que some sozinho; chamada nunca atendida (recusada/ocupado/sem
+  // resposta) vira uma tela que fica até a pessoa decidir (tentar de novo ou
+  // voltar), já que a decisão importa mais que a duração.
   useEffect(() => {
     const onEnded = (ev: Event) => {
       const detail = (
         ev as CustomEvent<{
           reason: "answered" | "rejected" | "missed" | "cancelled";
+          busy?: boolean;
           seconds: number;
         }>
       ).detail;
       if (!detail) return;
-      if (detail.reason !== "answered") return; // sem card pra chamada que nunca conectou
-      setEndedSummary({
-        title: "Chamada encerrada",
-        label: `Duração: ${formatDuration(detail.seconds)}`,
+      if (detail.reason === "answered") {
+        setEndedSummary({
+          title: "Chamada encerrada",
+          label: `Duração: ${formatDuration(detail.seconds)}`,
+        });
+        window.setTimeout(() => setEndedSummary(null), 4_000);
+        return;
+      }
+      const previous = participantsRef.current;
+      const primary = previous[0];
+      // "cancelled" (ninguém atendeu a tempo, do lado de quem ligou) e
+      // "missed" (do lado de quem recebeu e não agiu) viram a MESMA tela
+      // "Não atendeu" — só "rejected" (recusa explícita) tem tela própria.
+      const kind: TerminalKind = detail.busy
+        ? "busy"
+        : detail.reason === "rejected"
+          ? "rejected"
+          : "missed";
+      setTerminalOutcome({
+        name: primary?.name ?? "",
+        photo: primary?.photo,
+        kind,
+        retryInvitees: previous.map((p) => ({ id: p.userId, name: p.name, photo: p.photo })),
       });
-      window.setTimeout(() => setEndedSummary(null), 4_000);
     };
     window.addEventListener("call:ended", onEnded);
     return () => window.removeEventListener("call:ended", onEnded);
@@ -238,11 +275,6 @@ export function CallOverlay() {
     // de volta, esperando a próxima mudança de mídia (que podia demorar).
   }, [call.status, mediaVersion, cameraEnabled, screenSharing, minimized]);
 
-  const participants = useMemo(
-    () => (call.status === "idle" ? [] : Object.values(call.participants)),
-    [call.status === "idle" ? null : call.participants],
-  );
-
   const hiddenAudioPool = (
     <div className="hidden">
       {participants.map((p) => (
@@ -259,18 +291,23 @@ export function CallOverlay() {
   );
 
   if (call.status === "idle") {
-    if (!endedSummary) return null;
-    return (
-      <div className="fixed bottom-4 right-4 z-[100] flex items-center gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 shadow-2xl backdrop-blur animate-in fade-in slide-in-from-bottom-2">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-          <PhoneOff className="h-4 w-4" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-foreground">{endedSummary.title}</p>
-          <p className="text-xs text-muted-foreground">{endedSummary.label}</p>
+    if (endedSummary)
+      return (
+        <div className="fixed bottom-4 right-4 z-[100] flex items-center gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 shadow-2xl backdrop-blur animate-in fade-in slide-in-from-bottom-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <PhoneOff className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">{endedSummary.title}</p>
+            <p className="text-xs text-muted-foreground">{endedSummary.label}</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    if (terminalOutcome)
+      return (
+        <TerminalCallScreen outcome={terminalOutcome} onDismiss={() => setTerminalOutcome(null)} />
+      );
+    return null;
   }
 
   const seconds =
@@ -282,7 +319,9 @@ export function CallOverlay() {
   const title = isGroup
     ? call.status === "ringing-in"
       ? `${call.hostName} e mais ${participants.length - 1}`
-      : `Chamada em grupo · ${participants.length + 1} pessoas`
+      : call.status === "ringing-out"
+        ? `${primaryName} e mais ${participants.length - 1}`
+        : `Chamada em grupo · ${participants.length + 1} pessoas`
     : primaryName;
   const friendlyError = call.error ? friendlyCallError(call.error) : undefined;
   const statusLabel =
@@ -319,39 +358,12 @@ export function CallOverlay() {
     );
   }
 
-  if (call.status === "ringing-out") {
-    if (call.minimized) {
-      return (
-        <>
-          {hiddenAudioPool}
-          <CompactCallPlayer
-            call={call}
-            title={title}
-            statusLabel={friendlyError ?? statusLabel}
-            isError={!!friendlyError}
-            primaryPhoto={participants[0]?.photo}
-            localRef={localRef}
-            cameraEnabled={call.cameraEnabled}
-          />
-        </>
-      );
-    }
-    return (
-      <>
-        {hiddenAudioPool}
-        <OutgoingCallScreen
-          call={call}
-          participants={participants}
-          title={title}
-          statusLabel={friendlyError ?? statusLabel}
-          isError={!!friendlyError}
-          localRef={localRef}
-        />
-      </>
-    );
-  }
+  // ringing-out e in-call compartilham a MESMA interface (cabeçalho, área
+  // principal e barra de controles) — só o conteúdo da área principal e o
+  // texto de status evoluem, exatamente como Google Meet/FaceTime: a sala já
+  // existe antes de Lucas atender, não é uma tela de loading separada.
+  const isRingingOut = call.status === "ringing-out";
 
-  // in-call
   if (call.minimized) {
     return (
       <>
@@ -377,8 +389,11 @@ export function CallOverlay() {
       <div className="fixed inset-0 z-[100] flex flex-col bg-zinc-950 text-zinc-100">
         <header className="flex shrink-0 items-center justify-between gap-2 px-5 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{title}</p>
-            {(friendlyError || statusLabel !== `Em chamada · ${formatDuration(seconds)}`) && (
+            <p className="truncate text-sm font-semibold">
+              {isRingingOut ? `Chamada com ${title}` : title}
+            </p>
+            {(friendlyError ||
+              (!isRingingOut && statusLabel !== `Em chamada · ${formatDuration(seconds)}`)) && (
               <p
                 className={`flex items-center gap-1 text-xs ${friendlyError ? "text-rose-400" : "text-zinc-400"}`}
               >
@@ -414,10 +429,22 @@ export function CallOverlay() {
               speakingIds={speakingIds}
               remoteVideoOn={remoteVideoOn}
             />
-          ) : (
+          ) : isGroup ? (
             <VideoGrid
               call={call}
               participants={participants}
+              localRef={localRef}
+              remoteRefs={remoteRefs}
+              speakingIds={speakingIds}
+              remoteVideoOn={remoteVideoOn}
+            />
+          ) : (
+            <OneOnOneStage
+              call={call}
+              primary={participants[0]}
+              isRingingOut={isRingingOut}
+              isError={!!friendlyError}
+              statusLabel={friendlyError ?? statusLabel}
               localRef={localRef}
               remoteRefs={remoteRefs}
               speakingIds={speakingIds}
@@ -532,7 +559,11 @@ export function CallOverlay() {
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="mx-1 h-8 w-px bg-white/10" aria-hidden="true" />
-          <IconButton label="Encerrar chamada" danger onClick={() => endCall(true)}>
+          <IconButton
+            label={isRingingOut ? "Cancelar chamada" : "Encerrar chamada"}
+            danger
+            onClick={() => endCall(true)}
+          >
             <PhoneOff />
           </IconButton>
         </footer>
@@ -594,59 +625,135 @@ function IncomingCallToast({
   );
 }
 
-function OutgoingCallScreen({
+/** Área principal unificada pra chamada 1:1, usada tanto em "Chamando..."
+ * quanto já conectada — a MESMA composição (card + preview no canto)
+ * evolui de avatar pulsando pra vídeo real, em vez de trocar de tela. */
+function OneOnOneStage({
   call,
-  participants,
-  title,
-  statusLabel,
+  primary,
+  isRingingOut,
   isError,
+  statusLabel,
   localRef,
+  remoteRefs,
+  speakingIds,
+  remoteVideoOn,
 }: {
   call: RingingOrActiveCallState;
-  participants: CallParticipant[];
-  title: string;
-  statusLabel: string;
+  primary?: CallParticipant;
+  isRingingOut: boolean;
   isError: boolean;
+  statusLabel: string;
   localRef: React.RefObject<HTMLVideoElement | null>;
+  remoteRefs: React.RefObject<Map<string, HTMLVideoElement>>;
+  speakingIds: ReadonlySet<string>;
+  remoteVideoOn: Record<string, boolean>;
 }) {
-  const primary = participants[0];
-  const others = participants.slice(1);
+  const hasRemoteVideo = !isRingingOut && !!primary && remoteVideoOn[primary.userId];
+  const showStatus = isRingingOut || primary?.status === "reconnecting" || isError;
+  const label = isError
+    ? statusLabel
+    : primary?.status === "reconnecting"
+      ? "Reconectando..."
+      : statusLabel;
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-zinc-950 text-zinc-100">
-      <div className="text-center">
-        <TileAvatar name={primary?.name ?? ""} photo={primary?.photo} large ringing={!isError} />
-        <p className="mt-4 text-lg font-semibold">{title}</p>
-        <p className={`mt-1 text-sm ${isError ? "text-rose-400" : "text-zinc-400"}`}>
-          {statusLabel}
-        </p>
-        {others.length > 0 && (
-          <p className="mt-1 text-xs text-zinc-500">
-            e mais {others.map((p) => p.name).join(", ")}
-          </p>
-        )}
-      </div>
-      {call.cameraEnabled ? (
-        <div className="h-32 w-48 overflow-hidden rounded-xl bg-zinc-800">
-          <video ref={localRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-        </div>
+    <div className="relative h-full overflow-hidden rounded-2xl bg-zinc-900/60">
+      {hasRemoteVideo ? (
+        <video
+          ref={(el) => {
+            if (el && primary) remoteRefs.current.set(primary.userId, el);
+          }}
+          autoPlay
+          playsInline
+          className="h-full w-full object-cover"
+        />
       ) : (
-        <div className="flex flex-col items-center gap-1.5">
-          <TileAvatar name={getMe().name} photo={getMe().photo} />
-          <p className="text-xs text-zinc-500">Você</p>
+        <div className="flex h-full flex-col items-center justify-center gap-3">
+          <TileAvatar
+            name={primary?.name ?? ""}
+            photo={primary?.photo}
+            xl
+            ringing={isRingingOut && !isError}
+            speaking={!!primary && speakingIds.has(primary.userId)}
+          />
+          <div className="text-center">
+            <p className="text-xl font-semibold">{primary?.name}</p>
+            {showStatus && (
+              <p className={`mt-1 text-sm ${isError ? "text-rose-400" : "text-zinc-400"}`}>
+                {label}
+              </p>
+            )}
+          </div>
         </div>
       )}
-      <div className="flex items-center gap-3">
-        {isError && (
+      <SelfPreviewCard
+        cameraEnabled={call.cameraEnabled}
+        localRef={localRef}
+        speaking={speakingIds.has(LOCAL_SPEAKING_ID)}
+      />
+    </div>
+  );
+}
+
+/** Card flutuante da própria câmera/avatar — sempre no mesmo lugar (canto
+ * inferior direito da área principal), ligando/desligando a câmera troca só
+ * o conteúdo interno, nunca a posição. */
+function SelfPreviewCard({
+  cameraEnabled,
+  localRef,
+  speaking,
+}: {
+  cameraEnabled: boolean;
+  localRef: React.RefObject<HTMLVideoElement | null>;
+  speaking?: boolean;
+}) {
+  const me = getMe();
+  return (
+    <div className="absolute bottom-4 right-4 h-24 w-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-800 shadow-lg">
+      {cameraEnabled ? (
+        <video ref={localRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          <TileAvatar name={me.name} photo={me.photo} speaking={speaking} />
+        </div>
+      )}
+      <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-zinc-100">
+        Você
+      </span>
+    </div>
+  );
+}
+
+/** Tela persistente (não some sozinha) pra quando a chamada nunca conecta —
+ * recusada, ocupado ou sem resposta. Fica até a pessoa decidir tentar de
+ * novo ou voltar, em vez de um erro técnico ou sumir sem feedback. */
+function TerminalCallScreen({
+  outcome,
+  onDismiss,
+}: {
+  outcome: TerminalOutcome;
+  onDismiss: () => void;
+}) {
+  const label =
+    outcome.kind === "rejected"
+      ? "Chamada recusada"
+      : outcome.kind === "busy"
+        ? "Ocupado"
+        : "Não atendeu";
+  const canRetry = outcome.kind === "missed";
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-zinc-950 text-zinc-100">
+      <TileAvatar name={outcome.name} photo={outcome.photo} xl />
+      <div className="text-center">
+        <p className="text-xl font-semibold">{outcome.name}</p>
+        <p className="mt-1 text-sm text-zinc-400">{label}</p>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        {canRetry && (
           <button
             onClick={() => {
-              const invitees = [
-                ...(primary
-                  ? [{ id: primary.userId, name: primary.name, photo: primary.photo }]
-                  : []),
-                ...others.map((p) => ({ id: p.userId, name: p.name, photo: p.photo })),
-              ];
-              endCall(false);
-              void startCall(invitees);
+              onDismiss();
+              void startCall(outcome.retryInvitees);
             }}
             className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-zinc-100 hover:bg-white/20"
           >
@@ -654,10 +761,10 @@ function OutgoingCallScreen({
           </button>
         )}
         <button
-          onClick={() => endCall(true)}
-          className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-full bg-rose-600 px-6 py-3 text-sm font-medium text-white hover:bg-rose-500"
+          onClick={onDismiss}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-zinc-100 hover:bg-white/20"
         >
-          <PhoneOff className="h-4 w-4" /> Cancelar chamada
+          Voltar ao chat
         </button>
       </div>
     </div>
@@ -751,28 +858,28 @@ function CompactCallPlayer({
         )}
       </div>
       <div className="flex items-center justify-center gap-2">
-        {call.status === "in-call" && (
-          <>
-            <MiniIconButton
-              label={call.muted ? "Ativar microfone" : "Silenciar"}
-              active={call.muted}
-              onClick={() => setMuted(!call.muted)}
-            >
-              {call.muted ? <MicOff /> : <Mic />}
-            </MiniIconButton>
-            <MiniIconButton
-              label={call.cameraEnabled ? "Desligar câmera" : "Ligar câmera"}
-              active={call.cameraEnabled}
-              onClick={() => void setCameraEnabled(!call.cameraEnabled)}
-            >
-              {call.cameraEnabled ? <Camera /> : <CameraOff />}
-            </MiniIconButton>
-          </>
-        )}
+        <MiniIconButton
+          label={call.muted ? "Ativar microfone" : "Silenciar"}
+          active={call.muted}
+          onClick={() => setMuted(!call.muted)}
+        >
+          {call.muted ? <MicOff /> : <Mic />}
+        </MiniIconButton>
+        <MiniIconButton
+          label={call.cameraEnabled ? "Desligar câmera" : "Ligar câmera"}
+          active={call.cameraEnabled}
+          onClick={() => void setCameraEnabled(!call.cameraEnabled)}
+        >
+          {call.cameraEnabled ? <Camera /> : <CameraOff />}
+        </MiniIconButton>
         <MiniIconButton label="Expandir" onClick={() => setCallMinimized(false)}>
           <Maximize2 />
         </MiniIconButton>
-        <MiniIconButton label="Encerrar" danger onClick={() => endCall(true)}>
+        <MiniIconButton
+          label={call.status === "ringing-out" ? "Cancelar chamada" : "Encerrar chamada"}
+          danger
+          onClick={() => endCall(true)}
+        >
           <PhoneOff />
         </MiniIconButton>
       </div>
@@ -789,7 +896,7 @@ function ParticipantsPanel({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  call: ActiveCallState;
+  call: RingingOrActiveCallState;
   participants: CallParticipant[];
   speakingIds: ReadonlySet<string>;
 }) {
@@ -861,17 +968,6 @@ function ParticipantRow({
   );
 }
 
-function pickPrimaryLayout(
-  participants: CallParticipant[],
-  cameraEnabled: boolean,
-  remoteVideoOn: Record<string, boolean>,
-): "video" | "voice" {
-  if (participants.length > 1) return "video";
-  const other = participants[0];
-  const anyoneOnCamera = cameraEnabled || (other && remoteVideoOn[other.userId]);
-  return anyoneOnCamera ? "video" : "voice";
-}
-
 function VideoGrid({
   call,
   participants,
@@ -880,41 +976,13 @@ function VideoGrid({
   speakingIds,
   remoteVideoOn,
 }: {
-  call: ActiveCallState;
+  call: RingingOrActiveCallState;
   participants: CallParticipant[];
   localRef: React.RefObject<HTMLVideoElement | null>;
   remoteRefs: React.RefObject<Map<string, HTMLVideoElement>>;
   speakingIds: ReadonlySet<string>;
   remoteVideoOn: Record<string, boolean>;
 }) {
-  const layout = pickPrimaryLayout(participants, call.cameraEnabled, remoteVideoOn);
-  if (layout === "voice") {
-    // Ninguém com câmera ligada — dá protagonismo às pessoas, não a caixas
-    // de vídeo vazias/pretas.
-    const other = participants[0];
-    return (
-      <div className="flex h-full items-center justify-center gap-10">
-        <div className="text-center">
-          <TileAvatar name="Você" large speaking={speakingIds.has(LOCAL_SPEAKING_ID)} />
-          <p className="mt-2 text-sm text-zinc-300">Você</p>
-        </div>
-        {other && (
-          <div className="text-center">
-            <TileAvatar
-              name={other.name}
-              photo={other.photo}
-              large
-              speaking={speakingIds.has(other.userId)}
-            />
-            <p className="mt-2 text-sm text-zinc-300">{other.name}</p>
-            {other.status === "reconnecting" && (
-              <p className="text-xs text-amber-400">Reconectando...</p>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
   const tileCount = participants.length + 1;
   const cols = tileCount <= 1 ? 1 : tileCount <= 2 ? 2 : tileCount <= 4 ? 2 : 3;
   return (
@@ -938,13 +1006,15 @@ function VideoGrid({
           photo={p.photo}
           cameraOn={remoteVideoOn[p.userId]}
           statusLabel={
-            p.status === "connecting"
-              ? "Conectando..."
-              : p.status === "reconnecting"
-                ? "Reconectando..."
-                : p.status === "failed"
-                  ? "Desconectado"
-                  : undefined
+            p.status === "ringing"
+              ? "Chamando..."
+              : p.status === "connecting"
+                ? "Conectando..."
+                : p.status === "reconnecting"
+                  ? "Reconectando..."
+                  : p.status === "failed"
+                    ? "Desconectado"
+                    : undefined
           }
           speaking={speakingIds.has(p.userId)}
           videoRef={(el) => {
@@ -969,7 +1039,7 @@ function ScreenShareLayout({
   speakingIds,
   remoteVideoOn,
 }: {
-  call: ActiveCallState;
+  call: RingingOrActiveCallState;
   participants: CallParticipant[];
   screenSharing: boolean;
   remoteScreenPeer?: CallParticipant;
@@ -1135,6 +1205,7 @@ function TileAvatar({
   photo,
   small,
   large,
+  xl,
   ringing,
   speaking,
 }: {
@@ -1142,10 +1213,11 @@ function TileAvatar({
   photo?: string;
   small?: boolean;
   large?: boolean;
+  xl?: boolean;
   ringing?: boolean;
   speaking?: boolean;
 }) {
-  const size = small ? "h-10 w-10" : large ? "h-20 w-20" : "h-14 w-14";
+  const size = small ? "h-10 w-10" : large ? "h-20 w-20" : xl ? "h-28 w-28" : "h-14 w-14";
   return (
     <div className="relative">
       {ringing && <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/40" />}
