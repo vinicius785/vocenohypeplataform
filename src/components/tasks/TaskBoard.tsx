@@ -3260,11 +3260,7 @@ export function TaskDialog({
                   </div>
                 </Field>
 
-                <Field
-                  label="Tempo"
-                  icon={<Clock className="h-3.5 w-3.5" />}
-                  className="sm:col-span-2"
-                >
+                <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
                   {initial && timeTrackingOrigin ? (
                     <TimeTrackingPanel
                       taskId={timeTrackingTaskId!}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Play, Pause, Plus, Pencil, Trash2 } from "lucide-react";
+import { Play, Square, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -30,18 +31,29 @@ import {
 } from "@/lib/time-entries";
 import { correctTimeEntry } from "@/lib/time-entries.functions";
 
-/** Pequena duplicação intencional do `formatDuration` de TaskBoard.tsx —
- * importar de lá criaria um ciclo (TaskBoard.tsx importa este painel).
- * Função pura de 6 linhas, mesmo espírito de tolerância a duplicação já
- * usado em `projetos.ts` pro tipo `Task`. */
+/** Pequena duplicação intencional de `formatDuration`/`formatClock` — não
+ * são importados de TaskBoard.tsx pra não criar um ciclo (TaskBoard.tsx
+ * importa este painel). Funções puras de poucas linhas, mesmo espírito
+ * de tolerância a duplicação já usado em `projetos.ts` pro tipo `Task`. */
 function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.round(totalSeconds));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  if (h > 0) return `${h}h ${m}min`;
+  if (h > 0) return `${h}h${m > 0 ? `${m.toString().padStart(2, "0")}` : ""}`;
   if (m > 0) return `${m}min`;
   return `${sec}s`;
+}
+
+/** Relógio do cronômetro ativo — MM:SS abaixo de 1h, HH:MM:SS acima. */
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 function liveSeconds(entry: TimeEntry): number {
@@ -57,6 +69,37 @@ function toTimeInput(iso: string): string {
 function combine(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = (((h * 60 + m + minutes) % (24 * 60)) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** Aceita "30m", "1h", "1h30", "1h 30m", "2h15" — normaliza pra minutos.
+ * Número puro é tratado como minutos ("90" = 1h30). */
+function parseDurationToMinutes(raw: string): number | null {
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  let m = s.match(/^(\d+(?:[.,]\d+)?)\s*h(?:\s*(\d+)\s*m(?:in)?)?$/);
+  if (!m) m = s.match(/^(\d+(?:[.,]\d+)?)\s*h\s*(\d+)$/);
+  if (m) {
+    const hours = parseFloat(m[1].replace(",", "."));
+    const mins = m[2] ? parseInt(m[2], 10) : 0;
+    return Math.round(hours * 60 + mins);
+  }
+  const mOnly = s.match(/^(\d+)\s*m(?:in)?$/);
+  if (mOnly) return parseInt(mOnly[1], 10);
+  return null;
+}
+
+function minutesToDurationLabel(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h > 0 && m > 0) return `${h}h${m}min`;
+  if (h > 0) return `${h}h`;
+  return `${m}min`;
+}
 
 export type TimeTrackingMember = {
   id?: string;
@@ -70,6 +113,7 @@ type EntryDraft = {
   date: string;
   start: string;
   end: string;
+  durationText: string;
   note: string;
 };
 
@@ -78,47 +122,65 @@ function draftFromEntry(entry?: TimeEntry): EntryDraft {
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
+    const start = `${hh}:${mm}`;
     return {
       date: toDateInput(now.toISOString()),
-      start: `${hh}:${mm}`,
-      end: `${hh}:${mm}`,
+      start,
+      end: start,
+      durationText: "0min",
       note: "",
     };
   }
+  const start = toTimeInput(entry.startedAt);
+  const end = toTimeInput(entry.endedAt);
   return {
     date: toDateInput(entry.startedAt),
-    start: toTimeInput(entry.startedAt),
-    end: toTimeInput(entry.endedAt),
+    start,
+    end,
+    durationText: minutesToDurationLabel(Math.round((entry.durationSeconds ?? 0) / 60)),
     note: entry.note ?? "",
   };
 }
 
-function ManualEntryDialog({
-  open,
-  onOpenChange,
-  initial,
+function recomputeDuration(draft: EntryDraft): EntryDraft {
+  const startedAt = combine(draft.date, draft.start);
+  const endedAt = combine(draft.date, draft.end);
+  const secs = Math.max(0, Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 1000));
+  return { ...draft, durationText: minutesToDurationLabel(Math.round(secs / 60)) };
+}
+
+type PopoverView = "main" | "manual";
+
+function ManualEntryForm({
+  taskId,
+  taskOrigin,
+  entry,
   isForeignEdit,
+  onBack,
   onSaved,
 }: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  initial: { taskId: string; taskOrigin: TaskOrigin; entry?: TimeEntry };
+  taskId: string;
+  taskOrigin: TaskOrigin;
+  entry?: TimeEntry;
   isForeignEdit: boolean;
+  onBack: () => void;
   onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<EntryDraft>(() => draftFromEntry(initial.entry));
+  const [draft, setDraft] = useState<EntryDraft>(() => draftFromEntry(entry));
   const correctFn = useServerFn(correctTimeEntry);
-  useEffect(() => {
-    if (open) setDraft(draftFromEntry(initial.entry));
-  }, [open, initial.entry]);
+  const [saving, setSaving] = useState(false);
 
-  const durationLabel = (() => {
-    if (!draft.date || !draft.start || !draft.end) return null;
-    const startedAt = combine(draft.date, draft.start);
-    const endedAt = combine(draft.date, draft.end);
-    const secs = Math.max(0, Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 1000));
-    return formatDuration(secs);
-  })();
+  const setField = (patch: Partial<EntryDraft>) =>
+    setDraft((d) => recomputeDuration({ ...d, ...patch }));
+
+  const onDurationBlur = () => {
+    const minutes = parseDurationToMinutes(draft.durationText);
+    if (minutes == null) {
+      setDraft((d) => recomputeDuration(d));
+      return;
+    }
+    setDraft((d) => ({ ...d, end: addMinutesToTime(d.start, minutes) }));
+  };
 
   const save = async () => {
     if (!draft.date || !draft.start || !draft.end) return;
@@ -128,110 +190,264 @@ function ManualEntryDialog({
       toast.error("O horário de fim não pode ser antes do início.");
       return;
     }
+    setSaving(true);
     const note = draft.note.trim() || undefined;
-    if (initial.entry) {
-      const result = isForeignEdit
-        ? await correctFn({ data: { id: initial.entry.id, startedAt, endedAt, note } }).then(
+    const result = entry
+      ? isForeignEdit
+        ? await correctFn({ data: { id: entry.id, startedAt, endedAt, note } }).then(
             () => ({ error: null as string | null }),
             (e: unknown) => ({
               error: e instanceof Error ? e.message : "Erro ao corrigir entrada.",
             }),
           )
-        : await editOwnEntry(initial.entry.id, { startedAt, endedAt, note });
-      if (result.error) {
-        toast.error(result.error);
-        return;
-      }
-    } else {
-      const { error } = await createManualEntry({
-        taskId: initial.taskId,
-        taskOrigin: initial.taskOrigin,
-        startedAt,
-        endedAt,
-        note,
-      });
-      if (error) {
-        toast.error(error);
-        return;
-      }
+        : await editOwnEntry(entry.id, { startedAt, endedAt, note })
+      : await createManualEntry({ taskId, taskOrigin, startedAt, endedAt, note });
+    setSaving(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
     }
-    onOpenChange(false);
     onSaved();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>
-            {initial.entry ? "Editar registro" : "Registrar tempo manualmente"}
-          </DialogTitle>
-          <DialogDescription>Informe a data e o intervalo trabalhado.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Data</label>
-            <div className="mt-1">
-              <DateField
-                value={draft.date}
-                onChange={(v) => setDraft((d) => ({ ...d, date: v ?? d.date }))}
-                variant="input"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Início</label>
-              <div className="mt-1">
-                <TimeField
-                  value={draft.start}
-                  onChange={(v) => setDraft((d) => ({ ...d, start: v }))}
-                  ariaLabel="Início"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Fim</label>
-              <div className="mt-1">
-                <TimeField
-                  value={draft.end}
-                  onChange={(v) => setDraft((d) => ({ ...d, end: v }))}
-                  min={draft.start}
-                  ariaLabel="Fim"
-                />
-              </div>
-            </div>
-          </div>
-          {durationLabel && (
-            <p className="text-xs text-muted-foreground">Duração: {durationLabel}</p>
-          )}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Nota (opcional)</label>
-            <input
-              type="text"
-              value={draft.note}
-              onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
-              placeholder="O que foi feito"
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    <div className="w-72 space-y-3 p-3">
+      <p className="text-sm font-medium">Registrar tempo</p>
+      <div>
+        <label className="text-[11px] font-medium text-muted-foreground">Data</label>
+        <div className="mt-1">
+          <DateField value={draft.date} onChange={(v) => setField({ date: v ?? draft.date })} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground">Início</label>
+          <div className="mt-1">
+            <TimeField
+              value={draft.start}
+              onChange={(v) => setField({ start: v })}
+              ariaLabel="Início"
             />
           </div>
         </div>
-        <DialogFooter>
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground">Fim</label>
+          <div className="mt-1">
+            <TimeField
+              value={draft.end}
+              onChange={(v) => setField({ end: v })}
+              min={draft.start}
+              ariaLabel="Fim"
+            />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] font-medium text-muted-foreground">Duração</label>
+        <input
+          type="text"
+          value={draft.durationText}
+          onChange={(e) => setDraft((d) => ({ ...d, durationText: e.target.value }))}
+          onBlur={onDurationBlur}
+          onKeyDown={(e) => e.key === "Enter" && onDurationBlur()}
+          placeholder="1h30, 2h, 45m..."
+          className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+      <div>
+        <label className="text-[11px] font-medium text-muted-foreground">
+          Observação (opcional)
+        </label>
+        <input
+          type="text"
+          value={draft.note}
+          onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
+          placeholder="O que foi feito"
+          className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+      </div>
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={onBack}
+          className="cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+        >
+          Voltar
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="cursor-pointer rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          {saving ? "Registrando..." : entry ? "Salvar" : "Registrar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecentRow({
+  entry,
+  member,
+  canEdit,
+  onEdit,
+  onDelete,
+}: {
+  entry: TimeEntry;
+  member?: TimeTrackingMember;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted/40">
+      <span
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${member?.color ?? "bg-muted text-foreground"}`}
+      >
+        {member?.initials ?? "?"}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-foreground">{member?.name ?? "Alguém"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {entry.endedAt
+            ? `${toTimeInput(entry.startedAt)} → ${toTimeInput(entry.endedAt)}`
+            : "em andamento"}
+        </p>
+      </div>
+      <span className="shrink-0 tabular-nums text-muted-foreground">
+        {formatDuration(entry.endedAt ? (entry.durationSeconds ?? 0) : liveSeconds(entry))}
+      </span>
+      {canEdit && entry.endedAt && (
+        <span className="ml-1 hidden shrink-0 items-center gap-1 group-hover:flex">
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
-            className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            onClick={onEdit}
+            className="cursor-pointer text-muted-foreground hover:text-foreground"
           >
-            Cancelar
+            <Pencil className="h-3 w-3" />
           </button>
           <button
             type="button"
-            onClick={save}
-            className="cursor-pointer rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+            onClick={onDelete}
+            className="cursor-pointer text-muted-foreground hover:text-destructive"
           >
-            Salvar
+            <Trash2 className="h-3 w-3" />
           </button>
-        </DialogFooter>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function AllEntriesDialog({
+  open,
+  onOpenChange,
+  entries,
+  memberFor,
+  meId,
+  canManageOthers,
+  onEdit,
+  onDelete,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  entries: TimeEntry[];
+  memberFor: (id: string) => TimeTrackingMember | undefined;
+  meId: string;
+  canManageOthers: boolean;
+  onEdit: (entry: TimeEntry) => void;
+  onDelete: (id: string) => void;
+}) {
+  const total = entries.reduce(
+    (s, e) => s + (e.durationSeconds ?? 0) + (e.endedAt ? 0 : liveSeconds(e)),
+    0,
+  );
+  const own = entries
+    .filter((e) => e.userId === meId)
+    .reduce((s, e) => s + (e.durationSeconds ?? 0) + (e.endedAt ? 0 : liveSeconds(e)), 0);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Todos os registros de tempo</DialogTitle>
+          <DialogDescription>
+            Tempo total {formatDuration(total)} · Seu tempo {formatDuration(own)}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="py-1.5 pr-2 font-medium">Pessoa</th>
+                <th className="py-1.5 pr-2 font-medium">Data</th>
+                <th className="py-1.5 pr-2 font-medium">Início</th>
+                <th className="py-1.5 pr-2 font-medium">Fim</th>
+                <th className="py-1.5 pr-2 font-medium">Duração</th>
+                <th className="py-1.5 pr-2 font-medium">Origem</th>
+                <th className="py-1.5 font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => {
+                const member = memberFor(entry.userId);
+                const canEdit = entry.userId === meId || canManageOthers;
+                return (
+                  <tr key={entry.id} className="border-b border-border/60">
+                    <td className="py-1.5 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-medium ${member?.color ?? "bg-muted"}`}
+                        >
+                          {member?.initials ?? "?"}
+                        </span>
+                        {member?.name ?? "Alguém"}
+                      </div>
+                    </td>
+                    <td className="py-1.5 pr-2 text-muted-foreground">
+                      {toDateInput(entry.startedAt)}
+                    </td>
+                    <td className="py-1.5 pr-2 tabular-nums text-muted-foreground">
+                      {toTimeInput(entry.startedAt)}
+                    </td>
+                    <td className="py-1.5 pr-2 tabular-nums text-muted-foreground">
+                      {entry.endedAt ? toTimeInput(entry.endedAt) : "—"}
+                    </td>
+                    <td className="py-1.5 pr-2 tabular-nums">
+                      {formatDuration(
+                        entry.endedAt ? (entry.durationSeconds ?? 0) : liveSeconds(entry),
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-2 text-muted-foreground">
+                      {entry.source === "cronometro" ? "Cronômetro" : "Manual"}
+                      {entry.editedAt && " · corrigido"}
+                    </td>
+                    <td className="py-1.5 text-right">
+                      {canEdit && entry.endedAt && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(entry)}
+                            className="cursor-pointer text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(entry.id)}
+                            className="cursor-pointer text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -249,13 +465,13 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
   const me = getMe();
   const running = useRunningTimer();
   const { entries, loading, refetch } = useTaskTimeEntries(taskId, taskOrigin);
-  const [popover, setPopover] = useState<{
-    taskId: string;
-    taskOrigin: TaskOrigin;
-    entry?: TimeEntry;
-  } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState<PopoverView>("main");
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | undefined>(undefined);
   const [conflict, setConflict] = useState<TimeEntry | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [allOpen, setAllOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [, forceTick] = useState(0);
 
   const runningHere =
@@ -274,29 +490,42 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
     running.refetch();
   };
 
-  const handleStartStop = async () => {
-    if (runningHere) {
-      const { error } = await stopTimer(runningHere.id, runningHere.startedAt);
-      if (error) toast.error(error);
-      refreshAll();
-      return;
-    }
-    if (running.entry) {
-      // Já tem outro cronômetro rodando (em outra tarefa) — o próprio
-      // banco teria rejeitado o insert; mostramos o diálogo direto sem
-      // precisar da viagem de rede.
+  const totalSeconds =
+    entries.reduce((s, e) => s + (e.durationSeconds ?? 0), 0) +
+    (runningHere ? liveSeconds(runningHere) : 0);
+  const ownSeconds =
+    entries.filter((e) => e.userId === me.id).reduce((s, e) => s + (e.durationSeconds ?? 0), 0) +
+    (runningHere && runningHere.userId === me.id ? liveSeconds(runningHere) : 0);
+
+  const memberFor = (userId: string) => members.find((m) => m.id === userId);
+
+  // Nunca mostra o cronômetro "ativo" antes do backend confirmar — o
+  // botão fica em loading curto, e só quando `startTimer` resolve com
+  // sucesso é que `runningHere` (derivado de `running.entry`, já
+  // atualizado por `refreshAll`) passa a refletir "rodando".
+  const handleStart = async () => {
+    if (running.entry && !runningHere) {
       setConflict(running.entry);
       return;
     }
+    setStarting(true);
     const { conflict: conflictEntry, error } = await startTimer(taskId, taskOrigin);
+    setStarting(false);
     if (error) {
-      toast.error(error);
+      toast.error("Não foi possível iniciar o cronômetro. Tente novamente.");
       return;
     }
     if (conflictEntry) {
       setConflict(conflictEntry);
       return;
     }
+    refreshAll();
+  };
+
+  const handleStop = async () => {
+    if (!runningHere) return;
+    const { error } = await stopTimer(runningHere.id, runningHere.startedAt);
+    if (error) toast.error(error);
     refreshAll();
   };
 
@@ -308,19 +537,12 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
       return;
     }
     setConflict(null);
+    setStarting(true);
     const { error: startError } = await startTimer(taskId, taskOrigin);
-    if (startError) toast.error(startError);
+    setStarting(false);
+    if (startError) toast.error("Não foi possível iniciar o cronômetro. Tente novamente.");
     refreshAll();
   };
-
-  const totalSeconds =
-    entries.reduce((s, e) => s + (e.durationSeconds ?? 0), 0) +
-    (runningHere ? liveSeconds(runningHere) : 0);
-  const ownSeconds =
-    entries.filter((e) => e.userId === me.id).reduce((s, e) => s + (e.durationSeconds ?? 0), 0) +
-    (runningHere && runningHere.userId === me.id ? liveSeconds(runningHere) : 0);
-
-  const memberFor = (userId: string) => members.find((m) => m.id === userId);
 
   const handleDelete = async (id: string) => {
     const { error } = await deleteEntry(id);
@@ -329,109 +551,162 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
     refreshAll();
   };
 
+  const recent = useMemo(() => entries.slice(0, 3), [entries]);
+
+  const triggerLabel = runningHere
+    ? formatClock(liveSeconds(runningHere))
+    : totalSeconds > 0
+      ? formatDuration(totalSeconds)
+      : "Iniciar";
+
   return (
-    <div className="w-full min-w-0 space-y-2.5 rounded-lg border border-border bg-muted/20 p-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleStartStop}
-          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold tabular-nums ${
-            runningHere
-              ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
-              : "bg-background text-foreground/80 hover:bg-muted"
-          }`}
-        >
-          {runningHere ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          {totalSeconds > 0 ? formatDuration(totalSeconds) : "Iniciar"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setPopover({ taskId, taskOrigin })}
-          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Manual
-        </button>
-      </div>
+    <>
+      <Popover
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) {
+            setView("main");
+            setEditingEntry(undefined);
+          }
+        }}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums transition-colors hover:bg-muted ${
+              runningHere ? "text-sky-700 dark:text-sky-400" : "text-foreground/80"
+            }`}
+          >
+            {runningHere ? (
+              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-sky-500" />
+            ) : (
+              <Play className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {triggerLabel}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 p-0">
+          {view === "manual" ? (
+            <ManualEntryForm
+              taskId={taskId}
+              taskOrigin={taskOrigin}
+              entry={editingEntry}
+              isForeignEdit={!!editingEntry && editingEntry.userId !== me.id}
+              onBack={() => {
+                setView("main");
+                setEditingEntry(undefined);
+              }}
+              onSaved={() => {
+                setView("main");
+                setEditingEntry(undefined);
+                refreshAll();
+              }}
+            />
+          ) : (
+            <div className="p-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Tempo registrado</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {formatDuration(totalSeconds)}
+                </span>
+              </div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-xs text-muted-foreground">Seu tempo</span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {formatDuration(ownSeconds)}
+                </span>
+              </div>
 
-      {totalSeconds > 0 && (
-        <p className="text-[11px] text-muted-foreground">
-          Total{" "}
-          <span className="font-medium text-foreground/80">{formatDuration(totalSeconds)}</span>
-          {" · "}
-          Seu tempo{" "}
-          <span className="font-medium text-foreground/80">{formatDuration(ownSeconds)}</span>
-        </p>
-      )}
-
-      {!loading && entries.length > 0 && (
-        <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md bg-background/60">
-          {entries.map((entry) => {
-            const member = memberFor(entry.userId);
-            const isOwn = entry.userId === me.id;
-            const canEdit = isOwn || canManageOthers;
-            return (
-              <div
-                key={entry.id}
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50"
-              >
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${member?.color ?? "bg-muted text-foreground"}`}
-                >
-                  {member?.initials ?? "?"}
-                </span>
-                <span className="min-w-0 flex-1 truncate">
-                  {member?.name ?? "Alguém"} ·{" "}
-                  {entry.endedAt
-                    ? `${toTimeInput(entry.startedAt)}–${toTimeInput(entry.endedAt)}`
-                    : "em andamento"}
-                </span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {formatDuration(
-                    entry.endedAt ? (entry.durationSeconds ?? 0) : liveSeconds(entry),
-                  )}
-                </span>
-                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {entry.source === "cronometro" ? "Cronômetro" : "Manual"}
-                </span>
-                {entry.editedAt && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
-                    corrigido por {memberFor(entry.editedBy ?? "")?.name ?? "admin"}
-                  </span>
-                )}
-                {canEdit && entry.endedAt && (
-                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setPopover({ taskId, taskOrigin, entry })}
-                      className="cursor-pointer text-muted-foreground hover:text-foreground"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(entry.id)}
-                      className="cursor-pointer text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </span>
+              <div className="mt-3">
+                {runningHere ? (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-sky-500/15 px-3 py-2 text-sm font-semibold tabular-nums text-sky-700 hover:bg-sky-500/25 dark:text-sky-400"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    Parar · {formatClock(liveSeconds(runningHere))}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStart}
+                    disabled={starting}
+                    className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                  >
+                    {starting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {starting ? "Iniciando..." : "Iniciar cronômetro"}
+                  </button>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {popover && (
-        <ManualEntryDialog
-          open
-          onOpenChange={(o) => !o && setPopover(null)}
-          initial={popover}
-          isForeignEdit={!!popover.entry && popover.entry.userId !== me.id}
-          onSaved={refreshAll}
-        />
-      )}
+              <button
+                type="button"
+                onClick={() => setView("manual")}
+                className="mt-3 w-full cursor-pointer rounded-md border-t border-border pt-2.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                + Registrar tempo manualmente
+              </button>
+
+              {!loading && recent.length > 0 && (
+                <div className="-mx-3 mt-3 border-t border-border pt-2">
+                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Registros recentes
+                  </p>
+                  <div className="space-y-0.5">
+                    {recent.map((entry) => (
+                      <RecentRow
+                        key={entry.id}
+                        entry={entry}
+                        member={memberFor(entry.userId)}
+                        canEdit={entry.userId === me.id || canManageOthers}
+                        onEdit={() => {
+                          setEditingEntry(entry);
+                          setView("manual");
+                        }}
+                        onDelete={() => setConfirmDeleteId(entry.id)}
+                      />
+                    ))}
+                  </div>
+                  {entries.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        setAllOpen(true);
+                      }}
+                      className="mt-1 w-full cursor-pointer px-3 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      Ver todos os registros
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      <AllEntriesDialog
+        open={allOpen}
+        onOpenChange={setAllOpen}
+        entries={entries}
+        memberFor={memberFor}
+        meId={me.id}
+        canManageOthers={canManageOthers}
+        onEdit={(entry) => {
+          setAllOpen(false);
+          setEditingEntry(entry);
+          setView("manual");
+          setOpen(true);
+        }}
+        onDelete={(id) => setConfirmDeleteId(id)}
+      />
 
       <AlertDialog open={!!conflict} onOpenChange={(o) => !o && setConflict(null)}>
         <AlertDialogContent>
@@ -483,6 +758,6 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
           </div>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
