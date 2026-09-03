@@ -1,6 +1,7 @@
 {
-  "version": "1.249.0",
+  "version": "1.250.0",
   "notes": [
+    "Corrige comentários (e outras edições não salvas) sumindo do diálogo de tarefa: qualquer atualização em tempo real dessa mesma tarefa — inclusive vinda do próprio timer de tempo — resetava o formulário inteiro pro último estado salvo, descartando um comentário digitado/postado mas ainda não salvo. Agora o formulário só recarrega do zero quando o diálogo é aberto (ou troca de tarefa), nunca enquanto já está aberto.",
     "Remove a função \"Solicitar para o Marketing\" das tarefas de projetos e campanhas (botão que \"puxava\" uma tarefa pro kanban do Marketing). O kanban do Marketing continua funcionando normalmente com suas próprias tarefas avulsas.",
     "Corrige anexos do Financeiro (nota fiscal legada em base64) que não abriam em outra aba — o navegador bloqueia abrir uma URL base64 direto (about:blank em branco); agora ela é convertida pra um arquivo temporário antes de abrir, mesma solução já usada nos anexos de tarefas.",
     "Corrige avatares genéricos (iniciais) no menu de @menção dos comentários e da descrição de tarefas — agora mostra a foto de perfil real da pessoa, igual já acontecia no Chat, reaproveitando o mesmo componente de avatar do quadro de tarefas.",

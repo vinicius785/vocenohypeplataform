@@ -2377,6 +2377,15 @@ export function TaskDialog({
     setActivity((a) => pushActivity(a, `removeu a dependência "${label}"`, "dependency"));
   };
 
+  // Roda só quando o diálogo abre (ou troca de tarefa) — NUNCA a cada vez
+  // que `initial` muda de referência enquanto já está aberto. `initial` vem
+  // de `tasks.find(...)` no componente pai, que ganha uma referência nova
+  // toda vez que a lista de tarefas resincroniza (realtime — inclusive por
+  // uma mudança de OUTRA pessoa em OUTRA tarefa). Sem essa guarda, resetar
+  // o estado local a cada resync descartava um comentário/edição que o
+  // usuário tinha acabado de fazer mas ainda não salvou (comentário nunca
+  // salva sozinho — só ao fechar o diálogo ou clicar "Salvar", ver
+  // `postComment`/`attemptSave` abaixo) — a causa do "comentário sumiu".
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title ?? "");
@@ -2439,7 +2448,8 @@ export function TaskDialog({
         null,
     );
     setAssigneePickerOpen(false);
-  }, [open, initial, defaultStatus, initialEditSubtaskId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial?.id, defaultStatus, initialEditSubtaskId]);
 
   const canSave = title.trim().length > 0;
 
