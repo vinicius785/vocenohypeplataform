@@ -1571,6 +1571,57 @@ export type Database = {
         };
         Relationships: [];
       };
+      time_entries: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          edited_at: string | null;
+          edited_by: string | null;
+          ended_at: string | null;
+          id: string;
+          note: string | null;
+          original_ended_at: string | null;
+          original_started_at: string | null;
+          source: string;
+          started_at: string;
+          task_id: string;
+          task_origin: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          ended_at?: string | null;
+          id?: string;
+          note?: string | null;
+          original_ended_at?: string | null;
+          original_started_at?: string | null;
+          source: string;
+          started_at: string;
+          task_id: string;
+          task_origin: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          edited_at?: string | null;
+          edited_by?: string | null;
+          ended_at?: string | null;
+          id?: string;
+          note?: string | null;
+          original_ended_at?: string | null;
+          original_started_at?: string | null;
+          source?: string;
+          started_at?: string;
+          task_id?: string;
+          task_origin?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
           created_at: string;
@@ -1745,6 +1796,7 @@ export type Database = {
         Returns: boolean;
       };
       is_admin: { Args: { _user_id: string }; Returns: boolean };
+      publish_scheduled_blog_posts: { Args: never; Returns: undefined };
       toggle_message_reaction: {
         Args: { p_emoji: string; p_message_id: string };
         Returns: Json;

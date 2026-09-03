@@ -63,6 +63,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DateField } from "@/components/ui/date-field";
+import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
+import { stopIfRunningOnTask } from "@/lib/time-entries";
 import { linkifyText } from "@/lib/linkify";
 import {
   isRequested,
@@ -1840,6 +1842,13 @@ export function TaskBoard({
                         });
                       const finalTask = applyRecurrenceIfCompleted(dragged, updated);
                       persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
+                      // Cronômetro de `time_entries` (não é mais o campo
+                      // antigo que `withStatusChange` já tratou acima) — só
+                      // "Concluído" para sozinho, silenciosamente.
+                      const dragOrigin = taskOriginFromScope(scope);
+                      if (col === "Concluído" && dragOrigin) {
+                        void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
+                      }
                     }
                   }
                   setDragId(null);
@@ -2331,6 +2340,11 @@ export function TaskDialog({
   // "esta tarefa" precisa passar por esse id normalizado, nunca `initial.id`
   // direto.
   const depTaskId = initial?.id.replace(/^mkt:/, "");
+  // Mesma normalização de id que `task_dependencies` já usa (acima) — o
+  // painel de tempo grava em `time_entries` por uuid real, nunca pelo id
+  // com prefixo "mkt:" (convenção de deep-link, não um id de banco).
+  const timeTrackingTaskId = depTaskId;
+  const timeTrackingOrigin = taskOriginFromScope(scope);
   const { dependsOn, blocks } = depTaskId
     ? dependenciesOf(depTaskId, allDeps)
     : { dependsOn: [], blocks: [] };
@@ -2582,6 +2596,12 @@ export function TaskDialog({
         );
         act = withTimer.activity ?? act;
         cmts = withTimer.comments ?? cmts;
+        // Cronômetro de `time_entries` (independente do campo antigo que
+        // `withStatusChange` tratou acima) — só "Concluído" para sozinho,
+        // silenciosamente; qualquer outra troca de status nunca toca nele.
+        if (status === "Concluído" && origin && timeTrackingTaskId) {
+          void stopIfRunningOnTask(timeTrackingTaskId, origin);
+        }
         nextTimerRunning = withTimer.timerRunning ?? false;
         nextTimerStartedAt = withTimer.timerStartedAt;
         finalTimeEntries = withTimer.timeEntries ?? finalTimeEntries;
@@ -3240,33 +3260,13 @@ export function TaskDialog({
                   </div>
                 </Field>
 
-                <Field label="Timer" icon={<Clock className="h-3.5 w-3.5" />}>
-                  {initial && onToggleTimer ? (
-                    (() => {
-                      const accumulated = timeEntries.reduce((s, e) => s + e.seconds, 0);
-                      const running = timerRunning
-                        ? (Date.now() - Date.parse(timerStartedAt ?? "")) / 1000
-                        : 0;
-                      const total = accumulated + running;
-                      return (
-                        <button
-                          type="button"
-                          onClick={toggleTimer}
-                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums ${
-                            timerRunning
-                              ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
-                              : "text-foreground/70 hover:bg-muted"
-                          }`}
-                        >
-                          {timerRunning ? (
-                            <Pause className="h-3.5 w-3.5" />
-                          ) : (
-                            <Play className="h-3.5 w-3.5" />
-                          )}
-                          {total > 0 ? formatDuration(total) : "Iniciar"}
-                        </button>
-                      );
-                    })()
+                <Field label="Controle de tempo" icon={<Clock className="h-3.5 w-3.5" />}>
+                  {initial && timeTrackingOrigin ? (
+                    <TimeTrackingPanel
+                      taskId={timeTrackingTaskId!}
+                      taskOrigin={timeTrackingOrigin}
+                      members={members}
+                    />
                   ) : (
                     <span className="text-sm text-muted-foreground">
                       {initial ? "—" : "Disponível após criar a tarefa"}
@@ -3625,6 +3625,14 @@ export function TaskDialog({
                                     setActivity((a) =>
                                       pushActivity(a, `mudou status de "${s.title}" para ${next}`),
                                     );
+                                    // Cronômetro de `time_entries` da subtarefa —
+                                    // só "Concluído" para sozinho, silenciosamente.
+                                    if (next === "Concluído" && timeTrackingOrigin) {
+                                      void stopIfRunningOnTask(
+                                        s.id.replace(/^mkt:/, ""),
+                                        timeTrackingOrigin,
+                                      );
+                                    }
                                     // Sem isso, concluir/reabrir uma subtarefa por
                                     // aqui (o caminho mais usado, direto na linha)
                                     // nunca gerava o evento de XP/"concluídas
@@ -4002,6 +4010,7 @@ export function TaskDialog({
             open={!!editSubtask}
             onOpenChange={(o) => !o && setEditSubtask(null)}
             initial={editSubtask ?? undefined}
+            scope={scope}
             parentTitle={title || "Tarefa mãe"}
             onSave={(t) => {
               setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));

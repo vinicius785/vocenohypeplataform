@@ -65,6 +65,7 @@ import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/noti
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
+import { useRunningTimer } from "@/lib/time-entries";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
 
@@ -788,102 +789,97 @@ function useIncomingMessageNotifier() {
  * usuário atual — indicador global ao lado do botão de tema, já que o
  * timer pode ficar rodando fora da tela onde foi iniciado. */
 function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => void }) {
-  const me = getMe();
   const navigate = useNavigate();
+  const running = useRunningTimer();
   // `dataTick` só muda quando os dados de verdade mudam (evento de store) —
-  // é o único gatilho pro `useMemo` abaixo (que escaneia todos os projetos)
-  // recalcular. `nowTick` muda a cada segundo só pra atualizar o texto de
-  // tempo decorrido, sem re-escanear projetos/tarefas nenhuma.
+  // gatilho pro `useMemo` abaixo (que resolve o TÍTULO da tarefa do
+  // cronômetro em andamento) recalcular; os stores de tarefa continuam
+  // sendo a fonte de verdade pro título/navegação, só o dado de "está
+  // rodando" migrou pra `time_entries` (ver `useRunningTimer`).
   const [dataTick, forceData] = useState(0);
-  const [, forceNow] = useState(0);
   useEffect(() => onProjetosChange(() => forceData((n) => n + 1)), []);
   useEffect(() => onCampanhaTarefasChange(() => forceData((n) => n + 1)), []);
   useEffect(() => onStandaloneChange(() => forceData((n) => n + 1)), []);
+  const [, forceNow] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => forceNow((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, []);
 
   const active = useMemo(() => {
-    type MinimalTask = {
-      id: string;
-      title: string;
-      status?: string;
-      assignee?: string;
-      assignees?: string[];
-      timerRunning?: boolean;
-      timerStartedAt?: string;
-      subtasks?: MinimalTask[];
-    };
-    const isMine = (t: MinimalTask) => getTaskAssignees(t).includes(me.name);
-    // Defensivo: uma tarefa/subtarefa concluída nunca deveria ter o timer
-    // ainda ligado (o motor normal já para sozinho ao mudar de status),
-    // mas caminhos que gravam status sem passar por `withStatusChange`
-    // (ex: o checkbox de concluir subtarefa, que só trocava o status na
-    // marra) deixavam esse "vazamento" — sem esse filtro, o indicador
-    // ficava preso pra sempre numa tarefa já terminada.
-    const isActive = (t: MinimalTask) =>
-      !!t.timerRunning && isMine(t) && t.status !== "Concluído" && t.status !== "Arquivado";
-    // Retorna o nó que bateu + o id da tarefa de TOPO — não existe "abrir
-    // só a subtarefa", o diálogo é sempre o da tarefa raiz que a contém.
-    const findActive = (
+    const entry = running.entry;
+    if (!entry) return null;
+    type MinimalTask = { id: string; title: string; subtasks?: MinimalTask[] };
+    // Mesmo id pode estar numa subtarefa — retorna o título de onde achou
+    // + o id da tarefa de TOPO (não existe "abrir só a subtarefa", o
+    // diálogo é sempre o da tarefa raiz que a contém).
+    const findById = (
       list: MinimalTask[],
+      targetId: string,
       rootId?: string,
     ): { node: MinimalTask; rootId: string } | null => {
       for (const t of list) {
         const thisRootId = rootId ?? t.id;
-        if (isActive(t)) return { node: t, rootId: thisRootId };
-        const nested = findActive(t.subtasks ?? [], thisRootId);
+        if (t.id === targetId) return { node: t, rootId: thisRootId };
+        const nested = findById(t.subtasks ?? [], targetId, thisRootId);
         if (nested) return nested;
       }
       return null;
     };
-    let marketingProjectId: string | undefined;
-    for (const p of loadProjetos()) {
-      if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
-      const found = findActive((p.tasks ?? []) as MinimalTask[]);
-      if (found) {
-        return {
-          title: found.node.title,
-          startedAt: found.node.timerStartedAt,
-          section: "projetos" as const,
-          taskId: found.rootId,
-          projectId: p.id,
-        };
-      }
-    }
-    for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
-      const found = findActive(tasks as MinimalTask[]);
-      if (found) {
-        return {
-          title: found.node.title,
-          startedAt: found.node.timerStartedAt,
-          section: "campanhas" as const,
-          taskId: found.rootId,
-          campanhaId,
-        };
-      }
-    }
-    // Tarefas avulsas do Marketing (criadas direto no board de lá, sem
-    // projeto/campanha por trás) — sem isso, um timer rodando numa delas
-    // nunca aparecia aqui, já que essa 3ª origem nunca era escaneada. O id
-    // precisa do mesmo prefixo `mkt:` que `resolveTasks` usa em
-    // MarketingSection.tsx, senão o deep-link não acha a tarefa lá dentro.
-    if (marketingProjectId) {
-      for (const s of loadStandalone() as unknown as MinimalTask[]) {
-        if (isActive(s)) {
+    if (entry.taskOrigin === "projeto") {
+      for (const p of loadProjetos()) {
+        const found = findById((p.tasks ?? []) as MinimalTask[], entry.taskId);
+        if (found) {
           return {
-            title: s.title,
-            startedAt: s.timerStartedAt,
+            title: found.node.title,
+            startedAt: entry.startedAt,
             section: "projetos" as const,
-            taskId: `mkt:${s.id}`,
-            projectId: marketingProjectId,
+            taskId: found.rootId,
+            projectId: p.id,
           };
         }
       }
+    } else if (entry.taskOrigin === "campanha") {
+      for (const [campanhaId, tasks] of getAllCampanhaTarefas()) {
+        const found = findById(tasks as MinimalTask[], entry.taskId);
+        if (found) {
+          return {
+            title: found.node.title,
+            startedAt: entry.startedAt,
+            section: "campanhas" as const,
+            taskId: found.rootId,
+            campanhaId,
+          };
+        }
+      }
+    } else if (entry.taskOrigin === "marketing") {
+      // O id precisa do mesmo prefixo `mkt:` que `resolveTasks` usa em
+      // MarketingSection.tsx, senão o deep-link não acha a tarefa lá dentro.
+      let marketingProjectId: string | undefined;
+      for (const p of loadProjetos()) {
+        if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
+      }
+      const found = findById(loadStandalone() as unknown as MinimalTask[], entry.taskId);
+      if (found && marketingProjectId) {
+        return {
+          title: found.node.title,
+          startedAt: entry.startedAt,
+          section: "projetos" as const,
+          taskId: `mkt:${found.rootId}`,
+          projectId: marketingProjectId,
+        };
+      }
     }
-    return null;
-  }, [me.name, dataTick]);
+    // Tarefa não encontrada nos stores (ex.: removida enquanto o
+    // cronômetro corria) — mostra o indicador mesmo assim, sem título,
+    // em vez de escondê-lo ou quebrar a navegação.
+    return {
+      title: "Tarefa removida",
+      startedAt: entry.startedAt,
+      section: null,
+      taskId: entry.taskId,
+    };
+  }, [running.entry, dataTick]);
 
   if (!active) return null;
   const elapsed = active.startedAt ? (Date.now() - Date.parse(active.startedAt)) / 1000 : 0;
@@ -905,6 +901,7 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
           });
           return;
         }
+        if (active.section !== "campanhas") return;
         try {
           sessionStorage.setItem(
             OPEN_CAMPANHA_TASK_KEY,
