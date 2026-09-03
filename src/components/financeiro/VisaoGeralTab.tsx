@@ -1,16 +1,24 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { kpiTotals, fmtBRL } from "@/lib/financeiro-entries";
 import {
   matchesFilters,
   previousPeriodRange,
+  type AdvancedFilters,
   type useFinanceiroFilteredEntries,
 } from "./useFinanceiroFilteredEntries";
 import { Kpi } from "./shared";
+import { RequerAtencaoStrip } from "./RequerAtencaoStrip";
+import { FluxoFinanceiroChart } from "./FluxoFinanceiroChart";
+import { ResultadoAcumuladoChart } from "./ResultadoAcumuladoChart";
+import { DespesasPorCategoriaChart } from "./DespesasPorCategoriaChart";
+import { ReceitaPorClienteChart } from "./ReceitaPorClienteChart";
+import { ResultadoPorCampanhaTable } from "./ResultadoPorCampanhaTable";
+import { ProximosVencimentos } from "./ProximosVencimentos";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
 function pctChange(current: number, previous: number): number | null {
-  if (previous === 0) return current === 0 ? null : null;
+  if (previous === 0) return null;
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
@@ -27,8 +35,17 @@ function Delta({ pct }: { pct: number | null }) {
   );
 }
 
-export function VisaoGeralTab({ filtered }: { filtered: Filtered }) {
+export function VisaoGeralTab({
+  filtered,
+  onApplyFilter,
+  onNavigateToLancamentos,
+}: {
+  filtered: Filtered;
+  onApplyFilter: (patch: Partial<AdvancedFilters>) => void;
+  onNavigateToLancamentos: () => void;
+}) {
   const { all, visible, range, filters } = filtered;
+  const [flowMode, setFlowMode] = useState<"realizado" | "projetado">("realizado");
 
   const totals = useMemo(() => kpiTotals(visible), [visible]);
 
@@ -42,6 +59,11 @@ export function VisaoGeralTab({ filtered }: { filtered: Filtered }) {
     );
     return kpiTotals(prevEntries);
   }, [all, range, filters]);
+
+  const applyAndGo = (patch: Partial<AdvancedFilters>) => {
+    onApplyFilter(patch);
+    onNavigateToLancamentos();
+  };
 
   return (
     <div className="space-y-6">
@@ -62,10 +84,28 @@ export function VisaoGeralTab({ filtered }: { filtered: Filtered }) {
         <Kpi label="Saldo projetado" value={fmtBRL(totals.saldoProjetado)} />
       </div>
 
-      {visible.length === 0 && (
+      <RequerAtencaoStrip filtered={filtered} onApplyFilter={applyAndGo} />
+
+      {visible.length === 0 ? (
         <p className="rounded-lg border border-border bg-background px-4 py-12 text-center text-xs text-muted-foreground">
           Nenhum lançamento encontrado neste período.
         </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <FluxoFinanceiroChart filtered={filtered} mode={flowMode} onModeChange={setFlowMode} />
+            <ResultadoAcumuladoChart filtered={filtered} mode={flowMode} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <DespesasPorCategoriaChart filtered={filtered} onApplyFilter={applyAndGo} />
+            <ReceitaPorClienteChart filtered={filtered} onApplyFilter={applyAndGo} />
+          </div>
+
+          <ResultadoPorCampanhaTable filtered={filtered} onApplyFilter={applyAndGo} />
+
+          <ProximosVencimentos filtered={filtered} onVerTodos={onNavigateToLancamentos} />
+        </>
       )}
     </div>
   );

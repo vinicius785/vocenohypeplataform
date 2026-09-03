@@ -813,3 +813,209 @@ export function sortByUrgency(entries: Entry[]): Entry[] {
     return a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : 0;
   });
 }
+
+function isoAddDays(base: string, days: number): string {
+  const d = new Date(`${base}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export type AlertKind =
+  | "vencido_receita"
+  | "vencido_despesa"
+  | "vence_em_breve_receita"
+  | "vence_em_breve_despesa";
+export type AlertItem = { kind: AlertKind; count: number; total: number };
+
+/** Faixa "Requer atenção" da Visão Geral — só retorna grupos com pelo
+ * menos 1 item (a UI some inteira se vier vazio). */
+export function alertItems(entries: Entry[], venceEmBreveDias = 7): AlertItem[] {
+  const today = todayISO();
+  const limit = isoAddDays(today, venceEmBreveDias);
+  const groups: Record<AlertKind, AlertItem> = {
+    vencido_receita: { kind: "vencido_receita", count: 0, total: 0 },
+    vencido_despesa: { kind: "vencido_despesa", count: 0, total: 0 },
+    vence_em_breve_receita: { kind: "vence_em_breve_receita", count: 0, total: 0 },
+    vence_em_breve_despesa: { kind: "vence_em_breve_despesa", count: 0, total: 0 },
+  };
+  for (const e of entries) {
+    if (e.status === "vencido") {
+      const g = e.kind === "receita" ? groups.vencido_receita : groups.vencido_despesa;
+      g.count += 1;
+      g.total += e.amount;
+    } else if (
+      (e.status === "a_receber" || e.status === "a_pagar") &&
+      e.vencimento >= today &&
+      e.vencimento <= limit
+    ) {
+      const g =
+        e.kind === "receita" ? groups.vence_em_breve_receita : groups.vence_em_breve_despesa;
+      g.count += 1;
+      g.total += e.amount;
+    }
+  }
+  return Object.values(groups).filter((g) => g.count > 0);
+}
+
+export function groupByCategoria(
+  entries: Entry[],
+  kind: Kind,
+): { categoria: string; total: number }[] {
+  const map = new Map<string, number>();
+  for (const e of entries) {
+    if (e.kind !== kind) continue;
+    map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+  }
+  return Array.from(map.entries())
+    .map(([categoria, total]) => ({ categoria, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function groupByCliente(
+  entries: Entry[],
+): { clienteId: string; clienteNome: string; total: number }[] {
+  const map = new Map<string, { clienteNome: string; total: number }>();
+  for (const e of entries) {
+    if (e.kind !== "receita" || !e.clienteId) continue;
+    const cur = map.get(e.clienteId) ?? { clienteNome: e.clienteNome ?? "—", total: 0 };
+    cur.total += e.amount;
+    map.set(e.clienteId, cur);
+  }
+  return Array.from(map.entries())
+    .map(([clienteId, v]) => ({ clienteId, ...v }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function revenueConcentration(byCliente: { total: number }[]): {
+  top1Pct: number;
+  top3Pct: number;
+} {
+  const total = byCliente.reduce((s, c) => s + c.total, 0);
+  if (total <= 0) return { top1Pct: 0, top3Pct: 0 };
+  const sorted = [...byCliente].sort((a, b) => b.total - a.total);
+  const top1 = sorted[0]?.total ?? 0;
+  const top3 = sorted.slice(0, 3).reduce((s, c) => s + c.total, 0);
+  return { top1Pct: (top1 / total) * 100, top3Pct: (top3 / total) * 100 };
+}
+
+export type CampanhaResultado = {
+  campanhaId: string;
+  campanhaNome: string;
+  clienteNome: string;
+  receita: number;
+  custos: number;
+  resultado: number;
+  margem: number; // % — 0 se receita for 0
+};
+
+/** Receita/custo por campanha calculado a partir dos próprios lançamentos
+ * financeiros vinculados (`campanhaId`) — sem estrutura de custo
+ * dedicada ainda, então este é o cálculo inicial pedido explicitamente
+ * (usar os lançamentos já existentes). */
+export function groupByCampanha(entries: Entry[]): CampanhaResultado[] {
+  const map = new Map<
+    string,
+    { campanhaNome: string; clienteNome: string; receita: number; custos: number }
+  >();
+  for (const e of entries) {
+    if (!e.campanhaId) continue;
+    const cur = map.get(e.campanhaId) ?? {
+      campanhaNome: e.campanhaNome ?? "—",
+      clienteNome: e.clienteNome ?? "—",
+      receita: 0,
+      custos: 0,
+    };
+    if (e.kind === "receita") cur.receita += e.amount;
+    else cur.custos += e.amount;
+    map.set(e.campanhaId, cur);
+  }
+  return Array.from(map.entries())
+    .map(([campanhaId, v]) => {
+      const resultado = v.receita - v.custos;
+      const margem = v.receita > 0 ? (resultado / v.receita) * 100 : 0;
+      return { campanhaId, ...v, resultado, margem };
+    })
+    .sort((a, b) => b.receita - a.receita);
+}
+
+export type CashFlowPoint = {
+  bucket: string;
+  receitaRealizada: number;
+  receitaProjetada: number;
+  despesaRealizada: number;
+  despesaProjetada: number;
+};
+
+function bucketOf(iso: string, granularity: "day" | "week" | "month"): string {
+  if (granularity === "day") return iso;
+  if (granularity === "month") return iso.slice(0, 7);
+  const d = new Date(`${iso}T00:00:00`);
+  const dow = d.getDay();
+  const diff = dow === 0 ? 6 : dow - 1; // segunda como início da semana
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Série temporal receitas x despesas — REALIZADO usa a data efetiva do
+ * pagamento/recebimento; o que ainda não foi confirmado nunca entra na
+ * série realizada, só na projetada (por vencimento). Cancelados nunca
+ * entram em nenhuma das duas. */
+export function cashFlowSeries(
+  entries: Entry[],
+  granularity: "day" | "week" | "month",
+): CashFlowPoint[] {
+  const map = new Map<string, CashFlowPoint>();
+  const ensure = (bucket: string) => {
+    const cur = map.get(bucket);
+    if (cur) return cur;
+    const fresh: CashFlowPoint = {
+      bucket,
+      receitaRealizada: 0,
+      receitaProjetada: 0,
+      despesaRealizada: 0,
+      despesaProjetada: 0,
+    };
+    map.set(bucket, fresh);
+    return fresh;
+  };
+  for (const e of entries) {
+    if (e.status === "cancelado") continue;
+    const realized = e.status === "recebido" || e.status === "pago";
+    const bucketDate = realized ? (e.payment?.pagamento ?? e.vencimento) : e.vencimento;
+    const point = ensure(bucketOf(bucketDate, granularity));
+    if (e.kind === "receita") {
+      if (realized) point.receitaRealizada += e.payment?.paidAmount ?? e.amount;
+      else point.receitaProjetada += e.amount;
+    } else {
+      if (realized) point.despesaRealizada += e.payment?.paidAmount ?? e.amount;
+      else point.despesaProjetada += e.amount;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    a.bucket < b.bucket ? -1 : a.bucket > b.bucket ? 1 : 0,
+  );
+}
+
+/** Saldo acumulado ao longo da série — "realizado" só soma o que já
+ * aconteceu de fato; "projetado" soma tudo (realizado + ainda pendente). */
+export function runningBalance(
+  series: CashFlowPoint[],
+  mode: "realizado" | "projetado",
+): { bucket: string; saldoAcumulado: number }[] {
+  let acc = 0;
+  return series.map((p) => {
+    const receita =
+      mode === "realizado" ? p.receitaRealizada : p.receitaRealizada + p.receitaProjetada;
+    const despesa =
+      mode === "realizado" ? p.despesaRealizada : p.despesaRealizada + p.despesaProjetada;
+    acc += receita - despesa;
+    return { bucket: p.bucket, saldoAcumulado: acc };
+  });
+}
+
+export function upcomingDue(entries: Entry[], limit: number): Entry[] {
+  const pending = entries.filter(
+    (e) => e.status === "a_receber" || e.status === "a_pagar" || e.status === "vencido",
+  );
+  return sortByUrgency(pending).slice(0, limit);
+}

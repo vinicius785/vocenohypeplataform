@@ -77,7 +77,11 @@ export function FinanceiroSection() {
         </TabsList>
 
         <TabsContent value="visao-geral" className="mt-4">
-          <VisaoGeralTab filtered={filtered} />
+          <VisaoGeralTab
+            filtered={filtered}
+            onApplyFilter={(patch) => filtered.setFilters((f) => ({ ...f, ...patch }))}
+            onNavigateToLancamentos={() => setTopTab("lancamentos")}
+          />
         </TabsContent>
         <TabsContent value="lancamentos" className="mt-4">
           <LancamentosTab
