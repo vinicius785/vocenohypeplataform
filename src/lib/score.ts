@@ -456,9 +456,33 @@ export type WeekdayBucket = {
  * campo existir. Nunca cai pra `createdAt`: sem confirmação de quando
  * foi concluída, é melhor excluir a tarefa da estatística do que
  * atribuí-la a um dia errado. */
+export type CompletionTimestampLike = {
+  completedAt?: string;
+  activity?: { action: string; createdAt: string }[];
+};
+
+/** Timestamp CRU de conclusão — preferindo `t.completedAt` (exato) e caindo
+ * pra última entrada de activity "concluiu" só pra tarefas legadas
+ * concluídas antes desse campo existir. Fonte ÚNICA reaproveitada tanto
+ * pra decidir o DIA da semana (`resolvedCompletionDate`, abaixo) quanto
+ * pra exibir a HORA exata no drill-down de "Entregas por dia"
+ * (`task-aggregation.ts`'s `loadAllTasksFlat`) — as duas nunca podem
+ * divergir sobre o que "é" a conclusão de uma tarefa. */
+export function resolvedCompletionTimestamp(t: CompletionTimestampLike): string | null {
+  if (t.completedAt) return t.completedAt;
+  const entries = (t.activity ?? []).filter((a) => a.action === ACTIVITY_STATUS_COMPLETED_ACTION);
+  return entries.length > 0 ? entries[entries.length - 1].createdAt : null;
+}
+
+/** Data real de conclusão, preferindo o campo dedicado `t.completedAt`
+ * (timestamp exato) — cai pro derivado de `activity`
+ * (`taskCompletionDate`) só pra tarefas legadas concluídas antes desse
+ * campo existir. Nunca cai pra `createdAt`: sem confirmação de quando
+ * foi concluída, é melhor excluir a tarefa da estatística do que
+ * atribuí-la a um dia errado. */
 function resolvedCompletionDate(t: Task): string | null {
-  if (t.completedAt) return toLocalDateISO(t.completedAt);
-  return taskCompletionDate(t);
+  const ts = resolvedCompletionTimestamp(t);
+  return ts ? toLocalDateISO(ts) : null;
 }
 
 export function weekdayProductivity(

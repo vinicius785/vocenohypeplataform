@@ -43,6 +43,7 @@ export function TeamDashboard({
   tasksByMember,
   weeklyData,
   weekdayData,
+  weekdayTasksByDay,
   weekdayPeriod,
   onWeekdayPeriodChange,
   onlineCount,
@@ -74,6 +75,10 @@ export function TeamDashboard({
   tasksByMember: Map<string, DashTask[]>;
   weeklyData: WeekBucket[];
   weekdayData: WeekdayBucket[];
+  /** Tarefas concluídas de verdade agrupadas por dia útil (1=segunda...
+   * 5=sexta) — alimenta o drill-down ao clicar numa barra de "Entregas
+   * por dia da semana". */
+  weekdayTasksByDay: Map<number, DashTaskFlat[]>;
   weekdayPeriod: WeekdayPeriodMode;
   onWeekdayPeriodChange: (v: WeekdayPeriodMode) => void;
   onlineCount: number;
@@ -83,7 +88,7 @@ export function TeamDashboard({
   attentionTab: AttentionTab;
   onAttentionTabChange: (tab: AttentionTab) => void;
   onOpenTask: (t: DashTask) => void;
-  onOpenMember: (m: Member) => void;
+  onOpenMember: (m: Member, opts?: { showComposition?: boolean }) => void;
   onEditMember: (m: Member) => void;
   onDeleteMember: (id: string) => void;
   onResetMember: (id: string) => void;
@@ -164,11 +169,13 @@ export function TeamDashboard({
         </div>
       </div>
 
-      {/* Linha 3 — Produtividade por dia da semana (100%) */}
+      {/* Linha 3 — Entregas por dia da semana (100%) */}
       <TeamWeekdayProductivity
         data={weekdayData}
+        tasksByDay={weekdayTasksByDay}
         period={weekdayPeriod}
         onPeriodChange={onWeekdayPeriodChange}
+        onOpenTask={onOpenTask}
       />
 
       {/* Linha 4 — Performance do Time (100%) — Score de gestão, NUNCA chamado de "ranking" */}
@@ -178,6 +185,8 @@ export function TeamDashboard({
         scorePeriod={scorePeriod}
         onScorePeriodChange={onScorePeriodChange}
         performanceSettings={performanceSettings}
+        tasksByMember={tasksByMember}
+        onOpenTask={onOpenTask}
         meId={meId}
         isAdmin={isAdmin}
         loading={loading}

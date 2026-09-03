@@ -7,6 +7,7 @@ import {
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
 import { deadlineCutoff } from "@/lib/performance-engine";
+import { resolvedCompletionTimestamp } from "@/lib/score";
 
 /** Nomes dos dias, compartilhado entre o cabeçalho do Início ("Segunda, 27
  * ago") e a formatação de prazo (`formatDue`) aqui embaixo — um só lugar
@@ -33,6 +34,10 @@ export type DashTask = {
    * nível acima, se houver subtarefa dentro de subtarefa). */
   parentTitle?: string;
   parentId?: string;
+  /** Timestamp exato de conclusão (`resolvedCompletionTimestamp`,
+   * `@/lib/score`) — só presente pra tarefas com `status === "Concluído"`.
+   * Alimenta o drill-down de "Entregas por dia da semana" (aba Time). */
+  completedAt?: string;
 };
 
 /** Mais urgente primeiro — ordem de prioridade visual reaproveitada em
@@ -112,6 +117,11 @@ type CampanhaTaskLike = {
   primaryAssignee?: string;
   subtasks?: CampanhaTaskLike[];
   comments?: CommentLike[];
+  /** Presentes em runtime nos objetos reais (campanha/marketing são Task
+   * completas por baixo, só o tipo estrutural não expunha) — necessários
+   * pra `resolvedCompletionTimestamp` em `loadAllTasksFlat`. */
+  completedAt?: string;
+  activity?: { action: string; createdAt: string }[];
 };
 
 /** De quem é essa tarefa, pra fins de "isso é MEU trabalho"/"minha
@@ -314,6 +324,7 @@ export function loadAllTasksFlat(
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
           assignees,
+          completedAt: resolvedCompletionTimestamp(t) ?? undefined,
         });
       });
     }
@@ -336,6 +347,7 @@ export function loadAllTasksFlat(
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
           assignees,
+          completedAt: resolvedCompletionTimestamp(t) ?? undefined,
         });
       });
     }
@@ -364,6 +376,7 @@ export function loadAllTasksFlat(
             parentTitle,
             parentId: parentTitle ? `mkt:${s.id}` : undefined,
             assignees,
+            completedAt: resolvedCompletionTimestamp(t) ?? undefined,
           });
         },
       );

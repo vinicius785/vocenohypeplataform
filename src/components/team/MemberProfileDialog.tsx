@@ -227,6 +227,7 @@ export function MemberProfileDialog({
   onOpenTask,
   onOpenChange,
   onEdit,
+  initialShowComposition,
 }: {
   member: Member;
   isSelf: boolean;
@@ -247,6 +248,10 @@ export function MemberProfileDialog({
   onOpenTask: (t: DashTask) => void;
   onOpenChange: (open: boolean) => void;
   onEdit: (m: Member) => void;
+  /** Abre já com "Ver composição do score" expandida — clique no Score
+   * (Performance do Time, `TimeSection.tsx`), pra ir direto ao
+   * detalhamento sem precisar de mais um clique. */
+  initialShowComposition?: boolean;
 }) {
   const tv = member.timeView ?? [];
   const show = (f: TimeField) => isSelf || tv.includes(f);
@@ -392,7 +397,7 @@ export function MemberProfileDialog({
           ? "text-destructive"
           : "text-foreground";
 
-  const [showComposition, setShowComposition] = useState(false);
+  const [showComposition, setShowComposition] = useState(!!initialShowComposition);
   const upcoming = useMemo(
     () =>
       [...openTasksFull]

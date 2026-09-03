@@ -47,7 +47,9 @@ import {
   loadAllTasksFlat,
   marketingStandaloneAsTaskGroup,
   type DashTask,
+  type DashTaskFlat,
 } from "@/lib/task-aggregation";
+import { formatDateToIso } from "@/lib/utils";
 import {
   OPEN_CAMPANHA_TASK_KEY,
   OPEN_MEMBER_KEY,
@@ -162,6 +164,9 @@ function DiretorioTab() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [viewing, setViewing] = useState<Member | null>(null);
+  // Clicar no Score (Performance do Time) abre o Perfil já com "Ver
+  // composição do score" expandida — clicar no nome/avatar abre normal.
+  const [viewingShowComposition, setViewingShowComposition] = useState(false);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [createdInfo, setCreatedInfo] = useState<{ email: string; tempPassword: string } | null>(
@@ -458,6 +463,29 @@ function DiretorioTab() {
     );
   }, [tick, groupsWithMarketing, weekdayPeriod]);
 
+  // Drill-down de "Entregas por dia da semana" — mesma janela de datas de
+  // `weekdayData` (acima), mas devolve as tarefas de verdade (não só a
+  // contagem) pra abrir a partir de um clique na barra. Fonte separada
+  // (`allTasksFlat`, que já é achatado com id/projectId/campanhaId
+  // prontos pra abrir) em vez de reaproveitar `weekdayProductivity`
+  // internamente — essa função já serve só o número da barra.
+  const weekdayTasksByDay = useMemo(() => {
+    const range = rangeForWeekdayPeriod(weekdayPeriod);
+    const map = new Map<number, DashTaskFlat[]>([1, 2, 3, 4, 5].map((d) => [d, []]));
+    for (const t of allTasksFlat) {
+      if (t.status !== "Concluído" || !t.completedAt) continue;
+      const day = formatDateToIso(new Date(t.completedAt));
+      if (range.from && day < range.from) continue;
+      if (range.to && day > range.to) continue;
+      const wd = new Date(t.completedAt).getDay();
+      if (wd >= 1 && wd <= 5) map.get(wd)!.push(t);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+    }
+    return map;
+  }, [allTasksFlat, weekdayPeriod]);
+
   // Resolve título de reunião a partir do id — só usado pra exibir "N
   // reuniões perdidas" na ficha do membro (o ledger denormaliza
   // `meetingId`, não `meetingTitle`).
@@ -670,6 +698,7 @@ function DiretorioTab() {
             tasksByMember={tasksByMember}
             weeklyData={weeklyData}
             weekdayData={weekdayData}
+            weekdayTasksByDay={weekdayTasksByDay}
             weekdayPeriod={weekdayPeriod}
             onWeekdayPeriodChange={setWeekdayPeriod}
             onlineCount={onlineCount}
@@ -679,7 +708,10 @@ function DiretorioTab() {
             attentionTab={attentionTab}
             onAttentionTabChange={setAttentionTab}
             onOpenTask={openTask}
-            onOpenMember={(m) => setViewing(m)}
+            onOpenMember={(m, opts) => {
+              setViewing(m);
+              setViewingShowComposition(!!opts?.showComposition);
+            }}
             onEditMember={(m) => {
               setEditing(m);
               setOpen(true);
@@ -711,6 +743,7 @@ function DiretorioTab() {
             openTasksForMember={openTasksByMemberId.get(viewing.id) ?? []}
             performanceSettings={performanceSettings}
             meetingsById={meetingsById}
+            initialShowComposition={viewingShowComposition}
             onOpenTask={openTask}
             onOpenChange={(v) => {
               if (!v) setViewing(null);

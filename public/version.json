@@ -1,6 +1,7 @@
 {
-  "version": "1.255.0",
+  "version": "1.256.0",
   "notes": [
+    "Refinamento de UX/UI e drill-down na aba Time: \"Produtividade por dia da semana\" virou \"Entregas por dia da semana\" (métrica concreta, tarefas concluídas), gráfico 25% mais baixo, tooltip mais claro, e as barras agora são clicáveis (abre a lista real de tarefas daquele dia, cada uma abrindo a tarefa de verdade). Em \"Performance do Time\": removidos os números de posição (1º/2º/3º...) para não parecer ranking/gamificação; adicionado subtítulo; nome/avatar abre o Perfil; \"X atrasadas\" agora é clicável (popover com as tarefas reais) quando >0, e neutro/estático quando 0; o Score agora é clicável e abre o Perfil já na composição detalhada, mostra a classificação textual (Excelente/Muito bom/Bom/Atenção/Crítico) e usa faixas de cor mais graduais. Nenhuma mudança na lógica de cálculo do Score Operacional — só em como ele é exibido/acessado.",
     "Corrige o aviso de \"Nova versão disponível\" citando novidades de uma versão antiga (1.246.0) mesmo com o app já em versões bem mais recentes — as novidades curadas (`releases`) não estavam sendo atualizadas a cada bump, só o changelog técnico interno. Agora o card de novidades reflete de fato as mudanças acumuladas desde a última atualização do card (Financeiro, Tarefas, Reuniões, Time), e cada commit com mudança visível volta a atualizar `releases[0]` junto com o número da versão.",
     "Adiciona tabela de \"quantidade exata por membro\" em Produtividade por dia da semana (aba Time), só no recorte \"Esta semana\" — mostra quantas entregas cada pessoa fez em cada dia útil. Nos demais recortes (30/90 dias, ano) continua só o gráfico de média do time, sem a tabela.",
     "Corrige a lista de participantes ao criar/editar uma reunião não fechando ao clicar fora dela — era uma lista solta (sem o comportamento padrão de fechar ao clicar fora), agora usa o mesmo componente de popover já usado no resto do app.",
@@ -378,75 +379,28 @@
   ],
   "releases": [
     {
-      "version": "1.255.0",
-      "summary": "Correções no Financeiro e Reuniões, timers no fuso de Brasília, e produtividade por membro no Time.",
+      "version": "1.256.0",
+      "summary": "Aba Time mais navegável: entregas e atrasos agora levam direto às tarefas reais.",
       "modules": [
         {
-          "name": "FINANCEIRO",
-          "tagline": "Pequenas correções na experiência de pagamento",
-          "items": [
-            {
-              "title": "Calendário de pagamento",
-              "description": "O calendário de \"Data do pagamento\" não fica mais escondido atrás da janela."
-            },
-            {
-              "title": "Alertas mais confiáveis",
-              "description": "Clicar num alerta de \"Requer atenção\" sempre leva à lista certa, mesmo fora do período selecionado."
-            },
-            {
-              "title": "Anexos",
-              "description": "Notas fiscais antigas agora abrem em outra aba normalmente."
-            }
-          ]
-        },
-        {
-          "name": "TAREFAS",
-          "tagline": "Menos travas ao usar o dia a dia",
-          "items": [
-            {
-              "title": "Comentários não somem mais",
-              "description": "Um comentário digitado numa tarefa não é mais perdido se ela for atualizada em segundo plano."
-            },
-            {
-              "title": "Fotos reais nas menções",
-              "description": "Marcar alguém com @ agora mostra a foto de perfil da pessoa, não mais um ícone genérico."
-            },
-            {
-              "title": "Cronômetro no horário certo",
-              "description": "Os registros de tempo agora sempre mostram o horário de Brasília, não importa o fuso do computador."
-            }
-          ]
-        },
-        {
-          "name": "REUNIÕES",
-          "tagline": "Seleção de participantes mais previsível",
-          "items": [
-            {
-              "title": "Lista de participantes",
-              "description": "Clicar fora da lista de participantes agora fecha ela normalmente."
-            }
-          ]
-        },
-        {
           "name": "TIME",
-          "tagline": "Score e produtividade mais transparentes",
+          "tagline": "De contemplativo para navegável",
           "items": [
             {
-              "title": "Novo Score Operacional",
-              "description": "Passa a considerar entrega, previsibilidade de prazos e presença em reuniões, com o cálculo detalhado disponível no perfil de cada pessoa."
+              "title": "Entregas por dia da semana",
+              "description": "Métrica mais clara (tarefas concluídas) e barras clicáveis: veja exatamente quais tarefas compõem cada dia."
             },
             {
-              "title": "Produtividade por pessoa",
-              "description": "Na visão \"Esta semana\", veja quantas entregas cada pessoa fez em cada dia."
-            }
-          ]
-        },
-        {
-          "name": "MELHORIAS",
-          "items": [
+              "title": "Performance do Time sem ranking",
+              "description": "Removidos os números de posição — a lista continua ordenada por score, sem parecer um placar."
+            },
             {
-              "title": "Ajustes de interface",
-              "description": "Pequenas correções em diversas telas."
+              "title": "Score e atrasos clicáveis",
+              "description": "Clique no score para ver a composição detalhada; clique em \"X atrasadas\" para ver quais tarefas estão vencidas."
+            },
+            {
+              "title": "Classificação do score",
+              "description": "Além do número, agora mostra Excelente / Muito bom / Bom / Atenção / Crítico."
             }
           ]
         }

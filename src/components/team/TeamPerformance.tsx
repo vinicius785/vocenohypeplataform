@@ -7,6 +7,7 @@ import type {
   PerformanceSettings,
 } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
+import type { DashTask } from "@/lib/task-aggregation";
 import { MemberPerformanceRow } from "./MemberPerformanceRow";
 import { ScorePeriodSelector } from "./ScorePeriodSelector";
 
@@ -23,6 +24,8 @@ export function TeamPerformance({
   scorePeriod,
   onScorePeriodChange,
   performanceSettings,
+  tasksByMember,
+  onOpenTask,
   meId,
   isAdmin,
   loading,
@@ -37,11 +40,13 @@ export function TeamPerformance({
   scorePeriod: ScorePeriodMode;
   onScorePeriodChange: (v: ScorePeriodMode) => void;
   performanceSettings: PerformanceSettings;
+  tasksByMember: Map<string, DashTask[]>;
+  onOpenTask: (t: DashTask) => void;
   meId: string | null;
   isAdmin: boolean;
   loading: boolean;
   hasAnyMembers: boolean;
-  onOpenProfile: (m: Member) => void;
+  onOpenProfile: (m: Member, opts?: { showComposition?: boolean }) => void;
   onEdit: (m: Member) => void;
   onDelete: (id: string) => void;
   onReset: (id: string) => void;
@@ -57,10 +62,15 @@ export function TeamPerformance({
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance do Time
-        </h3>
+      <div className="flex flex-wrap items-start justify-between gap-2 px-1">
+        <div>
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance do Time
+          </h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Score operacional e tarefas em atraso
+          </p>
+        </div>
         <div className="flex items-center gap-1.5">
           <ScorePeriodSelector value={scorePeriod} onChange={onScorePeriodChange} />
           <Popover>
@@ -119,24 +129,22 @@ export function TeamPerformance({
           </div>
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border">
-            {ranked.map((m, i) => (
-              <div key={m.id} className="flex items-center">
-                <span className="w-7 shrink-0 pl-3 text-center text-xs font-semibold tabular-nums text-muted-foreground">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <MemberPerformanceRow
-                    member={m}
-                    score={scoreByMemberId.get(m.id)}
-                    isSelf={m.id === meId}
-                    isAdmin={isAdmin}
-                    onOpenProfile={() => onOpenProfile(m)}
-                    onEdit={() => onEdit(m)}
-                    onDelete={() => onDelete(m.id)}
-                    onReset={() => onReset(m.id)}
-                  />
-                </div>
-              </div>
+            {ranked.map((m) => (
+              <MemberPerformanceRow
+                key={m.id}
+                member={m}
+                score={scoreByMemberId.get(m.id)}
+                overdueTasks={(tasksByMember.get(m.name) ?? []).filter(
+                  (t) => t.bucket === "atrasada",
+                )}
+                onOpenTask={onOpenTask}
+                isSelf={m.id === meId}
+                isAdmin={isAdmin}
+                onOpenProfile={(opts) => onOpenProfile(m, opts)}
+                onEdit={() => onEdit(m)}
+                onDelete={() => onDelete(m.id)}
+                onReset={() => onReset(m.id)}
+              />
             ))}
           </div>
         )}
