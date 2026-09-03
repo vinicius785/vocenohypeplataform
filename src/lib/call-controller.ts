@@ -965,6 +965,13 @@ async function handle(signal: Signal) {
   }
   if (signal.type === "screen-share") {
     patchParticipant(signal.fromUserId, { sharingScreen: signal.sharing });
+    // Quem está assistindo troca de layout (tela compartilhada ↔ câmera)
+    // só por causa dessa mudança de participante — sem `mediaChanged()`
+    // aqui, a UI reorganiza os elementos de vídeo (a câmera da outra
+    // pessoa nasce de novo num lugar diferente) mas nada dispara o efeito
+    // que liga a imagem a esse elemento recém-criado, deixando a câmera
+    // cinza até a próxima mudança de mídia real (que podia nunca vir).
+    mediaChanged();
   }
 }
 
