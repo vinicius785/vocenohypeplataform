@@ -1063,26 +1063,30 @@ function ScreenShareLayout({
   return (
     <div className="flex h-full flex-col gap-2">
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-black">
-        {screenSharing ? (
-          <video
-            ref={localScreenRef}
-            autoPlay
-            muted
-            playsInline
-            className="h-full w-full object-contain"
-          />
-        ) : (
-          remoteScreenPeer && (
-            <video
-              ref={(el) => {
-                if (el) remoteScreenRefs.current.set(remoteScreenPeer.userId, el);
-              }}
-              autoPlay
-              playsInline
-              className="h-full w-full object-contain"
-            />
-          )
-        )}
+        {/* Os dois <video> ficam sempre montados (só troca a classe "hidden")
+            — o sinal explícito "screen-share" chega mais rápido que o
+            próprio track de vídeo via WebRTC, então o card podia nascer
+            antes de existir stream nenhuma, e o efeito que liga `srcObject`
+            só roda quando muda mídia de verdade (não quando este elemento
+            aparece) — resultado: tela preta presa até a próxima mudança de
+            mídia qualquer. Mesmo padrão já usado em VideoTile/OneOnOneStage. */}
+        <video
+          ref={localScreenRef}
+          autoPlay
+          muted
+          playsInline
+          className={`h-full w-full object-contain ${screenSharing ? "" : "hidden"}`}
+        />
+        <video
+          ref={(el) => {
+            if (!remoteScreenPeer) return;
+            if (el) remoteScreenRefs.current.set(remoteScreenPeer.userId, el);
+            else remoteScreenRefs.current.delete(remoteScreenPeer.userId);
+          }}
+          autoPlay
+          playsInline
+          className={`h-full w-full object-contain ${!screenSharing && remoteScreenPeer ? "" : "hidden"}`}
+        />
         <div className="absolute left-3 top-3 flex items-center gap-2">
           <span className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-zinc-100">
             {screenSharing
