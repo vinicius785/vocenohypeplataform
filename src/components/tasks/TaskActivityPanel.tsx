@@ -399,11 +399,7 @@ export function TaskActivityPanel({
                 onClick={() => insertMention(m.name)}
                 className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
               >
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-semibold ${m.color}`}
-                >
-                  {m.initials}
-                </span>
+                <Avatar member={m} size={20} />
                 {m.name}
               </button>
             ))}
