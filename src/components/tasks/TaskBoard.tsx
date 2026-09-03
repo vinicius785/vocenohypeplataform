@@ -66,12 +66,6 @@ import { DateField } from "@/components/ui/date-field";
 import { TimeTrackingPanel } from "@/components/tasks/TimeTrackingPanel";
 import { stopIfRunningOnTask } from "@/lib/time-entries";
 import { linkifyText } from "@/lib/linkify";
-import {
-  isRequested,
-  requestForMarketing,
-  removeRequest,
-  onRequestsChange,
-} from "@/lib/marketing-tasks";
 import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
@@ -2383,29 +2377,6 @@ export function TaskDialog({
     setActivity((a) => pushActivity(a, `removeu a dependência "${label}"`, "dependency"));
   };
 
-  const mktScope = scope && (scope.kind === "campanha" || scope.kind === "projeto") ? scope : null;
-  const [mktRequested, setMktRequested] = useState(
-    () => !!(mktScope && initial && isRequested(mktScope.kind, mktScope.id, initial.id)),
-  );
-  useEffect(() => {
-    setMktRequested(!!(mktScope && initial && isRequested(mktScope.kind, mktScope.id, initial.id)));
-    if (!mktScope || !initial) return;
-    return onRequestsChange(() =>
-      setMktRequested(isRequested(mktScope.kind, mktScope.id, initial.id)),
-    );
-  }, [mktScope?.kind, mktScope?.id, initial, open]);
-  const [justRequested, setJustRequested] = useState(false);
-  const toggleMarketing = () => {
-    if (!mktScope || !initial) return;
-    if (mktRequested) {
-      removeRequest(mktScope.kind, mktScope.id, initial.id);
-    } else {
-      requestForMarketing(mktScope.kind, mktScope.id, initial.id);
-      setJustRequested(true);
-      setTimeout(() => setJustRequested(false), 1400);
-    }
-  };
-
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title ?? "");
@@ -3958,31 +3929,6 @@ export function TaskDialog({
               )}
             </div>
             <div className="flex items-center gap-2">
-              {mktScope && initial && (
-                <button
-                  type="button"
-                  onClick={toggleMarketing}
-                  disabled={justRequested}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-300 ${
-                    justRequested
-                      ? "scale-105 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                      : mktRequested
-                        ? "bg-muted text-foreground hover:bg-muted/70"
-                        : "border border-border text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {justRequested ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 animate-in zoom-in duration-300" />
-                      Solicitado!
-                    </>
-                  ) : mktRequested ? (
-                    "Remover do Marketing"
-                  ) : (
-                    "Solicitar para o Marketing"
-                  )}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}

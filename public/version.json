@@ -1,6 +1,7 @@
 {
-  "version": "1.248.0",
+  "version": "1.249.0",
   "notes": [
+    "Remove a função \"Solicitar para o Marketing\" das tarefas de projetos e campanhas (botão que \"puxava\" uma tarefa pro kanban do Marketing). O kanban do Marketing continua funcionando normalmente com suas próprias tarefas avulsas.",
     "Corrige anexos do Financeiro (nota fiscal legada em base64) que não abriam em outra aba — o navegador bloqueia abrir uma URL base64 direto (about:blank em branco); agora ela é convertida pra um arquivo temporário antes de abrir, mesma solução já usada nos anexos de tarefas.",
     "Corrige avatares genéricos (iniciais) no menu de @menção dos comentários e da descrição de tarefas — agora mostra a foto de perfil real da pessoa, igual já acontecia no Chat, reaproveitando o mesmo componente de avatar do quadro de tarefas.",
     "Refatora o aviso de \"Nova versão disponível\": era um card técnico com gradiente e uma lista crua de commits; agora é um toast compacto (resumo de 1 linha + Ver novidades/Atualizar agora) que abre um painel \"O que há de novo\" com as mudanças agrupadas por módulo, em linguagem de produto (sem jargão de dev). Fechar o aviso registra a versão como já vista (não reaparece de forma invasiva); o changelog curado fica sempre acessível em Configurações > Novidades. Nova estrutura de dados releases/releasesVC em version.json, curada por módulo; notes/notesVC seguem existindo só como registro técnico interno, não são mais exibidos na UI.",

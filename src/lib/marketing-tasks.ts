@@ -1,14 +1,8 @@
 /**
- * Marketing tasks registry.
- * Stores references to tasks that live inside projects or campaigns and
- * should also appear in the shared "Marketing" kanban.
- *
- * A request is just a pointer — the actual task lives in its source
- * (project or campaign). Both the source view and the marketing kanban
- * read/write the same source, so updates reflect in both.
+ * Marketing tasks registry — tarefas avulsas criadas direto no kanban
+ * compartilhado do Marketing (não vinculadas a projeto/campanha).
  */
 
-import type { KanbanStatus } from "@/lib/projetos";
 import type {
   TimeEntry,
   Activity,
@@ -21,8 +15,6 @@ import type {
 import { createTableArrayStore } from "@/lib/table-array-store";
 import type { TaskRecurrence } from "@/lib/task-recurrence";
 
-export type MktSourceKind = "projeto" | "campanha";
-
 /** Colunas do kanban de marketing — mesmas de Campanhas/Projetos. */
 export type MktColumn =
   | "Aberto"
@@ -32,15 +24,6 @@ export type MktColumn =
   | "Aprovado"
   | "Concluído"
   | "Arquivado";
-
-export type MktRequest = {
-  id: string;
-  sourceKind: MktSourceKind;
-  sourceId: string; // projeto id or campanha id
-  taskId: string;
-  requestedAt: string;
-  note?: string;
-};
 
 export type MktStandalone = {
   id: string;
@@ -105,7 +88,6 @@ export const MKT_COLUMNS: { key: MktColumn; label: string; color: string }[] = [
   { key: "Arquivado", label: "Arquivado", color: "bg-muted-foreground/30" },
 ];
 
-const requestsStore = createTableArrayStore<MktRequest>("marketing_tasks");
 const standaloneStore = createTableArrayStore<MktStandalone>("marketing_standalone_tasks");
 
 /** Tarefas avulsas do Marketing viviam só em localStorage
@@ -131,88 +113,10 @@ function migrateLegacyStandalone() {
 }
 
 export function initMarketingTasksSync(): Promise<void> {
-  const p = Promise.all([requestsStore.init(), standaloneStore.init()]);
-  requestsStore.subscribeRealtime();
-  standaloneStore.subscribeRealtime();
-  return p.then(() => {
+  return standaloneStore.init().then(() => {
+    standaloneStore.subscribeRealtime();
     migrateLegacyStandalone();
   });
-}
-
-export function loadRequests(): MktRequest[] {
-  return requestsStore.get();
-}
-
-function save(list: MktRequest[]) {
-  requestsStore.set(() => list);
-}
-
-export function onRequestsChange(cb: () => void): () => void {
-  return requestsStore.subscribe(cb);
-}
-
-export function isRequested(kind: MktSourceKind, sourceId: string, taskId: string): boolean {
-  return loadRequests().some(
-    (r) => r.sourceKind === kind && r.sourceId === sourceId && r.taskId === taskId,
-  );
-}
-
-export function requestForMarketing(kind: MktSourceKind, sourceId: string, taskId: string) {
-  const list = loadRequests();
-  if (list.some((r) => r.sourceKind === kind && r.sourceId === sourceId && r.taskId === taskId))
-    return;
-  list.push({
-    id: crypto.randomUUID(),
-    sourceKind: kind,
-    sourceId,
-    taskId,
-    requestedAt: new Date().toISOString(),
-  });
-  save(list);
-}
-
-export function removeRequest(kind: MktSourceKind, sourceId: string, taskId: string) {
-  save(
-    loadRequests().filter(
-      (r) => !(r.sourceKind === kind && r.sourceId === sourceId && r.taskId === taskId),
-    ),
-  );
-}
-
-/* Os status de projeto e campanha agora são idênticos aos da coluna. */
-
-const ALLOWED: MktColumn[] = [
-  "Aberto",
-  "Em andamento",
-  "Em aprovação",
-  "Em ajustes",
-  "Aprovado",
-  "Concluído",
-  "Arquivado",
-];
-
-function toColumn(status: string): MktColumn {
-  // Compatibilidade com valores antigos (todo/doing/done).
-  if (status === "todo") return "Aberto";
-  if (status === "doing") return "Em andamento";
-  if (status === "done") return "Concluído";
-  return (ALLOWED as string[]).includes(status) ? (status as MktColumn) : "Aberto";
-}
-
-export function projetoStatusToColumn(status: string): MktColumn {
-  return toColumn(status);
-}
-
-export function campanhaStatusToColumn(status: string): MktColumn {
-  return toColumn(status);
-}
-
-export function columnToProjetoStatus(col: MktColumn): KanbanStatus {
-  return col;
-}
-
-export function columnToCampanhaStatus(col: MktColumn): string {
-  return col;
 }
 
 export function loadStandalone(): MktStandalone[] {
