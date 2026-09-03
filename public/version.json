@@ -1,6 +1,7 @@
 {
-  "version": "1.245.0",
+  "version": "1.246.0",
   "notes": [
+    "Refatora o aviso de \"Nova versão disponível\": era um card técnico com gradiente e uma lista crua de commits; agora é um toast compacto (resumo de 1 linha + Ver novidades/Atualizar agora) que abre um painel \"O que há de novo\" com as mudanças agrupadas por módulo, em linguagem de produto (sem jargão de dev). Fechar o aviso registra a versão como já vista (não reaparece de forma invasiva); o changelog curado fica sempre acessível em Configurações > Novidades. Nova estrutura de dados releases/releasesVC em version.json, curada por módulo; notes/notesVC seguem existindo só como registro técnico interno, não são mais exibidos na UI.",
     "Corrige dois bugs no Financeiro: calendário de \"Data do pagamento\" que abria atrás do modal \"Marcar como pago/recebido\" (agora fica acima); e clique num item de \"Requer atenção\" na Visão geral que abria uma lista vazia em Lançamentos quando o item vencido/a vencer estava fora do período selecionado (agora o período se ajusta automaticamente).",
     "Overhaul completo do Financeiro: virou um hub de gestão financeira, não só uma lista de lançamentos. Novas abas Visão geral/Lançamentos/A receber/A pagar com um único período compartilhado (Hoje/Esta semana/Este mês/Mês passado/30-90-180 dias/Este ano/Personalizado + navegação de mês). Status real por lançamento (a receber/recebido/a pagar/pago/vencido/cancelado) substituindo a marcação antiga de \"pago\" que só existia no navegador de cada pessoa (as marcas antigas são migradas automaticamente, uma vez, no primeiro acesso de cada navegador). Três datas distintas por lançamento (competência/vencimento/pagamento), nunca mais confundidas. \"Marcar como pago/recebido\" virou um fluxo de verdade com data real, valor, forma de pagamento e comprovante. Recorrência (semanal/mensal/trimestral/anual/personalizada) gerando a próxima ocorrência só quando a atual for paga ou vencer, nunca em lote. Novo lançamento ganhou \"Mais opções\" (competência, responsável, forma de pagamento, recorrência, observações) mantendo o formulário simples por padrão. Modal de detalhe do lançamento achatado (sem caixas empilhadas). Despesas de influenciador agora ligadas ao cadastro real da campanha, não só a um nome copiado. Barra de filtros avançados com chips removíveis (status, responsável, faixa de valor, forma de pagamento, origem, possui NF/comprovante). Visão geral com posição financeira única (saldo projetado + composição), \"Requer atenção\" clicável, gráfico de fluxo financeiro (realizado/projetado) com estado vazio de verdade em vez de gráfico zerado, A receber/A pagar em duas colunas, resultado por campanha (receita/custos/margem) e análises compactas de receita por cliente e despesas por categoria.",
     "Redesign dos registros de chamada no histórico do Chat: eram pills grandes e coloridas (amarelo pra perdida/não atendida, verde pra encerrada) que competiam visualmente com as mensagens de verdade — agora são discretos, monocromáticos, do mesmo peso visual de um \"Hoje\"/\"Ontem\" no histórico (cor só sobra num pontinho sutil pra \"perdida\"). Várias tentativas de chamada seguidas em pouco tempo (até 10 min, mesmo dia) agora agrupam num único item recolhível (\"5 tentativas de chamada · 22:05–22:07\"), que expande pra mostrar cada tentativa — chamadas que de fato aconteceram nunca agrupam, continuam aparecendo individualmente. Chamada encerrada ganhou \"Ver detalhes\" (clicável, mostra com quem, data, horário de início-fim e duração). Nada na lógica das chamadas, no banco de dados ou no texto salvo mudou — só a apresentação.",
@@ -365,5 +366,63 @@
     "Redesenha o card de perfil do link público de aprovação: maior, mais espaçado, com títulos e seções bem definidas.",
     "Corrige os gráficos de demografia (influenciador e link público de aprovação): as barras não apareciam por um bug de cor, ficando invisíveis sobre o card. Aproveitando, o card de perfil do link público ficou maior para nenhuma métrica ficar cortada.",
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
-  ]
+  ],
+  "releases": [
+    {
+      "version": "1.246.0",
+      "summary": "Financeiro com visão geral, contas a receber/pagar e resultado por campanha; histórico de chamadas mais enxuto no Chat.",
+      "modules": [
+        {
+          "name": "FINANCEIRO",
+          "tagline": "Nova experiência de gestão financeira",
+          "items": [
+            {
+              "title": "Nova Visão Geral",
+              "description": "Acompanhe sua posição financeira, alertas e fluxo de caixa em um só lugar."
+            },
+            {
+              "title": "Contas a receber e a pagar",
+              "description": "Veja o que está vencido, vence em breve ou já foi pago, com marcação de pagamento em poucos cliques."
+            },
+            {
+              "title": "Resultado por campanha",
+              "description": "Acompanhe receita, custos e margem de cada campanha."
+            },
+            {
+              "title": "Lançamentos recorrentes",
+              "description": "Cadastre uma vez e deixe o sistema gerar as próximas ocorrências automaticamente."
+            }
+          ]
+        },
+        {
+          "name": "CHAT",
+          "tagline": "Chamadas mais organizadas",
+          "items": [
+            {
+              "title": "Novo histórico de chamadas",
+              "description": "Registros de chamadas agora ocupam menos espaço e ficam mais fáceis de ler."
+            }
+          ]
+        },
+        {
+          "name": "MELHORIAS",
+          "items": [
+            {
+              "title": "Novos filtros",
+              "description": "Filtre lançamentos por cliente, campanha, categoria e outros critérios."
+            },
+            {
+              "title": "Aviso de novidades mais simples",
+              "description": "Fique por dentro do que mudou de forma rápida, sem termos técnicos."
+            },
+            {
+              "title": "Correções de interface",
+              "description": "Pequenos ajustes visuais e correções de bugs em diversas telas."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "releasesVC": []
 }

@@ -32,8 +32,11 @@ import {
   Sliders,
   Users,
   History,
+  Sparkles,
 } from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
+import { ReleaseModulesList } from "./ReleaseNotesDialog";
+import { fetchVersionInfo, type Release } from "@/lib/release-notes";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   listBugReports,
@@ -98,6 +101,7 @@ import { logSettingsAudit } from "@/lib/settings-audit";
 type TabKey =
   | "perfil"
   | "preferencias"
+  | "novidades"
   | "workspace"
   | "integracoes"
   | "precificacao"
@@ -113,7 +117,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.245.0";
+export const APP_VERSION = "1.246.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -212,6 +216,7 @@ const SETTINGS_GROUPS: {
     tabs: [
       { k: "perfil", label: "Meu Perfil", icon: User },
       { k: "preferencias", label: "Preferências", icon: Bell },
+      { k: "novidades", label: "Novidades", icon: Sparkles },
     ],
   },
   {
@@ -270,6 +275,7 @@ export function ConfiguracoesSection() {
           {tab === "perfil" && <PerfilTab perfil={perfil} setPerfil={setPerfil} />}
           {tab === "workspace" && (canConfig ? <WorkspaceTab /> : <LockedSection title="Geral" />)}
           {tab === "preferencias" && <PreferenciasTab />}
+          {tab === "novidades" && <NovidadesTab />}
           {tab === "integracoes" && <IntegracoesTab />}
           {tab === "precificacao" &&
             (canConfig ? <PrecificacaoTab /> : <LockedSection title="Custos e precificação" />)}
@@ -793,6 +799,41 @@ function ScoreOperacionalTab() {
           </button>
           {saved && <span className="text-xs text-emerald-600 dark:text-emerald-400">Salvo!</span>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Acesso permanente ao changelog curado (item 6 do pedido de refatoração
+ * do aviso de nova versão) — sempre mostra a release mais recente, mesmo
+ * depois que o toast já foi dispensado. */
+function NovidadesTab() {
+  const [release, setRelease] = useState<Release | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchVersionInfo().then((info) => {
+      if (!cancelled) setRelease(info?.releases?.[0] ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="max-w-lg space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">Novidades</h3>
+        <p className="text-xs text-muted-foreground">
+          O que mudou nas últimas atualizações da plataforma.
+        </p>
+      </div>
+      <div className="rounded-lg border border-border bg-background p-4">
+        {release === undefined ? (
+          <p className="text-xs text-muted-foreground">Carregando...</p>
+        ) : (
+          <ReleaseModulesList release={release} />
+        )}
       </div>
     </div>
   );
