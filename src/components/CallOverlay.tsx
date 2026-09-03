@@ -178,15 +178,26 @@ export function CallOverlay() {
   const screenSharing = call.status !== "idle" && call.screenSharing;
   useEffect(() => {
     if (call.status === "idle") return;
+    // Renegociar (ex: alguém ligou/desligou compartilhamento de tela) pode
+    // fazer o navegador pausar sozinho um <audio>/<video> já tocando no meio
+    // da troca de SDP, sem disparar nenhum erro — só um evento "pause" que
+    // ninguém escutava, deixando a chamada muda até alguém mexer de novo.
+    // `onpause` re-tenta tocar sozinho sempre que isso acontecer.
+    const playSafely = (el: HTMLMediaElement) => {
+      el.onpause = () => {
+        if (!el.ended) void el.play().catch(() => undefined);
+      };
+      void el.play().catch(() => undefined);
+    };
     const local = localRef.current;
     const localScreen = localScreenRef.current;
     if (local) {
       local.srcObject = getLocalCallStream();
-      void local.play().catch(() => undefined);
+      playSafely(local);
     }
     if (localScreen) {
       localScreen.srcObject = getLocalScreenStream();
-      void localScreen.play().catch(() => undefined);
+      playSafely(localScreen);
     }
     const nextVideoOn: Record<string, boolean> = {};
     for (const peerId of getActivePeerIds()) {
@@ -199,7 +210,7 @@ export function CallOverlay() {
         // oculto sempre montado abaixo, senão minimizar e depois voltar a
         // maximizar tocaria a mesma trilha duas vezes ao mesmo tempo.
         remote.muted = true;
-        void remote.play().catch(() => undefined);
+        playSafely(remote);
       }
       const hiddenAudio = hiddenAudioRefs.current.get(peerId);
       if (hiddenAudio) {
@@ -208,13 +219,13 @@ export function CallOverlay() {
         // independentes — uma falha ao trocar de dispositivo no máximo
         // deixa a saída no padrão do sistema, nunca impede o áudio de tocar.
         void setCallAudioOutput(hiddenAudio).catch(() => undefined);
-        void hiddenAudio.play().catch(() => undefined);
+        playSafely(hiddenAudio);
       }
       const remoteScreen = remoteScreenRefs.current.get(peerId);
       const screenStream = getRemoteScreenStream(peerId);
       if (remoteScreen && screenStream) {
         remoteScreen.srcObject = screenStream;
-        void remoteScreen.play().catch(() => undefined);
+        playSafely(remoteScreen);
       }
     }
     setRemoteVideoOn(nextVideoOn);
@@ -425,39 +436,49 @@ export function CallOverlay() {
           >
             {call.cameraEnabled ? <Camera /> : <CameraOff />}
           </IconButton>
-          <div className="relative">
+          {call.screenSharing ? (
             <IconButton
-              label={call.screenSharing ? "Parar compartilhamento" : "Compartilhar tela"}
-              active={call.screenSharing}
-              onClick={() =>
-                call.screenSharing ? void setScreenSharing(false) : setShareMenuOpen((v) => !v)
-              }
+              label="Parar compartilhamento"
+              active
+              onClick={() => void setScreenSharing(false)}
             >
-              {call.screenSharing ? <MonitorX /> : <MonitorUp />}
+              <MonitorX />
             </IconButton>
-            {shareMenuOpen && !call.screenSharing && (
-              <div className="absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-lg border border-white/10 bg-zinc-900 p-1 shadow-xl">
+          ) : (
+            <DropdownMenu open={shareMenuOpen} onOpenChange={setShareMenuOpen}>
+              <DropdownMenuTrigger asChild>
                 <button
-                  className="w-full cursor-pointer rounded px-2.5 py-2 text-left text-xs text-zinc-100 hover:bg-white/10"
-                  onClick={() => {
-                    setShareMenuOpen(false);
-                    void setScreenSharing(true, false);
-                  }}
+                  aria-label="Compartilhar tela"
+                  title="Compartilhar tela"
+                  className="inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-white/10 text-zinc-200 transition-colors hover:bg-white/20 [&_svg]:h-5 [&_svg]:w-5"
+                >
+                  <MonitorUp />
+                </button>
+              </DropdownMenuTrigger>
+              {/* Radix cuida da colisão sozinho (side="top" + flip automático)
+                  — antes disso, um menu posicionado à mão aqui podia sobrepor
+                  a faixa de participantes logo acima, quando os dois
+                  apareciam perto do rodapé ao mesmo tempo. */}
+              <DropdownMenuContent
+                side="top"
+                align="center"
+                className="w-56 border-white/10 bg-zinc-900 text-zinc-100"
+              >
+                <DropdownMenuItem
+                  onClick={() => void setScreenSharing(true, false)}
+                  className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
                 >
                   Compartilhar sem áudio
-                </button>
-                <button
-                  className="w-full cursor-pointer rounded px-2.5 py-2 text-left text-xs text-zinc-100 hover:bg-white/10"
-                  onClick={() => {
-                    setShareMenuOpen(false);
-                    void setScreenSharing(true, true);
-                  }}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void setScreenSharing(true, true)}
+                  className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
                 >
                   Compartilhar com áudio
-                </button>
-              </div>
-            )}
-          </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <DropdownMenu open={devicesOpen} onOpenChange={setDevicesOpen}>
             <DropdownMenuTrigger asChild>
               <button
