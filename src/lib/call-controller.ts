@@ -117,7 +117,13 @@ type Signal =
       fromUserId: string;
       toUserId: string;
       sharing: boolean;
-    };
+    }
+  // Avisa explicitamente quando alguém liga/desliga o próprio microfone —
+  // não dá pra saber isso olhando o áudio recebido (o track continua
+  // chegando normalmente mesmo mutado do lado de quem fala), então sem
+  // esse sinal a UI nunca saberia mostrar "microfone desligado" de quem
+  // não é você.
+  | { type: "mute-state"; callId: string; fromUserId: string; toUserId: string; muted: boolean };
 
 export type CallParticipantStatus =
   | "ringing"
@@ -133,6 +139,8 @@ export type CallParticipant = {
   /** Explícito via sinal "screen-share" — nunca inferido da identidade do
    * stream de mídia recebido (ver comentário no tipo `Signal`). */
   sharingScreen?: boolean;
+  /** Explícito via sinal "mute-state" — idem, nunca inferido do áudio. */
+  muted?: boolean;
 };
 
 type CallBase = {
@@ -318,6 +326,40 @@ function startRing(pattern: "outgoing" | "incoming") {
     /* visible incoming overlay remains */
   }
 }
+
+/** Toca uma sequência curta de tons UMA vez (diferente do `startRing`, que
+ * fica repetindo) — usado pra avisar "atendeu" (tom subindo) e "desligou"
+ * (tom descendo), do mesmo jeito que qualquer app de chamada avisa essas
+ * duas transições sem precisar olhar pra tela. */
+function playTone(freqs: number[]) {
+  try {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const context = new AC();
+    const step = 0.16;
+    freqs.forEach((freq, i) => {
+      const start = context.currentTime + i * step;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + step);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + step + 0.02);
+    });
+    window.setTimeout(
+      () => void context.close().catch(() => undefined),
+      (freqs.length + 1) * step * 1000,
+    );
+  } catch {
+    /* sem som, chamada segue normal */
+  }
+}
+const playConnectedTone = () => playTone([520, 780]);
+const playEndedTone = () => playTone([620, 440]);
 
 function closePeer(peerId: string) {
   const link = peers.get(peerId);
@@ -561,8 +603,10 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
       clearConnectTimeout(link);
       patchParticipant(peerId, { status: "connected" });
       if (state.status !== "idle") {
-        if (!state.connectedAt)
+        if (!state.connectedAt) {
           patch({ status: "in-call", connectedAt: Date.now(), error: undefined });
+          playConnectedTone();
+        }
         // Reconectou depois de um restart de ICE (falha temporária de rede)
         // — sem isso, um erro amigável que apareceu durante o hiccup ficava
         // preso na tela pra sempre, mesmo com a chamada funcionando de novo.
@@ -973,6 +1017,9 @@ async function handle(signal: Signal) {
     // cinza até a próxima mudança de mídia real (que podia nunca vir).
     mediaChanged();
   }
+  if (signal.type === "mute-state") {
+    patchParticipant(signal.fromUserId, { muted: signal.muted });
+  }
 }
 
 export async function initCallController(id: string, name: string, photo?: string) {
@@ -1171,6 +1218,10 @@ function finish(explicitReason?: CallEndReason) {
   );
   const reason: CallEndReason =
     explicitReason ?? (connected ? "answered" : previous.isHost ? "cancelled" : "missed");
+  // Só toca o tom de "desligou" pra uma chamada que chegou a conectar de
+  // verdade — quem nunca atendeu já tem o próprio feedback (recusada/não
+  // atendida/ocupado na tela), não precisa de mais um som em cima.
+  if (connected) playEndedTone();
   // "Ocupado" só faz sentido do ponto de vista de quem ligou, quando a
   // chamada nunca conectou — quem recebeu sabe que já estava em outra
   // ligação, isso não é uma informação nova pra mostrar do lado dele.
@@ -1204,6 +1255,11 @@ export function setMuted(muted: boolean) {
     track.enabled = !muted;
   });
   patch({ muted });
+  if (state.status !== "idle") {
+    const callId = state.callId;
+    for (const peerId of peers.keys())
+      void send({ type: "mute-state", callId, toUserId: peerId, muted }).catch(() => undefined);
+  }
 }
 /** "Ensurdecer" — silencia o áudio de todo mundo que eu recebo, sem afetar
  * o que os outros ouvem de mim (padrão Discord). */
@@ -1229,8 +1285,16 @@ export async function setCameraEnabled(enabled: boolean) {
   }
   try {
     const selected = prefs().videoIn;
+    // `ideal` só pede a melhor resolução razoável disponível pra câmera
+    // escolhida — nunca falha se a câmera não suportar (o navegador cai pro
+    // mais próximo sozinho), evita esticar um stream baixo pra parecer maior
+    // do que realmente é.
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: selected ? { deviceId: { exact: selected } } : true,
+      video: {
+        ...(selected ? { deviceId: { exact: selected } } : {}),
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
       audio: false,
     });
     const track = stream.getVideoTracks()[0];

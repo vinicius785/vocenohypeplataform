@@ -5,11 +5,12 @@ import {
   Camera,
   CameraOff,
   ChevronDown,
-  Ear,
-  EarOff,
+  EyeOff,
+  Maximize,
   Maximize2,
   Mic,
   MicOff,
+  Minimize,
   Minimize2,
   MonitorUp,
   MonitorX,
@@ -35,7 +36,6 @@ import {
   setCallAudioOutput,
   setCallMinimized,
   setCameraEnabled,
-  setDeafened,
   setMuted,
   setScreenSharing,
   startCall,
@@ -51,15 +51,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** Estado que já tem `CallBase` (participantes, mudo, câmera, etc) — usado
@@ -74,12 +74,24 @@ type TerminalOutcome = {
   kind: TerminalKind;
   retryInvitees: { id: string; name: string; photo?: string }[];
 };
+type Corner = "tl" | "tr" | "bl" | "br";
+type VideoFit = "cover" | "contain";
 
 const EMPTY: CallDevices = { microphones: [], cameras: [], speakers: [] };
 const PIP_POS_KEY = "call:pipPos";
+const SELF_PREVIEW_KEY = "call:selfPreviewCorner";
+const VIDEO_FIT_KEY = "call:videoFit";
 
 function formatDuration(seconds: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function readVideoFit(): VideoFit {
+  try {
+    return localStorage.getItem(VIDEO_FIT_KEY) === "contain" ? "contain" : "cover";
+  } catch {
+    return "cover";
+  }
 }
 
 /** Nunca deixa uma string técnica de WebRTC (nome de API, "Failed to
@@ -99,9 +111,13 @@ export function CallOverlay() {
   const speakingIds = useSpeakingPeerIds();
   const [now, setNow] = useState(Date.now());
   const [devices, setDevices] = useState(EMPTY);
-  const [devicesOpen, setDevicesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [videoFit, setVideoFit] = useState<VideoFit>(readVideoFit);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [selfPreviewHidden, setSelfPreviewHidden] = useState(false);
   const [endedSummary, setEndedSummary] = useState<{ title: string; label: string } | null>(null);
   const [terminalOutcome, setTerminalOutcome] = useState<TerminalOutcome | null>(null);
   const [remoteVideoOn, setRemoteVideoOn] = useState<Record<string, boolean>>({});
@@ -109,6 +125,7 @@ export function CallOverlay() {
   const localScreenRef = useRef<HTMLVideoElement>(null);
   const remoteRefs = useRef(new Map<string, HTMLVideoElement>());
   const remoteScreenRefs = useRef(new Map<string, HTMLVideoElement>());
+  const stageRef = useRef<HTMLDivElement>(null);
   // O <video> que carrega o áudio remoto some quando minimiza (a barra
   // minimizada não renderiza vídeo/áudio nenhum) — sem uma trilha de áudio
   // sempre montada, minimizar silenciava a ligação inteira mesmo com o
@@ -137,7 +154,7 @@ export function CallOverlay() {
 
   useEffect(() => {
     if (call.status === "idle") {
-      setDevicesOpen(false);
+      setMoreOpen(false);
       setShareMenuOpen(false);
       setParticipantsOpen(false);
       return;
@@ -148,10 +165,55 @@ export function CallOverlay() {
       .catch(() => setDevices(EMPTY));
   }, [call.status]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIDEO_FIT_KEY, videoFit);
+    } catch {
+      /* sem persistência, só não lembra da próxima vez */
+    }
+  }, [videoFit]);
+
+  useEffect(() => {
+    const onFsChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Some com os controles depois de alguns segundos sem mover o mouse —
+  // igual a qualquer plataforma de vídeo madura. Nunca esconde enquanto tem
+  // algo importante acontecendo (erro, reconectando, menu aberto), pra não
+  // esconder justo a única pista de que algo precisa de atenção.
+  useEffect(() => {
+    const c = callRef.current;
+    const important =
+      c.status !== "idle" &&
+      (!!c.error || Object.values(c.participants).some((p) => p.status === "reconnecting"));
+    if (moreOpen || shareMenuOpen || participantsOpen || important) {
+      setControlsVisible(true);
+      return;
+    }
+    let hideTimer: number | null = null;
+    const show = () => {
+      setControlsVisible(true);
+      if (hideTimer !== null) window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setControlsVisible(false), 3_500);
+    };
+    show();
+    const container = stageRef.current;
+    container?.addEventListener("mousemove", show);
+    container?.addEventListener("mousedown", show);
+    return () => {
+      if (hideTimer !== null) window.clearTimeout(hideTimer);
+      container?.removeEventListener("mousemove", show);
+      container?.removeEventListener("mousedown", show);
+    };
+  }, [moreOpen, shareMenuOpen, participantsOpen, call.status]);
+
   // Atalhos M (mic) / V (câmera) — só durante a chamada, e nunca quando o
   // foco está num campo de texto (não pode roubar digitação de mensagem no
   // Chat, por exemplo). ESC de propósito não faz nada aqui — encerrar só
-  // pelo botão específico, nunca sem querer.
+  // pelo botão específico, nunca sem querer (ESC sai do fullscreen sozinho,
+  // comportamento nativo do navegador, sem precisar de código pra isso).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const c = callRef.current;
@@ -182,6 +244,7 @@ export function CallOverlay() {
         }>
       ).detail;
       if (!detail) return;
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       if (detail.reason === "answered") {
         setEndedSummary({
           title: "Chamada encerrada",
@@ -324,14 +387,14 @@ export function CallOverlay() {
         : `Chamada em grupo · ${participants.length + 1} pessoas`
     : primaryName;
   const friendlyError = call.error ? friendlyCallError(call.error) : undefined;
-  const statusLabel =
-    call.status === "ringing-out"
-      ? "Chamando..."
-      : call.status === "ringing-in"
-        ? "Chamada recebida"
-        : call.status === "in-call" && !call.connectedAt
-          ? "Conectando..."
-          : `Em chamada · ${formatDuration(seconds)}`;
+  const isRingingOut = call.status === "ringing-out";
+  const isConnecting = call.status === "in-call" && !call.connectedAt;
+  const statusLabel = isRingingOut ? "Chamando..." : isConnecting ? "Conectando..." : undefined;
+  // Estado de conexão só aparece quando há algo relevante — nunca um
+  // "Conectado"/"Em chamada" parado ali sem função nenhuma.
+  const anyReconnecting =
+    call.status === "in-call" && participants.some((p) => p.status === "reconnecting");
+  const headerNotice = friendlyError ?? (anyReconnecting ? "Reconectando..." : undefined);
 
   // Quem está compartilhando é sempre decidido pelo sinal explícito
   // "screen-share" (`p.sharingScreen`), nunca adivinhado a partir da
@@ -358,12 +421,6 @@ export function CallOverlay() {
     );
   }
 
-  // ringing-out e in-call compartilham a MESMA interface (cabeçalho, área
-  // principal e barra de controles) — só o conteúdo da área principal e o
-  // texto de status evoluem, exatamente como Google Meet/FaceTime: a sala já
-  // existe antes de Lucas atender, não é uma tela de loading separada.
-  const isRingingOut = call.status === "ringing-out";
-
   if (call.minimized) {
     return (
       <>
@@ -383,31 +440,45 @@ export function CallOverlay() {
     );
   }
 
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void stageRef.current?.requestFullscreen().catch(() => undefined);
+  };
+
   return (
     <TooltipProvider delayDuration={300}>
       {hiddenAudioPool}
-      <div className="fixed inset-0 z-[100] flex flex-col bg-zinc-950 text-zinc-100">
-        <header className="flex shrink-0 items-center justify-between gap-2 px-5 py-3">
+      <div ref={stageRef} className="fixed inset-0 z-[100] flex flex-col bg-zinc-950 text-zinc-100">
+        <header
+          className={`flex shrink-0 items-center justify-between gap-2 px-5 py-3 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        >
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">
-              {isRingingOut ? `Chamada com ${title}` : title}
-            </p>
-            {(friendlyError ||
-              (!isRingingOut && statusLabel !== `Em chamada · ${formatDuration(seconds)}`)) && (
+            {headerNotice && (
               <p
-                className={`flex items-center gap-1 text-xs ${friendlyError ? "text-rose-400" : "text-zinc-400"}`}
+                className={`flex items-center gap-1.5 text-xs ${friendlyError ? "text-rose-400" : "text-amber-400"}`}
               >
-                {friendlyError && <AlertTriangle className="h-3 w-3 shrink-0" />}
-                {friendlyError ?? statusLabel}
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {headerNotice}
               </p>
             )}
           </div>
           <div className="flex items-center gap-1">
+            {!isRingingOut && !isConnecting && (
+              <span className="mr-1 text-xs tabular-nums text-zinc-400">
+                {formatDuration(seconds)}
+              </span>
+            )}
             <HeaderIconButton
               label={`Participantes · ${participants.length + 1}`}
-              onClick={() => setParticipantsOpen(true)}
+              onClick={() => setParticipantsOpen((v) => !v)}
             >
               <Users className="h-4 w-4" />
+            </HeaderIconButton>
+            <HeaderIconButton
+              label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+              onClick={toggleFullscreen}
+            >
+              {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
             </HeaderIconButton>
             <HeaderIconButton label="Minimizar chamada" onClick={() => setCallMinimized(true)}>
               <Minimize2 className="h-4 w-4" />
@@ -415,45 +486,62 @@ export function CallOverlay() {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 px-5 pb-3">
-          {anySharing ? (
-            <ScreenShareLayout
+        <div className="flex min-h-0 flex-1">
+          <div className="min-h-0 min-w-0 flex-1 px-5 pb-3">
+            {anySharing ? (
+              <ScreenShareLayout
+                call={call}
+                participants={participants}
+                screenSharing={screenSharing}
+                remoteScreenPeer={remoteScreenPeer}
+                localScreenRef={localScreenRef}
+                remoteScreenRefs={remoteScreenRefs}
+                remoteRefs={remoteRefs}
+                localRef={localRef}
+                speakingIds={speakingIds}
+                remoteVideoOn={remoteVideoOn}
+              />
+            ) : isGroup ? (
+              <VideoGrid
+                call={call}
+                participants={participants}
+                localRef={localRef}
+                remoteRefs={remoteRefs}
+                speakingIds={speakingIds}
+                remoteVideoOn={remoteVideoOn}
+                videoFit={videoFit}
+              />
+            ) : (
+              <OneOnOneStage
+                stageRef={stageRef}
+                primary={participants[0]}
+                isRingingOut={isRingingOut}
+                isError={!!friendlyError}
+                statusLabel={friendlyError ?? statusLabel}
+                localRef={localRef}
+                remoteRefs={remoteRefs}
+                speakingIds={speakingIds}
+                remoteVideoOn={remoteVideoOn}
+                videoFit={videoFit}
+                cameraEnabled={call.cameraEnabled}
+                selfPreviewHidden={selfPreviewHidden}
+                onSelfPreviewHiddenChange={setSelfPreviewHidden}
+              />
+            )}
+          </div>
+          {participantsOpen && (
+            <ParticipantsPanel
               call={call}
               participants={participants}
-              screenSharing={screenSharing}
-              remoteScreenPeer={remoteScreenPeer}
-              localScreenRef={localScreenRef}
-              remoteScreenRefs={remoteScreenRefs}
-              remoteRefs={remoteRefs}
-              localRef={localRef}
               speakingIds={speakingIds}
-              remoteVideoOn={remoteVideoOn}
-            />
-          ) : isGroup ? (
-            <VideoGrid
-              call={call}
-              participants={participants}
-              localRef={localRef}
-              remoteRefs={remoteRefs}
-              speakingIds={speakingIds}
-              remoteVideoOn={remoteVideoOn}
-            />
-          ) : (
-            <OneOnOneStage
-              call={call}
-              primary={participants[0]}
-              isRingingOut={isRingingOut}
-              isError={!!friendlyError}
-              statusLabel={friendlyError ?? statusLabel}
-              localRef={localRef}
-              remoteRefs={remoteRefs}
-              speakingIds={speakingIds}
-              remoteVideoOn={remoteVideoOn}
+              onClose={() => setParticipantsOpen(false)}
             />
           )}
         </div>
 
-        <footer className="relative flex shrink-0 items-center justify-center gap-2 pb-6 pt-2">
+        <footer
+          className={`relative flex shrink-0 items-center justify-center gap-2 pb-6 pt-2 transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        >
           <IconButton
             label={call.muted ? "Ativar microfone" : "Desativar microfone"}
             active={call.muted}
@@ -462,15 +550,8 @@ export function CallOverlay() {
             {call.muted ? <MicOff /> : <Mic />}
           </IconButton>
           <IconButton
-            label={call.deafened ? "Reativar áudio" : "Ensurdecer"}
-            active={call.deafened}
-            onClick={() => setDeafened(!call.deafened)}
-          >
-            {call.deafened ? <EarOff /> : <Ear />}
-          </IconButton>
-          <IconButton
-            label={call.cameraEnabled ? "Desligar câmera" : "Ativar câmera"}
-            active={call.cameraEnabled}
+            label={call.cameraEnabled ? "Desativar câmera" : "Ativar câmera"}
+            active={!call.cameraEnabled}
             onClick={() => void setCameraEnabled(!call.cameraEnabled)}
           >
             {call.cameraEnabled ? <Camera /> : <CameraOff />}
@@ -518,12 +599,12 @@ export function CallOverlay() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <DropdownMenu open={devicesOpen} onOpenChange={setDevicesOpen}>
+          <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 aria-label="Mais opções"
                 title="Mais opções"
-                className={`inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full ${devicesOpen ? "bg-white/20 text-zinc-100" : "bg-white/10 text-zinc-200"} hover:opacity-90`}
+                className={`inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full ${moreOpen ? "bg-white/20 text-zinc-100" : "bg-white/10 text-zinc-200"} hover:opacity-90`}
               >
                 <MoreHorizontal className="h-5 w-5" />
               </button>
@@ -531,31 +612,82 @@ export function CallOverlay() {
             <DropdownMenuContent
               align="center"
               side="top"
-              className="z-[110] w-72 border-white/10 bg-zinc-900 text-zinc-100"
+              className="z-[110] w-64 border-white/10 bg-zinc-900 text-zinc-100"
             >
-              <div className="grid gap-3 p-2">
-                <DeviceSelect
-                  label="Microfone"
-                  devices={devices.microphones}
-                  onChange={(id) => void switchCallDevice("audioIn", id)}
-                />
-                <DeviceSelect
-                  label="Câmera"
-                  devices={devices.cameras}
-                  onChange={(id) => void switchCallDevice("videoIn", id)}
-                />
-                <DeviceSelect
-                  label="Saída de áudio"
-                  devices={devices.speakers}
-                  onChange={(id) => void switchCallDevice("audioOut", id)}
-                />
-              </div>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100 data-[state=open]:bg-white/10">
+                  Configurações de áudio e vídeo
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="z-[110] w-72 border-white/10 bg-zinc-900 text-zinc-100">
+                    <div className="grid gap-3 p-2">
+                      <DeviceSelect
+                        label="Microfone"
+                        devices={devices.microphones}
+                        onChange={(id) => void switchCallDevice("audioIn", id)}
+                      />
+                      <DeviceSelect
+                        label="Câmera"
+                        devices={devices.cameras}
+                        onChange={(id) => void switchCallDevice("videoIn", id)}
+                      />
+                      <DeviceSelect
+                        label="Saída de áudio"
+                        devices={devices.speakers}
+                        onChange={(id) => void switchCallDevice("audioOut", id)}
+                      />
+                    </div>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100 data-[state=open]:bg-white/10">
+                  Enquadramento do vídeo
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="z-[110] w-52 border-white/10 bg-zinc-900 text-zinc-100">
+                    <DropdownMenuRadioGroup
+                      value={videoFit}
+                      onValueChange={(v) => setVideoFit(v as VideoFit)}
+                    >
+                      <DropdownMenuRadioItem
+                        value="cover"
+                        className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
+                      >
+                        Preencher
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem
+                        value="contain"
+                        className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
+                      >
+                        Ajustar à tela
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator className="bg-white/10" />
               <DropdownMenuItem
-                onClick={() => setParticipantsOpen(true)}
+                onClick={() => setParticipantsOpen((v) => !v)}
                 className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
               >
                 <Users className="h-4 w-4" /> Participantes
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={toggleFullscreen}
+                className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
+              >
+                {fullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}{" "}
+                Tela cheia
+              </DropdownMenuItem>
+              {selfPreviewHidden && (
+                <DropdownMenuItem
+                  onClick={() => setSelfPreviewHidden(false)}
+                  className="text-zinc-100 focus:bg-white/10 focus:text-zinc-100"
+                >
+                  <Camera className="h-4 w-4" /> Mostrar seu preview
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="mx-1 h-8 w-px bg-white/10" aria-hidden="true" />
@@ -568,13 +700,6 @@ export function CallOverlay() {
           </IconButton>
         </footer>
       </div>
-      <ParticipantsPanel
-        open={participantsOpen}
-        onOpenChange={setParticipantsOpen}
-        call={call}
-        participants={participants}
-        speakingIds={speakingIds}
-      />
     </TooltipProvider>
   );
 }
@@ -629,7 +754,7 @@ function IncomingCallToast({
  * quanto já conectada — a MESMA composição (card + preview no canto)
  * evolui de avatar pulsando pra vídeo real, em vez de trocar de tela. */
 function OneOnOneStage({
-  call,
+  stageRef,
   primary,
   isRingingOut,
   isError,
@@ -638,24 +763,27 @@ function OneOnOneStage({
   remoteRefs,
   speakingIds,
   remoteVideoOn,
+  videoFit,
+  cameraEnabled,
+  selfPreviewHidden,
+  onSelfPreviewHiddenChange,
 }: {
-  call: RingingOrActiveCallState;
+  stageRef: React.RefObject<HTMLDivElement | null>;
   primary?: CallParticipant;
   isRingingOut: boolean;
   isError: boolean;
-  statusLabel: string;
+  statusLabel?: string;
   localRef: React.RefObject<HTMLVideoElement | null>;
   remoteRefs: React.RefObject<Map<string, HTMLVideoElement>>;
   speakingIds: ReadonlySet<string>;
   remoteVideoOn: Record<string, boolean>;
+  videoFit: VideoFit;
+  cameraEnabled: boolean;
+  selfPreviewHidden: boolean;
+  onSelfPreviewHiddenChange: (hidden: boolean) => void;
 }) {
   const hasRemoteVideo = !isRingingOut && !!primary && remoteVideoOn[primary.userId];
-  const showStatus = isRingingOut || primary?.status === "reconnecting" || isError;
-  const label = isError
-    ? statusLabel
-    : primary?.status === "reconnecting"
-      ? "Reconectando..."
-      : statusLabel;
+  const muted = !!primary?.muted;
   return (
     <div className="relative h-full overflow-hidden rounded-2xl bg-zinc-900/60">
       {/* O <video> fica sempre montado (só troca a classe "hidden"), nunca
@@ -674,7 +802,7 @@ function OneOnOneStage({
         }}
         autoPlay
         playsInline
-        className={`h-full w-full object-cover ${hasRemoteVideo ? "" : "hidden"}`}
+        className={`h-full w-full ${videoFit === "cover" ? "object-cover" : "object-contain"} ${hasRemoteVideo ? "" : "hidden"}`}
       />
       {!hasRemoteVideo && (
         <div className="flex h-full flex-col items-center justify-center gap-3">
@@ -685,40 +813,120 @@ function OneOnOneStage({
             ringing={isRingingOut && !isError}
             speaking={!!primary && speakingIds.has(primary.userId)}
           />
-          <div className="text-center">
-            <p className="text-xl font-semibold">{primary?.name}</p>
-            {showStatus && (
-              <p className={`mt-1 text-sm ${isError ? "text-rose-400" : "text-zinc-400"}`}>
-                {label}
-              </p>
-            )}
-          </div>
+          {statusLabel && (
+            <p className={`text-sm ${isError ? "text-rose-400" : "text-zinc-400"}`}>
+              {statusLabel}
+            </p>
+          )}
         </div>
       )}
+      {/* Nome pertence ao próprio vídeo/tile, nunca solto no cabeçalho da
+          chamada — igual ao padrão já usado em VideoTile pros outros modos. */}
+      {primary && (
+        <span className="absolute bottom-2.5 left-3 flex items-center gap-1 rounded bg-black/55 px-2 py-1 text-xs font-medium text-zinc-100">
+          {primary.name}
+          {muted && <MicOff className="h-3 w-3 text-zinc-300" />}
+        </span>
+      )}
       <SelfPreviewCard
-        cameraEnabled={call.cameraEnabled}
+        stageRef={stageRef}
+        cameraEnabled={cameraEnabled}
         localRef={localRef}
         speaking={speakingIds.has(LOCAL_SPEAKING_ID)}
+        hidden={selfPreviewHidden}
+        onHiddenChange={onSelfPreviewHiddenChange}
       />
     </div>
   );
 }
 
-/** Card flutuante da própria câmera/avatar — sempre no mesmo lugar (canto
- * inferior direito da área principal), ligando/desligando a câmera troca só
- * o conteúdo interno, nunca a posição. */
+const CORNER_CLASS: Record<Corner, string> = {
+  tl: "top-4 left-4",
+  tr: "top-4 right-4",
+  bl: "bottom-24 left-4",
+  br: "bottom-24 right-4",
+};
+
+/** Card flutuante da própria câmera/avatar — arrastável entre os 4 cantos da
+ * área principal (nunca livre, sempre encaixa num deles), nunca sobrepondo a
+ * barra de controles (cantos inferiores já têm folga extra pra isso).
+ * Ocultar aqui nunca desliga a câmera — só para de mostrar seu próprio
+ * preview local, a chamada continua exatamente igual pro outro lado. */
 function SelfPreviewCard({
+  stageRef,
   cameraEnabled,
   localRef,
   speaking,
+  hidden,
+  onHiddenChange,
 }: {
+  stageRef: React.RefObject<HTMLDivElement | null>;
   cameraEnabled: boolean;
   localRef: React.RefObject<HTMLVideoElement | null>;
   speaking?: boolean;
+  hidden: boolean;
+  onHiddenChange: (hidden: boolean) => void;
 }) {
   const me = getMe();
+  const [corner, setCorner] = useState<Corner>(() => {
+    try {
+      const raw = sessionStorage.getItem(SELF_PREVIEW_KEY);
+      if (raw === "tl" || raw === "tr" || raw === "bl" || raw === "br") return raw;
+    } catch {
+      /* usa o padrão */
+    }
+    return "br";
+  });
+  const [large, setLarge] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+
+  // O vídeo local, mesmo quando o card está oculto, continua montado (só
+  // sem exibição) — desmontar de vez faria `localRef` sumir do outro lugar
+  // que também depende dele, e a intenção aqui é só parar de MOSTRAR, nunca
+  // interferir na câmera de verdade.
+  const size = large ? "h-40 w-60" : "h-24 w-36";
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStart.current || !stageRef.current) return;
+    const rect = stageRef.current.getBoundingClientRect();
+    setDragPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragStart.current && stageRef.current) {
+      const rect = stageRef.current.getBoundingClientRect();
+      const relX = (e.clientX - rect.left) / rect.width;
+      const relY = (e.clientY - rect.top) / rect.height;
+      const next: Corner = `${relY < 0.5 ? "t" : "b"}${relX < 0.5 ? "l" : "r"}` as Corner;
+      setCorner(next);
+      try {
+        sessionStorage.setItem(SELF_PREVIEW_KEY, next);
+      } catch {
+        /* sem persistência, só não lembra na próxima chamada */
+      }
+    }
+    dragStart.current = null;
+    setDragPos(null);
+  };
+
   return (
-    <div className="absolute bottom-4 right-4 h-24 w-36 overflow-hidden rounded-xl border border-white/10 bg-zinc-800 shadow-lg">
+    <div
+      className={`absolute z-10 ${size} cursor-grab select-none overflow-hidden rounded-xl border border-white/10 bg-zinc-800 shadow-lg transition-[width,height] active:cursor-grabbing ${
+        dragPos ? "" : CORNER_CLASS[corner]
+      } ${hidden ? "hidden" : ""}`}
+      style={dragPos ? { left: dragPos.x - 24, top: dragPos.y - 24 } : undefined}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
       {cameraEnabled ? (
         <video ref={localRef} autoPlay muted playsInline className="h-full w-full object-cover" />
       ) : (
@@ -729,6 +937,16 @@ function SelfPreviewCard({
       <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-zinc-100">
         Você
       </span>
+      {hovering && (
+        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40">
+          <MiniIconButton label={large ? "Reduzir" : "Ampliar"} onClick={() => setLarge((v) => !v)}>
+            {large ? <Minimize className="h-3 w-3" /> : <Maximize className="h-3 w-3" />}
+          </MiniIconButton>
+          <MiniIconButton label="Ocultar meu preview" onClick={() => onHiddenChange(true)}>
+            <EyeOff className="h-3 w-3" />
+          </MiniIconButton>
+        </div>
+      )}
     </div>
   );
 }
@@ -793,7 +1011,7 @@ function CompactCallPlayer({
 }: {
   call: RingingOrActiveCallState;
   title: string;
-  statusLabel: string;
+  statusLabel?: string;
   isError: boolean;
   primaryPhoto?: string;
   localRef: React.RefObject<HTMLVideoElement | null>;
@@ -850,9 +1068,11 @@ function CompactCallPlayer({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-sm font-semibold">{title}</p>
-        <span className={`text-xs ${isError ? "text-rose-500" : "text-muted-foreground"}`}>
-          {statusLabel}
-        </span>
+        {statusLabel && (
+          <span className={`text-xs ${isError ? "text-rose-500" : "text-muted-foreground"}`}>
+            {statusLabel}
+          </span>
+        )}
       </div>
       <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-lg bg-zinc-900">
         {cameraEnabled && !anySharing ? (
@@ -896,59 +1116,54 @@ function CompactCallPlayer({
   );
 }
 
+/** Faixa lateral de participantes — empurra/reduz a área de vídeo (é uma
+ * coluna flex normal, não um modal/overlay por cima), fechada por padrão. */
 function ParticipantsPanel({
-  open,
-  onOpenChange,
   call,
   participants,
   speakingIds,
+  onClose,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   call: RingingOrActiveCallState;
   participants: CallParticipant[];
   speakingIds: ReadonlySet<string>;
+  onClose: () => void;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="z-[110] w-80 border-l border-white/10 bg-zinc-900 text-zinc-100"
-      >
-        <SheetHeader>
-          <SheetTitle className="text-zinc-100">
-            Participantes · {participants.length + 1}
-          </SheetTitle>
-          <SheetDescription className="text-zinc-400">
-            Quem está nesta chamada agora.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="mt-4 space-y-1">
+    <div className="flex w-72 shrink-0 flex-col border-l border-white/10 bg-zinc-900 px-4 py-4 text-zinc-100">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Participantes · {participants.length + 1}</p>
+        <HeaderIconButton label="Fechar" onClick={onClose}>
+          <ChevronDown className="h-4 w-4 rotate-90" />
+        </HeaderIconButton>
+      </div>
+      <div className="mt-3 space-y-1 overflow-y-auto">
+        <ParticipantRow
+          name={`${getMe().name} (você)`}
+          photo={getMe().photo}
+          muted={call.muted}
+          speaking={speakingIds.has(LOCAL_SPEAKING_ID)}
+        />
+        {participants.map((p) => (
           <ParticipantRow
-            name="Você"
-            muted={call.muted}
-            speaking={speakingIds.has(LOCAL_SPEAKING_ID)}
+            key={p.userId}
+            name={p.name}
+            photo={p.photo}
+            muted={p.muted}
+            statusLabel={
+              p.status === "connecting"
+                ? "Conectando..."
+                : p.status === "reconnecting"
+                  ? "Reconectando..."
+                  : p.status === "failed"
+                    ? "Desconectado"
+                    : undefined
+            }
+            speaking={speakingIds.has(p.userId)}
           />
-          {participants.map((p) => (
-            <ParticipantRow
-              key={p.userId}
-              name={p.name}
-              photo={p.photo}
-              statusLabel={
-                p.status === "connecting"
-                  ? "Conectando..."
-                  : p.status === "reconnecting"
-                    ? "Reconectando..."
-                    : p.status === "failed"
-                      ? "Desconectado"
-                      : undefined
-              }
-              speaking={speakingIds.has(p.userId)}
-            />
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -970,9 +1185,10 @@ function ParticipantRow({
       <TileAvatar name={name} photo={photo} small speaking={speaking} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{name}</p>
-        {statusLabel && <p className="text-xs text-zinc-400">{statusLabel}</p>}
+        <p className="text-xs text-zinc-400">
+          {statusLabel ?? (muted ? "Microfone desligado" : "Microfone ligado")}
+        </p>
       </div>
-      {muted !== undefined && (muted ? <MicOff className="h-4 w-4 text-zinc-500" /> : null)}
     </div>
   );
 }
@@ -984,6 +1200,7 @@ function VideoGrid({
   remoteRefs,
   speakingIds,
   remoteVideoOn,
+  videoFit,
 }: {
   call: RingingOrActiveCallState;
   participants: CallParticipant[];
@@ -991,6 +1208,7 @@ function VideoGrid({
   remoteRefs: React.RefObject<Map<string, HTMLVideoElement>>;
   speakingIds: ReadonlySet<string>;
   remoteVideoOn: Record<string, boolean>;
+  videoFit: VideoFit;
 }) {
   const tileCount = participants.length + 1;
   const cols = tileCount <= 1 ? 1 : tileCount <= 2 ? 2 : tileCount <= 4 ? 2 : 3;
@@ -1006,6 +1224,7 @@ function VideoGrid({
         cameraOn={call.cameraEnabled}
         videoRef={localRef}
         speaking={speakingIds.has(LOCAL_SPEAKING_ID)}
+        videoFit={videoFit}
       />
       {participants.map((p) => (
         <VideoTile
@@ -1026,6 +1245,7 @@ function VideoGrid({
                     : undefined
           }
           speaking={speakingIds.has(p.userId)}
+          videoFit={videoFit}
           videoRef={(el) => {
             if (el) remoteRefs.current.set(p.userId, el);
             else remoteRefs.current.delete(p.userId);
@@ -1169,6 +1389,7 @@ function VideoTile({
   small,
   statusLabel,
   speaking,
+  videoFit = "cover",
   videoRef,
 }: {
   peerId?: string;
@@ -1180,6 +1401,7 @@ function VideoTile({
   small?: boolean;
   statusLabel?: string;
   speaking?: boolean;
+  videoFit?: VideoFit;
   videoRef: React.RefObject<HTMLVideoElement | null> | ((el: HTMLVideoElement | null) => void);
 }) {
   return (
@@ -1193,7 +1415,7 @@ function VideoTile({
         autoPlay
         muted={muted}
         playsInline
-        className={`h-full w-full object-cover ${!cameraOn ? "hidden" : ""}`}
+        className={`h-full w-full ${videoFit === "cover" ? "object-cover" : "object-contain"} ${!cameraOn ? "hidden" : ""}`}
       />
       {!cameraOn && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
