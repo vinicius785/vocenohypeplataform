@@ -1,6 +1,7 @@
 {
-  "version": "1.254.0",
+  "version": "1.255.0",
   "notes": [
+    "Corrige o aviso de \"Nova versão disponível\" citando novidades de uma versão antiga (1.246.0) mesmo com o app já em versões bem mais recentes — as novidades curadas (`releases`) não estavam sendo atualizadas a cada bump, só o changelog técnico interno. Agora o card de novidades reflete de fato as mudanças acumuladas desde a última atualização do card (Financeiro, Tarefas, Reuniões, Time), e cada commit com mudança visível volta a atualizar `releases[0]` junto com o número da versão.",
     "Adiciona tabela de \"quantidade exata por membro\" em Produtividade por dia da semana (aba Time), só no recorte \"Esta semana\" — mostra quantas entregas cada pessoa fez em cada dia útil. Nos demais recortes (30/90 dias, ano) continua só o gráfico de média do time, sem a tabela.",
     "Corrige a lista de participantes ao criar/editar uma reunião não fechando ao clicar fora dela — era uma lista solta (sem o comportamento padrão de fechar ao clicar fora), agora usa o mesmo componente de popover já usado no resto do app.",
     "Refatora o Score Operacional (Time > Perfil do membro): a lógica antiga dava crédito parcial pra conclusão atrasada e nunca penalizava prazos alterados em cima da hora, o que produzia notas altas (ex. 92/100) mesmo com baixa previsibilidade de planejamento. Agora o score é a soma de 3 pilares com pontos fixos: Entrega (50 pts, taxa de conclusão no prazo + penalidade por tarefas vencidas em aberto), Previsibilidade (35 pts, antes só um bloco informativo \"Regularidade\" — agora pesa de verdade, com penalidade maior quanto mais em cima da hora o prazo é alterado: antecipado/próximo do prazo/no dia/após vencimento) e Compromissos (15 pts, presença em reuniões). A soma dos 3 pilares mostrados bate exatamente com o score total (nunca diverge por arredondamento). Novidades: classificação textual (Excelente/Muito bom/Bom/Atenção/Crítico), comparação com o período anterior, aviso de amostra reduzida, tooltips explicativos e \"Ver composição do score\" reescrito com o detalhamento completo de cada pilar e os \"principais impactos\" na pontuação. A lista principal da aba Time usa a mesma fórmula agora (antes usava um cálculo diferente do Perfil). Removidos da tela Configurações > Score Operacional os campos de peso (%) e \"teto de dias\" que não fazem mais sentido no novo modelo de pontos fixos.",
@@ -377,38 +378,66 @@
   ],
   "releases": [
     {
-      "version": "1.246.0",
-      "summary": "Financeiro com visão geral, contas a receber/pagar e resultado por campanha; histórico de chamadas mais enxuto no Chat.",
+      "version": "1.255.0",
+      "summary": "Correções no Financeiro e Reuniões, timers no fuso de Brasília, e produtividade por membro no Time.",
       "modules": [
         {
           "name": "FINANCEIRO",
-          "tagline": "Nova experiência de gestão financeira",
+          "tagline": "Pequenas correções na experiência de pagamento",
           "items": [
             {
-              "title": "Nova Visão Geral",
-              "description": "Acompanhe sua posição financeira, alertas e fluxo de caixa em um só lugar."
+              "title": "Calendário de pagamento",
+              "description": "O calendário de \"Data do pagamento\" não fica mais escondido atrás da janela."
             },
             {
-              "title": "Contas a receber e a pagar",
-              "description": "Veja o que está vencido, vence em breve ou já foi pago, com marcação de pagamento em poucos cliques."
+              "title": "Alertas mais confiáveis",
+              "description": "Clicar num alerta de \"Requer atenção\" sempre leva à lista certa, mesmo fora do período selecionado."
             },
             {
-              "title": "Resultado por campanha",
-              "description": "Acompanhe receita, custos e margem de cada campanha."
-            },
-            {
-              "title": "Lançamentos recorrentes",
-              "description": "Cadastre uma vez e deixe o sistema gerar as próximas ocorrências automaticamente."
+              "title": "Anexos",
+              "description": "Notas fiscais antigas agora abrem em outra aba normalmente."
             }
           ]
         },
         {
-          "name": "CHAT",
-          "tagline": "Chamadas mais organizadas",
+          "name": "TAREFAS",
+          "tagline": "Menos travas ao usar o dia a dia",
           "items": [
             {
-              "title": "Novo histórico de chamadas",
-              "description": "Registros de chamadas agora ocupam menos espaço e ficam mais fáceis de ler."
+              "title": "Comentários não somem mais",
+              "description": "Um comentário digitado numa tarefa não é mais perdido se ela for atualizada em segundo plano."
+            },
+            {
+              "title": "Fotos reais nas menções",
+              "description": "Marcar alguém com @ agora mostra a foto de perfil da pessoa, não mais um ícone genérico."
+            },
+            {
+              "title": "Cronômetro no horário certo",
+              "description": "Os registros de tempo agora sempre mostram o horário de Brasília, não importa o fuso do computador."
+            }
+          ]
+        },
+        {
+          "name": "REUNIÕES",
+          "tagline": "Seleção de participantes mais previsível",
+          "items": [
+            {
+              "title": "Lista de participantes",
+              "description": "Clicar fora da lista de participantes agora fecha ela normalmente."
+            }
+          ]
+        },
+        {
+          "name": "TIME",
+          "tagline": "Score e produtividade mais transparentes",
+          "items": [
+            {
+              "title": "Novo Score Operacional",
+              "description": "Passa a considerar entrega, previsibilidade de prazos e presença em reuniões, com o cálculo detalhado disponível no perfil de cada pessoa."
+            },
+            {
+              "title": "Produtividade por pessoa",
+              "description": "Na visão \"Esta semana\", veja quantas entregas cada pessoa fez em cada dia."
             }
           ]
         },
@@ -416,16 +445,8 @@
           "name": "MELHORIAS",
           "items": [
             {
-              "title": "Novos filtros",
-              "description": "Filtre lançamentos por cliente, campanha, categoria e outros critérios."
-            },
-            {
-              "title": "Aviso de novidades mais simples",
-              "description": "Fique por dentro do que mudou de forma rápida, sem termos técnicos."
-            },
-            {
-              "title": "Correções de interface",
-              "description": "Pequenos ajustes visuais e correções de bugs em diversas telas."
+              "title": "Ajustes de interface",
+              "description": "Pequenas correções em diversas telas."
             }
           ]
         }
