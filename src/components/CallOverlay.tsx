@@ -177,6 +177,7 @@ export function CallOverlay() {
   const mediaVersion = call.status === "idle" ? 0 : call.mediaVersion;
   const cameraEnabled = call.status !== "idle" && call.cameraEnabled;
   const screenSharing = call.status !== "idle" && call.screenSharing;
+  const minimized = call.status !== "idle" && call.minimized;
   useEffect(() => {
     if (call.status === "idle") return;
     // Renegociar (ex: alguém ligou/desligou compartilhamento de tela) pode
@@ -230,7 +231,12 @@ export function CallOverlay() {
       }
     }
     setRemoteVideoOn(nextVideoOn);
-  }, [call.status, mediaVersion, cameraEnabled, screenSharing]);
+    // `minimized` entra nas dependências de propósito: alternar pro modo
+    // compacto desmonta os <video> da view expandida (e vice-versa), então
+    // os elementos recém-montados ao voltar têm `srcObject` vazio até esse
+    // efeito rodar de novo — sem isso, a câmera "ficava cinza" ao expandir
+    // de volta, esperando a próxima mudança de mídia (que podia demorar).
+  }, [call.status, mediaVersion, cameraEnabled, screenSharing, minimized]);
 
   const participants = useMemo(
     () => (call.status === "idle" ? [] : Object.values(call.participants)),
@@ -468,7 +474,7 @@ export function CallOverlay() {
               <DropdownMenuContent
                 side="top"
                 align="center"
-                className="w-56 border-white/10 bg-zinc-900 text-zinc-100"
+                className="z-[110] w-56 border-white/10 bg-zinc-900 text-zinc-100"
               >
                 <DropdownMenuItem
                   onClick={() => void setScreenSharing(true, false)}
@@ -498,7 +504,7 @@ export function CallOverlay() {
             <DropdownMenuContent
               align="center"
               side="top"
-              className="w-72 border-white/10 bg-zinc-900 text-zinc-100"
+              className="z-[110] w-72 border-white/10 bg-zinc-900 text-zinc-100"
             >
               <div className="grid gap-3 p-2">
                 <DeviceSelect
