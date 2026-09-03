@@ -12,6 +12,7 @@ import {
   Check,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { DateField } from "@/components/ui/date-field";
 import { TimeField } from "@/components/ui/time-field";
 import { Button } from "@/components/ui/button";
@@ -455,16 +456,17 @@ export function MeetingDialog({
               </ul>
             )}
 
-            <div className="relative mt-2">
-              <button
-                type="button"
-                onClick={() => setPickerOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" /> Adicionar participantes
-              </button>
-              {pickerOpen && (
-                <div className="absolute z-10 mt-1 max-h-48 w-64 overflow-auto rounded-md border border-border bg-popover p-1 shadow-lg">
+            <div className="mt-2">
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Adicionar participantes
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="max-h-48 w-64 overflow-auto p-1">
                   {team.length === 0 && (
                     <div className="px-2 py-2 text-xs text-muted-foreground">
                       Nenhum membro no time
@@ -494,8 +496,8 @@ export function MeetingDialog({
                       </label>
                     );
                   })}
-                </div>
-              )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {!addingGuest ? (
