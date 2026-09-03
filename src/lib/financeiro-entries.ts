@@ -36,18 +36,54 @@ export function legacyFinanceiroAnexoCategoria(raw: string): FinanceiroAnexoCate
     : "Comprovante";
 }
 
+/** Receita: a_receber → recebido (ou vencido, se passou do vencimento sem
+ * receber). Despesa: a_pagar → pago (ou vencido). `cancelado` é comum aos
+ * dois tipos. Substitui o antigo `PaidMap` (localStorage, só despesa) —
+ * ver `reconcilePaidMapOnce`. */
+export type EntryStatus = "a_receber" | "recebido" | "a_pagar" | "pago" | "vencido" | "cancelado";
+
+/** Grava os dados de uma confirmação de pagamento/recebimento — a data em
+ * si (`pagamento`) nunca é a mesma coisa que o vencimento: o vencimento é
+ * quando DEVERIA acontecer, isso aqui é quando de fato aconteceu. */
+export type PaymentConfirmation = {
+  pagamento: string; // YYYY-MM-DD
+  paidAmount: number;
+  paymentMethod: string;
+  paymentNote?: string;
+  paymentAnexoId?: string; // referencia um item de anexos[]
+};
+
+export type RecurrenceFrequency = "semanal" | "mensal" | "trimestral" | "anual" | "personalizado";
+
+export type EntryRecurrence = {
+  frequency: RecurrenceFrequency;
+  intervalDays?: number; // só p/ "personalizado"
+  seriesId: string; // constante em toda a série (= id da 1ª ocorrência)
+  parentId?: string; // id da ocorrência anterior (ausente na 1ª)
+  occurrenceIndex: number; // 0, 1, 2...
+};
+
 export type Entry = {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD — vencimento (nome legado do campo, ver `vencimento`)
+  vencimento: string; // mesmo valor de `date` — nome semanticamente correto
+  competencia: string; // YYYY-MM-DD — período contábil (default = vencimento)
   description: string;
   category: string;
   amount: number;
   kind: Kind;
   source: Source;
+  status: EntryStatus;
+  payment?: PaymentConfirmation;
   clienteId?: string;
   clienteNome?: string;
   campanhaId?: string;
   campanhaNome?: string;
+  influenciadorId?: string;
+  responsavelId?: string;
+  formaPagamento?: string; // prevista/planejada
+  observacoes?: string;
+  recurrence?: EntryRecurrence;
   meta?: string;
   editable: boolean;
   bank?: BankInfo;
@@ -60,12 +96,20 @@ export type Entry = {
 export type ManualEntry = {
   id: string;
   date: string;
+  competencia?: string;
   description: string;
   category: string;
   amount: number;
   kind: Kind;
+  status?: EntryStatus; // ausente = calculado por data na leitura
+  payment?: PaymentConfirmation;
   clienteId?: string;
   campanhaId?: string;
+  influenciadorId?: string;
+  responsavelId?: string;
+  formaPagamento?: string;
+  observacoes?: string;
+  recurrence?: EntryRecurrence;
   bank?: BankInfo;
   invoice?: InvoiceFile;
   anexos?: FinanceiroAnexo[];
@@ -342,7 +386,110 @@ function loadMembers(): Member[] {
   }
 }
 
-function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
+/** Status/pagamento de entries AUTO-GERADAS (campanha/influenciador/
+ * salário, `editable:false`) — essas não têm linha própria em
+ * `financeiro_lancamentos` pra guardar status, então usam esta tabela
+ * paralela, chaveada pelo mesmo id sintético já usado na `Entry` (ex.
+ * "inf:<campanhaId>:<influId>"). Mesmo padrão de cache+realtime de
+ * `manualCache` acima, só que mais simples (sem insert/delete pela UI —
+ * `upsertStatusOverride` sempre faz upsert). */
+type StatusOverride = { status: EntryStatus } & Partial<PaymentConfirmation>;
+let overridesCache: Record<string, StatusOverride> = {};
+let overridesLoaded = false;
+const overridesListeners = new Set<() => void>();
+const emitOverrides = () => overridesListeners.forEach((l) => l());
+
+let overridesChannel: ReturnType<typeof supabase.channel> | null = null;
+function subscribeOverridesRealtime() {
+  if (overridesChannel) return;
+  overridesChannel = supabase
+    .channel(`rt-financeiro_status_overrides-${Math.random().toString(36).slice(2)}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "financeiro_status_overrides" },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const old = payload.old as { id?: string } | null;
+          if (!old?.id) return;
+          const next = { ...overridesCache };
+          delete next[old.id];
+          overridesCache = next;
+        } else {
+          const row = payload.new as { id?: string; data?: StatusOverride } | null;
+          if (!row?.id || !row.data) return;
+          overridesCache = { ...overridesCache, [row.id]: row.data };
+        }
+        emitOverrides();
+      },
+    )
+    .subscribe();
+}
+
+export async function initOverridesSync(): Promise<void> {
+  if (!overridesLoaded) {
+    try {
+      const { data, error } = await supabase.from("financeiro_status_overrides").select("id,data");
+      if (error) throw error;
+      overridesCache = Object.fromEntries(
+        (data ?? []).map((row) => [row.id, row.data as StatusOverride]),
+      );
+    } catch (e) {
+      console.warn("[financeiro_status_overrides] initial load failed", e);
+    } finally {
+      overridesLoaded = true;
+      emitOverrides();
+    }
+  }
+  subscribeOverridesRealtime();
+}
+
+function loadOverrides(): Record<string, StatusOverride> {
+  return overridesCache;
+}
+function onOverridesChange(callback: () => void): () => void {
+  overridesListeners.add(callback);
+  return () => overridesListeners.delete(callback);
+}
+
+export async function upsertStatusOverride(id: string, override: StatusOverride): Promise<void> {
+  const { error } = await supabase
+    .from("financeiro_status_overrides")
+    .upsert({ id, data: override, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  overridesCache = { ...overridesCache, [id]: override };
+  emitOverrides();
+}
+
+/** Explícito (recebido/pago/cancelado) sempre vence; senão, vencido se já
+ * passou do vencimento sem confirmação; senão o padrão do tipo. Nunca
+ * confunde "a_receber"/"a_pagar" gravado no passado com uma confirmação —
+ * esses dois sempre recalculam por data, só recebido/pago/cancelado são
+ * estados terminais. */
+function deriveStatus(kind: Kind, vencimento: string, explicit?: EntryStatus): EntryStatus {
+  if (explicit === "recebido" || explicit === "pago" || explicit === "cancelado") return explicit;
+  if (vencimento < todayISO()) return "vencido";
+  return kind === "receita" ? "a_receber" : "a_pagar";
+}
+
+function paymentFromOverride(
+  override: StatusOverride | undefined,
+  fallbackAmount: number,
+): PaymentConfirmation | undefined {
+  if (!override?.pagamento) return undefined;
+  return {
+    pagamento: override.pagamento,
+    paidAmount: override.paidAmount ?? fallbackAmount,
+    paymentMethod: override.paymentMethod ?? "",
+    paymentNote: override.paymentNote,
+    paymentAnexoId: override.paymentAnexoId,
+  };
+}
+
+function buildEntries(
+  clientes: Cliente[],
+  manual: ManualEntry[],
+  overrides: Record<string, StatusOverride>,
+): Entry[] {
   const out: Entry[] = [];
 
   // 1. Campanhas: receita (valor do cliente / parcelas) + despesas (influenciadores)
@@ -351,14 +498,20 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
       const parcelas = camp.pagClienteParcelas ?? [];
       const pushReceita = (id: string, date: string, amount: number) => {
         if (amount <= 0) return;
+        const vencimento = date || todayISO();
+        const override = overrides[id];
         out.push({
           id,
-          date: date || todayISO(),
+          date: vencimento,
+          vencimento,
+          competencia: vencimento,
           description: `Receita — ${camp.nome}`,
           category: "Campanhas",
           amount,
           kind: "receita",
           source: "campanha",
+          status: deriveStatus("receita", vencimento, override?.status),
+          payment: paymentFromOverride(override, amount),
           clienteId: c.id,
           clienteNome: c.empresa,
           campanhaId: camp.id,
@@ -410,18 +563,26 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
         const outroCriterios = p.tipos.includes("Outro")
           ? p.config.Outro?.outroCriterios
           : undefined;
+        const infId = `inf:${camp.id}:${inf.id}`;
+        const infVencimento = p.data || todayISO();
+        const infOverride = overrides[infId];
         out.push({
-          id: `inf:${camp.id}:${inf.id}`,
-          date: p.data || todayISO(),
+          id: infId,
+          date: infVencimento,
+          vencimento: infVencimento,
+          competencia: infVencimento,
           description: pagamentoDescription(p, nome),
           category: "Influenciadores",
           amount,
           kind: "despesa",
           source: "influenciador",
+          status: deriveStatus("despesa", infVencimento, infOverride?.status),
+          payment: paymentFromOverride(infOverride, amount),
           clienteId: c.id,
           clienteNome: c.empresa,
           campanhaId: camp.id,
           campanhaNome: camp.nome,
+          influenciadorId: inf.id,
           meta: `${c.empresa} · ${camp.nome}${outroCriterios ? ` · ${outroCriterios}` : ""}`,
           editable: false,
           bank: inf.bank,
@@ -445,14 +606,20 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
     for (const m of members) {
       const amount = parseMoney(m.salary);
       if (amount <= 0) continue;
+      const salId = `sal:${m.id}:${iso}`;
+      const salOverride = overrides[salId];
       out.push({
-        id: `sal:${m.id}:${iso}`,
+        id: salId,
         date: iso,
+        vencimento: iso,
+        competencia: iso,
         description: `Salário — ${m.name}`,
         category: "Salários",
         amount,
         kind: "despesa",
         source: "salario",
+        status: deriveStatus("despesa", iso, salOverride?.status),
+        payment: paymentFromOverride(salOverride, amount),
         meta: "Recorrência dia 15",
         editable: false,
         memberName: m.name,
@@ -469,15 +636,24 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
     out.push({
       id: e.id,
       date: e.date,
+      vencimento: e.date,
+      competencia: e.competencia || e.date,
       description: e.description,
       category: e.category || (e.kind === "receita" ? "Receita" : "Despesa"),
       amount: e.amount,
       kind: e.kind,
       source: "manual",
+      status: deriveStatus(e.kind, e.date, e.status),
+      payment: e.payment,
       clienteId: e.clienteId,
       clienteNome: cli?.empresa,
       campanhaId: e.campanhaId,
       campanhaNome: camp?.nome,
+      influenciadorId: e.influenciadorId,
+      responsavelId: e.responsavelId,
+      formaPagamento: e.formaPagamento,
+      observacoes: e.observacoes,
+      recurrence: e.recurrence,
       meta: metaParts.join(" · ") || undefined,
       editable: true,
       bank: e.bank,
@@ -500,25 +676,95 @@ function buildEntries(clientes: Cliente[], manual: ManualEntry[]): Entry[] {
 export function useFinanceiroEntries(): Entry[] {
   const clientes = useClientes();
   const [manual, setManual] = useState<ManualEntry[]>(() => loadManual());
+  const [overrides, setOverrides] = useState<Record<string, StatusOverride>>(() => loadOverrides());
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    void reconcilePaidMapOnce();
     const onStorage = () => {
       setManual(loadManual());
+      setOverrides(loadOverrides());
       setTick((t) => t + 1);
     };
     window.addEventListener("storage", onStorage);
     const int = window.setInterval(onStorage, 1500);
     const unsubManual = onManualChange(onStorage);
+    const unsubOverrides = onOverridesChange(onStorage);
     return () => {
       window.removeEventListener("storage", onStorage);
       window.clearInterval(int);
       unsubManual();
+      unsubOverrides();
     };
   }, []);
 
   return useMemo(() => {
     void tick;
-    return buildEntries(clientes, manual);
-  }, [clientes, manual, tick]);
+    return buildEntries(clientes, manual, overrides);
+  }, [clientes, manual, overrides, tick]);
+}
+
+/** Roda uma vez por navegador: lê o `PaidMap` legado (localStorage) e, pra
+ * cada marca de "pago" que ainda não tem status gravado no servidor,
+ * grava (lançamento manual → `updateManualEntry`; entry auto-gerada →
+ * `upsertStatusOverride`). Cobertura é cumulativa entre navegadores —
+ * marcas que só existirem num navegador que nunca mais abrir o app não
+ * migram (limitação pré-existente do modelo antigo: esse dado nunca foi
+ * centralizado). Não remove o `PaidMap` — só para de ser a fonte de
+ * verdade daqui pra frente. */
+const RECONCILED_KEY = "financeiro:pagos:reconciled";
+export async function reconcilePaidMapOnce(): Promise<void> {
+  try {
+    if (localStorage.getItem(RECONCILED_KEY)) return;
+  } catch {
+    return;
+  }
+  const paid = loadPaid();
+  const entries = Object.entries(paid);
+  if (entries.length === 0) {
+    try {
+      localStorage.setItem(RECONCILED_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  for (const [entryId, isoDatePaid] of entries) {
+    try {
+      const manual = manualCache.find((e) => e.id === entryId);
+      if (manual) {
+        if (!manual.status) {
+          await updateManualEntry({
+            ...manual,
+            status: "pago",
+            payment: { pagamento: isoDatePaid, paidAmount: manual.amount, paymentMethod: "" },
+          });
+        }
+      } else if (!overridesCache[entryId]) {
+        await upsertStatusOverride(entryId, { status: "pago", pagamento: isoDatePaid });
+      }
+    } catch (e) {
+      console.warn("[financeiro] reconcilePaidMapOnce failed for", entryId, e);
+    }
+  }
+  try {
+    localStorage.setItem(RECONCILED_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Confirma pagamento/recebimento — sempre a partir da MESMA `Entry` já
+ * derivada (não distingue chamador), roteando pro lugar certo conforme a
+ * origem. Nunca reescreve `date`/vencimento: a data do pagamento é um
+ * campo à parte (ver `PaymentConfirmation`). */
+export async function markEntryPaid(entry: Entry, payload: PaymentConfirmation): Promise<void> {
+  const status: EntryStatus = entry.kind === "receita" ? "recebido" : "pago";
+  if (entry.editable) {
+    const manual = manualCache.find((e) => e.id === entry.id);
+    if (!manual) throw new Error("Lançamento não encontrado.");
+    await updateManualEntry({ ...manual, status, payment: payload });
+  } else {
+    await upsertStatusOverride(entry.id, { status, ...payload });
+  }
 }

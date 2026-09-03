@@ -63,7 +63,7 @@ import {
 import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
-import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
+import { useFinanceiroEntries } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 import { useRunningTimer, stopTimer } from "@/lib/time-entries";
 import { toast } from "sonner";
@@ -191,18 +191,10 @@ function useHasPendingMeetingRequests(): boolean {
  * paga)? Usado pro ícone de atenção do item "Financeiro" no menu. */
 function useHasOverdueDespesas(): boolean {
   const entries = useFinanceiroEntries();
-  const [paidTick, setPaidTick] = useState(0);
-  useEffect(() => {
-    const onStorage = () => setPaidTick((t) => t + 1);
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-  return useMemo(() => {
-    void paidTick;
-    const paid = loadPaid();
-    const today = todayISO();
-    return entries.some((e) => e.kind === "despesa" && !paid[e.id] && e.date < today);
-  }, [entries, paidTick]);
+  return useMemo(
+    () => entries.some((e) => e.kind === "despesa" && e.status === "vencido"),
+    [entries],
+  );
 }
 
 const SEEN_LEADS_KEY = "notif:seenLeadIds";

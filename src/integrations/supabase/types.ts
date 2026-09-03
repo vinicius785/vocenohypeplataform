@@ -870,6 +870,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      financeiro_recorrencias: {
+        Row: {
+          created_at: string;
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      financeiro_status_overrides: {
+        Row: {
+          data: Json;
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          data?: Json;
+          id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          data?: Json;
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       google_calendar_connections: {
         Row: {
           access_token: string;
