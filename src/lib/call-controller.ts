@@ -94,6 +94,19 @@ type Signal =
       fromUserId: string;
       toUserId: string;
       peer: { userId: string; name: string; photo?: string };
+    }
+  // Avisa explicitamente quando alguém liga/desliga compartilhamento de
+  // tela — antes disso, a UI "adivinhava" quem estava compartilhando
+  // comparando o id técnico do stream de mídia recebido (`ontrack`) contra
+  // o stream da chamada em si, uma heurística frágil que às vezes já
+  // confundia o próprio áudio/vídeo da chamada com uma "tela compartilhada"
+  // logo ao atender, sem ninguém ter clicado em compartilhar nada.
+  | {
+      type: "screen-share";
+      callId: string;
+      fromUserId: string;
+      toUserId: string;
+      sharing: boolean;
     };
 
 export type CallParticipantStatus =
@@ -107,6 +120,9 @@ export type CallParticipant = {
   name: string;
   photo?: string;
   status: CallParticipantStatus;
+  /** Explícito via sinal "screen-share" — nunca inferido da identidade do
+   * stream de mídia recebido (ver comentário no tipo `Signal`). */
+  sharingScreen?: boolean;
 };
 
 type CallBase = {
@@ -888,6 +904,10 @@ async function handle(signal: Signal) {
     if (link.pc.remoteDescription)
       await link.pc.addIceCandidate(signal.candidate).catch(() => undefined);
     else link.pendingIce.push(signal.candidate);
+    return;
+  }
+  if (signal.type === "screen-share") {
+    patchParticipant(signal.fromUserId, { sharingScreen: signal.sharing });
   }
 }
 
@@ -1153,8 +1173,13 @@ export async function setCameraEnabled(enabled: boolean) {
     fail(error);
   }
 }
+function broadcastScreenSharing(callId: string, sharing: boolean) {
+  for (const peerId of peers.keys())
+    void send({ type: "screen-share", callId, toUserId: peerId, sharing }).catch(() => undefined);
+}
 export async function setScreenSharing(enabled: boolean, withAudio = false) {
   if (state.status === "idle") return;
+  const callId = state.callId;
   if (!enabled) {
     for (const track of screenStream?.getTracks() ?? []) {
       for (const link of peers.values()) {
@@ -1166,6 +1191,7 @@ export async function setScreenSharing(enabled: boolean, withAudio = false) {
     screenStream = null;
     patch({ screenSharing: false });
     mediaChanged();
+    broadcastScreenSharing(callId, false);
     return;
   }
   if (!navigator.mediaDevices?.getDisplayMedia) {
@@ -1181,6 +1207,7 @@ export async function setScreenSharing(enabled: boolean, withAudio = false) {
     });
     patch({ screenSharing: true, error: undefined });
     mediaChanged();
+    broadcastScreenSharing(callId, true);
   } catch (error) {
     fail(error);
   }

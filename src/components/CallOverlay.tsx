@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { getMe } from "@/lib/chat-store";
 import {
   AlertTriangle,
   Camera,
@@ -287,7 +288,12 @@ export function CallOverlay() {
           ? "Conectando..."
           : `Em chamada · ${formatDuration(seconds)}`;
 
-  const remoteScreenPeer = participants.find((p) => getRemoteScreenStream(p.userId));
+  // Quem está compartilhando é sempre decidido pelo sinal explícito
+  // "screen-share" (`p.sharingScreen`), nunca adivinhado a partir da
+  // identidade técnica do stream de mídia recebido — essa heurística já
+  // confundiu áudio/vídeo comum da chamada com "tela compartilhada" logo ao
+  // atender, sem ninguém ter clicado em compartilhar nada.
+  const remoteScreenPeer = participants.find((p) => p.sharingScreen);
   const anySharing = screenSharing || !!remoteScreenPeer;
 
   // Chamada recebida vira uma notificação flutuante discreta, nunca a
@@ -613,9 +619,14 @@ function OutgoingCallScreen({
           </p>
         )}
       </div>
-      {call.cameraEnabled && (
+      {call.cameraEnabled ? (
         <div className="h-32 w-48 overflow-hidden rounded-xl bg-zinc-800">
           <video ref={localRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-1.5">
+          <TileAvatar name={getMe().name} photo={getMe().photo} />
+          <p className="text-xs text-zinc-500">Você</p>
         </div>
       )}
       <div className="flex items-center gap-3">
