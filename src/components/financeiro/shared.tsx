@@ -73,6 +73,35 @@ export function Section({
   );
 }
 
+/** Anexos podem ser uma data URL antiga (nota fiscal legada, base64 —
+ * `entryAnexos()` em `financeiro-entries.ts`) ou uma URL assinada do
+ * Supabase Storage (comprovantes/notas fiscais novos, `uploadFinanceiroAnexo`).
+ * Navegadores modernos bloqueiam abrir uma `data:` URL diretamente numa nova
+ * aba via `<a target="_blank">` (mostra "about:blank#blocked", proteção
+ * contra phishing) — convertendo pra Blob primeiro contorna o bloqueio.
+ * Mesmo problema e mesma solução já usados em `TaskBoard.tsx`. */
+export function openFinanceiroAnexo(url: string, filename: string): void {
+  if (!url.startsWith("data:")) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const [header, base64] = url.split(",");
+  const mime = header.match(/data:(.*?)(;base64)?$/)?.[1] || "application/octet-stream";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  a.target = "_blank";
+  a.rel = "noopener,noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 export function DetailRow({
   icon,
   label,
@@ -197,16 +226,14 @@ export function FinanceiroAnexoBox({
               key={a.id}
               className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs"
             >
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                download={a.nome}
-                className="inline-flex min-w-0 flex-1 items-center gap-1.5 hover:underline"
+              <button
+                type="button"
+                onClick={() => openFinanceiroAnexo(a.url, a.nome)}
+                className="inline-flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left hover:underline"
               >
                 <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{a.nome}</span>
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => onChange(anexos.filter((x) => x.id !== a.id))}

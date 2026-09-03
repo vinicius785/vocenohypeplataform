@@ -9,7 +9,14 @@ import {
   formatIsoDate,
   loadFinanceiroMembers,
 } from "@/lib/financeiro-entries";
-import { DetailRow, CopyPixButton, FinanceiroAnexoBox, STATUS_LABEL, statusTone } from "./shared";
+import {
+  DetailRow,
+  CopyPixButton,
+  FinanceiroAnexoBox,
+  STATUS_LABEL,
+  statusTone,
+  openFinanceiroAnexo,
+} from "./shared";
 
 const SOURCE_LABEL: Record<Source, string> = {
   manual: "Lançamento manual",
@@ -195,15 +202,13 @@ export function EntryDetailsDialog({
                           <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           <span className="truncate">{a.nome}</span>
                         </span>
-                        <a
-                          href={a.url}
-                          download={a.nome}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex shrink-0 items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
+                        <button
+                          type="button"
+                          onClick={() => openFinanceiroAnexo(a.url, a.nome)}
+                          className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground hover:underline"
                         >
                           <Download className="h-3 w-3" /> Baixar
-                        </a>
+                        </button>
                       </li>
                     ))}
                   </ul>
