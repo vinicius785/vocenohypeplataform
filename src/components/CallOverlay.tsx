@@ -658,18 +658,25 @@ function OneOnOneStage({
       : statusLabel;
   return (
     <div className="relative h-full overflow-hidden rounded-2xl bg-zinc-900/60">
-      {hasRemoteVideo ? (
-        <video
-          ref={(el) => {
-            if (!primary) return;
-            if (el) remoteRefs.current.set(primary.userId, el);
-            else remoteRefs.current.delete(primary.userId);
-          }}
-          autoPlay
-          playsInline
-          className="h-full w-full object-cover"
-        />
-      ) : (
+      {/* O <video> fica sempre montado (só troca a classe "hidden"), nunca
+          condicionado a `hasRemoteVideo` — o efeito que liga `srcObject` só
+          roda quando `mediaVersion`/câmera/etc mudam, não quando este
+          elemento nasce; se ele só existisse depois de ligar a câmera, o
+          efeito já teria rodado antes dele existir e nunca voltaria a rodar
+          de novo só porque o elemento apareceu — a câmera acendia sem
+          imagem nenhuma (tela preta), presa até a próxima mudança de mídia
+          qualquer. Mesmo padrão já usado em `VideoTile`. */}
+      <video
+        ref={(el) => {
+          if (!primary) return;
+          if (el) remoteRefs.current.set(primary.userId, el);
+          else remoteRefs.current.delete(primary.userId);
+        }}
+        autoPlay
+        playsInline
+        className={`h-full w-full object-cover ${hasRemoteVideo ? "" : "hidden"}`}
+      />
+      {!hasRemoteVideo && (
         <div className="flex h-full flex-col items-center justify-center gap-3">
           <TileAvatar
             name={primary?.name ?? ""}

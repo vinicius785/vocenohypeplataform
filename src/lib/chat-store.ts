@@ -219,12 +219,21 @@ async function reloadChannels() {
   emit();
 }
 async function reloadMessages() {
+  // Ordenar ASC + limit(5000) pegava as 5000 mensagens mais ANTIGAS de todo
+  // o workspace (a busca não é filtrada por conversa) — assim que o total
+  // passasse de 5000, as mensagens mais RECENTES de qualquer conversa
+  // simplesmente nunca eram carregadas, silenciosamente, e continuavam
+  // faltando em todo recarregamento seguinte (pareciam ter "sumido", mas só
+  // não estavam sendo buscadas). Ordenar DESC busca as 5000 mais recentes
+  // (o corte relevante), reordenando ASC de volta em memória pra exibição.
   const { data } = await supabase
     .from("chat_messages")
     .select(MESSAGE_COLUMNS)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(5000);
-  messagesCache = (data ?? []).map((r) => mapMessage(r as MessageRow));
+  messagesCache = (data ?? [])
+    .map((r) => mapMessage(r as MessageRow))
+    .sort((a, b) => a.createdAt - b.createdAt);
   emit();
 }
 async function reloadReads(uid: string) {
