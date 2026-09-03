@@ -178,6 +178,10 @@ export type DateFieldProps = {
   variant?: "input" | "inline";
   ariaLabel?: string;
   className?: string;
+  /** Classe extra pro `PopoverContent` (ex. `z-[70]` quando o campo é usado
+   * dentro de um overlay que já tem um z-index maior que o padrão do
+   * Popover, como o `MarkAsPaidDialog` do Financeiro). */
+  contentClassName?: string;
   /** Presença de `onRecurrenceChange` liga a seção de recorrência dentro
    * do popover (item "Configurar recorrência", igual ao ClickUp) — sem
    * ele, o `DateField` fica exatamente como em qualquer outro lugar do
@@ -205,6 +209,7 @@ export function DateField({
   variant = "input",
   ariaLabel,
   className,
+  contentClassName,
   recurrence,
   onRecurrenceChange,
 }: DateFieldProps) {
@@ -269,7 +274,10 @@ export function DateField({
           <span className="truncate">{value ? formatIsoDate(value) : placeholder}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
+      <PopoverContent
+        align="start"
+        className={cn("w-auto max-w-[calc(100vw-2rem)] p-0", contentClassName)}
+      >
         {showRecurrenceForm && onRecurrenceChange ? (
           <RecurrenceForm
             initial={recurrence}

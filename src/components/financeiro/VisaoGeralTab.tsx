@@ -36,6 +36,18 @@ export function VisaoGeralTab({
     onNavigateToLancamentos();
   };
 
+  /** "Requer atenção" olha o histórico inteiro (`filtered.all`), não só o
+   * período ativo — sem isso, um item vencido de um mês anterior some da
+   * lista ao navegar pra Lançamentos se o período atual for "Este mês". */
+  const applyAlertAndGo = (patch: Partial<AdvancedFilters>) => {
+    const futureBound = new Date();
+    futureBound.setDate(futureBound.getDate() + 30);
+    filtered.setPeriodMode("personalizado");
+    filtered.setCustomFrom("2000-01-01");
+    filtered.setCustomTo(futureBound.toISOString().slice(0, 10));
+    applyAndGo(patch);
+  };
+
   if (visible.length === 0) {
     return (
       <div className="space-y-4">
@@ -57,7 +69,7 @@ export function VisaoGeralTab({
         onNavigateToAPagar={onNavigateToAPagar}
       />
 
-      <RequerAtencaoStrip filtered={filtered} onApplyFilter={applyAndGo} />
+      <RequerAtencaoStrip filtered={filtered} onApplyFilter={applyAlertAndGo} />
 
       <Separator />
 

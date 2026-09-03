@@ -77,6 +77,7 @@ export function MarkAsPaidDialog({
               value={pagamento || undefined}
               onChange={(v) => setPagamento(v ?? "")}
               className={inputCls}
+              contentClassName="z-[70]"
             />
           </Field>
           <Field label="Valor pago (R$)">
