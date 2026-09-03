@@ -330,15 +330,15 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+    <div className="w-full min-w-0 space-y-2.5 rounded-lg border border-border bg-muted/20 p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={handleStartStop}
-          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium tabular-nums ${
+          className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold tabular-nums ${
             runningHere
-              ? "bg-sky-500/10 text-sky-700 dark:text-sky-400"
-              : "text-foreground/70 hover:bg-muted"
+              ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+              : "bg-background text-foreground/80 hover:bg-muted"
           }`}
         >
           {runningHere ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
@@ -347,7 +347,7 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
         <button
           type="button"
           onClick={() => setPopover({ taskId, taskOrigin })}
-          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
         >
           <Plus className="h-3.5 w-3.5" />
           Manual
@@ -355,13 +355,17 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
       </div>
 
       {totalSeconds > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Total: {formatDuration(totalSeconds)} · Seu tempo: {formatDuration(ownSeconds)}
+        <p className="text-[11px] text-muted-foreground">
+          Total{" "}
+          <span className="font-medium text-foreground/80">{formatDuration(totalSeconds)}</span>
+          {" · "}
+          Seu tempo{" "}
+          <span className="font-medium text-foreground/80">{formatDuration(ownSeconds)}</span>
         </p>
       )}
 
       {!loading && entries.length > 0 && (
-        <div className="space-y-1">
+        <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md bg-background/60">
           {entries.map((entry) => {
             const member = memberFor(entry.userId);
             const isOwn = entry.userId === me.id;
@@ -369,7 +373,7 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
             return (
               <div
                 key={entry.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-2 py-1.5 text-xs hover:bg-muted/50"
               >
                 <span
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${member?.color ?? "bg-muted text-foreground"}`}
@@ -396,22 +400,22 @@ export function TimeTrackingPanel({ taskId, taskOrigin, members }: Props) {
                   </span>
                 )}
                 {canEdit && entry.endedAt && (
-                  <>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setPopover({ taskId, taskOrigin, entry })}
-                      className="shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                      className="cursor-pointer text-muted-foreground hover:text-foreground"
                     >
                       <Pencil className="h-3 w-3" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(entry.id)}
-                      className="shrink-0 cursor-pointer text-muted-foreground hover:text-destructive"
+                      className="cursor-pointer text-muted-foreground hover:text-destructive"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
-                  </>
+                  </span>
                 )}
               </div>
             );

@@ -3260,7 +3260,11 @@ export function TaskDialog({
                   </div>
                 </Field>
 
-                <Field label="Controle de tempo" icon={<Clock className="h-3.5 w-3.5" />}>
+                <Field
+                  label="Tempo"
+                  icon={<Clock className="h-3.5 w-3.5" />}
+                  className="sm:col-span-2"
+                >
                   {initial && timeTrackingOrigin ? (
                     <TimeTrackingPanel
                       taskId={timeTrackingTaskId!}
@@ -4235,13 +4239,17 @@ function Field({
   label,
   icon,
   children,
+  className,
 }: {
   label: string;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-start gap-3 border-b border-border/60 px-1 py-2.5 transition-colors hover:bg-muted/30 sm:px-2">
+    <div
+      className={`group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-start gap-3 border-b border-border/60 px-1 py-2.5 transition-colors hover:bg-muted/30 sm:px-2 ${className ?? ""}`}
+    >
       <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground/70">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
