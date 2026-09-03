@@ -56,6 +56,7 @@ import {
 import { TeamDashboard } from "@/components/team/TeamDashboard";
 import type { AttentionTab } from "@/components/team/AttentionTasks";
 import { MemberProfileDialog } from "@/components/team/MemberProfileDialog";
+import { TimeTrackingReport } from "@/components/team/TimeTrackingReport";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,6 +168,7 @@ function DiretorioTab() {
   );
   const [isAdmin, setIsAdmin] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
+  const [topTab, setTopTab] = useState<"equipe" | "horas">("equipe");
   const [, forcePresence] = useState(0);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -567,6 +569,23 @@ function DiretorioTab() {
           action={headerAction}
         />
 
+        <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setTopTab("equipe")}
+            className={`cursor-pointer rounded-sm px-3 py-1.5 font-medium ${topTab === "equipe" ? "bg-muted" : "text-muted-foreground"}`}
+          >
+            Visão da equipe
+          </button>
+          <button
+            type="button"
+            onClick={() => setTopTab("horas")}
+            className={`cursor-pointer rounded-sm px-3 py-1.5 font-medium ${topTab === "horas" ? "bg-muted" : "text-muted-foreground"}`}
+          >
+            Horas trabalhadas
+          </button>
+        </div>
+
         {error && (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
             <span>{error}</span>
@@ -623,35 +642,39 @@ function DiretorioTab() {
           </div>
         )}
 
-        <TeamDashboard
-          allMembers={members}
-          filteredMembers={filtered}
-          scoreByMemberId={scoreByMemberId}
-          scorePeriod={scorePeriod}
-          onScorePeriodChange={setScorePeriod}
-          performanceEvents={performanceEvents}
-          performanceSettings={performanceSettings}
-          allTasksFlat={allTasksFlat}
-          tasksByMember={tasksByMember}
-          weeklyData={weeklyData}
-          weekdayData={weekdayData}
-          weekdayPeriod={weekdayPeriod}
-          onWeekdayPeriodChange={setWeekdayPeriod}
-          onlineCount={onlineCount}
-          meId={meId}
-          isAdmin={isAdmin}
-          loading={loading}
-          attentionTab={attentionTab}
-          onAttentionTabChange={setAttentionTab}
-          onOpenTask={openTask}
-          onOpenMember={(m) => setViewing(m)}
-          onEditMember={(m) => {
-            setEditing(m);
-            setOpen(true);
-          }}
-          onDeleteMember={(id) => void handleDelete(id)}
-          onResetMember={(id) => void handleReset(id)}
-        />
+        {topTab === "equipe" ? (
+          <TeamDashboard
+            allMembers={members}
+            filteredMembers={filtered}
+            scoreByMemberId={scoreByMemberId}
+            scorePeriod={scorePeriod}
+            onScorePeriodChange={setScorePeriod}
+            performanceEvents={performanceEvents}
+            performanceSettings={performanceSettings}
+            allTasksFlat={allTasksFlat}
+            tasksByMember={tasksByMember}
+            weeklyData={weeklyData}
+            weekdayData={weekdayData}
+            weekdayPeriod={weekdayPeriod}
+            onWeekdayPeriodChange={setWeekdayPeriod}
+            onlineCount={onlineCount}
+            meId={meId}
+            isAdmin={isAdmin}
+            loading={loading}
+            attentionTab={attentionTab}
+            onAttentionTabChange={setAttentionTab}
+            onOpenTask={openTask}
+            onOpenMember={(m) => setViewing(m)}
+            onEditMember={(m) => {
+              setEditing(m);
+              setOpen(true);
+            }}
+            onDeleteMember={(id) => void handleDelete(id)}
+            onResetMember={(id) => void handleReset(id)}
+          />
+        ) : (
+          <TimeTrackingReport members={members} meId={meId} isAdmin={isAdmin} />
+        )}
 
         <MemberDialog
           open={open}
