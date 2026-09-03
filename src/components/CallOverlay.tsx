@@ -661,7 +661,9 @@ function OneOnOneStage({
       {hasRemoteVideo ? (
         <video
           ref={(el) => {
-            if (el && primary) remoteRefs.current.set(primary.userId, el);
+            if (!primary) return;
+            if (el) remoteRefs.current.set(primary.userId, el);
+            else remoteRefs.current.delete(primary.userId);
           }}
           autoPlay
           playsInline

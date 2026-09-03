@@ -686,6 +686,11 @@ function attachLocalTracksTo(link: PeerLink) {
 }
 
 function fail(error: unknown) {
+  // Sem isso, o erro técnico de verdade nunca aparecia em lugar nenhum — a
+  // UI só mostra a versão amigável (de propósito), mas se nem o console
+  // registra a causa original, um problema real fica impossível de
+  // diagnosticar depois (só a mensagem genérica sobrevive).
+  console.error("[call] falha", error);
   const message =
     error instanceof DOMException && error.name === "NotAllowedError"
       ? "Permita o acesso ao microfone e à câmera."
