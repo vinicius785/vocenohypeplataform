@@ -898,6 +898,14 @@ async function handle(signal: Signal) {
         sdp: link.pc.localDescription as RTCSessionDescriptionInit,
       });
     } catch (error) {
+      // Corrida de negociação (glare resolvido por outro caminho enquanto
+      // este offer/answer específico já não fazia mais sentido) não deve
+      // derrubar a chamada com um erro visível — só uma falha real de
+      // conexão deve. Mesmo raciocínio do ramo "answer" logo abaixo.
+      if (error instanceof DOMException && error.name === "InvalidStateError") {
+        console.warn("[call] renegociação com colisão ignorada", error);
+        return;
+      }
       fail(error);
       // Uma renegociação (câmera/tela ligando no meio da chamada) que falha
       // não deve derrubar uma ligação que já está de pé — só marca "failed"
@@ -920,7 +928,24 @@ async function handle(signal: Signal) {
     // aparecia como erro visível na chamada. Só aceita a resposta se ainda
     // há uma oferta local pendente de fato.
     if (link.pc.signalingState !== "have-local-offer") return;
-    await link.pc.setRemoteDescription(signal.sdp).catch(fail);
+    try {
+      await link.pc.setRemoteDescription(signal.sdp);
+    } catch (error) {
+      // Mesma corrida que o `if` acima tenta evitar (resposta atrasada de
+      // uma oferta já abandonada) — só que escapou pela fresta de tempo
+      // entre o check e esta chamada (confirmado ao vivo: ligação real
+      // caindo com "Não foi possível estabelecer a chamada" por causa
+      // exatamente desse erro, mesmo com o guard já em vigor). Quando é
+      // essa corrida específica, a negociação já resolveu (ou vai
+      // resolver) por outro caminho — nunca deve derrubar a chamada com um
+      // erro visível, só registrar pra debug.
+      if (error instanceof DOMException && error.name === "InvalidStateError") {
+        console.warn("[call] resposta atrasada ignorada (corrida de negociação)", error);
+        return;
+      }
+      fail(error);
+      return;
+    }
     // O ramo de "offer" já esvazia `pendingIce` depois de aplicar a SDP
     // remota (candidatos só podem ser adicionados depois disso) — este
     // ramo fazia a mesma coisa (`setRemoteDescription`) mas nunca dava
