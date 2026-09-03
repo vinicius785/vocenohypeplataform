@@ -65,7 +65,8 @@ import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/noti
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries, loadPaid, todayISO } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
-import { useRunningTimer } from "@/lib/time-entries";
+import { useRunningTimer, stopTimer } from "@/lib/time-entries";
+import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
 
@@ -788,9 +789,37 @@ function useIncomingMessageNotifier() {
 /** Timer ativo em qualquer tarefa (Projetos ou Campanhas) atribuída ao
  * usuário atual — indicador global ao lado do botão de tema, já que o
  * timer pode ficar rodando fora da tela onde foi iniciado. */
+// Cronômetro rodando por mais que isso mostra um aviso de "esqueceu de
+// parar?" — não bloqueante, nunca modifica o registro por conta própria
+// (item explícito do pedido: só ação clicada pela pessoa muda o dado).
+const LONG_RUNNING_WARNING_HOURS = 8;
+
 function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => void }) {
   const navigate = useNavigate();
   const running = useRunningTimer();
+  // Um aviso por cronômetro (não um por limiar cruzado a cada render) —
+  // reseta quando o cronômetro em si muda (parou/outro começou).
+  const warnedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    const entry = running.entry;
+    if (!entry) {
+      warnedForRef.current = null;
+      return;
+    }
+    const elapsedHours = (Date.now() - Date.parse(entry.startedAt)) / 3_600_000;
+    if (elapsedHours < LONG_RUNNING_WARNING_HOURS || warnedForRef.current === entry.id) return;
+    warnedForRef.current = entry.id;
+    toast.warning("Cronômetro rodando há muito tempo. Você esqueceu de parar?", {
+      duration: Infinity,
+      action: {
+        label: "Parar agora",
+        onClick: () => {
+          void stopTimer(entry.id, entry.startedAt).then(() => running.refetch());
+        },
+      },
+      cancel: { label: "Continuar", onClick: () => {} },
+    });
+  }, [running.entry, running.refetch]);
   // `dataTick` só muda quando os dados de verdade mudam (evento de store) —
   // gatilho pro `useMemo` abaixo (que resolve o TÍTULO da tarefa do
   // cronômetro em andamento) recalcular; os stores de tarefa continuam
