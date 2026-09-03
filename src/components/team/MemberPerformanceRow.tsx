@@ -1,7 +1,7 @@
 import { ShieldCheck, KeyRound, Pencil, X, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { ScoreOperacionalResult } from "@/lib/performance-engine";
+import type { ScoreOperacionalV2 } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, IconAction } from "./member-ui";
 
@@ -22,7 +22,7 @@ export function MemberPerformanceRow({
   onReset,
 }: {
   member: Member;
-  score?: ScoreOperacionalResult;
+  score?: ScoreOperacionalV2;
   isSelf: boolean;
   isAdmin: boolean;
   onOpenProfile: () => void;
@@ -35,7 +35,7 @@ export function MemberPerformanceRow({
   const showName = canManage || isSelf || m.timeView.includes("name");
   const showRole = canManage || isSelf || m.timeView.includes("role");
   const status = getStatus(m.id);
-  const atrasadas = score?.pendencias.overdueCount ?? 0;
+  const atrasadas = score?.entrega.atualmenteAtrasadas ?? 0;
 
   return (
     <div

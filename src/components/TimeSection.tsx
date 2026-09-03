@@ -29,15 +29,16 @@ import {
   type WeekdayPeriodMode,
 } from "@/lib/score";
 import {
-  computeScoreOperacional,
-  computeExecucao,
-  computePendencias,
+  computeEntrega,
+  computePrevisibilidade,
   computeCompromissos,
+  combineScoreV2,
+  overdueOpenTasks,
   rangeForScorePeriod,
   groupEventsByPerson,
   dedupAttendanceEvents,
   type ScorePeriodMode,
-  type ScoreOperacionalResult,
+  type ScoreOperacionalV2,
   type TaskOutcome,
 } from "@/lib/performance-engine";
 import { usePerformanceEvents, usePerformanceSettings } from "@/lib/performance-events-store";
@@ -375,34 +376,48 @@ function DiretorioTab() {
   );
 
   const scoreByMemberId = useMemo(() => {
-    const map = new Map<string, ScoreOperacionalResult>();
+    const map = new Map<string, ScoreOperacionalV2>();
     for (const m of members) {
       const personEvents = eventsByPersonId.get(m.id) ?? [];
       const completions = personEvents
         .filter((e) => e.eventType === "task_completed")
         .map((e) => ({
           outcome: e.data.outcome as TaskOutcome,
-          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+          taskId: e.taskId,
+        }));
+      const deadlineChanges = personEvents
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          from: (e.data.from as string) ?? undefined,
+          occurredAt: e.occurredAt,
         }));
       const attendance = dedupAttendanceEvents(
         personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
       ).map((e) => ({ attended: !!e.data.attended }));
-      const execucao = computeExecucao(completions);
-      const pendencias = computePendencias(
-        openTasksByMemberId.get(m.id) ?? [],
-        performanceSettings.pendenciasDiasTeto,
+
+      const openTasks = openTasksByMemberId.get(m.id) ?? [];
+      const overdueCount = overdueOpenTasks(
+        openTasks,
         undefined,
+        performanceSettings.deadlineCutoffHour,
+      ).length;
+      // Universo (mesma base usada na ficha individual — ver
+      // `MemberProfileDialog.tsx`): tarefas abertas agora + concluídas no
+      // período, sem duplicar por id.
+      const universoIds = new Set<string>();
+      for (const t of openTasks) universoIds.add(t.id);
+      for (const c of completions) if (c.taskId) universoIds.add(c.taskId);
+      const universoTarefas = universoIds.size;
+
+      const entrega = computeEntrega(completions, overdueCount, universoTarefas);
+      const previsibilidade = computePrevisibilidade(
+        deadlineChanges,
+        universoTarefas,
         performanceSettings.deadlineCutoffHour,
       );
       const compromissos = computeCompromissos(attendance);
-      map.set(
-        m.id,
-        computeScoreOperacional(execucao, pendencias, compromissos, {
-          execucao: performanceSettings.weightExecucao,
-          pendencias: performanceSettings.weightPendencias,
-          compromissos: performanceSettings.weightCompromissos,
-        }),
-      );
+      map.set(m.id, combineScoreV2(entrega, previsibilidade, compromissos));
     }
     return map;
   }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings]);

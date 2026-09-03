@@ -402,10 +402,6 @@ export const DEADLINE_CHANGE_MOTIVO_EXEMPTS_BY_DEFAULT: Record<string, boolean> 
 };
 
 export type PerformanceSettings = {
-  weightExecucao: number;
-  weightPendencias: number;
-  weightCompromissos: number;
-  pendenciasDiasTeto: number;
   xpTaskOnTime: number;
   xpTaskEarlyBonus: number;
   xpMeetingAttended: number;
@@ -420,10 +416,6 @@ export type PerformanceSettings = {
 };
 
 export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
-  weightExecucao: 0.5,
-  weightPendencias: 0.3,
-  weightCompromissos: 0.2,
-  pendenciasDiasTeto: 10,
   xpTaskOnTime: 10,
   xpTaskEarlyBonus: 2,
   xpMeetingAttended: 2,
@@ -673,4 +665,287 @@ export function rangeForProfilePeriod(mode: ProfilePeriodMode, now: Date = new D
     return { from: formatDateToIso(from), to };
   }
   return rangeForScorePeriod(mode === "semana" ? "semana" : "mes", now);
+}
+
+/** Janela de mesma duração imediatamente anterior a `range` — mesmo
+ * princípio de `previousPeriodRange` em `useFinanceiroFilteredEntries.ts`
+ * (não importado de lá: camadas diferentes do app), usado pra "vs.
+ * período anterior" do Score Operacional. */
+export function previousEquivalentRange(range: DateRange): DateRange {
+  if (!range.from || !range.to) return { from: undefined, to: undefined };
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1);
+  const prevTo = new Date(from);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (days - 1));
+  return { from: formatDateToIso(prevFrom), to: formatDateToIso(prevTo) };
+}
+
+// ---------------------------------------------------------------------
+// Score Operacional v2 — Entrega (50) + Previsibilidade (35) +
+// Compromissos (15), pontos fixos e somáveis (não mais taxas 0-100
+// combinadas por peso configurável). Ver `Contexto` no plano: o modelo
+// antigo (`computeScoreOperacional` acima, PRESERVADO — ainda usado por
+// nada além deste arquivo agora, mas não removido) dava crédito parcial
+// a conclusão atrasada e nunca penalizava replanejamento de verdade, o
+// que produzia scores altos (ex. 92/100) mesmo com baixíssima
+// previsibilidade de planejamento (muitos prazos alterados em cima da
+// hora). Funções novas, paralelas — nenhuma função/tipo acima é alterado
+// (`computeAggregateIndicators` continua intocada, ainda usada por
+// `TeamIndicators.tsx`).
+// ---------------------------------------------------------------------
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+/** Amostra abaixo disso não é "insuficiente pra calcular" (o score ainda
+ * sai), mas carrega o aviso "amostra reduzida" — poucos dados no período
+ * não devem parecer uma avaliação definitiva (item 18). */
+export const AMOSTRA_MINIMA = 3;
+
+export type EntregaResult = {
+  value: number | null; // pontos 0-50; null só quando não há NENHUM dado (nem conclusão nem tarefa aberta)
+  concluidas: number;
+  noPrazo: number;
+  comAtraso: number;
+  atualmenteAtrasadas: number;
+  amostraReduzida: boolean;
+};
+
+/** Entrega (50 pontos) — taxa de conclusão no prazo (SEM crédito parcial
+ * pra atraso, diferente de `executionCredit`/`computeExecucao`: aqui é
+ * só no_prazo/atrasada, binário, como pedido) menos uma penalidade
+ * proporcional ao universo de tarefas do período por ter tarefas
+ * ATUALMENTE vencidas e ainda abertas. Sempre entre 0 e 50 — a
+ * penalidade nunca deixa o resultado negativo (item 3). */
+export function computeEntrega(
+  completions: { outcome: TaskOutcome }[],
+  overdueOpenCount: number,
+  universoTarefas: number,
+): EntregaResult {
+  const concluidas = completions.length;
+  const noPrazo = completions.filter((c) => c.outcome !== "late").length;
+  const comAtraso = concluidas - noPrazo;
+  const penalidade = universoTarefas > 0 ? (overdueOpenCount / universoTarefas) * 50 : 0;
+
+  if (concluidas === 0 && overdueOpenCount === 0) {
+    return {
+      value: null,
+      concluidas: 0,
+      noPrazo: 0,
+      comAtraso: 0,
+      atualmenteAtrasadas: overdueOpenCount,
+      amostraReduzida: false,
+    };
+  }
+  const pontosBase = concluidas > 0 ? (noPrazo / concluidas) * 50 : 50;
+  return {
+    value: clamp(pontosBase - penalidade, 0, 50),
+    concluidas,
+    noPrazo,
+    comAtraso,
+    atualmenteAtrasadas: overdueOpenCount,
+    amostraReduzida: concluidas > 0 && concluidas < AMOSTRA_MINIMA,
+  };
+}
+
+export type ReplanTiming = "antecipado" | "proximo" | "no_dia" | "apos_vencimento";
+
+export const REPLAN_TIMING_LABEL: Record<ReplanTiming, string> = {
+  antecipado: "Antecipado",
+  proximo: "Próximo do prazo",
+  no_dia: "No dia",
+  apos_vencimento: "Após vencimento",
+};
+
+const REPLAN_TIMING_WEIGHT: Record<ReplanTiming, number> = {
+  antecipado: 0.05,
+  proximo: 0.35,
+  no_dia: 0.7,
+  apos_vencimento: 1,
+};
+
+/** Classifica UMA alteração de prazo pela distância entre o momento da
+ * mudança e o prazo ANTERIOR (`from`) — mais de 2 dias completos antes =
+ * antecipado (penalidade mínima); 1-2 dias antes = próximo do prazo
+ * (moderada); mesmo dia = alta; depois de já vencida = muito alta. Usa a
+ * mesma referência de corte (`deadlineCutoff`) que já decide se uma
+ * conclusão é "atrasada", pra manter as duas classificações consistentes
+ * entre si. */
+export function classifyReplanTiming(
+  previousDueDate: string,
+  changedAtISO: string,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): ReplanTiming {
+  const limite = deadlineCutoff(previousDueDate, cutoffHour).getTime();
+  const mudou = new Date(changedAtISO).getTime();
+  const diasAntes = (limite - mudou) / (24 * 60 * 60 * 1000);
+  if (diasAntes < 0) return "apos_vencimento";
+  if (diasAntes < 1) return "no_dia";
+  if (diasAntes <= 2) return "proximo";
+  return "antecipado";
+}
+
+export type PrevisibilidadeResult = {
+  value: number | null; // pontos 0-35
+  tarefasReplanejadas: number; // tarefas ÚNICAS com >=1 alteração no período
+  tarefasElegiveis: number; // universo (mesma base do Entrega)
+  taxaReplanejamento: number | null; // tarefasReplanejadas / tarefasElegiveis
+  porTiming: Record<ReplanTiming, number>; // contagem de EVENTOS (não tarefas) por classificação
+  amostraReduzida: boolean;
+};
+
+/** Previsibilidade (35 pontos, antes exibida só como "Regularidade"
+ * diagnóstica, agora parte do cálculo) — mede replanejamento por TAXA de
+ * tarefas únicas afetadas (uma tarefa alterada 3x conta 1x pra taxa), com
+ * peso por severidade (`classifyReplanTiming`) sobre a PIOR alteração de
+ * cada tarefa, mais uma pequena penalidade adicional (capada) por
+ * alterações repetidas na mesma tarefa — sem duplicar a penalização
+ * principal (item 8: evitar dupla penalização excessiva do mesmo
+ * evento). */
+export function computePrevisibilidade(
+  deadlineChanges: { taskId: string | null; from?: string; occurredAt: string }[],
+  universoTarefas: number,
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): PrevisibilidadeResult {
+  const porTiming: Record<ReplanTiming, number> = {
+    antecipado: 0,
+    proximo: 0,
+    no_dia: 0,
+    apos_vencimento: 0,
+  };
+  const porTarefa = new Map<string, ReplanTiming[]>();
+  for (const d of deadlineChanges) {
+    if (!d.taskId || !d.from) continue;
+    const timing = classifyReplanTiming(d.from, d.occurredAt, cutoffHour);
+    porTiming[timing] += 1;
+    const arr = porTarefa.get(d.taskId) ?? [];
+    arr.push(timing);
+    porTarefa.set(d.taskId, arr);
+  }
+
+  const tarefasReplanejadas = porTarefa.size;
+  const taxaReplanejamento = universoTarefas > 0 ? tarefasReplanejadas / universoTarefas : null;
+
+  if (universoTarefas === 0) {
+    return {
+      value: tarefasReplanejadas > 0 ? null : 35,
+      tarefasReplanejadas,
+      tarefasElegiveis: 0,
+      taxaReplanejamento: null,
+      porTiming,
+      amostraReduzida: false,
+    };
+  }
+
+  let somaSeveridade = 0;
+  let somaRepetidas = 0;
+  for (const timings of porTarefa.values()) {
+    const pior = timings.reduce(
+      (max, t) => (REPLAN_TIMING_WEIGHT[t] > REPLAN_TIMING_WEIGHT[max] ? t : max),
+      timings[0],
+    );
+    somaSeveridade += REPLAN_TIMING_WEIGHT[pior];
+    somaRepetidas += Math.max(0, timings.length - 1);
+  }
+  const penalidadeBase = somaSeveridade / universoTarefas;
+  const penalidadeRepeticao = Math.min(0.05, 0.01 * somaRepetidas);
+  const value = clamp((1 - penalidadeBase - penalidadeRepeticao) * 35, 0, 35);
+
+  return {
+    value,
+    tarefasReplanejadas,
+    tarefasElegiveis: universoTarefas,
+    taxaReplanejamento,
+    porTiming,
+    amostraReduzida: universoTarefas < AMOSTRA_MINIMA,
+  };
+}
+
+const SCORE_CLASSIFICACAO: { min: number; label: string }[] = [
+  { min: 90, label: "Excelente" },
+  { min: 80, label: "Muito bom" },
+  { min: 70, label: "Bom" },
+  { min: 60, label: "Atenção" },
+  { min: 0, label: "Crítico" },
+];
+
+export function classificacaoDoScore(score: number): string {
+  return SCORE_CLASSIFICACAO.find((c) => score >= c.min)!.label;
+}
+
+export type ScoreOperacionalV2 = {
+  score: number | null; // inteiro 0-100
+  entrega: EntregaResult;
+  entregaPontos: number | null;
+  previsibilidade: PrevisibilidadeResult;
+  previsibilidadePontos: number | null;
+  compromissos: CompromissosResult;
+  compromissosPontos: number | null;
+  classificacao: string | null;
+  amostraReduzida: boolean;
+};
+
+/** Combina os 3 pilares em pontos fixos (50+35+15=100). `compromissos`
+ * recebe o resultado CRU de `computeCompromissos` (escala 0-100, %) —
+ * a conversão pra pontos de 15 acontece AQUI DENTRO, nunca no
+ * call-site, justamente pra nenhum consumidor esquecer de escalar (foi
+ * assim que um bug de score >100 aconteceu numa rodada anterior: o
+ * valor de 0-100 ia direto pra soma como se já fosse 0-15). Diferente
+ * do modelo antigo, nenhum pilar é excluído/renormalizado por falta de
+ * dado — os máximos já são fixos, então "sem reunião prevista" em
+ * Compromissos corretamente soma 0 (não redistribui peso). Arredonda
+ * pelo método do maior resto (Hamilton) pra GARANTIR que a soma dos 3
+ * pontos exibidos seja sempre exatamente igual ao score total exibido —
+ * nunca uma divergência de 1 ponto por arredondamento independente
+ * (item 13/20, auditabilidade). */
+export function combineScoreV2(
+  entrega: EntregaResult,
+  previsibilidade: PrevisibilidadeResult,
+  compromissos: CompromissosResult,
+): ScoreOperacionalV2 {
+  const raw = {
+    entrega: entrega.value ?? 0,
+    previsibilidade: previsibilidade.value ?? 0,
+    compromissos: compromissos.value != null ? (compromissos.value / 100) * 15 : 0,
+  };
+  const temAlgumDado =
+    entrega.value != null || previsibilidade.value != null || compromissos.value != null;
+
+  const totalRaw = raw.entrega + raw.previsibilidade + raw.compromissos;
+  const totalRounded = Math.round(totalRaw);
+
+  const floors = {
+    entrega: Math.floor(raw.entrega),
+    previsibilidade: Math.floor(raw.previsibilidade),
+    compromissos: Math.floor(raw.compromissos),
+  };
+  const remainders = (["entrega", "previsibilidade", "compromissos"] as const)
+    .map((k) => ({ k, r: raw[k] - floors[k] }))
+    .sort((a, b) => b.r - a.r);
+
+  const sumFloors = floors.entrega + floors.previsibilidade + floors.compromissos;
+  let need = totalRounded - sumFloors;
+  const pontos = { ...floors };
+  for (const { k } of remainders) {
+    if (need <= 0) break;
+    pontos[k] += 1;
+    need -= 1;
+  }
+
+  const score = temAlgumDado ? totalRounded : null;
+  return {
+    score,
+    entrega,
+    entregaPontos: temAlgumDado ? pontos.entrega : null,
+    previsibilidade,
+    previsibilidadePontos: temAlgumDado ? pontos.previsibilidade : null,
+    compromissos,
+    compromissosPontos: temAlgumDado ? pontos.compromissos : null,
+    classificacao: score == null ? null : classificacaoDoScore(score),
+    amostraReduzida: entrega.amostraReduzida || previsibilidade.amostraReduzida || false,
+  };
 }

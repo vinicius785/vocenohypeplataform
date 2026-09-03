@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Info, Gauge, UsersIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type {
-  ScoreOperacionalResult,
+  ScoreOperacionalV2,
   ScorePeriodMode,
   PerformanceSettings,
 } from "@/lib/performance-engine";
@@ -33,7 +33,7 @@ export function TeamPerformance({
   onReset,
 }: {
   members: Member[];
-  scoreByMemberId: Map<string, ScoreOperacionalResult>;
+  scoreByMemberId: Map<string, ScoreOperacionalV2>;
   scorePeriod: ScorePeriodMode;
   onScorePeriodChange: (v: ScorePeriodMode) => void;
   performanceSettings: PerformanceSettings;
@@ -79,27 +79,21 @@ export function TeamPerformance({
               </p>
               <ul className="space-y-1.5 text-xs text-muted-foreground">
                 <li className="flex items-center justify-between gap-3">
-                  <span>Execução — % de tarefas concluídas no prazo</span>
-                  <span className="shrink-0 font-semibold text-foreground">
-                    {Math.round(performanceSettings.weightExecucao * 100)}%
-                  </span>
+                  <span>Entrega — conclusão no prazo, penaliza vencidas em aberto</span>
+                  <span className="shrink-0 font-semibold text-foreground">50 pts</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
-                  <span>Pendências — proporção atrasada agora + tempo</span>
-                  <span className="shrink-0 font-semibold text-foreground">
-                    {Math.round(performanceSettings.weightPendencias * 100)}%
-                  </span>
+                  <span>Previsibilidade — quão em cima da hora os prazos mudam</span>
+                  <span className="shrink-0 font-semibold text-foreground">35 pts</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
                   <span>Compromissos — presença nas reuniões esperadas</span>
-                  <span className="shrink-0 font-semibold text-foreground">
-                    {Math.round(performanceSettings.weightCompromissos * 100)}%
-                  </span>
+                  <span className="shrink-0 font-semibold text-foreground">15 pts</span>
                 </li>
               </ul>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Prazos encerram às 19h. Sem dado suficiente no período, o componente é
-                desconsiderado (não vira 0) e os pesos são redistribuídos entre os demais.
+                Prazos encerram às 19h. Veja o detalhamento e a composição completa na ficha
+                individual do membro.
               </p>
             </PopoverContent>
           </Popover>

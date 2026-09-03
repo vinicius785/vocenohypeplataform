@@ -8,7 +8,7 @@ import {
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import type {
-  ScoreOperacionalResult,
+  ScoreOperacionalV2,
   ScorePeriodMode,
   PerformanceEventLike,
   PerformanceSettings,
@@ -63,7 +63,7 @@ export function TeamDashboard({
   /** Membros após a busca do header — só a Performance do Time é
    * filtrada por busca; os gráficos usam `allMembers`. */
   filteredMembers: Member[];
-  scoreByMemberId: Map<string, ScoreOperacionalResult>;
+  scoreByMemberId: Map<string, ScoreOperacionalV2>;
   scorePeriod: ScorePeriodMode;
   onScorePeriodChange: (v: ScorePeriodMode) => void;
   /** Eventos do ledger já filtrados ao `scorePeriod` — alimenta os

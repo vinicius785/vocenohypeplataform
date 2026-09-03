@@ -17,6 +17,7 @@ import {
   RefreshCcw,
   ListTodo,
   ClipboardList,
+  Info,
 } from "lucide-react";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,14 +35,16 @@ import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask } from "@/lib/task-aggregation";
 import type { Meeting } from "@/lib/reunioes-store";
 import {
-  computeExecucao,
-  computePendencias,
   computeCompromissos,
-  computeScoreOperacional,
-  computeAggregateIndicators,
+  computeEntrega,
+  computePrevisibilidade,
+  combineScoreV2,
+  classifyReplanTiming,
+  REPLAN_TIMING_LABEL,
   overdueOpenTasks,
   dedupAttendanceEvents,
   rangeForProfilePeriod,
+  previousEquivalentRange,
   PROFILE_PERIOD_OPTIONS,
   type ProfilePeriodMode,
   type PerformanceSettings,
@@ -74,6 +78,27 @@ function fmtPct(v: number | null): string {
 
 function fmtDays(v: number | null): string {
   return v == null ? "—" : `${v.toFixed(1)}d`;
+}
+
+/** "20% · 6 de 30 tarefas" — taxa SEMPRE acompanhada do "N de M" (item 5
+ * do pedido: nunca mostrar só a taxa, nem só o número absoluto). */
+function fmtTaxaComN(rate: number | null, n: number, total: number): string {
+  if (rate == null) return "—";
+  return `${Math.round(rate * 100)}% · ${n} de ${total}`;
+}
+
+/** Ícone pequeno com tooltip explicativo — reaproveitado nos títulos das
+ * métricas mais complexas (item 16 do pedido). Precisa de um
+ * `TooltipProvider` ancestral (envolve a seção do Score inteira). */
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Info className="h-3 w-3 shrink-0 cursor-help text-muted-foreground/70" />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 /** Card padrão de seção da ficha — label pequena com ícone no topo,
@@ -251,6 +276,7 @@ export function MemberProfileDialog({
         .map((e) => ({
           taskId: e.taskId,
           taskTitle: e.taskTitle,
+          from: (e.data.from as string) ?? undefined,
           isCritical: !!e.data.isCritical,
           motivo: (e.data.motivo as string) ?? undefined,
           exemptFromResponsibility: !!e.data.exemptFromResponsibility,
@@ -270,46 +296,93 @@ export function MemberProfileDialog({
     [events],
   );
 
-  const execucao = useMemo(
-    () =>
-      computeExecucao(completions.map(({ outcome, delayMinutes }) => ({ outcome, delayMinutes }))),
-    [completions],
+  const openTasksFull = useMemo(
+    () => tasksForMember.filter((t) => OPEN_STATUSES.has(t.status)),
+    [tasksForMember],
   );
   const overdueNow = useMemo(
     () => overdueOpenTasks(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
     [openTasksForMember, performanceSettings.deadlineCutoffHour],
   );
-  const pendencias = useMemo(
+  /** Universo de tarefas "em jogo" no período — base tanto da penalidade
+   * de Entrega (vencidas/universo) quanto da taxa de replanejamento de
+   * Previsibilidade (tarefas replanejadas/universo): tudo que está aberto
+   * agora (qualquer status/bucket) + tudo que foi concluído no período,
+   * sem duplicar por id. Nenhum dado novo — só reaproveita o que a ficha
+   * já carrega. */
+  const universoTarefas = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of openTasksFull) ids.add(t.id);
+    for (const c of completions) if (c.taskId) ids.add(c.taskId);
+    return ids.size;
+  }, [openTasksFull, completions]);
+
+  const entrega = useMemo(
+    () => computeEntrega(completions, overdueNow.length, universoTarefas),
+    [completions, overdueNow.length, universoTarefas],
+  );
+  const previsibilidade = useMemo(
     () =>
-      computePendencias(
-        openTasksForMember,
-        performanceSettings.pendenciasDiasTeto,
-        undefined,
+      computePrevisibilidade(
+        deadlineChanges.map((d) => ({ taskId: d.taskId, from: d.from, occurredAt: d.occurredAt })),
+        universoTarefas,
         performanceSettings.deadlineCutoffHour,
       ),
-    [
-      openTasksForMember,
-      performanceSettings.pendenciasDiasTeto,
-      performanceSettings.deadlineCutoffHour,
-    ],
+    [deadlineChanges, universoTarefas, performanceSettings.deadlineCutoffHour],
   );
   const compromissos = useMemo(
     () => computeCompromissos(attendance.map((a) => ({ attended: a.attended }))),
     [attendance],
   );
   const score = useMemo(
-    () =>
-      computeScoreOperacional(execucao, pendencias, compromissos, {
-        execucao: performanceSettings.weightExecucao,
-        pendencias: performanceSettings.weightPendencias,
-        compromissos: performanceSettings.weightCompromissos,
-      }),
-    [execucao, pendencias, compromissos, performanceSettings],
+    () => combineScoreV2(entrega, previsibilidade, compromissos),
+    [entrega, previsibilidade, compromissos],
   );
-  const regularidade = useMemo(
-    () => computeAggregateIndicators(completions, deadlineChanges, overdueNow.length),
-    [completions, deadlineChanges, overdueNow.length],
-  );
+
+  // Comparação com o período imediatamente anterior equivalente (item 12
+  // do pedido) — mesmo fetch/extração, só sobre outra janela de tempo.
+  const previousRange = useMemo(() => previousEquivalentRange(profileRange), [profileRange]);
+  const { events: previousEvents } = usePerformanceEvents(previousRange, member.id);
+  const previousScore = useMemo(() => {
+    const prevCompletions = previousEvents
+      .filter((e) => e.eventType === "task_completed")
+      .map((e) => ({ outcome: e.data.outcome as TaskOutcome, taskId: e.taskId }));
+    const prevDeadlineChanges = previousEvents
+      .filter((e) => e.eventType === "task_deadline_changed")
+      .map((e) => ({
+        taskId: e.taskId,
+        from: (e.data.from as string) ?? undefined,
+        occurredAt: e.occurredAt,
+      }));
+    const prevAttendance = dedupAttendanceEvents(
+      previousEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
+    ).map((e) => ({ attended: !!e.data.attended }));
+    // Sem `tasksForMember`/`openTasksForMember` do período anterior, o
+    // universo é aproximado pelas próprias conclusões+alterações desse
+    // período — suficiente pra uma comparação de tendência, não precisa
+    // ser idêntico ao cálculo do período atual.
+    const prevIds = new Set<string>();
+    for (const c of prevCompletions) if (c.taskId) prevIds.add(c.taskId);
+    for (const d of prevDeadlineChanges) if (d.taskId) prevIds.add(d.taskId);
+    const prevUniverso = prevIds.size;
+    const prevEntrega = computeEntrega(prevCompletions, 0, prevUniverso);
+    const prevPrevisibilidade = computePrevisibilidade(
+      prevDeadlineChanges,
+      prevUniverso,
+      performanceSettings.deadlineCutoffHour,
+    );
+    const prevCompromissos = computeCompromissos(prevAttendance);
+    return combineScoreV2(prevEntrega, prevPrevisibilidade, prevCompromissos);
+  }, [previousEvents, performanceSettings.deadlineCutoffHour]);
+  const trendLabel = useMemo(() => {
+    if (score.score == null || previousScore.score == null) return null;
+    const diff = score.score - previousScore.score;
+    if (diff === 0) return "— Sem alteração vs. período anterior";
+    return diff > 0
+      ? `↑ ${diff} pts vs. período anterior`
+      : `↓ ${Math.abs(diff)} pts vs. período anterior`;
+  }, [score.score, previousScore.score]);
+
   const scoreTone =
     score.score == null
       ? "text-muted-foreground"
@@ -320,11 +393,6 @@ export function MemberProfileDialog({
           : "text-foreground";
 
   const [showComposition, setShowComposition] = useState(false);
-
-  const openTasksFull = useMemo(
-    () => tasksForMember.filter((t) => OPEN_STATUSES.has(t.status)),
-    [tasksForMember],
-  );
   const upcoming = useMemo(
     () =>
       [...openTasksFull]
@@ -417,230 +485,327 @@ export function MemberProfileDialog({
             </div>
 
             {/* Score Operacional */}
-            <section className="rounded-lg border border-border p-5">
-              <div className="flex items-center justify-between gap-3">
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  <Gauge className="h-3.5 w-3.5" /> Score Operacional
-                </p>
-                <p className={`text-4xl font-light tracking-tight ${scoreTone}`}>
-                  {score.score == null ? "—" : score.score}
-                  <span className="text-base text-muted-foreground">/100</span>
-                </p>
-              </div>
-
-              <div className="mt-5 space-y-5">
-                <div>
-                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3" /> Execução
+            <TooltipProvider delayDuration={200}>
+              <section className="rounded-lg border border-border p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <Gauge className="h-3.5 w-3.5" /> Score Operacional
                   </p>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <MiniStat label="Concluídas no período" value={execucao.count} />
-                    <MiniStat label="No prazo" value={execucao.onTimeCount + execucao.earlyCount} />
-                    <MiniStat
-                      label="Com atraso"
-                      value={execucao.lateCount}
-                      tone={execucao.lateCount > 0 ? "danger" : "neutral"}
-                    />
-                    <MiniStat
-                      label="Atualmente atrasadas"
-                      value={pendencias.overdueCount}
-                      tone={pendencias.overdueCount > 0 ? "danger" : "neutral"}
-                    />
+                  <div className="text-right">
+                    <p className={`text-4xl font-light tracking-tight ${scoreTone}`}>
+                      {score.score == null ? "—" : score.score}
+                      <span className="text-base text-muted-foreground">/100</span>
+                    </p>
+                    {score.classificacao && (
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {score.classificacao}
+                      </p>
+                    )}
+                    {trendLabel && (
+                      <p className="text-[11px] text-muted-foreground">{trendLabel}</p>
+                    )}
                   </div>
                 </div>
-                <div className="border-t border-border pt-5">
-                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <RefreshCcw className="h-3 w-3" /> Regularidade
+                {score.amostraReduzida && (
+                  <p className="mt-3 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                    Score baseado em amostra reduzida — poucos dados no período selecionado.
                   </p>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <MiniStat label="Taxa no prazo" value={fmtPct(regularidade.pctNoPrazo)} />
-                    <MiniStat
-                      label="Tempo médio de atraso"
-                      value={fmtDays(regularidade.tempoMedioAtrasoDias)}
-                    />
-                    <MiniStat label="Replanejamentos" value={regularidade.qtdReplanejamentos} />
-                    <MiniStat
-                      label="Replanejamentos no dia"
-                      value={regularidade.qtdReplanejamentosNoDia}
-                      tone={regularidade.qtdReplanejamentosNoDia > 0 ? "danger" : "neutral"}
-                    />
-                    <MiniStat
-                      label="Alterações de prazo"
-                      value={fmtPct(regularidade.pctComPrazoAlterado)}
-                    />
-                  </div>
-                </div>
-                <div className="border-t border-border pt-5">
-                  <p className="mb-2.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    <CalendarClock className="h-3 w-3" /> Compromissos
-                  </p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <MiniStat
-                      label="Reuniões previstas"
-                      value={compromissos.expected === 0 ? "—" : compromissos.expected}
-                    />
-                    <MiniStat
-                      label="Participadas"
-                      value={compromissos.expected === 0 ? "—" : compromissos.attended}
-                    />
-                    <MiniStat
-                      label="Perdidas"
-                      value={
-                        compromissos.expected === 0
-                          ? "—"
-                          : compromissos.expected - compromissos.attended
-                      }
-                      tone={
-                        compromissos.expected > 0 &&
-                        compromissos.expected - compromissos.attended > 0
-                          ? "danger"
-                          : "neutral"
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
+                )}
 
-              <button
-                type="button"
-                onClick={() => setShowComposition((s) => !s)}
-                className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-              >
-                Ver composição do score
-                <ChevronDown
-                  className={`h-3 w-3 transition-transform ${showComposition ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {showComposition && (
-                <div className="mt-4 space-y-3 rounded-lg border border-border bg-muted/20 p-4 text-xs">
-                  {(
-                    [
-                      {
-                        key: "execucao",
-                        label: "Execução",
-                        value: score.execucao.value,
-                        weight: performanceSettings.weightExecucao,
-                        used: score.weightsUsed.execucao,
-                      },
-                      {
-                        key: "pendencias",
-                        label: "Pendências",
-                        value: score.pendencias.value,
-                        weight: performanceSettings.weightPendencias,
-                        used: score.weightsUsed.pendencias,
-                      },
-                      {
-                        key: "compromissos",
-                        label: "Compromissos",
-                        value: score.compromissos.value,
-                        weight: performanceSettings.weightCompromissos,
-                        used: score.weightsUsed.compromissos,
-                      },
-                    ] as const
-                  ).map((c) => (
-                    <div key={c.key} className="flex items-center justify-between">
-                      <span className="font-medium text-foreground">{c.label}</span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {c.value == null ? "—" : `${Math.round(c.value)}%`}
-                        {" · peso configurado "}
-                        {Math.round(c.weight * 100)}%
-                        {c.used > 0
-                          ? ` · usado no cálculo ${Math.round(c.used * 100)}%`
-                          : " · sem dado no período (excluído do cálculo)"}
+                <div className="mt-5 space-y-5">
+                  <div>
+                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <CheckCircle2 className="h-3 w-3" /> Entrega
+                      </p>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">
+                        {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
                       </span>
                     </div>
-                  ))}
-
-                  {completions.length > 0 && (
-                    <div className="border-t border-border pt-2">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Tarefas concluídas no período
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <MiniStat label="Concluídas no período" value={entrega.concluidas} />
+                      <MiniStat label="No prazo" value={entrega.noPrazo} />
+                      <MiniStat
+                        label="Com atraso"
+                        value={entrega.comAtraso}
+                        tone={entrega.comAtraso > 0 ? "danger" : "neutral"}
+                      />
+                      <MiniStat
+                        label="Atualmente atrasadas"
+                        value={entrega.atualmenteAtrasadas}
+                        tone={entrega.atualmenteAtrasadas > 0 ? "danger" : "neutral"}
+                      />
+                    </div>
+                  </div>
+                  <div className="border-t border-border pt-5">
+                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <RefreshCcw className="h-3 w-3" /> Previsibilidade
+                        <InfoTip text="Mede a estabilidade do planejamento considerando alterações de prazo e o momento em que ocorreram." />
                       </p>
-                      <ul className="space-y-0.5">
-                        {completions.slice(0, 8).map((c, i) => {
-                          const found = c.taskId
-                            ? tasksForMember.find((t) => t.id === c.taskId)
-                            : null;
-                          const label =
-                            c.outcome === "late"
-                              ? "Atrasada"
-                              : c.outcome === "early"
-                                ? "Antecipada"
-                                : "No prazo";
-                          const content = (
-                            <>
-                              <span className="min-w-0 flex-1 truncate">
-                                {c.taskTitle ?? "Tarefa"}
-                              </span>
-                              <span
-                                className={`shrink-0 ${c.outcome === "late" ? "text-destructive" : "text-muted-foreground"}`}
-                              >
-                                {label}
-                              </span>
-                            </>
-                          );
-                          return (
-                            <li key={c.taskId ?? i}>
-                              {found ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openById(found.id)}
-                                  className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/50 hover:underline"
-                                >
-                                  {content}
-                                </button>
-                              ) : (
-                                <div className="flex items-center gap-2 px-1 py-0.5 text-muted-foreground">
-                                  {content}
-                                </div>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      {completions.length > 8 && (
-                        <p className="mt-1 text-[10px] text-muted-foreground">
-                          +{completions.length - 8} outra{completions.length - 8 === 1 ? "" : "s"}
+                      <span className="text-xs font-semibold tabular-nums text-foreground">
+                        {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos} /
+                        35
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      <MiniStat
+                        label="Taxa de replanejamento"
+                        value={fmtTaxaComN(
+                          previsibilidade.taxaReplanejamento,
+                          previsibilidade.tarefasReplanejadas,
+                          previsibilidade.tarefasElegiveis,
+                        )}
+                      />
+                      <MiniStat
+                        label="No dia"
+                        value={previsibilidade.porTiming.no_dia}
+                        tone={previsibilidade.porTiming.no_dia > 0 ? "danger" : "neutral"}
+                      />
+                      <MiniStat
+                        label="Após vencimento"
+                        value={previsibilidade.porTiming.apos_vencimento}
+                        tone={previsibilidade.porTiming.apos_vencimento > 0 ? "danger" : "neutral"}
+                      />
+                    </div>
+                  </div>
+                  <div className="border-t border-border pt-5">
+                    <div className="mb-2.5 flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <CalendarClock className="h-3 w-3" /> Compromissos
+                      </p>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">
+                        {score.compromissosPontos == null ? "—" : score.compromissosPontos} / 15
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <MiniStat
+                        label="Reuniões consideradas"
+                        value={compromissos.expected === 0 ? "—" : compromissos.expected}
+                      />
+                      <MiniStat
+                        label="Participadas"
+                        value={compromissos.expected === 0 ? "—" : compromissos.attended}
+                      />
+                      <MiniStat
+                        label="Perdidas"
+                        value={
+                          compromissos.expected === 0
+                            ? "—"
+                            : compromissos.expected - compromissos.attended
+                        }
+                        tone={
+                          compromissos.expected > 0 &&
+                          compromissos.expected - compromissos.attended > 0
+                            ? "danger"
+                            : "neutral"
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowComposition((s) => !s)}
+                  className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Ver composição do score
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform ${showComposition ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {showComposition && (
+                  <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4 text-xs">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-foreground">Entrega</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
+                        </span>
+                      </div>
+                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                        <p>
+                          Taxa de conclusão no prazo:{" "}
+                          {entrega.concluidas > 0
+                            ? `${Math.round((entrega.noPrazo / entrega.concluidas) * 100)}%`
+                            : "—"}
                         </p>
+                        <p>Tarefas concluídas: {entrega.concluidas}</p>
+                        <p>No prazo: {entrega.noPrazo}</p>
+                        <p>Com atraso: {entrega.comAtraso}</p>
+                        <p>Atualmente vencidas: {entrega.atualmenteAtrasadas}</p>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-foreground">Previsibilidade</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos}{" "}
+                          / 35
+                        </span>
+                      </div>
+                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                        <p>
+                          Taxa de replanejamento:{" "}
+                          {fmtTaxaComN(
+                            previsibilidade.taxaReplanejamento,
+                            previsibilidade.tarefasReplanejadas,
+                            previsibilidade.tarefasElegiveis,
+                          )}
+                        </p>
+                        <p>Replanejamentos antecipados: {previsibilidade.porTiming.antecipado}</p>
+                        <p>Próximos do prazo: {previsibilidade.porTiming.proximo}</p>
+                        <p>No dia: {previsibilidade.porTiming.no_dia}</p>
+                        <p>Após vencimento: {previsibilidade.porTiming.apos_vencimento}</p>
+                      </div>
+                      {(previsibilidade.porTiming.no_dia > 0 ||
+                        previsibilidade.porTiming.apos_vencimento > 0 ||
+                        (previsibilidade.taxaReplanejamento ?? 0) > 0.15) && (
+                        <div className="mt-2 rounded-md bg-background/60 p-2">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Principais impactos
+                          </p>
+                          <ul className="space-y-0.5 text-muted-foreground">
+                            {previsibilidade.porTiming.no_dia > 0 && (
+                              <li>
+                                · {previsibilidade.porTiming.no_dia} prazo
+                                {previsibilidade.porTiming.no_dia > 1 ? "s" : ""} alterado
+                                {previsibilidade.porTiming.no_dia > 1 ? "s" : ""} no dia da entrega
+                              </li>
+                            )}
+                            {previsibilidade.porTiming.apos_vencimento > 0 && (
+                              <li>
+                                · {previsibilidade.porTiming.apos_vencimento} prazo
+                                {previsibilidade.porTiming.apos_vencimento > 1 ? "s" : ""} alterado
+                                {previsibilidade.porTiming.apos_vencimento > 1 ? "s" : ""} após
+                                vencimento
+                              </li>
+                            )}
+                            {(previsibilidade.taxaReplanejamento ?? 0) > 0.15 && (
+                              <li>
+                                · taxa de replanejamento de{" "}
+                                {Math.round((previsibilidade.taxaReplanejamento ?? 0) * 100)}%
+                              </li>
+                            )}
+                          </ul>
+                        </div>
                       )}
                     </div>
-                  )}
 
-                  {deadlineChanges.length > 0 && (
-                    <div className="border-t border-border pt-2">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Replanejamentos no período
-                      </p>
-                      <ul className="space-y-0.5">
-                        {deadlineChanges.slice(0, 8).map((d, i) => (
-                          <li
-                            key={`${d.taskId}_${i}`}
-                            className="flex items-center justify-between gap-2 px-1 py-0.5"
-                          >
-                            <span className="min-w-0 flex-1 truncate">
-                              {d.taskTitle ?? "Tarefa"}
-                            </span>
-                            <span
-                              className={
-                                d.isCritical && !d.exemptFromResponsibility
-                                  ? "shrink-0 text-destructive"
-                                  : "shrink-0 text-muted-foreground"
-                              }
-                            >
-                              {d.motivo
-                                ? (DEADLINE_CHANGE_MOTIVO_LABEL[d.motivo as DeadlineChangeMotivo] ??
-                                  d.motivo)
-                                : "—"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="border-t border-border pt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-foreground">Compromissos</span>
+                        <span className="tabular-nums text-muted-foreground">
+                          {score.compromissosPontos == null ? "—" : score.compromissosPontos} / 15
+                        </span>
+                      </div>
+                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                        <p>Reuniões consideradas: {compromissos.expected}</p>
+                        <p>Participadas: {compromissos.attended}</p>
+                        <p>
+                          Perdidas: {Math.max(0, compromissos.expected - compromissos.attended)}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-            </section>
+
+                    {completions.length > 0 && (
+                      <div className="border-t border-border pt-2">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Tarefas concluídas no período
+                        </p>
+                        <ul className="space-y-0.5">
+                          {completions.slice(0, 8).map((c, i) => {
+                            const found = c.taskId
+                              ? tasksForMember.find((t) => t.id === c.taskId)
+                              : null;
+                            const label =
+                              c.outcome === "late"
+                                ? "Atrasada"
+                                : c.outcome === "early"
+                                  ? "Antecipada"
+                                  : "No prazo";
+                            const content = (
+                              <>
+                                <span className="min-w-0 flex-1 truncate">
+                                  {c.taskTitle ?? "Tarefa"}
+                                </span>
+                                <span
+                                  className={`shrink-0 ${c.outcome === "late" ? "text-destructive" : "text-muted-foreground"}`}
+                                >
+                                  {label}
+                                </span>
+                              </>
+                            );
+                            return (
+                              <li key={c.taskId ?? i}>
+                                {found ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openById(found.id)}
+                                    className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/50 hover:underline"
+                                  >
+                                    {content}
+                                  </button>
+                                ) : (
+                                  <div className="flex items-center gap-2 px-1 py-0.5 text-muted-foreground">
+                                    {content}
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {completions.length > 8 && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            +{completions.length - 8} outra{completions.length - 8 === 1 ? "" : "s"}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {deadlineChanges.length > 0 && (
+                      <div className="border-t border-border pt-2">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Replanejamentos no período
+                        </p>
+                        <ul className="space-y-0.5">
+                          {deadlineChanges.slice(0, 8).map((d, i) => {
+                            const timing = d.from
+                              ? classifyReplanTiming(
+                                  d.from,
+                                  d.occurredAt,
+                                  performanceSettings.deadlineCutoffHour,
+                                )
+                              : null;
+                            const isSevere = timing === "no_dia" || timing === "apos_vencimento";
+                            return (
+                              <li
+                                key={`${d.taskId}_${i}`}
+                                className="flex items-center justify-between gap-2 px-1 py-0.5"
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {d.taskTitle ?? "Tarefa"}
+                                </span>
+                                <span
+                                  className={`shrink-0 ${isSevere ? "text-destructive" : "text-muted-foreground"}`}
+                                >
+                                  {timing ? REPLAN_TIMING_LABEL[timing] : "—"}
+                                  {d.motivo &&
+                                    ` · ${DEADLINE_CHANGE_MOTIVO_LABEL[d.motivo as DeadlineChangeMotivo] ?? d.motivo}`}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </TooltipProvider>
 
             {hasAttention && (
               <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">

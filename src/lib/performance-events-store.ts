@@ -167,10 +167,6 @@ type PerformanceSettingsRow = {
 
 function fromSettingsRow(row: PerformanceSettingsRow): PerformanceSettings {
   return {
-    weightExecucao: row.weight_execucao,
-    weightPendencias: row.weight_pendencias,
-    weightCompromissos: row.weight_compromissos,
-    pendenciasDiasTeto: row.pendencias_dias_teto,
     xpTaskOnTime: row.xp_task_on_time,
     xpTaskEarlyBonus: row.xp_task_early_bonus,
     xpMeetingAttended: row.xp_meeting_attended,
@@ -213,10 +209,6 @@ export async function savePerformanceSettings(
   patch: Partial<PerformanceSettings>,
 ): Promise<{ error: string | null }> {
   const row: Partial<PerformanceSettingsRow> = {};
-  if (patch.weightExecucao != null) row.weight_execucao = patch.weightExecucao;
-  if (patch.weightPendencias != null) row.weight_pendencias = patch.weightPendencias;
-  if (patch.weightCompromissos != null) row.weight_compromissos = patch.weightCompromissos;
-  if (patch.pendenciasDiasTeto != null) row.pendencias_dias_teto = patch.pendenciasDiasTeto;
   if (patch.xpTaskOnTime != null) row.xp_task_on_time = patch.xpTaskOnTime;
   if (patch.xpTaskEarlyBonus != null) row.xp_task_early_bonus = patch.xpTaskEarlyBonus;
   if (patch.xpMeetingAttended != null) row.xp_meeting_attended = patch.xpMeetingAttended;

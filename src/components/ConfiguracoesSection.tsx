@@ -117,7 +117,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.251.0";
+export const APP_VERSION = "1.252.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -614,11 +614,7 @@ function ScoreOperacionalTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  const weightSum = draft.weightExecucao + draft.weightPendencias + draft.weightCompromissos;
-  const weightSumOk = Math.abs(weightSum - 1) < 0.01;
-
   const save = async () => {
-    if (!weightSumOk) return;
     setSaving(true);
     setError("");
     setSaved(false);
@@ -636,76 +632,14 @@ function ScoreOperacionalTab() {
           <h3 className="text-sm font-semibold">Configuração do Score Operacional</h3>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <div>
-          <p className="mb-2 text-xs font-medium text-foreground">
-            Pesos do Score Operacional
-            <span
-              className={`ml-2 font-normal ${weightSumOk ? "text-muted-foreground" : "text-destructive"}`}
-            >
-              (soma: {Math.round(weightSum * 100)}%)
-            </span>
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Execução
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(draft.weightExecucao * 100)}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, weightExecucao: Number(e.target.value) / 100 }))
-                }
-                className={NUM_FIELD_CLS}
-              />
-              %
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Pendências
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(draft.weightPendencias * 100)}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, weightPendencias: Number(e.target.value) / 100 }))
-                }
-                className={NUM_FIELD_CLS}
-              />
-              %
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Compromissos
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(draft.weightCompromissos * 100)}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, weightCompromissos: Number(e.target.value) / 100 }))
-                }
-                className={NUM_FIELD_CLS}
-              />
-              %
-            </label>
-          </div>
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Entrega (50 pts), Previsibilidade (35 pts) e Compromissos (15 pts) usam regras de
+          classificação fixas — não são mais configuráveis por peso.
+        </p>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-foreground">Pendências e XP</p>
+          <p className="mb-2 text-xs font-medium text-foreground">XP</p>
           <div className="flex flex-wrap gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Teto de dias (Pendências)
-              <input
-                type="number"
-                min={1}
-                value={draft.pendenciasDiasTeto}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, pendenciasDiasTeto: Number(e.target.value) }))
-                }
-                className={NUM_FIELD_CLS}
-              />
-            </label>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               XP tarefa no prazo
               <input
@@ -792,7 +726,7 @@ function ScoreOperacionalTab() {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={saving || !weightSumOk}
+            disabled={saving}
             className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Salvando..." : "Salvar"}
