@@ -546,8 +546,14 @@ function createPeerLink(peerId: string, callId: string): PeerLink {
     if (pc.connectionState === "connected") {
       clearConnectTimeout(link);
       patchParticipant(peerId, { status: "connected" });
-      if (state.status !== "idle" && !state.connectedAt)
-        patch({ status: "in-call", connectedAt: Date.now(), error: undefined });
+      if (state.status !== "idle") {
+        if (!state.connectedAt)
+          patch({ status: "in-call", connectedAt: Date.now(), error: undefined });
+        // Reconectou depois de um restart de ICE (falha temporária de rede)
+        // — sem isso, um erro amigável que apareceu durante o hiccup ficava
+        // preso na tela pra sempre, mesmo com a chamada funcionando de novo.
+        else if (state.error) patch({ error: undefined });
+      }
     }
     if (pc.connectionState === "failed") {
       if (!link.iceFailureRetried) {
