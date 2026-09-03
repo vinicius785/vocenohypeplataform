@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, TrendingUp, TrendingDown, FileText, Landmark } from "lucide-react";
+import { X, TrendingUp, TrendingDown, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { DateField } from "@/components/ui/date-field";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { BankFields, type BankInfo } from "@/components/CampanhasSection";
@@ -7,12 +7,24 @@ import {
   type ManualEntry,
   type FinanceiroAnexo,
   type Kind,
+  type RecurrenceFrequency,
   categoriasFor,
+  createRecurrenceSeries,
+  loadFinanceiroMembers,
   todayISO,
 } from "@/lib/financeiro-entries";
 import { Field, inputCls, FinanceiroAnexoBox } from "./shared";
 
 type ClienteOpt = { id: string; nome: string; campanhas: { id: string; nome: string }[] };
+
+const RECURRENCE_OPTIONS: { value: "" | RecurrenceFrequency; label: string }[] = [
+  { value: "", label: "Não repete" },
+  { value: "semanal", label: "Semanal" },
+  { value: "mensal", label: "Mensal" },
+  { value: "trimestral", label: "Trimestral" },
+  { value: "anual", label: "Anual" },
+  { value: "personalizado", label: "Personalizado (dias)" },
+];
 
 export function EntryDialog({
   initial,
@@ -32,17 +44,26 @@ export function EntryDialog({
   const [amount, setAmount] = useState<number | undefined>(initial?.amount);
   const [clienteId, setClienteId] = useState(initial?.clienteId ?? "");
   const [campanhaId, setCampanhaId] = useState(initial?.campanhaId ?? "");
-  const [bank, setBank] = useState<BankInfo>(initial?.bank ?? {});
-  const [showBank, setShowBank] = useState<boolean>(
-    !!initial?.bank && Object.values(initial.bank).some(Boolean),
-  );
-  // Nota fiscal antiga (base64, `@deprecated`) só é preservada se o
-  // lançamento já tinha uma — nunca é escrita de novo daqui em diante,
-  // novos anexos sempre vão pro Storage via `anexos`.
-  const [invoice] = useState(initial?.invoice);
-  const [anexos, setAnexos] = useState<FinanceiroAnexo[]>(initial?.anexos ?? []);
   const [error, setError] = useState("");
 
+  // "Mais opções" — só aparece quando o usuário pede, não sobrecarrega o
+  // formulário padrão (item explícito do pedido).
+  const [showMore, setShowMore] = useState(false);
+  const [competencia, setCompetencia] = useState(initial?.competencia ?? "");
+  const [responsavelId, setResponsavelId] = useState(initial?.responsavelId ?? "");
+  const [formaPagamento, setFormaPagamento] = useState(initial?.formaPagamento ?? "");
+  const [recurrenceFreq, setRecurrenceFreq] = useState<"" | RecurrenceFrequency>(
+    initial?.recurrence?.frequency ?? "",
+  );
+  const [recurrenceIntervalDays, setRecurrenceIntervalDays] = useState<number>(
+    initial?.recurrence?.intervalDays ?? 30,
+  );
+  const [observacoes, setObservacoes] = useState(initial?.observacoes ?? "");
+  const [bank, setBank] = useState<BankInfo>(initial?.bank ?? {});
+  const [invoice] = useState(initial?.invoice);
+  const [anexos, setAnexos] = useState<FinanceiroAnexo[]>(initial?.anexos ?? []);
+
+  const members = useMemo(() => loadFinanceiroMembers(), []);
   const campanhas = useMemo(
     () => clientes.find((c) => c.id === clienteId)?.campanhas ?? [],
     [clientes, clienteId],
@@ -65,7 +86,7 @@ export function EntryDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = amount ?? 0;
     if (!description.trim() || amt <= 0 || !date || !category) {
@@ -73,9 +94,37 @@ export function EntryDialog({
       return;
     }
     const bankFilled = Object.values(bank).some((v) => v && String(v).trim() !== "");
+    const id = initial?.id ?? crypto.randomUUID();
+    // Recorrência só pode ser LIGADA na criação — mudar a frequência de um
+    // lançamento que já é a Nª ocorrência de uma série não move as
+    // ocorrências futuras (fora de escopo, documentado no plano).
+    const isNewRecurrence = !initial && recurrenceFreq;
+    const recurrence = isNewRecurrence
+      ? {
+          frequency: recurrenceFreq as RecurrenceFrequency,
+          intervalDays: recurrenceFreq === "personalizado" ? recurrenceIntervalDays : undefined,
+          seriesId: id,
+          occurrenceIndex: 0,
+        }
+      : initial?.recurrence;
+    if (isNewRecurrence) {
+      try {
+        await createRecurrenceSeries(
+          id,
+          recurrenceFreq as RecurrenceFrequency,
+          recurrenceFreq === "personalizado" ? recurrenceIntervalDays : undefined,
+        );
+      } catch (err) {
+        setError(
+          `Não foi possível criar a recorrência: ${err instanceof Error ? err.message : "erro"}.`,
+        );
+        return;
+      }
+    }
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      id,
       date,
+      competencia: competencia || undefined,
       description: description.trim(),
       category: category.trim(),
       amount: amt,
@@ -84,6 +133,11 @@ export function EntryDialog({
       payment: initial?.payment,
       clienteId: clienteId || undefined,
       campanhaId: campanhaId || undefined,
+      influenciadorId: initial?.influenciadorId,
+      responsavelId: responsavelId || undefined,
+      formaPagamento: formaPagamento || undefined,
+      observacoes: observacoes.trim() || undefined,
+      recurrence,
       bank: bankFilled ? bank : undefined,
       invoice,
       anexos,
@@ -97,7 +151,7 @@ export function EntryDialog({
     >
       <form
         onClick={(ev) => ev.stopPropagation()}
-        onSubmit={submit}
+        onSubmit={(e) => void submit(e)}
         className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
@@ -226,37 +280,135 @@ export function EntryDialog({
           <div className="rounded-xl border border-border">
             <button
               type="button"
-              onClick={() => setShowBank((s) => !s)}
+              onClick={() => setShowMore((s) => !s)}
               className="flex w-full cursor-pointer items-center justify-between px-3.5 py-2.5 text-xs font-semibold text-foreground hover:bg-muted/50"
             >
               <span className="flex items-center gap-2">
-                <Landmark className="h-4 w-4 text-muted-foreground" />
-                Dados bancários {showBank ? "" : "(opcional)"}
+                {showMore ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+                Mais opções
               </span>
-              <span className="text-muted-foreground">{showBank ? "−" : "+"}</span>
             </button>
-            {showBank && (
-              <div className="border-t border-border p-3.5">
-                <BankFields value={bank} onChange={setBank} compact />
+            {showMore && (
+              <div className="space-y-4 border-t border-border p-3.5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Competência (opcional)">
+                    <DateField
+                      value={competencia || undefined}
+                      onChange={(v) => setCompetencia(v ?? "")}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Responsável (opcional)">
+                    <select
+                      value={responsavelId}
+                      onChange={(e) => setResponsavelId(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">—</option>
+                      {members.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="Forma de pagamento prevista (opcional)">
+                  <input
+                    value={formaPagamento}
+                    onChange={(e) => setFormaPagamento(e.target.value)}
+                    placeholder="PIX, transferência, boleto..."
+                    className={inputCls}
+                  />
+                </Field>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Recorrência">
+                    <select
+                      value={recurrenceFreq}
+                      onChange={(e) =>
+                        setRecurrenceFreq(e.target.value as "" | RecurrenceFrequency)
+                      }
+                      disabled={!!initial}
+                      className={`${inputCls} disabled:opacity-50`}
+                    >
+                      {RECURRENCE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {recurrenceFreq === "personalizado" && (
+                    <Field label="A cada quantos dias">
+                      <input
+                        type="number"
+                        min={1}
+                        value={recurrenceIntervalDays}
+                        onChange={(e) => setRecurrenceIntervalDays(Number(e.target.value) || 30)}
+                        className={inputCls}
+                      />
+                    </Field>
+                  )}
+                </div>
+                {recurrenceFreq && !initial && (
+                  <p className="text-[11px] text-muted-foreground">
+                    A próxima ocorrência é criada automaticamente assim que esta for paga/recebida
+                    ou vencer.
+                  </p>
+                )}
+                {initial?.recurrence && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Ocorrência {initial.recurrence.occurrenceIndex + 1} de uma série recorrente —
+                    editar aqui afeta só esta ocorrência.
+                  </p>
+                )}
+
+                <Field label="Observações (opcional)">
+                  <textarea
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </Field>
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-xs font-semibold text-foreground">Dados bancários</p>
+                  <BankFields value={bank} onChange={setBank} compact />
+                </div>
+
+                {invoice && (
+                  <div className="rounded-lg border border-border p-3">
+                    <p className="mb-1.5 text-xs font-semibold text-foreground">
+                      Nota fiscal (anexo antigo)
+                    </p>
+                    <div className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{invoice.name}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <FinanceiroAnexoBox
+                    categoria="Comprovante"
+                    anexos={anexos}
+                    onChange={setAnexos}
+                  />
+                  <FinanceiroAnexoBox
+                    categoria="Nota fiscal"
+                    anexos={anexos}
+                    onChange={setAnexos}
+                  />
+                </div>
               </div>
             )}
-          </div>
-
-          {invoice && (
-            <div className="rounded-xl border border-border p-3.5">
-              <p className="mb-1.5 text-xs font-semibold text-foreground">
-                Nota fiscal (anexo antigo)
-              </p>
-              <div className="flex items-center gap-2 rounded bg-muted/40 px-2 py-1.5 text-xs">
-                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{invoice.name}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FinanceiroAnexoBox categoria="Comprovante" anexos={anexos} onChange={setAnexos} />
-            <FinanceiroAnexoBox categoria="Nota fiscal" anexos={anexos} onChange={setAnexos} />
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}

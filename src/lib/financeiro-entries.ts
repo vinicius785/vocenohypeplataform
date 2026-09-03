@@ -386,6 +386,12 @@ function loadMembers(): Member[] {
   }
 }
 
+/** Lista de membros do time pra popular o campo "Responsável" no
+ * lançamento — mesma fonte já usada pra gerar as despesas de salário. */
+export function loadFinanceiroMembers(): { id: string; name: string }[] {
+  return loadMembers().map((m) => ({ id: m.id, name: m.name }));
+}
+
 /** Status/pagamento de entries AUTO-GERADAS (campanha/influenciador/
  * salário, `editable:false`) — essas não têm linha própria em
  * `financeiro_lancamentos` pra guardar status, então usam esta tabela
@@ -681,6 +687,7 @@ export function useFinanceiroEntries(): Entry[] {
 
   useEffect(() => {
     void reconcilePaidMapOnce();
+    void ensureRecurrenceOccurrences(loadManual());
     const onStorage = () => {
       setManual(loadManual());
       setOverrides(loadOverrides());
@@ -1018,4 +1025,107 @@ export function upcomingDue(entries: Entry[], limit: number): Entry[] {
     (e) => e.status === "a_receber" || e.status === "a_pagar" || e.status === "vencido",
   );
   return sortByUrgency(pending).slice(0, limit);
+}
+
+type RecurrenceSeriesRow = {
+  seriesId: string;
+  frequency: RecurrenceFrequency;
+  intervalDays?: number;
+  active: boolean;
+};
+
+export async function createRecurrenceSeries(
+  seriesId: string,
+  frequency: RecurrenceFrequency,
+  intervalDays?: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from("financeiro_recorrencias")
+    .insert({ data: { seriesId, frequency, intervalDays, active: true } });
+  if (error) throw new Error(error.message);
+}
+
+async function fetchActiveRecurrenceSeries(): Promise<RecurrenceSeriesRow[]> {
+  const { data, error } = await supabase.from("financeiro_recorrencias").select("data");
+  if (error) {
+    console.warn("[financeiro_recorrencias] fetch failed", error);
+    return [];
+  }
+  return (data ?? []).map((row) => row.data as RecurrenceSeriesRow).filter((s) => s.active);
+}
+
+function addByFrequency(
+  dateIso: string,
+  frequency: RecurrenceFrequency,
+  intervalDays?: number,
+): string {
+  const d = new Date(`${dateIso}T00:00:00`);
+  switch (frequency) {
+    case "semanal":
+      d.setDate(d.getDate() + 7);
+      break;
+    case "mensal":
+      d.setMonth(d.getMonth() + 1);
+      break;
+    case "trimestral":
+      d.setMonth(d.getMonth() + 3);
+      break;
+    case "anual":
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+    case "personalizado":
+      d.setDate(d.getDate() + (intervalDays ?? 30));
+      break;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+let recurrenceCheckedThisSession = false;
+
+/** Roda uma vez por sessão de app: pra cada série ativa, se a ocorrência
+ * mais recente já foi paga/recebida/cancelada OU seu vencimento já
+ * passou, gera a próxima (nunca mais de uma por vez) — nunca gera um
+ * lote de ocorrências futuras. Cada ocorrência gerada é uma
+ * `ManualEntry` comum, editável/excluível sem afetar as demais. */
+export async function ensureRecurrenceOccurrences(allManual: ManualEntry[]): Promise<void> {
+  if (recurrenceCheckedThisSession) return;
+  recurrenceCheckedThisSession = true;
+  const series = await fetchActiveRecurrenceSeries();
+  if (series.length === 0) return;
+  const today = todayISO();
+  for (const s of series) {
+    const occurrences = allManual.filter((e) => e.recurrence?.seriesId === s.seriesId);
+    if (occurrences.length === 0) continue;
+    const latest = occurrences.reduce((a, b) =>
+      a.recurrence!.occurrenceIndex > b.recurrence!.occurrenceIndex ? a : b,
+    );
+    const isTerminal =
+      latest.status === "recebido" || latest.status === "pago" || latest.status === "cancelado";
+    if (!isTerminal && latest.date >= today) continue;
+    const alreadyHasNext = occurrences.some(
+      (e) => e.recurrence!.occurrenceIndex === latest.recurrence!.occurrenceIndex + 1,
+    );
+    if (alreadyHasNext) continue;
+    const nextDate = addByFrequency(latest.date, s.frequency, s.intervalDays);
+    const next: ManualEntry = {
+      ...latest,
+      id: crypto.randomUUID(),
+      date: nextDate,
+      competencia: nextDate,
+      status: undefined,
+      payment: undefined,
+      recurrence: {
+        frequency: s.frequency,
+        intervalDays: s.intervalDays,
+        seriesId: s.seriesId,
+        parentId: latest.id,
+        occurrenceIndex: latest.recurrence!.occurrenceIndex + 1,
+      },
+    };
+    try {
+      await createManualEntry(next);
+    } catch (e) {
+      console.warn("[financeiro] ensureRecurrenceOccurrences failed for series", s.seriesId, e);
+    }
+  }
 }

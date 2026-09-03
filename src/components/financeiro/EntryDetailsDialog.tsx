@@ -24,6 +24,7 @@ import {
   entryAnexos,
   fmtBRL,
   formatIsoDate,
+  loadFinanceiroMembers,
 } from "@/lib/financeiro-entries";
 import {
   Section,
@@ -65,6 +66,10 @@ export function EntryDetailsDialog({
     entry.kind === "receita"
       ? "bg-emerald-500/10 text-emerald-600"
       : "bg-rose-500/10 text-rose-600";
+
+  const responsavelNome = entry.responsavelId
+    ? loadFinanceiroMembers().find((m) => m.id === entry.responsavelId)?.name
+    : undefined;
 
   return (
     <div
@@ -184,6 +189,16 @@ export function EntryDetailsDialog({
                 />
               )}
               {entry.memberName && <DetailRow label="Membro" value={entry.memberName} />}
+              {responsavelNome && <DetailRow label="Responsável" value={responsavelNome} />}
+              {entry.formaPagamento && (
+                <DetailRow label="Forma de pagamento prevista" value={entry.formaPagamento} />
+              )}
+              {entry.recurrence && (
+                <DetailRow
+                  label="Recorrência"
+                  value={`${entry.recurrence.frequency} · ocorrência ${entry.recurrence.occurrenceIndex + 1}`}
+                />
+              )}
               {entry.observacoes && <DetailRow label="Observações" value={entry.observacoes} />}
             </div>
           </Section>
