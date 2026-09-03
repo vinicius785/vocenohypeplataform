@@ -6,6 +6,8 @@ import {
   Lock,
   Phone,
   PhoneMissed,
+  ChevronDown,
+  ChevronRight,
   Pencil,
   Trash2,
   AtSign,
@@ -1158,7 +1160,47 @@ function MessageList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [expandedCallGroups, setExpandedCallGroups] = useState<Set<string>>(new Set());
+  const [expandedCallDetails, setExpandedCallDetails] = useState<Set<string>>(new Set());
   const taskInfoById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  // Registros de chamada (📞) que nunca conectaram (recusada/perdida/não
+  // atendida — nunca uma que de fato aconteceu, essa fica sempre individual)
+  // ficam poluindo o histórico quando alguém liga várias vezes seguidas —
+  // agrupa tentativas consecutivas (sem mensagem de verdade no meio) dentro
+  // de uma janela de 10 minutos, no mesmo dia, num único item recolhível.
+  const callGroups = useMemo(() => {
+    const groups = new Map<string, ChatMessage[]>();
+    const hidden = new Set<string>();
+    let buffer: ChatMessage[] = [];
+    const flush = () => {
+      if (buffer.length >= 2) {
+        groups.set(buffer[0].id, buffer);
+        for (const b of buffer.slice(1)) hidden.add(b.id);
+      }
+      buffer = [];
+    };
+    for (const m of messages) {
+      const isGroupableCall =
+        m.authorId === "system" && m.text.startsWith("📞") && !m.text.includes("duração");
+      if (isGroupableCall) {
+        const last = buffer[buffer.length - 1];
+        if (
+          last &&
+          m.createdAt - last.createdAt <= 10 * 60 * 1000 &&
+          isSameDay(last.createdAt, m.createdAt)
+        ) {
+          buffer.push(m);
+        } else {
+          flush();
+          buffer = [m];
+        }
+      } else {
+        flush();
+      }
+    }
+    flush();
+    return { groups, hidden };
+  }, [messages]);
   const prevConvoIdRef = useRef(convoId);
   useEffect(() => {
     const switchedConvo = prevConvoIdRef.current !== convoId;
@@ -1203,6 +1245,9 @@ function MessageList({
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
       {messages.map((m, i) => {
+        // Absorvido num grupo de tentativas de chamada representado por um
+        // item anterior (ver `callGroups` acima) — nunca renderiza sozinho.
+        if (callGroups.hidden.has(m.id)) return null;
         const prev = messages[i - 1];
         const next = messages[i + 1];
         const grouped =
@@ -1224,49 +1269,135 @@ function MessageList({
         const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
         const editing = editingId === m.id;
         if (m.authorId === "system") {
-          // Registro de chamada (📞) tem hierarquia própria — ainda discreto,
-          // mas com ícone e leve destaque, pra não parecer o mesmo aviso
-          // cinza genérico de "sistema" usado pra outras notificações.
           const isCallRecord = m.text.startsWith("📞");
-          const isMissedOrNotAnswered = isCallRecord && !m.text.includes("duração");
+          const dayDividerEl = showDayDivider && (
+            <div className="my-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {formatDayLabel(m.createdAt)}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          );
+          // Registro de chamada é metadado do histórico (nível "Hoje"/"Lucas
+          // entrou na sala"), nunca deve competir visualmente com mensagens
+          // de verdade — monocromático, pequeno, sem pill colorida. Cor fica
+          // reservada só pro pontinho sutil de "perdida" (item 5 do pedido).
+          if (isCallRecord) {
+            const groupMsgs = callGroups.groups.get(m.id);
+            const fmtTime = (t: number) =>
+              new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+            if (groupMsgs) {
+              const expanded = expandedCallGroups.has(m.id);
+              const range = `${fmtTime(groupMsgs[0].createdAt)}–${fmtTime(groupMsgs[groupMsgs.length - 1].createdAt)}`;
+              return (
+                <div key={m.id}>
+                  {dayDividerEl}
+                  <div className="my-1.5 flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedCallGroups((prevSet) => {
+                          const next = new Set(prevSet);
+                          if (next.has(m.id)) next.delete(m.id);
+                          else next.add(m.id);
+                          return next;
+                        })
+                      }
+                      className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/30"
+                    >
+                      {expanded ? (
+                        <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
+                      )}
+                      <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
+                      <span>{groupMsgs.length} tentativas de chamada</span>
+                      <span className="text-[10px] opacity-60">{range}</span>
+                    </button>
+                    {expanded && (
+                      <div className="flex flex-col gap-0.5 rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
+                        {groupMsgs.map((gm) => (
+                          <div key={gm.id} className="flex items-center gap-1.5">
+                            <span className="text-[10px] opacity-60">{fmtTime(gm.createdAt)}</span>
+                            <span>·</span>
+                            <span>{formatCallRecordLabel(gm.text).label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            const { label, kind } = formatCallRecordLabel(m.text);
+            const detailsOpen = expandedCallDetails.has(m.id);
+            const otherName = isDm
+              ? members.find((mem) => mem.id === otherUserId)?.name
+              : undefined;
+            return (
+              <div key={m.id}>
+                {dayDividerEl}
+                <div className="my-1.5 flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      kind === "answered" &&
+                      setExpandedCallDetails((prevSet) => {
+                        const next = new Set(prevSet);
+                        if (next.has(m.id)) next.delete(m.id);
+                        else next.add(m.id);
+                        return next;
+                      })
+                    }
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground ${
+                      kind === "answered" ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
+                    }`}
+                  >
+                    {kind === "missed" ? (
+                      <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
+                    ) : (
+                      <Phone className="h-3 w-3 shrink-0 opacity-70" />
+                    )}
+                    <span>{label}</span>
+                    {/* Único toque de cor do redesign, de propósito: só pra
+                        "perdida" ter alguma diferenciação além do texto, e
+                        mesmo assim é só um pontinho, nunca card/ícone colorido. */}
+                    {kind === "missed" && (
+                      <span className="h-1 w-1 rounded-full bg-amber-500/70" aria-hidden="true" />
+                    )}
+                    <span className="text-[10px] opacity-60">{fmtTime(m.createdAt)}</span>
+                  </button>
+                  {detailsOpen && kind === "answered" && (
+                    <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
+                      <p className="font-medium text-foreground">
+                        Chamada{otherName ? ` com ${otherName}` : ""}
+                      </p>
+                      <p>{formatIsoDate(new Date(m.createdAt).toISOString().slice(0, 10))}</p>
+                      <p>
+                        {fmtTime(m.createdAt - parseCallDurationMs(m.text))} –{" "}
+                        {fmtTime(m.createdAt)}
+                      </p>
+                      <p>Duração: {label.split("· ")[1]}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={m.id}>
-              {showDayDivider && (
-                <div className="my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {formatDayLabel(m.createdAt)}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-              )}
+              {dayDividerEl}
               <div className="my-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                {isCallRecord ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 shadow-sm">
-                    {isMissedOrNotAnswered ? (
-                      <PhoneMissed className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    ) : (
-                      <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    )}
-                    <span className="font-medium text-foreground">{m.text.replace("📞 ", "")}</span>
-                    <span className="text-[10px] opacity-70">
-                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
+                  {m.text}
+                  <span className="ml-2 text-[10px] opacity-70">
+                    {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
-                ) : (
-                  <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
-                    {m.text}
-                    <span className="ml-2 text-[10px] opacity-70">
-                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </span>
-                )}
+                </span>
               </div>
             </div>
           );
@@ -1481,6 +1612,33 @@ function MessageList({
       )}
     </div>
   );
+}
+
+/** Só reformata pra exibição — o texto gravado no banco (gerado no handler
+ * de `call:ended`, ver mais acima) continua exatamente igual, de propósito:
+ * essa tarefa é só de apresentação, não pode mexer em como o registro é
+ * criado/armazenado. */
+function formatCallRecordLabel(rawText: string): {
+  label: string;
+  kind: "answered" | "missed" | "notAnswered";
+} {
+  const body = rawText.replace("📞 ", "");
+  const match = body.match(/duração (\d{2}):(\d{2})/);
+  if (match) {
+    const mm = Number(match[1]);
+    const ss = Number(match[2]);
+    const parts = [mm > 0 ? `${mm} min` : null, ss > 0 || mm === 0 ? `${ss} s` : null].filter(
+      Boolean,
+    );
+    return { label: `Chamada encerrada · ${parts.join(" ")}`, kind: "answered" };
+  }
+  if (body === "Chamada perdida") return { label: body, kind: "missed" };
+  return { label: body, kind: "notAnswered" };
+}
+function parseCallDurationMs(rawText: string): number {
+  const match = rawText.match(/duração (\d{2}):(\d{2})/);
+  if (!match) return 0;
+  return (Number(match[1]) * 60 + Number(match[2])) * 1000;
 }
 
 function isSameDay(a: number, b: number) {
