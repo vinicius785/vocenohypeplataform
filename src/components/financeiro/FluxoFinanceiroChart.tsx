@@ -88,6 +88,9 @@ export function FluxoFinanceiroChart({
     () => toPoints(cashFlowSeries(filtered.visible, granularity), mode, granularity),
     [filtered.visible, mode, granularity],
   );
+  // Uma série só de zeros não é informação — é ruído visual (eixo R$0,
+  // R$1, R$2...). Nunca renderiza o gráfico nesse caso.
+  const hasData = points.some((p) => p.receitas > 0 || p.despesas > 0);
 
   return (
     <ChartCard
@@ -111,13 +114,30 @@ export function FluxoFinanceiroChart({
         </div>
       }
     >
-      {points.length === 0 ? (
-        <ChartEmptyState message="Nenhum lançamento neste período." />
+      {!hasData ? (
+        <div className="flex items-center justify-between gap-3 py-2">
+          <ChartEmptyState
+            message={
+              mode === "realizado"
+                ? "Sem movimentações realizadas neste período."
+                : "Sem movimentações projetadas neste período."
+            }
+          />
+          {mode === "realizado" && (
+            <button
+              type="button"
+              onClick={() => onModeChange("projetado")}
+              className="shrink-0 cursor-pointer whitespace-nowrap text-xs font-medium text-foreground underline underline-offset-4 hover:no-underline"
+            >
+              Ver projetado
+            </button>
+          )}
+        </div>
       ) : (
-        <div className="h-64">
+        <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={points} margin={{ left: 0, right: 8, top: 4 }}>
-              <CartesianGrid vertical={false} strokeOpacity={0.15} stroke="var(--border)" />
+              <CartesianGrid vertical={false} strokeOpacity={0.1} stroke="var(--border)" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
@@ -152,7 +172,7 @@ export function FluxoFinanceiroChart({
               />
             </LineChart>
           </ResponsiveContainer>
-          <div className="mt-2 flex items-center gap-4 text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex items-center gap-4 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-2)" }} />
               Receitas

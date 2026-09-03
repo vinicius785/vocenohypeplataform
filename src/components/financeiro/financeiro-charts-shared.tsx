@@ -12,11 +12,7 @@ export function abbreviateBRL(n: number): string {
 }
 
 export function ChartEmptyState({ message }: { message: string }) {
-  return (
-    <p className="flex h-full min-h-[160px] items-center justify-center text-center text-xs text-muted-foreground">
-      {message}
-    </p>
-  );
+  return <p className="py-3 text-xs text-muted-foreground">{message}</p>;
 }
 
 export function ChartLoadingState() {
@@ -27,6 +23,8 @@ export function ChartLoadingState() {
   );
 }
 
+/** Sem borda/card — só título + conteúdo. Hierarquia vem de tipografia e
+ * do `<Separator />` entre blocos na página, não de retângulos aninhados. */
 export function ChartCard({
   title,
   action,
@@ -37,8 +35,8 @@ export function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div>
+      <div className="mb-2.5 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </h3>

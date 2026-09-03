@@ -3,6 +3,7 @@ import { Plus, Upload } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SectionHeader } from "./SectionHeader";
 import { useFinanceiroFilteredEntries } from "./financeiro/useFinanceiroFilteredEntries";
+import { PeriodPicker } from "./financeiro/PeriodPicker";
 import { VisaoGeralTab } from "./financeiro/VisaoGeralTab";
 import { LancamentosTab } from "./financeiro/LancamentosTab";
 import { AReceberTab } from "./financeiro/AReceberTab";
@@ -46,12 +47,13 @@ export function FinanceiroSection() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
+    <div className="mx-auto w-full max-w-7xl space-y-4">
       <SectionHeader
         title="Financeiro"
         subtitle="Hub de gestão financeira — receitas, despesas, cachês, salários e vínculos."
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker filtered={filtered} />
             <button
               onClick={() => setImportOpen(true)}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
@@ -81,6 +83,8 @@ export function FinanceiroSection() {
             filtered={filtered}
             onApplyFilter={(patch) => filtered.setFilters((f) => ({ ...f, ...patch }))}
             onNavigateToLancamentos={() => setTopTab("lancamentos")}
+            onNavigateToAReceber={() => setTopTab("a-receber")}
+            onNavigateToAPagar={() => setTopTab("a-pagar")}
           />
         </TabsContent>
         <TabsContent value="lancamentos" className="mt-4">

@@ -89,7 +89,7 @@ export function ResultadoPorCampanhaTable({
                     {fmtBRL(r.resultado)}
                   </td>
                   <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                    {r.margem.toFixed(0)}%
+                    {r.receita > 0 ? `${r.margem.toFixed(0)}%` : "—"}
                   </td>
                 </tr>
               ))}

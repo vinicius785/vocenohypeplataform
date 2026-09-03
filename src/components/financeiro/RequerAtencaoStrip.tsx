@@ -1,4 +1,4 @@
-import { AlertCircle, Clock } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { alertItems, fmtBRL, type AlertKind } from "@/lib/financeiro-entries";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
 
@@ -21,8 +21,9 @@ function patchFor(kind: AlertKind): Partial<AdvancedFilters> {
   return { tipo, status: [...status] };
 }
 
-/** Só aparece quando há algo relevante — nunca uma faixa vazia. Cada item
- * é um texto compacto e clicável, sem card vermelho gigante. */
+/** Só aparece quando há algo relevante. Cada linha ocupa a largura
+ * inteira e é clicável — cor só no indicador (bolinha), nunca no texto
+ * inteiro. */
 export function RequerAtencaoStrip({
   filtered,
   onApplyFilter,
@@ -34,28 +35,33 @@ export function RequerAtencaoStrip({
   if (items.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs">
-      <span className="flex shrink-0 items-center gap-1.5 font-medium text-muted-foreground">
-        <AlertCircle className="h-3.5 w-3.5" />
+    <div>
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Requer atenção
-      </span>
-      {items.map((item) => (
-        <button
-          key={item.kind}
-          type="button"
-          onClick={() => onApplyFilter(patchFor(item.kind))}
-          className={`inline-flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 hover:underline ${
-            item.kind.startsWith("vencido") ? "text-rose-600" : "text-amber-600"
-          }`}
-        >
-          {item.kind.startsWith("vencido") ? (
-            <AlertCircle className="h-3 w-3" />
-          ) : (
-            <Clock className="h-3 w-3" />
-          )}
-          {item.count} {ALERT_LABEL[item.kind]} · {fmtBRL(item.total)}
-        </button>
-      ))}
+      </p>
+      <div className="divide-y divide-border/60">
+        {items.map((item) => (
+          <button
+            key={item.kind}
+            type="button"
+            onClick={() => onApplyFilter(patchFor(item.kind))}
+            className="flex w-full cursor-pointer items-center gap-2.5 py-2 text-left text-sm hover:bg-muted/30"
+          >
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                item.kind.startsWith("vencido") ? "bg-rose-500" : "bg-amber-500"
+              }`}
+            />
+            <span className="min-w-0 flex-1 text-foreground">
+              {item.count} {ALERT_LABEL[item.kind]}
+              <span className="ml-1.5 tabular-nums text-muted-foreground">
+                {fmtBRL(item.total)}
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

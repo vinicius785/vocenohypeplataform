@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
-import { DateField } from "@/components/ui/date-field";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -9,7 +8,6 @@ import {
   loadFinanceiroMembers,
 } from "@/lib/financeiro-entries";
 import {
-  PERIOD_OPTIONS,
   DEFAULT_FILTERS,
   type AdvancedFilters,
   type useFinanceiroFilteredEntries,
@@ -39,18 +37,7 @@ function inputCls(extra = "") {
 
 export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   const clientes = useClientes();
-  const {
-    periodMode,
-    setPeriodMode,
-    anchorMonth,
-    setAnchorMonth,
-    customFrom,
-    setCustomFrom,
-    customTo,
-    setCustomTo,
-    filters,
-    setFilters,
-  } = filtered;
+  const { filters, setFilters } = filtered;
   const [moreOpen, setMoreOpen] = useState(false);
 
   const members = loadFinanceiroMembers();
@@ -144,58 +131,6 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={periodMode}
-          onChange={(e) => setPeriodMode(e.target.value as typeof periodMode)}
-          className={inputCls()}
-        >
-          {PERIOD_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        {(periodMode === "este_mes" || periodMode === "mes_passado") && (
-          <div className="inline-flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setAnchorMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-              className="cursor-pointer rounded-md border border-border px-1.5 py-1 text-xs hover:bg-muted"
-              aria-label="Mês anterior"
-            >
-              ‹
-            </button>
-            <span className="min-w-24 text-center text-xs text-muted-foreground">
-              {anchorMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setAnchorMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-              className="cursor-pointer rounded-md border border-border px-1.5 py-1 text-xs hover:bg-muted"
-              aria-label="Próximo mês"
-            >
-              ›
-            </button>
-          </div>
-        )}
-        {periodMode === "personalizado" && (
-          <div className="flex items-center gap-1.5">
-            <DateField
-              value={customFrom}
-              onChange={(v) => setCustomFrom(v ?? customFrom)}
-              max={customTo}
-              className="h-8 text-xs"
-            />
-            <span className="text-xs text-muted-foreground">até</span>
-            <DateField
-              value={customTo}
-              onChange={(v) => setCustomTo(v ?? customTo)}
-              min={customFrom}
-              className="h-8 text-xs"
-            />
-          </div>
-        )}
-
         <div className="inline-flex rounded-md border border-border bg-background p-0.5">
           {(["todos", "receita", "despesa"] as const).map((k) => (
             <button
