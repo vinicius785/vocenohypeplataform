@@ -115,7 +115,20 @@ export type AdvancedFilters = {
 
 export const DEFAULT_FILTERS: AdvancedFilters = { tipo: "todos", status: [], query: "" };
 
-function matchesFilters(e: Entry, f: AdvancedFilters): boolean {
+/** Janela de mesma duração imediatamente anterior ao período atual — usada
+ * na comparação "vs. período anterior" dos KPIs. */
+export function previousPeriodRange(range: DateRange): DateRange {
+  const from = new Date(`${range.from}T00:00:00`);
+  const to = new Date(`${range.to}T00:00:00`);
+  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1);
+  const prevTo = new Date(from);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - (days - 1));
+  return { from: toIso(prevFrom), to: toIso(prevTo) };
+}
+
+export function matchesFilters(e: Entry, f: AdvancedFilters): boolean {
   if (f.tipo !== "todos" && e.kind !== f.tipo) return false;
   if (f.status.length > 0 && !f.status.includes(e.status)) return false;
   if (f.clienteId && e.clienteId !== f.clienteId) return false;

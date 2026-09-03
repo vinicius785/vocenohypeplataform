@@ -768,3 +768,48 @@ export async function markEntryPaid(entry: Entry, payload: PaymentConfirmation):
     await upsertStatusOverride(entry.id, { status, ...payload });
   }
 }
+
+/** Recebe o array já filtrado por período+filtros (o `visible` do hook
+ * central) — nunca faz query própria. Usado pela linha de KPIs da Visão
+ * Geral. */
+export function kpiTotals(entries: Entry[]): {
+  receitaRealizada: number;
+  aReceber: number;
+  despesaRealizada: number;
+  aPagar: number;
+  saldoRealizado: number;
+  saldoProjetado: number;
+} {
+  let receitaRealizada = 0;
+  let aReceber = 0;
+  let despesaRealizada = 0;
+  let aPagar = 0;
+  for (const e of entries) {
+    if (e.kind === "receita") {
+      if (e.status === "recebido") receitaRealizada += e.payment?.paidAmount ?? e.amount;
+      else if (e.status !== "cancelado") aReceber += e.amount;
+    } else {
+      if (e.status === "pago") despesaRealizada += e.payment?.paidAmount ?? e.amount;
+      else if (e.status !== "cancelado") aPagar += e.amount;
+    }
+  }
+  return {
+    receitaRealizada,
+    aReceber,
+    despesaRealizada,
+    aPagar,
+    saldoRealizado: receitaRealizada - despesaRealizada,
+    saldoProjetado: receitaRealizada + aReceber - (despesaRealizada + aPagar),
+  };
+}
+
+/** Vencidos primeiro, depois por vencimento mais próximo — mesma ordenação
+ * usada em "Próximos vencimentos", "A receber" e "A pagar". */
+export function sortByUrgency(entries: Entry[]): Entry[] {
+  return [...entries].sort((a, b) => {
+    const aVencido = a.status === "vencido" ? 0 : 1;
+    const bVencido = b.status === "vencido" ? 0 : 1;
+    if (aVencido !== bVencido) return aVencido - bVencido;
+    return a.vencimento < b.vencimento ? -1 : a.vencimento > b.vencimento ? 1 : 0;
+  });
+}
