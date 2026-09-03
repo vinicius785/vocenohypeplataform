@@ -28,12 +28,62 @@ function ProductivityTooltip({ active, payload }: TooltipProps<number, string>) 
   );
 }
 
+/** Tabela "quantidade exata por membro" — só faz sentido no recorte
+ * "Esta semana" (pedido explícito): nos demais recortes (30/90 dias,
+ * ano) uma tabela pessoa×dia teria dezenas de ocorrências do mesmo dia
+ * da semana misturadas numa única contagem, e ficaria grande/confusa —
+ * o gráfico de média já serve pra esses recortes mais longos. */
+function ByMemberTable({ data }: { data: WeekdayBucket[] }) {
+  const names = Array.from(new Set(data.flatMap((d) => d.byMember.map((m) => m.name)))).sort(
+    (a, b) => a.localeCompare(b, "pt-BR"),
+  );
+  if (names.length === 0) return null;
+  const countFor = (name: string, bucket: WeekdayBucket) =>
+    bucket.byMember.find((m) => m.name === name)?.count ?? 0;
+
+  return (
+    <div className="mt-4 overflow-x-auto border-t border-border pt-3">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th className="pb-1.5 pr-2 font-medium">Membro</th>
+            {data.map((d) => (
+              <th key={d.weekday} className="px-1.5 pb-1.5 text-center font-medium">
+                {d.label.slice(0, 3).toUpperCase()}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {names.map((name) => (
+            <tr key={name} className="border-t border-border/60">
+              <td className="max-w-[9rem] truncate py-1.5 pr-2 text-foreground">{name}</td>
+              {data.map((d) => {
+                const count = countFor(name, d);
+                return (
+                  <td
+                    key={d.weekday}
+                    className={`px-1.5 py-1.5 text-center tabular-nums ${count > 0 ? "text-foreground" : "text-muted-foreground/40"}`}
+                  >
+                    {count > 0 ? count : "–"}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** "Produtividade por dia da semana" — substitui "Entregas por semana".
  * Mostra a MÉDIA de entregas por ocorrência de cada dia (seg-sex) no
  * período, não o total bruto (evita distorção quando o período cobre
  * números diferentes de cada dia da semana). Sábado/domingo omitidos
  * por completo (não cinza/desabilitados) — não fazem parte do escopo
- * desta métrica ainda. */
+ * desta métrica ainda. Na "Esta semana", uma tabela "quantidade exata
+ * por membro" complementa o gráfico (pedido explícito). */
 export function TeamWeekdayProductivity({
   data,
   period,
@@ -98,6 +148,7 @@ export function TeamWeekdayProductivity({
           </ResponsiveContainer>
         </div>
       )}
+      {period === "semana" && <ByMemberTable data={data} />}
     </div>
   );
 }

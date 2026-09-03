@@ -441,6 +441,13 @@ export type WeekdayBucket = {
    * nunca ocorreu no período, pra diferenciar visualmente "sem dado" de
    * "zero entregas nesse dia". */
   average: number | null;
+  /** Quantidade EXATA de entregas por responsável nesse dia (nome →
+   * contagem, crédito cheio pra cada responsável de tarefas com vários,
+   * mesma convenção de "Carga por membro"). Só faz sentido mostrar num
+   * recorte de uma única semana (perguntar a média por pessoa num
+   * período de 90 dias/ano seria uma tabela enorme) — quem consome decide
+   * quando exibir, esta função sempre calcula (custo desprezível). */
+  byMember: { name: string; count: number }[];
 };
 
 /** Data real de conclusão, preferindo o campo dedicado `t.completedAt`
@@ -462,8 +469,18 @@ export function weekdayProductivity(
   const buckets = new Map<Weekday, WeekdayBucket>(
     ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => [
       wd,
-      { weekday: wd, label: WEEKDAY_LABEL[wd], totalCompletions: 0, occurrences: 0, average: null },
+      {
+        weekday: wd,
+        label: WEEKDAY_LABEL[wd],
+        totalCompletions: 0,
+        occurrences: 0,
+        average: null,
+        byMember: [],
+      },
     ]),
+  );
+  const byMemberCounts = new Map<Weekday, Map<string, number>>(
+    ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => [wd, new Map<string, number>()]),
   );
 
   if (range.from && range.to) {
@@ -484,11 +501,18 @@ export function weekdayProductivity(
       const wd = parseIsoDateLocal(completedAt).getDay();
       if (wd < 1 || wd > 5) continue;
       buckets.get(wd as Weekday)!.totalCompletions += 1;
+      const counts = byMemberCounts.get(wd as Weekday)!;
+      for (const name of getTaskAssignees(t)) {
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
     }
   }
 
-  for (const bucket of buckets.values()) {
+  for (const [wd, bucket] of buckets) {
     bucket.average = bucket.occurrences > 0 ? bucket.totalCompletions / bucket.occurrences : null;
+    bucket.byMember = [...byMemberCounts.get(wd)!.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }
   return ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => buckets.get(wd)!);
 }
