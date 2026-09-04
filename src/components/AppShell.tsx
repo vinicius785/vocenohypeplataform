@@ -61,6 +61,7 @@ import {
 } from "@/lib/chat-store";
 
 import { useClientes, type Cliente } from "@/lib/clientes-store";
+import { messagePreviewLabel } from "@/lib/voice-messages";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
 import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
 import { useFinanceiroEntries } from "@/lib/financeiro-entries";
@@ -718,7 +719,7 @@ function useIncomingMessageNotifier() {
         convoLabel = projects.find((p) => p.id === m.convoId)?.name ?? "Projeto";
       else convoLabel = channels.find((c) => c.id === m.convoId)?.name ?? "Canal";
 
-      const bodyText = m.text?.trim() || (m.attachments?.length ? "📎 Anexo" : "");
+      const bodyText = messagePreviewLabel(m);
       const title = m.convoId.startsWith("dm:") ? m.authorName : `${m.authorName} · ${convoLabel}`;
 
       playNotifSound();

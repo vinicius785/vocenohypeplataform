@@ -1840,6 +1840,15 @@ export type Database = {
         };
         Returns: boolean;
       };
+      heal_voice_attachment_duration: {
+        Args: {
+          p_attachment_path: string;
+          p_duration_ms: number;
+          p_message_id: string;
+          p_peaks: Json;
+        };
+        Returns: Json;
+      };
       is_admin: { Args: { _user_id: string }; Returns: boolean };
       publish_scheduled_blog_posts: { Args: never; Returns: undefined };
       toggle_message_reaction: {

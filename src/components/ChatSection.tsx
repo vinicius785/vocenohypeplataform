@@ -21,9 +21,6 @@ import {
   Check,
   CheckCheck,
   Mic,
-  Square,
-  Play,
-  Pause,
   Plus,
   MoreHorizontal,
   MessageSquare,
@@ -69,6 +66,9 @@ import {
 
 import { useClientes } from "@/lib/clientes-store";
 import type { ChatMessage } from "@/lib/chat-store";
+import { messagePreviewLabel } from "@/lib/voice-messages";
+import { VoiceMessagePlayer } from "@/components/chat/VoiceMessagePlayer";
+import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
 
 import { useNavigate } from "@tanstack/react-router";
 import { loadProjetos } from "@/lib/projetos";
@@ -763,9 +763,7 @@ function ChatListRow({
           </span>
           <span className="block truncate text-xs text-muted-foreground">
             {item.lastMessage
-              ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${
-                  item.lastMessage.text || (item.lastMessage.attachments?.length ? "Anexo" : "")
-                }`
+              ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${messagePreviewLabel(item.lastMessage)}`
               : item.kind === "campanha"
                 ? "Campanha"
                 : item.kind === "projeto"
@@ -1475,7 +1473,7 @@ function MessageList({
                         <Reply className="mt-0.5 h-3 w-3 shrink-0" />
                         <div className="min-w-0">
                           <span className="font-medium">{original.authorName}</span>{" "}
-                          <span className="line-clamp-1 break-words">{original.text}</span>
+                          <span className="line-clamp-1 break-words">{messagePreviewLabel(original)}</span>
                         </div>
                       </button>
                     );
@@ -1510,7 +1508,7 @@ function MessageList({
                         <TaskMentionCard key={task.id} task={task} onOpen={onOpenTask} />
                       ))}
                     {m.attachments && m.attachments.length > 0 && (
-                      <AttachmentList attachments={m.attachments} />
+                      <AttachmentList message={m} attachments={m.attachments} />
                     )}
                     {m.reactions && Object.keys(m.reactions).length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -2173,171 +2171,7 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function fmtAudioTime(s: number) {
-  if (!isFinite(s) || s < 0) return "0:00";
-  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-}
-
-/** Decodifica o áudio uma vez para extrair a amplitude por trecho — vira a "forma de onda" visual do player. */
-function useAudioWaveform(url: string, bars: number): number[] {
-  const [levels, setLevels] = useState<number[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        const res = await fetch(url);
-        const buf = await res.arrayBuffer();
-        const ctx = new AC();
-        const audioBuf = await ctx.decodeAudioData(buf);
-        const raw = audioBuf.getChannelData(0);
-        const blockSize = Math.max(1, Math.floor(raw.length / bars));
-        const out: number[] = [];
-        for (let i = 0; i < bars; i++) {
-          let sum = 0;
-          for (let j = 0; j < blockSize; j++) sum += Math.abs(raw[i * blockSize + j] ?? 0);
-          out.push(sum / blockSize);
-        }
-        const max = Math.max(...out, 0.0001);
-        void ctx.close();
-        if (!cancelled) setLevels(out.map((v) => v / max));
-      } catch {
-        if (!cancelled) setLevels(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url, bars]);
-  return levels ?? Array.from({ length: bars }, (_, i) => 0.25 + 0.5 * Math.abs(Math.sin(i * 1.7)));
-}
-
-/** Player de áudio custom (onda + play/pause), no lugar do `<audio controls>` nativo do navegador. */
-const AUDIO_RATES = [1, 1.5, 2] as const;
-
-function AudioMessagePlayer({ src, compact }: { src: string; compact?: boolean }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [current, setCurrent] = useState(0);
-  const [rate, setRate] = useState<(typeof AUDIO_RATES)[number]>(1);
-  const bars = compact ? 22 : 34;
-  const levels = useAudioWaveform(src, bars);
-
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = rate;
-  }, [rate]);
-
-  const cycleRate = () => {
-    const next = AUDIO_RATES[(AUDIO_RATES.indexOf(rate) + 1) % AUDIO_RATES.length];
-    setRate(next);
-  };
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    const onTime = () => setCurrent(el.currentTime);
-    const onLoaded = () => setDuration(el.duration || 0);
-    const onEnd = () => {
-      setPlaying(false);
-      setCurrent(0);
-    };
-    el.addEventListener("timeupdate", onTime);
-    el.addEventListener("loadedmetadata", onLoaded);
-    el.addEventListener("ended", onEnd);
-    return () => {
-      el.removeEventListener("timeupdate", onTime);
-      el.removeEventListener("loadedmetadata", onLoaded);
-      el.removeEventListener("ended", onEnd);
-    };
-  }, []);
-
-  const toggle = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (playing) el.pause();
-    else void el.play();
-    setPlaying(!playing);
-  };
-
-  const seekTo = (ratio: number) => {
-    const el = audioRef.current;
-    if (!el || !duration) return;
-    el.currentTime = Math.min(duration, Math.max(0, ratio * duration));
-    setCurrent(el.currentTime);
-  };
-
-  const progress = duration > 0 ? current / duration : 0;
-
-  return (
-    <div
-      className={`flex items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1.5 pl-1.5 pr-2.5 ${compact ? "max-w-[220px]" : "max-w-xs"}`}
-    >
-      <audio
-        ref={audioRef}
-        src={src}
-        preload="metadata"
-        className="hidden"
-        onLoadedMetadata={(e) => {
-          e.currentTarget.playbackRate = rate;
-        }}
-      />
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={playing ? "Pausar áudio" : "Tocar áudio"}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-transform active:scale-95"
-      >
-        {playing ? (
-          <Pause className="h-3 w-3 fill-current" />
-        ) : (
-          <Play className="ml-0.5 h-3 w-3 fill-current" />
-        )}
-      </button>
-      <button
-        type="button"
-        aria-label="Buscar posição no áudio"
-        onClick={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          seekTo((e.clientX - rect.left) / rect.width);
-        }}
-        className="flex h-6 flex-1 items-center gap-[2px]"
-      >
-        {levels.map((lvl, i) => {
-          const played = levels.length > 0 && i / levels.length < progress;
-          return (
-            <span
-              key={i}
-              className={`w-[2.5px] shrink-0 rounded-full transition-colors ${
-                played ? "bg-foreground" : "bg-muted-foreground/40"
-              }`}
-              style={{ height: `${Math.max(20, lvl * 100)}%` }}
-            />
-          );
-        })}
-      </button>
-      <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground">
-        {fmtAudioTime(playing || current > 0 ? current : duration)}
-      </span>
-      <button
-        type="button"
-        onClick={cycleRate}
-        aria-label="Velocidade de reprodução"
-        className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors ${
-          rate !== 1
-            ? "border-foreground bg-foreground text-background"
-            : "border-border text-muted-foreground hover:text-foreground"
-        }`}
-      >
-        {rate}x
-      </button>
-    </div>
-  );
-}
-
-function AttachmentList({ attachments }: { attachments: ChatAttachment[] }) {
+function AttachmentList({ message, attachments }: { message: ChatMessage; attachments: ChatAttachment[] }) {
   return (
     <div className="mt-1.5 flex flex-col gap-1.5">
       {attachments.map((a) => {
@@ -2345,7 +2179,7 @@ function AttachmentList({ attachments }: { attachments: ChatAttachment[] }) {
         if (isImage) {
           return (
             <a
-              key={a.path}
+              key={a.path || a.url}
               href={a.url}
               target="_blank"
               rel="noreferrer"
@@ -2356,7 +2190,7 @@ function AttachmentList({ attachments }: { attachments: ChatAttachment[] }) {
           );
         }
         if (a.type.startsWith("audio/")) {
-          return <AudioMessagePlayer key={a.path} src={a.url} />;
+          return <VoiceMessagePlayer key={a.path || a.url} message={message} attachment={a} />;
         }
         return (
           <a
@@ -2408,12 +2242,8 @@ function Composer({
   const [value, setValue] = useState("");
   const [pending, setPending] = useState<ChatAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [recordSecs, setRecordSecs] = useState(0);
+  const [voiceMode, setVoiceMode] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordChunksRef = useRef<Blob[]>([]);
-  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const options = useMentions(
     members,
     tasks,
@@ -2429,57 +2259,6 @@ function Composer({
     onSend(value, extractUsedMentions(value, options), pending);
     setValue("");
     setPending([]);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
-      mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const recorder = new MediaRecorder(stream, { mimeType: mime });
-      recordChunksRef.current = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordChunksRef.current.push(e.data);
-      };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        if (recordTimerRef.current) {
-          clearInterval(recordTimerRef.current);
-          recordTimerRef.current = null;
-        }
-        const blob = new Blob(recordChunksRef.current, { type: mime });
-        if (blob.size > 0) {
-          setUploading(true);
-          try {
-            const ext = mime === "audio/webm" ? "webm" : "m4a";
-            const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: mime });
-            const att = await uploadChatAttachment(file);
-            if (att) setPending((p) => [...p, att]);
-          } finally {
-            setUploading(false);
-          }
-        }
-        setRecordSecs(0);
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setRecording(true);
-      recordTimerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
-    } catch (err) {
-      console.warn("[chat] mic access failed", err);
-      alert("Não foi possível acessar o microfone.");
-    }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
   };
 
   const handleFiles = async (files: FileList | null) => {
@@ -2510,7 +2289,7 @@ function Composer({
           <div className="min-w-0 flex-1">
             <span className="font-medium">{replyingTo.authorName}</span>{" "}
             <span className="line-clamp-1 break-words text-muted-foreground">
-              {replyingTo.text}
+              {messagePreviewLabel(replyingTo)}
             </span>
           </div>
           <button
@@ -2525,43 +2304,40 @@ function Composer({
       )}
       {pending.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
-          {pending.map((a) =>
-            a.type.startsWith("audio/") ? (
-              <div key={a.path} className="flex items-center gap-1">
-                <AudioMessagePlayer src={a.url} compact />
-                <button
-                  type="button"
-                  onClick={() => setPending((p) => p.filter((x) => x.path !== a.path))}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
-              <div
-                key={a.path}
-                className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
+          {pending.map((a) => (
+            <div
+              key={a.path}
+              className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
+            >
+              {a.type.startsWith("image/") ? (
+                <img src={a.url} alt="" className="h-8 w-8 rounded object-cover" />
+              ) : (
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              )}
+              <span className="max-w-[140px] truncate">{a.name}</span>
+              <button
+                type="button"
+                onClick={() => setPending((p) => p.filter((x) => x.path !== a.path))}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Remover anexo"
               >
-                {a.type.startsWith("image/") ? (
-                  <img src={a.url} alt="" className="h-8 w-8 rounded object-cover" />
-                ) : (
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                )}
-                <span className="max-w-[140px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setPending((p) => p.filter((x) => x.path !== a.path))}
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ),
-          )}
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
+      {voiceMode ? (
+        <VoiceRecorderBar
+          convoId={convoId}
+          replyToId={replyingTo?.id}
+          onDone={() => setVoiceMode(false)}
+          onSent={() => {
+            setVoiceMode(false);
+            onCancelReply();
+          }}
+        />
+      ) : (
       <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring">
         <input
           ref={fileRef}
@@ -2581,22 +2357,12 @@ function Composer({
         </button>
         <button
           type="button"
-          onClick={recording ? stopRecording : () => void startRecording()}
+          onClick={() => setVoiceMode(true)}
           disabled={uploading}
-          aria-label={recording ? "Parar gravação" : "Gravar áudio"}
-          className={`inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 ${recording ? "bg-destructive/10 text-destructive hover:bg-destructive/10 hover:text-destructive" : ""}`}
+          aria-label="Gravar mensagem de voz"
+          className="inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
         >
-          {recording ? (
-            <>
-              <Square className="h-3.5 w-3.5 fill-current" />
-              <span className="text-[11px] tabular-nums">
-                {String(Math.floor(recordSecs / 60)).padStart(2, "0")}:
-                {String(recordSecs % 60).padStart(2, "0")}
-              </span>
-            </>
-          ) : (
-            <Mic className="h-4 w-4" />
-          )}
+          <Mic className="h-4 w-4" />
         </button>
         <MentionTextarea
           value={value}
@@ -2618,11 +2384,14 @@ function Composer({
           <Send className="h-3.5 w-3.5" />
         </button>
       </div>
-      <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
-        <AtSign className="h-3 w-3" /> mencione tarefas{allowUserMentions ? " e pessoas" : ""} com @
-        • Enter envia
-        {uploading && <span className="ml-2">• enviando anexo...</span>}
-      </p>
+      )}
+      {!voiceMode && (
+        <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+          <AtSign className="h-3 w-3" /> mencione tarefas{allowUserMentions ? " e pessoas" : ""} com @
+          • Enter envia
+          {uploading && <span className="ml-2">• enviando anexo...</span>}
+        </p>
+      )}
     </div>
   );
 }

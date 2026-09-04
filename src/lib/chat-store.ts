@@ -45,6 +45,25 @@ export type ChatAttachment = {
   name: string;
   size: number;
   type: string; // MIME type
+  /** "voice" = gravado pelo microfone (mensagens de voz ganham rótulo
+   * "Mensagem de voz" em listas/notificações); "file" = anexado pelo
+   * seletor de arquivos, mesmo que seja áudio (mantém o nome do arquivo
+   * nesses lugares). Ausente (dados antigos) é tratado como "voice" — até
+   * aqui só existia o caminho do microfone. Ver `isVoiceAttachment` em
+   * `voice-messages.ts`. */
+  kind?: "voice" | "file";
+  /** Duração real do áudio, em ms — só existe pra `type` começando com
+   * `audio/`. Calculada uma vez (na gravação, ou ao abrir uma mensagem
+   * antiga que não tinha isso) e persistida, nunca recalculada à toa. */
+  durationMs?: number;
+  /** Amplitudes normalizadas (0-1) da waveform, tamanho fixo
+   * (`VOICE_WAVEFORM_BARS`) — evita decodificar o áudio de novo só pra
+   * desenhar a onda. */
+  peaks?: number[];
+  /** Só client-side, nunca persistido no banco: mensagem de voz otimista
+   * ainda subindo, ou que falhou ao subir. */
+  uploading?: boolean;
+  uploadError?: boolean;
 };
 
 export type ChatMessage = {
@@ -645,6 +664,180 @@ export async function uploadChatAttachment(file: File): Promise<ChatAttachment |
     size: file.size,
     type: file.type || "application/octet-stream",
   };
+}
+
+/** UPDATE em chat_messages é restrito ao próprio autor — corrigir a duração
+ * de uma mensagem de voz ANTIGA de outra pessoa (self-heal, ver
+ * `VoiceMessagePlayer`) passaria por RLS e falharia silenciosamente (zero
+ * linhas afetadas, sem erro). Usa a mesma técnica de `toggleReaction`: uma
+ * RPC `SECURITY DEFINER` que mexe só no attachment específico. */
+export async function updateMessageAttachmentMeta(
+  messageId: string,
+  attachmentPath: string,
+  durationMs: number,
+  peaks: number[],
+): Promise<void> {
+  const { data, error } = await supabase.rpc("heal_voice_attachment_duration", {
+    p_message_id: messageId,
+    p_attachment_path: attachmentPath,
+    p_duration_ms: Math.round(durationMs),
+    p_peaks: peaks as unknown as never,
+  });
+  if (error || !data) {
+    console.warn("[chat] falha ao persistir duração da mensagem de voz", error);
+    return;
+  }
+  const attachments = data as unknown as ChatAttachment[];
+  messagesCache = messagesCache.map((m) => (m.id === messageId ? { ...m, attachments } : m));
+  emit();
+}
+
+/** Blobs de mensagens de voz que ainda podem precisar de "Tentar novamente"
+ * (upload falhou) — só em memória, por tempId; some sozinho se a página
+ * recarregar (a mensagem otimista também não sobrevive a isso, já que nunca
+ * chegou a ser persistida). */
+const pendingVoiceBlobs = new Map<string, { blob: Blob; mimeType: string; convoId: string; replyToId?: string }>();
+
+async function uploadAndInsertVoiceMessage(
+  tempId: string,
+  blob: Blob,
+  mimeType: string,
+  durationMs: number,
+  peaks: number[],
+  convoId: string,
+  replyToId: string | undefined,
+  localUrl: string,
+) {
+  const ext = mimeType === "audio/webm" ? "webm" : "m4a";
+  const file = new File([blob], `voz-${Date.now()}.${ext}`, { type: mimeType });
+  const uploaded = await uploadChatAttachment(file);
+  if (!uploaded) {
+    pendingVoiceBlobs.set(tempId, { blob, mimeType, convoId, replyToId });
+    messagesCache = messagesCache.map((m) =>
+      m.id === tempId && m.attachments?.[0]
+        ? { ...m, attachments: [{ ...m.attachments[0], uploading: false, uploadError: true }] }
+        : m,
+    );
+    emit();
+    return;
+  }
+  URL.revokeObjectURL(localUrl);
+  pendingVoiceBlobs.delete(tempId);
+  const attachment: ChatAttachment = { ...uploaded, kind: "voice", durationMs, peaks };
+
+  const me = getMe();
+  const authorId = currentUserId ?? (me.id === "me" ? null : me.id);
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert({
+      convo_id: convoId,
+      author_id: authorId,
+      author_name: me.name,
+      author_photo: me.photo ?? null,
+      text: "",
+      mentions: [] as unknown as never,
+      attachments: [attachment] as unknown as never,
+      reply_to_id: replyToId ?? null,
+    })
+    .select(MESSAGE_COLUMNS)
+    .single();
+  if (error || !data) {
+    messagesCache = messagesCache.map((m) =>
+      m.id === tempId && m.attachments?.[0]
+        ? { ...m, attachments: [{ ...m.attachments[0], uploading: false, uploadError: true }] }
+        : m,
+    );
+    pendingVoiceBlobs.set(tempId, { blob, mimeType, convoId, replyToId });
+    emit();
+    return;
+  }
+  const mapped = mapMessage(data as MessageRow);
+  messagesCache = messagesCache.map((m) => (m.id === tempId ? mapped : m));
+  emit();
+  void triggerChatPush(mapped);
+}
+
+/** Envia uma mensagem de voz gravada pelo microfone — fluxo próprio (não usa
+ * o tray de anexos pendentes do Composer): insere uma mensagem otimista na
+ * hora (com URL local do blob, estado "enviando"), sobe o áudio, e só então
+ * grava a linha real — o usuário pode continuar digitando enquanto isso. */
+export async function sendVoiceMessage(input: {
+  convoId: string;
+  blob: Blob;
+  durationMs: number;
+  peaks: number[];
+  mimeType: string;
+  replyToId?: string;
+}): Promise<void> {
+  const me = getMe();
+  const authorId = currentUserId ?? (me.id === "me" ? null : me.id);
+  if (!authorId) return;
+
+  const tempId = `temp:${crypto.randomUUID()}`;
+  const localUrl = URL.createObjectURL(input.blob);
+  const optimistic: ChatMessage = {
+    id: tempId,
+    convoId: input.convoId,
+    authorId,
+    authorName: me.name,
+    authorPhoto: me.photo ?? undefined,
+    text: "",
+    createdAt: Date.now(),
+    mentions: [],
+    attachments: [
+      {
+        path: "",
+        url: localUrl,
+        name: "Mensagem de voz",
+        size: input.blob.size,
+        type: input.mimeType,
+        kind: "voice",
+        durationMs: input.durationMs,
+        peaks: input.peaks,
+        uploading: true,
+      },
+    ],
+    reactions: {},
+    replyToId: input.replyToId,
+  };
+  messagesCache = [...messagesCache, optimistic];
+  emit();
+
+  await uploadAndInsertVoiceMessage(
+    tempId,
+    input.blob,
+    input.mimeType,
+    input.durationMs,
+    input.peaks,
+    input.convoId,
+    input.replyToId,
+    localUrl,
+  );
+}
+
+/** Chamado pelo botão "Tentar novamente" de uma mensagem de voz que falhou
+ * ao subir — reusa o mesmo blob gravado, sem precisar regravar. */
+export async function retryVoiceMessage(tempId: string): Promise<void> {
+  const pending = pendingVoiceBlobs.get(tempId);
+  const msg = messagesCache.find((m) => m.id === tempId);
+  const attachment = msg?.attachments?.[0];
+  if (!pending || !attachment) return;
+  messagesCache = messagesCache.map((m) =>
+    m.id === tempId && m.attachments?.[0]
+      ? { ...m, attachments: [{ ...m.attachments[0], uploading: true, uploadError: false }] }
+      : m,
+  );
+  emit();
+  await uploadAndInsertVoiceMessage(
+    tempId,
+    pending.blob,
+    pending.mimeType,
+    attachment.durationMs ?? 0,
+    attachment.peaks ?? [],
+    pending.convoId,
+    pending.replyToId,
+    attachment.url,
+  );
 }
 
 export async function deleteMessage(id: string) {
