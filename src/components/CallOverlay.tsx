@@ -207,7 +207,18 @@ export function CallOverlay() {
       container?.removeEventListener("mousemove", show);
       container?.removeEventListener("mousedown", show);
     };
-  }, [moreOpen, shareMenuOpen, participantsOpen, call.status]);
+    // `call.minimized` precisa estar aqui: minimizar/expandir desmonta e
+    // remonta a `<div ref={stageRef}>` (branches diferentes do JSX), então
+    // sem isso o efeito nunca reanexava os listeners no novo nó — os
+    // controles podiam ficar presos em `opacity-0`/`pointer-events-none`
+    // pra sempre depois de expandir de novo, sem nada pra chamar `show()`.
+  }, [
+    moreOpen,
+    shareMenuOpen,
+    participantsOpen,
+    call.status,
+    call.status !== "idle" && call.minimized,
+  ]);
 
   // Atalhos M (mic) / V (câmera) — só durante a chamada, e nunca quando o
   // foco está num campo de texto (não pode roubar digitação de mensagem no
