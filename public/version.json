@@ -1,6 +1,7 @@
 {
-  "version": "1.259.0",
+  "version": "1.260.0",
   "notes": [
+    "Reformula a produtividade da aba Time: \"Entregas por dia da semana\" vira duas áreas separadas. \"Entregas da Semana\" agora sempre mostra a semana atual (segunda a domingo, horário de Brasília, sem seletor de período) — gráfico seg-sex com o valor em cima de cada barra, resumo compacto (total de entregas, variação % vs. semana anterior comparando só os dias equivalentes, melhor dia, média diária) e uma tabela por membro com Esta semana + médias semanais históricas (mensal/trimestral/anual, sempre \"por semana\", nunca total bruto) e Tendência; qualquer cabeçalho ordena a tabela, cada linha expande mostrando a distribuição seg-sex, e clicar no número ou numa barra abre a lista real de tarefas daquele recorte (nunca dados inventados). Nova seção \"Insights do Time\", logo abaixo, antes de Performance do Time — 3 a 5 insights factuais por rodada, gerados por um motor de regras determinístico (sem IA generativa, thresholds centralizados) cruzando volume de entregas, taxa no prazo, replanejamentos, concentração de carga, reuniões e frequência de início do dia; sempre interpreta em vez de repetir um número já visível, nunca vira ranking nem compara pessoas de forma simplista (comparação é sempre a pessoa vs. seu próprio histórico, ou pontualmente vs. a média do time quando fizer sentido). O mesmo motor alimenta uma nova seção \"Insights operacionais\" dentro da ficha de cada membro (Perfil), com 2 a 5 insights específicos daquela pessoa. Nenhuma mudança na fórmula do Score Operacional nem na regra histórica de crédito total a cada responsável em tarefas com múltiplos responsáveis — as duas áreas novas só leem dados já existentes.",
     "Adiciona \"@Todos\" à @menção do Chat: menciona de uma vez todos os participantes da conversa (DM, canal ou todo o time num canal público/campanha/projeto), sem precisar mencionar um por um. Aparece na aba \"Pessoas\" do menu de @menção; no envio, expande automaticamente numa menção individual real por pessoa (exceto quem enviou), reaproveitando 100% a notificação/contador de menções que já existe pra menção individual — sem duplicar badge na mensagem (mostra só um \"@Todos\" clicável).",
     "Corrige o menu \"/\" de comandos e o menu \"@\" de menção (editor de descrição da tarefa) não rolando nem respondendo a clique do mouse quando a lista tinha mais itens do que cabia na tela: o Radix trava `pointer-events` no `<body>` inteiro enquanto o diálogo está aberto, e como esses menus são montados direto no `<body>` (fora da árvore do próprio diálogo), herdavam esse bloqueio e ficavam visualmente por cima mas inertes a mouse. Teclado (setas/Enter) já funcionava normalmente.",
     "Reformula completamente o editor de Descrição das tarefas: era um textarea puro, agora é um mini editor de documento (estilo ClickUp/Notion) baseado em TipTap, integrado à identidade visual da plataforma. Suporta títulos (H1-H3), negrito/itálico/sublinhado/tachado/código inline, bloco de código, citação, lista com bullets/numerada, checklist independente das subtarefas, divisor horizontal, links (popover com Aplicar/Remover, Cmd/Ctrl+K), cor de texto e highlight, alinhamento, undo/redo. Toolbar flutuante compacta aparece ao selecionar texto (estilo ▾, B/I/U/S/code/link/lista + \"•••\" com o resto). Shortcuts de markdown (`# `, `- `, `1. `, `[] `, `> `, ``` ``` ```) e um atalho novo: digitar \"--\" e apertar Enter vira um divisor. Menu \"/\" de comandos com busca (\"/div\" → Divisor). @menção agora é estruturada (guarda id real, não só o nome) e cobre pessoa E tarefa — menção de tarefa vira um badge clicável (▣ Título) que abre a tarefa de verdade. Colar conteúdo de fora (Google Docs, Notion, Word) preserva parágrafos/negrito/listas/links mas remove fontes/cores estranhas; Cmd/Ctrl+Shift+V cola texto puro. Autosave da descrição (600-800ms após parar de digitar, também no blur/fechar/Cmd+Ctrl+S) com indicador discreto \"Salvando.../Salvo\", sem depender só do botão \"Salvar\" — sem duplicar entradas no histórico de atividade mesmo com múltiplos autosaves seguidos. Descrições antigas (texto simples) continuam abrindo normalmente, convertidas automaticamente em parágrafos, sem perder nenhum conteúdo. Nenhuma mudança no Score Operacional, Status, Responsável, Prioridade, Prazo, Subtarefas, Anexos ou Activity — só o editor da descrição.",
@@ -383,46 +384,32 @@
   ],
   "releases": [
     {
-      "version": "1.259.0",
-      "summary": "Chat ganha \"@Todos\" pra mencionar a conversa inteira de uma vez.",
+      "version": "1.260.0",
+      "summary": "Time ganha Entregas da Semana e Insights do Time — leitura factual do que está acontecendo, sem virar ranking.",
       "modules": [
         {
-          "name": "CHAT",
-          "tagline": "Menção pra todo mundo, de uma vez",
+          "name": "TIME",
+          "tagline": "Entregas da Semana + Insights do Time",
           "items": [
             {
-              "title": "\"@Todos\"",
-              "description": "Menciona todos os participantes da conversa (DM, canal ou time inteiro) sem precisar um por um."
+              "title": "Entregas da Semana",
+              "description": "Sempre a semana atual: gráfico seg-sex, total, variação vs. semana anterior, melhor dia e média diária, num resumo compacto."
             },
             {
-              "title": "Notifica cada pessoa normalmente",
-              "description": "Cada participante recebe a menção/notificação como se tivesse sido chamado individualmente."
-            }
-          ]
-        },
-        {
-          "name": "TAREFAS",
-          "tagline": "Editor de descrição, do zero",
-          "items": [
-            {
-              "title": "Editor de blocos completo",
-              "description": "Títulos, negrito/itálico/sublinhado/tachado, código, citação, listas, checklist e divisor — sem sair da caixa de descrição."
+              "title": "Tabela por membro com histórico",
+              "description": "Esta semana + médias semanais (mês/trimestre/ano) e tendência — ordene por qualquer coluna, expanda uma linha pra ver a distribuição seg-sex."
             },
             {
-              "title": "Toolbar ao selecionar texto",
-              "description": "Selecione um trecho e formate na hora, num menu flutuante discreto — igual ClickUp/Notion."
+              "title": "Drill-down real",
+              "description": "Clique num número ou numa barra pra ver as tarefas de verdade por trás dele — e abrir cada uma."
             },
             {
-              "title": "Menu \"/\" e atalhos de markdown",
-              "description": "Digite \"/\" pra inserir qualquer bloco, ou use atalhos como \"# \", \"- \", \"[] \" e \"--\" + Enter pra um divisor."
+              "title": "Insights do Time",
+              "description": "3 a 5 leituras factuais por rodada (prazos, carga, reuniões, evolução), geradas por regras — nunca vira ranking nem compara pessoas de forma simplista."
             },
             {
-              "title": "Menção de tarefa clicável",
-              "description": "@mencione uma pessoa ou uma tarefa — a menção de tarefa vira um badge que abre a tarefa de verdade."
-            },
-            {
-              "title": "Autosave discreto",
-              "description": "A descrição salva sozinha enquanto você digita, sem precisar clicar em Salvar."
+              "title": "Insights operacionais no Perfil",
+              "description": "A ficha de cada membro agora mostra os insights específicos daquela pessoa, ao lado do Score Operacional (que continua exatamente como era)."
             }
           ]
         }

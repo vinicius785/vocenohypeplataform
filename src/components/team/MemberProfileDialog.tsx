@@ -18,6 +18,7 @@ import {
   ListTodo,
   ClipboardList,
   Info,
+  Sparkles,
 } from "lucide-react";
 import {
   Dialog,
@@ -44,6 +45,7 @@ import {
   dedupAttendanceEvents,
   rangeForProfilePeriod,
   previousEquivalentRange,
+  computeAggregateIndicators,
   PROFILE_PERIOD_OPTIONS,
   type ProfilePeriodMode,
   type PerformanceSettings,
@@ -58,8 +60,19 @@ import {
 import type { Member, TimeField } from "@/components/TimeSection";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, MiniStat } from "./member-ui";
 import { STATUS_LABEL } from "@/lib/chat-store";
-import { todayIsoInBrasilia } from "@/lib/timezone";
+import {
+  todayIsoInBrasilia,
+  currentWeekRangeBrasilia,
+  startOfWeekIsoBrasilia,
+} from "@/lib/timezone";
+import { parseIsoDateLocal, formatDateToIso } from "@/lib/utils";
 import { StartOfDayHistoryDialog, averageStartTime } from "./StartOfDayHistoryDialog";
+import {
+  generateInsights,
+  INSIGHT_THRESHOLDS,
+  type MemberInsightBundle,
+} from "@/lib/insights-engine";
+import { InsightRow } from "./InsightRow";
 
 function formatBirthday(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -381,6 +394,170 @@ export function MemberProfileDialog({
   const missedMeetings = useMemo(() => attendance.filter((a) => !a.attended), [attendance]);
   const hasAttention =
     overdueTasksFull.length > 0 || criticalReplans.length > 0 || missedMeetings.length > 0;
+
+  // "Insights operacionais" (item 39 do pedido) — reaproveita 100% do que
+  // esta ficha já calculou acima (Score/prazos/carga/reuniões), sem
+  // nenhum fetch novo, exceto a extração equivalente do período ANTERIOR
+  // (já buscado via `previousEvents`, só faltava extrair completions/
+  // deadlineChanges no mesmo formato de `computeAggregateIndicators`).
+  const previousCompletions = useMemo(
+    () =>
+      previousEvents
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({
+          outcome: e.data.outcome as TaskOutcome,
+          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+          taskId: e.taskId,
+        })),
+    [previousEvents],
+  );
+  const previousDeadlineChanges = useMemo(
+    () =>
+      previousEvents
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          isCritical: !!e.data.isCritical,
+          motivo: (e.data.motivo as string) ?? undefined,
+          exemptFromResponsibility: !!e.data.exemptFromResponsibility,
+        })),
+    [previousEvents],
+  );
+  const aggCurrent = useMemo(
+    () => computeAggregateIndicators(completions, deadlineChanges, overdueNow.length),
+    [completions, deadlineChanges, overdueNow.length],
+  );
+  const aggPrevious = useMemo(
+    () => computeAggregateIndicators(previousCompletions, previousDeadlineChanges, 0),
+    [previousCompletions, previousDeadlineChanges],
+  );
+  const thisWeekCompletions = useMemo(() => {
+    const week = currentWeekRangeBrasilia();
+    return tasksForMember.filter((t) => {
+      if (t.status !== "Concluído" || !t.completedAt) return false;
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      return day >= week.from && day <= week.to;
+    }).length;
+  }, [tasksForMember]);
+  const monthlyWeeklyAvg = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    let fromIso = formatDateToIso(from);
+    const earliestCompleted = tasksForMember
+      .filter((t) => t.status === "Concluído" && t.completedAt)
+      .map((t) => todayIsoInBrasilia(new Date(t.completedAt!)))
+      .sort()[0];
+    if (earliestCompleted && earliestCompleted > fromIso) fromIso = earliestCompleted;
+    const to = todayIsoInBrasilia();
+    const weekStarts: string[] = [];
+    const cursor = parseIsoDateLocal(fromIso);
+    const end = parseIsoDateLocal(to);
+    while (cursor.getTime() <= end.getTime()) {
+      weekStarts.push(startOfWeekIsoBrasilia(cursor));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    if (weekStarts.length === 0) return null;
+    const counts = new Map<string, number>();
+    for (const t of tasksForMember) {
+      if (t.status !== "Concluído" || !t.completedAt) continue;
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      if (day < fromIso || day > to) continue;
+      const ws = startOfWeekIsoBrasilia(new Date(t.completedAt));
+      counts.set(ws, (counts.get(ws) ?? 0) + 1);
+    }
+    const total = weekStarts.reduce((s, ws) => s + (counts.get(ws) ?? 0), 0);
+    return total / weekStarts.length;
+  }, [tasksForMember]);
+  const memberInsights = useMemo(() => {
+    const last14 = new Date();
+    last14.setDate(last14.getDate() - 14);
+    const last14Iso = formatDateToIso(last14);
+    const completionsLast14 = completions.filter((c) => c.occurredAt >= last14Iso);
+    const noLateInLast14 =
+      completionsLast14.length >= INSIGHT_THRESHOLDS.amostraMinima &&
+      !completionsLast14.some((c) => c.outcome === "late");
+
+    const overdueHighPriorityCount = overdueTasksFull.filter(
+      (t) => t.priority === "Alta" || t.priority === "Urgente",
+    ).length;
+    const overdueOlderThanThresholdCount = overdueTasksFull.filter((t) => {
+      const match = /Atrasada (\d+)d/.exec(t.due);
+      return match ? Number(match[1]) >= INSIGHT_THRESHOLDS.atrasadasAntigasDias : false;
+    }).length;
+
+    const concentrationGroups = new Map<string, { count: number; label: string }>();
+    for (const t of openTasksFull) {
+      const key = t.campanhaId ?? t.projectId;
+      const g = concentrationGroups.get(key);
+      if (g) g.count += 1;
+      else concentrationGroups.set(key, { count: 1, label: t.projectName });
+    }
+    let topConcentration: { count: number; label: string } | null = null;
+    for (const g of concentrationGroups.values()) {
+      if (!topConcentration || g.count > topConcentration.count) topConcentration = g;
+    }
+
+    const startTimes = member.startTimes ?? {};
+    const recentDays = Object.keys(startTimes)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .slice(0, 10);
+    const earlyStartCount =
+      recentDays.length > 0
+        ? recentDays.filter((d) => {
+            const hour = Number(startTimes[d]?.split(":")[0]);
+            return Number.isFinite(hour) && hour < INSIGHT_THRESHOLDS.inicioDiaAntesDasHora;
+          }).length
+        : null;
+
+    const bundle: MemberInsightBundle = {
+      memberId: member.id,
+      memberName: member.name,
+      role: member.role,
+      thisWeekTotal: thisWeekCompletions,
+      monthlyWeeklyAvg,
+      onTimeRateCurrent: aggCurrent.pctNoPrazo,
+      onTimeRatePrevious: aggPrevious.pctNoPrazo,
+      onTimeSampleCurrent: completions.length,
+      onTimeSamplePrevious: previousCompletions.length,
+      avgDelayDaysCurrent: aggCurrent.tempoMedioAtrasoDias,
+      avgDelayDaysPrevious: aggPrevious.tempoMedioAtrasoDias,
+      replansCurrent: aggCurrent.qtdReplanejamentos,
+      replansPrevious: aggPrevious.qtdReplanejamentos,
+      overdueCount: overdueTasksFull.length,
+      overdueHighPriorityCount,
+      overdueOlderThanThresholdCount,
+      noOverdueForDays: noLateInLast14 ? INSIGHT_THRESHOLDS.semAtrasoDias : null,
+      scoreNow: score.score,
+      scorePrevious: previousScore.score,
+      scorePeriodLabel: "no período selecionado",
+      openTasksCount: openTasksFull.length,
+      activeProjectsCount: new Set(openTasksFull.map((t) => t.campanhaId ?? t.projectId)).size,
+      teamAvgActiveProjects: null,
+      topConcentrationLabel: topConcentration?.label ?? null,
+      topConcentrationPct:
+        topConcentration && openTasksFull.length > 0
+          ? topConcentration.count / openTasksFull.length
+          : null,
+      meetingsExpected: attendance.length,
+      meetingsAttended: attendance.filter((a) => a.attended).length,
+      earlyStartCount,
+      earlyStartWindow: recentDays.length > 0 ? recentDays.length : null,
+    };
+    return generateInsights([bundle], 5);
+  }, [
+    completions,
+    overdueTasksFull,
+    openTasksFull,
+    member,
+    thisWeekCompletions,
+    monthlyWeeklyAvg,
+    aggCurrent,
+    aggPrevious,
+    previousCompletions,
+    score.score,
+    previousScore.score,
+    attendance,
+  ]);
 
   const openById = (id: string) => {
     const t = tasksForMember.find((x) => x.id === id);
@@ -766,6 +943,19 @@ export function MemberProfileDialog({
                 )}
               </section>
             </TooltipProvider>
+
+            {memberInsights.length > 0 && (
+              <section className="space-y-1 rounded-lg border border-border p-4">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5" /> Insights operacionais
+                </p>
+                <div className="divide-y divide-border">
+                  {memberInsights.map((insight) => (
+                    <InsightRow key={insight.ruleId} insight={insight} hideName />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {hasAttention && (
               <section className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">

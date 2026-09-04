@@ -1,10 +1,5 @@
 import { useMemo, useRef } from "react";
-import {
-  OPEN_STATUSES,
-  type WeekBucket,
-  type WeekdayBucket,
-  type WeekdayPeriodMode,
-} from "@/lib/score";
+import { OPEN_STATUSES, type WeekBucket, type WeekdayBucket } from "@/lib/score";
 import type { DashTask, DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import type {
@@ -13,10 +8,12 @@ import type {
   PerformanceEventLike,
   PerformanceSettings,
 } from "@/lib/performance-engine";
+import type { Insight } from "@/lib/insights-engine";
 import { TeamMetricCard } from "./TeamMetricCard";
 import { AttentionTasks, type AttentionTab } from "./AttentionTasks";
 import { TeamWorkload } from "./TeamWorkload";
-import { TeamWeekdayProductivity } from "./TeamWeekdayProductivity";
+import { TeamDeliveriesWeek, type DeliveryMemberRow } from "./TeamDeliveriesWeek";
+import { TeamInsights } from "./TeamInsights";
 import { TeamPerformance } from "./TeamPerformance";
 import { TeamIndicators } from "./TeamIndicators";
 import { TeamStartOfDay } from "./TeamStartOfDay";
@@ -43,10 +40,13 @@ export function TeamDashboard({
   allTasksFlat,
   tasksByMember,
   weeklyData,
+  weekRange,
   weekdayData,
   weekdayTasksByDay,
-  weekdayPeriod,
-  onWeekdayPeriodChange,
+  weeklyTrendPct,
+  deliveryMemberRows,
+  teamInsights,
+  membersById,
   onlineCount,
   meId,
   isAdmin,
@@ -75,13 +75,18 @@ export function TeamDashboard({
   allTasksFlat: DashTaskFlat[];
   tasksByMember: Map<string, DashTask[]>;
   weeklyData: WeekBucket[];
+  /** Semana atual (segunda a domingo, Brasília) — "Entregas da Semana"
+   * não tem seletor de período, é sempre esta. */
+  weekRange: { from: string; to: string };
   weekdayData: WeekdayBucket[];
   /** Tarefas concluídas de verdade agrupadas por dia útil (1=segunda...
    * 5=sexta) — alimenta o drill-down ao clicar numa barra de "Entregas
-   * por dia da semana". */
+   * da Semana". */
   weekdayTasksByDay: Map<number, DashTaskFlat[]>;
-  weekdayPeriod: WeekdayPeriodMode;
-  onWeekdayPeriodChange: (v: WeekdayPeriodMode) => void;
+  weeklyTrendPct: number | null;
+  deliveryMemberRows: DeliveryMemberRow[];
+  teamInsights: Insight[];
+  membersById: Map<string, Member>;
   onlineCount: number;
   meId: string | null;
   isAdmin: boolean;
@@ -121,6 +126,15 @@ export function TeamDashboard({
     const pct = Math.round(((thisWeek.count - lastWeek.count) / lastWeek.count) * 100);
     return `${pct > 0 ? "+" : ""}${pct}% vs. semana passada`;
   }, [thisWeek, lastWeek]);
+
+  const weekRangeLabel = useMemo(() => {
+    const [fy, fm, fd] = weekRange.from.split("-").map(Number);
+    const [ty, tm, td] = weekRange.to.split("-").map(Number);
+    const from = new Date(fy, fm - 1, fd);
+    const to = new Date(ty, tm - 1, td);
+    const fmt = (d: Date) => d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+    return `${fmt(from)} — ${fmt(to)}`;
+  }, [weekRange]);
 
   return (
     <div className="space-y-4">
@@ -173,14 +187,21 @@ export function TeamDashboard({
         </div>
       </div>
 
-      {/* Linha 3 — Entregas por dia da semana (100%) */}
-      <TeamWeekdayProductivity
-        data={weekdayData}
+      {/* Linha 3 — Entregas da Semana (100%) — só volume, sempre a semana
+          atual, nunca vira Score (item 21 do pedido) */}
+      <TeamDeliveriesWeek
+        weekRangeLabel={weekRangeLabel}
+        weekdayData={weekdayData}
         tasksByDay={weekdayTasksByDay}
-        period={weekdayPeriod}
-        onPeriodChange={onWeekdayPeriodChange}
+        memberRows={deliveryMemberRows}
+        weeklyTrendPct={weeklyTrendPct}
         onOpenTask={onOpenTask}
+        onOpenMember={onOpenMember}
       />
+
+      {/* Linha 3.5 — Insights do Time (100%) — camada de interpretação,
+          separada de "Entregas da Semana" (o que aconteceu) de propósito */}
+      <TeamInsights insights={teamInsights} membersById={membersById} onOpenMember={onOpenMember} />
 
       {/* Linha 4 — Performance do Time (100%) — Score de gestão, NUNCA chamado de "ranking" */}
       <TeamPerformance

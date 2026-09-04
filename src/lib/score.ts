@@ -4,6 +4,7 @@ import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
 import { parseIsoDateLocal, formatDateToIso } from "./utils";
+import { startOfWeekIsoBrasilia } from "./timezone";
 
 /**
  * Score do time (aba Gestão) — pontuação derivada inteiramente de dados que
@@ -386,41 +387,14 @@ export function weeklyCompletions(
 }
 
 /* ============================================================
- * Produtividade por dia da semana — substitui "Entregas por semana" na
+ * Produtividade por dia da semana — usada por "Entregas da Semana" na
  * página Time. Diferente de `weeklyCompletions` (bucket por SEMANA
- * civil), aqui o bucket é por DIA DA SEMANA (seg-sex), agregando através
- * de todas as semanas do período — a métrica é a MÉDIA de entregas por
- * OCORRÊNCIA daquele dia no período (não o total bruto), pra não
- * distorcer quando o período tem números diferentes de cada dia (ex. 4
- * segundas mas só 3 sextas). Sábado/domingo nem entram nos buckets
- * (item 6 do pedido: "não contabilizar" nesta primeira versão).
+ * civil), aqui o bucket é por DIA DA SEMANA (seg-sex) — sempre chamada
+ * com o range da semana atual (Brasília, ver `currentWeekRangeBrasilia`
+ * em `@/lib/timezone`), nunca outro período (o seletor de período que
+ * existia aqui foi removido — "Entregas da Semana" só mostra a semana
+ * atual, sem dropdown). Sábado/domingo nem entram nos buckets.
  * ============================================================ */
-export type WeekdayPeriodMode = "semana" | "30dias" | "90dias" | "ano";
-
-export const WEEKDAY_PERIOD_OPTIONS: { value: WeekdayPeriodMode; label: string }[] = [
-  { value: "semana", label: "Esta semana" },
-  { value: "30dias", label: "Últimos 30 dias" },
-  { value: "90dias", label: "Últimos 90 dias" },
-  { value: "ano", label: "Este ano" },
-];
-
-export function rangeForWeekdayPeriod(mode: WeekdayPeriodMode, now: Date = new Date()): DateRange {
-  const to = formatDateToIso(now);
-  if (mode === "semana") return { from: startOfWeekISO(to), to };
-  if (mode === "90dias") {
-    const from = new Date(now);
-    from.setDate(from.getDate() - 90);
-    return { from: formatDateToIso(from), to };
-  }
-  if (mode === "ano") {
-    const from = new Date(now.getFullYear(), 0, 1);
-    return { from: formatDateToIso(from), to };
-  }
-  // "30dias" (default)
-  const from = new Date(now);
-  from.setDate(from.getDate() - 30);
-  return { from: formatDateToIso(from), to };
-}
 
 type Weekday = 1 | 2 | 3 | 4 | 5;
 const WEEKDAY_LABEL: Record<Weekday, string> = {
@@ -539,6 +513,58 @@ export function weekdayProductivity(
       .sort((a, b) => b.count - a.count);
   }
   return ([1, 2, 3, 4, 5] as Weekday[]).map((wd) => buckets.get(wd)!);
+}
+
+/** Totais semanais de entrega por membro dentro de `range` — uma entrada
+ * por SEMANA-CALENDÁRIO (segunda a domingo, Brasília) que o range toca,
+ * incluindo semanas com ZERO entregas daquele membro (mesma lógica de
+ * "occurrences" de `weekdayProductivity`: o denominador da média tem que
+ * contar toda semana do período, não só as que tiveram entrega, senão a
+ * média fica artificialmente alta). Mesma fonte/regra de crédito de
+ * `weekdayProductivity` (cada responsável ganha crédito integral, nunca
+ * dividido) — quem chama decide o que fazer com os totais (média do mês/
+ * trimestre/ano é responsabilidade do chamador, esta função só
+ * bucketiza). Membro sem NENHUMA tarefa concluída em `range` não aparece
+ * no mapa — cabe ao chamador tratar isso como "sem amostra" (nunca
+ * inventar um `0` disfarçado de dado real). */
+export function weeklyDeliveryTotalsByMember(
+  projetos: Project[],
+  campanhaGroups: TaskGroup[] = [],
+  range: DateRange,
+): Map<string, number[]> {
+  const weekStarts: string[] = [];
+  if (range.from && range.to) {
+    const cursor = parseIsoDateLocal(range.from);
+    const end = parseIsoDateLocal(range.to);
+    while (cursor.getTime() <= end.getTime()) {
+      weekStarts.push(startOfWeekIsoBrasilia(cursor));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  }
+
+  const perMemberPerWeek = new Map<string, Map<string, number>>();
+  for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
+    for (const t of flatten(p.tasks ?? [])) {
+      if (t.status !== "Concluído") continue;
+      const completedAt = resolvedCompletionDate(t);
+      if (!completedAt || !inRange(completedAt, range)) continue;
+      const ws = startOfWeekIsoBrasilia(parseIsoDateLocal(completedAt));
+      for (const name of getTaskAssignees(t)) {
+        if (!perMemberPerWeek.has(name)) perMemberPerWeek.set(name, new Map());
+        const weeks = perMemberPerWeek.get(name)!;
+        weeks.set(ws, (weeks.get(ws) ?? 0) + 1);
+      }
+    }
+  }
+
+  const result = new Map<string, number[]>();
+  for (const [name, weeks] of perMemberPerWeek) {
+    result.set(
+      name,
+      weekStarts.map((ws) => weeks.get(ws) ?? 0),
+    );
+  }
+  return result;
 }
 
 /** Quantas tarefas de UMA pessoa foram concluídas na semana corrente

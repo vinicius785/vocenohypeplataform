@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -23,16 +23,18 @@ import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
   weeklyCompletions,
   weekdayProductivity,
-  rangeForWeekdayPeriod,
+  weeklyDeliveryTotalsByMember,
   loadOpenTasksByMemberId,
+  OPEN_STATUSES,
   type TaskGroup,
-  type WeekdayPeriodMode,
+  type PerformanceOpenTask,
 } from "@/lib/score";
 import {
   computeEntrega,
   computePrevisibilidade,
   computeCompromissos,
   combineScoreV2,
+  computeAggregateIndicators,
   overdueOpenTasks,
   rangeForScorePeriod,
   groupEventsByPerson,
@@ -40,6 +42,7 @@ import {
   type ScorePeriodMode,
   type ScoreOperacionalV2,
   type TaskOutcome,
+  type PerformanceEventLike,
 } from "@/lib/performance-engine";
 import { usePerformanceEvents, usePerformanceSettings } from "@/lib/performance-events-store";
 import {
@@ -50,6 +53,18 @@ import {
   type DashTaskFlat,
 } from "@/lib/task-aggregation";
 import { formatDateToIso } from "@/lib/utils";
+import {
+  currentWeekRangeBrasilia,
+  previousWeekRangeBrasilia,
+  weekdayIndexInBrasilia,
+  todayIsoInBrasilia,
+} from "@/lib/timezone";
+import {
+  generateInsights,
+  INSIGHT_THRESHOLDS,
+  type MemberInsightBundle,
+} from "@/lib/insights-engine";
+import type { DeliveryMemberRow } from "@/components/team/TeamDeliveriesWeek";
 import {
   OPEN_CAMPANHA_TASK_KEY,
   OPEN_MEMBER_KEY,
@@ -450,41 +465,170 @@ function DiretorioTab() {
     return weeklyCompletions(loadProjetos(), groupsWithMarketing);
   }, [tick, groupsWithMarketing]);
 
-  // Produtividade por dia da semana — período PRÓPRIO, independente do
-  // `scorePeriod` da Performance do Time (opções diferentes: Esta
-  // semana/Últimos 30/90 dias/Este ano).
-  const [weekdayPeriod, setWeekdayPeriod] = useState<WeekdayPeriodMode>("30dias");
+  // "Entregas da Semana" (substitui "Entregas por dia da semana") —
+  // SEMPRE a semana atual (segunda a domingo, Brasília), sem seletor de
+  // período (itens 1-2 do pedido). `weekdayProductivity` continua sendo
+  // a mesma função de sempre — só o range passado muda.
+  const weekRange = useMemo(() => currentWeekRangeBrasilia(), []);
+  const previousWeekRange = useMemo(() => previousWeekRangeBrasilia(), []);
   const weekdayData = useMemo(() => {
     void tick;
-    return weekdayProductivity(
-      loadProjetos(),
-      groupsWithMarketing,
-      rangeForWeekdayPeriod(weekdayPeriod),
-    );
-  }, [tick, groupsWithMarketing, weekdayPeriod]);
+    return weekdayProductivity(loadProjetos(), groupsWithMarketing, weekRange);
+  }, [tick, groupsWithMarketing, weekRange]);
+  const previousWeekdayData = useMemo(() => {
+    void tick;
+    return weekdayProductivity(loadProjetos(), groupsWithMarketing, previousWeekRange);
+  }, [tick, groupsWithMarketing, previousWeekRange]);
 
-  // Drill-down de "Entregas por dia da semana" — mesma janela de datas de
-  // `weekdayData` (acima), mas devolve as tarefas de verdade (não só a
-  // contagem) pra abrir a partir de um clique na barra. Fonte separada
-  // (`allTasksFlat`, que já é achatado com id/projectId/campanhaId
+  // "vs. semana anterior" (item 6) — nunca compara semana parcial com
+  // semana anterior completa: os dois lados somam só até o mesmo dia da
+  // semana (hoje), sáb/dom tratam a semana como já completa (corte em
+  // sexta).
+  const weekdayCutoff = useMemo(() => {
+    const wd = weekdayIndexInBrasilia();
+    return wd === 0 || wd > 5 ? 5 : wd;
+  }, []);
+  const weeklyTrendPct = useMemo(() => {
+    const current = weekdayData
+      .filter((d) => d.weekday <= weekdayCutoff)
+      .reduce((s, d) => s + d.totalCompletions, 0);
+    const previous = previousWeekdayData
+      .filter((d) => d.weekday <= weekdayCutoff)
+      .reduce((s, d) => s + d.totalCompletions, 0);
+    if (previous === 0) return null;
+    return ((current - previous) / previous) * 100;
+  }, [weekdayData, previousWeekdayData, weekdayCutoff]);
+
+  // Drill-down de "Entregas da Semana" (bloco geral + por membro) — mesma
+  // janela de `weekRange`, devolve as tarefas de verdade (não só a
+  // contagem) pra abrir a partir de um clique na barra/número. Fonte
+  // separada (`allTasksFlat`, já achatado com id/projectId/campanhaId
   // prontos pra abrir) em vez de reaproveitar `weekdayProductivity`
-  // internamente — essa função já serve só o número da barra.
+  // internamente — essa função só serve o número da barra.
   const weekdayTasksByDay = useMemo(() => {
-    const range = rangeForWeekdayPeriod(weekdayPeriod);
     const map = new Map<number, DashTaskFlat[]>([1, 2, 3, 4, 5].map((d) => [d, []]));
     for (const t of allTasksFlat) {
       if (t.status !== "Concluído" || !t.completedAt) continue;
-      const day = formatDateToIso(new Date(t.completedAt));
-      if (range.from && day < range.from) continue;
-      if (range.to && day > range.to) continue;
-      const wd = new Date(t.completedAt).getDay();
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      if (day < weekRange.from || day > weekRange.to) continue;
+      const wd = weekdayIndexInBrasilia(new Date(t.completedAt));
       if (wd >= 1 && wd <= 5) map.get(wd)!.push(t);
     }
     for (const arr of map.values()) {
       arr.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
     }
     return map;
-  }, [allTasksFlat, weekdayPeriod]);
+  }, [allTasksFlat, weekRange]);
+
+  // Tarefas concluídas por CADA membro na semana atual (segunda a
+  // domingo completo, item 10 — inclui fim de semana, diferente do
+  // gráfico que só mostra seg-sex) — alimenta tanto a coluna "Esta
+  // semana" quanto o drill-down ao clicar no número.
+  const thisWeekTasksByMember = useMemo(() => {
+    const map = new Map<string, DashTaskFlat[]>();
+    for (const t of allTasksFlat) {
+      if (t.status !== "Concluído" || !t.completedAt) continue;
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      if (day < weekRange.from || day > weekRange.to) continue;
+      for (const name of t.assignees) {
+        if (!map.has(name)) map.set(name, []);
+        map.get(name)!.push(t);
+      }
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+    }
+    return map;
+  }, [allTasksFlat, weekRange]);
+
+  // Médias semanais históricas por membro (mês/trimestre/ano corrente,
+  // itens 11-13) — nunca inventa semana fora do histórico real: o início
+  // de cada janela é limitado à data da entrega mais antiga carregada.
+  const earliestCompletionIso = useMemo(() => {
+    let earliest: string | null = null;
+    for (const t of allTasksFlat) {
+      if (t.status !== "Concluído" || !t.completedAt) continue;
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      if (!earliest || day < earliest) earliest = day;
+    }
+    return earliest;
+  }, [allTasksFlat]);
+  const clampedRange = useCallback(
+    (monthsBack: number): { from: string; to: string } => {
+      const now = new Date();
+      const from = new Date(now);
+      from.setMonth(from.getMonth() - monthsBack);
+      let fromIso = formatDateToIso(from);
+      if (earliestCompletionIso && earliestCompletionIso > fromIso) fromIso = earliestCompletionIso;
+      return { from: fromIso, to: todayIsoInBrasilia() };
+    },
+    [earliestCompletionIso],
+  );
+  const monthRange = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    let fromIso = formatDateToIso(from);
+    if (earliestCompletionIso && earliestCompletionIso > fromIso) fromIso = earliestCompletionIso;
+    return { from: fromIso, to: todayIsoInBrasilia() };
+  }, [earliestCompletionIso]);
+  const quarterRange = useMemo(() => clampedRange(3), [clampedRange]);
+  const yearRange = useMemo(() => clampedRange(12), [clampedRange]);
+
+  const monthlyWeeklyTotals = useMemo(() => {
+    void tick;
+    return weeklyDeliveryTotalsByMember(loadProjetos(), groupsWithMarketing, monthRange);
+  }, [groupsWithMarketing, monthRange, tick]);
+  const quarterlyWeeklyTotals = useMemo(() => {
+    void tick;
+    return weeklyDeliveryTotalsByMember(loadProjetos(), groupsWithMarketing, quarterRange);
+  }, [groupsWithMarketing, quarterRange, tick]);
+  const yearlyWeeklyTotals = useMemo(() => {
+    void tick;
+    return weeklyDeliveryTotalsByMember(loadProjetos(), groupsWithMarketing, yearRange);
+  }, [groupsWithMarketing, yearRange, tick]);
+  const average = (arr: number[] | undefined): number | null => {
+    if (!arr || arr.length === 0) return null;
+    return arr.reduce((s, n) => s + n, 0) / arr.length;
+  };
+
+  // Tabela de produtividade por membro (substitui a tabela seg-sex
+  // antiga) — uma linha por membro, tudo já resolvido aqui (item 8 do
+  // pedido).
+  const deliveryMemberRows = useMemo<DeliveryMemberRow[]>(() => {
+    return members
+      .map((m) => {
+        const monthlyAvg = average(monthlyWeeklyTotals.get(m.name));
+        const thisWeekTasksForMember = thisWeekTasksByMember.get(m.name) ?? [];
+        const thisWeek = thisWeekTasksForMember.length;
+        const byWeekday = weekdayData.map((d) => ({
+          label: d.label,
+          count: d.byMember.find((x) => x.name === m.name)?.count ?? 0,
+        }));
+        const trendPct =
+          monthlyAvg != null && monthlyAvg > 0
+            ? ((thisWeek - monthlyAvg) / monthlyAvg) * 100
+            : null;
+        return {
+          member: m,
+          thisWeek,
+          monthlyAvg,
+          quarterlyAvg: average(quarterlyWeeklyTotals.get(m.name)),
+          yearlyAvg: average(yearlyWeeklyTotals.get(m.name)),
+          trendPct,
+          byWeekday,
+          thisWeekTasks: thisWeekTasksForMember,
+        };
+      })
+      .filter((r) => r.thisWeek > 0 || (monthlyWeeklyTotals.get(r.member.name)?.length ?? 0) > 0)
+      .sort((a, b) => b.thisWeek - a.thisWeek);
+  }, [
+    members,
+    monthlyWeeklyTotals,
+    quarterlyWeeklyTotals,
+    yearlyWeeklyTotals,
+    thisWeekTasksByMember,
+    weekdayData,
+  ]);
 
   // Resolve título de reunião a partir do id — só usado pra exibir "N
   // reuniões perdidas" na ficha do membro (o ledger denormaliza
@@ -493,6 +637,220 @@ function DiretorioTab() {
     void tick;
     return new Map(loadMeetings().map((m) => [m.id, m]));
   }, [tick]);
+
+  // "Insights do Time" — janela FIXA de 30 dias (independente do
+  // `scorePeriod` selecionado em Performance do Time), pra comparar
+  // "últimos 30 dias" vs. "30 dias antes disso" pra todo mundo de uma vez
+  // (1 fetch cada, não 1 por pessoa).
+  const last30Range = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 30);
+    return { from: formatDateToIso(from), to: todayIsoInBrasilia() };
+  }, []);
+  const previous30Range = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 60);
+    const to = new Date(now);
+    to.setDate(to.getDate() - 30);
+    return { from: formatDateToIso(from), to: formatDateToIso(to) };
+  }, []);
+  const { events: events30d } = usePerformanceEvents(last30Range);
+  const { events: eventsPrev30d } = usePerformanceEvents(previous30Range);
+  const eventsByPersonId30d = useMemo(() => groupEventsByPerson(events30d), [events30d]);
+  const eventsByPersonIdPrev30d = useMemo(
+    () => groupEventsByPerson(eventsPrev30d),
+    [eventsPrev30d],
+  );
+
+  const teamAvgActiveProjects = useMemo(() => {
+    if (members.length === 0) return null;
+    const counts = members.map((m) => {
+      const open = (tasksByMember.get(m.name) ?? []).filter((t) => OPEN_STATUSES.has(t.status));
+      return new Set(open.map((t) => t.campanhaId ?? t.projectId)).size;
+    });
+    return counts.reduce((s, n) => s + n, 0) / counts.length;
+  }, [members, tasksByMember]);
+
+  const insightBundles = useMemo<MemberInsightBundle[]>(() => {
+    const scoreFromEvents = (
+      personEvents: PerformanceEventLike[],
+      openTasks: PerformanceOpenTask[],
+    ) => {
+      const completions = personEvents
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({ outcome: e.data.outcome as TaskOutcome, taskId: e.taskId }));
+      const deadlineChanges = personEvents
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          from: (e.data.from as string) ?? undefined,
+          occurredAt: e.occurredAt,
+        }));
+      const attendance = dedupAttendanceEvents(
+        personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
+      ).map((e) => ({ attended: !!e.data.attended }));
+      const ids = new Set<string>();
+      for (const t of openTasks) ids.add(t.id);
+      for (const c of completions) if (c.taskId) ids.add(c.taskId);
+      const universo = ids.size;
+      const overdue = overdueOpenTasks(
+        openTasks,
+        undefined,
+        performanceSettings.deadlineCutoffHour,
+      ).length;
+      const entrega = computeEntrega(completions, overdue, universo);
+      const previsibilidade = computePrevisibilidade(
+        deadlineChanges,
+        universo,
+        performanceSettings.deadlineCutoffHour,
+      );
+      const compromissos = computeCompromissos(attendance);
+      return { score: combineScoreV2(entrega, previsibilidade, compromissos), attendance };
+    };
+
+    return members.map((m) => {
+      const personEvents30d = eventsByPersonId30d.get(m.id) ?? [];
+      const personEventsPrev30d = eventsByPersonIdPrev30d.get(m.id) ?? [];
+      const openTasks = openTasksByMemberId.get(m.id) ?? [];
+
+      const completions30d = personEvents30d
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({
+          outcome: e.data.outcome as TaskOutcome,
+          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+          taskId: e.taskId,
+          occurredAt: e.occurredAt,
+        }));
+      const deadlineChanges30d = personEvents30d
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          isCritical: !!e.data.isCritical,
+          motivo: (e.data.motivo as string) ?? undefined,
+          exemptFromResponsibility: !!e.data.exemptFromResponsibility,
+        }));
+      const agg30d = computeAggregateIndicators(completions30d, deadlineChanges30d, 0);
+
+      const completionsPrev30d = personEventsPrev30d
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({
+          outcome: e.data.outcome as TaskOutcome,
+          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+          taskId: e.taskId,
+        }));
+      const deadlineChangesPrev30d = personEventsPrev30d
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          isCritical: !!e.data.isCritical,
+          motivo: (e.data.motivo as string) ?? undefined,
+          exemptFromResponsibility: !!e.data.exemptFromResponsibility,
+        }));
+      const aggPrev30d = computeAggregateIndicators(completionsPrev30d, deadlineChangesPrev30d, 0);
+
+      const last14 = new Date();
+      last14.setDate(last14.getDate() - 14);
+      const last14Iso = formatDateToIso(last14);
+      const completionsLast14 = completions30d.filter((c) => c.occurredAt >= last14Iso);
+      const noLateInLast14 =
+        completionsLast14.length >= INSIGHT_THRESHOLDS.amostraMinima &&
+        !completionsLast14.some((c) => c.outcome === "late");
+
+      const scoreNowResult = scoreFromEvents(personEvents30d, openTasks);
+      const scorePreviousResult = scoreFromEvents(personEventsPrev30d, openTasks);
+
+      const overdueTasks = (tasksByMember.get(m.name) ?? []).filter((t) => t.bucket === "atrasada");
+      const overdueHighPriorityCount = overdueTasks.filter(
+        (t) => t.priority === "Alta" || t.priority === "Urgente",
+      ).length;
+      const overdueOlderThanThresholdCount = overdueTasks.filter((t) => {
+        const match = /Atrasada (\d+)d/.exec(t.due);
+        return match ? Number(match[1]) >= INSIGHT_THRESHOLDS.atrasadasAntigasDias : false;
+      }).length;
+
+      const openTasksForMember = (tasksByMember.get(m.name) ?? []).filter((t) =>
+        OPEN_STATUSES.has(t.status),
+      );
+      const activeProjectsCount = new Set(
+        openTasksForMember.map((t) => t.campanhaId ?? t.projectId),
+      ).size;
+      const concentrationGroups = new Map<string, { count: number; label: string }>();
+      for (const t of openTasksForMember) {
+        const key = t.campanhaId ?? t.projectId;
+        const g = concentrationGroups.get(key);
+        if (g) g.count += 1;
+        else concentrationGroups.set(key, { count: 1, label: t.projectName });
+      }
+      let topConcentration: { count: number; label: string } | null = null;
+      for (const g of concentrationGroups.values()) {
+        if (!topConcentration || g.count > topConcentration.count) topConcentration = g;
+      }
+
+      const startTimes = m.startTimes ?? {};
+      const recentDays = Object.keys(startTimes)
+        .sort((a, b) => (a < b ? 1 : -1))
+        .slice(0, 10);
+      const earlyStartCount =
+        recentDays.length > 0
+          ? recentDays.filter((d) => {
+              const hhmm = startTimes[d];
+              const hour = Number(hhmm?.split(":")[0]);
+              return Number.isFinite(hour) && hour < INSIGHT_THRESHOLDS.inicioDiaAntesDasHora;
+            }).length
+          : null;
+
+      const bundle: MemberInsightBundle = {
+        memberId: m.id,
+        memberName: m.name,
+        role: m.role,
+        thisWeekTotal: thisWeekTasksByMember.get(m.name)?.length ?? 0,
+        monthlyWeeklyAvg: average(monthlyWeeklyTotals.get(m.name)),
+        onTimeRateCurrent: agg30d.pctNoPrazo,
+        onTimeRatePrevious: aggPrev30d.pctNoPrazo,
+        onTimeSampleCurrent: completions30d.length,
+        onTimeSamplePrevious: completionsPrev30d.length,
+        avgDelayDaysCurrent: agg30d.tempoMedioAtrasoDias,
+        avgDelayDaysPrevious: aggPrev30d.tempoMedioAtrasoDias,
+        replansCurrent: agg30d.qtdReplanejamentos,
+        replansPrevious: aggPrev30d.qtdReplanejamentos,
+        overdueCount: overdueTasks.length,
+        overdueHighPriorityCount,
+        overdueOlderThanThresholdCount,
+        noOverdueForDays: noLateInLast14 ? INSIGHT_THRESHOLDS.semAtrasoDias : null,
+        scoreNow: scoreNowResult.score.score,
+        scorePrevious: scorePreviousResult.score.score,
+        scorePeriodLabel: "nos últimos 30 dias",
+        openTasksCount: openTasksForMember.length,
+        activeProjectsCount,
+        teamAvgActiveProjects,
+        topConcentrationLabel: topConcentration?.label ?? null,
+        topConcentrationPct:
+          topConcentration && openTasksForMember.length > 0
+            ? topConcentration.count / openTasksForMember.length
+            : null,
+        meetingsExpected: scoreNowResult.attendance.length,
+        meetingsAttended: scoreNowResult.attendance.filter((a) => a.attended).length,
+        earlyStartCount,
+        earlyStartWindow: recentDays.length > 0 ? recentDays.length : null,
+      };
+      return bundle;
+    });
+  }, [
+    members,
+    eventsByPersonId30d,
+    eventsByPersonIdPrev30d,
+    openTasksByMemberId,
+    performanceSettings.deadlineCutoffHour,
+    tasksByMember,
+    thisWeekTasksByMember,
+    monthlyWeeklyTotals,
+    teamAvgActiveProjects,
+  ]);
+
+  const teamInsights = useMemo(() => generateInsights(insightBundles, 5), [insightBundles]);
+  const membersById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
   const [attentionTab, setAttentionTab] = useState<AttentionTab>("atrasadas");
 
@@ -697,10 +1055,13 @@ function DiretorioTab() {
             allTasksFlat={allTasksFlat}
             tasksByMember={tasksByMember}
             weeklyData={weeklyData}
+            weekRange={weekRange}
             weekdayData={weekdayData}
             weekdayTasksByDay={weekdayTasksByDay}
-            weekdayPeriod={weekdayPeriod}
-            onWeekdayPeriodChange={setWeekdayPeriod}
+            weeklyTrendPct={weeklyTrendPct}
+            deliveryMemberRows={deliveryMemberRows}
+            teamInsights={teamInsights}
+            membersById={membersById}
             onlineCount={onlineCount}
             meId={meId}
             isAdmin={isAdmin}
