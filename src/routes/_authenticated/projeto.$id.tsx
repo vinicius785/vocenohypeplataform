@@ -503,6 +503,7 @@ function RoadmapPanel({
           scope={{ kind: "projeto", id: project.id }}
           breadcrumb="Projetos"
           onSave={(t) => saveTask(t as unknown as Task)}
+          onAutosave={(t) => saveTask(t as unknown as Task)}
           onDelete={() => {
             update({
               tasks: project.tasks.filter((t) => t.id !== openTask.id),

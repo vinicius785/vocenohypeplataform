@@ -29,6 +29,7 @@ function resolveTasks(standalones: MktStandalone[]): BoardTask[] {
     assignees: s.assignees,
     primaryAssignee: s.primaryAssignee,
     description: s.note,
+    descriptionText: s.noteText,
     createdAt: s.createdAt,
     timerRunning: s.timerRunning,
     timerStartedAt: s.timerStartedAt,
@@ -92,6 +93,7 @@ export function MarketingSection({
           estimate: t.estimate,
           dueDate: t.dueDate,
           note: t.description,
+          noteText: t.descriptionText,
           activity: t.activity,
           comments: t.comments,
         });
@@ -111,6 +113,7 @@ export function MarketingSection({
         estimate: t.estimate,
         dueDate: t.dueDate,
         note: t.description,
+        noteText: t.descriptionText,
         timerRunning: t.timerRunning,
         timerStartedAt: t.timerStartedAt,
         timeEntries: t.timeEntries,

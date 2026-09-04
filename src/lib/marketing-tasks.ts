@@ -12,6 +12,7 @@ import type {
   Attachment,
   Task,
 } from "@/components/tasks/TaskBoard";
+import type { RichDoc } from "@/lib/rich-text";
 import { createTableArrayStore } from "@/lib/table-array-store";
 import type { TaskRecurrence } from "@/lib/task-recurrence";
 
@@ -47,7 +48,11 @@ export type MktStandalone = {
   startDate?: string;
   estimate?: string;
   dueDate?: string;
-  note?: string;
+  /** Mesmo formato de `Task.description` (doc estruturado do editor
+   * rich-text) — aceita `string` pra registros antigos ainda não
+   * convertidos. */
+  note?: RichDoc | string;
+  noteText?: string;
   createdAt: string;
   /** Espelha `Task.timerRunning`/`timerStartedAt`/`timeEntries` — sem
    * esses campos aqui, o timer que inicia/para sozinho ao mudar de status
@@ -140,7 +145,8 @@ export function createStandalone(input: {
   startDate?: string;
   estimate?: string;
   dueDate?: string;
-  note?: string;
+  note?: RichDoc | string;
+  noteText?: string;
   activity?: Activity[];
   comments?: Comment[];
 }): MktStandalone {
@@ -159,6 +165,7 @@ export function createStandalone(input: {
     estimate: input.estimate,
     dueDate: input.dueDate,
     note: input.note,
+    noteText: input.noteText,
     activity: input.activity,
     comments: input.comments,
     createdAt: new Date().toISOString(),

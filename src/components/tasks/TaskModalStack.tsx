@@ -29,6 +29,9 @@ export function TaskModalStack() {
       scope={ctx.scope}
       breadcrumb={ctx.breadcrumb}
       onSave={ctx.save}
+      // Fechar aqui é só `onOpenChange` (linha acima) — `ctx.save` nunca
+      // fecha nada sozinho, então é seguro reaproveitar pro autosave.
+      onAutosave={ctx.save}
       onDelete={() => {
         ctx.remove();
         popTaskModal();

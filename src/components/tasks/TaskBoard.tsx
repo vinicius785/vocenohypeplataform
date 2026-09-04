@@ -42,6 +42,9 @@ import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory"
 import { pushTaskModal } from "@/lib/task-modal-stack";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
 import { formatIsoDate } from "@/lib/utils";
+import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
+import type { MentionOption } from "@/lib/mention-kinds";
+import { RichTaskEditor } from "@/components/tasks/rich-editor/RichTaskEditor";
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -419,7 +422,11 @@ export type DeadlineChangeEntry = {
 export type Task = {
   id: string;
   title: string;
-  description?: string;
+  /** Doc estruturado do editor rich-text (`@/lib/rich-text`) — aceita
+   * também `string` pra descrições antigas ainda não convertidas (o único
+   * ponto de conversão é o carregamento em `TaskDialog`, via `toRichDoc`). */
+  description?: RichDoc | string;
+  descriptionText?: string;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate?: string;
@@ -1920,9 +1927,9 @@ export function TaskBoard({
                       </div>
 
                       {/* Nível 2 — indicadores rápidos: descrição preenchida, subtarefas */}
-                      {(!!t.description || (t.subtasks?.length ?? 0) > 0) && (
+                      {(!isDescriptionEmpty(t.description) || (t.subtasks?.length ?? 0) > 0) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                          {!!t.description && (
+                          {!isDescriptionEmpty(t.description) && (
                             <span title="Tem descrição">
                               <FileText className="h-3 w-3" />
                             </span>
@@ -2023,7 +2030,7 @@ export function TaskBoard({
                               >
                                 {s.title}
                               </span>
-                              {!!s.description && (
+                              {!isDescriptionEmpty(s.description) && (
                                 <span
                                   title="Tem descrição"
                                   className="shrink-0 text-muted-foreground"
@@ -2100,6 +2107,7 @@ export function TaskBoard({
             }
             setTaskDialog(null);
           }}
+          onAutosave={(t) => persist(tasks.map((x) => (x.id === t.id ? t : x)))}
           onDelete={
             taskDialog?.mode === "edit" && taskDialog.data
               ? () => {
@@ -2195,6 +2203,7 @@ export function TaskDialog({
   scope,
   breadcrumb,
   onSave,
+  onAutosave,
   onDelete,
   onToggleTimer,
   initialEditSubtaskId,
@@ -2207,6 +2216,15 @@ export function TaskDialog({
   scope?: TaskBoardScope;
   breadcrumb?: string;
   onSave: (t: Task) => void;
+  /** Persistência "silenciosa" pro autosave da descrição (item 15 do
+   * pedido) — NUNCA a mesma função que `onSave`: em pelo menos dois
+   * call-sites (`TaskBoard.tsx`'s board principal, subtarefa) `onSave`
+   * também FECHA o diálogo (`setTaskDialog(null)`/`setEditSubtask(null)`)
+   * como efeito colateral — chamar isso a cada tick de autosave fechava o
+   * diálogo sozinho no meio da digitação (bug real, encontrado ao vivo).
+   * Cada call-site deve passar uma versão que só grava, sem fechar nem
+   * logar activity. Sem essa prop, autosave vira no-op (seguro). */
+  onAutosave?: (t: Task) => void;
   onDelete?: () => void;
   onToggleTimer?: (taskId: string) => Task | null;
   /** Abre o diálogo já direto na subtarefa indicada (clique numa subtarefa
@@ -2217,40 +2235,44 @@ export function TaskDialog({
   const taskTags = useTaskTags();
   const { settings: performanceSettings } = usePerformanceSettings();
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [descEditing, setDescEditing] = useState(false);
-  const [descMentionQuery, setDescMentionQuery] = useState<string | null>(null);
-  const descRef = useRef<HTMLTextAreaElement>(null);
-  // Mesmo padrão de @menção do composer de comentário
-  // (`TaskActivityPanel.tsx`'s `onCommentChange`/`insertMention`) —
-  // replicado aqui pra descrição também ganhar autocomplete, não só
-  // exibição.
-  const onDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const v = e.target.value;
-    setDescription(v);
-    const caret = e.target.selectionStart ?? v.length;
-    const before = v.slice(0, caret);
-    const m = before.match(/(?:^|\s)@([\wÀ-ÿ]*)$/);
-    setDescMentionQuery(m ? m[1] : null);
+  const [description, setDescription] = useState<RichDoc>(() => toRichDoc(undefined));
+  const [descriptionText, setDescriptionText] = useState("");
+  // Autosave da descrição (item 15 do pedido) — NUNCA chama `save()`/`onSave`
+  // inteiro (esse já monta o `Task` inteiro, loga activity por diff contra
+  // `initial` e dispara notificações — repetir isso a cada tick duplicaria
+  // "atualizou a descrição" no log e re-notificaria gente). Em vez disso,
+  // sobrepõe só `description`/`descriptionText` em cima do `initial` original
+  // (mantendo qualquer outro campo ainda não salvo intocado) e chama `onSave`
+  // direto — todo call-site de `onSave` já é upsert-por-id idempotente. Só
+  // roda em modo edição (`initial` existe): tarefa nova só salva no clique/
+  // fechamento, senão cada tick mintaria um id novo (`crypto.randomUUID()`).
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushDescriptionSave = (doc: RichDoc, text: string) => {
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
+    if (!initial || !onAutosave) return;
+    onAutosave({ ...initial, description: doc, descriptionText: text });
   };
-  const insertDescMention = (name: string) => {
-    const el = descRef.current;
-    const caret = el?.selectionStart ?? description.length;
-    const before = description.slice(0, caret).replace(/@([\wÀ-ÿ]*)$/, `@${name} `);
-    const after = description.slice(caret);
-    setDescription(before + after);
-    setDescMentionQuery(null);
-    setTimeout(() => {
-      el?.focus();
-      el?.setSelectionRange(before.length, before.length);
-    }, 0);
+  const scheduleDescriptionAutosave = (doc: RichDoc, text: string) => {
+    if (!initial || !onAutosave) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      autosaveTimer.current = null;
+      setAutosaveStatus("saving");
+      onAutosave({ ...initial, description: doc, descriptionText: text });
+      setAutosaveStatus("saved");
+      window.setTimeout(() => setAutosaveStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+    }, 700);
   };
-  const descMentionMatches =
-    descMentionQuery !== null
-      ? members
-          .filter((m) => m.name.toLowerCase().includes(descMentionQuery.toLowerCase()))
-          .slice(0, 5)
-      : [];
+  useEffect(
+    () => () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    },
+    [],
+  );
   const [status, setStatus] = useState<TaskStatus>("Aberto");
   const [priority, setPriority] = useState<TaskPriority>("Normal");
   const [dueDate, setDueDate] = useState<string>("");
@@ -2326,6 +2348,31 @@ export function TaskDialog({
     () => new Map(taskDirectory.map((t) => [t.rawId, t])),
     [taskDirectory],
   );
+  // Fonte da @menção do editor de descrição (pessoa + tarefa) — mesmo
+  // `MentionOption`/critério de ranking já usados no Chat
+  // (`@/lib/mention-kinds`), sem duplicar tipos. `getMentionOptions` precisa
+  // ser uma função ESTÁVEL (não recriada a cada render, senão a extensão do
+  // TipTap — montada uma única vez — ficaria presa a um closure antigo),
+  // então lê sempre o valor mais recente via ref.
+  const mentionOptionsRef = useRef<MentionOption[]>([]);
+  useEffect(() => {
+    const userOptions: MentionOption[] = members.map((m) => ({
+      kind: "user",
+      id: m.id ?? m.name,
+      label: m.name,
+      photo: m.photo,
+    }));
+    const taskOptions: MentionOption[] = taskDirectory.map((t) => ({
+      kind: "task",
+      id: t.rawId,
+      label: t.label,
+      hint: t.project,
+      campanhaId: t.campanhaId,
+      projectId: t.projectId,
+    }));
+    mentionOptionsRef.current = [...userOptions, ...taskOptions];
+  }, [members, taskDirectory]);
+  const getMentionOptions = useRef(() => mentionOptionsRef.current).current;
   // Nesta board (o projeto especial "Marketing" mistura tarefas próprias
   // com avulsas do Marketing) `initial.id` pode vir com o prefixo "mkt:"
   // (convenção de deep-link, não um id de banco de verdade — ver
@@ -2389,8 +2436,11 @@ export function TaskDialog({
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title ?? "");
-    setDescription(initial?.description ?? "");
-    setDescEditing(false);
+    // Único ponto de conversão de descrições antigas (string simples) pro
+    // doc estruturado do editor — `toRichDoc` aceita os dois formatos.
+    setDescription(toRichDoc(initial?.description));
+    setDescriptionText(initial?.descriptionText ?? "");
+    setAutosaveStatus("idle");
     setStatus(initial?.status ?? defaultStatus ?? "Aberto");
     setPriority(initial?.priority ?? "Normal");
     setDueDate(initial?.dueDate ?? "");
@@ -2542,6 +2592,14 @@ export function TaskDialog({
 
   const save = (dueDateOverride?: string) => {
     if (!canSave) return;
+    // Um autosave de descrição pendente não pode disparar DEPOIS desta save
+    // explícita (o React já processou o clique/fechamento com o valor mais
+    // recente) — cancela o timer pra nunca sobrescrever com um snapshot
+    // desatualizado.
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
     let act = activity;
     let cmts = comments;
     let nextTimerRunning = timerRunning;
@@ -2699,7 +2757,14 @@ export function TaskDialog({
           }
         }
       }
-      if ((initial.description ?? "") !== description)
+      // Compara o espelho em texto puro (barato, sem falso-positivo por
+      // diferença estrutural irrelevante no JSON do doc) — para tarefas
+      // antigas ainda sem `descriptionText`, cai pra descrição legada (que
+      // já era só texto) como base de comparação.
+      const initialDescriptionText =
+        initial.descriptionText ??
+        (typeof initial.description === "string" ? initial.description : "");
+      if (initialDescriptionText !== descriptionText)
         act = pushActivity(act, "atualizou a descrição");
       if (statusChangedTask) {
         const candidateNext: Task = {
@@ -2740,7 +2805,8 @@ export function TaskDialog({
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
       title: title.trim(),
-      description: description.trim() || undefined,
+      description: isDescriptionEmpty(description) ? undefined : description,
+      descriptionText: descriptionText || undefined,
       status: finalStatus,
       priority,
       dueDate: finalDueDate,
@@ -3362,71 +3428,31 @@ export function TaskDialog({
               </div>
 
               <div className="px-8 py-4">
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Descrição
-                </p>
-                {descEditing ? (
-                  <div className="relative">
-                    {descMentionMatches.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
-                        {descMentionMatches.map((m) => (
-                          <button
-                            key={m.name}
-                            type="button"
-                            // `onMouseDown` (não `onClick`) pra disparar antes do
-                            // `onBlur` do textarea — senão o dropdown já tinha
-                            // fechado (e a descrição saído de edição) antes do
-                            // clique registrar.
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              insertDescMention(m.name);
-                            }}
-                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
-                          >
-                            <Avatar member={m} size={20} />
-                            {m.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <textarea
-                      ref={descRef}
-                      value={description}
-                      onChange={onDescriptionChange}
-                      onBlur={() => {
-                        setDescEditing(false);
-                        setDescMentionQuery(null);
-                      }}
-                      placeholder="Escreva algo, adicione detalhes, links, use @ para mencionar…"
-                      rows={10}
-                      className="min-h-[120px] w-full resize-y border-0 bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70"
-                    />
-                  </div>
-                ) : description ? (
-                  // Links e @menções viram clicáveis/destacados só na
-                  // visualização — o textarea de edição continua sendo texto
-                  // puro, senão editar vira um problema.
-                  <div
-                    onClick={() => {
-                      setDescEditing(true);
-                      setTimeout(() => descRef.current?.focus(), 0);
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Descrição
+                  </p>
+                  {initial && autosaveStatus !== "idle" && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {autosaveStatus === "saving" ? "Salvando…" : "Salvo"}
+                    </span>
+                  )}
+                </div>
+                <div className="min-h-[120px] w-full">
+                  <RichTaskEditor
+                    taskKey={initial?.id ?? "new"}
+                    content={description}
+                    onChange={(doc, text) => {
+                      setDescription(doc);
+                      setDescriptionText(text);
+                      scheduleDescriptionAutosave(doc, text);
                     }}
-                    className="min-h-[120px] w-full cursor-text whitespace-pre-wrap text-sm leading-relaxed text-foreground"
-                  >
-                    {renderMentions(description, members)}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDescEditing(true);
-                      setTimeout(() => descRef.current?.focus(), 0);
-                    }}
-                    className="min-h-[60px] w-full text-left text-sm text-muted-foreground/70"
-                  >
-                    Escreva algo, adicione detalhes, links…
-                  </button>
-                )}
+                    onBlurFlush={() => flushDescriptionSave(description, descriptionText)}
+                    onSaveShortcut={() => attemptSave(false)}
+                    onOpenTaskMention={(rawId) => pushTaskModal(rawId)}
+                    getMentionOptions={getMentionOptions}
+                  />
+                </div>
               </div>
 
               {initial && (
@@ -3657,7 +3683,7 @@ export function TaskDialog({
                                 >
                                   {s.title}
                                 </span>
-                                {!!s.description && (
+                                {!isDescriptionEmpty(s.description) && (
                                   <span
                                     title="Tem descrição"
                                     className="shrink-0 text-muted-foreground"
@@ -3969,6 +3995,7 @@ export function TaskDialog({
               setActivity((a) => pushActivity(a, `atualizou subtarefa "${t.title}"`));
               setEditSubtask(null);
             }}
+            onAutosave={(t) => setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)))}
             onDelete={() => {
               removeSubtask(editSubtask.id);
               setEditSubtask(null);

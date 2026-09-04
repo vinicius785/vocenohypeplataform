@@ -197,7 +197,13 @@ export type Task = {
   id: string;
   title: string;
   status: KanbanStatus;
-  description?: string;
+  /** Doc estruturado do editor rich-text (`@/lib/rich-text`'s `RichDoc`) —
+   * aceita também `string` pra descrições antigas ainda não convertidas.
+   * Tipado aqui como `unknown` pra não criar um ciclo de import entre esta
+   * store e `@/lib/rich-text`/TipTap — o shape real é imposto por
+   * `TaskBoard.tsx`'s `Task`, este tipo só precisa "carregar" o valor. */
+  description?: unknown;
+  descriptionText?: string;
   dueDate?: string;
   startDate?: string;
   estimate?: string;

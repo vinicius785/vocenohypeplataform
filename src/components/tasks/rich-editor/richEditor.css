@@ -1,0 +1,127 @@
+/* Tipografia do editor de descrição — sem cards por parágrafo, sem borda de
+   textarea (item 14/23/24/25 do pedido). Reaproveita as CSS vars do design
+   system (mesmas usadas em outros componentes, ex. var(--border)). */
+
+.rte-content {
+  outline: none;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+.rte-content p {
+  margin: 0.25rem 0;
+}
+
+.rte-content h1,
+.rte-content h2,
+.rte-content h3 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.1rem 0 0.35rem;
+}
+.rte-content h1 {
+  font-size: 1.375rem;
+}
+.rte-content h2 {
+  font-size: 1.125rem;
+}
+.rte-content h3 {
+  font-size: 1rem;
+  color: var(--muted-foreground);
+}
+
+.rte-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+.rte-content blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: var(--muted-foreground);
+}
+
+.rte-content code {
+  background: var(--muted);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8125rem;
+}
+
+.rte-content pre {
+  background: var(--muted);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.rte-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.rte-content ul,
+.rte-content ol {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+
+.rte-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.rte-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.rte-content ul[data-type="taskList"] li > label {
+  margin-top: 0.2rem;
+}
+.rte-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.rte-content a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.rte-mention {
+  border-radius: 4px;
+  padding: 0 0.25rem;
+  font-weight: 500;
+}
+.rte-mention[data-kind="user"] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.rte-mention[data-kind="task"] {
+  background: var(--muted);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.rte-mention[data-kind="task"]:hover {
+  background: var(--accent);
+}
+
+.rte-content mark {
+  background: color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 2px;
+  padding: 0 0.1rem;
+}
+
+.rte-content .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
