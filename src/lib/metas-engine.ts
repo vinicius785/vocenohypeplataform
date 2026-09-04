@@ -135,7 +135,15 @@ export function metaEfetiva(
  * o fallback quando ninguém configurou nada. */
 function defaultBaseline(alvo: number, direcao: MetricDirection): number {
   if (higherIsBetter(direcao)) return 0;
-  return alvo > 0 ? alvo * 2 : alvo - Math.max(1, Math.abs(alvo));
+  // Pra "reduzir"/"manter_abaixo" o baseline sintético precisa ficar do
+  // lado PIOR do alvo (valor mais alto — "estado não otimizado"), nunca do
+  // lado melhor. Com alvo ≤ 0 (ex. "Limite 0 Pendências"), subtrair jogava
+  // o baseline pro lado bom (mais negativo = melhor sob "reduzir"),
+  // invertendo a matemática: um valor atual pior que o alvo (indo na
+  // direção errada) media como se tivesse SUPERADO a meta em centenas de
+  // %, em vez de ficar perto de 0%. Somar mantém o baseline sempre pior
+  // que o alvo, simétrico ao ramo `alvo > 0`.
+  return alvo > 0 ? alvo * 2 : alvo + Math.max(1, Math.abs(alvo));
 }
 
 /** Razão direcional entre baseline e alvo, em pontos percentuais (pode

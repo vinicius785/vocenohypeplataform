@@ -1,6 +1,7 @@
 {
-  "version": "1.262.1",
+  "version": "1.262.2",
   "notes": [
+    "Corrige indicadores de Metas com direção \"Reduzir (menos é melhor)\" e meta zero/negativa (ex. \"Limite 0 Pendências\") mostrando \"Saudável\"/100% mesmo quando o valor real estava bem pior que a meta e indo na direção errada: sem um Baseline configurado manualmente, o sistema inventa um ponto de partida automático — e pra esse tipo de meta (teto ≤ 0) a fórmula colocava esse ponto de partida do lado ERRADO (mais \"bom\" que a própria meta), fazendo a conta de progresso disparar pra centenas de % em vez de cair perto de 0%. Um indicador real com 6 pendências e meta 0 virava \"100% de progresso, Saudável\" quando devia ser \"0%, Em risco\" — agora mostra certo. Indicadores com Baseline preenchido manualmente não eram afetados.",
     "Corrige os botões da chamada (desligar, microfone, câmera etc.) sumindo depois de minimizar e expandir a chamada de novo: o recurso que esconde os controles sozinho após alguns segundos sem mexer o mouse perdia a referência aos botões nessa transição (minimizar/expandir troca o conteúdo por um componente diferente por baixo dos panos) e nunca mais reagia a mover o mouse pra trazer os controles de volta — ficavam invisíveis e inclicáveis até acontecer outra coisa na tela (abrir um menu, por exemplo). Agora a referência é atualizada corretamente nessa troca.",
     "Primeira etapa da revisão de responsividade mobile da plataforma inteira: modais grandes (detalhe de tarefa, novo/editar lançamento financeiro, detalhes do lançamento, reunião, perfil do membro) agora viram tela cheia no celular em vez de ficar espremidos numa caixinha centralizada — no desktop continuam exatamente iguais. Busca do cabeçalho vira só um ícone no mobile (abria competindo espaço com o menu e os outros ícones); ao tocar, abre um campo de busca ocupando a tela toda. Cabeçalho do Kanban (Ordenar/Filtrar/+Nova Tarefa) agora quebra linha em vez de cortar em telas estreitas. Popovers ganharam um teto de largura relativo à tela (nunca mais ultrapassam a borda em celulares pequenos). Calendário mensal de Reuniões: abaixo de um certo tamanho de tela, cada dia mostra só o número + uma bolinha indicando que tem evento (em vez de texto minúsculo ilegível) — tocar no dia continua abrindo os detalhes normalmente. Alguns formulários com campos lado a lado (endereço do influenciador, prazos de entrega, dados do lançamento financeiro) agora empilham em uma coluna no celular. Próximas etapas (Comercial, Metas, Blog, bottom sheets, tabelas viram cards) ficam para uma entrega futura.",
     "Reformula completamente as mensagens de voz do Chat: eram tratadas como um anexo comum (apareciam com duração \"0:00\" e uma waveform decorativa/aleatória). Corrigida a causa raiz da duração: o áudio gravado é decodificado uma vez (Web Audio API, a mesma técnica já usada pra desenhar a onda) logo depois de parar de gravar, e a duração real (em ms) + os picos reais da waveform são persistidos junto com a mensagem — nunca mais recalculados à toa. Mensagens de voz antigas (sem essa duração salva) são corrigidas automaticamente na primeira vez que alguém abre a conversa (via uma função no banco criada só pra isso, já que a edição de mensagem é restrita ao próprio autor) — sem precisar de migração manual. Novo player compacto (círculo de play/pause, waveform clicável e arrastável pra buscar posição, duração real, velocidade 0.5x/1x/1.5x/2x num popover pequeno) — só um áudio toca por vez, pausando os outros automaticamente. Gravação virou um modo próprio no composer: cronômetro ao vivo, waveform reagindo ao volume captado pelo microfone, pausar/continuar, cancelar (descarta sem enviar) e enviar — a mensagem aparece na hora com \"Enviando…\" e o usuário já pode digitar a próxima mensagem enquanto o áudio sobe; falha de upload mostra \"Tentar novamente\" sem perder a gravação. Permissão de microfone negada mostra um aviso amigável dentro do próprio composer (sem alerta técnico do navegador). Lista de conversas, citação de resposta e notificações agora mostram \"🎙 Mensagem de voz\" (com a duração, quando conhecida) em vez de \"Anexo\" genérico ou nome de arquivo cru — áudio anexado pelo seletor de arquivos comum continua mostrando o nome do arquivo normalmente. Reagir, responder, editar e excluir continuam funcionando exatamente como em qualquer outra mensagem.",
@@ -388,16 +389,16 @@
   ],
   "releases": [
     {
-      "version": "1.262.1",
-      "summary": "Corrige os controles da chamada (desligar, mic, câmera) sumindo depois de minimizar e expandir de novo.",
+      "version": "1.262.2",
+      "summary": "Corrige indicador de Metas \"Reduzir\" com meta zero/negativa mostrando Saudável mesmo estando bem pior que a meta.",
       "modules": [
         {
-          "name": "CHAMADAS",
-          "tagline": "Controles não somem mais ao expandir",
+          "name": "METAS",
+          "tagline": "Progresso correto pra metas de \"reduzir até 0\"",
           "items": [
             {
-              "title": "Botões de volta",
-              "description": "Minimizar e expandir a chamada não deixa mais os controles (desligar, microfone, câmera) invisíveis e inclicáveis."
+              "title": "Cálculo corrigido",
+              "description": "Indicadores com direção \"Reduzir\" e meta ≤ 0 (ex. \"Limite 0 Pendências\") não mostram mais 100%/Saudável quando o valor real está pior e indo na direção errada."
             }
           ]
         }
