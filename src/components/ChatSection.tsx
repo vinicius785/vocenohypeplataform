@@ -81,6 +81,8 @@ import {
 import {
   MENTION_KIND_CONFIG,
   MENTION_KIND_ORDER,
+  EVERYONE_MENTION_ID,
+  EVERYONE_MENTION_LABEL,
   contextBoost,
   matchScore,
   type MentionContext,
@@ -197,7 +199,12 @@ export function ChatSection() {
    * pra onde navegar, sem se preocupar com o resto. */
   const openMention = (m: ChatMention) => {
     if (m.kind === "task") return openTask(m.id);
-    if (m.kind === "user") return openMemberProfile(m.id);
+    if (m.kind === "user") {
+      // "Todos" é um badge informativo (menciona todos os participantes),
+      // não uma pessoa — não tenta abrir um perfil que não existe.
+      if (m.id === EVERYONE_MENTION_ID) return;
+      return openMemberProfile(m.id);
+    }
     if (m.kind === "project") {
       navigate({ to: "/projeto/$id", params: { id: m.id } });
       return;
@@ -283,13 +290,27 @@ export function ChatSection() {
 
   const typingUsers = getTypingUsers(activeId, me.id);
 
+  // Quem "@Todos" expande pra — mesma regra prática já usada pra decidir
+  // quem PODE participar de cada tipo de conversa hoje (não existe um
+  // conceito de "membros do canal" além disso, ver `mention-kinds.ts`):
+  // DM = a outra pessoa; canal privado = `allowedMemberIds`; canal
+  // público/campanha/projeto = todo mundo (`members`). Sempre exclui quem
+  // está enviando (não faz sentido notificar a própria pessoa).
+  const currentParticipantIds = (): string[] => {
+    if (isDm) return activeDmPartner ? [activeDmPartner.id] : [];
+    if (activeChannel?.private && activeChannel.allowedMemberIds) {
+      return activeChannel.allowedMemberIds.filter((id) => id !== me.id);
+    }
+    return members.map((m) => m.id).filter((id) => id !== me.id);
+  };
+
   const sendMessage = (text: string, mentions: ChatMention[], attachments: ChatAttachment[]) => {
     const trimmed = text.trim();
     if ((!trimmed && attachments.length === 0) || isSelfDm || !activeId) return;
     void sendMessageDb({
       convoId: activeId,
       text: trimmed,
-      mentions,
+      mentions: expandEveryoneMention(mentions, currentParticipantIds()),
       attachments,
       replyToId: replyingTo?.id,
     });
@@ -299,7 +320,7 @@ export function ChatSection() {
   const updateMessage = (id: string, text: string, mentions: ChatMention[]) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    void editMessageDb(id, trimmed, mentions);
+    void editMessageDb(id, trimmed, expandEveryoneMention(mentions, currentParticipantIds()));
   };
 
   const deleteMessage = async (id: string) => {
@@ -1701,13 +1722,21 @@ function useMentions(
       projectId: x.projectId,
     }));
     const u: MentionOption[] = allowUserMentions
-      ? members.map((m) => ({
-          kind: "user",
-          id: m.id,
-          label: m.name,
-          photo: m.photo,
-          hint: m.role,
-        }))
+      ? [
+          {
+            kind: "user",
+            id: EVERYONE_MENTION_ID,
+            label: EVERYONE_MENTION_LABEL,
+            hint: "Menciona todos os participantes",
+          },
+          ...members.map((m) => ({
+            kind: "user" as const,
+            id: m.id,
+            label: m.name,
+            photo: m.photo,
+            hint: m.role,
+          })),
+        ]
       : [];
     const all = [...u, ...t, ...projects, ...campaigns, ...clients];
     if (!context) return all;
@@ -1729,6 +1758,23 @@ function extractUsedMentions(text: string, options: MentionOption[]): ChatMentio
     }
   }
   return used;
+}
+
+/** "@Todos" nunca é uma pessoa real — expande a menção sentinela numa
+ * menção individual de verdade por participante (excluindo quem enviou),
+ * reaproveitando 100% a notificação/badge que já existe por menção
+ * individual (contador do sino em `AppShell.tsx`, push em
+ * `triggerChatPush`) sem precisar mudar nenhuma delas. O texto da
+ * mensagem continua mostrando só um badge "Todos" (as menções extras não
+ * têm o rótulo "Todos" reaproveitado pelo texto, então não duplicam
+ * badge na renderização — só alimentam a notificação de cada pessoa). */
+function expandEveryoneMention(mentions: ChatMention[], participantIds: string[]): ChatMention[] {
+  if (!mentions.some((m) => m.kind === "user" && m.id === EVERYONE_MENTION_ID)) return mentions;
+  const already = new Set(mentions.filter((m) => m.kind === "user").map((m) => m.id));
+  const extra: ChatMention[] = participantIds
+    .filter((id) => !already.has(id))
+    .map((id) => ({ kind: "user", id, label: EVERYONE_MENTION_LABEL }));
+  return [...mentions, ...extra];
 }
 
 function InlineEditor({

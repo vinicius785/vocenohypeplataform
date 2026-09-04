@@ -13,6 +13,17 @@ import {
  * novo montado em `ChatSection` — nada no menu/composer precisa mudar. */
 export type MentionKind = "user" | "task" | "project" | "campaign" | "client";
 
+/** Sentinel de "@Todos" — menciona todos os participantes da conversa de
+ * uma vez, sem precisar mencionar um por um. Nunca corresponde a uma
+ * pessoa real: é oferecido como mais um `MentionOption` (kind "user") no
+ * picker, e expandido em menções individuais reais no momento do envio
+ * (ver `expandEveryoneMention` em `ChatSection.tsx`) — assim a notificação/
+ * badge de menção de cada pessoa (`AppShell.tsx`, `triggerChatPush`)
+ * funciona sem nenhuma mudança, exatamente como se cada uma tivesse sido
+ * @mencionada à parte. */
+export const EVERYONE_MENTION_ID = "__everyone__";
+export const EVERYONE_MENTION_LABEL = "Todos";
+
 export const MENTION_KIND_ORDER: MentionKind[] = ["user", "task", "project", "campaign", "client"];
 
 export const MENTION_KIND_CONFIG: Record<
