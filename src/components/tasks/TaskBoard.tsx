@@ -1425,14 +1425,14 @@ export function TaskBoard({
   return (
     <TooltipProvider delayDuration={200}>
       <section className="space-y-4">
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-y-2 gap-x-4">
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {title}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{tasks.length} no total</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Popover open={sortOpen} onOpenChange={setSortOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -3056,7 +3056,7 @@ export function TaskDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-6xl gap-0 overflow-hidden p-0">
+        <DialogContent mobileFullScreen className="max-w-6xl gap-0 overflow-hidden p-0">
           <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
           <DialogDescription className="sr-only">
             Formulário de tarefa no estilo ClickUp
@@ -4081,7 +4081,7 @@ function AttachmentPreviewDialog({
   const isImage = isImageAttachment(attachment);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
+      <DialogContent mobileFullScreen className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <DialogTitle className="min-w-0 truncate text-sm font-medium">
             {attachment.name}

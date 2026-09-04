@@ -3205,7 +3205,7 @@ function EntregaDetailSheet({
               direto, sem depender de rodar a ação certa. */}
           <div className="space-y-2">
             <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
               {ENTREGA_FASE_COLUNAS.map((c) => {
                 const ativo = c === colunaAtual;
                 return (
@@ -3232,7 +3232,7 @@ function EntregaDetailSheet({
               "prazo planejado" de "recebimento real"). */}
           <div className="space-y-2">
             <FieldLabel title="Prazos" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <PrazoField
                 label="Roteiro"
                 value={entrega.dataRecebimentoRoteiro}

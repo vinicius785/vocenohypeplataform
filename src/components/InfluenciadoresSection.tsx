@@ -1235,35 +1235,35 @@ function BankInfluDialog({
                 value={endereco.rua ?? ""}
                 onChange={(e) => setEnd("rua", e.target.value)}
                 placeholder="Rua / Logradouro"
-                className="col-span-4 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-4"
               />
               <input
                 type="text"
                 value={endereco.numero ?? ""}
                 onChange={(e) => setEnd("numero", e.target.value)}
                 placeholder="Número"
-                className="col-span-2 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-2"
               />
               <input
                 type="text"
                 value={endereco.complemento ?? ""}
                 onChange={(e) => setEnd("complemento", e.target.value)}
                 placeholder="Complemento"
-                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
               />
               <input
                 type="text"
                 value={endereco.bairro ?? ""}
                 onChange={(e) => setEnd("bairro", e.target.value)}
                 placeholder="Bairro"
-                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
               />
               <input
                 type="text"
                 value={endereco.cidade ?? ""}
                 onChange={(e) => setEnd("cidade", e.target.value)}
                 placeholder="Cidade"
-                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
               />
               <input
                 type="text"
@@ -1271,14 +1271,14 @@ function BankInfluDialog({
                 onChange={(e) => setEnd("estado", e.target.value)}
                 placeholder="UF"
                 maxLength={2}
-                className="col-span-1 h-9 rounded-md border border-input bg-background px-2.5 text-sm uppercase focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm uppercase focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-1"
               />
               <input
                 type="text"
                 value={endereco.cep ?? ""}
                 onChange={(e) => setEnd("cep", e.target.value)}
                 placeholder="CEP"
-                className="col-span-2 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-2"
               />
               <input
                 type="text"

@@ -569,7 +569,10 @@ export function MemberProfileDialog({
 
   return (
     <Dialog open={!!member} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        mobileFullScreen
+        className="flex max-h-[92vh] max-w-3xl flex-col gap-0 overflow-hidden p-0"
+      >
         <DialogHeader className="border-b border-border px-7 py-5">
           <DialogTitle>Perfil</DialogTitle>
         </DialogHeader>

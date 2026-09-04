@@ -601,35 +601,119 @@ function GlobalSearch({ onSelect }: { onSelect: (key: SectionKey) => void }) {
     setQuery("");
   };
 
+  // Abaixo de `sm:`, o input permanente competia por espaço com o
+  // hambúrguer + 3 ícones na mesma linha (item 7 do pedido) — vira só um
+  // ícone que abre o campo como um overlay cobrindo o header, em vez de um
+  // input espremido o tempo todo.
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+
   return (
-    <div className="relative flex-1 max-w-2xl">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder="Buscar clientes, campanhas, projetos, time..."
-        className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-      />
-      {query && (
-        <button
-          type="button"
-          onClick={() => {
-            setQuery("");
-            setOpen(false);
+    <div className="relative min-w-0 flex-1 max-w-2xl">
+      <button
+        type="button"
+        onClick={() => setMobileExpanded(true)}
+        aria-label="Buscar"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground sm:hidden"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+
+      <div className="relative hidden sm:block">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
           }}
-          aria-label="Limpar busca"
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          onFocus={() => setOpen(true)}
+          placeholder="Buscar clientes, campanhas, projetos, time..."
+          className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setOpen(false);
+            }}
+            aria-label="Limpar busca"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {mobileExpanded && (
+        <div className="fixed inset-x-0 top-0 z-50 flex h-16 items-center gap-2 border-b border-border bg-background px-4 sm:hidden">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              type="search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              placeholder="Buscar..."
+              className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileExpanded(false);
+              setOpen(false);
+              setQuery("");
+            }}
+            aria-label="Fechar busca"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          {open && query && (
+            <div className="absolute inset-x-0 top-full max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border bg-popover shadow-lg">
+              {results.length === 0 ? (
+                <p className="px-4 py-4 text-center text-xs text-muted-foreground">
+                  Nenhum resultado para "{query}".
+                </p>
+              ) : (
+                <ul className="py-1">
+                  {results.map((r) => {
+                    const Icon = r.icon;
+                    return (
+                      <li key={r.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            go(r);
+                            setMobileExpanded(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm hover:bg-muted"
+                        >
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                          {r.hint && (
+                            <span className="shrink-0 truncate text-[11px] text-muted-foreground">
+                              {r.hint}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {open && query && (
+      {open && query && !mobileExpanded && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-96 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">

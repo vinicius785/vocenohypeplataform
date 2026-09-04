@@ -146,13 +146,13 @@ export function EntryDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-sm:items-stretch max-sm:p-0"
       onClick={onClose}
     >
       <form
         onClick={(ev) => ev.stopPropagation()}
         onSubmit={(e) => void submit(e)}
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
         <div className="flex items-center justify-between border-b border-border px-6 py-3.5">
           <h2 className="text-sm font-semibold text-foreground">

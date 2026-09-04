@@ -337,7 +337,10 @@ export function MeetingDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[88vh] max-w-lg flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        mobileFullScreen
+        className="flex max-h-[88vh] max-w-lg flex-col gap-0 overflow-hidden p-0"
+      >
         <div className="px-6 pb-2 pt-6">
           <DialogTitle className="sr-only">
             {initial ? "Editar reunião" : "Nova reunião"}

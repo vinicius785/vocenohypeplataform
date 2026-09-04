@@ -401,7 +401,20 @@ function MonthGrid({
                   {d.getDate()}
                 </span>
               </button>
-              <div className="mt-1 space-y-0.5">
+              {/* Abaixo de `sm:`, 7 colunas ficam estreitas demais pra
+                  mostrar título de evento com legibilidade (item 23 do
+                  pedido) — mantém só o número do dia + um indicador
+                  compacto (pontinhos); o texto completo só aparece a
+                  partir de `sm:`. Tocar no dia já abre o detalhe
+                  (`onSelectDay`). */}
+              {totalCount > 0 && (
+                <div className="mt-1 flex flex-wrap gap-0.5 sm:hidden">
+                  {Array.from({ length: Math.min(totalCount, 4) }).map((_, i) => (
+                    <span key={i} className="h-1.5 w-1.5 shrink-0 rounded-full bg-foreground/50" />
+                  ))}
+                </div>
+              )}
+              <div className="mt-1 hidden space-y-0.5 sm:block">
                 {shownMeetings.map((m) => (
                   <EventChip key={m.id} meeting={m} onOpen={() => onOpenMeeting(m)} />
                 ))}
