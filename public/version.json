@@ -1,6 +1,7 @@
 {
-  "version": "1.256.0",
+  "version": "1.257.0",
   "notes": [
+    "Evolui o \"Início do dia\": novo bloco compacto na aba Time (\"Visão da equipe\", só admin) mostra quem já registrou o início hoje e a que horas, com resumo (\"X de Y iniciaram hoje\"), navegação por data (setas + calendário) e histórico/média de 7-30-90 dias por pessoa ao clicar no horário. Modal \"Bom dia\" redesenhado (ícone discreto, mostra data/hora reais, botão \"Registrar início\", toast de confirmação) e a regra das 06h agora usa o horário de Brasília explicitamente (não mais o fuso do navegador). Card de \"Início de dia\" no Perfil do membro simplificado (Hoje + média 30 dias + \"Ver histórico\" no mesmo dialog compartilhado com a aba Time). Reaproveita 100% do armazenamento existente (`profiles.start_times`/`last_day_started_at`) — nenhuma tabela nova — e continua fora do Score Operacional (puramente informativo).",
     "Refinamento de UX/UI e drill-down na aba Time: \"Produtividade por dia da semana\" virou \"Entregas por dia da semana\" (métrica concreta, tarefas concluídas), gráfico 25% mais baixo, tooltip mais claro, e as barras agora são clicáveis (abre a lista real de tarefas daquele dia, cada uma abrindo a tarefa de verdade). Em \"Performance do Time\": removidos os números de posição (1º/2º/3º...) para não parecer ranking/gamificação; adicionado subtítulo; nome/avatar abre o Perfil; \"X atrasadas\" agora é clicável (popover com as tarefas reais) quando >0, e neutro/estático quando 0; o Score agora é clicável e abre o Perfil já na composição detalhada, mostra a classificação textual (Excelente/Muito bom/Bom/Atenção/Crítico) e usa faixas de cor mais graduais. Nenhuma mudança na lógica de cálculo do Score Operacional — só em como ele é exibido/acessado.",
     "Corrige o aviso de \"Nova versão disponível\" citando novidades de uma versão antiga (1.246.0) mesmo com o app já em versões bem mais recentes — as novidades curadas (`releases`) não estavam sendo atualizadas a cada bump, só o changelog técnico interno. Agora o card de novidades reflete de fato as mudanças acumuladas desde a última atualização do card (Financeiro, Tarefas, Reuniões, Time), e cada commit com mudança visível volta a atualizar `releases[0]` junto com o número da versão.",
     "Adiciona tabela de \"quantidade exata por membro\" em Produtividade por dia da semana (aba Time), só no recorte \"Esta semana\" — mostra quantas entregas cada pessoa fez em cada dia útil. Nos demais recortes (30/90 dias, ano) continua só o gráfico de média do time, sem a tabela.",
@@ -379,28 +380,28 @@
   ],
   "releases": [
     {
-      "version": "1.256.0",
-      "summary": "Aba Time mais navegável: entregas e atrasos agora levam direto às tarefas reais.",
+      "version": "1.257.0",
+      "summary": "Início do dia agora é uma visão de time, não só um popup individual.",
       "modules": [
         {
           "name": "TIME",
-          "tagline": "De contemplativo para navegável",
+          "tagline": "Início do dia, em nível de time",
           "items": [
             {
-              "title": "Entregas por dia da semana",
-              "description": "Métrica mais clara (tarefas concluídas) e barras clicáveis: veja exatamente quais tarefas compõem cada dia."
+              "title": "Bloco \"Início do dia\"",
+              "description": "Veja quem já registrou o início hoje e a que horas, com resumo rápido (\"X de Y iniciaram hoje\") — visível pra admins."
             },
             {
-              "title": "Performance do Time sem ranking",
-              "description": "Removidos os números de posição — a lista continua ordenada por score, sem parecer um placar."
+              "title": "Navegação por data",
+              "description": "Consulte o registro de qualquer dia anterior, com setas ou um calendário compacto."
             },
             {
-              "title": "Score e atrasos clicáveis",
-              "description": "Clique no score para ver a composição detalhada; clique em \"X atrasadas\" para ver quais tarefas estão vencidas."
+              "title": "Histórico e média por pessoa",
+              "description": "Clique no horário de alguém pra ver o histórico completo e a média dos últimos 7, 30 ou 90 dias."
             },
             {
-              "title": "Classificação do score",
-              "description": "Além do número, agora mostra Excelente / Muito bom / Bom / Atenção / Crítico."
+              "title": "Modal \"Bom dia\" renovado",
+              "description": "Visual mais elegante, mostra a data e hora reais, e confirma com um toast ao registrar o início."
             }
           ]
         }

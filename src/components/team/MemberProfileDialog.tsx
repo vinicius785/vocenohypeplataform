@@ -30,7 +30,6 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDateToIso } from "@/lib/utils";
 import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask } from "@/lib/task-aggregation";
 import type { Meeting } from "@/lib/reunioes-store";
@@ -59,17 +58,14 @@ import {
 import type { Member, TimeField } from "@/components/TimeSection";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, MiniStat } from "./member-ui";
 import { STATUS_LABEL } from "@/lib/chat-store";
+import { todayIsoInBrasilia } from "@/lib/timezone";
+import { StartOfDayHistoryDialog, averageStartTime } from "./StartOfDayHistoryDialog";
 
 function formatBirthday(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(value);
   return isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
-}
-
-function fmtDateBR(d: string) {
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}/${y}`;
 }
 
 function fmtPct(v: number | null): string {
@@ -132,75 +128,34 @@ function ProfileCard({
   );
 }
 
-/** Lista colapsável de registros de "Início de dia" — mostra só os 5
- * mais recentes, com "ver histórico completo" pra expandir. */
-function StartOfDayHistory({ startTimes }: { startTimes?: Record<string, string> }) {
-  const [expanded, setExpanded] = useState(false);
-  const entries = useMemo(
-    () =>
-      Object.entries(startTimes ?? {})
-        .filter(([d, h]) => d && h)
-        .sort((a, b) => (a[0] < b[0] ? 1 : -1)),
-    [startTimes],
-  );
-  if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground">Nenhum registro de início de dia ainda.</p>;
-  }
-  const visible = expanded ? entries : entries.slice(0, 5);
-  return (
-    <div>
-      <ul className="space-y-1">
-        {visible.map(([d, h]) => (
-          <li
-            key={d}
-            className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5 text-xs"
-          >
-            <span className="text-muted-foreground">{fmtDateBR(d)}</span>
-            <span className="font-medium tabular-nums text-foreground">{h}</span>
-          </li>
-        ))}
-      </ul>
-      {entries.length > 5 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-2 flex w-full items-center justify-center gap-1 rounded-md py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
-          {expanded ? "Ver só os últimos 5" : `Ver histórico completo (${entries.length})`}
-        </button>
-      )}
-    </div>
-  );
-}
-
-/** Conteúdo de "Início de dia" — só o registro do dia corrente + um
- * botão "Ver histórico" que revela o `StartOfDayHistory` completo (que
- * já se colapsa internamente em 5 + "ver mais"). Duplo colapso
- * deliberado: a ficha não deve mostrar todos os dias permanentemente. */
-function StartOfDayContent({ startTimes }: { startTimes?: Record<string, string> }) {
+/** Conteúdo de "Início de dia" — hoje + média dos últimos 30 dias (só
+ * sobre dias com registro real, nunca inventa horário pra dias sem
+ * registro) + "Ver histórico" abrindo o dialog compartilhado com a aba
+ * Time (`StartOfDayHistoryDialog`), pra nunca divergir a lógica entre a
+ * ficha individual e o bloco consolidado de gestão. */
+function StartOfDayContent({ member }: { member: Member }) {
   const [showHistory, setShowHistory] = useState(false);
-  const todayKey = formatDateToIso(new Date());
-  const todayTime = startTimes?.[todayKey];
+  const todayKey = todayIsoInBrasilia();
+  const todayTime = member.startTimes?.[todayKey];
+  const avg30 = averageStartTime(member.startTimes, 30);
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-foreground">
-          {todayTime ? `Início de hoje: ${todayTime}` : "Sem registro hoje"}
-        </span>
-        <button
-          type="button"
-          onClick={() => setShowHistory((s) => !s)}
-          className="shrink-0 text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
-        >
-          {showHistory ? "Ocultar histórico" : "Ver histórico"}
-        </button>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Hoje</span>
+        <span className="font-medium tabular-nums text-foreground">{todayTime ?? "—"}</span>
       </div>
-      {showHistory && (
-        <div className="mt-2">
-          <StartOfDayHistory startTimes={startTimes} />
-        </div>
-      )}
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">Média últimos 30 dias</span>
+        <span className="font-medium tabular-nums text-foreground">{avg30 ?? "—"}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowHistory(true)}
+        className="mt-1 cursor-pointer text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        Ver histórico →
+      </button>
+      <StartOfDayHistoryDialog member={member} open={showHistory} onOpenChange={setShowHistory} />
     </div>
   );
 }
@@ -964,7 +919,7 @@ export function MemberProfileDialog({
 
             {show("startOfDay") && (
               <ProfileCard icon={<Clock className="h-3.5 w-3.5" />} title="Início de dia">
-                <StartOfDayContent startTimes={member.startTimes} />
+                <StartOfDayContent member={member} />
               </ProfileCard>
             )}
 

@@ -19,6 +19,7 @@ import { TeamWorkload } from "./TeamWorkload";
 import { TeamWeekdayProductivity } from "./TeamWeekdayProductivity";
 import { TeamPerformance } from "./TeamPerformance";
 import { TeamIndicators } from "./TeamIndicators";
+import { TeamStartOfDay } from "./TeamStartOfDay";
 
 /**
  * Cockpit operacional do time — identifica rapidamente situação, carga,
@@ -148,6 +149,9 @@ export function TeamDashboard({
           sublabel={weeklyVariation}
         />
       </div>
+
+      {/* Linha 1.5 — Início do dia (100%) — só admin, informativo, fora do Score Operacional */}
+      {isAdmin && <TeamStartOfDay members={allMembers} onOpenMember={onOpenMember} />}
 
       {/* Linha 2 — Tarefas que precisam de atenção (60%) + Carga por membro (40%) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
