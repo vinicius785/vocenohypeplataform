@@ -1200,6 +1200,7 @@ export function TaskBoard({
     mode: "new" | "edit";
     data?: Task;
     defaultStatus?: TaskStatus;
+    defaultRoadmapPhaseId?: string;
     // Quando se clica numa subtarefa (card achatado ou prévia expandida no
     // board), `data` continua sendo a tarefa-mãe (é ela quem tem o
     // diálogo) mas isso diz pro diálogo abrir já direto na subtarefa —
@@ -1242,7 +1243,7 @@ export function TaskBoard({
   // Coluna que está recebendo o drag no momento — só feedback visual, não
   // participa da lógica de mudança de status (que continua inteira no
   // `onDrop` de cada coluna).
-  const [dragOverCol, setDragOverCol] = useState<TaskStatus | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [showAllDone, setShowAllDone] = useState(false);
   // Expandir subtarefas direto no card do board (fora da tarefa) — pedido
   // explícito de dar pra ver as subtarefas sem abrir a tarefa-mãe. Estado
@@ -1320,6 +1321,15 @@ export function TaskBoard({
   // toggle separado, mesmo padrão das outras categorias.
   const SEM_FASE = "__sem_fase__";
   const [faseFilters, setFaseFilters] = usePersistedState<string[]>("taskboard:faseFilters", []);
+  // "Agrupar por" — mesma preferência vale em qualquer board (não é
+  // por-projeto), mas só tem efeito quando `fases` existe; sem isso
+  // (Campanhas/Marketing) o board sempre agrupa por status, mesmo que a
+  // preferência salva seja "fase" de outro projeto.
+  const [groupByPref, setGroupByPref] = usePersistedState<"status" | "fase">(
+    "taskboard:groupBy",
+    "status",
+  );
+  const groupBy = fases ? groupByPref : "status";
   const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
     setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
@@ -1412,6 +1422,27 @@ export function TaskBoard({
       setFaseFilters,
     ],
   );
+
+  // Colunas do board — por status (padrão, sempre disponível) ou por
+  // fase do roadmap (só quando `fases` existe e "Agrupar por" está em
+  // "fase", ver `groupBy` acima). Fases ordenadas por `sortOrder`, com
+  // "Sem fase" sempre por último — mesmo sentinela `SEM_FASE` já usado
+  // pelo filtro por fase, pra nunca ter dois conceitos de "sem fase".
+  const faseColumnKey = (t: Pick<Task, "roadmapPhaseId">): string => {
+    if (!t.roadmapPhaseId) return SEM_FASE;
+    return fases?.some((f) => f.id === t.roadmapPhaseId) ? t.roadmapPhaseId : SEM_FASE;
+  };
+  const boardColumns = useMemo(() => {
+    if (groupBy === "fase" && fases) {
+      return [
+        ...[...fases]
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((f) => ({ key: f.id, label: f.nome, dotClass: f.cor.split(" ")[0] })),
+        { key: SEM_FASE, label: "Sem fase", dotClass: "bg-muted-foreground" },
+      ];
+    }
+    return TASK_STATUSES.map((s) => ({ key: s, label: s, dotClass: TASK_STATUS_DOT[s] }));
+  }, [groupBy, fases]);
 
   // "Exibir subtarefas no board" — preferência pessoal, persistida (não é
   // por-board: a mesma escolha vale em qualquer kanban, já que é o mesmo
@@ -1772,6 +1803,36 @@ export function TaskBoard({
                   </div>
                 </div>
 
+                {fases && (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground">Agrupar por</p>
+                    <div className="mt-1.5 inline-flex rounded-md border border-border p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setGroupByPref("status")}
+                        className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                          groupBy === "status"
+                            ? "bg-foreground text-background"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Status
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGroupByPref("fase")}
+                        className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                          groupBy === "fase"
+                            ? "bg-foreground text-background"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        Fase
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {fases && fases.length > 0 && (
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground">Fase</p>
@@ -1891,11 +1952,18 @@ export function TaskBoard({
         )}
 
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
-          {TASK_STATUSES.map((col) => {
-            const rootItems: BoardItem[] = visibleTasks.filter((t) => t.status === col);
+          {boardColumns.map((col) => {
+            const rootItems: BoardItem[] = visibleTasks.filter((t) =>
+              groupBy === "fase" ? faseColumnKey(t) === col.key : t.status === col.key,
+            );
             const subtaskItems: BoardItem[] = showSubtasksInline
               ? allSubtasksFlat
-                  .filter(({ subtask }) => subtask.status === col && taskMatchesFilters(subtask))
+                  .filter(
+                    ({ subtask }) =>
+                      (groupBy === "fase"
+                        ? faseColumnKey(subtask) === col.key
+                        : subtask.status === col.key) && taskMatchesFilters(subtask),
+                  )
                   .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
               : [];
             const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
@@ -1904,8 +1972,10 @@ export function TaskBoard({
             // precisa ver no dia a dia. Mostra só as 4 mais recentes por
             // padrão (derivado do log de atividade, ver `taskCompletedAt`),
             // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
-            // completo.
-            const isDone = col === "Concluído";
+            // completo. Só faz sentido agrupando por status — agrupando por
+            // fase, uma tarefa concluída convive normalmente com as outras
+            // da mesma fase.
+            const isDone = groupBy === "status" && col.key === "Concluído";
             const sortedItems = isDone
               ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
               : sortTasksBy(allItems, sortPrimary, sortSecondary);
@@ -1913,52 +1983,67 @@ export function TaskBoard({
             const hiddenCount = allItems.length - items.length;
             return (
               <div
-                key={col}
+                key={col.key}
                 onDragOver={(e) => e.preventDefault()}
-                onDragEnter={() => setDragOverCol(col)}
-                onDragLeave={() => setDragOverCol((cur) => (cur === col ? null : cur))}
+                onDragEnter={() => setDragOverCol(col.key)}
+                onDragLeave={() => setDragOverCol((cur) => (cur === col.key ? null : cur))}
                 onDrop={() => {
                   if (dragId) {
                     const dragged = tasks.find((t) => t.id === dragId);
-                    if (
-                      dragged &&
-                      col === "Em andamento" &&
-                      (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
-                    ) {
-                      toast.error("Esta tarefa depende de outra ainda não concluída.");
-                      setDragId(null);
-                      setDragOverCol(null);
-                      return;
-                    }
-                    if (dragged) {
-                      const updated = withStatusChange(dragged, col);
-                      if (updated !== dragged)
-                        recordTaskLedgerEventsOnStatusChange(dragged, updated, {
-                          scope,
-                          members,
-                          performanceSettings,
-                        });
-                      const finalTask = applyRecurrenceIfCompleted(dragged, updated);
-                      persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
-                      // Cronômetro de `time_entries` (não é mais o campo
-                      // antigo que `withStatusChange` já tratou acima) — só
-                      // "Concluído" para sozinho, silenciosamente.
-                      const dragOrigin = taskOriginFromScope(scope);
-                      if (col === "Concluído" && dragOrigin) {
-                        void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
+                    if (groupBy === "fase") {
+                      // Agrupar por fase: o drop só move a tarefa de fase,
+                      // nunca muda status — nenhuma das regras de transição
+                      // de status (dependência pendente, ledger, recorrência,
+                      // cronômetro) se aplica aqui.
+                      if (dragged) {
+                        const faseId = col.key === SEM_FASE ? undefined : col.key;
+                        persist(
+                          tasks.map((t) =>
+                            t.id === dragId ? { ...t, roadmapPhaseId: faseId } : t,
+                          ),
+                        );
+                      }
+                    } else {
+                      if (
+                        dragged &&
+                        col.key === "Em andamento" &&
+                        (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
+                      ) {
+                        toast.error("Esta tarefa depende de outra ainda não concluída.");
+                        setDragId(null);
+                        setDragOverCol(null);
+                        return;
+                      }
+                      if (dragged) {
+                        const updated = withStatusChange(dragged, col.key as TaskStatus);
+                        if (updated !== dragged)
+                          recordTaskLedgerEventsOnStatusChange(dragged, updated, {
+                            scope,
+                            members,
+                            performanceSettings,
+                          });
+                        const finalTask = applyRecurrenceIfCompleted(dragged, updated);
+                        persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
+                        // Cronômetro de `time_entries` (não é mais o campo
+                        // antigo que `withStatusChange` já tratou acima) — só
+                        // "Concluído" para sozinho, silenciosamente.
+                        const dragOrigin = taskOriginFromScope(scope);
+                        if (col.key === "Concluído" && dragOrigin) {
+                          void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
+                        }
                       }
                     }
                   }
                   setDragId(null);
                   setDragOverCol(null);
                 }}
-                className={`flex w-[288px] shrink-0 flex-col rounded-xl border p-3 transition-colors ${dragOverCol === col ? "border-foreground/30 bg-muted/10" : "border-border bg-background"}`}
+                className={`flex w-[288px] shrink-0 flex-col rounded-xl border p-3 transition-colors ${dragOverCol === col.key ? "border-foreground/30 bg-muted/10" : "border-border bg-background"}`}
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[col]}`} />
+                    <span className={`h-2 w-2 rounded-full ${col.dotClass}`} />
                     <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-                      {col}
+                      {col.label}
                     </h3>
                   </div>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -2191,7 +2276,16 @@ export function TaskBoard({
                   )}
                   <button
                     type="button"
-                    onClick={() => setTaskDialog({ mode: "new", defaultStatus: col })}
+                    onClick={() =>
+                      setTaskDialog(
+                        groupBy === "fase"
+                          ? {
+                              mode: "new",
+                              defaultRoadmapPhaseId: col.key === SEM_FASE ? undefined : col.key,
+                            }
+                          : { mode: "new", defaultStatus: col.key as TaskStatus },
+                      )
+                    }
                     className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                   >
                     <Plus className="h-3 w-3" /> Adicionar
@@ -2207,6 +2301,7 @@ export function TaskBoard({
           onOpenChange={(o) => !o && setTaskDialog(null)}
           initial={taskDialog?.data}
           defaultStatus={taskDialog?.defaultStatus}
+          defaultRoadmapPhaseId={taskDialog?.defaultRoadmapPhaseId}
           initialEditSubtaskId={taskDialog?.openSubtaskId}
           scope={scope}
           fases={fases}

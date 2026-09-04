@@ -586,7 +586,7 @@ function RoadmapPanel({
     });
   };
 
-  const handleMoveTask = (taskId: string, faseId: string) => {
+  const handleMoveTask = (taskId: string, faseId?: string) => {
     update({
       tasks: project.tasks.map((t) => (t.id === taskId ? { ...t, roadmapPhaseId: faseId } : t)),
     });

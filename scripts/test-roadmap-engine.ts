@@ -153,3 +153,28 @@ test("faseAtual: null quando todas as fases estão concluídas", () => {
   const fases = [fase({ id: "f1", status: "concluida" })];
   assert.equal(faseAtual(fases, []), null);
 });
+
+test("faseAtual: ordena por sortOrder, não pela ordem do array (Fase 2)", () => {
+  const fases = [
+    fase({ id: "f3", sortOrder: 2, status: "nao_iniciada" }),
+    fase({ id: "f1", sortOrder: 0, status: "concluida" }),
+    fase({ id: "f2", sortOrder: 1, status: "em_andamento" }),
+  ];
+  const atual = faseAtual(fases, []);
+  assert.equal(atual?.id, "f2");
+});
+
+test("tarefasSemFase: lista com fase válida, fase excluída e sem-fase misturadas mantém só as sem fase efetiva (Fase 2)", () => {
+  const fases = [fase({ id: "f1", sortOrder: 0 }), fase({ id: "f2", sortOrder: 1 })];
+  const tasks = [
+    task({ id: "t1", roadmapPhaseId: "f1" }),
+    task({ id: "t2", roadmapPhaseId: undefined }),
+    task({ id: "t3", roadmapPhaseId: "f2" }),
+    task({ id: "t4", roadmapPhaseId: "fase-que-nao-existe-mais" }),
+  ];
+  const semFase = tarefasSemFase(tasks, fases);
+  assert.deepEqual(
+    semFase.map((t) => t.id).sort(),
+    ["t2", "t4"],
+  );
+});

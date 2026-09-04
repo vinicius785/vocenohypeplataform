@@ -30,14 +30,60 @@ import {
   type ProjetoFase,
 } from "@/lib/roadmap-engine";
 
+/** Alternativa por menu ao drag-and-drop nativo pra mover uma tarefa
+ * entre fases — toque não sustenta HTML5 drag de forma confiável, então
+ * este menu funciona em qualquer dispositivo, sempre ao lado do drag
+ * (nunca substituindo). "Sem fase" só aparece quando a tarefa já está
+ * numa fase (mover pra "nenhuma fase" não faz sentido a partir de "sem
+ * fase" — já é o estado atual). */
+function MoveTaskMenu({
+  fases,
+  currentFaseId,
+  onMove,
+}: {
+  fases: ProjetoFase[];
+  currentFaseId?: string;
+  onMove: (faseId?: string) => void;
+}) {
+  if (fases.length === 0 && !currentFaseId) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Mover para fase"
+          className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        {currentFaseId && <DropdownMenuItem onClick={() => onMove(undefined)}>Sem fase</DropdownMenuItem>}
+        {fases
+          .filter((f) => f.id !== currentFaseId)
+          .map((f) => (
+            <DropdownMenuItem key={f.id} onClick={() => onMove(f.id)}>
+              {f.nome}
+            </DropdownMenuItem>
+          ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TaskRow({
   task,
   onOpen,
-  draggable,
+  canEdit,
+  fases,
+  onMove,
 }: {
   task: Task;
   onOpen: () => void;
-  draggable: boolean;
+  canEdit: boolean;
+  fases: ProjetoFase[];
+  onMove: (faseId?: string) => void;
 }) {
   const assignees = getTaskAssignees(task);
   const atrasada =
@@ -46,43 +92,49 @@ function TaskRow({
     !!task.dueDate &&
     task.dueDate < todayIsoInBrasilia();
   return (
-    <button
-      type="button"
-      draggable={draggable}
-      onDragStart={(e) => e.dataTransfer.setData("text/roadmap-task-id", task.id)}
-      onClick={onOpen}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/60"
-    >
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_STATUS_DOT[task.status]}`} />
-      <span className="min-w-0 flex-1 truncate text-foreground">{task.title}</span>
-      {task.priority !== "Normal" && (
-        <span className="shrink-0 text-[10px] text-muted-foreground">{task.priority}</span>
+    <div className="group flex w-full items-center gap-1 rounded-md px-2 py-1.5 hover:bg-muted/60">
+      <button
+        type="button"
+        draggable={canEdit}
+        onDragStart={(e) => e.dataTransfer.setData("text/roadmap-task-id", task.id)}
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left text-xs"
+      >
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_STATUS_DOT[task.status]}`} />
+        <span className="min-w-0 flex-1 truncate text-foreground">{task.title}</span>
+        {task.priority !== "Normal" && (
+          <span className="shrink-0 text-[10px] text-muted-foreground">{task.priority}</span>
+        )}
+        {task.dueDate && (
+          <span
+            className={`shrink-0 text-[10px] ${atrasada ? "text-destructive" : "text-muted-foreground"}`}
+          >
+            {atrasada && <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5" />}
+            {formatIsoDate(task.dueDate)}
+          </span>
+        )}
+        {assignees.length > 0 && (
+          <span className="flex shrink-0 items-center -space-x-1.5">
+            {assignees.slice(0, 3).map((a) => (
+              <Avatar
+                key={a}
+                member={{ name: a, initials: initialsOf(a) || "?", color: colorFor(a) }}
+                size={16}
+              />
+            ))}
+          </span>
+        )}
+      </button>
+      {canEdit && (
+        <MoveTaskMenu fases={fases} currentFaseId={task.roadmapPhaseId} onMove={onMove} />
       )}
-      {task.dueDate && (
-        <span
-          className={`shrink-0 text-[10px] ${atrasada ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {atrasada && <AlertTriangle className="mr-0.5 inline h-2.5 w-2.5" />}
-          {formatIsoDate(task.dueDate)}
-        </span>
-      )}
-      {assignees.length > 0 && (
-        <span className="flex shrink-0 items-center -space-x-1.5">
-          {assignees.slice(0, 3).map((a) => (
-            <Avatar
-              key={a}
-              member={{ name: a, initials: initialsOf(a) || "?", color: colorFor(a) }}
-              size={16}
-            />
-          ))}
-        </span>
-      )}
-    </button>
+    </div>
   );
 }
 
 function PhaseCard({
   fase,
+  fases,
   tasksDaFase,
   canEdit,
   onOpenTask,
@@ -92,8 +144,10 @@ function PhaseCard({
   onDuplicate,
   onDelete,
   onDropTask,
+  onMoveTask,
 }: {
   fase: ProjetoFase;
+  fases: ProjetoFase[];
   tasksDaFase: Task[];
   canEdit: boolean;
   onOpenTask: (t: Task) => void;
@@ -103,6 +157,7 @@ function PhaseCard({
   onDuplicate: () => void;
   onDelete: () => void;
   onDropTask: (taskId: string) => void;
+  onMoveTask: (taskId: string, faseId?: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -222,7 +277,14 @@ function PhaseCard({
           ) : (
             <div className="space-y-0.5">
               {tasksDaFase.map((t) => (
-                <TaskRow key={t.id} task={t} onOpen={() => onOpenTask(t)} draggable={canEdit} />
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  onOpen={() => onOpenTask(t)}
+                  canEdit={canEdit}
+                  fases={fases}
+                  onMove={(faseId) => onMoveTask(t.id, faseId)}
+                />
               ))}
             </div>
           )}
@@ -309,7 +371,7 @@ export function PhaseTimeline({
   onEditFase: (fase: ProjetoFase) => void;
   onDuplicateFase: (fase: ProjetoFase) => void;
   onDeleteFase: (fase: ProjetoFase) => void;
-  onMoveTask: (taskId: string, faseId: string) => void;
+  onMoveTask: (taskId: string, faseId?: string) => void;
   onNewFase: () => void;
   onCreateFaseFromSelection: (taskIds: string[]) => void;
 }) {
@@ -346,6 +408,7 @@ export function PhaseTimeline({
             <PhaseCard
               key={fase.id}
               fase={fase}
+              fases={ordered}
               tasksDaFase={tasks.filter((t) => t.roadmapPhaseId === fase.id)}
               canEdit={canEdit}
               onOpenTask={onOpenTask}
@@ -355,6 +418,7 @@ export function PhaseTimeline({
               onDuplicate={() => onDuplicateFase(fase)}
               onDelete={() => onDeleteFase(fase)}
               onDropTask={(taskId) => onMoveTask(taskId, fase.id)}
+              onMoveTask={onMoveTask}
             />
           ))}
         </div>
@@ -389,7 +453,7 @@ export function PhaseTimeline({
                   {semFase.map((t) => (
                     <label
                       key={t.id}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
+                      className="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/60"
                     >
                       {canEdit && (
                         <input
@@ -416,6 +480,13 @@ export function PhaseTimeline({
                       >
                         {t.title}
                       </span>
+                      {canEdit && (
+                        <MoveTaskMenu
+                          fases={ordered}
+                          currentFaseId={undefined}
+                          onMove={(faseId) => onMoveTask(t.id, faseId)}
+                        />
+                      )}
                     </label>
                   ))}
                 </div>
