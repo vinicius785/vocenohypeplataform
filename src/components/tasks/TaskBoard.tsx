@@ -27,6 +27,7 @@ import {
   MoreHorizontal,
   Search,
   Link2,
+  Milestone as MilestoneIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
@@ -149,9 +150,10 @@ import {
 } from "@/lib/task-status";
 export type { TaskStatus };
 export { TASK_STATUSES, TASK_STATUS_TONE, TASK_STATUS_DOT };
+import type { ProjetoFase } from "@/lib/roadmap-engine";
 
 export type TaskPriority = "Urgente" | "Alta" | "Normal" | "Baixa";
-const TASK_PRIORITIES: TaskPriority[] = ["Urgente", "Alta", "Normal", "Baixa"];
+export const TASK_PRIORITIES: TaskPriority[] = ["Urgente", "Alta", "Normal", "Baixa"];
 export const PRIORITY_TONE: Record<TaskPriority, string> = {
   Urgente: "text-red-600 dark:text-red-400",
   Alta: "text-amber-600 dark:text-amber-400",
@@ -292,7 +294,11 @@ export const DEADLINE_PERIOD_FILTER_LABEL: Record<DeadlinePeriodFilter, string> 
   sem_prazo: "Sem prazo",
 };
 
-function matchesDeadlinePeriod(t: Task, key: DeadlinePeriodFilter, cutoffHour?: number): boolean {
+export function matchesDeadlinePeriod(
+  t: Task,
+  key: DeadlinePeriodFilter,
+  cutoffHour?: number,
+): boolean {
   if (key === "sem_prazo") return !t.dueDate && !t.performanceDueDate;
   if (t.status === "Concluído" || t.status === "Arquivado") return false;
   const bucket = bucketFor(t.dueDate, t.status, t.performanceDueDate, cutoffHour);
@@ -468,6 +474,13 @@ export type Task = {
    * `applyRecurrenceIfCompleted`), sem duplicar registro, igual ao
    * ClickUp. */
   recurrence?: TaskRecurrence;
+  /** Fase do roadmap (só faz sentido pra tarefas de projeto,
+   * `scope.kind === "projeto"`) — `undefined`/ausente = "Sem fase".
+   * Vínculo por id só, nunca uma cópia da tarefa; excluir a fase nunca
+   * apaga a tarefa (só deixa este campo apontando pra um id que não
+   * existe mais, tratado como "sem fase" na leitura). Ver comentário
+   * equivalente em `projetos.ts`'s `Task.roadmapPhaseId`. */
+  roadmapPhaseId?: string;
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -1170,6 +1183,7 @@ export function TaskBoard({
   breadcrumb,
   initialOpenTaskId,
   onInitialOpenTaskHandled,
+  fases,
 }: {
   tasks: Task[];
   onChange: (next: Task[]) => void;
@@ -1178,6 +1192,9 @@ export function TaskBoard({
   breadcrumb?: string;
   initialOpenTaskId?: string;
   onInitialOpenTaskHandled?: () => void;
+  /** Fases do roadmap deste projeto — só faz sentido quando `scope.kind
+   * === "projeto"`; ver comentário equivalente em `TaskDialog`. */
+  fases?: ProjetoFase[];
 }) {
   const [taskDialog, setTaskDialog] = useState<{
     mode: "new" | "edit";
@@ -1298,6 +1315,11 @@ export function TaskBoard({
     "taskboard:deadlineFilters",
     [],
   );
+  // Sentinela pra "Sem fase" (nunca colide com um id real de fase, que é
+  // sempre um UUID) — reaproveita a mesma lista de filtros em vez de um
+  // toggle separado, mesmo padrão das outras categorias.
+  const SEM_FASE = "__sem_fase__";
+  const [faseFilters, setFaseFilters] = usePersistedState<string[]>("taskboard:faseFilters", []);
   const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => {
     setAssigneeFilters((prev) => prev.filter((a) => allAssignees.includes(a)));
@@ -1305,11 +1327,18 @@ export function TaskBoard({
   useEffect(() => {
     setTagFilters((prev) => prev.filter((t) => allTags.includes(t)));
   }, [allTags, setTagFilters]);
+  useEffect(() => {
+    if (!fases) return;
+    const validIds = new Set([SEM_FASE, ...fases.map((f) => f.id)]);
+    setFaseFilters((prev) => prev.filter((id) => validIds.has(id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- SEM_FASE é constante local, não precisa entrar nas deps
+  }, [fases, setFaseFilters]);
   const activeFilterCount = [
     assigneeFilters.length > 0,
     tagFilters.length > 0,
     priorityFilters.length > 0,
     deadlineFilters.length > 0,
+    faseFilters.length > 0,
   ].filter(Boolean).length;
   const toggleIn = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
@@ -1329,6 +1358,10 @@ export function TaskBoard({
       )
     )
       return false;
+    if (faseFilters.length > 0) {
+      const key = t.roadmapPhaseId ?? SEM_FASE;
+      if (!faseFilters.includes(key)) return false;
+    }
     return true;
   };
   const visibleTasks = tasks.filter(taskMatchesFilters);
@@ -1359,16 +1392,24 @@ export function TaskBoard({
         label: DEADLINE_PERIOD_FILTER_LABEL[key],
         onRemove: () => setDeadlineFilters((prev) => prev.filter((x) => x !== key)),
       })),
+      ...faseFilters.map((id) => ({
+        id: `fase:${id}`,
+        label: id === SEM_FASE ? "Sem fase" : fases?.find((f) => f.id === id)?.nome ?? "Fase",
+        onRemove: () => setFaseFilters((prev) => prev.filter((x) => x !== id)),
+      })),
     ],
     [
       assigneeFilters,
       tagFilters,
       priorityFilters,
       deadlineFilters,
+      faseFilters,
+      fases,
       setAssigneeFilters,
       setTagFilters,
       setPriorityFilters,
       setDeadlineFilters,
+      setFaseFilters,
     ],
   );
 
@@ -1579,6 +1620,7 @@ export function TaskBoard({
                       setTagFilters([]);
                       setPriorityFilters([]);
                       setDeadlineFilters([]);
+                      setFaseFilters([]);
                     }}
                     className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:hover:text-muted-foreground"
                   >
@@ -1730,6 +1772,60 @@ export function TaskBoard({
                   </div>
                 </div>
 
+                {fases && fases.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground">Fase</p>
+                    <div className="mt-1.5 space-y-0.5">
+                      {fases.map((f) => {
+                        const active = faseFilters.includes(f.id);
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setFaseFilters((prev) => toggleIn(prev, f.id))}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
+                          >
+                            <input
+                              type="checkbox"
+                              readOnly
+                              checked={active}
+                              className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
+                            />
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${f.cor.split(" ")[0]}`} />
+                            <span
+                              className={`truncate ${active ? "text-foreground" : "text-muted-foreground"}`}
+                            >
+                              {f.nome}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {(() => {
+                        const active = faseFilters.includes(SEM_FASE);
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setFaseFilters((prev) => toggleIn(prev, SEM_FASE))}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs hover:bg-muted/60"
+                          >
+                            <input
+                              type="checkbox"
+                              readOnly
+                              checked={active}
+                              className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
+                            />
+                            <span
+                              className={active ? "text-foreground" : "text-muted-foreground"}
+                            >
+                              Sem fase
+                            </span>
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
                 <label className="flex items-center gap-2 border-t border-border pt-3 text-xs text-foreground">
                   <input
                     type="checkbox"
@@ -1785,6 +1881,7 @@ export function TaskBoard({
                 setTagFilters([]);
                 setPriorityFilters([]);
                 setDeadlineFilters([]);
+                setFaseFilters([]);
               }}
               className="text-[11px] text-muted-foreground hover:text-foreground"
             >
@@ -1971,6 +2068,20 @@ export function TaskBoard({
                         >
                           <Flag className="h-3 w-3" /> {t.priority}
                         </span>
+                        {fases &&
+                          t.roadmapPhaseId &&
+                          (() => {
+                            const f = fases.find((x) => x.id === t.roadmapPhaseId);
+                            return f ? (
+                              <span
+                                className={`inline-flex items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${f.cor}`}
+                                title={f.nome}
+                              >
+                                <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
+                                <span className="max-w-[100px] truncate">{f.nome}</span>
+                              </span>
+                            ) : null;
+                          })()}
                       </div>
 
                       {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
@@ -2098,6 +2209,7 @@ export function TaskBoard({
           defaultStatus={taskDialog?.defaultStatus}
           initialEditSubtaskId={taskDialog?.openSubtaskId}
           scope={scope}
+          fases={fases}
           breadcrumb={breadcrumb}
           onSave={(t) => {
             if (taskDialog?.mode === "edit") {
@@ -2199,6 +2311,8 @@ export function TaskDialog({
   onOpenChange,
   initial,
   defaultStatus,
+  defaultRoadmapPhaseId,
+  fases,
   parentTitle,
   scope,
   breadcrumb,
@@ -2212,6 +2326,15 @@ export function TaskDialog({
   onOpenChange: (o: boolean) => void;
   initial?: Task;
   defaultStatus?: TaskStatus;
+  /** Pré-seleciona a fase ao CRIAR uma tarefa (ex. "+ Nova tarefa" de
+   * dentro de uma fase do roadmap) — só usado quando `initial` é
+   * ausente, igual a `defaultStatus`. */
+  defaultRoadmapPhaseId?: string;
+  /** Fases do roadmap DESTE projeto — só populado quando `scope.kind ===
+   * "projeto"`. Presente (mesmo vazio) já basta pra mostrar o campo
+   * "Fase"; ausente/undefined esconde o campo inteiro (campanha,
+   * marketing, ou contexto sem noção de fase). */
+  fases?: ProjetoFase[];
   parentTitle?: string;
   scope?: TaskBoardScope;
   breadcrumb?: string;
@@ -2296,6 +2419,7 @@ export function TaskDialog({
   } | null>(null);
   const [estimate, setEstimate] = useState<string>("");
   const [recurrence, setRecurrence] = useState<TaskRecurrence | undefined>(undefined);
+  const [roadmapPhaseId, setRoadmapPhaseId] = useState<string | undefined>(undefined);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -2451,6 +2575,7 @@ export function TaskDialog({
     setPendingDeadlineChange(null);
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
+    setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
     setTimerRunning(!!initial?.timerRunning);
     setTimerStartedAt(initial?.timerStartedAt);
     setTimeEntries(initial?.timeEntries ?? []);
@@ -2828,6 +2953,7 @@ export function TaskDialog({
       performanceDueDate: finalPerformanceDueDate,
       deadlineHistory: finalDeadlineHistory.length ? finalDeadlineHistory : undefined,
       recurrence,
+      roadmapPhaseId,
     });
   };
 
@@ -3425,6 +3551,23 @@ export function TaskDialog({
                     )}
                   </div>
                 </Field>
+
+                {fases && (
+                  <Field label="Fase" icon={<MilestoneIcon className="h-3.5 w-3.5" />}>
+                    <select
+                      value={roadmapPhaseId ?? ""}
+                      onChange={(e) => setRoadmapPhaseId(e.target.value || undefined)}
+                      className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-foreground outline-none"
+                    >
+                      <option value="">Sem fase</option>
+                      {fases.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome} · {fmtDate(f.dataInicio)}–{fmtDate(f.dataFim)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
               </div>
 
               <div className="px-8 py-4">
@@ -3989,6 +4132,7 @@ export function TaskDialog({
             onOpenChange={(o) => !o && setEditSubtask(null)}
             initial={editSubtask ?? undefined}
             scope={scope}
+            fases={fases}
             parentTitle={title || "Tarefa mãe"}
             onSave={(t) => {
               setSubtasks((prev) => prev.map((s) => (s.id === t.id ? t : s)));

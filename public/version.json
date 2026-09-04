@@ -1,6 +1,7 @@
 {
-  "version": "1.262.2",
+  "version": "1.263.0",
   "notes": [
+    "Refatora o Roadmap dos projetos: deixa de ser só uma linha do tempo de marcos e ganha um modelo de fases real, integrado ao Kanban. Cada fase tem nome, descrição, período, responsável, cor e status; tarefas se vinculam a uma fase (individualmente ou em massa, via um painel de busca dedicado), tarefas criadas dentro de uma fase já nascem vinculadas e aparecem também no Kanban do projeto — que ganhou um badge de fase no card e um filtro por fase. Excluir uma fase nunca apaga suas tarefas: elas voltam para \"Sem fase\" (área própria, com contador, seleção múltipla e opção de criar uma nova fase a partir da seleção). Progresso de cada fase é automático (concluídas/total, nunca \"0%\" enganoso quando não há tarefa vinculada) e o status visual (Não iniciada/Em andamento/Em risco/Atrasada/Concluída) combina o que foi definido manualmente com o cálculo automático baseado em prazo e pendências, reaproveitando a mesma regra de atraso já usada no resto da plataforma. A aba Roadmap virou 3 sub-abas — Visão geral (progresso geral, fase atual, próxima entrega/marco, atrasadas, fases em risco, responsáveis, período), Roadmap (linha do tempo proporcional + cards de fase expansíveis, com arrastar-tarefa-entre-fases) e Tarefas (o Kanban de sempre, agora com filtro por fase) — substituindo o Kanban solto que ficava sempre visível embaixo. Marcos continuam existindo, agora com uma fase opcional. Tudo condicionado à permissão de Projetos: sem ela, os botões de criar/editar fase e vincular tarefas ficam ocultos (validado no banco também, não só na interface).",
     "Corrige indicadores de Metas com direção \"Reduzir (menos é melhor)\" e meta zero/negativa (ex. \"Limite 0 Pendências\") mostrando \"Saudável\"/100% mesmo quando o valor real estava bem pior que a meta e indo na direção errada: sem um Baseline configurado manualmente, o sistema inventa um ponto de partida automático — e pra esse tipo de meta (teto ≤ 0) a fórmula colocava esse ponto de partida do lado ERRADO (mais \"bom\" que a própria meta), fazendo a conta de progresso disparar pra centenas de % em vez de cair perto de 0%. Um indicador real com 6 pendências e meta 0 virava \"100% de progresso, Saudável\" quando devia ser \"0%, Em risco\" — agora mostra certo. Indicadores com Baseline preenchido manualmente não eram afetados.",
     "Corrige os botões da chamada (desligar, microfone, câmera etc.) sumindo depois de minimizar e expandir a chamada de novo: o recurso que esconde os controles sozinho após alguns segundos sem mexer o mouse perdia a referência aos botões nessa transição (minimizar/expandir troca o conteúdo por um componente diferente por baixo dos panos) e nunca mais reagia a mover o mouse pra trazer os controles de volta — ficavam invisíveis e inclicáveis até acontecer outra coisa na tela (abrir um menu, por exemplo). Agora a referência é atualizada corretamente nessa troca.",
     "Primeira etapa da revisão de responsividade mobile da plataforma inteira: modais grandes (detalhe de tarefa, novo/editar lançamento financeiro, detalhes do lançamento, reunião, perfil do membro) agora viram tela cheia no celular em vez de ficar espremidos numa caixinha centralizada — no desktop continuam exatamente iguais. Busca do cabeçalho vira só um ícone no mobile (abria competindo espaço com o menu e os outros ícones); ao tocar, abre um campo de busca ocupando a tela toda. Cabeçalho do Kanban (Ordenar/Filtrar/+Nova Tarefa) agora quebra linha em vez de cortar em telas estreitas. Popovers ganharam um teto de largura relativo à tela (nunca mais ultrapassam a borda em celulares pequenos). Calendário mensal de Reuniões: abaixo de um certo tamanho de tela, cada dia mostra só o número + uma bolinha indicando que tem evento (em vez de texto minúsculo ilegível) — tocar no dia continua abrindo os detalhes normalmente. Alguns formulários com campos lado a lado (endereço do influenciador, prazos de entrega, dados do lançamento financeiro) agora empilham em uma coluna no celular. Próximas etapas (Comercial, Metas, Blog, bottom sheets, tabelas viram cards) ficam para uma entrega futura.",
@@ -388,6 +389,34 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.263.0",
+      "summary": "Roadmap dos projetos ganha fases reais, integradas ao Kanban.",
+      "modules": [
+        {
+          "name": "PROJETOS",
+          "tagline": "Roadmap conectado ao Kanban de verdade",
+          "items": [
+            {
+              "title": "Fases do roadmap",
+              "description": "Cada projeto pode ter fases (nome, período, responsável, cor, status) — crie, edite, reordene e exclua sem nunca apagar as tarefas vinculadas (voltam para \"Sem fase\")."
+            },
+            {
+              "title": "Tarefas ligadas às fases",
+              "description": "Vincule tarefas existentes (uma a uma ou em massa) ou crie uma tarefa já dentro da fase — ela aparece na fase e no Kanban ao mesmo tempo, com um filtro por fase novo no Kanban."
+            },
+            {
+              "title": "Progresso e status automáticos",
+              "description": "Cada fase mostra progresso real (concluídas/total) e um status que combina o que foi definido manualmente com atraso/risco calculado pelas datas e tarefas pendentes."
+            },
+            {
+              "title": "Nova estrutura em 3 abas",
+              "description": "Visão geral, Roadmap e Tarefas substituem o Kanban solto que ficava sempre visível embaixo da linha do tempo."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.262.2",
       "summary": "Corrige indicador de Metas \"Reduzir\" com meta zero/negativa mostrando Saudável mesmo estando bem pior que a meta.",

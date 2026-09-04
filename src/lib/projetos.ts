@@ -229,6 +229,8 @@ export type Task = {
   deadlineHistory?: DeadlineChangeEntry[];
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.recurrence`. */
   recurrence?: TaskRecurrence;
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.roadmapPhaseId`. */
+  roadmapPhaseId?: string;
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -249,7 +251,17 @@ export function getTaskCollaborators(
   return getTaskAssignees(t).filter((a) => a !== t.primaryAssignee);
 }
 
-export type Milestone = { id: string; title: string; date: string; done: boolean; taskId?: string };
+export type Milestone = {
+  id: string;
+  title: string;
+  date: string;
+  done: boolean;
+  taskId?: string;
+  /** Fase do roadmap a que este marco pertence — opcional (marcos
+   * antigos, de antes de fases existirem, ficam sem essa associação;
+   * não inventamos a qual fase pertenciam). */
+  faseId?: string;
+};
 
 /** De onde veio o link — detectado pela URL (`detectSourceType` em
  * `projeto.$id.tsx`), nunca perguntado ao usuário. */

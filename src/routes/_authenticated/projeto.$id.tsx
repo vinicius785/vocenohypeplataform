@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -44,6 +45,7 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useConfirm } from "@/hooks/use-confirm";
+import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { BackButton } from "@/components/BackButton";
 import { MarketingSection } from "@/components/MarketingSection";
@@ -84,7 +86,15 @@ import {
   saveProjetoInflus,
   onProjetoInflusChange,
   saveProjetoTarefas,
+  loadProjetoFases,
+  saveProjetoFases,
+  onProjetoFasesChange,
 } from "@/lib/projeto-scoped-store";
+import { tarefasSemFase, type ProjetoFase } from "@/lib/roadmap-engine";
+import { PhaseFormDialog } from "@/components/roadmap/PhaseFormDialog";
+import { LinkTasksPanel } from "@/components/roadmap/LinkTasksPanel";
+import { PhaseTimeline } from "@/components/roadmap/PhaseTimeline";
+import { RoadmapOverviewTab } from "@/components/roadmap/RoadmapOverviewTab";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
@@ -115,14 +125,23 @@ function renderPanel(
   onInitialOpenTaskHandled?: () => void,
 ) {
   const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
-  if (k === "roadmap") return <RoadmapPanel project={project} update={update} />;
+  if (k === "roadmap")
+    return (
+      <RoadmapPanel
+        project={project}
+        update={update}
+        showTarefasTab={!isMarketingProject}
+        initialOpenTaskId={initialOpenTaskId}
+        onInitialOpenTaskHandled={onInitialOpenTaskHandled}
+      />
+    );
   if (k === "kanban")
     return isMarketingProject ? (
       <MarketingSection
         initialOpenTaskId={initialOpenTaskId}
         onInitialOpenTaskHandled={onInitialOpenTaskHandled}
       />
-    ) : (
+    ) : project.features.includes("roadmap") ? null : ( // absorvido pela sub-aba "Tarefas" de Roadmap — ver `availableTabs`
       <KanbanPanel
         project={project}
         update={update}
@@ -148,24 +167,35 @@ function ProjetoPage() {
   const [project, setProject] = useState<Project | null>(() => getProjeto(id) ?? null);
   const [tab, setTab] = useState<FeatureKey | null>(null);
 
+  // Kanban de tarefas hoje pode ser tanto a aba solta "kanban" (projeto
+  // MARKETING, ou projeto sem "roadmap" habilitado) quanto a sub-aba
+  // "Tarefas" de dentro de "roadmap" (caso comum, ver `availableTabs`) —
+  // o deep-link precisa saber qual das duas abrir.
+  const hasKanban = (features: FeatureKey[]) =>
+    features.includes("kanban") || features.includes("roadmap");
+  const tabForTaskDeepLink = (features: FeatureKey[]): FeatureKey | null =>
+    features.includes("roadmap") ? "roadmap" : features.includes("kanban") ? "kanban" : null;
+
   useEffect(() => {
     if (project && !tab)
       setTab(
-        taskId && project.features.includes("kanban") ? "kanban" : (project.features[0] ?? null),
+        taskId && hasKanban(project.features)
+          ? tabForTaskDeepLink(project.features)
+          : (project.features[0] ?? null),
       );
   }, [project, tab, taskId]);
 
-  // Força a troca pra aba Kanban toda vez que chega um `taskId` NOVO via
-  // deep-link (ex.: clique no indicador global de timer ativo) — sem
-  // isso, se a pessoa já estivesse nesta mesma página de projeto numa
-  // aba diferente (ex. Documentos), o efeito acima nunca reagia de novo
-  // (só roda quando `tab` ainda é null, ou seja, só no primeiro
+  // Força a troca pra aba Kanban/Roadmap toda vez que chega um `taskId`
+  // NOVO via deep-link (ex.: clique no indicador global de timer ativo)
+  // — sem isso, se a pessoa já estivesse nesta mesma página de projeto
+  // numa aba diferente (ex. Documentos), o efeito acima nunca reagia de
+  // novo (só roda quando `tab` ainda é null, ou seja, só no primeiro
   // carregamento) e o parâmetro de busca mudava sem a tela visivelmente
   // reagir — parecia que "clicar não abria nada".
   const prevTaskIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (taskId && taskId !== prevTaskIdRef.current && project?.features.includes("kanban")) {
-      setTab("kanban");
+    if (taskId && taskId !== prevTaskIdRef.current && project && hasKanban(project.features)) {
+      setTab(tabForTaskDeepLink(project.features));
     }
     prevTaskIdRef.current = taskId;
   }, [taskId, project]);
@@ -213,10 +243,22 @@ function ProjetoPage() {
   // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
   // precisar que alguém lembre de habilitar a feature manualmente.
   const isHypeAppProject = project.name.trim().toLowerCase() === "hypeapp";
-  const availableTabs =
+  const isMarketingProject = project.name.trim().toUpperCase() === "MARKETING";
+  const featuresWithHypeApp =
     isHypeAppProject && !project.features.includes("bugs_sugestoes")
       ? [...project.features, "bugs_sugestoes" as const]
       : project.features;
+  // "Kanban de tarefas" vira a sub-aba "Tarefas" de dentro de "Roadmap"
+  // (item 8 do pedido: reduzir poluição visual, uma aba só) — a aba
+  // solta "Kanban" só continua existindo se, por algum motivo, o
+  // projeto tiver "kanban" sem "roadmap" habilitado (customização
+  // antiga) ou for o projeto MARKETING (onde "kanban" na verdade
+  // renderiza a `MarketingSection` inteira, não o board simples — nunca
+  // absorvido aqui).
+  const availableTabs =
+    featuresWithHypeApp.includes("roadmap") && !isMarketingProject
+      ? featuresWithHypeApp.filter((k) => k !== "kanban")
+      : featuresWithHypeApp;
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
@@ -338,18 +380,54 @@ function ProjetoPage() {
 }
 
 /* -------- Roadmap -------- */
+type RoadmapSubTab = "visao_geral" | "roadmap" | "tarefas";
+
 function RoadmapPanel({
   project,
   update,
+  showTarefasTab,
+  initialOpenTaskId,
+  onInitialOpenTaskHandled,
 }: {
   project: Project;
   update: (p: Partial<Project>) => void;
+  showTarefasTab?: boolean;
+  initialOpenTaskId?: string;
+  onInitialOpenTaskHandled?: () => void;
 }) {
+  const access = useMyAccess();
+  const canEdit = hasPermission(access, "projetos");
+  const confirm = useConfirm();
+
+  const [subTab, setSubTab] = useState<RoadmapSubTab>(
+    initialOpenTaskId ? "tarefas" : "visao_geral",
+  );
+  useEffect(() => {
+    if (initialOpenTaskId) setSubTab("tarefas");
+  }, [initialOpenTaskId]);
+
+  const [fases, setFases] = useState<ProjetoFase[]>(() => loadProjetoFases(project.id));
+  useEffect(() => {
+    setFases(loadProjetoFases(project.id));
+    return onProjetoFasesChange(() => setFases(loadProjetoFases(project.id)));
+  }, [project.id]);
+  const updateFases = (list: ProjetoFase[]) => {
+    setFases(list);
+    saveProjetoFases(project.id, list);
+  };
+
+  const semFase = useMemo(
+    () => tarefasSemFase(project.tasks as unknown as BoardTask[], fases),
+    [project.tasks, fases],
+  );
+
+  // Marco (mantido da versão anterior — item 11 do pedido, agora aceita
+  // uma fase opcional).
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [marcoFaseId, setMarcoFaseId] = useState("");
 
-  const add = (e: React.FormEvent) => {
+  const addMarco = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     const task: Task = {
@@ -357,6 +435,7 @@ function RoadmapPanel({
       title: title.trim(),
       status: "Aberto",
       dueDate: date || undefined,
+      roadmapPhaseId: marcoFaseId || undefined,
     };
     const m: Milestone = {
       id: crypto.randomUUID(),
@@ -364,19 +443,27 @@ function RoadmapPanel({
       date,
       done: false,
       taskId: task.id,
+      faseId: marcoFaseId || undefined,
     };
     update({ milestones: [...project.milestones, m], tasks: [...project.tasks, task] });
     setTitle("");
     setDate("");
+    setMarcoFaseId("");
   };
 
-  const remove = (id: string) => {
+  const removeMarco = (id: string) => {
     const m = project.milestones.find((x) => x.id === id);
     update({
       milestones: project.milestones.filter((x) => x.id !== id),
       tasks: m?.taskId ? project.tasks.filter((t) => t.id !== m.taskId) : project.tasks,
     });
   };
+
+  // Dialog de tarefa unificado — edita (marco, fase, "sem fase" ou Kanban)
+  // e cria (dentro de uma fase) usando SEMPRE o mesmo SharedTaskDialog.
+  const [taskDialog, setTaskDialog] = useState<
+    { mode: "edit"; taskId: string } | { mode: "new"; defaultFaseId?: string } | null
+  >(null);
 
   const openMilestone = (m: Milestone) => {
     let taskId = m.taskId;
@@ -386,6 +473,7 @@ function RoadmapPanel({
         title: m.title,
         status: m.done ? "Concluído" : "Aberto",
         dueDate: m.date || undefined,
+        roadmapPhaseId: m.faseId,
       };
       taskId = t.id;
       update({
@@ -393,10 +481,10 @@ function RoadmapPanel({
         milestones: project.milestones.map((x) => (x.id === m.id ? { ...x, taskId } : x)),
       });
     }
-    setOpenTaskId(taskId);
+    setTaskDialog({ mode: "edit", taskId });
   };
 
-  const saveTask = (t: Task) => {
+  const saveTaskUnified = (t: Task) => {
     const tasks = project.tasks.some((x) => x.id === t.id)
       ? project.tasks.map((x) => (x.id === t.id ? t : x))
       : [...project.tasks, t];
@@ -408,113 +496,329 @@ function RoadmapPanel({
     update({ tasks, milestones });
   };
 
-  const sorted = useMemo(
+  const deleteTaskUnified = (taskId: string) => {
+    update({
+      tasks: project.tasks.filter((t) => t.id !== taskId),
+      milestones: project.milestones.map((m) =>
+        m.taskId === taskId ? { ...m, taskId: undefined } : m,
+      ),
+    });
+  };
+
+  const sortedMarcos = useMemo(
     () => [...project.milestones].sort((a, b) => (a.date || "").localeCompare(b.date || "")),
     [project.milestones],
   );
 
-  const openTask = openTaskId ? (project.tasks.find((t) => t.id === openTaskId) ?? null) : null;
+  const editingTask =
+    taskDialog?.mode === "edit"
+      ? project.tasks.find((t) => t.id === taskDialog.taskId) ?? null
+      : null;
+
+  // Fase — criar/editar
+  const [faseDialogOpen, setFaseDialogOpen] = useState(false);
+  const [editingFase, setEditingFase] = useState<ProjetoFase | undefined>(undefined);
+  const [pendingSemFaseSelection, setPendingSemFaseSelection] = useState<string[] | null>(null);
+
+  const nowIso = () => new Date().toISOString();
+
+  const saveFase = (partial: Omit<ProjetoFase, "id" | "createdAt" | "updatedAt" | "sortOrder">) => {
+    if (editingFase) {
+      updateFases(
+        fases.map((f) => (f.id === editingFase.id ? { ...f, ...partial, updatedAt: nowIso() } : f)),
+      );
+    } else {
+      const novaFase: ProjetoFase = {
+        ...partial,
+        id: crypto.randomUUID(),
+        sortOrder: fases.length,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+      updateFases([...fases, novaFase]);
+      if (pendingSemFaseSelection) {
+        update({
+          tasks: project.tasks.map((t) =>
+            pendingSemFaseSelection.includes(t.id) ? { ...t, roadmapPhaseId: novaFase.id } : t,
+          ),
+        });
+        setPendingSemFaseSelection(null);
+      }
+    }
+    setFaseDialogOpen(false);
+    setEditingFase(undefined);
+  };
+
+  const handleDeleteFase = async (fase: ProjetoFase) => {
+    const count = project.tasks.filter((t) => t.roadmapPhaseId === fase.id).length;
+    const ok = await confirm.confirm(
+      count > 0
+        ? `Excluir a fase "${fase.nome}"? ${count} tarefa(s) vinculada(s) não serão apagadas — voltam para "Sem fase".`
+        : `Excluir a fase "${fase.nome}"?`,
+    );
+    if (!ok) return;
+    updateFases(fases.filter((f) => f.id !== fase.id));
+  };
+
+  const handleDuplicateFase = (fase: ProjetoFase) => {
+    updateFases([
+      ...fases,
+      {
+        ...fase,
+        id: crypto.randomUUID(),
+        nome: `${fase.nome} (cópia)`,
+        sortOrder: fases.length,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      },
+    ]);
+  };
+
+  // Vincular tarefas existentes
+  const [linkTasksFaseId, setLinkTasksFaseId] = useState<string | null>(null);
+
+  const handleLinkTasks = (taskIds: string[]) => {
+    if (!linkTasksFaseId) return;
+    update({
+      tasks: project.tasks.map((t) =>
+        taskIds.includes(t.id) ? { ...t, roadmapPhaseId: linkTasksFaseId } : t,
+      ),
+    });
+  };
+
+  const handleMoveTask = (taskId: string, faseId: string) => {
+    update({
+      tasks: project.tasks.map((t) => (t.id === taskId ? { ...t, roadmapPhaseId: faseId } : t)),
+    });
+  };
+
+  const handleCreateFaseFromSelection = (taskIds: string[]) => {
+    setPendingSemFaseSelection(taskIds);
+    setEditingFase(undefined);
+    setFaseDialogOpen(true);
+  };
+
+  const tabs: { key: RoadmapSubTab; label: string }[] = [
+    { key: "visao_geral", label: "Visão geral" },
+    { key: "roadmap", label: "Roadmap" },
+    ...(showTarefasTab !== false ? [{ key: "tarefas" as RoadmapSubTab, label: "Tarefas" }] : []),
+  ];
 
   return (
     <div className="space-y-6">
-      <form onSubmit={add} className="flex flex-wrap gap-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Marco / entrega"
-          className="h-8 flex-1 min-w-[200px] rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-        />
-        <DateField
-          value={date || undefined}
-          onChange={(v) => setDate(v ?? "")}
-          className="h-8 text-xs"
-        />
-        <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90">
-          <Plus className="h-3.5 w-3.5" /> Adicionar marco
-        </button>
-      </form>
+      <Tabs value={subTab} onValueChange={(v) => setSubTab(v as RoadmapSubTab)}>
+        <TabsList>
+          {tabs.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {sorted.length === 0 ? (
-        <EmptyState label="Nenhum marco ainda." />
-      ) : (
-        <div className="overflow-x-auto pb-4">
-          <div
-            className="relative min-w-full"
-            style={{ minWidth: `${Math.max(sorted.length * 180, 600)}px` }}
-          >
-            {/* linha horizontal */}
-            <div className="absolute left-0 right-0 top-6 h-px bg-border" />
-            <ol className="relative flex items-start gap-4">
-              {sorted.map((m) => (
-                <li
-                  key={m.id}
-                  className="group relative flex flex-1 min-w-[160px] flex-col items-center"
+      {subTab === "visao_geral" && (
+        <RoadmapOverviewTab
+          fases={fases}
+          tasks={project.tasks as unknown as BoardTask[]}
+          milestones={project.milestones}
+          semFase={semFase}
+          onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
+        />
+      )}
+
+      {subTab === "roadmap" && (
+        <div className="space-y-8">
+          <PhaseTimeline
+            fases={fases}
+            tasks={project.tasks as unknown as BoardTask[]}
+            semFase={semFase}
+            canEdit={canEdit}
+            onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
+            onCreateTask={(faseId) => setTaskDialog({ mode: "new", defaultFaseId: faseId })}
+            onLinkTasks={(faseId) => setLinkTasksFaseId(faseId)}
+            onEditFase={(fase) => {
+              setEditingFase(fase);
+              setFaseDialogOpen(true);
+            }}
+            onDuplicateFase={handleDuplicateFase}
+            onDeleteFase={(fase) => void handleDeleteFase(fase)}
+            onMoveTask={handleMoveTask}
+            onNewFase={() => {
+              setEditingFase(undefined);
+              setFaseDialogOpen(true);
+            }}
+            onCreateFaseFromSelection={handleCreateFaseFromSelection}
+          />
+
+          <div className="space-y-4 border-t border-border pt-6">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Marcos
+            </h3>
+            {canEdit && (
+              <form onSubmit={addMarco} className="flex flex-wrap gap-2">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Marco / entrega"
+                  className="h-8 flex-1 min-w-[200px] rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+                <DateField
+                  value={date || undefined}
+                  onChange={(v) => setDate(v ?? "")}
+                  className="h-8 text-xs"
+                />
+                <select
+                  value={marcoFaseId}
+                  onChange={(e) => setMarcoFaseId(e.target.value)}
+                  className="h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none"
                 >
-                  <button
-                    onClick={() => openMilestone(m)}
-                    aria-label={`Abrir tarefa ${m.title}`}
-                    className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 transition-transform hover:scale-110 ${
-                      m.done
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {m.done ? (
-                      <Check className="h-5 w-5" />
-                    ) : (
-                      <span className="text-xs font-semibold">{sorted.indexOf(m) + 1}</span>
-                    )}
-                  </button>
-                  <div className="mt-3 w-full text-center">
-                    <button
-                      onClick={() => openMilestone(m)}
-                      className={`block w-full truncate text-xs font-medium hover:underline ${m.done ? "text-muted-foreground line-through" : "text-foreground"}`}
-                      title={m.title}
-                    >
-                      {m.title}
-                    </button>
-                    {m.date && (
-                      <p className="mt-0.5 text-[10px] text-muted-foreground">
-                        {formatIsoDate(m.date)}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => remove(m.id)}
-                    aria-label="Remover"
-                    className="absolute right-0 top-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
-                  >
-                    <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                  </button>
-                </li>
-              ))}
-            </ol>
+                  <option value="">Sem fase</option>
+                  {fases.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome}
+                    </option>
+                  ))}
+                </select>
+                <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90">
+                  <Plus className="h-3.5 w-3.5" /> Adicionar marco
+                </button>
+              </form>
+            )}
+
+            {sortedMarcos.length === 0 ? (
+              <EmptyState label="Nenhum marco ainda." />
+            ) : (
+              <div className="overflow-x-auto pb-4">
+                <div
+                  className="relative min-w-full"
+                  style={{ minWidth: `${Math.max(sortedMarcos.length * 180, 600)}px` }}
+                >
+                  <div className="absolute left-0 right-0 top-6 h-px bg-border" />
+                  <ol className="relative flex items-start gap-4">
+                    {sortedMarcos.map((m) => (
+                      <li
+                        key={m.id}
+                        className="group relative flex flex-1 min-w-[160px] flex-col items-center"
+                      >
+                        <button
+                          onClick={() => openMilestone(m)}
+                          aria-label={`Abrir tarefa ${m.title}`}
+                          className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 transition-transform hover:scale-110 ${
+                            m.done
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {m.done ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            <span className="text-xs font-semibold">
+                              {sortedMarcos.indexOf(m) + 1}
+                            </span>
+                          )}
+                        </button>
+                        <div className="mt-3 w-full text-center">
+                          <button
+                            onClick={() => openMilestone(m)}
+                            className={`block w-full truncate text-xs font-medium hover:underline ${m.done ? "text-muted-foreground line-through" : "text-foreground"}`}
+                            title={m.title}
+                          >
+                            {m.title}
+                          </button>
+                          {m.date && (
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                              {formatIsoDate(m.date)}
+                            </p>
+                          )}
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => removeMarco(m.id)}
+                            aria-label="Remover"
+                            className="absolute right-0 top-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
+                          >
+                            <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {openTask && (
+      {subTab === "tarefas" && showTarefasTab !== false && (
+        <KanbanPanel
+          project={project}
+          update={update}
+          initialOpenTaskId={initialOpenTaskId}
+          onInitialOpenTaskHandled={onInitialOpenTaskHandled}
+          fases={fases}
+        />
+      )}
+
+      {taskDialog && (
         <SharedTaskDialog
           open={true}
           onOpenChange={(o) => {
-            if (!o) setOpenTaskId(null);
+            if (!o) setTaskDialog(null);
           }}
-          initial={openTask as unknown as BoardTask}
+          initial={taskDialog.mode === "edit" ? (editingTask as unknown as BoardTask) : undefined}
+          defaultRoadmapPhaseId={taskDialog.mode === "new" ? taskDialog.defaultFaseId : undefined}
+          fases={fases}
           scope={{ kind: "projeto", id: project.id }}
           breadcrumb="Projetos"
-          onSave={(t) => saveTask(t as unknown as Task)}
-          onAutosave={(t) => saveTask(t as unknown as Task)}
-          onDelete={() => {
-            update({
-              tasks: project.tasks.filter((t) => t.id !== openTask.id),
-              milestones: project.milestones.map((m) =>
-                m.taskId === openTask.id ? { ...m, taskId: undefined } : m,
-              ),
-            });
-            setOpenTaskId(null);
+          onSave={(t) => {
+            saveTaskUnified(t as unknown as Task);
+            setTaskDialog(null);
+          }}
+          onAutosave={(t) => saveTaskUnified(t as unknown as Task)}
+          onDelete={
+            taskDialog.mode === "edit"
+              ? () => {
+                  deleteTaskUnified(taskDialog.taskId);
+                  setTaskDialog(null);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {faseDialogOpen && (
+        <PhaseFormDialog
+          open={faseDialogOpen}
+          onOpenChange={(o) => {
+            setFaseDialogOpen(o);
+            if (!o) {
+              setEditingFase(undefined);
+              setPendingSemFaseSelection(null);
+            }
+          }}
+          initial={editingFase}
+          onSave={saveFase}
+        />
+      )}
+
+      {linkTasksFaseId && (
+        <LinkTasksPanel
+          open={true}
+          onOpenChange={(o) => {
+            if (!o) setLinkTasksFaseId(null);
+          }}
+          tasks={project.tasks as unknown as BoardTask[]}
+          fases={fases}
+          targetFaseId={linkTasksFaseId}
+          onLink={(taskIds) => {
+            handleLinkTasks(taskIds);
+            setLinkTasksFaseId(null);
           }}
         />
       )}
+
+      {confirm.confirmDialog}
     </div>
   );
 }
@@ -527,11 +831,13 @@ function KanbanPanel({
   update,
   initialOpenTaskId,
   onInitialOpenTaskHandled,
+  fases,
 }: {
   project: Project;
   update: (p: Partial<Project>) => void;
   initialOpenTaskId?: string;
   onInitialOpenTaskHandled?: () => void;
+  fases?: ProjetoFase[];
 }) {
   return (
     <TaskBoard
@@ -552,6 +858,7 @@ function KanbanPanel({
       breadcrumb="Projetos"
       initialOpenTaskId={initialOpenTaskId}
       onInitialOpenTaskHandled={onInitialOpenTaskHandled}
+      fases={fases}
     />
   );
 }
