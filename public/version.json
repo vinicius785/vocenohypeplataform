@@ -1,6 +1,7 @@
 {
-  "version": "1.260.0",
+  "version": "1.260.1",
   "notes": [
+    "Corrige tarefa com Responsável principal definido deixando de aparecer em \"Meu trabalho\" (Início) e na ficha (Perfil)/\"Carga por membro\" da aba Time pros demais responsáveis (colaboradores) da mesma tarefa — só o Responsável principal contava. Agora estar na tarefa (mesmo só como colaborador, não principal) já é suficiente pra ela aparecer nessas listas de qualquer um dos responsáveis, igual já acontecia antes do campo Responsável principal existir.",
     "Reformula a produtividade da aba Time: \"Entregas por dia da semana\" vira duas áreas separadas. \"Entregas da Semana\" agora sempre mostra a semana atual (segunda a domingo, horário de Brasília, sem seletor de período) — gráfico seg-sex com o valor em cima de cada barra, resumo compacto (total de entregas, variação % vs. semana anterior comparando só os dias equivalentes, melhor dia, média diária) e uma tabela por membro com Esta semana + médias semanais históricas (mensal/trimestral/anual, sempre \"por semana\", nunca total bruto) e Tendência; qualquer cabeçalho ordena a tabela, cada linha expande mostrando a distribuição seg-sex, e clicar no número ou numa barra abre a lista real de tarefas daquele recorte (nunca dados inventados). Nova seção \"Insights do Time\", logo abaixo, antes de Performance do Time — 3 a 5 insights factuais por rodada, gerados por um motor de regras determinístico (sem IA generativa, thresholds centralizados) cruzando volume de entregas, taxa no prazo, replanejamentos, concentração de carga, reuniões e frequência de início do dia; sempre interpreta em vez de repetir um número já visível, nunca vira ranking nem compara pessoas de forma simplista (comparação é sempre a pessoa vs. seu próprio histórico, ou pontualmente vs. a média do time quando fizer sentido). O mesmo motor alimenta uma nova seção \"Insights operacionais\" dentro da ficha de cada membro (Perfil), com 2 a 5 insights específicos daquela pessoa. Nenhuma mudança na fórmula do Score Operacional nem na regra histórica de crédito total a cada responsável em tarefas com múltiplos responsáveis — as duas áreas novas só leem dados já existentes.",
     "Adiciona \"@Todos\" à @menção do Chat: menciona de uma vez todos os participantes da conversa (DM, canal ou todo o time num canal público/campanha/projeto), sem precisar mencionar um por um. Aparece na aba \"Pessoas\" do menu de @menção; no envio, expande automaticamente numa menção individual real por pessoa (exceto quem enviou), reaproveitando 100% a notificação/contador de menções que já existe pra menção individual — sem duplicar badge na mensagem (mostra só um \"@Todos\" clicável).",
     "Corrige o menu \"/\" de comandos e o menu \"@\" de menção (editor de descrição da tarefa) não rolando nem respondendo a clique do mouse quando a lista tinha mais itens do que cabia na tela: o Radix trava `pointer-events` no `<body>` inteiro enquanto o diálogo está aberto, e como esses menus são montados direto no `<body>` (fora da árvore do próprio diálogo), herdavam esse bloqueio e ficavam visualmente por cima mas inertes a mouse. Teclado (setas/Enter) já funcionava normalmente.",
@@ -384,9 +385,19 @@
   ],
   "releases": [
     {
-      "version": "1.260.0",
-      "summary": "Time ganha Entregas da Semana e Insights do Time — leitura factual do que está acontecendo, sem virar ranking.",
+      "version": "1.260.1",
+      "summary": "Corrige tarefa sumindo de \"Meu trabalho\" pra quem é colaborador (não Responsável principal).",
       "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Colaborador também vê a tarefa",
+          "items": [
+            {
+              "title": "\"Meu trabalho\" corrigido",
+              "description": "Estar numa tarefa como colaborador (mesmo sem ser o Responsável principal) já é suficiente pra ela aparecer no seu \"Meu trabalho\" e na sua ficha na aba Time."
+            }
+          ]
+        },
         {
           "name": "TIME",
           "tagline": "Entregas da Semana + Insights do Time",

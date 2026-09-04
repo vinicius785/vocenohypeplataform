@@ -125,16 +125,14 @@ type CampanhaTaskLike = {
 };
 
 /** De quem é essa tarefa, pra fins de "isso é MEU trabalho"/"minha
- * carga" (não pra exibição de avatares — `collectAllTasks`, abaixo,
- * continua mostrando todos os responsáveis). Quando a tarefa tem um
- * Responsável principal definido, só ele conta — colaboradores deixam
- * de ver a tarefa em "Meu trabalho"/"Carga por membro" dele. Sem
- * principal definido (a maioria das tarefas hoje, criadas antes desse
- * campo existir), cai pro comportamento de sempre: todo mundo listado
- * em `assignees` conta — decisão explícita do usuário, pra não esvaziar
- * "Meu trabalho" de ninguém enquanto o time ainda não usa o campo. */
+ * carga" (mesmo conjunto que `collectAllTasks`, abaixo, usa pra exibir
+ * avatares). Todo mundo em `assignees` conta, mesmo quando a tarefa tem
+ * um Responsável principal definido — estar na tarefa como colaborador
+ * (não só como principal) já é suficiente pra ela aparecer em "Meu
+ * trabalho"/"Carga por membro" dessa pessoa (decisão explícita do
+ * usuário: `primaryAssignee` não deve remover ninguém dessas listas). */
 function taskOwners(t: CampanhaTaskLike): string[] {
-  return t.primaryAssignee ? [t.primaryAssignee] : getTaskAssignees(t);
+  return getTaskAssignees(t);
 }
 
 /** Percorre uma tarefa e (recursivamente) suas subtarefas, chamando `push`
