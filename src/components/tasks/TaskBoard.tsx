@@ -4304,17 +4304,21 @@ export function TaskDialog({
               </div>
             </div>
 
-            {/* `min-h-0` é essencial aqui: sem ele, este wrapper (agora o
-                item direto do grid, no lugar do próprio `TaskActivityPanel`)
-                não tem altura limitada, e o `flex-1 overflow-y-auto` de
-                dentro do painel de Activity passa a crescer pro tamanho
-                natural do conteúdo em vez de caber na linha do grid —
-                estourando a altura da linha inteira e quebrando o scroll da
-                coluna da esquerda também (regressão real: sem isto, dava
-                pra rolar só uns 130px antes de "empacar", escondendo
-                Subtarefas/Anexos). Mesma classe que `TaskActivityPanel`'s
-                próprio elemento raiz já usa. */}
-            <div ref={historicoSectionRef} className="min-h-0">
+            {/* Este wrapper existe só pra guardar `historicoSectionRef`
+                (atalho "Histórico" do menu "⋯") — mas virou o item direto
+                do grid no lugar do próprio `TaskActivityPanel`, então
+                precisa repassar a altura da linha do grid pra ele:
+                `min-h-0` deixa o wrapper aceitar a altura esticada pelo
+                grid (sem isso, cresce pro conteúdo e estoura a linha
+                inteira, quebrando o scroll da coluna da esquerda também);
+                `flex` faz esse wrapper esticar o `TaskActivityPanel` (um
+                `flex flex-col` sem altura própria) pra preencher essa
+                altura de verdade — só `min-h-0` sozinho limita o TAMANHO
+                DO WRAPPER, mas não obriga o FILHO a ocupar esse espaço, e
+                sem isso o painel de Activity ficava do tamanho do próprio
+                conteúdo (sem scroll interno nenhum, cortado pelo
+                `overflow-hidden` do grid em vez de rolar). */}
+            <div ref={historicoSectionRef} className="flex min-h-0">
               <TaskActivityPanel
                 task={{
                   status,
