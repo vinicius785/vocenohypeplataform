@@ -1,6 +1,7 @@
 {
-  "version": "1.264.1",
+  "version": "1.264.2",
   "notes": [
+    "Corrige erro de \"Time-out\" ao salvar tarefas com anexos (mudar status, adicionar anexo, etc.) — anexos de tarefa eram salvos como arquivo embutido (base64) direto no registro da tarefa; poucos anexos em subtarefas já produziram uma tarefa de mais de 6MB, e qualquer alteração nela (até só o status) precisava reenviar tudo de novo, estourando o tempo limite. Anexos novos agora sobem para um espaço de armazenamento próprio (como já acontecia no Chat), deixando o registro da tarefa pequeno de novo. Também corrigida a tarefa específica que já estava travada (\"Acesso dos crawlers e navegação agêntica\") — os anexos das 5 subtarefas foram migrados sem perda, e ela volta a salvar normalmente.",
     "Corrige o diálogo de tarefa não deixando rolar até o fim (subtarefas e anexos ficavam inacessíveis em qualquer tarefa) — regressão introduzida junto com o menu \"⋯\": o painel de Activity, ao ganhar uma referência pro atalho \"Histórico\", perdeu a classe que limitava sua altura dentro da tarefa, fazendo a linha inteira do diálogo crescer além do previsto e travar o scroll da coluna principal bem antes do fim de verdade.",
     "Adiciona um menu \"⋯\" nas tarefas (ao lado do X de fechar, no diálogo da tarefa) com ações rápidas: Mover para... (transfere a tarefa pra outro projeto, campanha ou pro Kanban do Marketing — preserva comentários, anexos, subtarefas e dependências, já que o id da tarefa é mantido), Duplicar (cria uma cópia na mesma tarefa/board, sem herdar histórico/comentários/cronômetro da original), Relacionamentos e Histórico (atalhos que rolam até as seções de Dependências e Activity já existentes no próprio diálogo) e Arquivar (atalho pra marcar o status como \"Arquivado\"). \"Excluir\" também passou a aparecer nesse menu, além do botão que já existia no rodapé.",
     "Simplifica a Visão geral do Roadmap: remove os indicadores \"Tarefas atrasadas\", \"Tarefas sem fase\" e \"Responsáveis\" (com suas respectivas listas). \"Período do projeto\" vira \"Período da fase\" — mostra as datas da fase atual em vez do intervalo de todas as fases do projeto.",
@@ -395,6 +396,22 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.264.2",
+      "summary": "Corrige timeout ao salvar tarefas com anexos — anexos agora sobem pro Storage em vez de inflar a tarefa.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Anexos mais leves",
+          "items": [
+            {
+              "title": "Sem mais timeout ao salvar",
+              "description": "Anexos de tarefa deixaram de ser embutidos como base64 no registro da tarefa (o que podia inflar uma tarefa com subtarefas anexadas pra vários MB e travar qualquer save) — agora sobem pra um armazenamento próprio, como já acontecia no Chat."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.264.1",
       "summary": "Corrige o diálogo de tarefa travando o scroll antes do fim, escondendo subtarefas e anexos.",

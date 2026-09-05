@@ -76,6 +76,7 @@ import { stopIfRunningOnTask } from "@/lib/time-entries";
 import { linkifyText } from "@/lib/linkify";
 import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
+import { supabase } from "@/integrations/supabase/client";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
 import { MoveTaskDialog } from "@/components/tasks/MoveTaskDialog";
 import { moveTask, duplicateTask, type MoveTarget } from "@/lib/move-task";
@@ -367,7 +368,17 @@ export type Activity = {
   createdAt: string;
   kind?: ActivityKind;
 };
-export type Attachment = { id: string; name: string; url?: string };
+export type Attachment = {
+  id: string;
+  name: string;
+  url?: string;
+  /** Presente só pra anexos enviados pro bucket `task-attachments`
+   * (`uploadTaskAttachment`) — permite excluir o arquivo de verdade do
+   * Storage ao remover o anexo. Ausente em anexos antigos, salvos como
+   * data URL (base64) direto neste campo antes dessa correção — esses
+   * continuam abrindo normalmente, só não têm nada pra apagar no Storage. */
+  path?: string;
+};
 export type TimeEntry = { seconds: number; author: string; endedAt: string };
 
 /** As 7 opções fixas do motivo de replanejamento — enum fechado (não
@@ -3209,24 +3220,62 @@ export function TaskDialog({
       r.readAsDataURL(file);
     });
 
-  // `URL.createObjectURL` só é válido na aba/sessão que criou o anexo — ao
-  // recarregar a página (ou abrir em outro dispositivo) a URL já não existe
-  // mais, então o anexo "sumia" mesmo salvo. Persistindo como data URL
-  // (base64) direto no campo da tarefa, o arquivo sobrevive a refresh igual
-  // já acontece com foto/contrato de influenciador.
+  // Envia pro bucket `task-attachments` (mesmo padrão de
+  // `uploadChatAttachment`, chat-store.ts) em vez de embutir o arquivo como
+  // data URL (base64) direto no campo da tarefa. Anexos base64 inflam o
+  // jsonb da tarefa/subtarefa — como toda mudança na tarefa (até só o
+  // status) reenvia o objeto inteiro pro banco, uma tarefa com poucos
+  // anexos assim já virou uma linha de +6MB e passou a dar timeout ao
+  // salvar QUALQUER coisa nela, inclusive nas subtarefas. Retorna `null`
+  // em caso de falha (sem sessão, ou o upload em si falhou) — quem chama
+  // cai pro fallback de data URL nesse caso, pra nunca perder o anexo que
+  // a pessoa acabou de selecionar.
+  async function uploadTaskAttachment(file: File): Promise<Attachment | null> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const safeName = file.name.replace(/[^\w.-]+/g, "_");
+    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+    const { error } = await supabase.storage.from("task-attachments").upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+    if (error) {
+      console.warn("[tasks] upload failed", error);
+      return null;
+    }
+    // URL assinada válida por ~1 ano (bucket é privado) — mesmo prazo já
+    // usado pra anexos de chat.
+    const { data: signed } = await supabase.storage
+      .from("task-attachments")
+      .createSignedUrl(path, 60 * 60 * 24 * 365);
+    if (!signed?.signedUrl) return null;
+    return { id: crypto.randomUUID(), name: file.name, url: signed.signedUrl, path };
+  }
+
   const addFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const items: Attachment[] = await Promise.all(
-      Array.from(files).map(async (f) => ({
-        id: crypto.randomUUID(),
-        name: f.name,
-        url: await readAsDataUrl(f),
-      })),
+      Array.from(files).map(
+        async (f) =>
+          (await uploadTaskAttachment(f)) ?? {
+            id: crypto.randomUUID(),
+            name: f.name,
+            url: await readAsDataUrl(f),
+          },
+      ),
     );
     setAttachments((a) => [...a, ...items]);
     setActivity((a) => pushActivity(a, `anexou ${items.length} arquivo(s)`));
   };
-  const removeAttachment = (id: string) => setAttachments((a) => a.filter((x) => x.id !== id));
+  const removeAttachment = (id: string) => {
+    const removed = attachments.find((a) => a.id === id);
+    setAttachments((a) => a.filter((x) => x.id !== id));
+    if (removed?.path) {
+      void supabase.storage.from("task-attachments").remove([removed.path]);
+    }
+  };
 
   const postComment = () => {
     const t = commentText.trim();
