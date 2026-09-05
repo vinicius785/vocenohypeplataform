@@ -4255,7 +4255,17 @@ export function TaskDialog({
               </div>
             </div>
 
-            <div ref={historicoSectionRef}>
+            {/* `min-h-0` é essencial aqui: sem ele, este wrapper (agora o
+                item direto do grid, no lugar do próprio `TaskActivityPanel`)
+                não tem altura limitada, e o `flex-1 overflow-y-auto` de
+                dentro do painel de Activity passa a crescer pro tamanho
+                natural do conteúdo em vez de caber na linha do grid —
+                estourando a altura da linha inteira e quebrando o scroll da
+                coluna da esquerda também (regressão real: sem isto, dava
+                pra rolar só uns 130px antes de "empacar", escondendo
+                Subtarefas/Anexos). Mesma classe que `TaskActivityPanel`'s
+                próprio elemento raiz já usa. */}
+            <div ref={historicoSectionRef} className="min-h-0">
               <TaskActivityPanel
                 task={{
                   status,
