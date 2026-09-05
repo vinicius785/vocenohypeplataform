@@ -28,6 +28,10 @@ import {
   Search,
   Link2,
   Milestone as MilestoneIcon,
+  Copy,
+  Archive,
+  History,
+  FolderInput,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
@@ -73,6 +77,8 @@ import { linkifyText } from "@/lib/linkify";
 import { loadTeamMembers, ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { getMe } from "@/lib/chat-store";
 import { TaskActivityPanel } from "@/components/tasks/TaskActivityPanel";
+import { MoveTaskDialog } from "@/components/tasks/MoveTaskDialog";
+import { moveTask, duplicateTask, type MoveTarget } from "@/lib/move-task";
 import { recordPerformanceEvent, usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   isCriticalReplan,
@@ -1404,7 +1410,7 @@ export function TaskBoard({
       })),
       ...faseFilters.map((id) => ({
         id: `fase:${id}`,
-        label: id === SEM_FASE ? "Sem fase" : fases?.find((f) => f.id === id)?.nome ?? "Fase",
+        label: id === SEM_FASE ? "Sem fase" : (fases?.find((f) => f.id === id)?.nome ?? "Fase"),
         onRemove: () => setFaseFilters((prev) => prev.filter((x) => x !== id)),
       })),
     ],
@@ -1852,7 +1858,9 @@ export function TaskBoard({
                               checked={active}
                               className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
                             />
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${f.cor.split(" ")[0]}`} />
+                            <span
+                              className={`h-2 w-2 shrink-0 rounded-full ${f.cor.split(" ")[0]}`}
+                            />
                             <span
                               className={`truncate ${active ? "text-foreground" : "text-muted-foreground"}`}
                             >
@@ -1875,9 +1883,7 @@ export function TaskBoard({
                               checked={active}
                               className="h-3.5 w-3.5 shrink-0 rounded border-border accent-foreground"
                             />
-                            <span
-                              className={active ? "text-foreground" : "text-muted-foreground"}
-                            >
+                            <span className={active ? "text-foreground" : "text-muted-foreground"}>
                               Sem fase
                             </span>
                           </button>
@@ -2613,6 +2619,8 @@ export function TaskDialog({
   );
   const [depPopover, setDepPopover] = useState<null | "menu" | "depends" | "blocks">(null);
   const depsSectionRef = useRef<HTMLDivElement>(null);
+  const historicoSectionRef = useRef<HTMLDivElement>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [pendingSaveCloseAfter, setPendingSaveCloseAfter] = useState(false);
 
@@ -3299,7 +3307,90 @@ export function TaskDialog({
             <span className="text-foreground">
               {initial ? "Editar" : parentTitle ? "Nova subtarefa" : "Nova tarefa"}
             </span>
+            {/* Menu de ações — só faz sentido editando uma tarefa raiz já
+                existente (não numa subtarefa nem em "Nova tarefa"). Mover/
+                Duplicar dependem de saber o scope atual (`scope`), então
+                ficam fora se ele não vier informado (chamador não sabe onde
+                a tarefa vive). */}
+            {initial && !parentTitle && (
+              <div className="ml-auto flex items-center">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Mais ações da tarefa"
+                      className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {scope && (
+                      <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
+                        <FolderInput className="h-3.5 w-3.5" /> Mover para...
+                      </DropdownMenuItem>
+                    )}
+                    {scope && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          duplicateTask(initial, scope);
+                          toast.success("Tarefa duplicada.");
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5" /> Duplicar
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      onClick={() =>
+                        depsSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        })
+                      }
+                    >
+                      <Link2 className="h-3.5 w-3.5" /> Relacionamentos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        historicoSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        })
+                      }
+                    >
+                      <History className="h-3.5 w-3.5" /> Histórico
+                    </DropdownMenuItem>
+                    {status !== "Arquivado" && (
+                      <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
+                        <Archive className="h-3.5 w-3.5" /> Arquivar
+                      </DropdownMenuItem>
+                    )}
+                    {onDelete && (
+                      <DropdownMenuItem
+                        onClick={onDelete}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
           </div>
+
+          {scope && initial && (
+            <MoveTaskDialog
+              open={moveDialogOpen}
+              onOpenChange={setMoveDialogOpen}
+              currentScope={scope}
+              onConfirm={(target: MoveTarget) => {
+                moveTask(initial, scope, target);
+                toast.success(`Tarefa movida para ${target.label}.`);
+                onOpenChange(false);
+              }}
+            />
+          )}
 
           <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
             <div className="min-h-0 overflow-y-auto">
@@ -4164,30 +4255,32 @@ export function TaskDialog({
               </div>
             </div>
 
-            <TaskActivityPanel
-              task={{
-                status,
-                dueDate: dueDate || undefined,
-                originalDueDate,
-                performanceDueDate,
-                deadlineHistory,
-                completedAt: initial?.completedAt,
-              }}
-              activity={activity}
-              comments={comments}
-              members={members}
-              commentText={commentText}
-              onCommentTextChange={setCommentText}
-              onPostComment={postComment}
-              deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
-              pendingDeadlineChange={pendingDeadlineChange}
-              onConfirmDeadlineChange={(motivo, observacao) => {
-                if (!pendingDeadlineChange) return;
-                commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
-                setPendingDeadlineChange(null);
-              }}
-              onCancelDeadlineChange={discardPendingDeadlineChange}
-            />
+            <div ref={historicoSectionRef}>
+              <TaskActivityPanel
+                task={{
+                  status,
+                  dueDate: dueDate || undefined,
+                  originalDueDate,
+                  performanceDueDate,
+                  deadlineHistory,
+                  completedAt: initial?.completedAt,
+                }}
+                activity={activity}
+                comments={comments}
+                members={members}
+                commentText={commentText}
+                onCommentTextChange={setCommentText}
+                onPostComment={postComment}
+                deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
+                pendingDeadlineChange={pendingDeadlineChange}
+                onConfirmDeadlineChange={(motivo, observacao) => {
+                  if (!pendingDeadlineChange) return;
+                  commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
+                  setPendingDeadlineChange(null);
+                }}
+                onCancelDeadlineChange={discardPendingDeadlineChange}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">

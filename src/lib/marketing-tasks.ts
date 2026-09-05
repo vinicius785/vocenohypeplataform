@@ -184,3 +184,12 @@ export function updateStandalone(
 export function removeStandalone(id: string) {
   standaloneStore.set((prev) => prev.filter((s) => s.id !== id));
 }
+
+/** Igual a `createStandalone`, mas preserva o `id` recebido em vez de
+ * gerar um novo — usada só por "Mover tarefa" (`src/lib/move-task.ts`):
+ * mover uma tarefa PRA cá tem que manter o mesmo id de origem, senão
+ * dependências (`task_dependencies`, guardadas só pelo id cru da
+ * tarefa) e qualquer link cruzado apontando pra ela quebrariam. */
+export function insertStandaloneWithId(item: MktStandalone) {
+  standaloneStore.set((prev) => [...prev, item]);
+}

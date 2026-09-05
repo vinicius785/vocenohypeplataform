@@ -1,6 +1,7 @@
 {
-  "version": "1.263.4",
+  "version": "1.264.0",
   "notes": [
+    "Adiciona um menu \"⋯\" nas tarefas (ao lado do X de fechar, no diálogo da tarefa) com ações rápidas: Mover para... (transfere a tarefa pra outro projeto, campanha ou pro Kanban do Marketing — preserva comentários, anexos, subtarefas e dependências, já que o id da tarefa é mantido), Duplicar (cria uma cópia na mesma tarefa/board, sem herdar histórico/comentários/cronômetro da original), Relacionamentos e Histórico (atalhos que rolam até as seções de Dependências e Activity já existentes no próprio diálogo) e Arquivar (atalho pra marcar o status como \"Arquivado\"). \"Excluir\" também passou a aparecer nesse menu, além do botão que já existia no rodapé.",
     "Simplifica a Visão geral do Roadmap: remove os indicadores \"Tarefas atrasadas\", \"Tarefas sem fase\" e \"Responsáveis\" (com suas respectivas listas). \"Período do projeto\" vira \"Período da fase\" — mostra as datas da fase atual em vez do intervalo de todas as fases do projeto.",
     "Remove a funcionalidade de Marcos do Roadmap dos projetos — as fases já cobrem esse papel (entregas/pontos-chave do projeto). Some o formulário \"Adicionar marco\", a linha do tempo de marcos e o indicador \"Próximo marco\" na Visão geral. Nenhuma tarefa foi apagada: tarefas que estavam vinculadas a um marco continuam existindo normalmente no Kanban/fases, só perderam esse vínculo que não existe mais.",
     "Reverte a fusão do Kanban dentro do Roadmap (feita na Fase 1 do Roadmap): \"Kanban\" volta a ser uma aba própria da página do projeto, separada de \"Roadmap\", exatamente como era antes. A aba Roadmap também volta a ser uma tela única (Visão geral + Linha do tempo de fases + Marcos, tudo em sequência), sem as sub-abas internas que ela tinha ganhado. Nada do modelo de dados muda — fases, vínculo de tarefas, progresso automático, filtro/agrupamento por fase no Kanban e o menu \"Mover para fase\" continuam funcionando exatamente como antes; só a estrutura de navegação da página voltou ao normal.",
@@ -393,6 +394,26 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.264.0",
+      "summary": "Novo menu \"⋯\" na tarefa: mover pra outro projeto/campanha/Marketing, duplicar, arquivar e mais.",
+      "modules": [
+        {
+          "name": "TAREFAS",
+          "tagline": "Menu de ações rápidas",
+          "items": [
+            {
+              "title": "Mover tarefa",
+              "description": "Transfira uma tarefa pra outro projeto, campanha ou pro Kanban do Marketing — comentários, anexos, subtarefas e dependências continuam funcionando depois do move."
+            },
+            {
+              "title": "Duplicar, Arquivar e atalhos",
+              "description": "Duplicar cria uma cópia limpa (sem histórico da original); Arquivar muda o status com um clique; Relacionamentos e Histórico levam direto às seções já existentes na tarefa."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.263.4",
       "summary": "Visão geral do Roadmap mais enxuta: menos indicadores, período por fase.",
