@@ -1,6 +1,7 @@
 {
-  "version": "1.263.2",
+  "version": "1.263.3",
   "notes": [
+    "Remove a funcionalidade de Marcos do Roadmap dos projetos — as fases já cobrem esse papel (entregas/pontos-chave do projeto). Some o formulário \"Adicionar marco\", a linha do tempo de marcos e o indicador \"Próximo marco\" na Visão geral. Nenhuma tarefa foi apagada: tarefas que estavam vinculadas a um marco continuam existindo normalmente no Kanban/fases, só perderam esse vínculo que não existe mais.",
     "Reverte a fusão do Kanban dentro do Roadmap (feita na Fase 1 do Roadmap): \"Kanban\" volta a ser uma aba própria da página do projeto, separada de \"Roadmap\", exatamente como era antes. A aba Roadmap também volta a ser uma tela única (Visão geral + Linha do tempo de fases + Marcos, tudo em sequência), sem as sub-abas internas que ela tinha ganhado. Nada do modelo de dados muda — fases, vínculo de tarefas, progresso automático, filtro/agrupamento por fase no Kanban e o menu \"Mover para fase\" continuam funcionando exatamente como antes; só a estrutura de navegação da página voltou ao normal.",
     "Fase 2 do Roadmap dos projetos: Kanban ganha um toggle \"Agrupar por: Status | Fase\" (dentro de Filtrar) — agrupando por fase, cada coluna passa a ser uma fase do roadmap (+ \"Sem fase\"), arrastar um card entre colunas move a tarefa de fase (nunca muda status), e \"Adicionar\" numa coluna já cria a tarefa naquela fase. Cada tarefa dentro de uma fase (ou em \"Tarefas sem fase\") ganhou um menu \"Mover para fase\" — alternativa ao arrastar-e-soltar que também funciona em qualquer dispositivo, já que toque não sustenta drag-and-drop nativo de forma confiável.",
     "Refatora o Roadmap dos projetos: deixa de ser só uma linha do tempo de marcos e ganha um modelo de fases real, integrado ao Kanban. Cada fase tem nome, descrição, período, responsável, cor e status; tarefas se vinculam a uma fase (individualmente ou em massa, via um painel de busca dedicado), tarefas criadas dentro de uma fase já nascem vinculadas e aparecem também no Kanban do projeto — que ganhou um badge de fase no card e um filtro por fase. Excluir uma fase nunca apaga suas tarefas: elas voltam para \"Sem fase\" (área própria, com contador, seleção múltipla e opção de criar uma nova fase a partir da seleção). Progresso de cada fase é automático (concluídas/total, nunca \"0%\" enganoso quando não há tarefa vinculada) e o status visual (Não iniciada/Em andamento/Em risco/Atrasada/Concluída) combina o que foi definido manualmente com o cálculo automático baseado em prazo e pendências, reaproveitando a mesma regra de atraso já usada no resto da plataforma. A aba Roadmap virou 3 sub-abas — Visão geral (progresso geral, fase atual, próxima entrega/marco, atrasadas, fases em risco, responsáveis, período), Roadmap (linha do tempo proporcional + cards de fase expansíveis, com arrastar-tarefa-entre-fases) e Tarefas (o Kanban de sempre, agora com filtro por fase) — substituindo o Kanban solto que ficava sempre visível embaixo. Marcos continuam existindo, agora com uma fase opcional. Tudo condicionado à permissão de Projetos: sem ela, os botões de criar/editar fase e vincular tarefas ficam ocultos (validado no banco também, não só na interface).",
@@ -391,6 +392,22 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.263.3",
+      "summary": "Remove Marcos do Roadmap — as fases já cobrem esse papel.",
+      "modules": [
+        {
+          "name": "PROJETOS",
+          "tagline": "Roadmap mais enxuto",
+          "items": [
+            {
+              "title": "Marcos removidos",
+              "description": "O Roadmap não tem mais a seção de Marcos (formulário, linha do tempo e o indicador \"Próximo marco\") — as fases já servem esse propósito. Nenhuma tarefa foi apagada."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.263.2",
       "summary": "Reverte a fusão do Kanban dentro do Roadmap — cada um volta a ser sua própria aba.",

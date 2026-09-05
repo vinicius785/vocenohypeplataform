@@ -1,9 +1,14 @@
 import { AlertTriangle, Calendar, CheckCircle2, Clock, Flag, Users } from "lucide-react";
-import { Avatar, getTaskAssignees, initialsOf, colorFor, type Task } from "@/components/tasks/TaskBoard";
+import {
+  Avatar,
+  getTaskAssignees,
+  initialsOf,
+  colorFor,
+  type Task,
+} from "@/components/tasks/TaskBoard";
 import { OPEN_STATUSES } from "@/lib/score";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import { formatIsoDate } from "@/lib/utils";
-import type { Milestone } from "@/lib/projetos";
 import {
   faseAtual,
   faseStatusEfetivo,
@@ -37,17 +42,15 @@ function StatCard({
 }
 
 /** Aba "Visão geral" (item 8 do pedido) — só leitura, deriva tudo do que
- * já está carregado (`fases`+`tasks`+`milestones`), nenhum fetch novo. */
+ * já está carregado (`fases`+`tasks`), nenhum fetch novo. */
 export function RoadmapOverviewTab({
   fases,
   tasks,
-  milestones,
   semFase,
   onOpenTask,
 }: {
   fases: ProjetoFase[];
   tasks: Task[];
-  milestones: Milestone[];
   semFase: Task[];
   onOpenTask: (t: Task) => void;
 }) {
@@ -65,11 +68,6 @@ export function RoadmapOverviewTab({
     .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
   const proximaEntrega = abertasComPrazo.find((t) => (t.dueDate ?? "") >= today) ?? null;
 
-  const proximoMarco =
-    [...milestones]
-      .filter((m) => !m.done && m.date >= today)
-      .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
-
   const atrasadas = tasks.filter(
     (t) => OPEN_STATUSES.has(t.status) && !!t.dueDate && t.dueDate < today,
   );
@@ -82,11 +80,16 @@ export function RoadmapOverviewTab({
   const responsaveis = Array.from(new Set(tasks.flatMap((t) => getTaskAssignees(t))));
 
   const inicio = fases.length ? fases.map((f) => f.dataInicio).sort()[0] : null;
-  const fim = fases.length ? fases.map((f) => f.dataFim).sort().at(-1) : null;
+  const fim = fases.length
+    ? fases
+        .map((f) => f.dataFim)
+        .sort()
+        .at(-1)
+    : null;
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
           label="Progresso geral"
@@ -97,19 +100,17 @@ export function RoadmapOverviewTab({
           icon={<Flag className="h-3.5 w-3.5" />}
           label="Fase atual"
           value={atual?.nome ?? "—"}
-          hint={atual ? `${formatIsoDate(atual.dataInicio)} – ${formatIsoDate(atual.dataFim)}` : "Todas as fases concluídas"}
+          hint={
+            atual
+              ? `${formatIsoDate(atual.dataInicio)} – ${formatIsoDate(atual.dataFim)}`
+              : "Todas as fases concluídas"
+          }
         />
         <StatCard
           icon={<Calendar className="h-3.5 w-3.5" />}
           label="Próxima entrega"
           value={proximaEntrega ? proximaEntrega.title : "—"}
           hint={proximaEntrega?.dueDate ? formatIsoDate(proximaEntrega.dueDate) : undefined}
-        />
-        <StatCard
-          icon={<Flag className="h-3.5 w-3.5" />}
-          label="Próximo marco"
-          value={proximoMarco?.title ?? "—"}
-          hint={proximoMarco ? formatIsoDate(proximoMarco.date) : "Nenhum marco pendente"}
         />
       </div>
 
@@ -194,7 +195,10 @@ export function RoadmapOverviewTab({
                 key={a}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-foreground"
               >
-                <Avatar member={{ name: a, initials: initialsOf(a) || "?", color: colorFor(a) }} size={18} />
+                <Avatar
+                  member={{ name: a, initials: initialsOf(a) || "?", color: colorFor(a) }}
+                  size={18}
+                />
                 {a}
               </span>
             ))}

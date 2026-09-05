@@ -9,7 +9,6 @@ import {
   Users,
   FileText,
   ImageIcon,
-  Check,
   ExternalLink,
   CalendarDays,
   Megaphone,
@@ -63,7 +62,6 @@ import {
   type Project,
   type ProjectLayout,
   type Task,
-  type Milestone,
   type DocItem,
   type DocSourceType,
   type DocCategory,
@@ -74,7 +72,6 @@ import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
 import { AeoMonitorPanel } from "@/components/marketing/AeoMonitorPanel";
 import { FluxosEmailPanel } from "@/components/marketing/FluxosEmailPanel";
-import { formatIsoDate } from "@/lib/utils";
 import {
   InfluencerBoard,
   normalizeInflus,
@@ -374,94 +371,22 @@ function RoadmapPanel({
     [project.tasks, fases],
   );
 
-  // Marco (mantido da versão anterior — item 11 do pedido, agora aceita
-  // uma fase opcional).
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [marcoFaseId, setMarcoFaseId] = useState("");
-
-  const addMarco = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
-    const task: Task = {
-      id: crypto.randomUUID(),
-      title: title.trim(),
-      status: "Aberto",
-      dueDate: date || undefined,
-      roadmapPhaseId: marcoFaseId || undefined,
-    };
-    const m: Milestone = {
-      id: crypto.randomUUID(),
-      title: title.trim(),
-      date,
-      done: false,
-      taskId: task.id,
-      faseId: marcoFaseId || undefined,
-    };
-    update({ milestones: [...project.milestones, m], tasks: [...project.tasks, task] });
-    setTitle("");
-    setDate("");
-    setMarcoFaseId("");
-  };
-
-  const removeMarco = (id: string) => {
-    const m = project.milestones.find((x) => x.id === id);
-    update({
-      milestones: project.milestones.filter((x) => x.id !== id),
-      tasks: m?.taskId ? project.tasks.filter((t) => t.id !== m.taskId) : project.tasks,
-    });
-  };
-
-  // Dialog de tarefa unificado — edita (marco, fase, "sem fase" ou Kanban)
-  // e cria (dentro de uma fase) usando SEMPRE o mesmo SharedTaskDialog.
+  // Dialog de tarefa unificado — edita (fase, "sem fase" ou Kanban) e
+  // cria (dentro de uma fase) usando SEMPRE o mesmo SharedTaskDialog.
   const [taskDialog, setTaskDialog] = useState<
     { mode: "edit"; taskId: string } | { mode: "new"; defaultFaseId?: string } | null
   >(null);
-
-  const openMilestone = (m: Milestone) => {
-    let taskId = m.taskId;
-    if (!taskId) {
-      const t: Task = {
-        id: crypto.randomUUID(),
-        title: m.title,
-        status: m.done ? "Concluído" : "Aberto",
-        dueDate: m.date || undefined,
-        roadmapPhaseId: m.faseId,
-      };
-      taskId = t.id;
-      update({
-        tasks: [...project.tasks, t],
-        milestones: project.milestones.map((x) => (x.id === m.id ? { ...x, taskId } : x)),
-      });
-    }
-    setTaskDialog({ mode: "edit", taskId });
-  };
 
   const saveTaskUnified = (t: Task) => {
     const tasks = project.tasks.some((x) => x.id === t.id)
       ? project.tasks.map((x) => (x.id === t.id ? t : x))
       : [...project.tasks, t];
-    const milestones = project.milestones.map((m) =>
-      m.taskId === t.id
-        ? { ...m, title: t.title, date: t.dueDate ?? m.date, done: t.status === "Concluído" }
-        : m,
-    );
-    update({ tasks, milestones });
+    update({ tasks });
   };
 
   const deleteTaskUnified = (taskId: string) => {
-    update({
-      tasks: project.tasks.filter((t) => t.id !== taskId),
-      milestones: project.milestones.map((m) =>
-        m.taskId === taskId ? { ...m, taskId: undefined } : m,
-      ),
-    });
+    update({ tasks: project.tasks.filter((t) => t.id !== taskId) });
   };
-
-  const sortedMarcos = useMemo(
-    () => [...project.milestones].sort((a, b) => (a.date || "").localeCompare(b.date || "")),
-    [project.milestones],
-  );
 
   const editingTask =
     taskDialog?.mode === "edit"
@@ -556,7 +481,6 @@ function RoadmapPanel({
       <RoadmapOverviewTab
         fases={fases}
         tasks={project.tasks as unknown as BoardTask[]}
-        milestones={project.milestones}
         semFase={semFase}
         onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
       />
@@ -582,102 +506,6 @@ function RoadmapPanel({
         }}
         onCreateFaseFromSelection={handleCreateFaseFromSelection}
       />
-
-      <div className="space-y-4 border-t border-border pt-6">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Marcos
-        </h3>
-        {canEdit && (
-          <form onSubmit={addMarco} className="flex flex-wrap gap-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Marco / entrega"
-              className="h-8 flex-1 min-w-[200px] rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
-            />
-            <DateField
-              value={date || undefined}
-              onChange={(v) => setDate(v ?? "")}
-              className="h-8 text-xs"
-            />
-            <select
-              value={marcoFaseId}
-              onChange={(e) => setMarcoFaseId(e.target.value)}
-              className="h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none"
-            >
-              <option value="">Sem fase</option>
-              {fases.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.nome}
-                </option>
-              ))}
-            </select>
-            <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90">
-              <Plus className="h-3.5 w-3.5" /> Adicionar marco
-            </button>
-          </form>
-        )}
-
-        {sortedMarcos.length === 0 ? (
-          <EmptyState label="Nenhum marco ainda." />
-        ) : (
-          <div className="overflow-x-auto pb-4">
-            <div
-              className="relative min-w-full"
-              style={{ minWidth: `${Math.max(sortedMarcos.length * 180, 600)}px` }}
-            >
-              <div className="absolute left-0 right-0 top-6 h-px bg-border" />
-              <ol className="relative flex items-start gap-4">
-                {sortedMarcos.map((m) => (
-                  <li
-                    key={m.id}
-                    className="group relative flex flex-1 min-w-[160px] flex-col items-center"
-                  >
-                    <button
-                      onClick={() => openMilestone(m)}
-                      aria-label={`Abrir tarefa ${m.title}`}
-                      className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 transition-transform hover:scale-110 ${
-                        m.done
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {m.done ? (
-                        <Check className="h-5 w-5" />
-                      ) : (
-                        <span className="text-xs font-semibold">{sortedMarcos.indexOf(m) + 1}</span>
-                      )}
-                    </button>
-                    <div className="mt-3 w-full text-center">
-                      <button
-                        onClick={() => openMilestone(m)}
-                        className={`block w-full truncate text-xs font-medium hover:underline ${m.done ? "text-muted-foreground line-through" : "text-foreground"}`}
-                        title={m.title}
-                      >
-                        {m.title}
-                      </button>
-                      {m.date && (
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
-                          {formatIsoDate(m.date)}
-                        </p>
-                      )}
-                    </div>
-                    {canEdit && (
-                      <button
-                        onClick={() => removeMarco(m.id)}
-                        aria-label="Remover"
-                        className="absolute right-0 top-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted"
-                      >
-                        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
-        )}
-      </div>
 
       {taskDialog && (
         <SharedTaskDialog
@@ -772,16 +600,7 @@ function KanbanPanel({
     <TaskBoard
       tasks={project.tasks as unknown as BoardTask[]}
       onChange={(next) => {
-        const tasks = next as unknown as Task[];
-        update({
-          tasks,
-          milestones: project.milestones.map((m) => {
-            const t = tasks.find((x) => x.id === m.taskId);
-            return t
-              ? { ...m, title: t.title, date: t.dueDate ?? m.date, done: t.status === "Concluído" }
-              : m;
-          }),
-        });
+        update({ tasks: next as unknown as Task[] });
       }}
       scope={{ kind: "projeto", id: project.id }}
       breadcrumb="Projetos"
