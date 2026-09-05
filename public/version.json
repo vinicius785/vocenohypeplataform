@@ -1,6 +1,7 @@
 {
-  "version": "1.263.3",
+  "version": "1.263.4",
   "notes": [
+    "Simplifica a Visão geral do Roadmap: remove os indicadores \"Tarefas atrasadas\", \"Tarefas sem fase\" e \"Responsáveis\" (com suas respectivas listas). \"Período do projeto\" vira \"Período da fase\" — mostra as datas da fase atual em vez do intervalo de todas as fases do projeto.",
     "Remove a funcionalidade de Marcos do Roadmap dos projetos — as fases já cobrem esse papel (entregas/pontos-chave do projeto). Some o formulário \"Adicionar marco\", a linha do tempo de marcos e o indicador \"Próximo marco\" na Visão geral. Nenhuma tarefa foi apagada: tarefas que estavam vinculadas a um marco continuam existindo normalmente no Kanban/fases, só perderam esse vínculo que não existe mais.",
     "Reverte a fusão do Kanban dentro do Roadmap (feita na Fase 1 do Roadmap): \"Kanban\" volta a ser uma aba própria da página do projeto, separada de \"Roadmap\", exatamente como era antes. A aba Roadmap também volta a ser uma tela única (Visão geral + Linha do tempo de fases + Marcos, tudo em sequência), sem as sub-abas internas que ela tinha ganhado. Nada do modelo de dados muda — fases, vínculo de tarefas, progresso automático, filtro/agrupamento por fase no Kanban e o menu \"Mover para fase\" continuam funcionando exatamente como antes; só a estrutura de navegação da página voltou ao normal.",
     "Fase 2 do Roadmap dos projetos: Kanban ganha um toggle \"Agrupar por: Status | Fase\" (dentro de Filtrar) — agrupando por fase, cada coluna passa a ser uma fase do roadmap (+ \"Sem fase\"), arrastar um card entre colunas move a tarefa de fase (nunca muda status), e \"Adicionar\" numa coluna já cria a tarefa naquela fase. Cada tarefa dentro de uma fase (ou em \"Tarefas sem fase\") ganhou um menu \"Mover para fase\" — alternativa ao arrastar-e-soltar que também funciona em qualquer dispositivo, já que toque não sustenta drag-and-drop nativo de forma confiável.",
@@ -392,6 +393,26 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.263.4",
+      "summary": "Visão geral do Roadmap mais enxuta: menos indicadores, período por fase.",
+      "modules": [
+        {
+          "name": "PROJETOS",
+          "tagline": "Visão geral simplificada",
+          "items": [
+            {
+              "title": "Indicadores removidos",
+              "description": "Some \"Tarefas atrasadas\", \"Tarefas sem fase\" e \"Responsáveis\" da Visão geral do Roadmap."
+            },
+            {
+              "title": "Período da fase, não do projeto",
+              "description": "O card de período agora mostra as datas da fase atual, em vez do intervalo entre todas as fases do projeto."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.263.3",
       "summary": "Remove Marcos do Roadmap — as fases já cobrem esse papel.",

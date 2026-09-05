@@ -478,12 +478,7 @@ function RoadmapPanel({
 
   return (
     <div className="space-y-8">
-      <RoadmapOverviewTab
-        fases={fases}
-        tasks={project.tasks as unknown as BoardTask[]}
-        semFase={semFase}
-        onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
-      />
+      <RoadmapOverviewTab fases={fases} tasks={project.tasks as unknown as BoardTask[]} />
 
       <PhaseTimeline
         fases={fases}
