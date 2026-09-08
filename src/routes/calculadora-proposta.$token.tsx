@@ -80,7 +80,7 @@ function TopBar({ ws }: { ws: Workspace }) {
 }
 
 const selectCls =
-  "h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
+  "h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
 
 function CalculadoraPropostaPage() {
   const { proposta, ws } = Route.useLoaderData();
