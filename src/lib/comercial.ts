@@ -38,7 +38,28 @@ export type LeadHistoryEntry = {
   type: "created" | "stage" | "edit";
   text: string;
   createdAt: number;
+  /** Categoria estruturada do evento — opcional, só gravada a partir da
+   * introdução deste campo (histórico antigo continua renderizando, só sem
+   * ícone/agrupamento específico). Alimenta a timeline rica do drawer e,
+   * com volume suficiente, os relatórios de conversão/tempo por etapa —
+   * nunca reconstruído por parsing de `text`. */
+  kind?: OpportunityHistoryKind;
+  /** Etapa de origem/destino de uma mudança — só presente em `kind ===
+   * "stage_change"`, gravado pelo motor (`comercial-engine.ts`), nunca
+   * inferido do texto. */
+  fromStage?: string;
+  toStage?: string;
 };
+
+export type OpportunityHistoryKind =
+  | "created"
+  | "stage_change"
+  | "value_change"
+  | "proposal"
+  | "meeting"
+  | "negotiation"
+  | "won"
+  | "lost";
 
 /** Snapshot do Simulador de Proposta (Comercial) aplicado a este lead —
  * linhas de Tier×Formato×Qtd + percentuais usados no cálculo, guardados
@@ -112,6 +133,14 @@ export type Lead = {
   // Preenchido ao converter o lead em cliente/projeto (fecha o ciclo Comercial → Clientes/Projetos)
   clienteId?: string;
   projectId?: string;
+  /** Timestamp ISO de quando a oportunidade entrou em GANHO/PERDIDO —
+   * gravado pelo motor (`applyOpportunityAction`) a partir de agora, nunca
+   * inferido de `updatedAt` (que muda a qualquer edição). Ausente em
+   * negócios ganhos/perdidos ANTES desta mudança — relatórios "no período"
+   * tratam esse caso como fora do recorte, nunca reaproveitam `updatedAt`
+   * como aproximação silenciosa. */
+  wonAt?: string;
+  lostAt?: string;
 };
 
 const STAGES_KEY = "comercial:stages";

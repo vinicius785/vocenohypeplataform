@@ -1,4 +1,4 @@
-import type { Lead, PropostaSnapshot } from "@/lib/comercial";
+import type { Lead, OpportunityHistoryKind, PropostaSnapshot } from "@/lib/comercial";
 import { formatBRL } from "@/lib/comercial";
 
 /**
@@ -197,11 +197,22 @@ export type OpportunityActionOpts = {
   toStage?: OpportunityStage;
 };
 
+/** Uma entrada de histórico produzida por uma ação — `kind`/`fromStage`/
+ * `toStage` são estruturados (nunca inferidos por parsing de `text` depois)
+ * pra alimentar a timeline rica do drawer e, com volume, os relatórios de
+ * conversão/tempo por etapa. */
+export type OpportunityHistoryEntryDraft = {
+  text: string;
+  kind: OpportunityHistoryKind;
+  fromStage?: OpportunityStage;
+  toStage?: OpportunityStage;
+};
+
 export type OpportunityActionResult = {
   patch: Partial<Lead>;
   /** Uma ou mais linhas de histórico — a maioria das ações gera uma só,
    * mas ex. criar_proposta com ajuste manual de preço gera duas. */
-  historyEntries: string[];
+  historyEntries: OpportunityHistoryEntryDraft[];
 };
 
 /**
@@ -218,37 +229,66 @@ export function applyOpportunityAction(
   actorName: string,
   opts: OpportunityActionOpts = {},
 ): OpportunityActionResult {
+  const from = legacyStage(lead.stage);
+
   switch (action) {
     case "registrar_contato":
       return {
         patch: { stage: "CONTATO_FEITO" },
-        historyEntries: [`${actorName} registrou contato.`],
+        historyEntries: [
+          {
+            text: `${actorName} registrou contato.`,
+            kind: "stage_change",
+            fromStage: from,
+            toStage: "CONTATO_FEITO",
+          },
+        ],
       };
 
     case "agendar_reuniao":
       return {
         patch: { stage: "REUNIAO_AGENDADA", nextMeeting: opts.data },
         historyEntries: [
-          opts.data
-            ? `${actorName} agendou reunião para ${formatDateBR(opts.data)}.`
-            : `${actorName} agendou reunião.`,
+          {
+            text: opts.data
+              ? `${actorName} agendou reunião para ${formatDateBR(opts.data)}.`
+              : `${actorName} agendou reunião.`,
+            kind: "meeting",
+            fromStage: from,
+            toStage: "REUNIAO_AGENDADA",
+          },
         ],
       };
 
     case "registrar_reuniao":
       return {
         patch: { stage: "REUNIAO_REALIZADA" },
-        historyEntries: [`${actorName} registrou a reunião realizada.`],
+        historyEntries: [
+          {
+            text: `${actorName} registrou a reunião realizada.`,
+            kind: "meeting",
+            fromStage: from,
+            toStage: "REUNIAO_REALIZADA",
+          },
+        ],
       };
 
     case "criar_proposta": {
       const proposta = opts.proposta;
       const valor = proposta?.precoFinal ?? lead.value;
-      const entries = [`${actorName} criou proposta de ${formatBRL(valor)}.`];
+      const entries: OpportunityHistoryEntryDraft[] = [
+        {
+          text: `${actorName} criou proposta de ${formatBRL(valor)}.`,
+          kind: "proposal",
+          fromStage: from,
+          toStage: "PROPOSTA_PREPARO",
+        },
+      ];
       if (proposta?.ajustadoManualmente && proposta.precoCalculado !== undefined) {
-        entries.push(
-          `${actorName} ajustou o preço comercial de ${formatBRL(proposta.precoCalculado)} para ${formatBRL(proposta.precoFinal)}.`,
-        );
+        entries.push({
+          text: `${actorName} ajustou o preço comercial de ${formatBRL(proposta.precoCalculado)} para ${formatBRL(proposta.precoFinal)}.`,
+          kind: "value_change",
+        });
       }
       return {
         patch: { stage: "PROPOSTA_PREPARO", value: valor, proposta },
@@ -259,59 +299,91 @@ export function applyOpportunityAction(
     case "enviar_proposta":
       return {
         patch: { stage: "PROPOSTA_ENVIADA" },
-        historyEntries: [`${actorName} enviou proposta de ${formatBRL(lead.value)} ao cliente.`],
+        historyEntries: [
+          {
+            text: `${actorName} enviou proposta de ${formatBRL(lead.value)} ao cliente.`,
+            kind: "proposal",
+            fromStage: from,
+            toStage: "PROPOSTA_ENVIADA",
+          },
+        ],
       };
 
     case "revisar_proposta":
       return {
         patch: { stage: "PROPOSTA_PREPARO" },
-        historyEntries: [`${actorName} reabriu a proposta para revisão.`],
+        historyEntries: [
+          {
+            text: `${actorName} reabriu a proposta para revisão.`,
+            kind: "proposal",
+            fromStage: from,
+            toStage: "PROPOSTA_PREPARO",
+          },
+        ],
       };
 
     case "registrar_negociacao": {
       const patch: Partial<Lead> = { stage: "NEGOCIACAO" };
-      const entries: string[] = [];
+      const entries: OpportunityHistoryEntryDraft[] = [];
       if (opts.novoValor !== undefined && opts.novoValor !== lead.value) {
-        entries.push(
-          `${actorName} atualizou o valor da negociação de ${formatBRL(lead.value)} para ${formatBRL(opts.novoValor)}.`,
-        );
+        entries.push({
+          text: `${actorName} atualizou o valor da negociação de ${formatBRL(lead.value)} para ${formatBRL(opts.novoValor)}.`,
+          kind: "value_change",
+        });
         patch.value = opts.novoValor;
       }
-      entries.push(
-        opts.nota
+      entries.push({
+        text: opts.nota
           ? `${actorName} registrou atualização na negociação: ${opts.nota}`
           : `${actorName} registrou atualização na negociação.`,
-      );
+        kind: "negotiation",
+        fromStage: from,
+        toStage: "NEGOCIACAO",
+      });
       return { patch, historyEntries: entries };
     }
 
     case "marcar_ganho": {
       const valorFinal = opts.valorFinal ?? lead.value;
       return {
-        patch: { stage: "GANHO", value: valorFinal },
+        patch: { stage: "GANHO", value: valorFinal, wonAt: new Date().toISOString() },
         historyEntries: [
-          `${actorName} marcou a oportunidade como ganha — ${formatBRL(valorFinal)}.`,
+          {
+            text: `${actorName} marcou a oportunidade como ganha — ${formatBRL(valorFinal)}.`,
+            kind: "won",
+            fromStage: from,
+            toStage: "GANHO",
+          },
         ],
       };
     }
 
     case "marcar_perdido":
       return {
-        patch: { stage: "PERDIDO", lossReason: opts.motivo },
+        patch: { stage: "PERDIDO", lossReason: opts.motivo, lostAt: new Date().toISOString() },
         historyEntries: [
-          opts.motivo
-            ? `${actorName} marcou a oportunidade como perdida — motivo: ${opts.motivo}.`
-            : `${actorName} marcou a oportunidade como perdida.`,
+          {
+            text: opts.motivo
+              ? `${actorName} marcou a oportunidade como perdida — motivo: ${opts.motivo}.`
+              : `${actorName} marcou a oportunidade como perdida.`,
+            kind: "lost",
+            fromStage: from,
+            toStage: "PERDIDO",
+          },
         ],
       };
 
     case "alterar_etapa_manual": {
-      const from = legacyStage(lead.stage);
       const to = opts.toStage ?? from;
       return {
         patch: { stage: to },
         historyEntries: [
-          `${actorName} alterou manualmente: ${OPPORTUNITY_STAGE_LABEL[from]} → ${OPPORTUNITY_STAGE_LABEL[to]}.`,
+          {
+            text: `${actorName} alterou manualmente: ${OPPORTUNITY_STAGE_LABEL[from]} → ${OPPORTUNITY_STAGE_LABEL[to]}.`,
+            kind: "stage_change",
+            fromStage: from,
+            toStage: to,
+          },
         ],
       };
     }
@@ -334,4 +406,19 @@ export function daysSinceLastStageChange(lead: Pick<Lead, "history" | "updatedAt
     stageEntries.length > 0 ? Math.max(...stageEntries.map((h) => h.createdAt)) : lead.updatedAt;
   const diffMs = Date.now() - lastAt;
   return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
+}
+
+/** Limiar único de "parada no funil" — mesmo valor em badge do card, KPI,
+ * filtro e resumo do drawer (antes havia uma segunda definição, por
+ * `updatedAt`, divergente desta). */
+export const OPPORTUNITY_STALE_DAYS = 5;
+
+/** Uma oportunidade está "parada" quando não é terminal (GANHO/PERDIDO) E
+ * não muda de etapa há `OPPORTUNITY_STALE_DAYS` dias ou mais — nunca por
+ * `updatedAt` cru (editar uma observação não é "progresso"). Única fonte
+ * de verdade pro conceito de "parado" no módulo Comercial. */
+export function isOpportunityStale(lead: Pick<Lead, "stage" | "history" | "updatedAt">): boolean {
+  const stage = legacyStage(lead.stage);
+  if (stage === "GANHO" || stage === "PERDIDO") return false;
+  return daysSinceLastStageChange(lead) >= OPPORTUNITY_STALE_DAYS;
 }

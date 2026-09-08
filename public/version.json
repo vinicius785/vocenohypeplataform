@@ -1,6 +1,7 @@
 {
-  "version": "1.266.1",
+  "version": "1.267.0",
   "notes": [
+    "Redesign completo do Comercial: virou uma central de vendas com 4 visões (Visão geral/Pipeline/Atividades/Relatórios). Kanban agora usa a largura total da tela (colunas de 300px, cabeçalho fixo e rolagem própria por coluna, feedback visual ao arrastar). Cards mostram só o essencial (empresa, contato, valor, responsável, próxima ação, tempo sem interação) com um único indicador de risco por card, em vez de vários badges disputando atenção. Drawer da oportunidade reduzido de 896px para ~608px, sem o painel de resumo que repetia informação do cabeçalho, e reorganizado em 3 abas (Visão geral/Proposta/Histórico — Contato e Qualificação viraram blocos dentro de Visão geral). Nova barra de filtros (responsável, etapa, origem, com/sem próxima ação, ação vencida, parado 5+ dias, faixa de valor) com chips removíveis e ordenação, além de uma faixa de indicadores no cabeçalho (pipeline total, ganho no período, abertas, sem próxima ação, paradas, ações vencidas) — sempre \"—\" quando o dado não existe, nunca um número inventado (ex: forecast ponderado, que depende de uma probabilidade de fechamento que a plataforma ainda não tem configurada). Corrigido também um bug real: mover um card no Kanban enquanto a ficha desse mesmo lead estava aberta podia ser desfeito silenciosamente (e duplicar o histórico) ao editar qualquer campo de texto — a etapa agora só muda pelas ações do próprio motor de pipeline, nunca pelo salvamento automático de campo. \"Parado há quantos dias\" também unificado numa única regra (antes o card e a ficha calculavam isso de duas formas diferentes, com números divergentes).",
     "Corrige o item da calculadora de proposta externa transbordando a caixa e sobrepondo o preço em telas mais estreitas (largura da tela do cliente, tablet): os seletores de Porte e Formato não conseguiam encolher dentro da linha flexível (limitação padrão do navegador pra esse tipo de elemento), então o texto mais longo das opções empurrava o valor pra fora do lugar. Agora encolhem corretamente, sem cortar nem sobrepor nada.",
     "Corrige distorções no Score Operacional (Time): quem não tinha nenhuma tarefa concluída ou atrasada no período recebia pontuação alta \"de fábrica\" em Entrega (base 50) e Previsibilidade (35/35) — as duas dimensões agora retornam \"Sem dados\" nesse caso, e o Score da pessoa aparece como \"—\", nunca um número. Com poucas tarefas (menos de 5 no período), o Score é calculado mas marcado \"Provisório\" (sem classificação Excelente/Bom/Atenção/Crítico até ter amostra suficiente). Entrega ganhou penalidade graduada por tarefa atualmente atrasada há mais de 5 dias e por tarefa atrasada de prioridade alta. Compromissos, sem reunião esperada no período, agora fica \"Não aplicável\" (peso redistribuído entre Entrega e Previsibilidade) em vez de contar como 0/15. Novas salvaguardas de coerência: taxa de entrega no prazo abaixo de 50%/35%, tarefa de prioridade alta atrasada há +5 dias, 5+ tarefas atualmente atrasadas ou zero pontos em Entrega agora sempre limitam o Score final (teto 59 ou 49), mesmo com boas notas nas outras dimensões. Ficha do membro e lista da Time ganharam indicação de \"Sem dados\"/\"Provisório\"/quantidade de tarefas usada no cálculo e um tooltip explicando por que o Score foi limitado.",
     "Adiciona a Calculadora de Proposta externa (Comercial → aba Proposta de um lead → \"Calculadora externa\"): gera um link à parte (`/calculadora-proposta/$token`, mesmo padrão do \"Link do cliente\") pra abrir durante uma call de venda — o cliente/vendedor monta o pacote (porte do influenciador × formato de entrega × quantidade) e vê o investimento total recalculado em tempo real, com uma descrição curta de cada formato. Diferente do Simulador interno, o custo por tier e os percentuais da agência nunca saem do servidor — só o preço final (total e por item) chega ao navegador. Um botão \"Salvar esta simulação\" grava o pacote de volta no lead (mesmo campo que o Simulador interno usa), sem mudar a etapa do funil.",
@@ -400,6 +401,34 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.267.0",
+      "summary": "Comercial ganha um redesign completo: virou uma central de vendas, não só um Kanban.",
+      "modules": [
+        {
+          "name": "COMERCIAL",
+          "tagline": "Central de vendas",
+          "items": [
+            {
+              "title": "Pipeline em tela cheia",
+              "description": "Kanban usa toda a largura da tela, com cabeçalho de coluna fixo, rolagem própria e feedback visual ao arrastar um card."
+            },
+            {
+              "title": "Cards mais claros",
+              "description": "Cada card mostra o essencial (empresa, contato, valor, responsável, próxima ação) com um único indicador de risco, em vez de vários badges disputando atenção."
+            },
+            {
+              "title": "Ficha da oportunidade mais compacta",
+              "description": "O painel lateral encolheu e ganhou 3 abas (Visão geral, Proposta, Histórico), sem repetir informação do cabeçalho."
+            },
+            {
+              "title": "Filtros, indicadores e 3 novas visões",
+              "description": "Nova barra de filtros com chips, indicadores no topo (pipeline, ganho no período, paradas, ações vencidas) e as visões Visão geral/Atividades/Relatórios — sempre mostrando \"—\" quando o dado não existe, nunca um número inventado."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.266.1",
       "summary": "Corrige item da calculadora de proposta externa sobrepondo o preço em telas mais estreitas.",

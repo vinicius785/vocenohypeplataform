@@ -94,6 +94,8 @@ function rowToLead(row: LeadRow): Lead {
     contactRole: (extra.contactRole as string) ?? undefined,
     clienteId: (extra.clienteId as string) ?? undefined,
     projectId: (extra.projectId as string) ?? undefined,
+    wonAt: (extra.wonAt as string) ?? undefined,
+    lostAt: (extra.lostAt as string) ?? undefined,
   };
 }
 
@@ -220,6 +222,8 @@ function leadToRow(lead: Lead) {
     "contactRole",
     "clienteId",
     "projectId",
+    "wonAt",
+    "lostAt",
   ];
   for (const k of extraKeys) {
     const v = lead[k];
@@ -295,11 +299,14 @@ export const runOpportunityAction = createServerFn({ method: "POST" })
     );
     const history: LeadHistoryEntry[] = [
       ...(lead.history ?? []),
-      ...historyEntries.map((text) => ({
+      ...historyEntries.map((entry) => ({
         id: crypto.randomUUID(),
         type: "stage" as const,
-        text,
+        text: entry.text,
         createdAt: Date.now(),
+        kind: entry.kind,
+        fromStage: entry.fromStage,
+        toStage: entry.toStage,
       })),
     ];
     const merged: Lead = { ...lead, ...patch, history };
@@ -342,29 +349,29 @@ export const upsertLead = createServerFn({ method: "POST" })
     if (data.id) {
       const { data: existingRow, error: fetchErr } = await context.supabase
         .from("leads")
-        .select("stage, extra")
+        .select("extra")
         .eq("id", data.id)
         .single();
       if (fetchErr) throw new Error(fetchErr.message);
       const prevExtra = ((existingRow as { extra: Record<string, unknown> } | null)?.extra ??
         {}) as Record<string, unknown>;
-      const prevHistory = Array.isArray(prevExtra.history)
-        ? (prevExtra.history as LeadHistoryEntry[])
-        : [];
-      const history = [...prevHistory];
-      const prevStage = (existingRow as { stage: string } | null)?.stage;
-      if (prevStage && prevStage !== data.stage) {
-        history.push({
-          id: crypto.randomUUID(),
-          type: "stage",
-          text: `${actorName} moveu o lead para "${data.stageLabel ?? data.stage}"`,
-          createdAt: Date.now(),
-        });
-      }
-      row.extra.history = history;
+      row.extra.history = Array.isArray(prevExtra.history) ? prevExtra.history : [];
+      // Etapa e reunião agendada são exclusivas do motor de pipeline
+      // (`runOpportunityAction`/`updateLeadStage`) — nunca escritas por
+      // este caminho de autosave genérico de campo. Sem isso, o `stage`
+      // (e o `nextMeeting`) do estado local `liveLead` no drawer podia
+      // ficar desatualizado (ex.: um drag-and-drop no Kanban mudou a
+      // etapa enquanto o drawer do mesmo lead estava aberto) e um simples
+      // autosave de outro campo revertia a etapa/apagava a reunião
+      // silenciosamente, além de gerar uma segunda entrada de histórico
+      // conflitante. `stage`/`next_meeting` só entram no payload de
+      // criação (mais abaixo), nunca no de atualização.
+      const rowUpdate: Partial<typeof row> = { ...row };
+      delete rowUpdate.stage;
+      delete rowUpdate.next_meeting;
       const { data: updated, error } = await context.supabase
         .from("leads")
-        .update(row as never)
+        .update(rowUpdate as never)
         .eq("id", data.id)
         .select("*")
         .single();
@@ -420,11 +427,14 @@ export const updateLeadStage = createServerFn({ method: "POST" })
     );
     const history: LeadHistoryEntry[] = [
       ...(lead.history ?? []),
-      ...historyEntries.map((text) => ({
+      ...historyEntries.map((entry) => ({
         id: crypto.randomUUID(),
         type: "stage" as const,
-        text,
+        text: entry.text,
         createdAt: Date.now(),
+        kind: entry.kind,
+        fromStage: entry.fromStage,
+        toStage: entry.toStage,
       })),
     ];
     const merged: Lead = { ...lead, ...patch, history };
