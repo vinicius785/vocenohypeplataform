@@ -12,6 +12,7 @@ import {
   leadsClosestToClosing,
   bucketActivities,
   rangeForComercialPeriod,
+  computeComercialPriorities,
   type DateRange,
 } from "./comercial-metrics";
 
@@ -34,8 +35,13 @@ function lead(overrides: Partial<Lead> = {}): Lead {
 const fullRange: DateRange = { from: "1970-01-01T00:00:00.000Z", to: "9999-01-01T00:00:00.000Z" };
 
 describe("computeComercialKpis — nunca inventa dado que não existe", () => {
-  it("pipelineTotal soma o value de todos os leads, forecastPonderado é sempre null", () => {
-    const leads = [lead({ value: 100 }), lead({ value: 200 })];
+  it("pipelineTotal soma só oportunidades ABERTAS (exclui ganho/perdido), forecastPonderado é sempre null", () => {
+    const leads = [
+      lead({ value: 100 }),
+      lead({ value: 200 }),
+      lead({ stage: "GANHO", value: 9999 }),
+      lead({ stage: "PERDIDO", value: 9999 }),
+    ];
     const kpis = computeComercialKpis(leads, fullRange);
     expect(kpis.pipelineTotal).toBe(300);
     expect(kpis.forecastPonderado).toBeNull();
@@ -56,22 +62,33 @@ describe("computeComercialKpis — nunca inventa dado que não existe", () => {
     expect(kpis.ganhosSemDataRegistrada).toBe(1);
   });
 
-  it("oportunidadesSemProximaAcao conta só PROPOSTA_ENVIADA (única etapa aberta sem ação)", () => {
+  it("oportunidadesSemProximaAcao conta PROPOSTA_ENVIADA sem reunião futura, mas não quando há reunião futura agendada", () => {
     const leads = [
-      lead({ stage: "PROPOSTA_ENVIADA" }),
+      lead({ id: "sem-acao", stage: "PROPOSTA_ENVIADA" }),
       lead({ stage: "LEAD_RECEBIDO" }),
       lead({ stage: "NEGOCIACAO" }),
+      lead({
+        id: "com-reuniao-futura",
+        stage: "PROPOSTA_ENVIADA",
+        nextMeeting: new Date(Date.now() + DAY).toISOString(),
+      }),
     ];
     expect(computeComercialKpis(leads, fullRange).oportunidadesSemProximaAcao).toBe(1);
   });
 
-  it("atividadesVencidas conta só nextMeeting já passado", () => {
+  it("atividadesVencidas conta só nextMeeting já passado em oportunidades ainda abertas", () => {
     const vencida = lead({ nextMeeting: new Date(Date.now() - DAY).toISOString() });
     const futura = lead({ nextMeeting: new Date(Date.now() + DAY).toISOString() });
     const semReuniao = lead({});
-    expect(computeComercialKpis([vencida, futura, semReuniao], fullRange).atividadesVencidas).toBe(
-      1,
+    const ganhaComReuniaoVencida = lead({
+      stage: "GANHO",
+      nextMeeting: new Date(Date.now() - DAY).toISOString(),
+    });
+    const kpis = computeComercialKpis(
+      [vencida, futura, semReuniao, ganhaComReuniaoVencida],
+      fullRange,
     );
+    expect(kpis.atividadesVencidas).toBe(1);
   });
 
   it("oportunidadesAbertas exclui GANHO e PERDIDO", () => {
@@ -174,6 +191,93 @@ describe("leadsNeedingActionToday / leadsAtRisk / leadsClosestToClosing", () => 
     const c = lead({ id: "c", stage: "LEAD_RECEBIDO", value: 9999 });
     const result = leadsClosestToClosing([a, b, c]);
     expect(result.map((l) => l.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("computeComercialPriorities — lista única, sem duplicar oportunidade, ordenada por gravidade", () => {
+  it("classifica cada motivo de gravidade corretamente", () => {
+    const vencida = lead({
+      id: "vencida",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() - 3 * DAY).toISOString(),
+    });
+    const semAcao = lead({ id: "sem-acao", stage: "PROPOSTA_ENVIADA" });
+    const parada = lead({
+      id: "parada",
+      stage: "CONTATO_FEITO",
+      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 8 * DAY }],
+    });
+    const hoje = lead({
+      id: "hoje",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    });
+    const proximos = lead({
+      id: "proximos",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() + 3 * DAY).toISOString(),
+    });
+    const semProblema = lead({ id: "ok", stage: "LEAD_RECEBIDO" });
+    const ganho = lead({ id: "ganho", stage: "GANHO" });
+
+    const items = computeComercialPriorities([
+      vencida,
+      semAcao,
+      parada,
+      hoje,
+      proximos,
+      semProblema,
+      ganho,
+    ]);
+    const byId = new Map(items.map((i) => [i.lead.id, i.reason]));
+    expect(byId.get("vencida")).toBe("acao_vencida");
+    expect(byId.get("sem-acao")).toBe("sem_proxima_acao");
+    expect(byId.get("parada")).toBe("parada");
+    expect(byId.get("hoje")).toBe("hoje");
+    expect(byId.get("proximos")).toBe("proximos_dias");
+    expect(byId.has("ok")).toBe(false);
+    expect(byId.has("ganho")).toBe(false);
+  });
+
+  it("nunca lista a mesma oportunidade duas vezes, mesmo com vários problemas simultâneos", () => {
+    // Vencida (nextMeeting no passado) E, se não fosse a reunião, também
+    // seria "parada" (sem mudar de etapa há muitos dias) — deve aparecer
+    // só uma vez, com o motivo de maior gravidade (ação vencida).
+    const multiProblema = lead({
+      id: "multi",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() - 10 * DAY).toISOString(),
+      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 30 * DAY }],
+    });
+    const items = computeComercialPriorities([multiProblema]);
+    expect(items).toHaveLength(1);
+    expect(items[0].reason).toBe("acao_vencida");
+  });
+
+  it("ordena primeiro por gravidade, depois pelo maior atraso/inatividade dentro do mesmo motivo", () => {
+    const vencidaPouco = lead({
+      id: "vencida-pouco",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() - 1 * DAY).toISOString(),
+    });
+    const vencidaMuito = lead({
+      id: "vencida-muito",
+      stage: "REUNIAO_AGENDADA",
+      nextMeeting: new Date(Date.now() - 9 * DAY).toISOString(),
+    });
+    const parada = lead({
+      id: "parada",
+      stage: "CONTATO_FEITO",
+      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 8 * DAY }],
+    });
+    const items = computeComercialPriorities([parada, vencidaPouco, vencidaMuito]);
+    expect(items.map((i) => i.lead.id)).toEqual(["vencida-muito", "vencida-pouco", "parada"]);
+  });
+
+  it("estado vazio: nenhuma prioridade quando não há oportunidade com problema", () => {
+    const ok1 = lead({ id: "ok1", stage: "LEAD_RECEBIDO" });
+    const ok2 = lead({ id: "ok2", stage: "NEGOCIACAO" });
+    expect(computeComercialPriorities([ok1, ok2])).toEqual([]);
   });
 });
 

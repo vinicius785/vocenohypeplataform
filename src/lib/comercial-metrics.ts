@@ -3,6 +3,8 @@ import {
   legacyStage,
   deriveOpportunityNextStep,
   isOpportunityStale,
+  isNextActionOverdue,
+  hasValidNextAction,
   daysSinceLastStageChange,
   type OpportunityStage,
 } from "./comercial-engine";
@@ -74,7 +76,11 @@ export type ComercialKpis = {
    * `PROPOSTA_ENVIADA` (aguardando retorno do cliente), única condição
    * real e não-terminal com `action === null`. */
   oportunidadesSemProximaAcao: number;
+  /** Soma de `value` das oportunidades contadas em `oportunidadesSemProximaAcao`. */
+  valorSemProximaAcao: number;
   oportunidadesParadas: number;
+  /** Soma de `value` das oportunidades contadas em `oportunidadesParadas`. */
+  valorParadas: number;
   /** Só as com `nextMeeting` já vencido — único prazo estruturado que
    * existe hoje em qualquer etapa. Não cobre "próxima ação" em geral
    * (essas não têm prazo — ver `LeadFiltersBar`/aba Atividades). */
@@ -88,13 +94,12 @@ export function computeComercialKpis(leads: Lead[], range: DateRange): Comercial
   let ganhosSemDataRegistrada = 0;
   let oportunidadesAbertas = 0;
   let oportunidadesSemProximaAcao = 0;
+  let valorSemProximaAcao = 0;
   let oportunidadesParadas = 0;
+  let valorParadas = 0;
   let atividadesVencidas = 0;
-  const now = Date.now();
-
   for (const lead of leads) {
     const stage = legacyStage(lead.stage);
-    pipelineTotal += lead.value || 0;
 
     if (stage === "GANHO") {
       if (!lead.wonAt) ganhosSemDataRegistrada += 1;
@@ -104,15 +109,20 @@ export function computeComercialKpis(leads: Lead[], range: DateRange): Comercial
       }
     }
 
+    // Pipeline total: só oportunidades ABERTAS (exclui ganhos/perdidos) —
+    // um negócio já fechado não é mais "pipeline em aberto".
     if (stage !== "GANHO" && stage !== "PERDIDO") {
+      pipelineTotal += lead.value || 0;
       oportunidadesAbertas += 1;
-      const step = deriveOpportunityNextStep(lead);
-      if (step.action === null) oportunidadesSemProximaAcao += 1;
-      if (isOpportunityStale(lead)) oportunidadesParadas += 1;
-    }
-
-    if (lead.nextMeeting && new Date(lead.nextMeeting).getTime() < now) {
-      atividadesVencidas += 1;
+      if (!hasValidNextAction(lead)) {
+        oportunidadesSemProximaAcao += 1;
+        valorSemProximaAcao += lead.value || 0;
+      }
+      if (isOpportunityStale(lead)) {
+        oportunidadesParadas += 1;
+        valorParadas += lead.value || 0;
+      }
+      if (isNextActionOverdue(lead)) atividadesVencidas += 1;
     }
   }
 
@@ -124,7 +134,9 @@ export function computeComercialKpis(leads: Lead[], range: DateRange): Comercial
     ganhosSemDataRegistrada,
     oportunidadesAbertas,
     oportunidadesSemProximaAcao,
+    valorSemProximaAcao,
     oportunidadesParadas,
+    valorParadas,
     atividadesVencidas,
   };
 }
@@ -269,4 +281,90 @@ export function bucketActivities(
     if (step.actor === "HYPE" && step.action) result.proximas.push(lead);
   }
   return result;
+}
+
+/**
+ * Prioridades comerciais — lista única (Visão geral) que substitui "Precisa
+ * de ação hoje" / "Em risco" / "Mais avançadas no funil": cada oportunidade
+ * aberta aparece NO MÁXIMO uma vez, com o motivo de MAIOR gravidade que se
+ * aplica a ela (nunca duplicada por ter mais de um problema). Gravidade,
+ * em ordem: ação vencida > sem próxima ação > parada 5+ dias > reunião
+ * hoje > reunião nos próximos dias. Dentro do mesmo motivo, ordena pelo
+ * maior atraso/inatividade primeiro (reuniões futuras ordenam pela mais
+ * próxima primeiro, já que ali não há "atraso").
+ */
+export type ComercialPriorityReason =
+  | "acao_vencida"
+  | "sem_proxima_acao"
+  | "parada"
+  | "hoje"
+  | "proximos_dias";
+
+export const PRIORITY_REASON_RANK: Record<ComercialPriorityReason, number> = {
+  acao_vencida: 1,
+  sem_proxima_acao: 2,
+  parada: 3,
+  hoje: 4,
+  proximos_dias: 5,
+};
+
+export type ComercialPriorityItem = {
+  lead: Lead;
+  reason: ComercialPriorityReason;
+  /** Dias de atraso/inatividade (ação vencida, sem próxima ação, parada)
+   * ou dias até a próxima reunião (hoje = 0, próximos dias > 0). */
+  days: number;
+};
+
+export function computeComercialPriorities(leads: Lead[]): ComercialPriorityItem[] {
+  const now = Date.now();
+  const items: ComercialPriorityItem[] = [];
+
+  for (const lead of leads) {
+    const stage = legacyStage(lead.stage);
+    if (stage === "GANHO" || stage === "PERDIDO") continue;
+
+    if (isNextActionOverdue(lead)) {
+      const overdueDays = Math.max(
+        1,
+        Math.floor((now - new Date(lead.nextMeeting!).getTime()) / 86_400_000),
+      );
+      items.push({ lead, reason: "acao_vencida", days: overdueDays });
+      continue;
+    }
+
+    if (!hasValidNextAction(lead)) {
+      items.push({ lead, reason: "sem_proxima_acao", days: daysSinceLastStageChange(lead) });
+      continue;
+    }
+
+    if (isOpportunityStale(lead)) {
+      items.push({ lead, reason: "parada", days: daysSinceLastStageChange(lead) });
+      continue;
+    }
+
+    if (lead.nextMeeting) {
+      // Compara pelo DIA CALENDÁRIO (não por janelas de 24h) — uma reunião
+      // marcada pra dentro de 2h ainda é "hoje", nunca "em 1 dia".
+      const todayIso = new Date(now).toISOString().slice(0, 10);
+      const meetingDay = lead.nextMeeting.slice(0, 10);
+      if (meetingDay === todayIso) {
+        items.push({ lead, reason: "hoje", days: 0 });
+      } else {
+        const daysUntil = Math.max(
+          1,
+          Math.ceil((new Date(lead.nextMeeting).getTime() - now) / 86_400_000),
+        );
+        items.push({ lead, reason: "proximos_dias", days: daysUntil });
+      }
+    }
+    // Tem ação válida do motor (sem reunião associada), não está parada:
+    // não é uma prioridade — é o fluxo normal, não precisa de destaque.
+  }
+
+  return items.sort((a, b) => {
+    const rankDiff = PRIORITY_REASON_RANK[a.reason] - PRIORITY_REASON_RANK[b.reason];
+    if (rankDiff !== 0) return rankDiff;
+    return a.reason === "proximos_dias" ? a.days - b.days : b.days - a.days;
+  });
 }

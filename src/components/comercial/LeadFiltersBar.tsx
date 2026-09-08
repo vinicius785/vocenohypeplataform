@@ -6,9 +6,10 @@ import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_LABEL,
   legacyStage,
-  deriveOpportunityNextStep,
+  hasValidNextAction,
   daysSinceLastStageChange,
   isOpportunityStale,
+  isNextActionOverdue,
   type OpportunityStage,
 } from "@/lib/comercial-engine";
 import type { TeamMemberLite } from "@/lib/projetos";
@@ -85,14 +86,11 @@ export function applyLeadFilters(leads: Lead[], f: LeadFiltersState): Lead[] {
     if (f.stages.length > 0 && !f.stages.includes(legacyStage(l.stage))) return false;
     if (f.origins.length > 0 && !f.origins.includes(l.source ?? "")) return false;
     if (f.nextAction !== "todas") {
-      const hasAction = deriveOpportunityNextStep(l).action !== null;
+      const hasAction = hasValidNextAction(l);
       if (f.nextAction === "com" && !hasAction) return false;
       if (f.nextAction === "sem" && hasAction) return false;
     }
-    if (f.overdueOnly) {
-      const overdue = !!l.nextMeeting && new Date(l.nextMeeting).getTime() < Date.now();
-      if (!overdue) return false;
-    }
+    if (f.overdueOnly && !isNextActionOverdue(l)) return false;
     if (f.staleOnly && !isOpportunityStale(l)) return false;
     if (min !== null && (l.value || 0) < min) return false;
     if (max !== null && (l.value || 0) > max) return false;

@@ -25,7 +25,7 @@ export function ComercialHeader({
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 className="text-xl font-semibold text-foreground">Comercial</h2>
-        <p className="text-sm text-muted-foreground">Central de vendas — pipeline e forecast.</p>
+        <p className="text-sm text-muted-foreground">Pipeline e acompanhamento de oportunidades</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select

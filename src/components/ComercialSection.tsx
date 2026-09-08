@@ -11,21 +11,18 @@ import {
   runOpportunityAction,
 } from "@/lib/comercial.functions";
 import { type OpportunityActionKind, type OpportunityStage } from "@/lib/comercial-engine";
-import {
-  computeComercialKpis,
-  rangeForComercialPeriod,
-  type ComercialPeriodMode,
-} from "@/lib/comercial-metrics";
+import { rangeForComercialPeriod, type ComercialPeriodMode } from "@/lib/comercial-metrics";
 import { loadTeamMembers, type TeamMemberLite } from "@/lib/projetos";
 import { supabase } from "@/integrations/supabase/client";
 import { useConfirm } from "@/hooks/use-confirm";
 import { ComercialHeader } from "./comercial/ComercialHeader";
-import { ComercialKpiStrip } from "./comercial/ComercialKpiStrip";
 import {
   LeadFiltersBar,
   useLeadFilters,
   applyLeadFilters,
   sortLeads,
+  DEFAULT_LEAD_FILTERS,
+  type LeadFiltersState,
 } from "./comercial/LeadFiltersBar";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
@@ -131,7 +128,6 @@ export function ComercialSection() {
   });
 
   const range = useMemo(() => rangeForComercialPeriod(period), [period]);
-  const kpis = useMemo(() => computeComercialKpis(leads, range), [leads, range]);
 
   const searched = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -167,6 +163,14 @@ export function ComercialSection() {
     setCreateInStage(undefined);
   };
   const moveTo = (id: string, stage: string) => stageMutation.mutate({ id, stage });
+  /** Indicador/etapa clicado na Visão geral — troca pro Pipeline já com o
+   * filtro correspondente aplicado (nunca um filtro "parecido": os dois
+   * lugares leem os mesmos `applyLeadFilters`/`isOpportunityStale` etc,
+   * então o número que a pessoa clicou é exatamente o que ela vê a seguir). */
+  const goToPipelineWithFilter = (patch: Partial<LeadFiltersState>) => {
+    setFilters({ ...DEFAULT_LEAD_FILTERS, ...patch });
+    setView("pipeline");
+  };
   const handleDeleteFromDrawer = async () => {
     if (!editing) return;
     const ok = await confirmDelete("Excluir esta oportunidade?");
@@ -183,18 +187,6 @@ export function ComercialSection() {
         period={period}
         onPeriodChange={setPeriod}
         onNewLead={() => openNewLead()}
-      />
-
-      <ComercialKpiStrip
-        kpis={kpis}
-        staleActive={filters.staleOnly}
-        overdueActive={filters.overdueOnly}
-        noNextActionActive={filters.nextAction === "sem"}
-        onToggleStale={() => setFilters({ ...filters, staleOnly: !filters.staleOnly })}
-        onToggleOverdue={() => setFilters({ ...filters, overdueOnly: !filters.overdueOnly })}
-        onToggleNoNextAction={() =>
-          setFilters({ ...filters, nextAction: filters.nextAction === "sem" ? "todas" : "sem" })
-        }
       />
 
       <Tabs value={view} onValueChange={(v) => setView(v as ComercialView)}>
@@ -245,7 +237,12 @@ export function ComercialSection() {
           )}
         </div>
       ) : (
-        <ComercialOverviewView leads={leads} range={range} onOpenLead={openLead} />
+        <ComercialOverviewView
+          leads={searched}
+          range={range}
+          onOpenLead={openLead}
+          onFilterPipeline={goToPipelineWithFilter}
+        />
       )}
 
       {showDrawer && (

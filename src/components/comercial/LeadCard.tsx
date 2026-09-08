@@ -5,6 +5,7 @@ import {
   deriveOpportunityNextStep,
   daysSinceLastStageChange,
   isOpportunityStale,
+  isNextActionOverdue,
   legacyStage,
 } from "@/lib/comercial-engine";
 import { avatarAccent, initialsOf } from "@/components/team/member-ui";
@@ -31,8 +32,7 @@ function cardSignal(lead: Lead): { tone: CardTone; text: string | null } {
   if (stage === "GANHO") return { tone: "green", text: null };
   if (stage === "PERDIDO") return { tone: "neutral", text: null };
 
-  const meetingOverdue = !!lead.nextMeeting && new Date(lead.nextMeeting).getTime() < Date.now();
-  if (meetingOverdue) return { tone: "red", text: "Reunião vencida" };
+  if (isNextActionOverdue(lead)) return { tone: "red", text: "Reunião vencida" };
 
   if (isOpportunityStale(lead)) {
     return { tone: "red", text: `Sem interação há ${daysSinceLastStageChange(lead)}d` };

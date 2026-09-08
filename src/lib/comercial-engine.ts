@@ -422,3 +422,25 @@ export function isOpportunityStale(lead: Pick<Lead, "stage" | "history" | "updat
   if (stage === "GANHO" || stage === "PERDIDO") return false;
   return daysSinceLastStageChange(lead) >= OPPORTUNITY_STALE_DAYS;
 }
+
+/** Uma reunião agendada com prazo já passado, ainda não atualizada (a
+ * etapa/`nextMeeting` só mudam quando alguém registra o que aconteceu) —
+ * única definição de "ação vencida" no módulo, reaproveitada por
+ * `LeadCard`, `LeadFiltersBar` e a lista de Prioridades comerciais (antes
+ * cada um tinha sua própria conta de `new Date(nextMeeting) < now`). */
+export function isNextActionOverdue(lead: Pick<Lead, "nextMeeting">): boolean {
+  return !!lead.nextMeeting && new Date(lead.nextMeeting).getTime() < Date.now();
+}
+
+/** Uma oportunidade tem "próxima ação válida" quando o motor sugere uma
+ * ação real (`deriveOpportunityNextStep`, qualquer etapa aberta exceto
+ * "aguardando cliente") OU já existe uma reunião agendada pra uma data
+ * futura — as duas contam, uma reunião marcada não deixa de ser uma
+ * "próxima ação" só porque a etapa atual (ex. Proposta enviada) não tem
+ * botão de ação do motor. Usado pra decidir "Sem próxima ação" de forma
+ * central (KPI, card, filtro e lista de prioridades). */
+export function hasValidNextAction(lead: Pick<Lead, "stage" | "nextMeeting">): boolean {
+  const step = deriveOpportunityNextStep(lead);
+  if (step.action !== null) return true;
+  return !!lead.nextMeeting && new Date(lead.nextMeeting).getTime() >= Date.now();
+}
