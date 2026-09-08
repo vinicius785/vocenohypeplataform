@@ -35,13 +35,17 @@ export function MarkAsPaidDialog({
     setSaving(true);
     try {
       const paymentAnexo = anexos.find((a) => !(entry.anexos ?? []).some((old) => old.id === a.id));
-      await markEntryPaid(entry, {
-        pagamento,
-        paidAmount,
-        paymentMethod,
-        paymentNote: paymentNote.trim() || undefined,
-        paymentAnexoId: paymentAnexo?.id,
-      });
+      await markEntryPaid(
+        entry,
+        {
+          pagamento,
+          paidAmount,
+          paymentMethod,
+          paymentNote: paymentNote.trim() || undefined,
+          paymentAnexoId: paymentAnexo?.id,
+        },
+        anexos,
+      );
       onConfirmed();
     } catch (err) {
       setError(`Não foi possível confirmar: ${err instanceof Error ? err.message : "erro"}.`);

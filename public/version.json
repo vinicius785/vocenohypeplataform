@@ -1,6 +1,7 @@
 {
-  "version": "1.268.0",
+  "version": "1.268.1",
   "notes": [
+    "Corrige comprovantes de pagamento não ficando salvos ao marcar um lançamento do Financeiro como pago/recebido: o arquivo subia normalmente, mas a referência a ele nunca era gravada no lançamento (só um identificador solto, nunca usado em lugar nenhum) — reabrir o lançamento fazia o comprovante \"desaparecer\". Corrigido tanto para lançamentos manuais quanto para os gerados automaticamente por campanha, influenciador e salário.",
     "Simplifica a Visão geral do Comercial: removidos o Forecast ponderado, \"Oportunidades abertas\" como card, Pipeline por responsável, \"Em risco\", \"Mais avançadas no funil\" e a linha de indicadores em texto que ficava acima das abas (agora só existe dentro da própria Visão geral, sem duplicar em lugar nenhum). A tela responde só 4 perguntas: Pipeline total, Ganho no período, Sem próxima ação e Paradas (5+ dias) — cada indicador é clicável e já abre o Pipeline com o filtro correspondente aplicado. Abaixo, dois blocos: \"Pipeline por etapa\" (barras proporcionais, com alternância Valor/Quantidade, clique na etapa filtra o Pipeline) e a nova \"Prioridades comerciais\", que substitui as 3 listas antigas por uma só, sem repetir a mesma oportunidade — prioriza ação vencida, depois sem próxima ação, depois parada há 5+ dias, depois reunião hoje/próximos dias. Corrigido de quebra um cálculo que estava errado: \"Pipeline total\" somava até negócios já ganhos/perdidos; agora soma só o que está de fato em aberto.",
     "Ajustes no redesign do Comercial: removidas as abas Atividades e Relatórios (ficam Visão geral e Pipeline). Corrige o botão \"Calculadora externa\" (aba Proposta) que tinha ficado escondido até a proposta já existir — volta a aparecer sempre que a oportunidade já foi salva. Visão geral redesenhada: estatísticas em destaque no topo, \"Pipeline por etapa\" e \"Pipeline por responsável\" como barras proporcionais ao valor real, e as listas de ação com a mesma linguagem visual do card do Kanban (avatar do responsável).",
     "Redesign completo do Comercial: virou uma central de vendas com 4 visões (Visão geral/Pipeline/Atividades/Relatórios). Kanban agora usa a largura total da tela (colunas de 300px, cabeçalho fixo e rolagem própria por coluna, feedback visual ao arrastar). Cards mostram só o essencial (empresa, contato, valor, responsável, próxima ação, tempo sem interação) com um único indicador de risco por card, em vez de vários badges disputando atenção. Drawer da oportunidade reduzido de 896px para ~608px, sem o painel de resumo que repetia informação do cabeçalho, e reorganizado em 3 abas (Visão geral/Proposta/Histórico — Contato e Qualificação viraram blocos dentro de Visão geral). Nova barra de filtros (responsável, etapa, origem, com/sem próxima ação, ação vencida, parado 5+ dias, faixa de valor) com chips removíveis e ordenação, além de uma faixa de indicadores no cabeçalho (pipeline total, ganho no período, abertas, sem próxima ação, paradas, ações vencidas) — sempre \"—\" quando o dado não existe, nunca um número inventado (ex: forecast ponderado, que depende de uma probabilidade de fechamento que a plataforma ainda não tem configurada). Corrigido também um bug real: mover um card no Kanban enquanto a ficha desse mesmo lead estava aberta podia ser desfeito silenciosamente (e duplicar o histórico) ao editar qualquer campo de texto — a etapa agora só muda pelas ações do próprio motor de pipeline, nunca pelo salvamento automático de campo. \"Parado há quantos dias\" também unificado numa única regra (antes o card e a ficha calculavam isso de duas formas diferentes, com números divergentes).",
@@ -403,6 +404,22 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.268.1",
+      "summary": "Corrige comprovante de pagamento desaparecendo ao marcar um lançamento do Financeiro como pago.",
+      "modules": [
+        {
+          "name": "FINANCEIRO",
+          "tagline": "Comprovante salvo de verdade",
+          "items": [
+            {
+              "title": "Comprovante não some mais",
+              "description": "O arquivo já subia normalmente, mas a referência a ele nunca era gravada no lançamento — agora fica salva, tanto em lançamentos manuais quanto nos gerados automaticamente por campanha, influenciador e salário."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.268.0",
       "summary": "Visão geral do Comercial fica mais direta: só 4 indicadores e 2 blocos que ajudam a decidir.",

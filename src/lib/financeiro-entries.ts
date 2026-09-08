@@ -399,7 +399,10 @@ export function loadFinanceiroMembers(): { id: string; name: string }[] {
  * "inf:<campanhaId>:<influId>"). Mesmo padrão de cache+realtime de
  * `manualCache` acima, só que mais simples (sem insert/delete pela UI —
  * `upsertStatusOverride` sempre faz upsert). */
-type StatusOverride = { status: EntryStatus } & Partial<PaymentConfirmation>;
+type StatusOverride = {
+  status: EntryStatus;
+  anexos?: FinanceiroAnexo[];
+} & Partial<PaymentConfirmation>;
 let overridesCache: Record<string, StatusOverride> = {};
 let overridesLoaded = false;
 const overridesListeners = new Set<() => void>();
@@ -591,6 +594,7 @@ function buildEntries(
           campanhaNome: camp.nome,
           meta: c.empresa,
           editable: false,
+          anexos: override?.anexos,
         });
       };
       if (parcelas.length > 0) {
@@ -667,6 +671,7 @@ function buildEntries(
           editable: false,
           bank: inf.bank,
           influencerName: inf.nome,
+          anexos: infOverride?.anexos,
         });
       }
       // Nota: o "Outro" configurado no pagamento da campanha (na criação/
@@ -703,6 +708,7 @@ function buildEntries(
         meta: "Recorrência dia 15",
         editable: false,
         memberName: m.name,
+        anexos: salOverride?.anexos,
       });
     }
   }
@@ -845,15 +851,32 @@ export async function reconcilePaidMapOnce(): Promise<void> {
 /** Confirma pagamento/recebimento — sempre a partir da MESMA `Entry` já
  * derivada (não distingue chamador), roteando pro lugar certo conforme a
  * origem. Nunca reescreve `date`/vencimento: a data do pagamento é um
- * campo à parte (ver `PaymentConfirmation`). */
-export async function markEntryPaid(entry: Entry, payload: PaymentConfirmation): Promise<void> {
+ * campo à parte (ver `PaymentConfirmation`).
+ *
+ * `anexos`, quando informado, é o array JÁ ATUALIZADO (incluindo qualquer
+ * comprovante recém enviado no próprio diálogo de confirmação) — precisa
+ * ser passado explicitamente porque nem `updateManualEntry` nem
+ * `upsertStatusOverride` derivam isso da `entry` recebida (que reflete o
+ * estado ANTES do upload). Sem isso, o arquivo subia pro Storage com
+ * sucesso mas a referência a ele nunca era persistida no lançamento —
+ * bug corrigido aqui, não só no diálogo. */
+export async function markEntryPaid(
+  entry: Entry,
+  payload: PaymentConfirmation,
+  anexos?: FinanceiroAnexo[],
+): Promise<void> {
   const status: EntryStatus = entry.kind === "receita" ? "recebido" : "pago";
   if (entry.editable) {
     const manual = manualCache.find((e) => e.id === entry.id);
     if (!manual) throw new Error("Lançamento não encontrado.");
-    await updateManualEntry({ ...manual, status, payment: payload });
+    await updateManualEntry({
+      ...manual,
+      status,
+      payment: payload,
+      anexos: anexos ?? manual.anexos,
+    });
   } else {
-    await upsertStatusOverride(entry.id, { status, ...payload });
+    await upsertStatusOverride(entry.id, { status, ...payload, anexos });
   }
 }
 
