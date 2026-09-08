@@ -996,34 +996,39 @@ function ProposalTabContent({
           {proposta.ajustadoManualmente && (
             <p className="text-[11px] italic text-muted-foreground">Ajustado manualmente</p>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            {liveLead && nextStep?.action === "enviar_proposta" && (
+          {liveLead && nextStep?.action === "enviar_proposta" && (
+            <div className="flex flex-wrap items-center gap-2">
               <ActionButton
                 label="Enviar proposta"
                 busy={runningAction === "enviar_proposta"}
                 onClick={onEnviarProposta}
               />
-            )}
-            {liveLead && (
-              <button
-                type="button"
-                onClick={onCopyLink}
-                disabled={generatingLink}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium shadow-sm hover:bg-muted disabled:opacity-50"
-              >
-                {generatingLink ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Link2 className="h-3.5 w-3.5" />
-                )}
-                {linkCopied ? "Link copiado!" : "Calculadora externa"}
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </Section>
       )}
 
-      <Section title="Simulador" icon={<Calculator className="h-4 w-4" />}>
+      <Section
+        title="Simulador"
+        icon={<Calculator className="h-4 w-4" />}
+        action={
+          liveLead && (
+            <button
+              type="button"
+              onClick={onCopyLink}
+              disabled={generatingLink}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium shadow-sm hover:bg-muted disabled:opacity-50"
+            >
+              {generatingLink ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Link2 className="h-3.5 w-3.5" />
+              )}
+              {linkCopied ? "Link copiado!" : "Calculadora externa"}
+            </button>
+          )
+        }
+      >
         <p className="-mt-1 mb-3 text-[11px] text-muted-foreground">
           Monte o pacote, calcule custo/impostos/comissão/bonificação/margem e aplique o preço final
           ao negócio.

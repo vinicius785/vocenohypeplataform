@@ -30,17 +30,15 @@ import {
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
 import { ComercialOverviewView } from "./comercial/ComercialOverviewView";
-import { ComercialActivitiesView } from "./comercial/ComercialActivitiesView";
-import { ComercialReportsView } from "./comercial/ComercialReportsView";
 
 /**
  * Central de vendas (Comercial) — shell: dados (React Query + realtime
- * Supabase, inalterados) + navegação entre as 4 visões + o drawer da
+ * Supabase, inalterados) + navegação entre as visões + o drawer da
  * oportunidade. Cada visão vive no seu próprio componente em
  * `src/components/comercial/`; este arquivo só orquestra.
  */
 
-type ComercialView = "visao-geral" | "pipeline" | "atividades" | "relatorios";
+type ComercialView = "visao-geral" | "pipeline";
 
 export function ComercialSection() {
   const [view, setView] = useState<ComercialView>("pipeline");
@@ -203,8 +201,6 @@ export function ComercialSection() {
         <TabsList>
           <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-          <TabsTrigger value="atividades">Atividades</TabsTrigger>
-          <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -248,12 +244,8 @@ export function ComercialSection() {
             />
           )}
         </div>
-      ) : view === "visao-geral" ? (
-        <ComercialOverviewView leads={leads} range={range} onOpenLead={openLead} />
-      ) : view === "atividades" ? (
-        <ComercialActivitiesView leads={leads} team={team} />
       ) : (
-        <ComercialReportsView leads={leads} range={range} />
+        <ComercialOverviewView leads={leads} range={range} onOpenLead={openLead} />
       )}
 
       {showDrawer && (

@@ -1,6 +1,7 @@
 {
-  "version": "1.267.0",
+  "version": "1.267.1",
   "notes": [
+    "Ajustes no redesign do Comercial: removidas as abas Atividades e Relatórios (ficam Visão geral e Pipeline). Corrige o botão \"Calculadora externa\" (aba Proposta) que tinha ficado escondido até a proposta já existir — volta a aparecer sempre que a oportunidade já foi salva. Visão geral redesenhada: estatísticas em destaque no topo, \"Pipeline por etapa\" e \"Pipeline por responsável\" como barras proporcionais ao valor real, e as listas de ação com a mesma linguagem visual do card do Kanban (avatar do responsável).",
     "Redesign completo do Comercial: virou uma central de vendas com 4 visões (Visão geral/Pipeline/Atividades/Relatórios). Kanban agora usa a largura total da tela (colunas de 300px, cabeçalho fixo e rolagem própria por coluna, feedback visual ao arrastar). Cards mostram só o essencial (empresa, contato, valor, responsável, próxima ação, tempo sem interação) com um único indicador de risco por card, em vez de vários badges disputando atenção. Drawer da oportunidade reduzido de 896px para ~608px, sem o painel de resumo que repetia informação do cabeçalho, e reorganizado em 3 abas (Visão geral/Proposta/Histórico — Contato e Qualificação viraram blocos dentro de Visão geral). Nova barra de filtros (responsável, etapa, origem, com/sem próxima ação, ação vencida, parado 5+ dias, faixa de valor) com chips removíveis e ordenação, além de uma faixa de indicadores no cabeçalho (pipeline total, ganho no período, abertas, sem próxima ação, paradas, ações vencidas) — sempre \"—\" quando o dado não existe, nunca um número inventado (ex: forecast ponderado, que depende de uma probabilidade de fechamento que a plataforma ainda não tem configurada). Corrigido também um bug real: mover um card no Kanban enquanto a ficha desse mesmo lead estava aberta podia ser desfeito silenciosamente (e duplicar o histórico) ao editar qualquer campo de texto — a etapa agora só muda pelas ações do próprio motor de pipeline, nunca pelo salvamento automático de campo. \"Parado há quantos dias\" também unificado numa única regra (antes o card e a ficha calculavam isso de duas formas diferentes, com números divergentes).",
     "Corrige o item da calculadora de proposta externa transbordando a caixa e sobrepondo o preço em telas mais estreitas (largura da tela do cliente, tablet): os seletores de Porte e Formato não conseguiam encolher dentro da linha flexível (limitação padrão do navegador pra esse tipo de elemento), então o texto mais longo das opções empurrava o valor pra fora do lugar. Agora encolhem corretamente, sem cortar nem sobrepor nada.",
     "Corrige distorções no Score Operacional (Time): quem não tinha nenhuma tarefa concluída ou atrasada no período recebia pontuação alta \"de fábrica\" em Entrega (base 50) e Previsibilidade (35/35) — as duas dimensões agora retornam \"Sem dados\" nesse caso, e o Score da pessoa aparece como \"—\", nunca um número. Com poucas tarefas (menos de 5 no período), o Score é calculado mas marcado \"Provisório\" (sem classificação Excelente/Bom/Atenção/Crítico até ter amostra suficiente). Entrega ganhou penalidade graduada por tarefa atualmente atrasada há mais de 5 dias e por tarefa atrasada de prioridade alta. Compromissos, sem reunião esperada no período, agora fica \"Não aplicável\" (peso redistribuído entre Entrega e Previsibilidade) em vez de contar como 0/15. Novas salvaguardas de coerência: taxa de entrega no prazo abaixo de 50%/35%, tarefa de prioridade alta atrasada há +5 dias, 5+ tarefas atualmente atrasadas ou zero pontos em Entrega agora sempre limitam o Score final (teto 59 ou 49), mesmo com boas notas nas outras dimensões. Ficha do membro e lista da Time ganharam indicação de \"Sem dados\"/\"Provisório\"/quantidade de tarefas usada no cálculo e um tooltip explicando por que o Score foi limitado.",
@@ -401,6 +402,30 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.267.1",
+      "summary": "Ajustes no Comercial: menos abas, botão da calculadora externa de volta, Visão geral redesenhada.",
+      "modules": [
+        {
+          "name": "COMERCIAL",
+          "tagline": "Ajustes finos",
+          "items": [
+            {
+              "title": "Menos abas",
+              "description": "Removidas Atividades e Relatórios — a navegação fica só com Visão geral e Pipeline."
+            },
+            {
+              "title": "Calculadora externa de volta",
+              "description": "O botão na aba Proposta tinha ficado escondido até a proposta já existir — volta a aparecer sempre."
+            },
+            {
+              "title": "Visão geral com mais destaque visual",
+              "description": "Estatísticas em cartões no topo e pipeline por etapa/responsável como barras proporcionais ao valor real."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.267.0",
       "summary": "Comercial ganha um redesign completo: virou uma central de vendas, não só um Kanban.",
