@@ -102,8 +102,10 @@ export function TeamPerformance({
                 </li>
               </ul>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Prazos encerram às 19h. Veja o detalhamento e a composição completa na ficha
-                individual do membro.
+                Prazos encerram às 19h. Sem tarefa no período, o score não existe ("Sem dados"); com
+                poucas tarefas, é calculado mas fica "Provisório". Um problema grave de entrega
+                sempre limita o score, mesmo com boas notas nas outras dimensões. Veja o
+                detalhamento e a composição completa na ficha individual do membro.
               </p>
             </PopoverContent>
           </Popover>

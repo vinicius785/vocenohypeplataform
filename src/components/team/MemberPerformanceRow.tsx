@@ -19,8 +19,7 @@ const OVERDUE_PREVIEW_LIMIT = 4;
 function scoreToneClass(score: number | null): string {
   if (score == null) return "text-muted-foreground";
   if (score >= 90) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 80) return "text-emerald-600/70 dark:text-emerald-400/70";
-  if (score >= 70) return "text-foreground";
+  if (score >= 75) return "text-foreground";
   if (score >= 60) return "text-amber-600 dark:text-amber-400";
   return "text-destructive";
 }
@@ -208,6 +207,14 @@ export function MemberPerformanceRow({
           <span className={`text-base font-semibold tabular-nums ${scoreToneClass(score.score)}`}>
             {score.score == null ? "—" : score.score}
           </span>
+          {score.dataState === "sem_dados" && (
+            <span className="text-[10px] text-muted-foreground">Sem dados</span>
+          )}
+          {score.dataState === "provisorio" && (
+            <span className="text-[10px] text-amber-600 dark:text-amber-400">
+              Provisório · {score.amostra}
+            </span>
+          )}
           {score.classificacao && (
             <span className="text-[10px] text-muted-foreground">{score.classificacao}</span>
           )}

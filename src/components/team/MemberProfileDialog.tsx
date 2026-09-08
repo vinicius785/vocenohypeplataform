@@ -42,11 +42,13 @@ import {
   classifyReplanTiming,
   REPLAN_TIMING_LABEL,
   overdueOpenTasks,
+  overdueTaskDetails,
   dedupAttendanceEvents,
   rangeForProfilePeriod,
   previousEquivalentRange,
   computeAggregateIndicators,
   PROFILE_PERIOD_OPTIONS,
+  MIN_TASK_SAMPLE,
   type ProfilePeriodMode,
   type PerformanceSettings,
   type TaskOutcome,
@@ -277,31 +279,23 @@ export function MemberProfileDialog({
     () => overdueOpenTasks(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
     [openTasksForMember, performanceSettings.deadlineCutoffHour],
   );
-  /** Universo de tarefas "em jogo" no período — base tanto da penalidade
-   * de Entrega (vencidas/universo) quanto da taxa de replanejamento de
-   * Previsibilidade (tarefas replanejadas/universo): tudo que está aberto
-   * agora (qualquer status/bucket) + tudo que foi concluído no período,
-   * sem duplicar por id. Nenhum dado novo — só reaproveita o que a ficha
-   * já carrega. */
-  const universoTarefas = useMemo(() => {
-    const ids = new Set<string>();
-    for (const t of openTasksFull) ids.add(t.id);
-    for (const c of completions) if (c.taskId) ids.add(c.taskId);
-    return ids.size;
-  }, [openTasksFull, completions]);
+  const overdueDetails = useMemo(
+    () => overdueTaskDetails(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
+    [openTasksForMember, performanceSettings.deadlineCutoffHour],
+  );
 
   const entrega = useMemo(
-    () => computeEntrega(completions, overdueNow.length, universoTarefas),
-    [completions, overdueNow.length, universoTarefas],
+    () => computeEntrega(completions, overdueDetails),
+    [completions, overdueDetails],
   );
   const previsibilidade = useMemo(
     () =>
       computePrevisibilidade(
         deadlineChanges.map((d) => ({ taskId: d.taskId, from: d.from, occurredAt: d.occurredAt })),
-        universoTarefas,
+        entrega.tarefasElegiveis,
         performanceSettings.deadlineCutoffHour,
       ),
-    [deadlineChanges, universoTarefas, performanceSettings.deadlineCutoffHour],
+    [deadlineChanges, entrega.tarefasElegiveis, performanceSettings.deadlineCutoffHour],
   );
   const compromissos = useMemo(
     () => computeCompromissos(attendance.map((a) => ({ attended: a.attended }))),
@@ -330,18 +324,16 @@ export function MemberProfileDialog({
     const prevAttendance = dedupAttendanceEvents(
       previousEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
     ).map((e) => ({ attended: !!e.data.attended }));
-    // Sem `tasksForMember`/`openTasksForMember` do período anterior, o
-    // universo é aproximado pelas próprias conclusões+alterações desse
-    // período — suficiente pra uma comparação de tendência, não precisa
-    // ser idêntico ao cálculo do período atual.
-    const prevIds = new Set<string>();
-    for (const c of prevCompletions) if (c.taskId) prevIds.add(c.taskId);
-    for (const d of prevDeadlineChanges) if (d.taskId) prevIds.add(d.taskId);
-    const prevUniverso = prevIds.size;
-    const prevEntrega = computeEntrega(prevCompletions, 0, prevUniverso);
+    // Sem `openTasksForMember` do período anterior, não há como saber
+    // quais tarefas estavam ATUALMENTE atrasadas naquele momento passado
+    // (reconstruir isso a partir só do estado atual seria inventar dado —
+    // limitação documentada, não uma aproximação silenciosa). A tendência
+    // usa só as conclusões do período anterior; `tarefasElegiveis` sai de
+    // dentro do próprio `computeEntrega` (mesma regra do período atual).
+    const prevEntrega = computeEntrega(prevCompletions, []);
     const prevPrevisibilidade = computePrevisibilidade(
       prevDeadlineChanges,
-      prevUniverso,
+      prevEntrega.tarefasElegiveis,
       performanceSettings.deadlineCutoffHour,
     );
     const prevCompromissos = computeCompromissos(prevAttendance);
@@ -359,9 +351,9 @@ export function MemberProfileDialog({
   const scoreTone =
     score.score == null
       ? "text-muted-foreground"
-      : score.score >= 80
+      : score.score >= 90
         ? "text-emerald-600 dark:text-emerald-400"
-        : score.score < 50
+        : score.score < 60
           ? "text-destructive"
           : "text-foreground";
 
@@ -632,23 +624,54 @@ export function MemberProfileDialog({
                     <Gauge className="h-3.5 w-3.5" /> Score Operacional
                   </p>
                   <div className="text-right">
-                    <p className={`text-4xl font-light tracking-tight ${scoreTone}`}>
+                    <p
+                      className={`flex items-center justify-end gap-1.5 text-4xl font-light tracking-tight ${scoreTone}`}
+                    >
                       {score.score == null ? "—" : score.score}
-                      <span className="text-base text-muted-foreground">/100</span>
+                      {score.score != null && (
+                        <span className="text-base text-muted-foreground">/100</span>
+                      )}
+                      {score.guardrails.length > 0 && (
+                        <InfoTip
+                          text={`Score limitado por: ${score.guardrails.map((g) => g.label).join("; ")}.`}
+                        />
+                      )}
                     </p>
+                    {score.dataState === "sem_dados" && (
+                      <p className="text-xs font-medium text-muted-foreground">Sem dados</p>
+                    )}
+                    {score.dataState === "provisorio" && (
+                      <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                        Provisório
+                      </p>
+                    )}
                     {score.classificacao && (
                       <p className="text-xs font-medium text-muted-foreground">
                         {score.classificacao}
                       </p>
                     )}
-                    {trendLabel && (
+                    {trendLabel && score.dataState !== "sem_dados" && (
                       <p className="text-[11px] text-muted-foreground">{trendLabel}</p>
                     )}
                   </div>
                 </div>
-                {score.amostraReduzida && (
+                {score.dataState === "sem_dados" && (
                   <p className="mt-3 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                    Score baseado em amostra reduzida — poucos dados no período selecionado.
+                    Nenhuma atividade operacional suficiente no período selecionado — sem tarefa
+                    concluída, atualmente atrasada, ou vencendo neste recorte, não há base pra
+                    calcular um score.
+                  </p>
+                )}
+                {score.dataState === "provisorio" && (
+                  <p className="mt-3 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    Baseado em {score.amostra} tarefa{score.amostra === 1 ? "" : "s"} — amostra
+                    pequena, ainda sem classificação definitiva (mínimo de {MIN_TASK_SAMPLE} no
+                    período).
+                  </p>
+                )}
+                {score.dataState === "definitivo" && (
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    Baseado em {score.amostra} tarefas no período.
                   </p>
                 )}
 
@@ -713,9 +736,16 @@ export function MemberProfileDialog({
                     <div className="mb-2.5 flex items-center justify-between gap-2">
                       <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <CalendarClock className="h-3 w-3" /> Compromissos
+                        {!score.compromissosAplicavel && (
+                          <InfoTip text="Sem reunião esperada desta pessoa no período — a dimensão não entra no cálculo do score (nem soma, nem penaliza)." />
+                        )}
                       </p>
                       <span className="text-xs font-semibold tabular-nums text-foreground">
-                        {score.compromissosPontos == null ? "—" : score.compromissosPontos} / 15
+                        {score.compromissosAplicavel ? (
+                          <>{score.compromissosPontos} / 15</>
+                        ) : (
+                          <span className="text-muted-foreground">Não aplicável</span>
+                        )}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
@@ -839,15 +869,26 @@ export function MemberProfileDialog({
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-foreground">Compromissos</span>
                         <span className="tabular-nums text-muted-foreground">
-                          {score.compromissosPontos == null ? "—" : score.compromissosPontos} / 15
+                          {score.compromissosAplicavel
+                            ? `${score.compromissosPontos} / 15`
+                            : "Não aplicável"}
                         </span>
                       </div>
                       <div className="mt-1.5 space-y-0.5 text-muted-foreground">
-                        <p>Reuniões consideradas: {compromissos.expected}</p>
-                        <p>Participadas: {compromissos.attended}</p>
-                        <p>
-                          Perdidas: {Math.max(0, compromissos.expected - compromissos.attended)}
-                        </p>
+                        {score.compromissosAplicavel ? (
+                          <>
+                            <p>Reuniões consideradas: {compromissos.expected}</p>
+                            <p>Participadas: {compromissos.attended}</p>
+                            <p>
+                              Perdidas: {Math.max(0, compromissos.expected - compromissos.attended)}
+                            </p>
+                          </>
+                        ) : (
+                          <p>
+                            Nenhuma reunião esperada desta pessoa no período — peso redistribuído
+                            entre Entrega e Previsibilidade.
+                          </p>
+                        )}
                       </div>
                     </div>
 

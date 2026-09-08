@@ -119,6 +119,10 @@ export type PerformanceOpenTask = {
   status: string;
   dueDate?: string;
   performanceDueDate?: string;
+  /** "Urgente"/"Alta"/"Normal"/"Baixa" (`TaskPriority` em `projetos.ts`) —
+   * viaja crua (não como boolean) pra quem calcula o Score decidir o que é
+   * "alta prioridade" sem duplicar essa regra aqui. */
+  priority?: string;
 };
 
 /** Tarefas ATUALMENTE abertas de cada pessoa (status ∈ `OPEN_STATUSES`),
@@ -150,6 +154,7 @@ export function loadOpenTasksByMemberId(
           status: t.status,
           dueDate: t.dueDate,
           performanceDueDate: t.performanceDueDate,
+          priority: t.priority,
         });
         byId.set(member.id, arr);
       }

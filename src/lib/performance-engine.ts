@@ -280,6 +280,34 @@ export function overdueOpenTasks<T extends PerformanceTaskLike>(
   });
 }
 
+export type PerformanceOpenTaskWithPriority = PerformanceTaskLike & { priority?: string };
+
+/** Detalhe (dias de atraso + prioridade alta?) de cada tarefa
+ * ATUALMENTE atrasada — usado por `computeEntrega`/`computeScoreGuardrails`
+ * pras penalidades graduadas e salvaguardas de coerência. Única função
+ * que soma "quantos dias" a partir do mesmo corte (`deadlineCutoff`) que
+ * `overdueOpenTasks` já usa pra decidir SE está atrasada, pra nunca
+ * divergir entre "está atrasada" e "há quantos dias". `Math.ceil` (não
+ * `Math.floor`) pra uma tarefa vencida há poucas horas já contar como
+ * "1 dia de atraso", nunca "0 dias" (0 pareceria "não atrasada" nas
+ * penalidades graduadas). */
+export function overdueTaskDetails<T extends PerformanceOpenTaskWithPriority>(
+  openTasksNow: T[],
+  now: Date = new Date(),
+  cutoffHour: number = DEADLINE_CUTOFF_HOUR,
+): OverdueTaskDetail[] {
+  return overdueOpenTasks(openTasksNow, now, cutoffHour).map((t) => {
+    const ref = (t.performanceDueDate ?? t.dueDate)!;
+    const daysOverdue = Math.max(
+      1,
+      Math.ceil(
+        (now.getTime() - deadlineCutoff(ref, cutoffHour).getTime()) / (24 * 60 * 60 * 1000),
+      ),
+    );
+    return { daysOverdue, highPriority: isHighPriority(t.priority) };
+  });
+}
+
 export type PendenciasResult = {
   value: number;
   overdueCount: number;
@@ -701,54 +729,127 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-/** Amostra abaixo disso não é "insuficiente pra calcular" (o score ainda
- * sai), mas carrega o aviso "amostra reduzida" — poucos dados no período
- * não devem parecer uma avaliação definitiva (item 18). */
-export const AMOSTRA_MINIMA = 3;
+/** Amostra mínima pra uma classificação DEFINITIVA (Excelente/Bom/Atenção/
+ * Crítico) — abaixo disso o score ainda é calculado e mostrado, mas
+ * marcado "Provisório" (nunca definitivo), pra uma avaliação baseada em
+ * poucos dados nunca parecer conclusiva (item de "amostra insuficiente"
+ * do pedido). Centralizado aqui — nenhum outro lugar deve hardcodar esse
+ * limiar. */
+export const MIN_TASK_SAMPLE = 5;
+
+/** Dias de atraso a partir dos quais uma tarefa atualmente vencida entra
+ * na penalidade agravada de "atraso longo" (independente de prioridade). */
+export const ATRASO_LONGO_DIAS = 5;
+/** Prioridades tratadas como "alta" pra fins de agravamento do Score —
+ * mesmos valores de `TaskPriority` em `projetos.ts`, replicados aqui (não
+ * importados) pra este motor continuar sem depender do shape concreto de
+ * `Task` (mesmo espírito do restante do arquivo, ver `Contexto` no topo). */
+const HIGH_PRIORITY_VALUES = new Set(["Urgente", "Alta"]);
+
+export function isHighPriority(priority: string | undefined): boolean {
+  return !!priority && HIGH_PRIORITY_VALUES.has(priority);
+}
+
+export const ENTREGA_MAX_PONTOS = 50;
+export const PREVISIBILIDADE_MAX_PONTOS = 35;
+export const COMPROMISSOS_MAX_PONTOS = 15;
+
+/** Pontos subtraídos da Entrega por CADA tarefa atualmente atrasada há
+ * mais de `ATRASO_LONGO_DIAS` dias. */
+export const PENALIDADE_ATRASO_LONGO = 8;
+/** Pontos subtraídos da Entrega por CADA tarefa atualmente atrasada de
+ * prioridade alta/urgente. Somável com a penalidade de atraso longo — uma
+ * mesma tarefa atrasada há muito tempo E de prioridade alta deve pesar
+ * pelos dois motivos (não é "dupla contagem do mesmo evento", são dois
+ * fatores de gravidade distintos sobre o mesmo atraso). */
+export const PENALIDADE_PRIORIDADE_ALTA = 6;
 
 export type EntregaResult = {
-  value: number | null; // pontos 0-50; null só quando não há NENHUM dado (nem conclusão nem tarefa aberta)
+  value: number | null; // pontos 0-50; null só quando não há NENHUM dado (nem conclusão nem tarefa aberta atrasada)
   concluidas: number;
   noPrazo: number;
   comAtraso: number;
   atualmenteAtrasadas: number;
+  /** `concluidas + atualmenteAtrasadas` — universo de tarefas que de fato
+   * entram na conta de Entrega/Previsibilidade neste período (base da
+   * taxa E da checagem de amostra insuficiente). Tarefa aberta mas ainda
+   * dentro do prazo NÃO entra aqui — não é "atividade" pra fins de score,
+   * só "trabalho em andamento". */
+  tarefasElegiveis: number;
+  /** Quantas das atualmente atrasadas passam de `ATRASO_LONGO_DIAS` dias. */
+  atrasoLongoCount: number;
+  /** Quantas das atualmente atrasadas são de prioridade alta/urgente. */
+  prioridadeAltaCount: number;
+  /** Quantas das atualmente atrasadas são AO MESMO TEMPO de prioridade
+   * alta/urgente E atraso longo — a condição exata da salvaguarda de
+   * coerência "tarefa de prioridade alta atrasada há mais de 5 dias". */
+  prioridadeAltaAtrasoLongoCount: number;
   amostraReduzida: boolean;
 };
 
+export type OverdueTaskDetail = { daysOverdue: number; highPriority: boolean };
+
 /** Entrega (50 pontos) — taxa de conclusão no prazo (SEM crédito parcial
  * pra atraso, diferente de `executionCredit`/`computeExecucao`: aqui é
- * só no_prazo/atrasada, binário, como pedido) menos uma penalidade
- * proporcional ao universo de tarefas do período por ter tarefas
- * ATUALMENTE vencidas e ainda abertas. Sempre entre 0 e 50 — a
- * penalidade nunca deixa o resultado negativo (item 3). */
+ * só no_prazo/atrasada, binário, como pedido), com penalidades graduadas
+ * por severidade do backlog de tarefas ATUALMENTE atrasadas (atraso
+ * longo, prioridade alta) — nunca deixa o resultado abaixo de 0 nem
+ * pontua a mais que 50 (`clamp`). `null` só quando não há NENHUM dado
+ * (nem conclusão no período, nem tarefa aberta e vencida agora) — ausência
+ * de dado nunca deve virar pontuação, positiva ou negativa (é o bug
+ * original: 0 conclusões dava base 50 "de fábrica"). O acúmulo de
+ * atrasadas já é penalizado pela própria taxa (cada atrasada aumenta o
+ * denominador sem aumentar o numerador) — não há uma penalidade "de
+ * acúmulo" redundante aqui; o teto duro pra 5+ atrasadas vive nas
+ * salvaguardas de coerência (`computeScoreGuardrails`), não nesta função. */
 export function computeEntrega(
   completions: { outcome: TaskOutcome }[],
-  overdueOpenCount: number,
-  universoTarefas: number,
+  overdueTasks: OverdueTaskDetail[],
 ): EntregaResult {
   const concluidas = completions.length;
   const noPrazo = completions.filter((c) => c.outcome !== "late").length;
   const comAtraso = concluidas - noPrazo;
-  const penalidade = universoTarefas > 0 ? (overdueOpenCount / universoTarefas) * 50 : 0;
+  const atualmenteAtrasadas = overdueTasks.length;
+  const tarefasElegiveis = concluidas + atualmenteAtrasadas;
 
-  if (concluidas === 0 && overdueOpenCount === 0) {
+  const atrasoLongo = overdueTasks.filter((t) => t.daysOverdue > ATRASO_LONGO_DIAS);
+  const prioridadeAlta = overdueTasks.filter((t) => t.highPriority);
+  const prioridadeAltaAtrasoLongo = overdueTasks.filter(
+    (t) => t.highPriority && t.daysOverdue > ATRASO_LONGO_DIAS,
+  );
+
+  if (tarefasElegiveis === 0) {
     return {
       value: null,
       concluidas: 0,
       noPrazo: 0,
       comAtraso: 0,
-      atualmenteAtrasadas: overdueOpenCount,
+      atualmenteAtrasadas: 0,
+      tarefasElegiveis: 0,
+      atrasoLongoCount: 0,
+      prioridadeAltaCount: 0,
+      prioridadeAltaAtrasoLongoCount: 0,
       amostraReduzida: false,
     };
   }
-  const pontosBase = concluidas > 0 ? (noPrazo / concluidas) * 50 : 50;
+
+  const taxaEntregaNoPrazo = noPrazo / tarefasElegiveis;
+  const pontosEntregaBase = taxaEntregaNoPrazo * ENTREGA_MAX_PONTOS;
+  const penalidade =
+    atrasoLongo.length * PENALIDADE_ATRASO_LONGO +
+    prioridadeAlta.length * PENALIDADE_PRIORIDADE_ALTA;
+
   return {
-    value: clamp(pontosBase - penalidade, 0, 50),
+    value: clamp(pontosEntregaBase - penalidade, 0, ENTREGA_MAX_PONTOS),
     concluidas,
     noPrazo,
     comAtraso,
-    atualmenteAtrasadas: overdueOpenCount,
-    amostraReduzida: concluidas > 0 && concluidas < AMOSTRA_MINIMA,
+    atualmenteAtrasadas,
+    tarefasElegiveis,
+    atrasoLongoCount: atrasoLongo.length,
+    prioridadeAltaCount: prioridadeAlta.length,
+    prioridadeAltaAtrasoLongoCount: prioridadeAltaAtrasoLongo.length,
+    amostraReduzida: tarefasElegiveis < MIN_TASK_SAMPLE,
   };
 }
 
@@ -790,9 +891,9 @@ export function classifyReplanTiming(
 }
 
 export type PrevisibilidadeResult = {
-  value: number | null; // pontos 0-35
+  value: number | null; // pontos 0-35; null quando não há tarefa elegível no período ("Sem dados", NUNCA 35/35 de fábrica)
   tarefasReplanejadas: number; // tarefas ÚNICAS com >=1 alteração no período
-  tarefasElegiveis: number; // universo (mesma base do Entrega)
+  tarefasElegiveis: number; // mesmo universo de `EntregaResult.tarefasElegiveis` (item: nunca calcular sem essa base)
   taxaReplanejamento: number | null; // tarefasReplanejadas / tarefasElegiveis
   porTiming: Record<ReplanTiming, number>; // contagem de EVENTOS (não tarefas) por classificação
   amostraReduzida: boolean;
@@ -805,10 +906,15 @@ export type PrevisibilidadeResult = {
  * cada tarefa, mais uma pequena penalidade adicional (capada) por
  * alterações repetidas na mesma tarefa — sem duplicar a penalização
  * principal (item 8: evitar dupla penalização excessiva do mesmo
- * evento). */
+ * evento). `tarefasElegiveis` é SEMPRE a mesma base de `computeEntrega`
+ * (passar `entrega.tarefasElegiveis` do mesmo período) — só assim as duas
+ * dimensões concordam sobre "quando há dado suficiente pra calcular".
+ * Sem tarefa elegível, `value` é `null` ("Sem dados"), nunca 35 de
+ * fábrica — esse era o bug original (ausência de tarefa sendo tratada
+ * como previsibilidade perfeita). */
 export function computePrevisibilidade(
   deadlineChanges: { taskId: string | null; from?: string; occurredAt: string }[],
-  universoTarefas: number,
+  tarefasElegiveis: number,
   cutoffHour: number = DEADLINE_CUTOFF_HOUR,
 ): PrevisibilidadeResult {
   const porTiming: Record<ReplanTiming, number> = {
@@ -828,11 +934,10 @@ export function computePrevisibilidade(
   }
 
   const tarefasReplanejadas = porTarefa.size;
-  const taxaReplanejamento = universoTarefas > 0 ? tarefasReplanejadas / universoTarefas : null;
 
-  if (universoTarefas === 0) {
+  if (tarefasElegiveis === 0) {
     return {
-      value: tarefasReplanejadas > 0 ? null : 35,
+      value: null,
       tarefasReplanejadas,
       tarefasElegiveis: 0,
       taxaReplanejamento: null,
@@ -841,6 +946,7 @@ export function computePrevisibilidade(
     };
   }
 
+  const taxaReplanejamento = tarefasReplanejadas / tarefasElegiveis;
   let somaSeveridade = 0;
   let somaRepetidas = 0;
   for (const timings of porTarefa.values()) {
@@ -851,24 +957,27 @@ export function computePrevisibilidade(
     somaSeveridade += REPLAN_TIMING_WEIGHT[pior];
     somaRepetidas += Math.max(0, timings.length - 1);
   }
-  const penalidadeBase = somaSeveridade / universoTarefas;
+  const penalidadeBase = somaSeveridade / tarefasElegiveis;
   const penalidadeRepeticao = Math.min(0.05, 0.01 * somaRepetidas);
-  const value = clamp((1 - penalidadeBase - penalidadeRepeticao) * 35, 0, 35);
+  const value = clamp(
+    (1 - penalidadeBase - penalidadeRepeticao) * PREVISIBILIDADE_MAX_PONTOS,
+    0,
+    PREVISIBILIDADE_MAX_PONTOS,
+  );
 
   return {
     value,
     tarefasReplanejadas,
-    tarefasElegiveis: universoTarefas,
+    tarefasElegiveis,
     taxaReplanejamento,
     porTiming,
-    amostraReduzida: universoTarefas < AMOSTRA_MINIMA,
+    amostraReduzida: tarefasElegiveis < MIN_TASK_SAMPLE,
   };
 }
 
 const SCORE_CLASSIFICACAO: { min: number; label: string }[] = [
   { min: 90, label: "Excelente" },
-  { min: 80, label: "Muito bom" },
-  { min: 70, label: "Bom" },
+  { min: 75, label: "Bom" },
   { min: 60, label: "Atenção" },
   { min: 0, label: "Crítico" },
 ];
@@ -877,75 +986,187 @@ export function classificacaoDoScore(score: number): string {
   return SCORE_CLASSIFICACAO.find((c) => score >= c.min)!.label;
 }
 
+/** Estado de disponibilidade de dado do Score — controla o que a
+ * interface pode mostrar (nunca um número OU classificação quando não
+ * há base pra isso):
+ * - `sem_dados`: nenhuma tarefa elegível no período E nenhuma atualmente
+ *   atrasada — não existe score (nem 0, nem 35 "de fábrica"). A ficha
+ *   mostra "—"/"Sem dados", nunca um número.
+ * - `provisorio`: há score calculado, mas com menos de `MIN_TASK_SAMPLE`
+ *   tarefas elegíveis — mostrado com o valor calculado, marcado
+ *   "Provisório", sem classificação definitiva (Excelente/Bom/Atenção/
+ *   Crítico não se aplicam ainda).
+ * - `definitivo`: `MIN_TASK_SAMPLE` ou mais tarefas elegíveis — score e
+ *   classificação definitivos. */
+export type ScoreDataState = "sem_dados" | "provisorio" | "definitivo";
+
+/** Um motivo pelo qual o score final foi limitado abaixo do que a média
+ * ponderada das 3 dimensões sugeriria — "salvaguarda de coerência" no
+ * pedido: nenhum resultado bom secundário pode mascarar um problema grave
+ * de entrega. `cap` é o teto que ESSE motivo, isoladamente, impõe; o teto
+ * efetivo aplicado ao score é o MENOR entre todos os motivos disparados. */
+export type GuardrailReason = { key: string; label: string; cap: number };
+
+export const GUARDRAIL_CAP_TAXA_ABAIXO_35 = 49;
+export const GUARDRAIL_CAP_TAXA_ABAIXO_50 = 59;
+export const GUARDRAIL_CAP_PRIORIDADE_ALTA_ATRASO_LONGO = 49;
+export const GUARDRAIL_CAP_ACUMULO_ATRASADAS = 49;
+export const GUARDRAIL_CAP_ENTREGA_ZERO = 49;
+/** A partir de quantas tarefas atualmente atrasadas o teto de acúmulo
+ * entra em vigor. */
+export const GUARDRAIL_ACUMULO_LIMIAR = 5;
+
+/**
+ * Salvaguardas de coerência (item explícito do pedido) — função central,
+ * única, testável isoladamente: nenhuma tela lê essas regras "espalhadas"
+ * pela UI, todas vivem aqui. Cada regra dispara de forma independente
+ * (uma tarefa grave pode disparar duas ao mesmo tempo — atraso longo E
+ * prioridade alta não são a "mesma" regra, então isso não é dupla
+ * contagem); o teto FINAL aplicado é o menor entre os disparados. */
+export function computeScoreGuardrails(entrega: EntregaResult): GuardrailReason[] {
+  const reasons: GuardrailReason[] = [];
+  const taxaNoPrazo =
+    entrega.tarefasElegiveis > 0 ? entrega.noPrazo / entrega.tarefasElegiveis : null;
+
+  if (taxaNoPrazo != null && taxaNoPrazo < 0.35) {
+    reasons.push({
+      key: "taxa_no_prazo_abaixo_35",
+      label: "Taxa de entrega no prazo abaixo de 35%",
+      cap: GUARDRAIL_CAP_TAXA_ABAIXO_35,
+    });
+  } else if (taxaNoPrazo != null && taxaNoPrazo < 0.5) {
+    reasons.push({
+      key: "taxa_no_prazo_abaixo_50",
+      label: "Taxa de entrega no prazo abaixo de 50%",
+      cap: GUARDRAIL_CAP_TAXA_ABAIXO_50,
+    });
+  }
+  if (entrega.prioridadeAltaAtrasoLongoCount > 0) {
+    reasons.push({
+      key: "prioridade_alta_atraso_longo",
+      label: `Tarefa de prioridade alta atrasada há mais de ${ATRASO_LONGO_DIAS} dias`,
+      cap: GUARDRAIL_CAP_PRIORIDADE_ALTA_ATRASO_LONGO,
+    });
+  }
+  if (entrega.atualmenteAtrasadas >= GUARDRAIL_ACUMULO_LIMIAR) {
+    reasons.push({
+      key: "acumulo_atrasadas",
+      label: `${entrega.atualmenteAtrasadas} tarefas atualmente atrasadas`,
+      cap: GUARDRAIL_CAP_ACUMULO_ATRASADAS,
+    });
+  }
+  if (entrega.tarefasElegiveis > 0 && entrega.value === 0) {
+    reasons.push({
+      key: "entrega_zero",
+      label: "Zero pontos na dimensão Entrega",
+      cap: GUARDRAIL_CAP_ENTREGA_ZERO,
+    });
+  }
+  return reasons;
+}
+
 export type ScoreOperacionalV2 = {
-  score: number | null; // inteiro 0-100
+  score: number | null; // inteiro 0-100; null só em `dataState === "sem_dados"`
+  dataState: ScoreDataState;
+  /** = `entrega.tarefasElegiveis` — "Baseado em N tarefas" na interface. */
+  amostra: number;
   entrega: EntregaResult;
-  entregaPontos: number | null;
+  entregaPontos: number | null; // 0-50, exibição (não redistribuído — ver nota em `combineScoreV2`)
   previsibilidade: PrevisibilidadeResult;
-  previsibilidadePontos: number | null;
+  previsibilidadePontos: number | null; // 0-35
   compromissos: CompromissosResult;
-  compromissosPontos: number | null;
-  classificacao: string | null;
+  compromissosPontos: number | null; // 0-15; null quando `!compromissosAplicavel`
+  /** `false` quando não havia nenhuma reunião esperada no período — a
+   * dimensão é "Não aplicável" (não pontua 15 de fábrica, não penaliza,
+   * e o Score final é renormalizado só sobre Entrega+Previsibilidade). */
+  compromissosAplicavel: boolean;
+  classificacao: string | null; // null fora de `dataState === "definitivo"`
+  guardrails: GuardrailReason[];
+  /** @deprecated use `dataState === "provisorio"` — mantido só pra não
+   * quebrar leitura antiga em um único ciclo de revisão de UI. */
   amostraReduzida: boolean;
 };
 
-/** Combina os 3 pilares em pontos fixos (50+35+15=100). `compromissos`
- * recebe o resultado CRU de `computeCompromissos` (escala 0-100, %) —
- * a conversão pra pontos de 15 acontece AQUI DENTRO, nunca no
- * call-site, justamente pra nenhum consumidor esquecer de escalar (foi
- * assim que um bug de score >100 aconteceu numa rodada anterior: o
- * valor de 0-100 ia direto pra soma como se já fosse 0-15). Diferente
- * do modelo antigo, nenhum pilar é excluído/renormalizado por falta de
- * dado — os máximos já são fixos, então "sem reunião prevista" em
- * Compromissos corretamente soma 0 (não redistribui peso). Arredonda
- * pelo método do maior resto (Hamilton) pra GARANTIR que a soma dos 3
- * pontos exibidos seja sempre exatamente igual ao score total exibido —
- * nunca uma divergência de 1 ponto por arredondamento independente
- * (item 13/20, auditabilidade). */
+/** Combina os 3 pilares com renormalização de pesos (item explícito do
+ * pedido): Entrega (50) e Previsibilidade (35) SEMPRE entram juntas —
+ * elas compartilham a mesma base de elegibilidade (`entrega.value` só é
+ * `null` quando a base é 0, e nesse caso Previsibilidade também é `null`
+ * pela mesma razão), então "ter dado" é uma decisão única, não 2. Já
+ * Compromissos só entra quando havia reunião esperada no período
+ * (`compromissos.value != null`) — sem isso, a dimensão é excluída do
+ * denominador (`pontosPossiveis`) em vez de contar como 0/15, e o
+ * resultado é escalado de volta pra 0-100 sobre o que sobrou. Essa
+ * renormalização só roda quando já existe o mínimo de dado operacional
+ * (Entrega/Previsibilidade não-nulas) — nunca deixa "zero reunião" virar
+ * sozinha um bom score (é exatamente o caso "sem_dados" abaixo, que
+ * retorna ANTES de qualquer conta). Os pontos por dimensão exibidos
+ * (`entregaPontos`/`previsibilidadePontos`/`compromissosPontos`) são só
+ * arredondamento simples do valor de CADA dimensão dentro do seu próprio
+ * teto (50/35/15) — propositalmente NÃO somam ao `score` final quando
+ * Compromissos é inaplicável (score é renormalizado sobre 85, os pontos
+ * de dimensão continuam na escala cheia de 100/50/35/15 pra comparação
+ * direta entre pessoas) — a ficha explica os dois números separadamente,
+ * nunca finge que um é o outro. Depois de combinar, aplica as
+ * salvaguardas de coerência (`computeScoreGuardrails`) — nenhum resultado
+ * bom nas outras dimensões pode mascarar um problema grave de Entrega. */
 export function combineScoreV2(
   entrega: EntregaResult,
   previsibilidade: PrevisibilidadeResult,
   compromissos: CompromissosResult,
 ): ScoreOperacionalV2 {
-  const raw = {
-    entrega: entrega.value ?? 0,
-    previsibilidade: previsibilidade.value ?? 0,
-    compromissos: compromissos.value != null ? (compromissos.value / 100) * 15 : 0,
-  };
-  const temAlgumDado =
-    entrega.value != null || previsibilidade.value != null || compromissos.value != null;
+  const compromissosAplicavel = compromissos.value != null;
 
-  const totalRaw = raw.entrega + raw.previsibilidade + raw.compromissos;
-  const totalRounded = Math.round(totalRaw);
-
-  const floors = {
-    entrega: Math.floor(raw.entrega),
-    previsibilidade: Math.floor(raw.previsibilidade),
-    compromissos: Math.floor(raw.compromissos),
-  };
-  const remainders = (["entrega", "previsibilidade", "compromissos"] as const)
-    .map((k) => ({ k, r: raw[k] - floors[k] }))
-    .sort((a, b) => b.r - a.r);
-
-  const sumFloors = floors.entrega + floors.previsibilidade + floors.compromissos;
-  let need = totalRounded - sumFloors;
-  const pontos = { ...floors };
-  for (const { k } of remainders) {
-    if (need <= 0) break;
-    pontos[k] += 1;
-    need -= 1;
+  if (entrega.value == null) {
+    return {
+      score: null,
+      dataState: "sem_dados",
+      amostra: 0,
+      entrega,
+      entregaPontos: null,
+      previsibilidade,
+      previsibilidadePontos: null,
+      compromissos,
+      compromissosPontos: null,
+      compromissosAplicavel,
+      classificacao: null,
+      guardrails: [],
+      amostraReduzida: false,
+    };
   }
 
-  const score = temAlgumDado ? totalRounded : null;
+  const previsibilidadePontosRaw = previsibilidade.value ?? 0;
+  const compromissosPontosRaw = compromissosAplicavel
+    ? (compromissos.value! / 100) * COMPROMISSOS_MAX_PONTOS
+    : 0;
+
+  const pontosPossiveis =
+    ENTREGA_MAX_PONTOS +
+    PREVISIBILIDADE_MAX_PONTOS +
+    (compromissosAplicavel ? COMPROMISSOS_MAX_PONTOS : 0);
+  const pontosObtidos = entrega.value + previsibilidadePontosRaw + compromissosPontosRaw;
+  const scoreRenormalizado = clamp((pontosObtidos / pontosPossiveis) * 100, 0, 100);
+
+  const guardrails = computeScoreGuardrails(entrega);
+  const capEfetivo = guardrails.length > 0 ? Math.min(...guardrails.map((g) => g.cap)) : 100;
+  const score = clamp(Math.min(Math.round(scoreRenormalizado), capEfetivo), 0, 100);
+
+  const amostra = entrega.tarefasElegiveis;
+  const amostraReduzida = amostra < MIN_TASK_SAMPLE;
+  const dataState: ScoreDataState = amostraReduzida ? "provisorio" : "definitivo";
+
   return {
     score,
+    dataState,
+    amostra,
     entrega,
-    entregaPontos: temAlgumDado ? pontos.entrega : null,
+    entregaPontos: Math.round(entrega.value),
     previsibilidade,
-    previsibilidadePontos: temAlgumDado ? pontos.previsibilidade : null,
+    previsibilidadePontos: previsibilidade.value != null ? Math.round(previsibilidade.value) : null,
     compromissos,
-    compromissosPontos: temAlgumDado ? pontos.compromissos : null,
-    classificacao: score == null ? null : classificacaoDoScore(score),
-    amostraReduzida: entrega.amostraReduzida || previsibilidade.amostraReduzida || false,
+    compromissosPontos: compromissosAplicavel ? Math.round(compromissosPontosRaw) : null,
+    compromissosAplicavel,
+    classificacao: dataState === "definitivo" ? classificacaoDoScore(score) : null,
+    guardrails,
+    amostraReduzida,
   };
 }

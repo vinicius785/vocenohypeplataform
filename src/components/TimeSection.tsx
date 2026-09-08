@@ -35,7 +35,7 @@ import {
   computeCompromissos,
   combineScoreV2,
   computeAggregateIndicators,
-  overdueOpenTasks,
+  overdueTaskDetails,
   rangeForScorePeriod,
   groupEventsByPerson,
   dedupAttendanceEvents,
@@ -417,23 +417,16 @@ function DiretorioTab() {
       ).map((e) => ({ attended: !!e.data.attended }));
 
       const openTasks = openTasksByMemberId.get(m.id) ?? [];
-      const overdueCount = overdueOpenTasks(
+      const overdueDetails = overdueTaskDetails(
         openTasks,
         undefined,
         performanceSettings.deadlineCutoffHour,
-      ).length;
-      // Universo (mesma base usada na ficha individual — ver
-      // `MemberProfileDialog.tsx`): tarefas abertas agora + concluídas no
-      // período, sem duplicar por id.
-      const universoIds = new Set<string>();
-      for (const t of openTasks) universoIds.add(t.id);
-      for (const c of completions) if (c.taskId) universoIds.add(c.taskId);
-      const universoTarefas = universoIds.size;
+      );
 
-      const entrega = computeEntrega(completions, overdueCount, universoTarefas);
+      const entrega = computeEntrega(completions, overdueDetails);
       const previsibilidade = computePrevisibilidade(
         deadlineChanges,
-        universoTarefas,
+        entrega.tarefasElegiveis,
         performanceSettings.deadlineCutoffHour,
       );
       const compromissos = computeCompromissos(attendance);
@@ -691,19 +684,15 @@ function DiretorioTab() {
       const attendance = dedupAttendanceEvents(
         personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
       ).map((e) => ({ attended: !!e.data.attended }));
-      const ids = new Set<string>();
-      for (const t of openTasks) ids.add(t.id);
-      for (const c of completions) if (c.taskId) ids.add(c.taskId);
-      const universo = ids.size;
-      const overdue = overdueOpenTasks(
+      const overdueDetails = overdueTaskDetails(
         openTasks,
         undefined,
         performanceSettings.deadlineCutoffHour,
-      ).length;
-      const entrega = computeEntrega(completions, overdue, universo);
+      );
+      const entrega = computeEntrega(completions, overdueDetails);
       const previsibilidade = computePrevisibilidade(
         deadlineChanges,
-        universo,
+        entrega.tarefasElegiveis,
         performanceSettings.deadlineCutoffHour,
       );
       const compromissos = computeCompromissos(attendance);
