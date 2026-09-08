@@ -96,6 +96,13 @@ export type Lead = {
    * `value` deste lead — sobrevive à conversão em Cliente (ver
    * `Cliente.orcamentoSugerido`). */
   proposta?: PropostaSnapshot;
+  /** Token opaco (`crypto.randomUUID()` sem hífens) da calculadora de
+   * proposta EXTERNA deste lead (`/calculadora-proposta/$token`) — gerado
+   * uma vez, na lazy, na primeira vez que alguém pede o link (mesmo
+   * padrão de `Cliente.publicToken`). Diferente do portal do cliente, este
+   * link mostra só o simulador de pacote (Tier×Formato×Qtd → preço final),
+   * sem custo/percentuais da agência, pra abrir durante uma call de venda. */
+  propostaPublicToken?: string;
   score?: number;
   // contact block
   contactCompany?: string;

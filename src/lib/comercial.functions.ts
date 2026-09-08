@@ -87,6 +87,7 @@ function rowToLead(row: LeadRow): Lead {
     aiSummary: (extra.aiSummary as string) ?? undefined,
     budget: (extra.budget as number) ?? undefined,
     proposta: (extra.proposta as PropostaSnapshot) ?? undefined,
+    propostaPublicToken: (extra.propostaPublicToken as string) ?? undefined,
     contactCompany: (extra.contactCompany as string) ?? undefined,
     contactPhone: (extra.contactPhone as string) ?? undefined,
     contactEmail: (extra.contactEmail as string) ?? undefined,
@@ -137,6 +138,7 @@ const leadInputSchema = z.object({
   aiSummary: z.string().optional(),
   budget: z.number().optional(),
   proposta: propostaSchema.optional(),
+  propostaPublicToken: z.string().optional(),
   contactCompany: z.string().optional(),
   contactPhone: z.string().optional(),
   contactEmail: z.string().optional(),
@@ -162,6 +164,7 @@ function inputToRow(input: LeadInput) {
     "aiSummary",
     "budget",
     "proposta",
+    "propostaPublicToken",
     "contactCompany",
     "contactPhone",
     "contactEmail",
@@ -210,6 +213,7 @@ function leadToRow(lead: Lead) {
     "aiSummary",
     "budget",
     "proposta",
+    "propostaPublicToken",
     "contactCompany",
     "contactPhone",
     "contactEmail",
@@ -435,6 +439,39 @@ export const updateLeadStage = createServerFn({ method: "POST" })
       void dispatchOutgoingWebhook("lead.won", { id: data.id, stage: "ganho" });
     }
     return { ok: true };
+  });
+
+/**
+ * Gera (na lazy, uma única vez) o token do link externo da calculadora de
+ * proposta deste lead (`/calculadora-proposta/$token`) — mesmo padrão de
+ * `Cliente.publicToken` em `ClientesSection.tsx`'s `copyClientLink`, só que
+ * gerado no servidor (não no cliente) porque a escrita precisa buscar o
+ * `extra` atual antes de mesclar, pra nunca sobrescrever outro campo que
+ * tenha mudado entre o load do formulário e este clique. Idempotente: se já
+ * existe um token, devolve o mesmo — nunca gera um segundo link pro mesmo
+ * lead. */
+export const generatePropostaPublicToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => z.object({ id: z.string() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: existingRow, error: fetchErr } = await context.supabase
+      .from("leads")
+      .select("extra")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr) throw new Error(fetchErr.message);
+    const extra = ((existingRow as { extra: Record<string, unknown> } | null)?.extra ??
+      {}) as Record<string, unknown>;
+    const existingToken = extra.propostaPublicToken as string | undefined;
+    if (existingToken) return { token: existingToken };
+
+    const token = crypto.randomUUID().replace(/-/g, "");
+    const { error } = await context.supabase
+      .from("leads")
+      .update({ extra: { ...extra, propostaPublicToken: token } } as never)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { token };
   });
 
 export const deleteLead = createServerFn({ method: "POST" })

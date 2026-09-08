@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
+import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
@@ -42,6 +43,12 @@ const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   path: '/inscricao/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CalculadoraPropostaTokenRoute =
+  CalculadoraPropostaTokenRouteImport.update({
+    id: '/calculadora-proposta/$token',
+    path: '/calculadora-proposta/$token',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BugsTokenRoute = BugsTokenRouteImport.update({
   id: '/bugs/$token',
   path: '/bugs/$token',
@@ -94,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
+  '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
+  '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -124,6 +133,7 @@ export interface FileRoutesById {
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
+  '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
+    | '/calculadora-proposta/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
+    | '/calculadora-proposta/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/projeto/$id'
@@ -169,6 +181,7 @@ export interface FileRouteTypes {
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
     | '/bugs/$token'
+    | '/calculadora-proposta/$token'
     | '/inscricao/$token'
     | '/portal/$token'
     | '/_authenticated/projeto/$id'
@@ -183,6 +196,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
+  CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   PortalTokenRoute: typeof PortalTokenRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
@@ -220,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/inscricao/$token'
       fullPath: '/inscricao/$token'
       preLoaderRoute: typeof InscricaoTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calculadora-proposta/$token': {
+      id: '/calculadora-proposta/$token'
+      path: '/calculadora-proposta/$token'
+      fullPath: '/calculadora-proposta/$token'
+      preLoaderRoute: typeof CalculadoraPropostaTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bugs/$token': {
@@ -307,6 +328,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
+  CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   PortalTokenRoute: PortalTokenRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,

@@ -18,6 +18,7 @@ import {
   updateLeadStage,
   deleteLead as deleteLeadFn,
   runOpportunityAction,
+  generatePropostaPublicToken,
 } from "@/lib/comercial.functions";
 import {
   deriveOpportunityNextStep,
@@ -63,6 +64,7 @@ import {
   MoreHorizontal,
   ArrowRight,
   Loader2,
+  Link2,
 } from "lucide-react";
 import { linkifyText } from "@/lib/linkify";
 
@@ -561,6 +563,9 @@ function LeadForm({
   // valor) e de cada autosave, sem fechar a ficha — os campos abaixo
   // continuam como estado local separado, só sincronizado na abertura.
   const [liveLead, setLiveLead] = useState<Lead | null>(initial);
+  const generateLinkFn = useServerFn(generatePropostaPublicToken);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [name, setName] = useState(initial?.name ?? "");
   const [company, setCompany] = useState(initial?.company ?? "");
   const [contact, setContact] = useState(initial?.contact ?? "");
@@ -619,6 +624,33 @@ function LeadForm({
       setError(e instanceof Error ? e.message : "Não foi possível executar a ação.");
     } finally {
       setRunningAction(null);
+    }
+  };
+
+  /** Copia o link da calculadora de proposta EXTERNA deste lead — gera o
+   * token na lazy (uma única vez, ver `generatePropostaPublicToken`) se
+   * ainda não existir. Mesmo padrão de "Link do cliente" em
+   * `ClientesSection.tsx`, só que pro Comercial (usado durante calls de
+   * venda, antes do lead virar cliente). */
+  const copyPropostaLink = async () => {
+    if (!liveLead) return;
+    setGeneratingLink(true);
+    try {
+      let token = liveLead.propostaPublicToken;
+      if (!token) {
+        const result = await generateLinkFn({ data: { id: liveLead.id } });
+        token = result.token;
+        setLiveLead((prev) => (prev ? { ...prev, propostaPublicToken: token } : prev));
+      }
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/calculadora-proposta/${token}`,
+      );
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível gerar o link.");
+    } finally {
+      setGeneratingLink(false);
     }
   };
 
@@ -1184,7 +1216,31 @@ function LeadForm({
                   </Section>
                 )}
 
-                <Section title="Simulador" icon={<Calculator className="h-4 w-4" />}>
+                <Section
+                  title="Simulador"
+                  icon={<Calculator className="h-4 w-4" />}
+                  action={
+                    liveLead && (
+                      <button
+                        type="button"
+                        onClick={copyPropostaLink}
+                        disabled={generatingLink}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium shadow-sm hover:bg-muted disabled:opacity-50"
+                      >
+                        {generatingLink ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Link2 className="h-3.5 w-3.5" />
+                        )}
+                        {linkCopied ? "Link copiado!" : "Calculadora externa"}
+                      </button>
+                    )
+                  }
+                >
+                  <p className="-mt-1 mb-3 text-[11px] text-muted-foreground">
+                    Gere um link à parte, com preço final e sem os custos internos, pra abrir
+                    durante a call com o cliente.
+                  </p>
                   <SimuladorPropostaForm
                     initial={proposta}
                     applyLabel={proposta ? "Atualizar proposta" : "Usar como valor do negócio"}
@@ -1542,19 +1598,24 @@ function MiniActionDialog({
 function Section({
   title,
   icon,
+  action,
   children,
 }: {
   title: string;
   icon: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
-          {icon}
-        </span>
-        {title}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
+            {icon}
+          </span>
+          {title}
+        </div>
+        {action}
       </div>
       {children}
     </div>
