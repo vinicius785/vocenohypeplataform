@@ -68,15 +68,15 @@ export function MarkAsPaidDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-sm:items-stretch max-sm:p-0"
       onClick={onClose}
     >
       <form
         onClick={(ev) => ev.stopPropagation()}
         onSubmit={(e) => void submit(e)}
-        className="flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold text-foreground">{label}</h2>
           <button
             type="button"
@@ -88,7 +88,7 @@ export function MarkAsPaidDialog({
           </button>
         </div>
 
-        <div className="space-y-3 px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           {jaRecebido > 0 && (
             <div className="grid grid-cols-3 gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px]">
               <div>
@@ -148,7 +148,7 @@ export function MarkAsPaidDialog({
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
           <button
             type="button"
             onClick={onClose}

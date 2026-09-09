@@ -219,7 +219,7 @@ export function IndicadorAdvancedSettings({
 
       <div className="space-y-3 border-t border-border pt-4">
         <p className={SECTION_TITLE_CLS}>Como medir</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLS}>Tipo</label>
             <select
@@ -280,7 +280,7 @@ export function IndicadorAdvancedSettings({
       {NUMERIC_TYPES.includes(tipo) && (
         <div className="space-y-3 border-t border-border pt-4">
           <p className={SECTION_TITLE_CLS}>Desempenho</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={LABEL_CLS}>Valor atual</label>
               <NivelField
@@ -300,7 +300,7 @@ export function IndicadorAdvancedSettings({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={LABEL_CLS}>Meta esperada</label>
               <NivelField
@@ -321,7 +321,7 @@ export function IndicadorAdvancedSettings({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={LABEL_CLS}>Meta mínima</label>
               <NivelField
@@ -348,7 +348,7 @@ export function IndicadorAdvancedSettings({
 
       <div className="space-y-3 border-t border-border pt-4">
         <p className={SECTION_TITLE_CLS}>Responsabilidade e período</p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLS}>Responsável pela atualização</label>
             <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
@@ -398,7 +398,7 @@ export function IndicadorAdvancedSettings({
               })}
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLS}>Data inicial</label>
             <DateField

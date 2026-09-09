@@ -389,7 +389,10 @@ export function VincularCampanhaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[94vh] max-w-4xl flex-col gap-0 overflow-hidden border-border bg-card p-0">
+      <DialogContent
+        className="flex max-h-[94vh] max-w-4xl flex-col gap-0 overflow-hidden border-border bg-card p-0"
+        mobileFullScreen
+      >
         <div className="px-8 pt-7 pb-5">
           <DialogTitle className="text-2xl font-light tracking-tighter">
             {initial ? "Editar campanha" : "Vincular campanha"}

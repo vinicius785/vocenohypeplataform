@@ -200,7 +200,10 @@ export function ClientesSection() {
           }
         }}
       >
-        <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-card p-0">
+        <DialogContent
+          className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-card p-0"
+          mobileFullScreen
+        >
           <div className="flex items-center gap-3 border-b border-border px-6 py-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
               <Building2 className="h-4 w-4" />
@@ -360,7 +363,10 @@ export function ClientesSection() {
       </div>
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent className="max-w-2xl gap-0 overflow-hidden border-border bg-card p-0">
+        <DialogContent
+          className="max-w-2xl gap-0 overflow-hidden border-border bg-card p-0"
+          mobileFullScreen
+        >
           {selected && (
             <>
               <div className="border-b border-border/60 px-8 pt-8 pb-6">

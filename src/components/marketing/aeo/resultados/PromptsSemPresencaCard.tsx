@@ -28,12 +28,12 @@ export function PromptsSemPresencaCard({
         Ver prompts
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" mobileFullScreen>
           <DialogHeader>
             <DialogTitle>Prompts sem presença ({lista.length})</DialogTitle>
           </DialogHeader>
-          <div className="max-h-96 overflow-y-auto">
-            <table className="w-full text-xs">
+          <div className="max-h-96 overflow-auto">
+            <table className="w-full min-w-[420px] text-xs">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="py-1.5 font-medium">Prompt</th>

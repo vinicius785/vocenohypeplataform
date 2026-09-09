@@ -40,15 +40,15 @@ export function CobrancaDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 max-sm:items-stretch max-sm:p-0"
       onClick={onClose}
     >
       <form
         onClick={(ev) => ev.stopPropagation()}
         onSubmit={(e) => void submit(e)}
-        className="flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold text-foreground">Registrar cobrança</h2>
           <button
             type="button"
@@ -60,7 +60,7 @@ export function CobrancaDialog({
           </button>
         </div>
 
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           {historico.length > 0 && (
             <div>
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -96,7 +96,7 @@ export function CobrancaDialog({
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-5 py-3">
           <button
             type="button"
             onClick={onClose}

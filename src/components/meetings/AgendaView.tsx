@@ -119,7 +119,7 @@ export function AgendaView({
 
             <div className="min-w-0 flex-1">
               <p className="truncate text-xl font-medium text-foreground">{hero.titulo}</p>
-              <div className="mt-2.5 flex items-center gap-2.5">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
                 <AvatarStack people={heroPeople} max={4} size="md" />
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(meetingDisplayStatus(hero))}`}

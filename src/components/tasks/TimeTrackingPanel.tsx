@@ -406,15 +406,15 @@ function AllEntriesDialog({
     .reduce((s, e) => s + (e.durationSeconds ?? 0) + (e.endedAt ? 0 : liveSeconds(e)), 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" mobileFullScreen>
         <DialogHeader>
           <DialogTitle>Todos os registros de tempo</DialogTitle>
           <DialogDescription>
             Tempo total {formatDuration(total)} · Seu tempo {formatDuration(own)}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
-          <table className="w-full text-sm">
+        <div className="max-h-[60vh] overflow-auto">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="py-1.5 pr-2 font-medium">Pessoa</th>

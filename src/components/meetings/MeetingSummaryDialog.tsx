@@ -225,7 +225,10 @@ export function MeetingSummaryDialog({
 
   return (
     <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[85vh] w-full max-w-[520px] flex-col gap-0 overflow-hidden rounded-2xl p-0">
+      <DialogContent
+        className="flex max-h-[85vh] w-full max-w-[520px] flex-col gap-0 overflow-hidden rounded-2xl p-0"
+        mobileFullScreen
+      >
         {/* Header — título, data+hora numa linha só, status só quando
             "Sua resposta" (abaixo) não existir pra representar esse dado. */}
         <div className="flex items-start gap-3 px-6 pb-1 pt-6">

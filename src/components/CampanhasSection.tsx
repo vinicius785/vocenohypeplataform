@@ -774,7 +774,7 @@ function CampanhaDetail({
       <GaleriaConteudosSection influs={visibleInflus} />
 
       <Dialog open={openPanel === "documentos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="max-w-xl border-border bg-card">
+        <DialogContent className="max-w-xl border-border bg-card" mobileFullScreen>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <FolderOpen className="h-4 w-4" /> Documentos
           </DialogTitle>
@@ -786,7 +786,7 @@ function CampanhaDetail({
       </Dialog>
 
       <Dialog open={openPanel === "calendario"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="max-w-2xl border-border bg-card">
+        <DialogContent className="max-w-2xl border-border bg-card" mobileFullScreen>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <CalendarClock className="h-4 w-4" /> Calendário da campanha
           </DialogTitle>
@@ -804,7 +804,7 @@ function CampanhaDetail({
       </Dialog>
 
       <Dialog open={openPanel === "composicao"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="max-w-md border-border bg-card">
+        <DialogContent className="max-w-md border-border bg-card" mobileFullScreen>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <Wallet className="h-4 w-4" /> Composição & pagamentos
           </DialogTitle>
@@ -859,7 +859,7 @@ function CampanhaDetail({
       </Dialog>
 
       <Dialog open={openPanel === "direitos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="max-w-md border-border bg-card">
+        <DialogContent className="max-w-md border-border bg-card" mobileFullScreen>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <ShieldCheck className="h-4 w-4" /> Direitos de imagem
           </DialogTitle>
@@ -911,7 +911,10 @@ function CampanhaDetail({
       </Dialog>
 
       <Dialog open={openPanel === "relatorioMensal"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col border-border bg-card">
+        <DialogContent
+          className="flex max-h-[85vh] max-w-2xl flex-col border-border bg-card"
+          mobileFullScreen
+        >
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
             <FileBarChart className="h-4 w-4" /> Relatórios mensais
           </DialogTitle>

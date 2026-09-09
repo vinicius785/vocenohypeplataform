@@ -59,12 +59,16 @@ export function LeadCard({
   onDragStart,
   onDragEnd,
   dragging,
+  draggable = true,
 }: {
   lead: Lead;
   onOpen: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   dragging: boolean;
+  /** Drag nativo (HTML5) não existe em toque — o Kanban desativa isso no
+   * mobile e usa o seletor de Etapa dentro do drawer da oportunidade. */
+  draggable?: boolean;
 }) {
   const step = deriveOpportunityNextStep(lead);
   const signal = cardSignal(lead);
@@ -72,9 +76,9 @@ export function LeadCard({
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
       onClick={onOpen}
       role="button"
       tabIndex={0}

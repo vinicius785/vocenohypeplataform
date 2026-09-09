@@ -102,12 +102,12 @@ export function ImportDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-sm:items-stretch max-sm:p-0"
       onClick={onClose}
     >
       <div
         onClick={(ev) => ev.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg max-sm:!h-dvh max-sm:!max-h-dvh max-sm:!max-w-none max-sm:!rounded-none max-sm:!border-0"
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
           <h2 className="text-sm font-semibold">Importar lista (ClickUp ou outra planilha)</h2>
@@ -182,7 +182,7 @@ export function ImportDialog({
                 </Field>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Tipo padrão">
                   <select
                     value={defaultKind}
@@ -225,12 +225,16 @@ export function ImportDialog({
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                   Prévia ({preview.length} {preview.length === 1 ? "lançamento" : "lançamentos"})
                 </p>
-                <div className="max-h-56 overflow-y-auto rounded-md border border-border">
-                  <table className="w-full text-xs">
+                <div className="max-h-56 overflow-auto rounded-md border border-border">
+                  <table className="w-full min-w-[320px] text-xs">
                     <tbody className="divide-y divide-border">
                       {preview.slice(0, 50).map((p, i) => (
                         <tr key={i}>
-                          <td className="truncate px-2 py-1.5">{p.description}</td>
+                          <td className="px-2 py-1.5">
+                            <span className="block max-w-[160px] truncate sm:max-w-[280px]">
+                              {p.description}
+                            </span>
+                          </td>
                           <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">
                             {formatIsoDate(p.date)}
                           </td>

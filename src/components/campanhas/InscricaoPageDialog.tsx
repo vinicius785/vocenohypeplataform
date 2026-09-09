@@ -255,7 +255,7 @@ export function InscricaoPageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 p-0">
+      <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 p-0" mobileFullScreen>
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-lg font-light tracking-tight text-foreground">
             Página de inscrição

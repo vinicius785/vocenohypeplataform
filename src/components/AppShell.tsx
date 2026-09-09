@@ -304,6 +304,30 @@ export function AppShell({
   useEffect(() => {
     setMobileOpen(false);
   }, [active]);
+
+  // Foco/Escape do menu mobile: ao abrir, entra no primeiro item de
+  // navegação (leitor de tela já sabe que um novo painel apareceu); ao
+  // fechar (Escape, backdrop, navegação), devolve o foco pro botão que
+  // abriu — sem isso o foco fica "perdido" num elemento que já saiu da
+  // tela. `inert` no conteúdo atrás faz o papel de focus trap: impede
+  // Tab/leitor de tela de escapar pro conteúdo escondido sob o backdrop,
+  // sem precisar interceptar cada tecla manualmente.
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const first = mobileNavRef.current?.querySelector<HTMLElement>("button:not(:disabled)");
+    first?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const menuButton = mobileMenuButtonRef.current;
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      menuButton?.focus();
+    };
+  }, [mobileOpen]);
   const [theme, setThemeState] = useState<"light" | "dark">(() =>
     typeof window !== "undefined" ? getTheme() : "light",
   );
@@ -361,7 +385,7 @@ export function AppShell({
           )}
         </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           {groups.map((group) => (
             <div key={group.title} className="mb-4">
               {showFull && (
@@ -487,13 +511,18 @@ export function AppShell({
         </Dialog>
       )}
 
-      <div className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        inert={mobileOpen ? true : undefined}
+      >
         <header className="flex h-16 items-center gap-3 border-b border-border px-6">
           <button
+            ref={mobileMenuButtonRef}
             type="button"
             onClick={() => setMobileOpen((v) => !v)}
             className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
-            aria-label="Abrir menu"
+            aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={mobileOpen}
           >
             <Menu className="h-4 w-4" />
           </button>

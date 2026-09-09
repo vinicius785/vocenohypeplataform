@@ -255,7 +255,7 @@ export function SimuladorPropostaDialog({
     // dentro (overlay, selects, botões) também fechava o painel por trás.
     <div onClick={(e) => e.stopPropagation()}>
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col gap-0 p-0" mobileFullScreen>
           <div className="flex items-center gap-3 border-b border-border px-5 py-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
               <Calculator className="h-4 w-4" />

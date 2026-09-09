@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type EntryStatus,
@@ -206,150 +207,145 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
           />
         </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setMoreOpen((v) => !v)}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-3 w-3" />+ Filtros
-          </button>
-          {moreOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-72 space-y-3 rounded-lg border border-border bg-popover p-3.5 text-xs shadow-lg">
+        <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-3 w-3" />+ Filtros
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-3 p-3.5 text-xs">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Status
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleStatus(s)}
+                    className={`cursor-pointer rounded-full border px-2 py-0.5 text-[11px] ${
+                      filters.status.includes(s)
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {STATUS_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Responsável
+              </label>
+              <select
+                value={filters.responsavelId ?? ""}
+                onChange={(e) => setF({ responsavelId: e.target.value || undefined })}
+                className={inputCls("w-full")}
+              >
+                <option value="">Todos</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Status
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {STATUS_OPTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => toggleStatus(s)}
-                      className={`cursor-pointer rounded-full border px-2 py-0.5 text-[11px] ${
-                        filters.status.includes(s)
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Responsável
-                </label>
-                <select
-                  value={filters.responsavelId ?? ""}
-                  onChange={(e) => setF({ responsavelId: e.target.value || undefined })}
-                  className={inputCls("w-full")}
-                >
-                  <option value="">Todos</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Valor mín.
-                  </label>
-                  <input
-                    type="number"
-                    value={filters.valorMin ?? ""}
-                    onChange={(e) =>
-                      setF({ valorMin: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                    className={inputCls("w-full")}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                    Valor máx.
-                  </label>
-                  <input
-                    type="number"
-                    value={filters.valorMax ?? ""}
-                    onChange={(e) =>
-                      setF({ valorMax: e.target.value ? Number(e.target.value) : undefined })
-                    }
-                    className={inputCls("w-full")}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Forma de pagamento
+                  Valor mín.
                 </label>
                 <input
-                  value={filters.formaPagamento ?? ""}
-                  onChange={(e) => setF({ formaPagamento: e.target.value || undefined })}
-                  placeholder="PIX, transferência..."
+                  type="number"
+                  value={filters.valorMin ?? ""}
+                  onChange={(e) =>
+                    setF({ valorMin: e.target.value ? Number(e.target.value) : undefined })
+                  }
                   className={inputCls("w-full")}
                 />
               </div>
-
               <div>
                 <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Origem
+                  Valor máx.
                 </label>
-                <select
-                  value={filters.origem ?? ""}
+                <input
+                  type="number"
+                  value={filters.valorMax ?? ""}
                   onChange={(e) =>
-                    setF({ origem: (e.target.value || undefined) as Source | undefined })
+                    setF({ valorMax: e.target.value ? Number(e.target.value) : undefined })
                   }
                   className={inputCls("w-full")}
-                >
-                  <option value="">Todas</option>
-                  {(Object.keys(SOURCE_LABEL) as Source[]).map((s) => (
-                    <option key={s} value={s}>
-                      {SOURCE_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-
-              <div className="flex items-center gap-4">
-                <label className="flex cursor-pointer items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={filters.possuiNotaFiscal ?? false}
-                    onChange={(e) =>
-                      setF({ possuiNotaFiscal: e.target.checked ? true : undefined })
-                    }
-                  />
-                  Possui NF
-                </label>
-                <label className="flex cursor-pointer items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={filters.possuiComprovante ?? false}
-                    onChange={(e) =>
-                      setF({ possuiComprovante: e.target.checked ? true : undefined })
-                    }
-                  />
-                  Possui comprovante
-                </label>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setMoreOpen(false)}
-                className="w-full cursor-pointer rounded-md bg-foreground py-1.5 text-xs font-medium text-background hover:opacity-90"
-              >
-                Aplicar
-              </button>
             </div>
-          )}
-        </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Forma de pagamento
+              </label>
+              <input
+                value={filters.formaPagamento ?? ""}
+                onChange={(e) => setF({ formaPagamento: e.target.value || undefined })}
+                placeholder="PIX, transferência..."
+                className={inputCls("w-full")}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Origem
+              </label>
+              <select
+                value={filters.origem ?? ""}
+                onChange={(e) =>
+                  setF({ origem: (e.target.value || undefined) as Source | undefined })
+                }
+                className={inputCls("w-full")}
+              >
+                <option value="">Todas</option>
+                {(Object.keys(SOURCE_LABEL) as Source[]).map((s) => (
+                  <option key={s} value={s}>
+                    {SOURCE_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={filters.possuiNotaFiscal ?? false}
+                  onChange={(e) => setF({ possuiNotaFiscal: e.target.checked ? true : undefined })}
+                />
+                Possui NF
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={filters.possuiComprovante ?? false}
+                  onChange={(e) => setF({ possuiComprovante: e.target.checked ? true : undefined })}
+                />
+                Possui comprovante
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMoreOpen(false)}
+              className="w-full cursor-pointer rounded-md bg-foreground py-1.5 text-xs font-medium text-background hover:opacity-90"
+            >
+              Aplicar
+            </button>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {chips.length > 0 && (

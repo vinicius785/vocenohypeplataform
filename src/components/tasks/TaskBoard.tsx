@@ -1358,7 +1358,6 @@ export function TaskBoard({
     if (!fases) return;
     const validIds = new Set([SEM_FASE, ...fases.map((f) => f.id)]);
     setFaseFilters((prev) => prev.filter((id) => validIds.has(id)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- SEM_FASE é constante local, não precisa entrar nas deps
   }, [fases, setFaseFilters]);
   const activeFilterCount = [
     assigneeFilters.length > 0,
@@ -1510,6 +1509,30 @@ export function TaskBoard({
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const isMobile = useIsMobile();
   const [sortOpen, setSortOpen] = useState(false);
+
+  // No mobile, mostra só a coluna ativa (sem rolagem horizontal nenhuma) em
+  // vez da faixa de colunas lado a lado — o próprio drag-and-drop nativo
+  // (HTML5 `draggable`) não funciona em toque, então rolar entre colunas
+  // pra arrastar não ajudaria mesmo; a troca de status/fase acontece pelo
+  // campo dentro do diálogo da tarefa, que já existe pra isso.
+  const [mobileActiveCol, setMobileActiveCol] = useState<string>(() => boardColumns[0]?.key ?? "");
+  useEffect(() => {
+    if (!boardColumns.some((c) => c.key === mobileActiveCol)) {
+      setMobileActiveCol(boardColumns[0]?.key ?? "");
+    }
+  }, [boardColumns, mobileActiveCol]);
+  const mobileColCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of visibleTasks) {
+      const key = groupBy === "fase" ? faseColumnKey(t) : t.status;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleTasks, groupBy, fases]);
+  const renderedColumns = isMobile
+    ? boardColumns.filter((c) => c.key === mobileActiveCol)
+    : boardColumns;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -1968,8 +1991,29 @@ export function TaskBoard({
           </div>
         )}
 
+        {isMobile && boardColumns.length > 1 && (
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+            {boardColumns.map((col) => (
+              <button
+                key={col.key}
+                type="button"
+                onClick={() => setMobileActiveCol(col.key)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                  mobileActiveCol === col.key
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${col.dotClass}`} />
+                {col.label}
+                <span className="tabular-nums opacity-70">{mobileColCounts.get(col.key) ?? 0}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
-          {boardColumns.map((col) => {
+          {renderedColumns.map((col) => {
             const rootItems: BoardItem[] = visibleTasks.filter((t) =>
               groupBy === "fase" ? faseColumnKey(t) === col.key : t.status === col.key,
             );
@@ -2054,7 +2098,7 @@ export function TaskBoard({
                   setDragId(null);
                   setDragOverCol(null);
                 }}
-                className={`flex w-[288px] shrink-0 flex-col rounded-xl border p-3 transition-colors ${dragOverCol === col.key ? "border-foreground/30 bg-muted/10" : "border-border bg-background"}`}
+                className={`flex ${isMobile ? "w-full" : "w-[288px] shrink-0"} flex-col rounded-xl border p-3 transition-colors ${dragOverCol === col.key ? "border-foreground/30 bg-muted/10" : "border-border bg-background"}`}
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
@@ -2071,8 +2115,8 @@ export function TaskBoard({
                   {items.map((t) => (
                     <div
                       key={t.id}
-                      draggable={!t.__parentTask}
-                      onDragStart={() => !t.__parentTask && setDragId(t.id)}
+                      draggable={!isMobile && !t.__parentTask}
+                      onDragStart={() => !isMobile && !t.__parentTask && setDragId(t.id)}
                       onDragEnd={() => setDragId(null)}
                       onClick={() =>
                         setTaskDialog({

@@ -3526,6 +3526,7 @@ function InfluencerProfileDialog({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
         className="flex h-[92vh] max-w-6xl flex-col gap-0 overflow-hidden p-0"
+        mobileFullScreen
         onPointerDownOutside={() => {
           // Clicar fora fecha o diálogo antes do evento de blur do campo
           // focado terminar de disparar — o rascunho (ex: link de
@@ -4100,7 +4101,10 @@ function InfluenciadorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0">
+      <DialogContent
+        className="flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden border-border bg-background p-0"
+        mobileFullScreen
+      >
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">Novo influenciador</DialogTitle>
           <DialogDescription className="sr-only">Cadastrar novo influenciador</DialogDescription>
@@ -5111,7 +5115,10 @@ function BankPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 overflow-hidden border-border bg-background p-0">
+      <DialogContent
+        className="flex max-h-[85vh] max-w-lg flex-col gap-0 overflow-hidden border-border bg-background p-0"
+        mobileFullScreen
+      >
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">Adicionar do banco</DialogTitle>
           <DialogDescription className="mt-0.5 text-xs text-muted-foreground">

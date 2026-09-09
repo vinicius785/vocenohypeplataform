@@ -236,7 +236,7 @@ export function ReunioesSection() {
           { label: "PENDENTES", value: pendentes },
         ]}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <JoinByLinkDialog />
             <Button size="sm" onClick={() => openNewMeeting()}>
               <Plus className="h-3.5 w-3.5" /> Nova reunião

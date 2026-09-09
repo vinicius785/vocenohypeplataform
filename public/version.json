@@ -1,6 +1,7 @@
 {
-  "version": "1.269.0",
+  "version": "1.270.0",
   "notes": [
+    "Auditoria e correção de responsividade mobile em toda a plataforma (320px a desktop). Corrigida a causa raiz mais séria: o `TabsList` compartilhado (shadcn) era `inline-flex` sem limite de largura — com várias abas (ex.: as 6 do Financeiro) ele crescia além da tela e, como o container principal tem rolagem própria, a página inteira virava arrastável na horizontal. Agora a lista de abas rola só dentro de si mesma quando não cabe, sem afetar o desktop. Corrigido também em Reuniões: o cabeçalho da \"Próxima reunião\" (avatares + status + duração) e os botões de ação do topo vazavam ~65px da tela em 320px por falta de `flex-wrap`. Menu mobile (sidebar) ganhou fechamento por Escape, gerenciamento de foco (entra no primeiro item ao abrir, volta pro botão hambúrguer ao fechar) e bloqueio de interação com o conteúdo atrás (`inert`) — reforça o backdrop que já existia. Kanban de tarefas e Pipeline comercial ganham um modo mobile: em vez da faixa de colunas lado a lado, mostram só a etapa ativa (largura cheia, zero scroll horizontal) com chips no topo pra trocar — arrastar card não funciona em toque (é HTML5 nativo), então fica desativado no mobile; trocar de etapa continua possível pelo campo Status/Etapa já existente dentro do diálogo/drawer. \"+Filtros\" do Financeiro trocado de painel posicionado à mão (sem limite de largura) para o Popover real do design system (colisão com a borda da tela tratada automaticamente). Diversos diálogos e tabelas menores (Financeiro, Configurações, AEO Monitor, Cronômetro) ganharam o mesmo tratamento de tela cheia no mobile e rolagem horizontal contida já usado em outros diálogos grandes do app. Nenhuma regra de negócio, dado ou comportamento no desktop mudou — só a adaptação a telas estreitas.",
     "Redesign completo da central financeira (Financeiro): 6 abas — Visão geral, Movimentações (era Lançamentos), A receber, A pagar, Campanhas (nova) e Relatórios (nova). Investigada e explicada a divergência entre o total \"a pagar\" da Visão geral e da aba A pagar: eram escopos diferentes (mês corrente vs. toda a carteira em aberto), não um erro de cálculo — resolvido removendo esse número ambíguo da Visão geral e rotulando \"· toda a carteira\" em todo lugar que usa esse escopo mais amplo. Definições financeiras centralizadas e testadas: \"realizado\" agora usa a data de liquidação (não o vencimento); \"saldo projetado\" ganhou um horizonte explícito (fim do mês/30/90 dias) em vez de misturar com o período selecionado na tela; \"saldo atual\" nunca é inventado — sem um saldo inicial configurado (novo, opcional, em Visão geral → \"Configurar saldo\") mostra \"Saldo não configurado\" com uma ação, nunca R$ 0,00 ou um número estimado. Corrigido bug de fuso horário: o Financeiro calculava \"hoje\" pelo relógio do navegador/computador, não pelo horário de Brasília (diferente do resto da plataforma). Novas faixas de vencimento mutuamente exclusivas (Vencido/Vence hoje/Próximos 7 dias/8 a 30 dias/Acima de 30 dias) e faixas de atraso (aging: 1-7/8-15/16-30/31-60/60+ dias) em A receber, A pagar e no novo relatório de aging. \"Requer atenção\" da Visão geral ganhou mais categorias (vence hoje, sem cliente/categoria/campanha, risco de saldo negativo) com gravidade — um recebimento vencido de R$ 87 mil agora aparece com destaque visual proporcional ao risco, não como um aviso secundário igual a um lançamento sem categoria. \"Resultado por campanha\" ganhou um toggle Contratado/Realizado (nunca mais mistura receita contratada com receita já recebida sem identificar qual é qual) e não soma mais lançamentos cancelados. Recebimento/pagamento parcial: \"Marcar como pago/recebido\" agora aceita um valor menor que o total, mantendo o saldo restante em aberto (mostrado como \"Parcial · saldo R$ X\" na lista e no detalhe). Nova ação \"Registrar cobrança\" em A receber (histórico de contatos + agendar próxima cobrança). Movimentações ganhou exportação CSV, seleção múltipla com exclusão em lote e paginação; a importação por texto colado agora ignora automaticamente linhas duplicadas (mesma descrição, valor e data de um lançamento já existente). Nova aba Relatórios com evolução mensal, inadimplência, aging, prazo médio de liquidação, receita por cliente, despesas por categoria e valores sem vínculo — cada bloco responde uma pergunta financeira específica, sem gráfico decorativo. Nenhum dado existente foi alterado ou migrado; tudo aditivo.",
     "Corrige comprovantes de pagamento não ficando salvos ao marcar um lançamento do Financeiro como pago/recebido: o arquivo subia normalmente, mas a referência a ele nunca era gravada no lançamento (só um identificador solto, nunca usado em lugar nenhum) — reabrir o lançamento fazia o comprovante \"desaparecer\". Corrigido tanto para lançamentos manuais quanto para os gerados automaticamente por campanha, influenciador e salário.",
     "Simplifica a Visão geral do Comercial: removidos o Forecast ponderado, \"Oportunidades abertas\" como card, Pipeline por responsável, \"Em risco\", \"Mais avançadas no funil\" e a linha de indicadores em texto que ficava acima das abas (agora só existe dentro da própria Visão geral, sem duplicar em lugar nenhum). A tela responde só 4 perguntas: Pipeline total, Ganho no período, Sem próxima ação e Paradas (5+ dias) — cada indicador é clicável e já abre o Pipeline com o filtro correspondente aplicado. Abaixo, dois blocos: \"Pipeline por etapa\" (barras proporcionais, com alternância Valor/Quantidade, clique na etapa filtra o Pipeline) e a nova \"Prioridades comerciais\", que substitui as 3 listas antigas por uma só, sem repetir a mesma oportunidade — prioriza ação vencida, depois sem próxima ação, depois parada há 5+ dias, depois reunião hoje/próximos dias. Corrigido de quebra um cálculo que estava errado: \"Pipeline total\" somava até negócios já ganhos/perdidos; agora soma só o que está de fato em aberto.",
@@ -405,6 +406,34 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.270.0",
+      "summary": "Correção de responsividade mobile em toda a plataforma — a causa raiz de páginas ficarem arrastáveis na horizontal foi corrigida no componente de abas compartilhado.",
+      "modules": [
+        {
+          "name": "PLATAFORMA",
+          "tagline": "Mobile sem rolagem lateral indevida",
+          "items": [
+            {
+              "title": "Páginas não ficam mais arrastáveis de lado",
+              "description": "Abas com várias opções (Financeiro, Reuniões e outras) faziam a tela inteira rolar na horizontal em celulares. Corrigido na raiz, no componente de abas compartilhado por todo o app."
+            },
+            {
+              "title": "Menu mobile com Escape e foco correto",
+              "description": "O menu lateral no celular agora fecha com Escape, leva o foco pro primeiro item ao abrir e devolve pro botão de abrir ao fechar."
+            },
+            {
+              "title": "Kanban e Pipeline com modo mobile",
+              "description": "Em telas de celular, mostram só a etapa/coluna ativa (sem rolagem horizontal), com chips para trocar — arrastar card continua funcionando normalmente no desktop."
+            },
+            {
+              "title": "Diálogos e filtros ajustados",
+              "description": "Vários diálogos do Financeiro e o \"+Filtros\" ganharam o mesmo comportamento de tela cheia/sem cortes já usado nos outros diálogos grandes do app."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.269.0",
       "summary": "Redesign completo do Financeiro: central financeira com 6 abas, definições e totais rotulados e reconciliados, faixas de vencimento/atraso, saldo inicial configurável, cobrança e recebimento parcial.",
