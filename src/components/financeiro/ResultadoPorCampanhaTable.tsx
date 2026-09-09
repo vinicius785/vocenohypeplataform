@@ -6,6 +6,7 @@ import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinance
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 type SortKey = "receita" | "custos" | "resultado" | "margem";
+type Mode = "completo" | "realizado";
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "receita", label: "Maior receita" },
@@ -23,18 +24,35 @@ export function ResultadoPorCampanhaTable({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("receita");
   const [ascending, setAscending] = useState(false);
+  const [mode, setMode] = useState<Mode>("completo");
 
   const rows: CampanhaResultado[] = useMemo(() => {
-    const grouped = groupByCampanha(filtered.visible);
+    const grouped = groupByCampanha(filtered.visible, mode);
     const sorted = [...grouped].sort((a, b) => a[sortKey] - b[sortKey]);
     return ascending ? sorted : sorted.reverse();
-  }, [filtered.visible, sortKey, ascending]);
+  }, [filtered.visible, sortKey, ascending, mode]);
 
   return (
     <ChartCard
       title="Resultado por campanha"
       action={
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="inline-flex rounded-md border border-border bg-background p-0.5 text-[11px]">
+            {(["completo", "realizado"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`cursor-pointer rounded px-2 py-0.5 font-medium ${
+                  mode === m
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "completo" ? "Contratado" : "Realizado"}
+              </button>
+            ))}
+          </div>
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
@@ -57,6 +75,11 @@ export function ResultadoPorCampanhaTable({
         </div>
       }
     >
+      <p className="mb-2 text-[11px] text-muted-foreground">
+        {mode === "completo"
+          ? "Valor total contratado (recebido + em aberto) por campanha."
+          : "Só o que já foi efetivamente recebido/pago — nunca confunde contratado com realizado."}
+      </p>
       {rows.length === 0 ? (
         <ChartEmptyState message="Nenhuma campanha possui movimentação financeira neste período." />
       ) : (
@@ -67,6 +90,12 @@ export function ResultadoPorCampanhaTable({
                 <th className="py-1.5 pr-3 font-medium">Campanha</th>
                 <th className="py-1.5 pr-3 font-medium">Cliente</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Receita</th>
+                {mode === "completo" && (
+                  <>
+                    <th className="py-1.5 pr-3 text-right font-medium">Recebido</th>
+                    <th className="py-1.5 pr-3 text-right font-medium">Pendente</th>
+                  </>
+                )}
                 <th className="py-1.5 pr-3 text-right font-medium">Custos</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Resultado</th>
                 <th className="py-1.5 text-right font-medium">Margem</th>
@@ -82,6 +111,16 @@ export function ResultadoPorCampanhaTable({
                   <td className="py-1.5 pr-3 font-medium text-foreground">{r.campanhaNome}</td>
                   <td className="py-1.5 pr-3 text-muted-foreground">{r.clienteNome}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBRL(r.receita)}</td>
+                  {mode === "completo" && (
+                    <>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-600">
+                        {fmtBRL(r.receitaRecebida)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-amber-600">
+                        {fmtBRL(r.receitaPendente)}
+                      </td>
+                    </>
+                  )}
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBRL(r.custos)}</td>
                   <td
                     className={`py-1.5 pr-3 text-right font-medium tabular-nums ${r.resultado >= 0 ? "text-emerald-600" : "text-rose-600"}`}

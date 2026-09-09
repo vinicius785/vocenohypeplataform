@@ -1,6 +1,7 @@
 {
-  "version": "1.268.1",
+  "version": "1.269.0",
   "notes": [
+    "Redesign completo da central financeira (Financeiro): 6 abas — Visão geral, Movimentações (era Lançamentos), A receber, A pagar, Campanhas (nova) e Relatórios (nova). Investigada e explicada a divergência entre o total \"a pagar\" da Visão geral e da aba A pagar: eram escopos diferentes (mês corrente vs. toda a carteira em aberto), não um erro de cálculo — resolvido removendo esse número ambíguo da Visão geral e rotulando \"· toda a carteira\" em todo lugar que usa esse escopo mais amplo. Definições financeiras centralizadas e testadas: \"realizado\" agora usa a data de liquidação (não o vencimento); \"saldo projetado\" ganhou um horizonte explícito (fim do mês/30/90 dias) em vez de misturar com o período selecionado na tela; \"saldo atual\" nunca é inventado — sem um saldo inicial configurado (novo, opcional, em Visão geral → \"Configurar saldo\") mostra \"Saldo não configurado\" com uma ação, nunca R$ 0,00 ou um número estimado. Corrigido bug de fuso horário: o Financeiro calculava \"hoje\" pelo relógio do navegador/computador, não pelo horário de Brasília (diferente do resto da plataforma). Novas faixas de vencimento mutuamente exclusivas (Vencido/Vence hoje/Próximos 7 dias/8 a 30 dias/Acima de 30 dias) e faixas de atraso (aging: 1-7/8-15/16-30/31-60/60+ dias) em A receber, A pagar e no novo relatório de aging. \"Requer atenção\" da Visão geral ganhou mais categorias (vence hoje, sem cliente/categoria/campanha, risco de saldo negativo) com gravidade — um recebimento vencido de R$ 87 mil agora aparece com destaque visual proporcional ao risco, não como um aviso secundário igual a um lançamento sem categoria. \"Resultado por campanha\" ganhou um toggle Contratado/Realizado (nunca mais mistura receita contratada com receita já recebida sem identificar qual é qual) e não soma mais lançamentos cancelados. Recebimento/pagamento parcial: \"Marcar como pago/recebido\" agora aceita um valor menor que o total, mantendo o saldo restante em aberto (mostrado como \"Parcial · saldo R$ X\" na lista e no detalhe). Nova ação \"Registrar cobrança\" em A receber (histórico de contatos + agendar próxima cobrança). Movimentações ganhou exportação CSV, seleção múltipla com exclusão em lote e paginação; a importação por texto colado agora ignora automaticamente linhas duplicadas (mesma descrição, valor e data de um lançamento já existente). Nova aba Relatórios com evolução mensal, inadimplência, aging, prazo médio de liquidação, receita por cliente, despesas por categoria e valores sem vínculo — cada bloco responde uma pergunta financeira específica, sem gráfico decorativo. Nenhum dado existente foi alterado ou migrado; tudo aditivo.",
     "Corrige comprovantes de pagamento não ficando salvos ao marcar um lançamento do Financeiro como pago/recebido: o arquivo subia normalmente, mas a referência a ele nunca era gravada no lançamento (só um identificador solto, nunca usado em lugar nenhum) — reabrir o lançamento fazia o comprovante \"desaparecer\". Corrigido tanto para lançamentos manuais quanto para os gerados automaticamente por campanha, influenciador e salário.",
     "Simplifica a Visão geral do Comercial: removidos o Forecast ponderado, \"Oportunidades abertas\" como card, Pipeline por responsável, \"Em risco\", \"Mais avançadas no funil\" e a linha de indicadores em texto que ficava acima das abas (agora só existe dentro da própria Visão geral, sem duplicar em lugar nenhum). A tela responde só 4 perguntas: Pipeline total, Ganho no período, Sem próxima ação e Paradas (5+ dias) — cada indicador é clicável e já abre o Pipeline com o filtro correspondente aplicado. Abaixo, dois blocos: \"Pipeline por etapa\" (barras proporcionais, com alternância Valor/Quantidade, clique na etapa filtra o Pipeline) e a nova \"Prioridades comerciais\", que substitui as 3 listas antigas por uma só, sem repetir a mesma oportunidade — prioriza ação vencida, depois sem próxima ação, depois parada há 5+ dias, depois reunião hoje/próximos dias. Corrigido de quebra um cálculo que estava errado: \"Pipeline total\" somava até negócios já ganhos/perdidos; agora soma só o que está de fato em aberto.",
     "Ajustes no redesign do Comercial: removidas as abas Atividades e Relatórios (ficam Visão geral e Pipeline). Corrige o botão \"Calculadora externa\" (aba Proposta) que tinha ficado escondido até a proposta já existir — volta a aparecer sempre que a oportunidade já foi salva. Visão geral redesenhada: estatísticas em destaque no topo, \"Pipeline por etapa\" e \"Pipeline por responsável\" como barras proporcionais ao valor real, e as listas de ação com a mesma linguagem visual do card do Kanban (avatar do responsável).",
@@ -404,6 +405,42 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.269.0",
+      "summary": "Redesign completo do Financeiro: central financeira com 6 abas, definições e totais rotulados e reconciliados, faixas de vencimento/atraso, saldo inicial configurável, cobrança e recebimento parcial.",
+      "modules": [
+        {
+          "name": "FINANCEIRO",
+          "tagline": "Central financeira redesenhada",
+          "items": [
+            {
+              "title": "6 abas: Visão geral, Movimentações, A receber, A pagar, Campanhas, Relatórios",
+              "description": "Campanhas e Relatórios são novas — resultado por campanha (contratado/realizado) e relatórios reais (inadimplência, aging, prazo médio, evolução mensal e mais), sem métrica inventada."
+            },
+            {
+              "title": "Totais rotulados e reconciliados",
+              "description": "O total \"a pagar\" da Visão geral e o da aba A pagar podiam divergir sem explicação — eram escopos diferentes (mês vs. toda a carteira). Agora cada tela rotula o escopo que está mostrando, e os dois batem."
+            },
+            {
+              "title": "Saldo atual nunca é inventado",
+              "description": "Sem um saldo inicial configurado, mostra \"Saldo não configurado\" com uma ação — nunca R$ 0,00 ou um número estimado. Saldo projetado agora tem horizonte explícito (fim do mês/30/90 dias)."
+            },
+            {
+              "title": "Faixas de vencimento e atraso",
+              "description": "Vencido/Vence hoje/Próximos 7 dias/8 a 30 dias/Acima de 30 dias (mutuamente exclusivas) em A receber e A pagar, mais aging de recebíveis no novo relatório."
+            },
+            {
+              "title": "Recebimento/pagamento parcial e cobrança",
+              "description": "Marcar como pago/recebido aceita valor parcial, mantendo o saldo restante visível. Nova ação \"Registrar cobrança\" em A receber, com histórico."
+            },
+            {
+              "title": "Movimentações: exportar, selecionar em lote, importar sem duplicar",
+              "description": "Exportação CSV, seleção múltipla com exclusão em lote, paginação, e a importação por texto colado agora ignora linhas já existentes."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.268.1",
       "summary": "Corrige comprovante de pagamento desaparecendo ao marcar um lançamento do Financeiro como pago.",

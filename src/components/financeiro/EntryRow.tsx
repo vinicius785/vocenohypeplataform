@@ -7,8 +7,16 @@ import {
   AlertCircle,
   Pencil,
   Trash2,
+  PhoneCall,
 } from "lucide-react";
-import { type Entry, fmtBRL, formatIsoDate } from "@/lib/financeiro-entries";
+import {
+  type Entry,
+  diasDeAtraso,
+  fmtBRL,
+  formatIsoDate,
+  isPartiallyPaid,
+  remainingBalance,
+} from "@/lib/financeiro-entries";
 import { STATUS_LABEL, statusTone } from "./shared";
 
 export function EntryRow({
@@ -17,14 +25,20 @@ export function EntryRow({
   onMarkPaid,
   onEdit,
   onDelete,
+  onRegistrarCobranca,
 }: {
   e: Entry;
   onView: () => void;
   onMarkPaid: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Só passado nas linhas de "A receber" — cobrança não se aplica a
+   * despesas. */
+  onRegistrarCobranca?: () => void;
 }) {
   const isTerminal = e.status === "recebido" || e.status === "pago" || e.status === "cancelado";
+  const atraso = e.status === "vencido" ? diasDeAtraso(e.vencimento) : 0;
+  const partial = isPartiallyPaid(e);
   return (
     <li
       onClick={onView}
@@ -73,6 +87,16 @@ export function EntryRow({
             {STATUS_LABEL[e.status]}
             {e.payment?.pagamento && ` ${formatIsoDate(e.payment.pagamento)}`}
           </span>
+          {atraso > 0 && (
+            <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-rose-600">
+              {atraso}d de atraso
+            </span>
+          )}
+          {partial && (
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600">
+              Parcial · saldo {fmtBRL(remainingBalance(e))}
+            </span>
+          )}
           {e.source !== "manual" && (
             <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
               auto
@@ -80,6 +104,18 @@ export function EntryRow({
           )}
         </div>
       </div>
+      {onRegistrarCobranca && !isTerminal && (
+        <button
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onRegistrarCobranca();
+          }}
+          className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground"
+          title="Registrar cobrança"
+        >
+          <PhoneCall className="h-3.5 w-3.5" />
+        </button>
+      )}
       {!isTerminal && (
         <button
           onClick={(ev) => {

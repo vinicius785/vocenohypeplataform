@@ -3,7 +3,9 @@ import { X } from "lucide-react";
 import {
   type ManualEntry,
   type Kind,
+  dedupeImportEntries,
   fmtBRL,
+  loadManual,
   parseMoney,
   todayISO,
   formatIsoDate,
@@ -50,7 +52,7 @@ export function ImportDialog({
 
   const preview = useMemo(() => {
     if (!rows) return [];
-    return rows
+    const parsed = rows
       .filter((r) => {
         if (statusColIdx === -1) return true;
         const s = (r[statusColIdx] ?? "").trim().toLowerCase();
@@ -65,7 +67,24 @@ export function ImportDialog({
         return { description, amount, date };
       })
       .filter((r) => r.description);
-  }, [rows, roles, pendingFilter, statusColIdx, descColIdx, amountColIdx, dateColIdx]);
+    // Nunca duplica um lançamento já existente (mesma descrição+valor+data) —
+    // reimportar o mesmo texto colado duas vezes não cria linhas repetidas.
+    return dedupeImportEntries(parsed, loadManual());
+  }, [rows, pendingFilter, statusColIdx, descColIdx, amountColIdx, dateColIdx]);
+
+  const duplicatesSkipped = useMemo(() => {
+    if (!rows) return 0;
+    const parsedCount = rows
+      .filter((r) => {
+        if (statusColIdx === -1) return true;
+        const s = (r[statusColIdx] ?? "").trim().toLowerCase();
+        if (!pendingFilter.trim()) return true;
+        return s.includes(pendingFilter.trim().toLowerCase());
+      })
+      .map((r) => (descColIdx !== -1 ? (r[descColIdx] ?? "").trim() : r.join(" ").trim()))
+      .filter(Boolean).length;
+    return Math.max(0, parsedCount - preview.length);
+  }, [rows, pendingFilter, statusColIdx, descColIdx, preview.length]);
 
   const handleImport = () => {
     if (importing) return;
@@ -192,6 +211,13 @@ export function ImportDialog({
               {dateColIdx === -1 && (
                 <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                   Nenhuma coluna de data selecionada — os lançamentos entrarão com a data de hoje.
+                </p>
+              )}
+              {duplicatesSkipped > 0 && (
+                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  {duplicatesSkipped} linha{duplicatesSkipped > 1 ? "s" : ""} ignorada
+                  {duplicatesSkipped > 1 ? "s" : ""} por já existir um lançamento igual (mesma
+                  descrição, valor e data).
                 </p>
               )}
 

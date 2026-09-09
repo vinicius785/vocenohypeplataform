@@ -7,7 +7,9 @@ import {
   entryAnexos,
   fmtBRL,
   formatIsoDate,
+  isPartiallyPaid,
   loadFinanceiroMembers,
+  remainingBalance,
 } from "@/lib/financeiro-entries";
 import {
   DetailRow,
@@ -90,6 +92,29 @@ export function EntryDetailsDialog({
             </div>
           </div>
 
+          {isPartiallyPaid(entry) && (
+            <div className="grid grid-cols-3 gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px]">
+              <div>
+                <p className="text-muted-foreground">Valor original</p>
+                <p className="font-medium tabular-nums text-foreground">{fmtBRL(entry.amount)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">
+                  {entry.kind === "receita" ? "Já recebido" : "Já pago"}
+                </p>
+                <p className="font-medium tabular-nums text-foreground">
+                  {fmtBRL(entry.payment?.paidAmount ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Saldo restante</p>
+                <p className="font-medium tabular-nums text-amber-600">
+                  {fmtBRL(remainingBalance(entry))}
+                </p>
+              </div>
+            </div>
+          )}
+
           <Separator />
 
           {/* Três datas lado a lado — nunca confunde vencimento com
@@ -127,6 +152,28 @@ export function EntryDetailsDialog({
 
           {entry.observacoes && (
             <p className="text-xs text-muted-foreground">{entry.observacoes}</p>
+          )}
+
+          {(entry.cobrancaHistorico?.length || entry.proximaCobranca) && (
+            <>
+              <Separator />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                {entry.cobrancaHistorico && entry.cobrancaHistorico.length > 0 && (
+                  <DetailRow
+                    label="Último contato de cobrança"
+                    value={formatIsoDate(
+                      entry.cobrancaHistorico[entry.cobrancaHistorico.length - 1].data,
+                    )}
+                  />
+                )}
+                {entry.proximaCobranca && (
+                  <DetailRow
+                    label="Próxima cobrança agendada"
+                    value={formatIsoDate(entry.proximaCobranca)}
+                  />
+                )}
+              </div>
+            </>
           )}
 
           {onMarkPaid && (

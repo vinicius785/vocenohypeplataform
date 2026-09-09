@@ -894,6 +894,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      financeiro_settings: {
+        Row: {
+          id: boolean;
+          saldo_inicial: number | null;
+          saldo_inicial_data: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          saldo_inicial?: number | null;
+          saldo_inicial_data?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          saldo_inicial?: number | null;
+          saldo_inicial_data?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       financeiro_status_overrides: {
         Row: {
           data: Json;

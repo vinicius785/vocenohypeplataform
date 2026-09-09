@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { supabase } from "@/integrations/supabase/client";
 import type { BankInfo } from "@/components/CampanhasSection";
+import { todayIsoInBrasilia } from "@/lib/timezone";
 import {
   pagamentoCashValue,
   normalizePagamento,
@@ -44,13 +45,38 @@ export type EntryStatus = "a_receber" | "recebido" | "a_pagar" | "pago" | "venci
 
 /** Grava os dados de uma confirmação de pagamento/recebimento — a data em
  * si (`pagamento`) nunca é a mesma coisa que o vencimento: o vencimento é
- * quando DEVERIA acontecer, isso aqui é quando de fato aconteceu. */
+ * quando DEVERIA acontecer, isso aqui é quando de fato aconteceu.
+ *
+ * `paidAmount` é CUMULATIVO (o total já recebido/pago até `pagamento`, não
+ * o valor desta parcela isolada) — é o que permite um recebimento/pagamento
+ * parcial: `entry.amount - payment.paidAmount` é o saldo restante. Quando
+ * `paidAmount >= amount` o lançamento vira status terminal (recebido/pago);
+ * enquanto for menor, o status permanece em aberto (a_receber/a_pagar/
+ * vencido, conforme a data), só que já com parte do valor abatido. */
 export type PaymentConfirmation = {
-  pagamento: string; // YYYY-MM-DD
+  pagamento: string; // YYYY-MM-DD — data da ÚLTIMA parcela confirmada
   paidAmount: number;
   paymentMethod: string;
   paymentNote?: string;
   paymentAnexoId?: string; // referencia um item de anexos[]
+};
+
+/** Saldo restante de um lançamento — 0 se nunca houve confirmação parcial
+ * (comportamento idêntico ao anterior: valor cheio em aberto). */
+export function remainingBalance(entry: { amount: number; payment?: PaymentConfirmation }): number {
+  if (!entry.payment) return entry.amount;
+  return Math.max(0, entry.amount - entry.payment.paidAmount);
+}
+
+export function isPartiallyPaid(entry: { amount: number; payment?: PaymentConfirmation }): boolean {
+  return !!entry.payment && entry.payment.paidAmount > 0 && entry.payment.paidAmount < entry.amount;
+}
+
+/** Um registro de tentativa/ação de cobrança — histórico simples, sem
+ * lembretes/notificações (fora de escopo, ver plano). */
+export type CobrancaRegistro = {
+  data: string; // YYYY-MM-DD
+  nota: string;
 };
 
 export type RecurrenceFrequency = "semanal" | "mensal" | "trimestral" | "anual" | "personalizado";
@@ -91,6 +117,8 @@ export type Entry = {
   anexos?: FinanceiroAnexo[];
   influencerName?: string;
   memberName?: string;
+  cobrancaHistorico?: CobrancaRegistro[];
+  proximaCobranca?: string; // YYYY-MM-DD
 };
 
 export type ManualEntry = {
@@ -113,6 +141,8 @@ export type ManualEntry = {
   bank?: BankInfo;
   invoice?: InvoiceFile;
   anexos?: FinanceiroAnexo[];
+  cobrancaHistorico?: CobrancaRegistro[];
+  proximaCobranca?: string;
 };
 
 type InfluPersisted = {
@@ -260,16 +290,11 @@ export function fmtMonth(k: string) {
   const s = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+/** "Hoje" pro Financeiro é sempre Brasília, nunca o fuso do navegador/OS —
+ * evita que um lançamento vença "amanhã" ou "ontem" por engano quando o
+ * usuário (ou o servidor) não está no fuso do Brasil. */
 export function todayISO() {
-  // `toISOString().slice(0, 10)` pega o dia em UTC — no Brasil (UTC-3), depois
-  // das 21h já vira o dia seguinte em UTC, fazendo entregas feitas "hoje" à
-  // noite parecerem atrasadas por um dia. Monta a data a partir dos
-  // componentes locais em vez de depender do fuso UTC.
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return todayIsoInBrasilia();
 }
 
 export { formatIsoDate } from "./utils";
@@ -402,6 +427,8 @@ export function loadFinanceiroMembers(): { id: string; name: string }[] {
 type StatusOverride = {
   status: EntryStatus;
   anexos?: FinanceiroAnexo[];
+  cobrancaHistorico?: CobrancaRegistro[];
+  proximaCobranca?: string;
 } & Partial<PaymentConfirmation>;
 let overridesCache: Record<string, StatusOverride> = {};
 let overridesLoaded = false;
@@ -595,6 +622,8 @@ function buildEntries(
           meta: c.empresa,
           editable: false,
           anexos: override?.anexos,
+          cobrancaHistorico: override?.cobrancaHistorico,
+          proximaCobranca: override?.proximaCobranca,
         });
       };
       if (parcelas.length > 0) {
@@ -745,6 +774,8 @@ function buildEntries(
       bank: e.bank,
       invoice: e.invoice,
       anexos: e.anexos,
+      cobrancaHistorico: e.cobrancaHistorico,
+      proximaCobranca: e.proximaCobranca,
     });
   }
 
@@ -865,18 +896,64 @@ export async function markEntryPaid(
   payload: PaymentConfirmation,
   anexos?: FinanceiroAnexo[],
 ): Promise<void> {
-  const status: EntryStatus = entry.kind === "receita" ? "recebido" : "pago";
+  // `payload.paidAmount` chega como o valor CONFIRMADO NESTA parcela — soma
+  // ao que já tinha sido pago antes (0 se essa é a primeira confirmação),
+  // nunca sobrescreve. Só quando o total acumulado alcança `entry.amount`
+  // o status vira terminal; do contrário fica em aberto com saldo restante
+  // (recebimento/pagamento parcial).
+  const previousPaid = entry.payment?.paidAmount ?? 0;
+  const cumulative = previousPaid + payload.paidAmount;
+  const finalPayment: PaymentConfirmation = { ...payload, paidAmount: cumulative };
+  const isFinal = cumulative >= entry.amount - 0.005; // tolerância de arredondamento
+  const status: EntryStatus = isFinal
+    ? entry.kind === "receita"
+      ? "recebido"
+      : "pago"
+    : entry.kind === "receita"
+      ? "a_receber"
+      : "a_pagar";
   if (entry.editable) {
     const manual = manualCache.find((e) => e.id === entry.id);
     if (!manual) throw new Error("Lançamento não encontrado.");
     await updateManualEntry({
       ...manual,
       status,
-      payment: payload,
+      payment: finalPayment,
       anexos: anexos ?? manual.anexos,
     });
   } else {
-    await upsertStatusOverride(entry.id, { status, ...payload, anexos });
+    await upsertStatusOverride(entry.id, {
+      status,
+      ...finalPayment,
+      anexos,
+      cobrancaHistorico: entry.cobrancaHistorico,
+      proximaCobranca: entry.proximaCobranca,
+    });
+  }
+}
+
+/** Registra uma ação de cobrança (contato feito) e, opcionalmente, agenda a
+ * próxima — histórico simples por lançamento, sem lembretes/notificações
+ * (essa infraestrutura não existe hoje, ver limitação registrada no plano). */
+export async function registrarCobranca(
+  entry: Entry,
+  nota: string,
+  proximaCobranca?: string,
+): Promise<void> {
+  const registro: CobrancaRegistro = { data: todayISO(), nota: nota.trim() };
+  const historico = [...(entry.cobrancaHistorico ?? []), registro];
+  if (entry.editable) {
+    const manual = manualCache.find((e) => e.id === entry.id);
+    if (!manual) throw new Error("Lançamento não encontrado.");
+    await updateManualEntry({ ...manual, cobrancaHistorico: historico, proximaCobranca });
+  } else {
+    await upsertStatusOverride(entry.id, {
+      status: entry.status,
+      ...(entry.payment ?? {}),
+      anexos: entry.anexos,
+      cobrancaHistorico: historico,
+      proximaCobranca,
+    });
   }
 }
 
@@ -914,6 +991,212 @@ export function kpiTotals(entries: Entry[]): {
   };
 }
 
+export type DateRange = { from: string; to: string };
+
+/** Resultado realizado — SÓ o que foi de fato liquidado (recebido/pago),
+ * usando a DATA DA LIQUIDAÇÃO (`payment.pagamento`), nunca o vencimento.
+ * Recebe `all` (não filtrado por período) e aplica o range aqui dentro —
+ * diferente de `kpiTotals`, que soma `receitaRealizada` de qualquer entry
+ * cujo VENCIMENTO caia no período, mesmo que a liquidação real tenha
+ * acontecido em outro mês. Nunca trata contas a receber/pagar em aberto
+ * como resultado realizado. */
+export function resultadoRealizado(
+  entries: Entry[],
+  range: DateRange,
+): { receita: number; despesa: number; resultado: number } {
+  let receita = 0;
+  let despesa = 0;
+  for (const e of entries) {
+    if (!e.payment?.pagamento) continue;
+    if (e.payment.pagamento < range.from || e.payment.pagamento > range.to) continue;
+    if (e.kind === "receita" && e.status === "recebido") receita += e.payment.paidAmount;
+    else if (e.kind === "despesa" && e.status === "pago") despesa += e.payment.paidAmount;
+  }
+  return { receita, despesa, resultado: receita - despesa };
+}
+
+/** `null` = "nunca configurado" — a UI nunca deve inventar um número aqui,
+ * só mostrar "Saldo não configurado" com uma ação pra configurar. Quando
+ * configurado, soma toda liquidação (recebimento/pagamento) ocorrida
+ * DEPOIS da data-base do saldo inicial — antes disso já está embutido no
+ * valor informado. */
+export function computeSaldoAtual(
+  saldoInicial: { valor: number; data: string } | null,
+  all: Entry[],
+): number | null {
+  if (!saldoInicial) return null;
+  let acc = saldoInicial.valor;
+  for (const e of all) {
+    if (!e.payment?.pagamento) continue;
+    if (e.payment.pagamento <= saldoInicial.data) continue;
+    if (e.status === "recebido") acc += e.payment.paidAmount;
+    else if (e.status === "pago") acc -= e.payment.paidAmount;
+  }
+  return acc;
+}
+
+/** Saldo projetado = saldo atual + recebimentos em aberto − pagamentos em
+ * aberto, mas SÓ os que vencem dentro do horizonte explícito (ex.: fim do
+ * mês, próximos 30/90 dias) — nunca a carteira inteira em aberto e nunca
+ * confundido com o recorte do período selecionado na página. `null` quando
+ * o saldo atual não está configurado (não dá pra projetar sem um ponto de
+ * partida real). */
+export function computeSaldoProjetado(
+  saldoAtual: number | null,
+  all: Entry[],
+  horizonTo: string,
+): number | null {
+  if (saldoAtual == null) return null;
+  let receitasAbertas = 0;
+  let despesasAbertas = 0;
+  for (const e of all) {
+    if (e.status !== "a_receber" && e.status !== "a_pagar" && e.status !== "vencido") continue;
+    if (e.vencimento > horizonTo) continue;
+    const valor = remainingBalance(e);
+    if (e.kind === "receita") receitasAbertas += valor;
+    else despesasAbertas += valor;
+  }
+  return saldoAtual + receitasAbertas - despesasAbertas;
+}
+
+export type ProjectionHorizon = "fim_do_mes" | "30dias" | "90dias";
+export const PROJECTION_HORIZON_OPTIONS: { value: ProjectionHorizon; label: string }[] = [
+  { value: "fim_do_mes", label: "Até o fim do mês" },
+  { value: "30dias", label: "Próximos 30 dias" },
+  { value: "90dias", label: "Próximos 90 dias" },
+];
+
+export function projectionHorizonTo(horizon: ProjectionHorizon, today = todayISO()): string {
+  const d = new Date(`${today}T00:00:00`);
+  if (horizon === "fim_do_mes") {
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return end.toISOString().slice(0, 10);
+  }
+  d.setDate(d.getDate() + (horizon === "30dias" ? 30 : 90));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Faixa de vencimento — mutuamente exclusivas (nunca soma "próx. 7 dias" +
+ * "próx. 30 dias" como se fossem independentes: 8_a_30 já exclui os 7
+ * primeiros dias). Só faz sentido pra lançamentos em aberto. */
+export type DueBucket = "vencido" | "vence_hoje" | "proximos_7" | "de_8_a_30" | "acima_30";
+export const DUE_BUCKET_LABEL: Record<DueBucket, string> = {
+  vencido: "Vencido",
+  vence_hoje: "Vence hoje",
+  proximos_7: "Próximos 7 dias",
+  de_8_a_30: "De 8 a 30 dias",
+  acima_30: "Acima de 30 dias",
+};
+
+export function dueBucket(vencimento: string, hoje = todayISO()): DueBucket {
+  const diffDays = Math.round((Date.parse(vencimento) - Date.parse(hoje)) / 86_400_000);
+  if (diffDays < 0) return "vencido";
+  if (diffDays === 0) return "vence_hoje";
+  if (diffDays <= 7) return "proximos_7";
+  if (diffDays <= 30) return "de_8_a_30";
+  return "acima_30";
+}
+
+/** Faixa de atraso (aging) — só se aplica a quem já venceu. */
+export type AgingBucket = "1_a_7" | "8_a_15" | "16_a_30" | "31_a_60" | "mais_60";
+export const AGING_BUCKET_LABEL: Record<AgingBucket, string> = {
+  "1_a_7": "1 a 7 dias",
+  "8_a_15": "8 a 15 dias",
+  "16_a_30": "16 a 30 dias",
+  "31_a_60": "31 a 60 dias",
+  mais_60: "Mais de 60 dias",
+};
+
+/** `diasAtraso` deve ser > 0 (chamador filtra por vencido antes). */
+export function agingBucket(diasAtraso: number): AgingBucket {
+  if (diasAtraso <= 7) return "1_a_7";
+  if (diasAtraso <= 15) return "8_a_15";
+  if (diasAtraso <= 30) return "16_a_30";
+  if (diasAtraso <= 60) return "31_a_60";
+  return "mais_60";
+}
+
+export function diasDeAtraso(vencimento: string, hoje = todayISO()): number {
+  return Math.max(0, Math.round((Date.parse(hoje) - Date.parse(vencimento)) / 86_400_000));
+}
+
+/** Agrupa lançamentos em aberto (de um único `kind`) pelas faixas de
+ * vencimento mutuamente exclusivas — base do bloco de faixas em Visão
+ * Geral/A receber/A pagar. */
+export function groupByDueBucket(
+  entries: Entry[],
+  hoje = todayISO(),
+): Record<DueBucket, { count: number; total: number }> {
+  const groups: Record<DueBucket, { count: number; total: number }> = {
+    vencido: { count: 0, total: 0 },
+    vence_hoje: { count: 0, total: 0 },
+    proximos_7: { count: 0, total: 0 },
+    de_8_a_30: { count: 0, total: 0 },
+    acima_30: { count: 0, total: 0 },
+  };
+  for (const e of entries) {
+    if (e.status !== "a_receber" && e.status !== "a_pagar" && e.status !== "vencido") continue;
+    const bucket = dueBucket(e.vencimento, hoje);
+    groups[bucket].count += 1;
+    groups[bucket].total += remainingBalance(e);
+  }
+  return groups;
+}
+
+/** Aging de recebíveis/pagáveis vencidos — só considera quem já venceu
+ * (`status === "vencido"`), agrupado nas faixas de atraso. Base do
+ * relatório "Aging de recebíveis". */
+export function groupByAging(
+  entries: Entry[],
+  hoje = todayISO(),
+): Record<AgingBucket, { count: number; total: number }> {
+  const groups: Record<AgingBucket, { count: number; total: number }> = {
+    "1_a_7": { count: 0, total: 0 },
+    "8_a_15": { count: 0, total: 0 },
+    "16_a_30": { count: 0, total: 0 },
+    "31_a_60": { count: 0, total: 0 },
+    mais_60: { count: 0, total: 0 },
+  };
+  for (const e of entries) {
+    if (e.status !== "vencido") continue;
+    const bucket = agingBucket(diasDeAtraso(e.vencimento, hoje));
+    groups[bucket].count += 1;
+    groups[bucket].total += remainingBalance(e);
+  }
+  return groups;
+}
+
+/** Lançamentos manuais em aberto sem cliente OU sem campanha — base do
+ * relatório "Valores sem vínculo". */
+export function valoresSemVinculo(entries: Entry[]): { count: number; total: number } {
+  let count = 0;
+  let total = 0;
+  for (const e of entries) {
+    if (!e.editable || e.status === "cancelado" || e.status === "recebido" || e.status === "pago")
+      continue;
+    if (!e.clienteId || (e.clienteId && !e.campanhaId)) {
+      count += 1;
+      total += remainingBalance(e);
+    }
+  }
+  return { count, total };
+}
+
+/** Prazo médio (em dias) entre vencimento e liquidação real, só sobre
+ * lançamentos já liquidados — usado no relatório "Prazo médio de
+ * recebimento/pagamento". `null` quando não há nenhum liquidado (nunca
+ * mostra 0 como se fosse um prazo real). */
+export function prazoMedioLiquidacao(entries: Entry[], kind: Kind): number | null {
+  const status = kind === "receita" ? "recebido" : "pago";
+  const liquidados = entries.filter((e) => e.kind === kind && e.status === status && e.payment);
+  if (liquidados.length === 0) return null;
+  const total = liquidados.reduce(
+    (sum, e) => sum + (Date.parse(e.payment!.pagamento) - Date.parse(e.vencimento)) / 86_400_000,
+    0,
+  );
+  return Math.round(total / liquidados.length);
+}
+
 /** Vencidos primeiro, depois por vencimento mais próximo — mesma ordenação
  * usada em "Próximos vencimentos", "A receber" e "A pagar". */
 export function sortByUrgency(entries: Entry[]): Entry[] {
@@ -934,38 +1217,112 @@ function isoAddDays(base: string, days: number): string {
 export type AlertKind =
   | "vencido_receita"
   | "vencido_despesa"
+  | "vence_hoje_receita"
+  | "vence_hoje_despesa"
   | "vence_em_breve_receita"
-  | "vence_em_breve_despesa";
-export type AlertItem = { kind: AlertKind; count: number; total: number };
+  | "vence_em_breve_despesa"
+  | "sem_cliente"
+  | "sem_categoria"
+  | "sem_campanha"
+  | "risco_saldo_negativo";
+export type AlertSeverity = "alta" | "media" | "baixa";
+export type AlertItem = {
+  kind: AlertKind;
+  count: number;
+  total: number;
+  severity: AlertSeverity;
+};
+
+const ALERT_SEVERITY: Record<AlertKind, AlertSeverity> = {
+  vencido_receita: "alta",
+  vencido_despesa: "alta",
+  risco_saldo_negativo: "alta",
+  vence_hoje_receita: "media",
+  vence_hoje_despesa: "media",
+  vence_em_breve_receita: "media",
+  vence_em_breve_despesa: "media",
+  sem_cliente: "baixa",
+  sem_categoria: "baixa",
+  sem_campanha: "baixa",
+};
 
 /** Faixa "Requer atenção" da Visão Geral — só retorna grupos com pelo
- * menos 1 item (a UI some inteira se vier vazio). */
-export function alertItems(entries: Entry[], venceEmBreveDias = 7): AlertItem[] {
+ * menos 1 item (a UI some inteira se vier vazio). Recebe `all` (histórico
+ * inteiro, não só o período selecionado) porque um recebimento vencido do
+ * mês passado continua exigindo atenção hoje. `saldoProjetado` (já
+ * calculado com o horizonte ativo) alimenta o alerta de risco de caixa —
+ * `null` quando o saldo atual não está configurado (nesse caso o alerta
+ * simplesmente não aparece, não inventa risco). */
+export function alertItems(
+  all: Entry[],
+  venceEmBreveDias = 7,
+  saldoProjetado: number | null = null,
+): AlertItem[] {
   const today = todayISO();
   const limit = isoAddDays(today, venceEmBreveDias);
-  const groups: Record<AlertKind, AlertItem> = {
-    vencido_receita: { kind: "vencido_receita", count: 0, total: 0 },
-    vencido_despesa: { kind: "vencido_despesa", count: 0, total: 0 },
-    vence_em_breve_receita: { kind: "vence_em_breve_receita", count: 0, total: 0 },
-    vence_em_breve_despesa: { kind: "vence_em_breve_despesa", count: 0, total: 0 },
-  };
-  for (const e of entries) {
+  const kinds: AlertKind[] = [
+    "vencido_receita",
+    "vencido_despesa",
+    "vence_hoje_receita",
+    "vence_hoje_despesa",
+    "vence_em_breve_receita",
+    "vence_em_breve_despesa",
+    "sem_cliente",
+    "sem_categoria",
+    "sem_campanha",
+    "risco_saldo_negativo",
+  ];
+  const groups = Object.fromEntries(
+    kinds.map((k) => [k, { kind: k, count: 0, total: 0, severity: ALERT_SEVERITY[k] }]),
+  ) as Record<AlertKind, AlertItem>;
+
+  for (const e of all) {
+    if (e.status === "cancelado") continue;
+    const aberto = e.status === "a_receber" || e.status === "a_pagar" || e.status === "vencido";
     if (e.status === "vencido") {
       const g = e.kind === "receita" ? groups.vencido_receita : groups.vencido_despesa;
       g.count += 1;
-      g.total += e.amount;
-    } else if (
-      (e.status === "a_receber" || e.status === "a_pagar") &&
-      e.vencimento >= today &&
-      e.vencimento <= limit
-    ) {
+      g.total += remainingBalance(e);
+    } else if (aberto && e.vencimento === today) {
+      const g = e.kind === "receita" ? groups.vence_hoje_receita : groups.vence_hoje_despesa;
+      g.count += 1;
+      g.total += remainingBalance(e);
+    } else if (aberto && e.vencimento > today && e.vencimento <= limit) {
       const g =
         e.kind === "receita" ? groups.vence_em_breve_receita : groups.vence_em_breve_despesa;
       g.count += 1;
-      g.total += e.amount;
+      g.total += remainingBalance(e);
+    }
+    // Qualidade de cadastro só é cobrada de lançamentos manuais — os
+    // auto-gerados (campanha/influenciador/salário) já nascem com
+    // cliente/categoria/campanha coerentes com a origem.
+    if (e.editable && aberto) {
+      if (!e.clienteId) {
+        groups.sem_cliente.count += 1;
+        groups.sem_cliente.total += remainingBalance(e);
+      }
+      if (!e.category) {
+        groups.sem_categoria.count += 1;
+        groups.sem_categoria.total += remainingBalance(e);
+      }
+      if (e.clienteId && !e.campanhaId) {
+        groups.sem_campanha.count += 1;
+        groups.sem_campanha.total += remainingBalance(e);
+      }
     }
   }
-  return Object.values(groups).filter((g) => g.count > 0);
+
+  if (saldoProjetado != null && saldoProjetado < 0) {
+    groups.risco_saldo_negativo.count = 1;
+    groups.risco_saldo_negativo.total = saldoProjetado;
+  }
+
+  return Object.values(groups)
+    .filter((g) => g.count > 0)
+    .sort((a, b) => {
+      const order: Record<AlertSeverity, number> = { alta: 0, media: 1, baixa: 2 };
+      return order[a.severity] - order[b.severity];
+    });
 }
 
 export function groupByCategoria(
@@ -974,7 +1331,7 @@ export function groupByCategoria(
 ): { categoria: string; total: number }[] {
   const map = new Map<string, number>();
   for (const e of entries) {
-    if (e.kind !== kind) continue;
+    if (e.kind !== kind || e.status === "cancelado") continue;
     map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
   }
   return Array.from(map.entries())
@@ -987,7 +1344,7 @@ export function groupByCliente(
 ): { clienteId: string; clienteNome: string; total: number }[] {
   const map = new Map<string, { clienteNome: string; total: number }>();
   for (const e of entries) {
-    if (e.kind !== "receita" || !e.clienteId) continue;
+    if (e.kind !== "receita" || !e.clienteId || e.status === "cancelado") continue;
     const cur = map.get(e.clienteId) ?? { clienteNome: e.clienteNome ?? "—", total: 0 };
     cur.total += e.amount;
     map.set(e.clienteId, cur);
@@ -1017,27 +1374,52 @@ export type CampanhaResultado = {
   custos: number;
   resultado: number;
   margem: number; // % — 0 se receita for 0
+  receitaRecebida: number;
+  receitaPendente: number;
 };
 
 /** Receita/custo por campanha calculado a partir dos próprios lançamentos
  * financeiros vinculados (`campanhaId`) — sem estrutura de custo
  * dedicada ainda, então este é o cálculo inicial pedido explicitamente
  * (usar os lançamentos já existentes). */
-export function groupByCampanha(entries: Entry[]): CampanhaResultado[] {
+/** `mode: "completo"` (padrão) soma o valor CONTRATADO de tudo que está
+ * vinculado (realizado + em aberto) — visão de portfólio. `mode:
+ * "realizado"` soma só o que já foi de fato liquidado (`payment.paidAmount`)
+ * — nunca mistura as duas sem identificar qual é qual (spec explícita). */
+export function groupByCampanha(
+  entries: Entry[],
+  mode: "completo" | "realizado" = "completo",
+): CampanhaResultado[] {
   const map = new Map<
     string,
-    { campanhaNome: string; clienteNome: string; receita: number; custos: number }
+    {
+      campanhaNome: string;
+      clienteNome: string;
+      receita: number;
+      custos: number;
+      receitaRecebida: number;
+      receitaPendente: number;
+    }
   >();
   for (const e of entries) {
-    if (!e.campanhaId) continue;
+    if (!e.campanhaId || e.status === "cancelado") continue;
+    if (mode === "realizado" && e.status !== "recebido" && e.status !== "pago") continue;
+    const valor = mode === "realizado" ? (e.payment?.paidAmount ?? 0) : e.amount;
     const cur = map.get(e.campanhaId) ?? {
       campanhaNome: e.campanhaNome ?? "—",
       clienteNome: e.clienteNome ?? "—",
       receita: 0,
       custos: 0,
+      receitaRecebida: 0,
+      receitaPendente: 0,
     };
-    if (e.kind === "receita") cur.receita += e.amount;
-    else cur.custos += e.amount;
+    if (e.kind === "receita") {
+      cur.receita += valor;
+      if (e.status === "recebido") cur.receitaRecebida += e.payment?.paidAmount ?? e.amount;
+      else cur.receitaPendente += remainingBalance(e);
+    } else {
+      cur.custos += valor;
+    }
     map.set(e.campanhaId, cur);
   }
   return Array.from(map.entries())
@@ -1122,6 +1504,33 @@ export function runningBalance(
     acc += receita - despesa;
     return { bucket: p.bucket, saldoAcumulado: acc };
   });
+}
+
+/** Chave de deduplicação de importação — mesma descrição (normalizada) +
+ * valor + data já existente entra como duplicata. Não é uma chave de
+ * identidade perfeita (duas contas realmente diferentes podem coincidir
+ * por acaso), mas cobre o caso real do pedido: reimportar o mesmo texto
+ * colado duas vezes. */
+function importDedupKey(e: { description: string; amount: number; date: string }): string {
+  return `${e.description.trim().toLowerCase()}|${e.amount.toFixed(2)}|${e.date}`;
+}
+
+/** Filtra da lista de importação qualquer item cuja chave já exista em
+ * `existing` (lançamentos manuais já persistidos) — nunca insere a mesma
+ * linha duas vezes ao reimportar o mesmo texto colado. */
+export function dedupeImportEntries<
+  T extends { description: string; amount: number; date: string },
+>(toImport: T[], existing: { description: string; amount: number; date: string }[]): T[] {
+  const existingKeys = new Set(existing.map(importDedupKey));
+  const seenInBatch = new Set<string>();
+  const out: T[] = [];
+  for (const item of toImport) {
+    const key = importDedupKey(item);
+    if (existingKeys.has(key) || seenInBatch.has(key)) continue;
+    seenInBatch.add(key);
+    out.push(item);
+  }
+  return out;
 }
 
 export function upcomingDue(entries: Entry[], limit: number): Entry[] {

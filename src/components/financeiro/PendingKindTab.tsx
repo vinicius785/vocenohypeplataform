@@ -4,9 +4,10 @@ import {
   type Entry,
   type ManualEntry,
   type Kind,
+  DUE_BUCKET_LABEL,
   fmtBRL,
+  groupByDueBucket,
   sortByUrgency,
-  todayISO,
   loadManual,
   createManualEntry,
   updateManualEntry,
@@ -18,23 +19,26 @@ import { EntryRow } from "./EntryRow";
 import { EntryDialog } from "./EntryDialog";
 import { EntryDetailsDialog } from "./EntryDetailsDialog";
 import { MarkAsPaidDialog } from "./MarkAsPaidDialog";
+import { CobrancaDialog } from "./CobrancaDialog";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
-function daysFromToday(iso: string): number {
-  return Math.round((Date.parse(iso) - Date.parse(todayISO())) / 86_400_000);
-}
-
-/** "A receber"/"A pagar" mostram TUDO que está pendente daquele tipo —
- * não ficam presas à janela do período selecionado no topo (que é "este
- * mês", "hoje" etc.), já que uma conta a vencer daqui a 40 dias ainda
- * precisa aparecer aqui. Respeitam os OUTROS filtros ativos (cliente,
- * campanha, categoria, busca), só não o recorte de período. */
+/** "A receber"/"A pagar" mostram TUDO que está pendente daquele tipo, em
+ * toda a carteira — não ficam presas à janela do período selecionado no
+ * topo (que é "este mês", "hoje" etc.), já que uma conta a vencer daqui a
+ * 40 dias ainda precisa aparecer aqui. É exatamente esse escopo mais
+ * amplo — carteira inteira, não o mês corrente — que explica o total
+ * "A pagar" aqui ser diferente do card "A pagar" da Visão Geral (que É
+ * restrito ao período selecionado): a diferença é de RECORTE, não um erro
+ * de cálculo, e por isso cada tela rotula explicitamente seu próprio
+ * escopo. Respeitam os OUTROS filtros ativos (cliente, campanha,
+ * categoria, busca), só não o recorte de período. */
 export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: Kind }) {
   const { all, filters } = filtered;
   const clientes = useClientes();
   const [viewing, setViewing] = useState<Entry | null>(null);
   const [markingPaid, setMarkingPaid] = useState<Entry | null>(null);
+  const [cobrando, setCobrando] = useState<Entry | null>(null);
   const [editing, setEditing] = useState<ManualEntry | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -50,20 +54,8 @@ export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: K
     );
   }, [all, filters, kind]);
 
-  const totals = useMemo(() => {
-    let total = 0;
-    let vencido = 0;
-    let proximos7 = 0;
-    let proximos30 = 0;
-    for (const e of pending) {
-      total += e.amount;
-      if (e.status === "vencido") vencido += e.amount;
-      const days = daysFromToday(e.vencimento);
-      if (days >= 0 && days <= 7) proximos7 += e.amount;
-      if (days >= 0 && days <= 30) proximos30 += e.amount;
-    }
-    return { total, vencido, proximos7, proximos30 };
-  }, [pending]);
+  const buckets = useMemo(() => groupByDueBucket(pending), [pending]);
+  const totalEmAberto = pending.reduce((s, e) => s + e.amount, 0);
 
   const findManual = (id: string) => loadManual().find((x) => x.id === id) ?? null;
 
@@ -71,13 +63,19 @@ export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: K
     <div className="space-y-6">
       <div className="flex flex-wrap gap-x-6 gap-y-3 overflow-x-auto pb-1">
         <Kpi
-          label={kind === "receita" ? "Total a receber" : "Total a pagar"}
-          value={fmtBRL(totals.total)}
+          label={kind === "receita" ? "Total em aberto" : "Total em aberto"}
+          value={fmtBRL(totalEmAberto)}
         />
-        <Kpi label="Vencido" value={fmtBRL(totals.vencido)} />
-        <Kpi label="Próximos 7 dias" value={fmtBRL(totals.proximos7)} />
-        <Kpi label="Próximos 30 dias" value={fmtBRL(totals.proximos30)} />
+        <Kpi label={DUE_BUCKET_LABEL.vencido} value={fmtBRL(buckets.vencido.total)} />
+        <Kpi label={DUE_BUCKET_LABEL.vence_hoje} value={fmtBRL(buckets.vence_hoje.total)} />
+        <Kpi label={DUE_BUCKET_LABEL.proximos_7} value={fmtBRL(buckets.proximos_7.total)} />
+        <Kpi label={DUE_BUCKET_LABEL.de_8_a_30} value={fmtBRL(buckets.de_8_a_30.total)} />
+        <Kpi label={DUE_BUCKET_LABEL.acima_30} value={fmtBRL(buckets.acima_30.total)} />
       </div>
+      <p className="-mt-4 text-[11px] text-muted-foreground">
+        Faixas mutuamente exclusivas (cada lançamento entra em só uma) · toda a carteira em aberto,
+        não apenas o período selecionado no topo.
+      </p>
 
       <div className="overflow-hidden rounded-lg border border-border bg-background">
         {pending.length === 0 ? (
@@ -92,6 +90,7 @@ export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: K
                 e={e}
                 onView={() => setViewing(e)}
                 onMarkPaid={() => setMarkingPaid(e)}
+                onRegistrarCobranca={kind === "receita" ? () => setCobrando(e) : undefined}
                 onEdit={() => {
                   const m = findManual(e.id);
                   if (m) {
@@ -166,6 +165,14 @@ export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: K
             setMarkingPaid(null);
             setViewing((v) => (v && v.id === markingPaid.id ? null : v));
           }}
+        />
+      )}
+
+      {cobrando && (
+        <CobrancaDialog
+          entry={cobrando}
+          onClose={() => setCobrando(null)}
+          onSaved={() => setCobrando(null)}
         />
       )}
     </div>

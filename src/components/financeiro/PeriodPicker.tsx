@@ -19,6 +19,7 @@ export function PeriodPicker({ filtered }: { filtered: Filtered }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] text-muted-foreground">Período (por vencimento)</span>
       <select
         value={periodMode}
         onChange={(e) => setPeriodMode(e.target.value as typeof periodMode)}

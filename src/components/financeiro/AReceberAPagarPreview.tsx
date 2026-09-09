@@ -22,7 +22,7 @@ function Coluna({
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {titulo}
+        {titulo} <span className="normal-case text-muted-foreground/70">· toda a carteira</span>
       </p>
       <p className="mt-0.5 text-xl font-semibold tabular-nums text-foreground">{fmtBRL(total)}</p>
       {vencidos > 0 && (
