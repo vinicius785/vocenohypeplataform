@@ -604,7 +604,11 @@ function readTeamMembers(): Member[] {
     return [];
   }
 }
-function useTeamMembers(): Member[] {
+/** Exportado pra fora de TaskBoard.tsx — reaproveitado pela @menção dos
+ * comentários de artigo do Mural (`ArticleReader.tsx`), mesma lista de
+ * pessoas mencionáveis usada nas tarefas, sem duplicar a leitura de
+ * `time:membros`. */
+export function useTeamMembers(): Member[] {
   const [members, setMembers] = useState<Member[]>(() => readTeamMembers());
   useEffect(() => {
     const upd = () => setMembers(readTeamMembers());

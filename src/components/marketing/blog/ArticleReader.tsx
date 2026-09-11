@@ -1,7 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
-import { Heart, MessageCircle, Send } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Heart, MessageCircle, Send, Trash2 } from "lucide-react";
 import type { BlogComment } from "@/lib/blog-engagement";
 import { initialsOf, colorFor } from "@/lib/blog-engagement";
+import { renderMentions, type Member } from "@/components/tasks/TaskBoard";
+import { useConfirm } from "@/hooks/use-confirm";
 import { MARKDOWN_LITE_CLASSES } from "./markdown";
 
 function fmtRelative(iso: string): string {
@@ -28,6 +30,16 @@ type ArticleEngagementProps = {
   onToggleLike: () => void;
   onAddComment: (body: string) => void | Promise<void>;
   commentPlaceholder?: string;
+  /** Pessoas mencionáveis via "@" no comentário — só passado pelo Mural
+   * interno (`InicioDashboard.tsx`); o Portal do cliente nunca recebe
+   * isso, então o cliente nunca vê nem menciona a equipe interna. Quando
+   * ausente, o campo continua um comentário simples, sem dropdown de
+   * @menção — comportamento idêntico ao de antes desta funcionalidade. */
+  mentionMembers?: Member[];
+  /** Exclui um comentário — só passado pelo Mural interno; ausente, o
+   * botão de excluir nem aparece (Portal do cliente continua sem essa
+   * ação, como sempre foi). */
+  onDeleteComment?: (commentId: string) => void | Promise<void>;
 };
 
 /** Painel de curtir/comentar no formato "cartão lateral" do LinkedIn:
@@ -40,10 +52,63 @@ function ArticleCommentsPanel({
   onToggleLike,
   onAddComment,
   commentPlaceholder = "Adicionar comentário...",
+  mentionMembers,
+  onDeleteComment,
 }: ArticleEngagementProps) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { confirm, confirmDialog } = useConfirm();
+
+  const handleDelete = async (comment: BlogComment) => {
+    if (!onDeleteComment) return;
+    const ok = await confirm(`Excluir o comentário de ${comment.authorLabel}?`);
+    if (!ok) return;
+    setDeletingId(comment.id);
+    try {
+      await onDeleteComment(comment.id);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // @menção (item pedido pelo usuário) — mesma lógica de detecção/
+  // inserção de `TaskActivityPanel.tsx`, só adaptada de `<textarea>` pra
+  // `<input>` de uma linha. Só ativa quando `mentionMembers` é passado
+  // (Mural interno); no Portal do cliente (sem a prop) fica como sempre
+  // foi, um campo simples.
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  useEffect(() => {
+    if (!draft) setMentionQuery(null);
+  }, [draft]);
+  const mentionMatches =
+    mentionMembers && mentionQuery !== null
+      ? mentionMembers
+          .filter((m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+          .slice(0, 5)
+      : [];
+  const onDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value;
+    setDraft(v);
+    if (!mentionMembers) return;
+    const caret = e.target.selectionStart ?? v.length;
+    const before = v.slice(0, caret);
+    const m = before.match(/(?:^|\s)@([\wÀ-ÿ]*)$/);
+    setMentionQuery(m ? m[1] : null);
+  };
+  const insertMention = (name: string) => {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const before = draft.slice(0, caret).replace(/@([\wÀ-ÿ]*)$/, `@${name} `);
+    const after = draft.slice(caret);
+    setDraft(before + after);
+    setMentionQuery(null);
+    setTimeout(() => {
+      el?.focus();
+      el?.setSelectionRange(before.length, before.length);
+    }, 0);
+  };
 
   const submit = async () => {
     const body = draft.trim();
@@ -52,6 +117,7 @@ function ArticleCommentsPanel({
     try {
       await onAddComment(body);
       setDraft("");
+      setMentionQuery(null);
     } finally {
       setSending(false);
     }
@@ -59,6 +125,7 @@ function ArticleCommentsPanel({
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+      {confirmDialog}
       <h3 className="text-sm font-semibold">Comentários</h3>
 
       {(likeCount > 0 || comments.length > 0) && (
@@ -95,15 +162,36 @@ function ArticleCommentsPanel({
         </button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
+        {mentionMatches.length > 0 && (
+          <div className="absolute bottom-full left-0 right-11 mb-1 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+            {mentionMatches.map((m) => (
+              <button
+                key={m.name}
+                type="button"
+                onClick={() => insertMention(m.name)}
+                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs hover:bg-muted"
+              >
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold ${colorFor(m.name)}`}
+                >
+                  {initialsOf(m.name) || "?"}
+                </span>
+                {m.name}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={onDraftChange}
           onKeyDown={(e) => {
             if (e.key === "Enter") void submit();
           }}
-          placeholder={commentPlaceholder}
+          placeholder={
+            mentionMembers ? `${commentPlaceholder} (use @ para mencionar)` : commentPlaceholder
+          }
           className="h-9 w-full rounded-full border border-border bg-background px-3.5 text-xs outline-none focus:ring-2 focus:ring-ring"
         />
         <button
@@ -126,7 +214,7 @@ function ArticleCommentsPanel({
       ) : (
         <ul className="max-h-96 space-y-3 overflow-y-auto">
           {comments.map((c) => (
-            <li key={c.id} className="flex gap-2.5">
+            <li key={c.id} className="group flex gap-2.5">
               <span
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${colorFor(c.authorLabel)}`}
               >
@@ -143,8 +231,21 @@ function ArticleCommentsPanel({
                   <span className="text-[10px] text-muted-foreground">
                     {fmtRelative(c.createdAt)}
                   </span>
+                  {onDeleteComment && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(c)}
+                      disabled={deletingId === c.id}
+                      aria-label={`Excluir comentário de ${c.authorLabel}`}
+                      className="ml-auto shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
-                <p className="mt-0.5 whitespace-pre-wrap text-xs text-foreground">{c.body}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-foreground [overflow-wrap:anywhere]">
+                  {mentionMembers ? renderMentions(c.body, mentionMembers) : c.body}
+                </p>
               </div>
             </li>
           ))}

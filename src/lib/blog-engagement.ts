@@ -133,3 +133,15 @@ export async function addCommentVI(postId: string, body: string): Promise<void> 
   });
   if (error) throw new Error(error.message);
 }
+
+/** Exclui um comentário do Mural interno. A tabela não guarda `user_id`
+ * (só `author_label`, texto livre — ver migração
+ * `20260813194730_blog_likes_and_comments.sql`) e a RLS já libera acesso
+ * total pra qualquer `authenticated`, então não há como restringir "só
+ * o autor" no servidor; a exclusão fica disponível pra qualquer pessoa
+ * do time, mesmo modelo de permissão que a tabela já tinha antes desta
+ * função existir. */
+export async function deleteCommentVI(commentId: string): Promise<void> {
+  const { error } = await supabase.from("blog_comments").delete().eq("id", commentId);
+  if (error) throw new Error(error.message);
+}

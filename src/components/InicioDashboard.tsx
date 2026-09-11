@@ -21,6 +21,7 @@ import {
   loadEngagementVI,
   toggleLikeVI,
   addCommentVI,
+  deleteCommentVI,
   type BlogEngagement,
 } from "@/lib/blog-engagement";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,7 +49,7 @@ import {
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
-import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard";
+import { TASK_STATUS_TONE, TASK_STATUS_DOT, useTeamMembers } from "@/components/tasks/TaskBoard";
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
@@ -1192,6 +1193,11 @@ function fmtPublishDate(publishDate: string): string {
 }
 
 function MuralNovidades() {
+  // Mesma lista de pessoas mencionáveis já usada nos comentários de
+  // tarefa — reaproveitada aqui pra @menção nos comentários dos artigos
+  // do Mural (nunca passada pro Portal do cliente, que não importa
+  // `MuralNovidades`).
+  const teamMembers = useTeamMembers();
   const [items, setItems] = useState<Array<BlogPost & { projectName: string }>>([]);
   const [dismissed, setDismissed] = useState<string[]>(() => {
     try {
@@ -1401,6 +1407,12 @@ function MuralNovidades() {
                         const next = await loadEngagementVI(openArticle.id);
                         setEngagement(next);
                       },
+                      onDeleteComment: async (commentId) => {
+                        await deleteCommentVI(commentId);
+                        const next = await loadEngagementVI(openArticle.id);
+                        setEngagement(next);
+                      },
+                      mentionMembers: teamMembers,
                     }}
                   />
                 )}
