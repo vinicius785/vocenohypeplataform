@@ -2005,7 +2005,7 @@ export function TaskBoard({
             <button
               type="button"
               onClick={() => setTaskDialog({ mode: "new" })}
-              className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
             >
               <Plus className="h-3.5 w-3.5" /> Nova Tarefa
             </button>
@@ -4346,7 +4346,7 @@ export function TaskDialog({
                                   type="button"
                                   onClick={addSubtask}
                                   disabled={!newSubtaskTitle.trim()}
-                                  className="rounded bg-foreground px-2 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+                                  className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
                                 >
                                   Adicionar
                                 </button>
@@ -4513,7 +4513,7 @@ export function TaskDialog({
                 type="button"
                 onClick={() => attemptSave(false)}
                 disabled={!canSave}
-                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
               >
                 {initial ? "Salvar" : "Criar tarefa"}
               </button>

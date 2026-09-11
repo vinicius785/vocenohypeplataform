@@ -13,7 +13,7 @@ export function linkifyText(text: string, keyPrefix = "link"): ReactNode[] {
           href={part}
           target="_blank"
           rel="noreferrer"
-          className="underline underline-offset-2 hover:opacity-80"
+          className="break-all underline underline-offset-2 hover:opacity-80"
           onClick={(e) => e.stopPropagation()}
         >
           {part}
