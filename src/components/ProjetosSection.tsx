@@ -23,6 +23,8 @@ import {
   Mail,
   MoreVertical,
   ArrowUpDown,
+  AlertTriangle,
+  ListChecks,
 } from "lucide-react";
 import {
   FEATURES,
@@ -38,6 +40,10 @@ import {
   type Project,
   type ProjectLayout,
 } from "@/lib/projetos";
+import { loadProjetoFases } from "@/lib/projeto-scoped-store";
+import { faseStatusEfetivo } from "@/lib/roadmap-engine";
+import { OPEN_STATUSES } from "@/lib/score";
+import type { Task as BoardTask } from "@/components/tasks/TaskBoard";
 import { SectionHeader } from "./SectionHeader";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -248,6 +254,15 @@ function ProjectCard({
   const visible = features.slice(0, 3);
   const rest = features.length - visible.length;
 
+  const tasks = project.tasks as unknown as BoardTask[];
+  const pendentes = tasks.filter((t) => OPEN_STATUSES.has(t.status)).length;
+  const emRisco = features.includes("roadmap")
+    ? loadProjetoFases(project.id).some((f) => {
+        const s = faseStatusEfetivo(f, tasks);
+        return s === "em_risco" || s === "atrasada";
+      })
+    : false;
+
   return (
     <article
       role="button"
@@ -327,10 +342,20 @@ function ProjectCard({
         )}
 
         <div className="flex items-center justify-between border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-          <span>
-            {features.length} {features.length === 1 ? "funcionalidade" : "funcionalidades"}
-          </span>
-          <span>
+          <div className="flex min-w-0 items-center gap-2">
+            {pendentes > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <ListChecks className="h-3 w-3" /> {pendentes}{" "}
+                {pendentes === 1 ? "pendente" : "pendentes"}
+              </span>
+            )}
+            {emRisco && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-0.5 font-medium text-warning-soft-foreground">
+                <AlertTriangle className="h-3 w-3" /> Em risco
+              </span>
+            )}
+          </div>
+          <span className="shrink-0">
             Criado em{" "}
             {new Date(project.createdAt).toLocaleDateString("pt-BR", {
               day: "2-digit",

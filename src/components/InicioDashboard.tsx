@@ -60,6 +60,11 @@ import {
   type TaskCommentMention,
 } from "@/lib/task-aggregation";
 import { usePerformanceSettings } from "@/lib/performance-events-store";
+import { TomatoIcon } from "@/components/focus/TomatoIcon";
+import { useWeather } from "@/hooks/use-weather";
+import type { WeatherSnapshot } from "@/lib/weather-cache";
+import { WeatherHeaderEffect } from "@/components/inicio/WeatherHeaderEffect";
+import { WEATHER_CONDITION_LABEL_PT } from "@/lib/weather-condition";
 
 type PersonalItem = { id: string; text: string; done: boolean };
 
@@ -76,6 +81,19 @@ function toISODate(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** Linha discreta de clima da saudação (item 7 do pedido) —
+ * "22 °C · Chuva leve". Temperatura sempre arredondada; condição
+ * "unknown" nunca aparece como texto (nem código, nem "undefined") —
+ * nesse caso a linha só mostra a temperatura. A localização (Itaim
+ * Bibi) continua fixa como fonte real do clima (`weather-location.ts`),
+ * só não aparece mais escrita na saudação — pedido explícito do
+ * usuário. */
+function formatWeatherLine(weather: WeatherSnapshot): string {
+  const temp = `${Math.round(weather.temperatureC)} °C`;
+  const label = WEATHER_CONDITION_LABEL_PT[weather.condition];
+  return [temp, label].filter(Boolean).join(" · ");
 }
 
 function loadPerfil(): { nome?: string; foto?: string } {
@@ -133,6 +151,21 @@ function sanitizeVisible(raw: Record<string, boolean>): Record<CardKey, boolean>
   return next;
 }
 
+// Preferência "Ambiente climático no cabeçalho" (item 11 do pedido) —
+// mesmo mecanismo de "Gerenciar cards" (persistida em localStorage,
+// lida uma vez no estado inicial), só que numa chave própria: não é um
+// card exibido/ocultado do corpo da página, é o efeito visual do
+// cabeçalho, então não faz sentido misturar com `CardKey`/`visible`.
+const WEATHER_ENABLED_KEY = "inicio.weather.enabled";
+function loadWeatherEnabledPref(): boolean {
+  try {
+    const raw = localStorage.getItem(WEATHER_ENABLED_KEY);
+    return raw === null ? true : raw === "true";
+  } catch {
+    return true;
+  }
+}
+
 type TaskFilter = "hoje" | "atrasada" | "semana";
 
 const WORK_PAGE_SIZE = 6;
@@ -183,6 +216,20 @@ export function InicioDashboard() {
       /* ignore */
     }
   }, [visible]);
+
+  const [weatherEnabled, setWeatherEnabled] = useState<boolean>(() => loadWeatherEnabledPref());
+  useEffect(() => {
+    try {
+      localStorage.setItem(WEATHER_ENABLED_KEY, String(weatherEnabled));
+    } catch {
+      /* ignore */
+    }
+  }, [weatherEnabled]);
+  // Localização sempre fixa (Itaim Bibi) — nunca geolocalização/IP/perfil
+  // (item 1). Desligar a preferência evita a própria consulta (item 11:
+  // "a consulta climática pode ser evitada se a temperatura também
+  // estiver oculta").
+  const { weather } = useWeather(weatherEnabled);
 
   useEffect(() => {
     const perfil = loadPerfil();
@@ -500,6 +547,14 @@ export function InicioDashboard() {
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
   };
 
+  const goToFocus = (t: Pick<DashTask, "id" | "parentId">) => {
+    const targetId = (t.parentId ?? t.id).replace(/^mkt:/, "");
+    navigate({
+      to: "/foco",
+      search: { taskId: targetId, from: `${window.location.pathname}${window.location.search}` },
+    });
+  };
+
   const visibleWorkTasks = workExpanded ? filteredTasks : filteredTasks.slice(0, WORK_PAGE_SIZE);
   const visibleComments = commentsExpanded
     ? assignedComments
@@ -507,55 +562,91 @@ export function InicioDashboard() {
 
   return (
     <PageContainer className="space-y-10">
-      {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          {foto ? (
-            <img src={foto} alt="" className="h-13 w-13 rounded-full object-cover" />
-          ) : (
-            <div className="flex h-13 w-13 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
-              {name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <p className="text-2xl font-semibold tracking-tight text-foreground">
-              {greeting}, {name}
-            </p>
-            <p className="text-sm text-muted-foreground">{today}</p>
-          </div>
-        </div>
-        <div className="relative flex items-center gap-3">
-          <button
-            onClick={() => setManageOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Gerenciar cards
-          </button>
-          {manageOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
-              <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
-                <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Cards da tela inicial
+      {/* Header — ambiente climático (item 2 do pedido) fica restrito a
+       * este cabeçalho: camada própria atrás do conteúdo, nunca no resto
+       * da Home. `overflow-hidden` garante que nenhuma gota/névoa escape
+       * pros cards abaixo; a altura mínima por breakpoint evita virar um
+       * "hero" gigante. */}
+      <header className="relative overflow-hidden rounded-2xl min-h-0 sm:min-h-[170px] md:min-h-[200px]">
+        {weatherEnabled && weather && (
+          <WeatherHeaderEffect condition={weather.condition} isDay={weather.isDay} />
+        )}
+        {/* Esmaece o efeito antes da primeira seção operacional (item 2:
+         * "o efeito deve desaparecer gradualmente antes da primeira
+         * seção operacional"). */}
+        {weatherEnabled && weather && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-background" />
+        )}
+
+        <div className="relative z-10 flex h-full flex-wrap items-center justify-between gap-4 p-5 md:p-7">
+          <div className="flex items-center gap-3.5">
+            {foto ? (
+              <img
+                src={foto}
+                alt=""
+                className="h-12 w-12 rounded-full object-cover md:h-14 md:w-14"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background md:h-14 md:w-14">
+                {name.slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className="text-2xl font-semibold tracking-tight text-foreground">
+                {greeting}, {name}
+              </p>
+              <p className="text-sm text-muted-foreground">{today}</p>
+              {weatherEnabled && weather && (
+                <p className="mt-0.5 text-xs text-muted-foreground/80">
+                  {formatWeatherLine(weather)}
                 </p>
-                {CARD_DEFS.map((c) => (
-                  <label
-                    key={c.key}
-                    className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
-                  >
-                    <span>{c.label}</span>
+              )}
+            </div>
+          </div>
+          <div className="relative flex items-center gap-3">
+            <button
+              onClick={() => setManageOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Gerenciar cards
+            </button>
+            {manageOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
+                <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
+                  <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Cards da tela inicial
+                  </p>
+                  {CARD_DEFS.map((c) => (
+                    <label
+                      key={c.key}
+                      className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                    >
+                      <span>{c.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={visible[c.key]}
+                        onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
+                        className="h-3.5 w-3.5 accent-brand"
+                      />
+                    </label>
+                  ))}
+                  <div className="my-1.5 border-t border-border" />
+                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted">
+                    <span>Ambiente climático no cabeçalho</span>
                     <input
                       type="checkbox"
-                      checked={visible[c.key]}
-                      onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
+                      checked={weatherEnabled}
+                      onChange={() => setWeatherEnabled((v) => !v)}
                       className="h-3.5 w-3.5 accent-brand"
+                      aria-label="Ativar ou desativar o ambiente climático no cabeçalho"
                     />
                   </label>
-                ))}
-              </div>
-            </>
-          )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -614,10 +705,18 @@ export function InicioDashboard() {
                   </p>
                 )}
                 {visibleWorkTasks.map((t) => (
-                  <button
+                  <div
                     key={`${t.projectId}_${t.id}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => openTask(t)}
-                    className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openTask(t);
+                      }
+                    }}
+                    className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     <PriorityFlag priority={t.priority} bucket={t.bucket} />
                     <div className="min-w-0 flex-1">
@@ -649,8 +748,20 @@ export function InicioDashboard() {
                     >
                       {t.due}
                     </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToFocus(t);
+                      }}
+                      aria-label="Iniciar foco nesta tarefa"
+                      title="Iniciar foco"
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-brand group-hover:opacity-100"
+                    >
+                      <TomatoIcon className="h-3.5 w-3.5" />
+                    </button>
                     <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                  </button>
+                  </div>
                 ))}
                 {filteredTasks.length > WORK_PAGE_SIZE && (
                   <button

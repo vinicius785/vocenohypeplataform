@@ -32,6 +32,11 @@ import {
   Pencil,
   Trash2,
   Search,
+  Flag,
+  CalendarClock,
+  ListChecks,
+  AlertTriangle,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -89,7 +94,14 @@ import {
   saveProjetoFases,
   onProjetoFasesChange,
 } from "@/lib/projeto-scoped-store";
-import { tarefasSemFase, type ProjetoFase } from "@/lib/roadmap-engine";
+import {
+  tarefasSemFase,
+  faseAtual,
+  faseStatusEfetivo,
+  type ProjetoFase,
+} from "@/lib/roadmap-engine";
+import { OPEN_STATUSES } from "@/lib/score";
+import { formatIsoDate } from "@/lib/utils";
 import { PhaseFormDialog } from "@/components/roadmap/PhaseFormDialog";
 import { LinkTasksPanel } from "@/components/roadmap/LinkTasksPanel";
 import { PhaseTimeline } from "@/components/roadmap/PhaseTimeline";
@@ -204,6 +216,19 @@ function ProjetoPage() {
 
   const layout: ProjectLayout = project?.layout ?? "tabs";
 
+  // Resumo operacional do cabeçalho — derivado do Roadmap (fase atual,
+  // responsável, próxima entrega, progresso) quando a funcionalidade está
+  // habilitada; nunca inventado quando não há fases/roadmap, só omitido.
+  const hasRoadmap = !!project?.features.includes("roadmap");
+  const [fasesForHeader, setFasesForHeader] = useState<ProjetoFase[]>(() =>
+    id ? loadProjetoFases(id) : [],
+  );
+  useEffect(() => {
+    if (!hasRoadmap) return;
+    setFasesForHeader(loadProjetoFases(id));
+    return onProjetoFasesChange(() => setFasesForHeader(loadProjetoFases(id)));
+  }, [id, hasRoadmap]);
+
   const [editOpen, setEditOpen] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -237,6 +262,21 @@ function ProjetoPage() {
     );
   }
 
+  const projectTasks = project.tasks as unknown as BoardTask[];
+  const pendentes = projectTasks.filter((t) => OPEN_STATUSES.has(t.status)).length;
+  const faseAtualDoProjeto = hasRoadmap ? faseAtual(fasesForHeader, projectTasks) : null;
+  const todasFasesConcluidas = hasRoadmap && fasesForHeader.length > 0 && !faseAtualDoProjeto;
+  const fasesEmRiscoCount = hasRoadmap
+    ? fasesForHeader.filter((f) => {
+        const s = faseStatusEfetivo(f, projectTasks);
+        return s === "em_risco" || s === "atrasada";
+      }).length
+    : 0;
+  const proximaEntregaTask =
+    projectTasks
+      .filter((t) => OPEN_STATUSES.has(t.status) && t.dueDate)
+      .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))[0] ?? null;
+
   // Projeto "HypeApp" ganha a aba de Bugs & Sugestões automaticamente,
   // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
   // precisar que alguém lembre de habilitar a feature manualmente.
@@ -250,72 +290,117 @@ function ProjetoPage() {
   return (
     <AppShell active="projetos" onSelect={goToSection}>
       <PageContainer className="space-y-6">
-        {/* Breadcrumb — troca o antigo botão "Voltar" isolado. */}
-        <nav aria-label="Navegação" className="flex items-center gap-1.5 text-sm">
-          <button
-            type="button"
-            onClick={() => goToSection("projetos")}
-            className="text-muted-foreground hover:text-foreground hover:underline"
-          >
-            Projetos
-          </button>
-          <span className="text-muted-foreground">/</span>
-          <span className="min-w-0 truncate font-medium text-foreground">{project.name}</span>
-        </nav>
-
-        {/* Cabeçalho compacto — capa pequena, nome, descrição curta,
-         * quantidade de funcionalidades, editar + mais opções. A
-         * alternância Abas/Página única virou uma configuração do
-         * projeto (dentro de "Editar projeto"), não mais uma ação
-         * permanente aqui. */}
-        <header className="flex items-center gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted ring-1 ring-border">
-            {project.cover ? (
-              <img
-                src={project.cover}
-                alt=""
-                className="h-full w-full object-cover object-center"
-              />
-            ) : (
-              <ImageIcon className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
-              {project.name}
-            </h1>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-              {project.description && <span className="truncate">{project.description}</span>}
-              {project.description && <span>·</span>}
-              <span className="shrink-0">
-                {availableTabs.length}{" "}
-                {availableTabs.length === 1 ? "funcionalidade" : "funcionalidades"}
+        {/* Cabeçalho azul compacto (~140-170px no desktop) — identidade do
+         * projeto + resumo operacional (fase atual/responsável/próxima
+         * entrega/progresso, derivados do Roadmap quando habilitado, nunca
+         * inventados) + ações. Breadcrumb embutido, substitui o antigo nav
+         * isolado. */}
+        <header className="overflow-hidden rounded-2xl bg-brand">
+          <div className="flex flex-col gap-4 px-5 py-5 md:px-7 md:py-6">
+            <nav
+              aria-label="Navegação"
+              className="flex items-center gap-1.5 text-xs text-brand-foreground-secondary"
+            >
+              <button
+                type="button"
+                onClick={() => goToSection("projetos")}
+                className="rounded hover:text-brand-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground/40"
+              >
+                Projetos
+              </button>
+              <span>/</span>
+              <span className="min-w-0 truncate font-medium text-brand-foreground">
+                {project.name}
               </span>
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-              <Pencil className="h-3.5 w-3.5" /> Editar
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            </nav>
+
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/10 ring-1 ring-brand-foreground/15 md:h-[72px] md:w-[72px]">
+                  {project.cover ? (
+                    <img
+                      src={project.cover}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <ImageIcon
+                      className="h-6 w-6 text-brand-foreground-secondary"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight text-brand-foreground">
+                    {project.name}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-foreground-secondary">
+                    {project.description && (
+                      <span className="max-w-[280px] truncate">{project.description}</span>
+                    )}
+                    {faseAtualDoProjeto ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Flag className="h-3 w-3" /> {faseAtualDoProjeto.nome}
+                      </span>
+                    ) : todasFasesConcluidas ? (
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Projeto concluído
+                      </span>
+                    ) : null}
+                    {faseAtualDoProjeto?.responsavelPrincipal && (
+                      <span>{faseAtualDoProjeto.responsavelPrincipal}</span>
+                    )}
+                    {proximaEntregaTask?.dueDate && (
+                      <span className="inline-flex items-center gap-1">
+                        <CalendarClock className="h-3 w-3" />
+                        Próxima entrega {formatIsoDate(proximaEntregaTask.dueDate)}
+                      </span>
+                    )}
+                    {pendentes > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <ListChecks className="h-3 w-3" /> {pendentes}{" "}
+                        {pendentes === 1 ? "tarefa pendente" : "tarefas pendentes"}
+                      </span>
+                    )}
+                    {fasesEmRiscoCount > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 font-medium text-brand-foreground">
+                        <AlertTriangle className="h-3 w-3" /> {fasesEmRiscoCount}{" "}
+                        {fasesEmRiscoCount === 1 ? "fase em risco" : "fases em risco"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 self-start md:self-center">
                 <button
                   type="button"
-                  aria-label="Mais opções"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setEditOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-brand-foreground/25 px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-black/10"
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" /> Editar
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={() => void requestDelete()}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Excluir projeto
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Mais opções"
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-brand-foreground hover:bg-black/10"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => void requestDelete()}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir projeto
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -352,7 +437,7 @@ function ProjetoPage() {
                           onClick={() => setTab(k)}
                           className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
                             active
-                              ? "border-foreground text-foreground"
+                              ? "border-brand text-brand"
                               : "border-transparent text-muted-foreground hover:text-foreground"
                           }`}
                         >
@@ -814,7 +899,7 @@ function DocLinkForm({
         </button>
         <button
           type="submit"
-          className="rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          className="rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
         >
           {initial ? "Salvar" : "Adicionar"}
         </button>
@@ -1031,7 +1116,7 @@ function DocsPanel({
             }}
           >
             <PopoverTrigger asChild>
-              <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90">
+              <button className="inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover">
                 <Plus className="h-3.5 w-3.5" /> Adicionar
               </button>
             </PopoverTrigger>
@@ -1078,9 +1163,18 @@ function DocsPanel({
       </div>
 
       {project.docs.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Nenhum material adicionado ainda. Adicione links importantes deste projeto.
-        </p>
+        <div className="rounded-lg border border-dashed border-border p-6 text-center">
+          <p className="text-xs text-muted-foreground">
+            Nenhum material adicionado ainda. Adicione links importantes deste projeto.
+          </p>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-2 text-xs font-medium text-brand hover:underline"
+          >
+            Adicionar primeiro material
+          </button>
+        </div>
       ) : sortedDocs.length === 0 ? (
         <p className="text-xs text-muted-foreground">Nenhum resultado para esta busca/filtro.</p>
       ) : (
@@ -1191,7 +1285,7 @@ function SectionPanel({
             className={inputCls}
           />
         )}
-        <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90">
+        <button className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover">
           <Plus className="h-3.5 w-3.5" /> Adicionar
         </button>
       </form>

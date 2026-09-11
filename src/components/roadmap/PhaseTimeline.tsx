@@ -17,7 +17,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, getTaskAssignees, initialsOf, colorFor, type Task } from "@/components/tasks/TaskBoard";
+import {
+  Avatar,
+  getTaskAssignees,
+  initialsOf,
+  colorFor,
+  type Task,
+} from "@/components/tasks/TaskBoard";
 import { formatIsoDate } from "@/lib/utils";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import { TASK_STATUS_DOT } from "@/lib/task-status";
@@ -59,7 +65,9 @@ function MoveTaskMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        {currentFaseId && <DropdownMenuItem onClick={() => onMove(undefined)}>Sem fase</DropdownMenuItem>}
+        {currentFaseId && (
+          <DropdownMenuItem onClick={() => onMove(undefined)}>Sem fase</DropdownMenuItem>
+        )}
         {fases
           .filter((f) => f.id !== currentFaseId)
           .map((f) => (
@@ -399,9 +407,20 @@ export function PhaseTimeline({
       <ProportionalStrip fases={ordered} />
 
       {ordered.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          Nenhuma fase ainda. Crie a primeira fase pra começar a organizar o roadmap.
-        </p>
+        <div className="rounded-xl border border-dashed border-border p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Nenhuma fase criada. Organize o roadmap em etapas cronológicas.
+          </p>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={onNewFase}
+              className="mt-2 text-xs font-medium text-brand hover:underline"
+            >
+              Criar primeira fase
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-2.5">
           {ordered.map((fase) => (
@@ -472,9 +491,7 @@ export function PhaseTimeline({
                       )}
                       <span
                         draggable={canEdit}
-                        onDragStart={(e) =>
-                          e.dataTransfer.setData("text/roadmap-task-id", t.id)
-                        }
+                        onDragStart={(e) => e.dataTransfer.setData("text/roadmap-task-id", t.id)}
                         onClick={() => onOpenTask(t)}
                         className="min-w-0 flex-1 cursor-pointer truncate text-foreground hover:underline"
                       >

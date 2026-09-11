@@ -307,3 +307,26 @@ h4 {
     opacity: 1 !important;
   }
 }
+
+/* Deslocamento lento das "nuvens"/neblina do ambiente climático do
+ * cabeçalho da Home (WeatherHeaderEffect.tsx) — puro CSS, sem canvas;
+ * `motion-reduce:animate-none` (aplicado no componente) já cobre
+ * `prefers-reduced-motion`, essas regras só definem o movimento em si. */
+@keyframes weather-drift {
+  0%,
+  100% {
+    transform: translateX(-4%);
+  }
+  50% {
+    transform: translateX(4%);
+  }
+}
+@keyframes weather-drift-reverse {
+  0%,
+  100% {
+    transform: translateX(4%);
+  }
+  50% {
+    transform: translateX(-4%);
+  }
+}

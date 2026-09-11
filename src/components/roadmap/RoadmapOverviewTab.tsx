@@ -10,33 +10,13 @@ import {
   type ProjetoFase,
 } from "@/lib/roadmap-engine";
 import { formatIsoDate } from "@/lib/utils";
-
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border p-4">
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {icon} {label}
-      </p>
-      <p className={`mt-2 text-xl font-semibold ${tone ?? "text-foreground"}`}>{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
+import { MetricCard } from "@/components/shared/MetricCard";
 
 /** Aba "Visão geral" (item 8 do pedido) — só leitura, deriva tudo do que
- * já está carregado (`fases`+`tasks`), nenhum fetch novo. */
+ * já está carregado (`fases`+`tasks`), nenhum fetch novo. Indicadores
+ * migrados pro `MetricCard` compartilhado (compact) — a implementação
+ * local anterior (`StatCard`) era uma das 8 duplicatas apontadas na
+ * auditoria do design system. */
 export function RoadmapOverviewTab({ fases, tasks }: { fases: ProjetoFase[]; tasks: Task[] }) {
   const comFase = tasks.filter((t) => t.roadmapPhaseId);
   const concluidasComFase = comFase.filter((t) => t.status === "Concluído").length;
@@ -44,6 +24,10 @@ export function RoadmapOverviewTab({ fases, tasks }: { fases: ProjetoFase[]; tas
     comFase.length === 0 ? null : Math.round((concluidasComFase / comFase.length) * 100);
 
   const atual = faseAtual(fases, tasks);
+  // Distingue "ainda não existe nenhuma fase" de "todas as fases já foram
+  // concluídas" — antes as duas caíam no mesmo "—" com a mesma legenda,
+  // mesmo sendo estados bem diferentes pra quem está lendo.
+  const todasConcluidas = fases.length > 0 && !atual;
 
   const today = todayIsoInBrasilia();
   const abertasComPrazo = tasks
@@ -59,42 +43,54 @@ export function RoadmapOverviewTab({ fases, tasks }: { fases: ProjetoFase[]; tas
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
+        <MetricCard
+          compact
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
           label="Progresso geral"
-          value={progressoGeral === null ? "—" : `${progressoGeral}%`}
-          hint={progressoGeral === null ? "Nenhuma tarefa vinculada" : undefined}
+          value={progressoGeral === null ? null : `${progressoGeral}%`}
+          unavailableReason="Nenhuma tarefa vinculada a uma fase"
+          tone="brand"
         />
-        <StatCard
+        <MetricCard
+          compact
           icon={<Flag className="h-3.5 w-3.5" />}
           label="Fase atual"
-          value={atual?.nome ?? "—"}
-          hint={
+          value={todasConcluidas ? "Concluído" : (atual?.nome ?? null)}
+          unavailableReason="Nenhuma fase criada ainda"
+          complement={
             atual
               ? `${formatIsoDate(atual.dataInicio)} – ${formatIsoDate(atual.dataFim)}`
-              : "Todas as fases concluídas"
+              : undefined
           }
+          tone={todasConcluidas ? "success" : "neutral"}
         />
-        <StatCard
+        <MetricCard
+          compact
           icon={<Calendar className="h-3.5 w-3.5" />}
           label="Próxima entrega"
-          value={proximaEntrega ? proximaEntrega.title : "—"}
-          hint={proximaEntrega?.dueDate ? formatIsoDate(proximaEntrega.dueDate) : undefined}
+          value={proximaEntrega ? proximaEntrega.title : null}
+          unavailableReason="Nenhuma tarefa em aberto com prazo"
+          complement={proximaEntrega?.dueDate ? formatIsoDate(proximaEntrega.dueDate) : undefined}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <StatCard
+        <MetricCard
+          compact
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
           label="Fases em risco"
           value={String(fasesEmRisco.length)}
-          tone={fasesEmRisco.length > 0 ? "text-amber-600 dark:text-amber-400" : undefined}
+          tone={fasesEmRisco.length > 0 ? "warning" : "neutral"}
         />
-        <StatCard
+        <MetricCard
+          compact
           icon={<Calendar className="h-3.5 w-3.5" />}
-          label="Período da fase"
+          label="Período da fase atual"
           value={
-            atual ? `${formatIsoDate(atual.dataInicio)} – ${formatIsoDate(atual.dataFim)}` : "—"
+            atual ? `${formatIsoDate(atual.dataInicio)} – ${formatIsoDate(atual.dataFim)}` : null
+          }
+          unavailableReason={
+            todasConcluidas ? "Todas as fases concluídas" : "Nenhuma fase criada ainda"
           }
         />
       </div>

@@ -17,6 +17,7 @@ import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculado
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
+import { Route as AuthenticatedFocoRouteImport } from './routes/_authenticated/foco'
 import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './routes/_authenticated/design-system-finance-concept'
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
@@ -67,6 +68,11 @@ const AuthenticatedPrimeiroAcessoRoute =
     path: '/primeiro-acesso',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedFocoRoute = AuthenticatedFocoRouteImport.update({
+  id: '/foco',
+  path: '/foco',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDesignSystemFinanceConceptRoute =
   AuthenticatedDesignSystemFinanceConceptRouteImport.update({
     id: '/design-system-finance-concept',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
+  '/foco': typeof AuthenticatedFocoRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
+  '/foco': typeof AuthenticatedFocoRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
   '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
+  '/_authenticated/foco': typeof AuthenticatedFocoRoute
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/'
     | '/design-system'
     | '/design-system-finance-concept'
+    | '/foco'
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
     | '/'
     | '/design-system'
     | '/design-system-finance-concept'
+    | '/foco'
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_authenticated/design-system'
     | '/_authenticated/design-system-finance-concept'
+    | '/_authenticated/foco'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
     | '/bugs/$token'
@@ -290,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrimeiroAcessoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/foco': {
+      id: '/_authenticated/foco'
+      path: '/foco'
+      fullPath: '/foco'
+      preLoaderRoute: typeof AuthenticatedFocoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/design-system-finance-concept': {
       id: '/_authenticated/design-system-finance-concept'
       path: '/design-system-finance-concept'
@@ -352,6 +371,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDesignSystemRoute: typeof AuthenticatedDesignSystemRoute
   AuthenticatedDesignSystemFinanceConceptRoute: typeof AuthenticatedDesignSystemFinanceConceptRoute
+  AuthenticatedFocoRoute: typeof AuthenticatedFocoRoute
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
@@ -361,6 +381,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDesignSystemRoute: AuthenticatedDesignSystemRoute,
   AuthenticatedDesignSystemFinanceConceptRoute:
     AuthenticatedDesignSystemFinanceConceptRoute,
+  AuthenticatedFocoRoute: AuthenticatedFocoRoute,
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,

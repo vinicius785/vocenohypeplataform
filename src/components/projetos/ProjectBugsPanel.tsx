@@ -204,6 +204,13 @@ export function ProjectBugsPanel({
             Reporte problemas ou ideias sobre o HypeApp — visíveis pro time todo, com status de
             resolução.
           </p>
+          {!loading && reports.length > 0 && (
+            <p className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">{abertos.length}</span> em aberto
+              <span className="font-medium text-foreground">{resolvidos.length}</span> resolvido
+              {resolvidos.length === 1 ? "" : "s"}
+            </p>
+          )}
         </div>
         {project && update && (
           <DropdownMenu>
@@ -242,7 +249,7 @@ export function ProjectBugsPanel({
 
       <form
         onSubmit={submit}
-        className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4"
+        className="max-w-2xl space-y-3 rounded-2xl border border-border bg-muted/40 p-4"
       >
         <div className="flex flex-wrap gap-4">
           <div className="space-y-1.5">
@@ -258,7 +265,7 @@ export function ProjectBugsPanel({
                     onClick={() => setKind(opt.value)}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                       active
-                        ? "border-foreground bg-foreground text-background"
+                        ? "border-brand bg-brand text-brand-foreground"
                         : "border-border text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -281,7 +288,7 @@ export function ProjectBugsPanel({
                     onClick={() => setScope(opt.value)}
                     className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                       active
-                        ? "border-foreground bg-foreground text-background"
+                        ? "border-brand bg-brand text-brand-foreground"
                         : "border-border text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -374,7 +381,7 @@ export function ProjectBugsPanel({
       )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted px-3 py-2 text-xs text-foreground">
+        <div className="flex items-center gap-2 rounded-xl border border-danger-border bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">
           <X className="h-3.5 w-3.5 shrink-0" /> {error}
         </div>
       )}
@@ -431,14 +438,20 @@ function ReportList({
   onOpenScreenshot: (r: BugReport) => void;
   muted?: boolean;
 }) {
+  const PAGE_SIZE = 8;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   if (items.length === 0) return null;
+  const visibleItems = items.slice(0, visibleCount);
+  const remaining = items.length - visibleItems.length;
+
   return (
     <div>
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {title} ({items.length})
       </p>
       <ul className="space-y-2">
-        {items.map((r) => (
+        {visibleItems.map((r) => (
           <li
             key={r.id}
             className={`rounded-xl border border-border p-3 ${muted ? "opacity-60" : ""}`}
@@ -448,8 +461,8 @@ function ReportList({
                 <span
                   className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                     r.kind === "bug"
-                      ? "border-border text-foreground"
-                      : "border-border text-foreground"
+                      ? "border-danger-border bg-danger-soft text-danger-soft-foreground"
+                      : "border-brand/30 bg-brand-subtle text-brand"
                   }`}
                 >
                   {r.kind === "bug" ? (
@@ -484,7 +497,7 @@ function ReportList({
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
                       r.resolved
                         ? "border-border text-muted-foreground hover:text-foreground"
-                        : "border-foreground text-foreground hover:bg-muted"
+                        : "border-success-border bg-success-soft text-success-soft-foreground hover:bg-success-soft/70"
                     }`}
                   >
                     <Check className="h-3 w-3" />
@@ -516,6 +529,15 @@ function ReportList({
           </li>
         ))}
       </ul>
+      {remaining > 0 && (
+        <button
+          type="button"
+          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          className="mt-2 text-xs font-medium text-brand hover:underline"
+        >
+          Carregar mais ({remaining})
+        </button>
+      )}
     </div>
   );
 }

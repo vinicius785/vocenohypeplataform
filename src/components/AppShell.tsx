@@ -77,6 +77,7 @@ import { useRunningTimer, stopTimer } from "@/lib/time-entries";
 import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
+import { FocusHeaderButton } from "@/components/focus/FocusHeaderButton";
 import { type SectionKey, SECTION_SUBNAV } from "@/lib/section-nav";
 
 export type { SectionKey };
@@ -683,6 +684,7 @@ export function AppShell({
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
             <ActiveTimerIndicator onSelect={onSelect} />
+            <FocusHeaderButton />
             <button
               type="button"
               onClick={toggleTheme}
