@@ -1,6 +1,7 @@
 {
-  "version": "1.273.0",
+  "version": "1.274.0",
   "notes": [
+    "1.274.0: Repagina as seções abaixo do cabeçalho climático do Início (Meu trabalho, Agenda, Mural de novidades, Comentários atribuídos e Lista pessoal) com o mesmo acabamento premium do restante da plataforma: cantos, superfícies, tipografia e estados vazios agora consistentes entre os cards, sem alterar nenhum dado ou comportamento existente.",
     "1.273.0: Adiciona @menção de usuários e opção de excluir comentário nos artigos do Mural de novidades. Deixa o efeito de chuva do cabeçalho do Início mais visível, inclusive no tema claro. Corrige o aviso de chamada encerrada aparecendo duplicado (às vezes até 9x) no chat quando havia mais de uma aba aberta. Reformula o cabeçalho climático do Início: saudação, clima e indicadores (Hoje/Amanhã/Próximos 7 dias/Atrasadas) agora vivem num único bloco visual coeso, com composição válida pra qualquer condição do tempo — a localização usada pra buscar o clima nunca aparece na interface, só internamente.",
     "1.272.0: Adiciona o Modo Foco (Pomodoro imersivo, rota própria /foco, acesso pelo cabeçalho global e pelas tarefas, tarefas reais da plataforma, áudio ambiente gerado por síntese e chuva visual em canvas). Adiciona ambiente climático dinâmico no cabeçalho do Início (clima real de Itaim Bibi via Open-Meteo, cache de 25min, camada visual sutil restrita ao cabeçalho). Repagina o módulo Projetos (cabeçalho azul compacto, Roadmap, Bugs e sugestões). Corrige botões brancos do padrão antigo no Kanban de tarefas (Nova Tarefa, Adicionar subtarefa, Criar/Salvar tarefa) para o azul da marca e links longos cortados nos comentários de tarefa.",
     "1.271.0: Migração visual para o novo design system em toda a plataforma (tokens de tipografia/cor/espaçamento); refatoração do Chat com layouts desktop/mobile distintos; aviso de nova versão atualizado para o novo design system.",
@@ -409,6 +410,22 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.274.0",
+      "summary": "Home repaginada: as seções abaixo do clima ganham o acabamento premium do design system.",
+      "modules": [
+        {
+          "name": "INÍCIO",
+          "tagline": "Cards padronizados com o design system",
+          "items": [
+            {
+              "title": "Meu trabalho, Agenda, Mural, Comentários e Lista pessoal",
+              "description": "Mesmos cantos arredondados, superfícies, tipografia e estados vazios compactos do restante da plataforma — a Home inteira agora parece um único produto."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.273.0",
       "summary": "Cabeçalho do Início reformulado (clima + indicadores num só bloco); @menção e exclusão de comentário no Mural; corrige spam de chamada encerrada.",

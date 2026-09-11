@@ -89,6 +89,17 @@ export const ELEVATION = {
   overlay: "border border-border shadow-lg", // Modal/Drawer — Radix já cuida do resto
 } as const;
 
+/** Superfície de card "premium" já validada visualmente no Financeiro
+ * (`financeiro/PosicaoFinanceira.tsx`'s `SECONDARY_SURFACE`) — promovida
+ * aqui pra token reutilizável fora daquele módulo (primeiro consumidor:
+ * a Home). Sem sombra pesada; a hierarquia vem do contraste de
+ * superfície (branco/cinza muito claro no tema claro com borda discreta,
+ * carvão elevado — mais claro que `--background` mas mais escuro que
+ * `--card` — no escuro, sem borda). */
+export const SURFACE = {
+  raised: "border border-border/60 bg-card dark:border-0 dark:bg-[oklch(0.17_0_0)]",
+} as const;
+
 /** Movimento — só o que já existe (`tw-animate-css`, já usado em todo
  * `ui/*.tsx` via `data-[state=open]:animate-in` etc.). Nenhuma lib nova. */
 export const MOTION = {

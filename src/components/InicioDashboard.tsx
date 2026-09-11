@@ -35,6 +35,10 @@ import {
   type BlogEngagement,
 } from "@/lib/blog-engagement";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { IconButton } from "@/components/ui/icon-button";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
 import { AvatarStack } from "@/components/meetings/AvatarStack";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
@@ -626,7 +630,7 @@ export function InicioDashboard() {
     : assignedComments.slice(0, COMMENTS_PAGE_SIZE);
 
   return (
-    <PageContainer className="space-y-10">
+    <PageContainer className="space-y-6 md:space-y-8">
       {/* Header — bloco único: saudação+clima em cima, indicadores
        * embutidos embaixo (item 2/3 do pedido). O ambiente climático
        * (`WeatherHeaderEffect`) fica restrito a este cabeçalho, nunca no
@@ -784,7 +788,7 @@ export function InicioDashboard() {
 
       {/* Linha operacional principal */}
       {(visible.work || visible.agenda) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
           {visible.work && (
             <Card ref={workCardRef} className="lg:col-span-2">
               <CardHeader
@@ -804,11 +808,13 @@ export function InicioDashboard() {
                   </div>
                 }
               />
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border/70">
                 {filteredTasks.length === 0 && (
-                  <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    Nada por aqui. Bom trabalho.
-                  </p>
+                  <EmptyState
+                    compact
+                    icon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+                    title="Nada por aqui. Bom trabalho."
+                  />
                 )}
                 {visibleWorkTasks.map((t) => (
                   <div
@@ -822,15 +828,18 @@ export function InicioDashboard() {
                         openTask(t);
                       }
                     }}
-                    className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="group flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-5"
                   >
                     <PriorityFlag priority={t.priority} bucket={t.bucket} />
                     <div className="min-w-0 flex-1">
-                      <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
+                      <p
+                        className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline"
+                        title={t.title}
+                      >
                         {t.parentTitle && (
                           <span
                             title={`Subtarefa de "${t.parentTitle}"`}
-                            className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                            className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
                           >
                             Sub
                           </span>
@@ -839,14 +848,14 @@ export function InicioDashboard() {
                       </p>
                     </div>
                     <span
-                      className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
+                      className={`hidden shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
                     >
                       <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
                       {t.status}
                     </span>
-                    <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+                    <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
                       {t.projectName}
-                    </span>
+                    </Badge>
                     <span
                       className={`shrink-0 text-xs tabular-nums ${
                         t.bucket === "atrasada" ? "text-danger" : "text-muted-foreground"
@@ -854,18 +863,17 @@ export function InicioDashboard() {
                     >
                       {t.due}
                     </span>
-                    <button
-                      type="button"
+                    <IconButton
+                      label="Iniciar foco nesta tarefa"
+                      tone="neutral"
                       onClick={(e) => {
                         e.stopPropagation();
                         goToFocus(t);
                       }}
-                      aria-label="Iniciar foco nesta tarefa"
-                      title="Iniciar foco"
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-brand group-hover:opacity-100"
+                      className="h-7 w-7 shrink-0 text-muted-foreground/70 opacity-60 transition-opacity hover:text-brand focus-visible:opacity-100"
                     >
                       <TomatoIcon className="h-3.5 w-3.5" />
-                    </button>
+                    </IconButton>
                     <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
                 ))}
@@ -873,7 +881,7 @@ export function InicioDashboard() {
                   <button
                     type="button"
                     onClick={() => setWorkExpanded((v) => !v)}
-                    className="flex w-full items-center justify-center gap-1 px-4 py-2 text-xs font-medium text-brand hover:underline"
+                    className="flex w-full items-center justify-center gap-1 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
                   >
                     {workExpanded ? "Ver menos" : `Ver todas (${filteredTasks.length})`}
                     <ChevronDown
@@ -895,16 +903,18 @@ export function InicioDashboard() {
                     onClick={() =>
                       navigate({ to: "/time", search: { section: "reunioes" as SectionKey } })
                     }
-                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
                   >
                     Ver tudo
                   </button>
                 }
               />
               {todaysMeetings.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-                  Nenhuma reunião hoje.
-                </p>
+                <EmptyState
+                  compact
+                  icon={<Calendar className="h-4 w-4" aria-hidden="true" />}
+                  title="Nenhuma reunião hoje."
+                />
               ) : (
                 <ol className="space-y-0.5 p-3">
                   {todaysMeetings.map((m) => {
@@ -916,13 +926,16 @@ export function InicioDashboard() {
                           <button
                             type="button"
                             onClick={() => setMeetingSummary(m)}
-                            className="flex w-full items-start gap-3 rounded-lg border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left hover:bg-brand-subtle/70"
+                            className="flex w-full items-start gap-3 rounded-xl border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left transition-colors hover:bg-brand-subtle/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-brand">
                               {m.hora}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">
+                              <p
+                                className="truncate text-sm font-medium text-foreground"
+                                title={m.titulo}
+                              >
                                 {m.titulo}
                               </p>
                               <p className="truncate text-[11px] text-muted-foreground">
@@ -941,7 +954,7 @@ export function InicioDashboard() {
                         <button
                           type="button"
                           onClick={() => setMeetingSummary(m)}
-                          className={`flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40 ${
+                          className={`flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                             isPast ? "opacity-50" : ""
                           }`}
                         >
@@ -949,7 +962,10 @@ export function InicioDashboard() {
                             {m.hora}
                           </div>
                           <div className="min-w-0 flex-1 pb-0.5">
-                            <p className="truncate text-xs font-medium text-foreground">
+                            <p
+                              className="truncate text-xs font-medium text-foreground"
+                              title={m.titulo}
+                            >
                               {m.titulo}
                             </p>
                             <p className="truncate text-[11px] text-muted-foreground">
@@ -970,7 +986,7 @@ export function InicioDashboard() {
       <MuralNovidades />
 
       {(visible.comments || visible.personal) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
           {visible.comments && (
             <Card className="lg:col-span-2">
               <CardHeader
@@ -980,7 +996,7 @@ export function InicioDashboard() {
                   assignedComments.length > 0 && (
                     <button
                       onClick={() => void clearAllComments()}
-                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                      className="text-xs font-medium text-muted-foreground hover:text-foreground"
                     >
                       Limpar tudo
                     </button>
@@ -988,30 +1004,32 @@ export function InicioDashboard() {
                 }
               />
               {assignedComments.length === 0 ? (
-                <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                  Sem menções no momento.
-                </p>
+                <EmptyState
+                  compact
+                  icon={<MessageSquare className="h-4 w-4" aria-hidden="true" />}
+                  title="Sem menções no momento."
+                />
               ) : (
                 <>
                   <div
-                    className={`divide-y divide-border ${commentsExpanded ? "max-h-[26rem] overflow-y-auto" : ""}`}
+                    className={`divide-y divide-border/70 ${commentsExpanded ? "max-h-[26rem] overflow-y-auto" : ""}`}
                   >
                     {visibleComments.map((c) => (
                       <div
                         key={c.key}
-                        className="group relative flex items-start gap-1 px-4 py-2.5"
+                        className="group relative flex items-start gap-1 px-4 py-2.5 md:px-5"
                       >
                         <span
                           className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand"
-                          aria-hidden
+                          aria-hidden="true"
                         />
                         <button
                           onClick={c.onOpen}
-                          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                          className="flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
-                              <p className="text-xs font-medium text-foreground">
+                              <p className="truncate text-xs font-medium text-foreground">
                                 {c.author}{" "}
                                 <span className="font-normal text-muted-foreground">
                                   mencionou você em {c.context}
@@ -1021,20 +1039,23 @@ export function InicioDashboard() {
                                 {fmtCommentAt(c.at)}
                               </span>
                             </div>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            <p
+                              className="mt-0.5 truncate text-xs text-muted-foreground"
+                              title={c.text}
+                            >
                               {c.text}
                             </p>
                           </div>
                           <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </button>
-                        <button
+                        <IconButton
+                          label={`Limpar menção de ${c.author}`}
+                          tone="neutral"
                           onClick={c.onDismiss}
-                          className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
-                          aria-label={`Limpar menção de ${c.author}`}
-                          title={`Limpar menção de ${c.author}`}
+                          className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
                         >
                           <X className="h-3.5 w-3.5" />
-                        </button>
+                        </IconButton>
                       </div>
                     ))}
                   </div>
@@ -1042,7 +1063,7 @@ export function InicioDashboard() {
                     <button
                       type="button"
                       onClick={() => setCommentsExpanded((v) => !v)}
-                      className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2 text-xs font-medium text-brand hover:underline"
+                      className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
                     >
                       {commentsExpanded ? "Ver menos" : `Ver todos (${assignedComments.length})`}
                       <ChevronDown
@@ -1066,7 +1087,7 @@ export function InicioDashboard() {
                   </span>
                 }
               />
-              <div className="space-y-1 p-3">
+              <div className="space-y-1 p-3 md:p-4">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -1078,23 +1099,17 @@ export function InicioDashboard() {
                     value={newPersonal}
                     onChange={(e) => setNewPersonal(e.target.value)}
                     placeholder="Adicionar item…"
-                    className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <button
-                    type="submit"
-                    className="rounded-md border border-border bg-background px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Adicionar"
-                  >
+                  <IconButton type="submit" label="Adicionar" tone="brand">
                     <Plus className="h-3.5 w-3.5" />
-                  </button>
+                  </IconButton>
                 </form>
-                {personal.length === 0 && (
-                  <p className="py-4 text-center text-[11px] text-muted-foreground">Nenhum item.</p>
-                )}
+                {personal.length === 0 && <EmptyState compact title="Nenhum item." />}
                 {personal.map((p) => (
                   <div
                     key={p.id}
-                    className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40"
+                    className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted/40"
                   >
                     <input
                       type="checkbox"
@@ -1103,17 +1118,19 @@ export function InicioDashboard() {
                       className="h-3.5 w-3.5 rounded border-border accent-brand"
                     />
                     <span
-                      className={`flex-1 ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
+                      className={`flex-1 truncate ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
+                      title={p.text}
                     >
                       {p.text}
                     </span>
-                    <button
+                    <IconButton
+                      label="Remover"
+                      tone="neutral"
                       onClick={() => removePersonal(p.id)}
-                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label="Remover"
+                      className="h-6 w-6 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-destructive focus-visible:opacity-100"
                     >
-                      <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                    </button>
+                      <Trash2 className="h-3 w-3" />
+                    </IconButton>
                   </div>
                 ))}
               </div>
@@ -1157,6 +1174,11 @@ export function InicioDashboard() {
   );
 }
 
+/** Superfície de seção da Home — mesmo tratamento em todos os 5 cards
+ * (`Meu trabalho`, `Agenda`, `Mural`, `Comentários`, `Lista pessoal`) e
+ * mesmo raio do cabeçalho climático aprovado (`rounded-2xl`), pra tudo
+ * parecer parte de um único produto em vez de caixas isoladas com
+ * tratamentos divergentes. */
 const Card = ({
   children,
   className = "",
@@ -1166,14 +1188,15 @@ const Card = ({
   className?: string;
   ref?: React.Ref<HTMLDivElement>;
 }) => (
-  <div
-    ref={ref}
-    className={`overflow-hidden rounded-lg border border-border bg-background ${className}`}
-  >
+  <div ref={ref} className={`overflow-hidden rounded-2xl ${SURFACE.raised} ${className}`}>
     {children}
   </div>
 );
 
+/** Cabeçalho integrado ao próprio card — sem barra retangular separada
+ * (sem `border-b`), ícone e título com o mesmo peso/tamanho em toda a
+ * Home, ação alinhada à direita e livre pra quebrar numa segunda linha
+ * em telas estreitas em vez de comprimir. */
 function CardHeader({
   icon,
   title,
@@ -1184,16 +1207,22 @@ function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 md:px-5">
       <div className="flex items-center gap-2 text-foreground">
-        <span className="text-muted-foreground">{icon}</span>
-        <p className="text-xs font-semibold">{title}</p>
+        <span className="text-muted-foreground" aria-hidden="true">
+          {icon}
+        </span>
+        <p className={TYPOGRAPHY.cardTitle}>{title}</p>
       </div>
       {action}
     </div>
   );
 }
 
+/** Grupo de tabs em pill — usado só em "Meu trabalho". Ativo com fundo
+ * de marca bem sutil (`bg-brand-subtle`, mesmo tom que badges/chips de
+ * marca usam em todo o resto da plataforma) em vez do antigo botão
+ * branco/preto sólido. */
 function Tab({
   active,
   children,
@@ -1205,10 +1234,11 @@ function Tab({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
-          ? "bg-foreground text-background"
+          ? "bg-brand-subtle text-brand"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
@@ -1372,33 +1402,35 @@ function MuralNovidades() {
     : undefined;
 
   return (
-    <div className="rounded-lg border border-border bg-background">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <Newspaper className="h-4 w-4" />
-        <p className="text-sm font-semibold">Mural de novidades</p>
-        {rest.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowAll((v) => !v)}
-            className="ml-auto text-[11px] font-medium text-brand hover:underline"
-          >
-            {showAll ? "Ver menos" : `Ver todas (${visibleItems.length})`}
-          </button>
-        )}
-      </div>
+    <Card>
+      <CardHeader
+        icon={<Newspaper className="h-4 w-4" />}
+        title="Mural de novidades"
+        action={
+          rest.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              {showAll ? "Ver menos" : `Ver todas (${visibleItems.length})`}
+            </button>
+          )
+        }
+      />
 
       {!showAll ? (
-        <div className="group flex flex-col gap-3 p-4 sm:flex-row">
+        <div className="group flex flex-col gap-4 px-4 pb-4 sm:flex-row md:px-5 md:pb-5">
           {featured.cover && (
             <button
               type="button"
               onClick={() => setOpenArticle(featured)}
-              className="shrink-0 overflow-hidden rounded-md sm:w-48"
+              className="shrink-0 overflow-hidden rounded-xl sm:w-40 md:w-44"
             >
               <img
                 src={featured.cover}
                 alt=""
-                className="h-32 w-full object-cover object-center sm:h-full"
+                className="h-32 w-full object-cover object-center transition-transform group-hover:scale-[1.02] sm:h-full"
               />
             </button>
           )}
@@ -1407,14 +1439,14 @@ function MuralNovidades() {
               <button
                 type="button"
                 onClick={() => setOpenArticle(featured)}
-                className="min-w-0 flex-1 text-left"
+                className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {featured.category && (
-                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <Badge variant="secondary" className="rounded-full uppercase tracking-wide">
                     {featured.category}
-                  </span>
+                  </Badge>
                 )}
-                <p className="mt-1 truncate text-base font-semibold text-foreground hover:underline">
+                <p className="mt-1.5 truncate text-base font-semibold text-foreground hover:underline">
                   {featured.title}
                 </p>
                 {featured.excerpt && (
@@ -1423,13 +1455,14 @@ function MuralNovidades() {
                   </p>
                 )}
               </button>
-              <button
+              <IconButton
+                label="Dispensar"
+                tone="neutral"
                 onClick={() => dismiss(featured.id)}
-                className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                aria-label="Dispensar"
+                className="h-7 w-7 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
               >
-                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-              </button>
+                <X className="h-3.5 w-3.5" />
+              </IconButton>
             </div>
             <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
               <span>{featured.authorName || "Sem autor"}</span>
@@ -1439,16 +1472,16 @@ function MuralNovidades() {
           </div>
         </div>
       ) : (
-        <ul className="divide-y divide-border">
+        <ul className="divide-y divide-border/70">
           {visibleItems.map((p) => (
-            <li key={p.id} className="group flex gap-3 px-4 py-3">
+            <li key={p.id} className="group flex gap-3 px-4 py-3 md:px-5">
               {p.cover && (
-                <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded object-cover" />
+                <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded-lg object-cover" />
               )}
               <button
                 type="button"
                 onClick={() => setOpenArticle(p)}
-                className="min-w-0 flex-1 text-left"
+                className="min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <p className="truncate text-sm font-medium hover:underline">{p.title}</p>
                 {p.excerpt && (
@@ -1462,13 +1495,14 @@ function MuralNovidades() {
                   {p.publishDate && <span>· {fmtPublishDate(p.publishDate)}</span>}
                 </div>
               </button>
-              <button
+              <IconButton
+                label="Dispensar"
+                tone="neutral"
                 onClick={() => dismiss(p.id)}
-                className="opacity-0 transition-opacity group-hover:opacity-100"
-                aria-label="Dispensar"
+                className="h-7 w-7 shrink-0 self-start text-muted-foreground/60 opacity-60 transition-opacity hover:text-foreground focus-visible:opacity-100"
               >
-                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-              </button>
+                <X className="h-3.5 w-3.5" />
+              </IconButton>
             </li>
           ))}
         </ul>
@@ -1528,6 +1562,6 @@ function MuralNovidades() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </Card>
   );
 }
