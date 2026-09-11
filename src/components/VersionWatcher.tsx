@@ -74,7 +74,7 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
       {!showNotes && (
         <div className="fixed bottom-4 right-4 z-[200] w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-lg">
           <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-foreground">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
               <Sparkles className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -113,7 +113,7 @@ export function VersionWatcher({ scope = "vi" }: { scope?: "vi" | "vc" }) {
                   type="button"
                   onClick={handleUpdate}
                   disabled={updating}
-                  className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-default disabled:opacity-70"
+                  className="ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-default disabled:opacity-70"
                 >
                   {updating ? (
                     <>

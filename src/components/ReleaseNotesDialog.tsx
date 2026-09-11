@@ -70,7 +70,7 @@ export function ReleaseNotesDialog({
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-lg">
         <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-muted-foreground" />O que há de novo
+            <Sparkles className="h-4 w-4 text-brand" />O que há de novo
           </DialogTitle>
           {version && <p className="text-xs text-muted-foreground">Versão {version}</p>}
         </DialogHeader>
@@ -84,7 +84,7 @@ export function ReleaseNotesDialog({
             type="button"
             onClick={handleUpdate}
             disabled={updating}
-            className="inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background hover:opacity-90 disabled:cursor-default disabled:opacity-70"
+            className="inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-default disabled:opacity-70"
           >
             {updating ? (
               <>
