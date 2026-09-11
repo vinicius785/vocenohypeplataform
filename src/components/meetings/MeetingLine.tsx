@@ -97,14 +97,14 @@ export function MeetingLine({
               onClick={(e) => e.stopPropagation()}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-opacity ${
                 isNow
-                  ? "bg-emerald-500/15 text-emerald-700 opacity-100 dark:text-emerald-400"
-                  : "bg-foreground text-background opacity-0 group-hover:opacity-100"
+                  ? "bg-success-soft text-success-soft-foreground opacity-100"
+                  : "bg-brand text-brand-foreground opacity-0 group-hover:opacity-100"
               }`}
             >
               <LogIn className="h-3 w-3" /> {isNow ? "Entrar agora" : "Entrar"}
             </a>
           )}
-          <ChevronRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" />
+          <ChevronRight className="h-4 w-4 text-text-secondary/50 transition-colors group-hover:text-text-secondary" />
         </span>
       </div>
     </li>

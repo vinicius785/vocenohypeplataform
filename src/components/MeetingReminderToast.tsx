@@ -155,7 +155,13 @@ export function MeetingReminderToast() {
 
   return (
     <>
-      <div className="fixed bottom-24 right-4 z-[190] w-full max-w-[420px]">
+      {/* z-40 (não mais z-190): fica acima do conteúdo normal da página mas
+       * abaixo de qualquer Sheet/Dialog/AlertDialog/DropdownMenu/Popover
+       * (todos z-50) — antes o card cobria o rodapé de drawers/diálogos
+       * abertos em qualquer módulo (achado real durante a rodada corretiva
+       * de Clientes, corrigido aqui porque a causa é deste componente
+       * global, não do módulo). Nenhuma lógica de exibição/dedupe mudou. */}
+      <div className="fixed bottom-24 right-4 z-40 w-full max-w-[420px]">
         <div className="rounded-2xl border border-border bg-background p-4 shadow-xl">
           <div className="flex items-start gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">

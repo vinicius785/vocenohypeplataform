@@ -9,12 +9,12 @@ export const STATUS: { key: BlogStatus; label: string; cls: string }[] = [
   {
     key: "agendado",
     label: "Agendado",
-    cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+    cls: "bg-warning-soft text-warning-soft-foreground",
   },
   {
     key: "publicado",
     label: "Publicado",
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    cls: "bg-success-soft text-success-soft-foreground",
   },
   {
     key: "despublicado",

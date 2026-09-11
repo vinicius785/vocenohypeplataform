@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowLeft, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, MoreHorizontal, RefreshCw, Trash2 } from "lucide-react";
 import type { Indicador, Objetivo } from "@/lib/metas-store";
 import {
   INDICADOR_SAUDE_DOT,
@@ -9,6 +9,7 @@ import {
   indicadorSaudeParaObjetivo,
   indicadorTendencia,
 } from "@/lib/metas-engine";
+import { Button } from "@/components/ui/button";
 import {
   formatIndicadorValor,
   formatMetaVinculo,
@@ -29,8 +30,8 @@ type Member = { name: string; photo?: string };
  * (Acompanhamento migrou pro accordion de Configurações). */
 function StatBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border p-3">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className="rounded-2xl bg-muted/40 p-3.5">
+      <p className="text-[11px] text-text-secondary">{label}</p>
       <div className="mt-1 text-sm font-medium text-foreground">{children}</div>
     </div>
   );
@@ -58,7 +59,7 @@ function ObjetivoVinculadoRow({
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
 
   return (
-    <div className="group flex items-center gap-3 px-3 py-2.5">
+    <div className="group flex items-center gap-3 px-1 py-2.5">
       <button
         type="button"
         onClick={onOpen}
@@ -66,10 +67,10 @@ function ObjetivoVinculadoRow({
       >
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${INDICADOR_SAUDE_DOT[saude]}`} />
         <span className="min-w-0 flex-1 truncate text-sm text-foreground">{objetivo.titulo}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        <span className="shrink-0 text-xs tabular-nums text-text-secondary">
           {formatMetaVinculo(indicador, objetivo.id) ?? "—"}
         </span>
-        <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        <span className="w-10 shrink-0 text-right text-xs tabular-nums text-text-secondary">
           {Math.round(peso)}%
         </span>
         <span
@@ -84,19 +85,20 @@ function ObjetivoVinculadoRow({
           onClick={() => setMenuOpen((v) => !v)}
           title="Mais ações"
           aria-label="Mais ações"
-          className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-expanded={menuOpen}
+          className="rounded p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-border bg-popover p-1 shadow-md">
+          <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-xl bg-popover p-1 shadow-lg dark:shadow-none">
             <button
               type="button"
               onClick={() => {
                 setMenuOpen(false);
                 onOpen();
               }}
-              className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
             >
               Abrir
             </button>
@@ -106,7 +108,7 @@ function ObjetivoVinculadoRow({
                 setMenuOpen(false);
                 onUnlink();
               }}
-              className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-muted"
+              className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
             >
               Desvincular
             </button>
@@ -118,11 +120,11 @@ function ObjetivoVinculadoRow({
 }
 
 /** Página de acompanhamento de um Indicador — quanto está, como evoluiu,
- * em quais objetivos é usado, como foi atualizado. Não é mais uma tela
- * de configuração: dono/colaboradores/frequência/origem ficam
- * escondidos atrás do accordion "Configurações", e o header nunca
- * mostra status/meta/progresso (isso é sempre por vínculo — ver
- * "Objetivos vinculados"). */
+ * em quais objetivos é usado, como foi atualizado. Não é uma tela de
+ * configuração: dono/colaboradores/frequência/origem ficam escondidos
+ * atrás do accordion "Configurações", e o hero nunca mostra status/
+ * meta/progresso (isso é sempre por vínculo — ver "Objetivos
+ * vinculados"). */
 export function IndicadorPage({
   indicador,
   cameFromObjetivo,
@@ -173,96 +175,101 @@ export function IndicadorPage({
   ].filter((r) => r.value != null);
 
   return (
-    <div className="mx-auto w-full max-w-4xl pb-10">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> {cameFromObjetivo ? cameFromObjetivo.titulo : "Metas"}
-        </button>
-        <div ref={menuRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Mais ações"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-border bg-popover p-1 shadow-md">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-                className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-muted"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Excluir indicador
-              </button>
-            </div>
+    <div className="mx-auto w-full max-w-4xl space-y-6 pb-10">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 rounded text-sm text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      >
+        <ArrowLeft className="h-4 w-4" /> {cameFromObjetivo ? cameFromObjetivo.titulo : "Metas"}
+      </button>
+
+      {/* Hero — valor em destaque, sem meta/status/barra global: o
+          indicador não tem "a" meta, isso é sempre por vínculo (ver
+          Objetivos vinculados abaixo). */}
+      <div className="rounded-[28px] bg-brand p-6 dark:shadow-none md:p-7">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 truncate text-2xl font-bold tracking-tight text-brand-foreground md:text-3xl">
+            {indicador.titulo}
+          </h1>
+          <div ref={menuRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Mais ações"
+              aria-expanded={menuOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-brand-foreground-secondary hover:bg-black/10 hover:text-brand-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl bg-popover p-1 text-foreground shadow-lg dark:shadow-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete();
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir indicador
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        {indicador.descricao && (
+          <p className="mt-1.5 max-w-xl text-sm text-brand-foreground-secondary">
+            {indicador.descricao}
+          </p>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="flex items-baseline gap-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground">
+              {valorPrincipal}
+              {tendencia && (
+                <span className={`text-sm font-medium ${TENDENCIA_TONE[tendencia.trend]}`}>
+                  {TENDENCIA_ICON[tendencia.trend]}{" "}
+                  {formatIndicadorValor(
+                    indicador.tipo,
+                    Math.abs(tendencia.diff),
+                    indicador.unidade,
+                  )}
+                </span>
+              )}
+            </p>
+            <p className="mt-1.5 text-xs text-brand-foreground-secondary">
+              {atualizacoes.length > 0
+                ? `Atualizado ${timeAgo(indicador.updatedAt ?? indicador.createdAt)} por ${ultimaAtualizacao.author}`
+                : `Atualizado ${timeAgo(indicador.updatedAt ?? indicador.createdAt)}`}
+              {indicador.calcTotal != null && indicador.calcContagem != null && (
+                <span>
+                  {" "}
+                  · {indicador.calcContagem} de {indicador.calcTotal}
+                </span>
+              )}
+            </p>
+          </div>
+          {indicador.dataSource === "manual" ? (
+            <Button
+              size="comfortable"
+              className="border-0 bg-background text-brand hover:bg-background/90"
+              onClick={() => setUpdateOpen(true)}
+            >
+              <RefreshCw className="h-4 w-4" /> Atualizar
+            </Button>
+          ) : (
+            <p className="text-xs text-brand-foreground-secondary">Sincronizado automaticamente.</p>
           )}
         </div>
       </div>
 
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
-        {indicador.titulo}
-      </h1>
-      {indicador.descricao && (
-        <p className="mt-2 text-sm text-muted-foreground">{indicador.descricao}</p>
-      )}
-
-      {/* Valor em destaque — sem meta/status/barra global (item 25): o
-          indicador não tem "a" meta, isso é sempre por vínculo (ver
-          Objetivos vinculados). */}
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="flex items-baseline gap-2 text-4xl font-light tracking-tight text-foreground">
-            {valorPrincipal}
-            {tendencia && (
-              <span className={`text-sm font-medium ${TENDENCIA_TONE[tendencia.trend]}`}>
-                {TENDENCIA_ICON[tendencia.trend]}{" "}
-                {formatIndicadorValor(indicador.tipo, Math.abs(tendencia.diff), indicador.unidade)}
-              </span>
-            )}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Atual
-            {indicador.calcTotal != null && indicador.calcContagem != null && (
-              <span>
-                {" "}
-                · {indicador.calcContagem} de {indicador.calcTotal}
-              </span>
-            )}
-          </p>
-        </div>
-        {indicador.dataSource === "manual" ? (
-          <button
-            type="button"
-            onClick={() => setUpdateOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
-          >
-            Atualizar
-          </button>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sincronizado automaticamente.</p>
-        )}
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {atualizacoes.length > 0
-          ? `Atualizado ${timeAgo(indicador.updatedAt ?? indicador.createdAt)} por ${ultimaAtualizacao.author}`
-          : `Atualizado ${timeAgo(indicador.updatedAt ?? indicador.createdAt)}`}
-      </p>
-
       {/* Desempenho */}
       {niveisRows.length > 0 && (
-        <div className="mt-9">
-          <h2 className="text-sm font-semibold text-foreground">Desempenho</h2>
-          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+        <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+          <h2 className="text-[15px] font-semibold text-foreground">Desempenho</h2>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {niveisRows.map((r) => (
               <StatBlock key={r.label} label={r.label}>
                 {formatIndicadorValor(indicador.tipo, r.value, indicador.unidade)}
@@ -272,23 +279,25 @@ export function IndicadorPage({
         </div>
       )}
 
-      <IndicadorEvolucao
-        atualizacoes={atualizacoes}
-        tipo={indicador.tipo}
-        unidade={indicador.unidade}
-      />
+      <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+        <IndicadorEvolucao
+          atualizacoes={atualizacoes}
+          tipo={indicador.tipo}
+          unidade={indicador.unidade}
+        />
+      </div>
 
       {/* Objetivos vinculados — pode ser mais de um, indicador é
           universal. Deixa explícito que a mesma métrica é reutilizável:
           cada objetivo pode ter sua própria meta/peso/status pro MESMO
           valor atual. */}
       {objetivosVinculados.length > 0 && (
-        <div className="mt-9">
-          <h2 className="text-sm font-semibold text-foreground">
+        <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+          <h2 className="text-[15px] font-semibold text-foreground">
             Usado em {objetivosVinculados.length} objetivo
             {objetivosVinculados.length === 1 ? "" : "s"}
           </h2>
-          <div className="mt-2.5 divide-y divide-border rounded-lg border border-border">
+          <div className="mt-2.5 divide-y divide-border/60">
             {objetivosVinculados.map((o) => {
               const irmaos = allIndicadores.filter((i) => i.objetivoIds?.includes(o.id));
               return (
@@ -307,33 +316,32 @@ export function IndicadorPage({
       )}
 
       {/* Histórico */}
-      <div className="mt-9">
-        <h2 className="text-sm font-semibold text-foreground">Histórico</h2>
-        <div className="mt-2.5 rounded-lg border border-border">
-          {atualizacoes.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Nenhuma atualização ainda.</p>
-          ) : (
-            <IndicadorHistorico
-              atualizacoes={atualizacoes}
-              tipo={indicador.tipo}
-              unidade={indicador.unidade}
-            />
-          )}
-        </div>
+      <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+        <h2 className="text-[15px] font-semibold text-foreground">Histórico</h2>
+        {atualizacoes.length === 0 ? (
+          <p className="mt-2 text-sm text-text-secondary">Nenhuma atualização ainda.</p>
+        ) : (
+          <IndicadorHistorico
+            atualizacoes={atualizacoes}
+            tipo={indicador.tipo}
+            unidade={indicador.unidade}
+          />
+        )}
       </div>
 
       {/* Configurações */}
-      <div className="mt-9">
+      <div className="rounded-[24px] bg-card dark:shadow-none">
         <button
           type="button"
           onClick={() => setAdvancedOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-sm font-medium text-foreground hover:bg-muted/40"
+          aria-expanded={advancedOpen}
+          className="flex w-full items-center justify-between rounded-[24px] px-5 py-4 text-left text-sm font-semibold text-foreground hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           Configurações
           {advancedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {advancedOpen && (
-          <div className="mt-3 rounded-lg border border-border p-4">
+          <div className="border-t border-border/60 p-5">
             <IndicadorAdvancedSettings
               indicador={indicador}
               members={members}

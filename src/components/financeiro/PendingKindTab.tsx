@@ -14,12 +14,14 @@ import {
   deleteManualEntry,
 } from "@/lib/financeiro-entries";
 import { matchesFilters, type useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
-import { Kpi } from "./shared";
 import { EntryRow } from "./EntryRow";
 import { EntryDialog } from "./EntryDialog";
 import { EntryDetailsDialog } from "./EntryDetailsDialog";
 import { MarkAsPaidDialog } from "./MarkAsPaidDialog";
 import { CobrancaDialog } from "./CobrancaDialog";
+import { MetricCard } from "@/components/shared/MetricCard";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { PartyPopper } from "lucide-react";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -61,71 +63,95 @@ export function PendingKindTab({ filtered, kind }: { filtered: Filtered; kind: K
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-x-6 gap-y-3 overflow-x-auto pb-1">
-        <Kpi
-          label={kind === "receita" ? "Total em aberto" : "Total em aberto"}
-          value={fmtBRL(totalEmAberto)}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <MetricCard compact label="Total em aberto" value={fmtBRL(totalEmAberto)} tone="brand" />
+        <MetricCard
+          compact
+          label={DUE_BUCKET_LABEL.vencido}
+          value={fmtBRL(buckets.vencido.total)}
+          tone={buckets.vencido.total > 0 ? "danger" : "neutral"}
         />
-        <Kpi label={DUE_BUCKET_LABEL.vencido} value={fmtBRL(buckets.vencido.total)} />
-        <Kpi label={DUE_BUCKET_LABEL.vence_hoje} value={fmtBRL(buckets.vence_hoje.total)} />
-        <Kpi label={DUE_BUCKET_LABEL.proximos_7} value={fmtBRL(buckets.proximos_7.total)} />
-        <Kpi label={DUE_BUCKET_LABEL.de_8_a_30} value={fmtBRL(buckets.de_8_a_30.total)} />
-        <Kpi label={DUE_BUCKET_LABEL.acima_30} value={fmtBRL(buckets.acima_30.total)} />
+        <MetricCard
+          compact
+          label={DUE_BUCKET_LABEL.vence_hoje}
+          value={fmtBRL(buckets.vence_hoje.total)}
+          tone={buckets.vence_hoje.total > 0 ? "warning" : "neutral"}
+        />
+        <MetricCard
+          compact
+          label={DUE_BUCKET_LABEL.proximos_7}
+          value={fmtBRL(buckets.proximos_7.total)}
+          tone="neutral"
+        />
+        <MetricCard
+          compact
+          label={DUE_BUCKET_LABEL.de_8_a_30}
+          value={fmtBRL(buckets.de_8_a_30.total)}
+          tone="neutral"
+        />
+        <MetricCard
+          compact
+          label={DUE_BUCKET_LABEL.acima_30}
+          value={fmtBRL(buckets.acima_30.total)}
+          tone="neutral"
+        />
       </div>
-      <p className="-mt-4 text-[11px] text-muted-foreground">
+      <p className="text-xs text-text-secondary">
         Faixas mutuamente exclusivas (cada lançamento entra em só uma) · toda a carteira em aberto,
         não apenas o período selecionado no topo.
       </p>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
+      <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
         {pending.length === 0 ? (
-          <p className="px-4 py-12 text-center text-xs text-muted-foreground">
-            {kind === "receita" ? "Nenhuma receita pendente. 🎉" : "Nenhuma despesa pendente. 🎉"}
-          </p>
+          <EmptyState
+            icon={<PartyPopper className="h-5 w-5" />}
+            title={kind === "receita" ? "Nenhuma receita pendente" : "Nenhuma despesa pendente"}
+            description="Tudo em dia por aqui."
+          />
         ) : (
           <ul className="divide-y divide-border">
             {pending.map((e) => (
-              <EntryRow
-                key={e.id}
-                e={e}
-                onView={() => setViewing(e)}
-                onMarkPaid={() => setMarkingPaid(e)}
-                onRegistrarCobranca={kind === "receita" ? () => setCobrando(e) : undefined}
-                onEdit={() => {
-                  const m = findManual(e.id);
-                  if (m) {
-                    setEditing(m);
-                    setDialogOpen(true);
-                  }
-                }}
-                onDelete={() => void deleteManualEntry(e.id)}
-              />
+              <li key={e.id}>
+                <EntryRow
+                  e={e}
+                  onView={() => setViewing(e)}
+                  onMarkPaid={() => setMarkingPaid(e)}
+                  onRegistrarCobranca={kind === "receita" ? () => setCobrando(e) : undefined}
+                  onEdit={() => {
+                    const m = findManual(e.id);
+                    if (m) {
+                      setEditing(m);
+                      setDialogOpen(true);
+                    }
+                  }}
+                  onDelete={() => void deleteManualEntry(e.id)}
+                />
+              </li>
             ))}
           </ul>
         )}
       </div>
 
-      {dialogOpen && (
-        <EntryDialog
-          initial={editing}
-          clientes={clientes.map((c) => ({
-            id: c.id,
-            nome: c.empresa,
-            campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
-          }))}
-          onClose={() => {
+      <EntryDialog
+        open={dialogOpen}
+        initial={editing}
+        clientes={clientes.map((c) => ({
+          id: c.id,
+          nome: c.empresa,
+          campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
+        }))}
+        onClose={() => {
+          setDialogOpen(false);
+          setEditing(null);
+        }}
+        onSave={(m) => {
+          const isNew = !loadManual().some((x) => x.id === m.id);
+          void (isNew ? createManualEntry(m) : updateManualEntry(m)).then(() => {
             setDialogOpen(false);
             setEditing(null);
-          }}
-          onSave={(m) => {
-            const isNew = !loadManual().some((x) => x.id === m.id);
-            void (isNew ? createManualEntry(m) : updateManualEntry(m)).then(() => {
-              setDialogOpen(false);
-              setEditing(null);
-            });
-          }}
-        />
-      )}
+          });
+        }}
+      />
 
       {viewing && (
         <EntryDetailsDialog

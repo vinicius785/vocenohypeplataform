@@ -71,7 +71,7 @@ export function CreateChannelModal({
   // lateral em vez de cobrir a tela inteira.
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-background p-5 shadow-xl">
+      <div className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-y-auto rounded-xl border border-border bg-background p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">
             {isEdit ? "Editar canal" : "Novo canal"}
@@ -126,7 +126,7 @@ export function CreateChannelModal({
                     setError(null);
                   }}
                   placeholder="ex: marketing"
-                  className="flex-1 bg-transparent py-2 text-sm outline-none"
+                  className="flex-1 bg-transparent py-2 text-base outline-none md:text-sm"
                 />
               </div>
               {normalized && (
@@ -206,7 +206,7 @@ export function CreateChannelModal({
           </button>
           <button
             onClick={submit}
-            className="rounded-md bg-foreground px-3 py-1.5 text-xs text-background hover:opacity-90"
+            className="rounded-md bg-brand px-3 py-1.5 text-xs text-brand-foreground hover:bg-brand-hover"
           >
             {isEdit ? "Salvar" : "Criar canal"}
           </button>

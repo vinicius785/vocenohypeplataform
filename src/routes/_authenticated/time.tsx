@@ -4,6 +4,14 @@ import { Loader2 } from "lucide-react";
 import { AppShell, type SectionKey } from "@/components/AppShell";
 import { LockedSection } from "@/components/LockedSection";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
+import {
+  resolveFinanceiroTab,
+  resolveMetasTab,
+  resolveReunioesView,
+  type FinanceiroTab,
+  type MetasTab,
+  type ReunioesView,
+} from "@/lib/section-nav";
 
 // Cada seção vira o próprio chunk JS, baixado só quando o usuário navega até
 // ela — antes todas as 12 seções (algumas com milhares de linhas, ex.
@@ -78,23 +86,36 @@ export const Route = createFileRoute("/_authenticated/time")({
     s: Record<string, unknown>,
   ): {
     section?: SectionKey;
-    metasView?: "objetivos" | "indicadores";
-    reunioesView?: "agenda" | "calendario" | "solicitacoes" | "disponibilidade";
+    metasView?: MetasTab;
+    reunioesView?: ReunioesView;
+    financeiroTab?: FinanceiroTab;
   } => {
     const v = s.section;
-    const mv = s.metasView;
-    const rv = s.reunioesView;
     return {
       ...(typeof v === "string" && (VALID as string[]).includes(v)
         ? { section: v as SectionKey }
         : {}),
-      ...(mv === "objetivos" || mv === "indicadores" ? { metasView: mv } : {}),
-      ...(rv === "agenda" ||
-      rv === "calendario" ||
-      rv === "solicitacoes" ||
-      rv === "disponibilidade"
-        ? { reunioesView: rv }
+      // Cada um só entra na URL se já tinha um valor explícito (mesmo
+      // padrão de antes) — o fallback pro default de cada seção acontece
+      // em `resolve*Tab`/`resolveReunioesView`, não aqui, então um valor
+      // antigo/inválido (ex. `reunioesView=disponibilidade`) não trava a
+      // URL, só é ignorado.
+      ...(typeof s.metasView === "string" && s.metasView === resolveMetasTab(s.metasView)
+        ? { metasView: s.metasView as MetasTab }
         : {}),
+      ...(typeof s.reunioesView === "string" &&
+      s.reunioesView === resolveReunioesView(s.reunioesView)
+        ? { reunioesView: s.reunioesView as ReunioesView }
+        : {}),
+      ...(typeof s.financeiroTab === "string" &&
+      s.financeiroTab === resolveFinanceiroTab(s.financeiroTab)
+        ? { financeiroTab: s.financeiroTab as FinanceiroTab }
+        : {}),
+      // `timeTab` saiu do schema (a subpágina "Horas trabalhadas" foi
+      // incorporada à "Visão da equipe") — um link antigo com
+      // `?timeTab=horas` simplesmente tem o param ignorado aqui e cai na
+      // única tela de Time que existe agora, sem precisar de redirect
+      // explícito.
     };
   },
 });
@@ -135,6 +156,41 @@ function TimePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Subitem ativo da sidebar (Etapa 3) — só relevante pras seções com
+  // subnav (`SECTION_SUBNAV`: Financeiro/Reuniões/Metas); as outras
+  // seções (Time incluído, desde que "Horas trabalhadas" virou parte da
+  // "Visão da equipe") passam `undefined` e a sidebar simplesmente não
+  // renderiza subitens.
+  const activeSubTab =
+    active === "financeiro"
+      ? resolveFinanceiroTab(search.financeiroTab)
+      : active === "reunioes"
+        ? resolveReunioesView(search.reunioesView)
+        : active === "metas"
+          ? resolveMetasTab(search.metasView)
+          : undefined;
+  const onSelectSubTab = (section: SectionKey, subKey: string) => {
+    if (section === "financeiro") {
+      void navigate({
+        to: "/time",
+        search: (prev) => ({ ...prev, section, financeiroTab: subKey as FinanceiroTab }),
+        replace: true,
+      });
+    } else if (section === "reunioes") {
+      void navigate({
+        to: "/time",
+        search: (prev) => ({ ...prev, section, reunioesView: subKey as ReunioesView }),
+        replace: true,
+      });
+    } else if (section === "metas") {
+      void navigate({
+        to: "/time",
+        search: (prev) => ({ ...prev, section, metasView: subKey as MetasTab }),
+        replace: true,
+      });
+    }
+  };
+
   const section = SECTIONS[active];
   const access = useMyAccess();
   // "configuracoes" fica de fora aqui: a própria tela filtra suas abas
@@ -143,7 +199,12 @@ function TimePage() {
   const allowed = active === "configuracoes" || hasPermission(access, SECTION_PERMISSION[active]);
 
   return (
-    <AppShell active={active} onSelect={setActive}>
+    <AppShell
+      active={active}
+      onSelect={setActive}
+      activeSubTab={activeSubTab}
+      onSelectSubTab={onSelectSubTab}
+    >
       {!allowed ? (
         <LockedSection title={section.title} />
       ) : (

@@ -347,8 +347,8 @@ export function ProjectBugsPanel({
             disabled={submitting || (!description.trim() && !justSubmittedKind)}
             className={`inline-flex items-center gap-1.5 rounded-full border-2 px-4 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-50 ${
               justSubmittedKind
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
+                ? "border-success-border bg-success text-brand-foreground"
+                : "border-brand bg-brand text-brand-foreground hover:bg-brand-hover"
             }`}
           >
             {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -364,8 +364,8 @@ export function ProjectBugsPanel({
       </form>
 
       {justSubmittedKind && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-700 duration-300 animate-in fade-in-0 slide-in-from-top-1 dark:text-emerald-400">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white duration-500 animate-in zoom-in-50">
+        <div className="flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-3 py-2 text-xs font-medium text-success-soft-foreground duration-300 animate-in fade-in-0 slide-in-from-top-1">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-brand-foreground duration-500 animate-in zoom-in-50">
             <Check className="h-3 w-3" />
           </span>
           {justSubmittedKind === "bug" ? "Bug enviado!" : "Sugestão enviada!"} Nosso time vai dar

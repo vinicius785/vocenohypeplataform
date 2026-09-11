@@ -9,8 +9,8 @@ export function RodadaProgressoCard({ rodada }: { rodada: AeoRodadaComputada }) 
         <span
           className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
             rodada.status === "concluida"
-              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-              : "bg-sky-500/10 text-sky-700 dark:text-sky-400"
+              ? "bg-success-soft text-success-soft-foreground"
+              : "bg-info-soft text-info-soft-foreground"
           }`}
         >
           {rodada.status === "concluida" ? "Concluída" : "Em andamento"}
@@ -23,9 +23,16 @@ export function RodadaProgressoCard({ rodada }: { rodada: AeoRodadaComputada }) 
         <span>{rodada.respostasPreenchidas} preenchidas</span>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          role="progressbar"
+          aria-label={`Progresso da rodada: ${rodada.respostasPreenchidas} de ${rodada.respostasEsperadas} respostas preenchidas`}
+          aria-valuenow={rodada.progresso}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
+        >
           <div
-            className="h-full rounded-full bg-foreground transition-all"
+            className="h-full rounded-full bg-brand transition-all"
             style={{ width: `${rodada.progresso}%` }}
           />
         </div>

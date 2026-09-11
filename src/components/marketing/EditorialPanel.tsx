@@ -14,13 +14,9 @@ import { formatIsoDate } from "@/lib/utils";
 
 const STATUS: { key: EditorialStatus; label: string; cls: string }[] = [
   { key: "ideia", label: "Ideia", cls: "bg-muted text-foreground" },
-  { key: "producao", label: "Produção", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  { key: "agendado", label: "Agendado", cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
-  {
-    key: "publicado",
-    label: "Publicado",
-    cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  },
+  { key: "producao", label: "Produção", cls: "bg-warning-soft text-warning-soft-foreground" },
+  { key: "agendado", label: "Agendado", cls: "bg-info-soft text-info-soft-foreground" },
+  { key: "publicado", label: "Publicado", cls: "bg-success-soft text-success-soft-foreground" },
 ];
 
 const CHANNELS = [
@@ -155,7 +151,7 @@ export function EditorialPanel({
               status: "ideia",
             });
           }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
         >
           <Plus className="h-3.5 w-3.5" /> Novo post
         </button>
@@ -388,7 +384,7 @@ function PostModal({
             </button>
             <button
               type="submit"
-              className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background"
+              className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
             >
               Salvar
             </button>

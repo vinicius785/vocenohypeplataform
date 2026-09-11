@@ -22,11 +22,12 @@ export function IndicadorHistorico({
   if (atualizacoes.length === 0) return null;
 
   return (
-    <div className="border-t border-border px-6 py-3 sm:px-7">
+    <div className="mt-2">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1 rounded text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         {atualizacoes.length} atualizaç{atualizacoes.length === 1 ? "ão" : "ões"}
@@ -46,7 +47,7 @@ export function IndicadorHistorico({
                     : ""}
                   {a.nota ? ` — ${a.nota}` : ""}
                 </span>
-                <span className="ml-1.5 text-muted-foreground">
+                <span className="ml-1.5 text-text-secondary">
                   {new Date(a.createdAt).toLocaleDateString("pt-BR")}
                 </span>
               </div>

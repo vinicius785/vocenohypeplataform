@@ -1,24 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { PageContainer } from "@/components/shared/PageContainer";
 import {
   ArrowUpRight,
   Calendar,
   CheckCircle2,
-  Clock,
+  ChevronDown,
   Flag,
   MessageSquare,
   Newspaper,
   Plus,
-  Puzzle,
   Sparkles,
   Star,
-  Target,
   Trash2,
-  TrendingUp,
-  Trophy,
-  Wallet,
   X,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, type BlogPost } from "@/lib/projetos";
@@ -29,8 +23,9 @@ import {
   addCommentVI,
   type BlogEngagement,
 } from "@/lib/blog-engagement";
-import { ZipGameSection } from "@/components/games/ZipGameSection";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AvatarStack } from "@/components/meetings/AvatarStack";
+import { useConfirm } from "@/hooks/use-confirm";
 import {
   subscribeChat,
   getMe,
@@ -43,10 +38,6 @@ import {
 } from "@/lib/chat-store";
 import { useClientes } from "@/lib/clientes-store";
 import { supabase } from "@/integrations/supabase/client";
-import { listLeads } from "@/lib/comercial.functions";
-import { formatBRL } from "@/lib/comercial";
-import { legacyStage } from "@/lib/comercial-engine";
-import { useFinanceiroEntries, monthKey, fmtBRL } from "@/lib/financeiro-entries";
 import type { SectionKey } from "@/components/AppShell";
 import { OPEN_CAMPANHA_TASK_KEY } from "@/components/AppShell";
 import {
@@ -61,8 +52,6 @@ import { TASK_STATUS_TONE, TASK_STATUS_DOT } from "@/components/tasks/TaskBoard"
 import { MeetingSummaryDialog } from "@/components/ReunioesSection";
 import { onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
-import { getZipMonthLeader, subscribeZipLeaderboard, type ZipMonthLeader } from "@/lib/zip-results";
-import { todayZipKey } from "@/lib/zip-game";
 import {
   loadAllTasks,
   WEEKDAYS,
@@ -118,15 +107,13 @@ function cachePersonal(items: PersonalItem[]) {
   }
 }
 
-type CardKey = "stats" | "work" | "agenda" | "comments" | "personal" | "comercial" | "financeiro";
+type CardKey = "stats" | "work" | "agenda" | "comments" | "personal";
 const CARD_DEFS: { key: CardKey; label: string }[] = [
   { key: "stats", label: "Resumo (chips)" },
   { key: "work", label: "Meu trabalho" },
   { key: "agenda", label: "Agenda" },
   { key: "comments", label: "Comentários atribuídos" },
   { key: "personal", label: "Lista pessoal" },
-  { key: "comercial", label: "Funil comercial" },
-  { key: "financeiro", label: "Financeiro do mês" },
 ];
 const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   stats: true,
@@ -134,11 +121,22 @@ const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   agenda: true,
   comments: true,
   personal: true,
-  comercial: true,
-  financeiro: true,
 };
+/** Ids de cards removidos em rodadas anteriores — se sobrar no localStorage
+ * de alguém, é só ignorado (nunca lido em nenhum `visible.*`), sem quebrar
+ * a leitura do restante das preferências salvas. */
+function sanitizeVisible(raw: Record<string, boolean>): Record<CardKey, boolean> {
+  const next = { ...DEFAULT_VISIBLE };
+  for (const key of Object.keys(next) as CardKey[]) {
+    if (typeof raw[key] === "boolean") next[key] = raw[key];
+  }
+  return next;
+}
 
 type TaskFilter = "hoje" | "atrasada" | "semana";
+
+const WORK_PAGE_SIZE = 6;
+const COMMENTS_PAGE_SIZE = 3;
 
 export function InicioDashboard() {
   const navigate = useNavigate();
@@ -163,14 +161,15 @@ export function InicioDashboard() {
   const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
   const [personal, setPersonal] = useState<PersonalItem[]>(() => loadPersonalCache());
   const [newPersonal, setNewPersonal] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [zipOpen, setZipOpen] = useState(false);
-  const [monthLeader, setMonthLeader] = useState<ZipMonthLeader | null>(null);
+  const [workExpanded, setWorkExpanded] = useState(false);
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const workCardRef = useRef<HTMLDivElement>(null);
+  const { confirm, confirmDialog } = useConfirm();
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
       const raw = localStorage.getItem("inicio.cards");
-      if (raw) return { ...DEFAULT_VISIBLE, ...JSON.parse(raw) };
+      if (raw) return sanitizeVisible(JSON.parse(raw));
     } catch {
       /* ignore */
     }
@@ -200,7 +199,6 @@ export function InicioDashboard() {
     };
     refresh();
     window.addEventListener("storage", refresh);
-    const unsubMeetings = onMeetingsChange(refresh);
     // `storage` só dispara pra troca feita em OUTRA aba do mesmo navegador —
     // tarefas mudadas por outra pessoa chegam via realtime do Supabase, que
     // usa esses pub/sub próprios (`onProjetosChange`/`onCampanhaTarefasChange`),
@@ -210,6 +208,7 @@ export function InicioDashboard() {
     const unsubProjetos = onProjetosChange(refresh);
     const unsubCampanhaTarefas = onCampanhaTarefasChange(refresh);
     const unsubStandalone = onStandaloneChange(refresh);
+    const unsubMeetings = onMeetingsChange(refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       unsubMeetings();
@@ -257,16 +256,6 @@ export function InicioDashboard() {
     };
   }, []);
 
-  // "Líder do mês" do box "Jogos do dia" — quem mais venceu o Zip do dia
-  // este mês (mais dias com o tempo mais rápido). Atualiza sozinho quando
-  // alguém bate um novo recorde hoje (realtime no `date_key` de hoje, que é
-  // o único que pode mudar o líder do mês em tempo real).
-  useEffect(() => {
-    const refreshZipLeader = () => void getZipMonthLeader().then(setMonthLeader);
-    refreshZipLeader();
-    return subscribeZipLeaderboard(todayZipKey(), refreshZipLeader, "monthleader");
-  }, []);
-
   // Mantém o resumo aberto em sincronia com atualizações (confirmar,
   // recusar, sugerir horário, etc.) feitas dentro do próprio diálogo.
   useEffect(() => {
@@ -275,30 +264,25 @@ export function InicioDashboard() {
     setMeetingSummary(fresh ?? null);
   }, [meetings, meetingSummary?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user || cancelled) return;
-      const { data: ok } = await supabase.rpc("is_admin", { _user_id: u.user.id });
-      if (!cancelled) setIsAdmin(Boolean(ok));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const countBy = (b: DashTask["bucket"]) => tasks.filter((t) => t.bucket === b).length;
   const hoje = countBy("hoje");
   const amanha = countBy("amanha");
   const semana = countBy("semana");
   const atrasadas = countBy("atrasada");
+  const proximos7Dias = semana + hoje + amanha;
 
   const filteredTasks = useMemo(() => {
     if (filter === "hoje") return tasks.filter((t) => t.bucket === "hoje");
     if (filter === "atrasada") return tasks.filter((t) => t.bucket === "atrasada");
     return tasks.filter((t) => ["hoje", "amanha", "semana"].includes(t.bucket));
   }, [filter, tasks]);
+
+  useEffect(() => setWorkExpanded(false), [filter]);
+
+  const goToWork = (f: TaskFilter) => {
+    setFilter(f);
+    workCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const todayISO = toISODate(new Date());
   const todaysMeetings = useMemo(() => {
@@ -312,9 +296,25 @@ export function InicioDashboard() {
       .sort((a, b) => a.hora.localeCompare(b.hora));
   }, [meetings, todayISO]);
 
-  // Comentários atribuídos — menções a mim em qualquer conversa do chat.
-  // "Limpar" (por pessoa/item ou tudo de uma vez) grava em `notif:seenMentions`
-  // — o mesmo set que o sino de notificações usa — então limpar aqui também
+  const nowHHMM = useMemo(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }, []);
+  const nextMeeting =
+    todaysMeetings.find((m) => m.hora >= nowHHMM) ??
+    (todaysMeetings.length > 0 ? todaysMeetings[0] : null);
+  const otherMeetings = todaysMeetings.filter((m) => m.id !== nextMeeting?.id);
+  const members = useMemo(() => loadMembers(), []);
+  const meetingParticipants = (m: Meeting) =>
+    (m.participanteIds ?? [])
+      .map((id) => members.find((x) => x.id === id))
+      .filter((x): x is NonNullable<typeof x> => !!x)
+      .map((x) => ({ id: x.id, name: x.name, photo: x.photo }));
+
+  // Comentários atribuídos — menções a mim em qualquer conversa do chat, e
+  // menções em comentários de tarefa. "Limpar" (por item ou tudo de uma vez)
+  // grava em `notif:seenMentions`/`notif:seenTaskCommentMentions` — os
+  // mesmos sets que o sino de notificações usa — então limpar aqui também
   // tira o item de lá, em vez de manter duas listas de "visto" divergentes.
   const [, forceChat] = useState(0);
   useEffect(() => subscribeChat(() => forceChat((n) => n + 1)), []);
@@ -356,7 +356,7 @@ export function InicioDashboard() {
           m.mentions?.some((x) => x.kind === "user" && x.id === me.id),
       )
       .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, 6)
+      .slice(0, 10)
       .map((m) => ({ ...m, convoLabel: labelFor(m.convoId) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientesForChat, seenTick]);
@@ -366,10 +366,6 @@ export function InicioDashboard() {
     navigate({ to: "/time", search: { section: "chat" as SectionKey } });
   };
 
-  // Menções em COMENTÁRIOS DE TAREFA (@Nome dentro de uma tarefa qualquer,
-  // Projetos/Campanhas/Marketing) — sistema à parte das menções de chat
-  // acima; "visto" grava numa chave própria (`notif:seenTaskCommentMentions`)
-  // pra não colidir com os ids de mensagem de chat.
   const readSeenTaskCommentMentions = (): Set<string> => {
     try {
       const raw = localStorage.getItem("notif:seenTaskCommentMentions");
@@ -386,43 +382,65 @@ export function InicioDashboard() {
   };
   const taskCommentMentionItems = useMemo(() => {
     const seen = readSeenTaskCommentMentions();
-    return taskCommentMentions.filter((m) => !seen.has(m.commentId)).slice(0, 6);
+    return taskCommentMentions.filter((m) => !seen.has(m.commentId)).slice(0, 10);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskCommentMentions, seenTick]);
 
-  // Funil comercial — leads reais (tabela Supabase via server function)
-  const listLeadsFn = useServerFn(listLeads);
-  const { data: leads = [] } = useQuery({
-    queryKey: ["leads", "dashboard"],
-    queryFn: () => listLeadsFn(),
-    refetchInterval: 30000,
-  });
-  const comercialStats = useMemo(() => {
-    // Compara sempre pela etapa NORMALIZADA (legacyStage) — leads antigos
-    // gravados com os 6 valores curtos ("lead", "ganho"...) e leads novos
-    // com o pipeline de 9 etapas do motor precisam contar igual aqui.
-    const abertos = leads.filter((l) => {
-      const s = legacyStage(l.stage);
-      return s !== "GANHO" && s !== "PERDIDO";
-    });
-    const novos = leads.filter((l) => legacyStage(l.stage) === "LEAD_RECEBIDO");
-    const valorFunil = abertos.reduce((s, l) => s + (l.value || 0), 0);
-    return { abertos: abertos.length, novos: novos.length, valorFunil };
-  }, [leads]);
+  // Uma única lista, ordenada por data, combinando as duas fontes acima —
+  // é o que a seção "Comentários atribuídos" mostra.
+  type AssignedComment = {
+    key: string;
+    author: string;
+    context: string;
+    text: string;
+    at: number;
+    onOpen: () => void;
+    onDismiss: () => void;
+  };
+  const assignedComments = useMemo<AssignedComment[]>(() => {
+    const fromMentions: AssignedComment[] = mentionItems.map((m) => ({
+      key: `mention:${m.id}`,
+      author: m.authorName,
+      context: m.convoLabel,
+      text: m.text,
+      at: m.createdAt,
+      onOpen: () => openMention(m.convoId),
+      onDismiss: () => dismissMentions([m.id]),
+    }));
+    const fromTasks: AssignedComment[] = taskCommentMentionItems.map((m) => ({
+      key: `task:${m.commentId}`,
+      author: m.author,
+      context: m.taskTitle,
+      text: m.commentText,
+      at: Date.parse(m.createdAt) || 0,
+      onOpen: () => openTask(m),
+      onDismiss: () => dismissTaskCommentMentions([m.commentId]),
+    }));
+    return [...fromMentions, ...fromTasks].sort((a, b) => b.at - a.at);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mentionItems, taskCommentMentionItems]);
 
-  // Financeiro — saldo do mês corrente
-  const financeiroEntries = useFinanceiroEntries();
-  const financeiroMes = useMemo(() => {
-    const mk = monthKey(new Date());
-    let receita = 0;
-    let despesa = 0;
-    for (const e of financeiroEntries) {
-      if (!e.date.startsWith(mk)) continue;
-      if (e.kind === "receita") receita += e.amount;
-      else despesa += e.amount;
+  const fmtCommentAt = (at: number) => {
+    if (!at) return "";
+    const d = new Date(at);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    return sameDay
+      ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : d.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+  };
+
+  const clearAllComments = async () => {
+    if (
+      !(await confirm(
+        `Limpar ${assignedComments.length === 1 ? "o comentário atribuído" : `todos os ${assignedComments.length} comentários atribuídos`}? Eles saem também do sino de notificações.`,
+      ))
+    ) {
+      return;
     }
-    return { receita, despesa, saldo: receita - despesa };
-  }, [financeiroEntries]);
+    dismissMentions(mentionItems.map((m) => m.id));
+    dismissTaskCommentMentions(taskCommentMentionItems.map((m) => m.commentId));
+  };
 
   const persistPersonal = (next: PersonalItem[]) => {
     setPersonal(next);
@@ -469,23 +487,28 @@ export function InicioDashboard() {
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
   };
 
+  const visibleWorkTasks = workExpanded ? filteredTasks : filteredTasks.slice(0, WORK_PAGE_SIZE);
+  const visibleComments = commentsExpanded
+    ? assignedComments
+    : assignedComments.slice(0, COMMENTS_PAGE_SIZE);
+
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-1">
+    <PageContainer className="space-y-10">
       {/* Header */}
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
           {foto ? (
-            <img src={foto} alt="" className="h-10 w-10 rounded-full object-cover" />
+            <img src={foto} alt="" className="h-13 w-13 rounded-full object-cover" />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background">
+            <div className="flex h-13 w-13 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
               {name.slice(0, 1).toUpperCase()}
             </div>
           )}
           <div>
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+            <p className="text-2xl font-semibold tracking-tight text-foreground">
               {greeting}, {name}
-            </h1>
-            <p className="text-xs text-muted-foreground">{today}</p>
+            </p>
+            <p className="text-sm text-muted-foreground">{today}</p>
           </div>
         </div>
         <div className="relative flex items-center gap-3">
@@ -503,9 +526,7 @@ export function InicioDashboard() {
                 <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Cards da tela inicial
                 </p>
-                {CARD_DEFS.filter(
-                  (c) => isAdmin || (c.key !== "comercial" && c.key !== "financeiro"),
-                ).map((c) => (
+                {CARD_DEFS.map((c) => (
                   <label
                     key={c.key}
                     className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
@@ -515,7 +536,7 @@ export function InicioDashboard() {
                       type="checkbox"
                       checked={visible[c.key]}
                       onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
-                      className="h-3.5 w-3.5 accent-foreground"
+                      className="h-3.5 w-3.5 accent-brand"
                     />
                   </label>
                 ))}
@@ -527,412 +548,343 @@ export function InicioDashboard() {
 
       {/* Stat strip */}
       {visible.stats && (
-        <div className="flex gap-x-6 overflow-x-auto whitespace-nowrap pb-1">
-          <StatChip label="Hoje" value={hoje} />
-          <StatChip label="Amanhã" value={amanha} />
-          <StatChip label="7 dias" value={semana + hoje + amanha} />
-          <StatChip label="Atrasadas" value={atrasadas} />
+        <div className="-mt-4 flex gap-x-2 overflow-x-auto pb-1 sm:gap-x-3">
+          <StatChip
+            label="Hoje"
+            value={hoje}
+            active={filter === "hoje"}
+            onClick={() => goToWork("hoje")}
+          />
+          <StatChip label="Amanhã" value={amanha} onClick={() => goToWork("semana")} />
+          <StatChip
+            label="Próximos 7 dias"
+            value={proximos7Dias}
+            active={filter === "semana"}
+            onClick={() => goToWork("semana")}
+          />
+          <StatChip
+            label="Atrasadas"
+            value={atrasadas}
+            tone="danger"
+            active={filter === "atrasada"}
+            onClick={() => goToWork("atrasada")}
+          />
+        </div>
+      )}
+
+      {/* Linha operacional principal */}
+      {(visible.work || visible.agenda) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {visible.work && (
+            <Card ref={workCardRef} className="lg:col-span-2">
+              <CardHeader
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                title="Meu trabalho"
+                action={
+                  <div className="flex items-center gap-1">
+                    <Tab active={filter === "hoje"} onClick={() => setFilter("hoje")}>
+                      Hoje
+                    </Tab>
+                    <Tab active={filter === "atrasada"} onClick={() => setFilter("atrasada")}>
+                      Atrasadas
+                    </Tab>
+                    <Tab active={filter === "semana"} onClick={() => setFilter("semana")}>
+                      Semana
+                    </Tab>
+                  </div>
+                }
+              />
+              <div className="divide-y divide-border">
+                {filteredTasks.length === 0 && (
+                  <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+                    Nada por aqui. Bom trabalho.
+                  </p>
+                )}
+                {visibleWorkTasks.map((t) => (
+                  <button
+                    key={`${t.projectId}_${t.id}`}
+                    onClick={() => openTask(t)}
+                    className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
+                  >
+                    <PriorityFlag priority={t.priority} bucket={t.bucket} />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
+                        {t.parentTitle && (
+                          <span
+                            title={`Subtarefa de "${t.parentTitle}"`}
+                            className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                          >
+                            Sub
+                          </span>
+                        )}
+                        <span className="truncate">{t.title}</span>
+                      </p>
+                    </div>
+                    <span
+                      className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
+                      {t.status}
+                    </span>
+                    <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+                      {t.projectName}
+                    </span>
+                    <span
+                      className={`shrink-0 text-xs tabular-nums ${
+                        t.bucket === "atrasada" ? "text-danger" : "text-muted-foreground"
+                      }`}
+                    >
+                      {t.due}
+                    </span>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  </button>
+                ))}
+                {filteredTasks.length > WORK_PAGE_SIZE && (
+                  <button
+                    type="button"
+                    onClick={() => setWorkExpanded((v) => !v)}
+                    className="flex w-full items-center justify-center gap-1 px-4 py-2 text-xs font-medium text-brand hover:underline"
+                  >
+                    {workExpanded ? "Ver menos" : `Ver todas (${filteredTasks.length})`}
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${workExpanded ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {visible.agenda && (
+            <Card>
+              <CardHeader
+                icon={<Calendar className="h-4 w-4" />}
+                title="Agenda"
+                action={
+                  <button
+                    onClick={() =>
+                      navigate({ to: "/time", search: { section: "reunioes" as SectionKey } })
+                    }
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Ver tudo
+                  </button>
+                }
+              />
+              {todaysMeetings.length === 0 ? (
+                <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                  Nenhuma reunião hoje.
+                </p>
+              ) : (
+                <div className="p-3">
+                  {nextMeeting && (
+                    <button
+                      type="button"
+                      onClick={() => setMeetingSummary(nextMeeting)}
+                      className="flex w-full items-start gap-3 rounded-lg border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left hover:bg-brand-subtle/70"
+                    >
+                      <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-brand">
+                        {nextMeeting.hora}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {nextMeeting.titulo}
+                        </p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {nextMeeting.duracao} min · {nextMeeting.local || nextMeeting.com}
+                        </p>
+                      </div>
+                      {meetingParticipants(nextMeeting).length > 0 && (
+                        <AvatarStack people={meetingParticipants(nextMeeting)} max={3} size="sm" />
+                      )}
+                    </button>
+                  )}
+                  {otherMeetings.length > 0 && (
+                    <ol className="relative mt-1 space-y-0.5">
+                      {otherMeetings.map((m) => (
+                        <li key={m.id}>
+                          <button
+                            type="button"
+                            onClick={() => setMeetingSummary(m)}
+                            className="flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40"
+                          >
+                            <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                              {m.hora}
+                            </div>
+                            <div className="min-w-0 flex-1 pb-0.5">
+                              <p className="truncate text-xs font-medium text-foreground">
+                                {m.titulo}
+                              </p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {m.duracao} min · {m.local || m.com}
+                              </p>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       )}
 
       <MuralNovidades />
 
-      {/* Widget grid */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* My Work */}
-        {visible.work && (
-          <Card className="lg:col-span-2">
-            <CardHeader
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              title="Meu trabalho"
-              action={
-                <div className="flex items-center gap-1">
-                  <Tab active={filter === "hoje"} onClick={() => setFilter("hoje")}>
-                    Hoje
-                  </Tab>
-                  <Tab active={filter === "atrasada"} onClick={() => setFilter("atrasada")}>
-                    Atrasadas
-                  </Tab>
-                  <Tab active={filter === "semana"} onClick={() => setFilter("semana")}>
-                    Semana
-                  </Tab>
-                </div>
-              }
-            />
-            <div className="divide-y divide-border">
-              {filteredTasks.length === 0 && (
+      {(visible.comments || visible.personal) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {visible.comments && (
+            <Card className="lg:col-span-2">
+              <CardHeader
+                icon={<MessageSquare className="h-4 w-4" />}
+                title="Comentários atribuídos"
+                action={
+                  assignedComments.length > 0 && (
+                    <button
+                      onClick={() => void clearAllComments()}
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      Limpar tudo
+                    </button>
+                  )
+                }
+              />
+              {assignedComments.length === 0 ? (
                 <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                  Nada por aqui. Bom trabalho.
-                </p>
-              )}
-              {filteredTasks.map((t) => (
-                <button
-                  key={`${t.projectId}_${t.id}`}
-                  onClick={() => openTask(t)}
-                  className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40"
-                >
-                  <PriorityFlag priority={t.priority} bucket={t.bucket} />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
-                      {t.parentTitle && (
-                        <span
-                          title={`Subtarefa de "${t.parentTitle}"`}
-                          className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
-                        >
-                          Sub
-                        </span>
-                      )}
-                      <span className="truncate">{t.title}</span>
-                    </p>
-                  </div>
-                  <span
-                    className={`hidden shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${TASK_STATUS_TONE[t.status]}`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${TASK_STATUS_DOT[t.status]}`} />
-                    {t.status}
-                  </span>
-                  <span className="hidden shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
-                    {t.projectName}
-                  </span>
-                  <span
-                    className={`shrink-0 text-xs tabular-nums ${
-                      t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
-                    }`}
-                  >
-                    {t.due}
-                  </span>
-                  <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Agenda */}
-        {visible.agenda && (
-          <Card>
-            <CardHeader
-              icon={<Calendar className="h-4 w-4" />}
-              title="Agenda"
-              action={
-                <button
-                  onClick={() =>
-                    navigate({ to: "/time", search: { section: "reunioes" as SectionKey } })
-                  }
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Ver tudo
-                </button>
-              }
-            />
-            <div className="p-3">
-              {todaysMeetings.length === 0 ? (
-                <p className="py-6 text-center text-xs text-muted-foreground">
-                  Nenhuma reunião hoje.
+                  Sem menções no momento.
                 </p>
               ) : (
-                <ol className="relative space-y-0.5">
-                  <span
-                    className="absolute bottom-1 left-[3.4rem] top-1 w-px bg-border"
-                    aria-hidden
-                  />
-                  {todaysMeetings.map((m) => (
-                    <li key={m.id} className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setMeetingSummary(m)}
-                        className="flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40"
-                      >
-                        <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
-                          {m.hora}
-                        </div>
-                        <span className="relative z-10 mt-1.5 h-2 w-2 shrink-0 rounded-full bg-foreground ring-2 ring-background" />
-                        <div className="min-w-0 flex-1 pb-0.5">
-                          <p className="truncate text-xs font-medium text-foreground">{m.titulo}</p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {m.duracao} min · {m.local || m.com}
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {/* Comments */}
-        {visible.comments && (
-          <Card className="lg:col-span-2">
-            <CardHeader
-              icon={<MessageSquare className="h-4 w-4" />}
-              title="Comentários atribuídos"
-              action={
-                (mentionItems.length > 0 || taskCommentMentionItems.length > 0) && (
-                  <button
-                    onClick={() => {
-                      dismissMentions(mentionItems.map((m) => m.id));
-                      dismissTaskCommentMentions(taskCommentMentionItems.map((m) => m.commentId));
-                    }}
-                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                <>
+                  <div
+                    className={`divide-y divide-border ${commentsExpanded ? "max-h-[26rem] overflow-y-auto" : ""}`}
                   >
-                    Limpar tudo
-                  </button>
-                )
-              }
-            />
-            {mentionItems.length === 0 && taskCommentMentionItems.length === 0 ? (
-              <p className="px-4 py-8 text-center text-xs text-muted-foreground">
-                Sem menções no momento.
-              </p>
-            ) : (
-              <div className="divide-y divide-border">
-                {mentionItems.map((m) => (
-                  <div key={m.id} className="group flex items-start gap-1 px-4 py-2.5">
-                    <button
-                      onClick={() => openMention(m.convoId)}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground">
-                          {m.authorName}{" "}
-                          <span className="font-normal text-muted-foreground">
-                            mencionou você em {m.convoLabel}
-                          </span>
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{m.text}</p>
+                    {visibleComments.map((c) => (
+                      <div
+                        key={c.key}
+                        className="group relative flex items-start gap-1 px-4 py-2.5"
+                      >
+                        <span
+                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand"
+                          aria-hidden
+                        />
+                        <button
+                          onClick={c.onOpen}
+                          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="text-xs font-medium text-foreground">
+                                {c.author}{" "}
+                                <span className="font-normal text-muted-foreground">
+                                  mencionou você em {c.context}
+                                </span>
+                              </p>
+                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                                {fmtCommentAt(c.at)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                              {c.text}
+                            </p>
+                          </div>
+                          <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                        </button>
+                        <button
+                          onClick={c.onDismiss}
+                          className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                          aria-label={`Limpar menção de ${c.author}`}
+                          title={`Limpar menção de ${c.author}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                    </button>
-                    <button
-                      onClick={() => dismissMentions([m.id])}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
-                      aria-label={`Limpar menção de ${m.authorName}`}
-                      title={`Limpar menção de ${m.authorName}`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    ))}
                   </div>
-                ))}
-                {taskCommentMentionItems.map((m) => (
-                  <div key={m.commentId} className="group flex items-start gap-1 px-4 py-2.5">
+                  {assignedComments.length > COMMENTS_PAGE_SIZE && (
                     <button
-                      onClick={() => openTask(m)}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      type="button"
+                      onClick={() => setCommentsExpanded((v) => !v)}
+                      className="flex w-full items-center justify-center gap-1 border-t border-border px-4 py-2 text-xs font-medium text-brand hover:underline"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground">
-                          {m.author}{" "}
-                          <span className="font-normal text-muted-foreground">
-                            mencionou você em {m.taskTitle}
-                          </span>
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {m.commentText}
-                        </p>
-                      </div>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      {commentsExpanded ? "Ver menos" : `Ver todos (${assignedComments.length})`}
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${commentsExpanded ? "rotate-180" : ""}`}
+                      />
                     </button>
-                    <button
-                      onClick={() => dismissTaskCommentMentions([m.commentId])}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
-                      aria-label={`Limpar menção de ${m.author}`}
-                      title={`Limpar menção de ${m.author}`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* Comercial */}
-        {isAdmin && visible.comercial && (
-          <Card>
-            <CardHeader
-              icon={<Target className="h-4 w-4" />}
-              title="Funil comercial"
-              action={
-                <button
-                  onClick={() =>
-                    navigate({ to: "/time", search: { section: "comercial" as SectionKey } })
-                  }
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Ver tudo
-                </button>
-              }
-            />
-            <div className="grid grid-cols-2 divide-x divide-border">
-              <div className="px-4 py-3">
-                <p className="text-[11px] text-muted-foreground">Leads novos</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                  {comercialStats.novos}
-                </p>
-              </div>
-              <div className="px-4 py-3">
-                <p className="text-[11px] text-muted-foreground">Valor em aberto</p>
-                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
-                  {formatBRL(comercialStats.valorFunil)}
-                </p>
-              </div>
-            </div>
-            <p className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
-              {comercialStats.abertos} negociação(ões) em aberto
-            </p>
-          </Card>
-        )}
-
-        {/* Financeiro */}
-        {isAdmin && visible.financeiro && (
-          <Card>
-            <CardHeader
-              icon={<Wallet className="h-4 w-4" />}
-              title="Financeiro do mês"
-              action={
-                <button
-                  onClick={() =>
-                    navigate({ to: "/time", search: { section: "financeiro" as SectionKey } })
-                  }
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  Ver tudo
-                </button>
-              }
-            />
-            <div className="grid grid-cols-2 divide-x divide-border">
-              <div className="px-4 py-3">
-                <p className="text-[11px] text-muted-foreground">Receita</p>
-                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
-                  {fmtBRL(financeiroMes.receita)}
-                </p>
-              </div>
-              <div className="px-4 py-3">
-                <p className="text-[11px] text-muted-foreground">Despesa</p>
-                <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
-                  {fmtBRL(financeiroMes.despesa)}
-                </p>
-              </div>
-            </div>
-            <p className="border-t border-border px-4 py-2 text-[11px] font-medium text-foreground">
-              Saldo: {fmtBRL(financeiroMes.saldo)}
-            </p>
-          </Card>
-        )}
-
-        {/* Personal */}
-        {visible.personal && (
-          <Card>
-            <CardHeader
-              icon={<Star className="h-4 w-4" />}
-              title="Lista pessoal"
-              action={
-                <span className="text-[11px] text-muted-foreground">
-                  {personal.filter((p) => !p.done).length}
-                </span>
-              }
-            />
-            <div className="space-y-1 p-3">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addPersonal();
-                }}
-                className="mb-2 flex items-center gap-1.5"
-              >
-                <input
-                  value={newPersonal}
-                  onChange={(e) => setNewPersonal(e.target.value)}
-                  placeholder="Adicionar item…"
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md border border-border bg-background px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Adicionar"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </form>
-              {personal.length === 0 && (
-                <p className="py-4 text-center text-[11px] text-muted-foreground">Nenhum item.</p>
+                  )}
+                </>
               )}
-              {personal.map((p) => (
-                <div
-                  key={p.id}
-                  className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40"
+            </Card>
+          )}
+
+          {visible.personal && (
+            <Card>
+              <CardHeader
+                icon={<Star className="h-4 w-4" />}
+                title="Lista pessoal"
+                action={
+                  <span className="text-[11px] text-muted-foreground">
+                    {personal.filter((p) => !p.done).length}
+                  </span>
+                }
+              />
+              <div className="space-y-1 p-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    addPersonal();
+                  }}
+                  className="mb-2 flex items-center gap-1.5"
                 >
                   <input
-                    type="checkbox"
-                    checked={p.done}
-                    onChange={() => togglePersonal(p.id)}
-                    className="h-3.5 w-3.5 rounded border-border accent-foreground"
+                    value={newPersonal}
+                    onChange={(e) => setNewPersonal(e.target.value)}
+                    placeholder="Adicionar item…"
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
-                  <span
-                    className={`flex-1 ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
-                  >
-                    {p.text}
-                  </span>
                   <button
-                    onClick={() => removePersonal(p.id)}
-                    className="opacity-0 transition-opacity group-hover:opacity-100"
-                    aria-label="Remover"
+                    type="submit"
+                    className="rounded-md border border-border bg-background px-2 py-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Adicionar"
                   >
-                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                    <Plus className="h-3.5 w-3.5" />
                   </button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* Jogos do dia */}
-      <Card>
-        <CardHeader icon={<Puzzle className="h-4 w-4" />} title="Jogos do dia" />
-        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <button
-            type="button"
-            onClick={() => setZipOpen(true)}
-            className="flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-              <Puzzle className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Zip do dia</p>
-              <p className="text-xs text-muted-foreground">
-                Conecte os pontos em ordem, com ranking do time.
-              </p>
-            </div>
-          </button>
-          <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
-              <Trophy className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Líder do mês · Zip</p>
-              {monthLeader ? (
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {monthLeader.userId === getMe().id
-                      ? "Você"
-                      : (loadMembers().find((m) => m.id === monthLeader.userId)?.name ?? "Alguém")}
-                  </span>{" "}
-                  · {monthLeader.wins} {monthLeader.wins === 1 ? "dia vencido" : "dias vencidos"}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Ninguém venceu o Zip este mês ainda.
-                </p>
-              )}
-            </div>
-          </div>
+                </form>
+                {personal.length === 0 && (
+                  <p className="py-4 text-center text-[11px] text-muted-foreground">Nenhum item.</p>
+                )}
+                {personal.map((p) => (
+                  <div
+                    key={p.id}
+                    className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted/40"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={p.done}
+                      onChange={() => togglePersonal(p.id)}
+                      className="h-3.5 w-3.5 rounded border-border accent-brand"
+                    />
+                    <span
+                      className={`flex-1 ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
+                    >
+                      {p.text}
+                    </span>
+                    <button
+                      onClick={() => removePersonal(p.id)}
+                      className="opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-label="Remover"
+                    >
+                      <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
-      </Card>
+      )}
 
       <MeetingSummaryDialog
         meeting={meetingSummary}
@@ -964,24 +916,27 @@ export function InicioDashboard() {
           setMeetingSummary(null);
         }}
       />
-
-      <Dialog open={zipOpen} onOpenChange={setZipOpen}>
-        <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 overflow-y-auto p-6">
-          <DialogTitle className="sr-only">Zip do dia</DialogTitle>
-          <ZipGameSection />
-        </DialogContent>
-      </Dialog>
-    </div>
+      {confirmDialog}
+    </PageContainer>
   );
 }
 
-function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={`overflow-hidden rounded-lg border border-border bg-background ${className}`}>
-      {children}
-    </div>
-  );
-}
+const Card = ({
+  children,
+  className = "",
+  ref,
+}: {
+  children: ReactNode;
+  className?: string;
+  ref?: React.Ref<HTMLDivElement>;
+}) => (
+  <div
+    ref={ref}
+    className={`overflow-hidden rounded-lg border border-border bg-background ${className}`}
+  >
+    {children}
+  </div>
+);
 
 function CardHeader({
   icon,
@@ -996,7 +951,7 @@ function CardHeader({
     <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
       <div className="flex items-center gap-2 text-foreground">
         <span className="text-muted-foreground">{icon}</span>
-        <h2 className="text-xs font-semibold">{title}</h2>
+        <p className="text-xs font-semibold">{title}</p>
       </div>
       {action}
     </div>
@@ -1029,21 +984,44 @@ function Tab({
 function StatChip({
   label,
   value,
+  tone = "default",
+  active = false,
+  onClick,
 }: {
-  icon?: ReactNode;
   label: string;
   value: number;
   tone?: "default" | "danger";
+  active?: boolean;
+  onClick?: () => void;
 }) {
+  const isZero = value === 0;
   return (
-    <div className="flex shrink-0 items-baseline gap-2 border-l border-border pl-6 first:border-l-0 first:pl-0">
-      <span className="text-xl font-semibold tabular-nums text-foreground">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        active
+          ? "border-brand/40 bg-brand-subtle"
+          : "border-border bg-background hover:border-foreground/20 hover:bg-muted/40"
+      }`}
+    >
+      <span
+        className={`text-xl font-semibold tabular-nums ${
+          isZero
+            ? "text-muted-foreground/50"
+            : tone === "danger" && value > 0
+              ? "text-danger"
+              : active
+                ? "text-brand"
+                : "text-foreground"
+        }`}
+      >
         {value.toString().padStart(2, "0")}
       </span>
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -1056,7 +1034,7 @@ function PriorityFlag({
 }) {
   const color =
     bucket === "atrasada"
-      ? "text-destructive"
+      ? "text-danger"
       : priority === "Urgente"
         ? "text-red-500"
         : priority === "Alta"
@@ -1075,6 +1053,14 @@ function PriorityFlag({
   );
 }
 
+/** `publishDate` pode ser só a data (posts antigos) ou um datetime ISO
+ * completo (posts novos, ver comentário do campo em `projetos.ts`) — sempre
+ * exibe só a data, no formato pt-BR, igual ao editor do post. */
+function fmtPublishDate(publishDate: string): string {
+  const d = new Date(publishDate);
+  return Number.isNaN(d.getTime()) ? publishDate : d.toLocaleDateString("pt-BR");
+}
+
 function MuralNovidades() {
   const [items, setItems] = useState<Array<BlogPost & { projectName: string }>>([]);
   const [dismissed, setDismissed] = useState<string[]>(() => {
@@ -1084,6 +1070,7 @@ function MuralNovidades() {
       return [];
     }
   });
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -1136,6 +1123,7 @@ function MuralNovidades() {
   const visibleItems = items.filter((i) => !dismissed.includes(i.id));
   if (visibleItems.length === 0) return null;
 
+  const [featured, ...rest] = visibleItems;
   const authorPhoto = openArticle?.authorId
     ? team.find((m) => m.id === openArticle.authorId)?.photo
     : undefined;
@@ -1144,40 +1132,104 @@ function MuralNovidades() {
     <div className="rounded-lg border border-border bg-background">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Newspaper className="h-4 w-4" />
-        <h2 className="text-sm font-semibold">Mural de novidades</h2>
-        <span className="ml-auto text-[11px] text-muted-foreground">{visibleItems.length}</span>
+        <p className="text-sm font-semibold">Mural de novidades</p>
+        {rest.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="ml-auto text-[11px] font-medium text-brand hover:underline"
+          >
+            {showAll ? "Ver menos" : `Ver todas (${visibleItems.length})`}
+          </button>
+        )}
       </div>
-      <ul className="divide-y divide-border">
-        {visibleItems.slice(0, 5).map((p) => (
-          <li key={p.id} className="group flex gap-3 px-4 py-3">
-            {p.cover && (
-              <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded object-cover" />
-            )}
+
+      {!showAll ? (
+        <div className="group flex flex-col gap-3 p-4 sm:flex-row">
+          {featured.cover && (
             <button
               type="button"
-              onClick={() => setOpenArticle(p)}
-              className="min-w-0 flex-1 text-left"
+              onClick={() => setOpenArticle(featured)}
+              className="shrink-0 overflow-hidden rounded-md sm:w-48"
             >
-              <p className="truncate text-sm font-medium hover:underline">{p.title}</p>
-              {p.excerpt && (
-                <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{p.excerpt}</p>
+              <img
+                src={featured.cover}
+                alt=""
+                className="h-32 w-full object-cover object-center sm:h-full"
+              />
+            </button>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setOpenArticle(featured)}
+                className="min-w-0 flex-1 text-left"
+              >
+                {featured.category && (
+                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {featured.category}
+                  </span>
+                )}
+                <p className="mt-1 truncate text-base font-semibold text-foreground hover:underline">
+                  {featured.title}
+                </p>
+                {featured.excerpt && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {featured.excerpt}
+                  </p>
+                )}
+              </button>
+              <button
+                onClick={() => dismiss(featured.id)}
+                className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="Dispensar"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span>{featured.authorName || "Sem autor"}</span>
+              <span>· {featured.projectName}</span>
+              {featured.publishDate && <span>· {fmtPublishDate(featured.publishDate)}</span>}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {visibleItems.map((p) => (
+            <li key={p.id} className="group flex gap-3 px-4 py-3">
+              {p.cover && (
+                <img src={p.cover} alt="" className="h-12 w-16 shrink-0 rounded object-cover" />
               )}
-              <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                <span>{p.authorName || "Sem autor"}</span>
-                <span>· {p.projectName}</span>
-                {p.publishDate && <span>· {p.publishDate}</span>}
-              </div>
-            </button>
-            <button
-              onClick={() => dismiss(p.id)}
-              className="opacity-0 transition-opacity group-hover:opacity-100"
-              aria-label="Dispensar"
-            >
-              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-            </button>
-          </li>
-        ))}
-      </ul>
+              <button
+                type="button"
+                onClick={() => setOpenArticle(p)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <p className="truncate text-sm font-medium hover:underline">{p.title}</p>
+                {p.excerpt && (
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                    {p.excerpt}
+                  </p>
+                )}
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span>{p.authorName || "Sem autor"}</span>
+                  <span>· {p.projectName}</span>
+                  {p.publishDate && <span>· {fmtPublishDate(p.publishDate)}</span>}
+                </div>
+              </button>
+              <button
+                onClick={() => dismiss(p.id)}
+                className="opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label="Dispensar"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={!!openArticle} onOpenChange={(v) => !v && setOpenArticle(null)}>
         <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col gap-0 overflow-hidden p-0">

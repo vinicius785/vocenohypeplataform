@@ -32,9 +32,9 @@ export const CADENCE_OPTIONS: TrackingFrequency[] = [
 /** Tom/ícone da tendência — compartilhado entre `ObjetivoIndicadorRow` e
  * `IndicadorGlobalRow` (listas densas), pra nunca divergir. */
 export const TENDENCIA_TONE: Record<"melhorando" | "piorando" | "estavel", string> = {
-  melhorando: "text-emerald-600 dark:text-emerald-400",
-  piorando: "text-rose-600 dark:text-rose-400",
-  estavel: "text-muted-foreground",
+  melhorando: "text-success",
+  piorando: "text-danger",
+  estavel: "text-text-secondary",
 };
 export const TENDENCIA_ICON: Record<"melhorando" | "piorando" | "estavel", string> = {
   melhorando: "↑",
@@ -51,14 +51,11 @@ export function initialsOf(name: string): string {
     .join("");
 }
 
-const AVATAR_COLORS = [
-  "bg-rose-500",
-  "bg-sky-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-  "bg-violet-500",
-  "bg-teal-500",
-];
+// Mesma paleta de acento (5 tons de gráfico) já usada pelos avatares do
+// módulo Time (`avatarAccent`, `src/components/team/member-ui.tsx`) —
+// evita reinventar uma paleta decorativa própria com `rose`/`amber`, que
+// colidiria visualmente com os tons semânticos de saúde deste módulo.
+const AVATAR_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
 
 export function colorFor(name: string): string {
   let h = 0;

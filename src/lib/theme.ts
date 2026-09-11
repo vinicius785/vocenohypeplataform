@@ -26,3 +26,25 @@ export function setTheme(theme: Theme) {
   }
   applyTheme(theme);
 }
+
+/** Aditivo (rodada corretiva do design system) — "Sistema" não é um
+ * terceiro valor de `Theme` (isso mudaria o tipo usado em toda tela real
+ * hoje); é só limpar a preferência salva e aplicar o que o SO já diz,
+ * que é exatamente o que `getTheme()` já fazia como fallback. Só a
+ * página `/design-system` chama isso por enquanto. */
+export function clearThemePreference() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* ignore */
+  }
+  applyTheme(window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+export function hasStoredThemePreference(): boolean {
+  try {
+    return localStorage.getItem(KEY) !== null;
+  } catch {
+    return false;
+  }
+}

@@ -1,69 +1,45 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  Plus,
-  ImageIcon,
-  Mail,
-  MessageCircle,
-  X,
-  Link2,
-  Building2,
-  Pencil,
-  Megaphone,
-  Trash2,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Building2, Megaphone, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DateField } from "@/components/ui/date-field";
-import { formatIsoDate } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { PageContainer } from "@/components/shared/PageContainer";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { VincularCampanhaDialog, type Campaign } from "./VincularCampanhaDialog";
-import FlowingMenu from "@/components/FlowingMenu";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
-import { loadMembers } from "@/lib/chat-store";
-import { SectionHeader } from "./SectionHeader";
 import { useConfirm } from "@/hooks/use-confirm";
 import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
+import { ClienteCard } from "./clientes/ClienteCard";
+import { ClienteFiltersBar } from "./clientes/ClienteFiltersBar";
+import { ClienteFormSheet } from "./clientes/ClienteFormSheet";
+import { ClienteDetailsSheet } from "./clientes/ClienteDetailsSheet";
+import {
+  DEFAULT_CLIENTE_FILTERS,
+  filterClientes,
+  sortClientes,
+  type ClienteFiltersState,
+} from "./clientes/cliente-ui";
 
-const emptyForm: Omit<Cliente, "id" | "campanhas"> = {
-  photo: undefined,
-  empresa: "",
-  responsavel: "",
-  responsavelInterno: "",
-  email: "",
-  whatsapp: "",
-  clienteDesde: "",
-};
-
-const inputCls =
-  "w-full rounded-lg border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="block text-xs font-semibold uppercase tracking-tight text-foreground/80">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
+/* ============================================================
+ * Clientes — migração visual (mesmo padrão de Financeiro/Comercial/
+ * Reuniões/Metas): hero com o dado real dominante, toolbar unificada de
+ * busca/filtro/ordenação sobre o mesmo dataset já sincronizado
+ * (useClientes), grid de cards substituindo o antigo FlowingMenu (raiz do
+ * bug de logo repetindo em marquee) e drawers laterais no lugar dos
+ * modais centrais de criação/edição/detalhes. Nenhuma regra de negócio,
+ * payload ou dado mudou — só a apresentação e a arquitetura de
+ * informação.
+ * ============================================================ */
 
 export function ClientesSection() {
   const clientes = useClientes();
   const setClientes = clientesStore.set;
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingClienteId, setEditingClienteId] = useState<string | null>(null);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [campanhaOpen, setCampanhaOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<ClienteFiltersState>(DEFAULT_CLIENTE_FILTERS);
   const { confirm, confirmDialog } = useConfirm();
 
   const selected = clientes.find((c) => c.id === selectedId) ?? null;
@@ -100,48 +76,40 @@ export function ClientesSection() {
         prev.map((cl) => (cl.id === cliente.id ? { ...cl, publicToken: token } : cl)),
       );
     }
-    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
-
-  const update = <K extends keyof typeof emptyForm>(k: K, v: (typeof emptyForm)[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
-
-  const onPhoto = (file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => update("photo", reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.empresa.trim()) return;
-    if (editingClienteId) {
-      setClientes((prev) => prev.map((c) => (c.id === editingClienteId ? { ...c, ...form } : c)));
-    } else {
-      setClientes((prev) => [...prev, { ...form, id: crypto.randomUUID(), campanhas: [] }]);
-    }
-    setForm(emptyForm);
-    setEditingClienteId(null);
-    setOpen(false);
+    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`);
   };
 
   const openEditCliente = (c: Cliente) => {
-    const { id: _id, campanhas: _cs, ...rest } = c;
-    setForm(rest);
-    setEditingClienteId(c.id);
-    // Close the detail dialog first — no need for two stacked dialogs at once.
+    setEditingCliente(c);
     setSelectedId(null);
-    setOpen(true);
+    setFormOpen(true);
   };
 
   const openNovoCliente = () => {
-    setForm(emptyForm);
-    setEditingClienteId(null);
-    setOpen(true);
+    setEditingCliente(null);
+    setFormOpen(true);
+  };
+
+  const saveCliente = (form: Omit<Cliente, "id" | "campanhas">) => {
+    if (editingCliente) {
+      setClientes((prev) => prev.map((c) => (c.id === editingCliente.id ? { ...c, ...form } : c)));
+    } else {
+      setClientes((prev) => [...prev, { ...form, id: crypto.randomUUID(), campanhas: [] }]);
+    }
+    setFormOpen(false);
+    setEditingCliente(null);
+  };
+
+  const requestDeleteCliente = async (c: Cliente) => {
+    const campanhaCount = c.campanhas?.length ?? 0;
+    const ok = await confirm(
+      campanhaCount > 0
+        ? `Excluir o cliente "${c.empresa}"? As ${campanhaCount} campanha(s) vinculada(s) também serão removidas — essa ação não pode ser desfeita.`
+        : `Excluir o cliente "${c.empresa}"? Essa ação não pode ser desfeita.`,
+    );
+    if (!ok) return;
+    setClientes((prev) => prev.filter((x) => x.id !== c.id));
+    setSelectedId(null);
   };
 
   const saveCampaign = (c: Campaign) => {
@@ -159,357 +127,195 @@ export function ClientesSection() {
     );
   };
 
+  const responsaveis = useMemo(
+    () =>
+      Array.from(new Set(clientes.map((c) => c.responsavelInterno).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [clientes],
+  );
+
+  const visibleClientes = useMemo(
+    () => sortClientes(filterClientes(clientes, query, filters), filters.sort),
+    [clientes, query, filters],
+  );
+
   const totalClientes = clientes.length;
-  const totalCampanhas = clientes.reduce((s, c) => s + (c.campanhas?.length ?? 0), 0);
   const comCampanha = clientes.filter((c) => (c.campanhas?.length ?? 0) > 0).length;
+  const semCampanha = totalClientes - comCampanha;
+  const totalCampanhas = clientes.reduce((s, c) => s + (c.campanhas?.length ?? 0), 0);
+
+  const hasAnyClient = totalClientes > 0;
+  const hasResults = visibleClientes.length > 0;
+  const hasActiveSearchOrFilter =
+    query.trim().length > 0 ||
+    filters.campanha !== "todos" ||
+    filters.contato !== "todos" ||
+    filters.responsavelInterno.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <SectionHeader
-        title="Clientes"
-        subtitle="Gerencie seus clientes."
-        kpis={[
-          { label: "TOTAL", value: totalClientes },
-          {
-            label: "COM CAMPANHA",
-            value: comCampanha,
-            tone: "text-emerald-600 dark:text-emerald-400",
-          },
-          {
-            label: "CAMPANHAS ATIVAS",
-            value: totalCampanhas,
-            tone: "text-sky-600 dark:text-sky-400",
-          },
-        ]}
-        action={
-          <button
-            onClick={openNovoCliente}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <Plus className="h-3.5 w-3.5" /> Novo cliente
-          </button>
-        }
-      />
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) {
-            setEditingClienteId(null);
-            setForm(emptyForm);
-          }
-        }}
-      >
-        <DialogContent
-          className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden border-border bg-card p-0"
-          mobileFullScreen
-        >
-          <div className="flex items-center gap-3 border-b border-border px-6 py-4">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-              <Building2 className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle className="text-lg font-light tracking-tight text-foreground">
-                {editingClienteId ? "Editar cliente" : "Novo cliente"}
-              </DialogTitle>
-              <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
-                {editingClienteId
-                  ? "Atualize as informações do cliente."
-                  : "Cadastre as informações básicas para iniciar o workspace."}
-              </DialogDescription>
-            </div>
+    // Canvas fix (mesma correção do Financeiro/Reuniões/Metas): --background
+    // e --card são idênticos no claro, então sem isso os cards de Clientes
+    // não se distinguiam do fundo.
+    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+      <PageContainer className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+              Clientes
+            </p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              Todos os clientes e campanhas vinculadas em um só lugar.
+            </p>
           </div>
+          <Button variant="primary" size="comfortable" onClick={openNovoCliente}>
+            <Plus className="h-4 w-4" /> Novo cliente
+          </Button>
+        </div>
 
-          <form onSubmit={submit} className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
-            <div className="flex items-center gap-5">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="group flex h-16 w-16 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border bg-muted text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-muted"
-                >
-                  {form.photo ? (
-                    <img src={form.photo} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <ImageIcon className="h-5 w-5" strokeWidth={1.75} />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    form.photo ? update("photo", undefined) : fileRef.current?.click()
-                  }
-                  className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
-                  aria-label={form.photo ? "Remover foto" : "Adicionar foto"}
-                >
-                  {form.photo ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => onPhoto(e.target.files?.[0])}
-                />
+        {hasAnyClient && (
+          // Compactado na rodada corretiva: era uma pilha vertical (rótulo →
+          // número gigante → linha de apoio), alta e com muito vazio à
+          // direita em telas largas. Agora é uma faixa única — número
+          // dominante à esquerda, os 3 indicadores de apoio distribuídos à
+          // direita — que só empilha verticalmente (`flex-col`) quando o
+          // espaço aperta (mobile), sem crescer em altura à toa no desktop.
+          <div className="rounded-[24px] bg-brand p-5 dark:shadow-none md:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+              <div className="shrink-0">
+                <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
+                  Total de clientes
+                </span>
+                <p className="mt-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[46px] md:text-[52px]">
+                  {totalClientes}
+                </p>
               </div>
 
-              <div className="flex-1 space-y-3">
-                <Field label="Nome da empresa">
-                  <input
-                    value={form.empresa}
-                    onChange={(e) => update("empresa", e.target.value)}
-                    placeholder="Ex: Acme Corp"
-                    required
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label="Nome do responsável">
-                  <input
-                    value={form.responsavel}
-                    onChange={(e) => update("responsavel", e.target.value)}
-                    placeholder="Nome completo"
-                    className={inputCls}
-                  />
-                </Field>
+              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 lg:justify-end">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <Megaphone className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Com campanha
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {comCampanha}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <Users className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Sem campanha
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {semCampanha}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <Building2 className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Campanhas no total
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {totalCampanhas}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-1 gap-x-4 gap-y-4 rounded-2xl border border-border bg-muted/40 p-4 sm:grid-cols-2">
-              <Field label="E-mail do cliente">
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => update("email", e.target.value)}
-                    placeholder="email@empresa.com"
-                    className={`${inputCls} pl-9`}
-                  />
-                </div>
-              </Field>
-
-              <Field label="WhatsApp do cliente">
-                <div className="relative">
-                  <MessageCircle className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="tel"
-                    value={form.whatsapp}
-                    onChange={(e) => update("whatsapp", e.target.value)}
-                    placeholder="+55 (00) 00000-0000"
-                    className={`${inputCls} pl-9`}
-                  />
-                </div>
-              </Field>
-
-              <Field label="Responsável interno">
-                <select
-                  value={form.responsavelInterno}
-                  onChange={(e) => update("responsavelInterno", e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">Selecione um membro</option>
-                  {loadMembers().map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Cliente desde">
-                <DateField
-                  value={form.clienteDesde || undefined}
-                  onChange={(v) => update("clienteDesde", v ?? "")}
-                  className={inputCls}
-                />
-              </Field>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
-              >
-                {editingClienteId ? "Salvar alterações" : "Criar cliente"}
-              </button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <div className="mt-8">
-        {clientes.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-            Nenhum cliente cadastrado ainda.
           </div>
-        ) : (
-          <FlowingMenu
-            items={clientes.map((c) => ({
-              id: c.id,
-              text: c.empresa,
-              subtitle: c.responsavel || "Sem responsável",
-              image: c.photo,
-              onSelect: () => setSelectedId(c.id),
-            }))}
+        )}
+
+        {hasAnyClient && (
+          <ClienteFiltersBar
+            query={query}
+            onQueryChange={setQuery}
+            filters={filters}
+            onFiltersChange={setFilters}
+            responsaveis={responsaveis}
           />
         )}
-      </div>
 
-      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelectedId(null)}>
-        <DialogContent
-          className="max-w-2xl gap-0 overflow-hidden border-border bg-card p-0"
-          mobileFullScreen
-        >
-          {selected && (
-            <>
-              <div className="border-b border-border/60 px-8 pt-8 pb-6">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted">
-                    {selected.photo ? (
-                      <img src={selected.photo} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <Building2 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <DialogTitle className="truncate text-xl font-semibold">
-                      {selected.empresa}
-                    </DialogTitle>
-                    <DialogDescription className="mt-0.5 truncate text-sm text-muted-foreground">
-                      {selected.responsavel || "Sem responsável"}
-                    </DialogDescription>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => copyClientLink(selected)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-sm hover:opacity-90"
-                  >
-                    <Link2 className="h-3.5 w-3.5" />
-                    {linkCopied ? "Link copiado!" : "Link do cliente"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEditCliente(selected)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-muted"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = await confirm(
-                        `Excluir o cliente "${selected.empresa}"? Todas as campanhas vinculadas também serão removidas.`,
-                      );
-                      if (!ok) return;
-                      setClientes((prev) => prev.filter((c) => c.id !== selected.id));
-                      setSelectedId(null);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-destructive shadow-sm hover:bg-destructive/10"
-                    aria-label="Excluir cliente"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Excluir
-                  </button>
-                </div>
-              </div>
+        {!hasAnyClient ? (
+          <EmptyState
+            icon={<Building2 className="h-5 w-5" />}
+            title="Nenhum cliente cadastrado ainda"
+            description="Cadastre o primeiro cliente para começar a vincular campanhas."
+            primaryAction={{ label: "Novo cliente", onClick: openNovoCliente }}
+          />
+        ) : !hasResults ? (
+          <EmptyState
+            icon={<Building2 className="h-5 w-5" />}
+            title={
+              hasActiveSearchOrFilter ? "Nenhum cliente encontrado" : "Nenhum cliente para mostrar"
+            }
+            description={
+              hasActiveSearchOrFilter
+                ? "Ajuste a busca ou os filtros para ver outros clientes."
+                : undefined
+            }
+            secondaryAction={
+              hasActiveSearchOrFilter
+                ? {
+                    label: "Limpar filtros",
+                    onClick: () => {
+                      setQuery("");
+                      setFilters(DEFAULT_CLIENTE_FILTERS);
+                    },
+                  }
+                : undefined
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleClientes.map((c) => (
+              <ClienteCard
+                key={c.id}
+                cliente={c}
+                onOpen={() => setSelectedId(c.id)}
+                onEdit={() => openEditCliente(c)}
+                onDelete={() => void requestDeleteCliente(c)}
+              />
+            ))}
+          </div>
+        )}
+      </PageContainer>
 
-              <div className="max-h-[60vh] space-y-6 overflow-y-auto p-8">
-                <div className="space-y-4">
-                  <InfoRow label="E-mail" value={selected.email || "—"} />
-                  <InfoRow label="WhatsApp" value={selected.whatsapp || "—"} />
-                  <InfoRow label="Responsável interno" value={selected.responsavelInterno || "—"} />
-                  <InfoRow
-                    label="Cliente desde"
-                    value={
-                      selected.clienteDesde
-                        ? new Date(selected.clienteDesde).toLocaleDateString("pt-BR")
-                        : "—"
-                    }
-                  />
-                </div>
+      <ClienteFormSheet
+        open={formOpen}
+        initial={editingCliente}
+        onClose={() => {
+          setFormOpen(false);
+          setEditingCliente(null);
+        }}
+        onSave={saveCliente}
+      />
 
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-tight text-foreground/80">
-                      Campanhas
-                    </h4>
-                    <span className="text-xs text-muted-foreground">
-                      {selected.campanhas?.length ?? 0}
-                    </span>
-                  </div>
-                  {selected.campanhas && selected.campanhas.length > 0 ? (
-                    <ul className="divide-y divide-border/60 rounded-lg border border-border">
-                      {selected.campanhas.map((camp) => (
-                        <li key={camp.id} className="flex items-center gap-3 p-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
-                            {selected.photo ? (
-                              <img
-                                src={selected.photo}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <Megaphone className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{camp.nome}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {camp.prazo ? `Prazo ${formatIsoDate(camp.prazo)}` : "Sem prazo"}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingCampaign(camp);
-                              setCampanhaOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted"
-                          >
-                            <Pencil className="h-3 w-3" /> Editar
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                      Nenhuma campanha vinculada.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 border-t border-border/60 px-8 py-4">
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
-                >
-                  Fechar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingCampaign(null);
-                    setCampanhaOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-                >
-                  <Link2 className="h-3.5 w-3.5" /> Vincular campanha
-                </button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ClienteDetailsSheet
+        cliente={selected}
+        onClose={() => setSelectedId(null)}
+        onEdit={openEditCliente}
+        onDelete={(c) => void requestDeleteCliente(c)}
+        onCopyLink={copyClientLink}
+        onNovaCampanha={() => {
+          setEditingCampaign(null);
+          setCampanhaOpen(true);
+        }}
+        onEditCampanha={(camp) => {
+          setEditingCampaign(camp);
+          setCampanhaOpen(true);
+        }}
+      />
 
       <VincularCampanhaDialog
         open={campanhaOpen}
@@ -523,19 +329,6 @@ export function ClientesSection() {
         onSave={saveCampaign}
       />
       {confirmDialog}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-border/40 pb-3 last:border-0 last:pb-0">
-      <span className="text-xs font-semibold uppercase tracking-tight text-muted-foreground">
-        {label}
-      </span>
-      <span className="min-w-0 max-w-[60%] break-words text-right text-sm text-foreground">
-        {value}
-      </span>
     </div>
   );
 }

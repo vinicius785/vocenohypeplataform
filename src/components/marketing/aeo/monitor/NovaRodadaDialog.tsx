@@ -45,7 +45,7 @@ export function NovaRodadaDialog({
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button size="sm" onClick={submit}>
+          <Button size="sm" variant="primary" onClick={submit}>
             Criar rodada
           </Button>
         </DialogFooter>

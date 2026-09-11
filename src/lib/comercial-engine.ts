@@ -55,28 +55,56 @@ export const OPPORTUNITY_STAGE_LABEL: Record<OpportunityStage, string> = {
   PERDIDO: "Perdido",
 };
 
+/**
+ * Paleta categórica das etapas — rodada corretiva: cada etapa passa a ter
+ * um matiz distinto (antes, Contato/Reunião agendada dividiam "indigo" e
+ * Reunião realizada/Proposta em preparo dividiam "violet", Proposta
+ * enviada/Negociação dividiam "amber" — impossível distinguir de relance).
+ * Única fonte de verdade pra cor de etapa em todo o Comercial — nenhum
+ * outro componente declara cor hardcoded por etapa. `PERDIDO` usa cinza
+ * neutro (não vermelho) de propósito: vermelho fica reservado à semântica
+ * de risco/parada (`isOpportunityStale`/badge "Parada há Xd" em
+ * `LeadCard.tsx`), nunca à categoria de etapa — uma oportunidade perdida
+ * já tem o motivo em texto explícito ("Perdido — {motivo}"), não depende
+ * só da cor cinza.
+ */
 export const OPPORTUNITY_STAGE_TONE: Record<OpportunityStage, string> = {
-  LEAD_RECEBIDO: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  LEAD_RECEBIDO: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400",
   CONTATO_FEITO: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-  REUNIAO_AGENDADA: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-  REUNIAO_REALIZADA: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  PROPOSTA_PREPARO: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  PROPOSTA_ENVIADA: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  NEGOCIACAO: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  REUNIAO_AGENDADA: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  REUNIAO_REALIZADA: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+  PROPOSTA_PREPARO: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  PROPOSTA_ENVIADA: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  NEGOCIACAO: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   GANHO: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  PERDIDO: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  PERDIDO: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-400",
 };
 
 export const OPPORTUNITY_STAGE_COLOR: Record<OpportunityStage, string> = {
-  LEAD_RECEBIDO: "bg-sky-500",
+  LEAD_RECEBIDO: "bg-cyan-500",
   CONTATO_FEITO: "bg-indigo-500",
-  REUNIAO_AGENDADA: "bg-indigo-500",
-  REUNIAO_REALIZADA: "bg-violet-500",
-  PROPOSTA_PREPARO: "bg-violet-500",
-  PROPOSTA_ENVIADA: "bg-amber-500",
-  NEGOCIACAO: "bg-amber-500",
+  REUNIAO_AGENDADA: "bg-violet-500",
+  REUNIAO_REALIZADA: "bg-purple-500",
+  PROPOSTA_PREPARO: "bg-amber-500",
+  PROPOSTA_ENVIADA: "bg-orange-500",
+  NEGOCIACAO: "bg-blue-500",
   GANHO: "bg-emerald-500",
-  PERDIDO: "bg-rose-500",
+  PERDIDO: "bg-zinc-500",
+};
+
+/** Borda/anel do destino de drag-and-drop — mesma cor categórica da
+ * etapa (nunca `--brand`, que fica reservado ao azul de foco/ação
+ * genérico). Só usada em `PipelineBoard.tsx` no `onDragEnter`. */
+export const OPPORTUNITY_STAGE_RING: Record<OpportunityStage, string> = {
+  LEAD_RECEBIDO: "ring-cyan-500",
+  CONTATO_FEITO: "ring-indigo-500",
+  REUNIAO_AGENDADA: "ring-violet-500",
+  REUNIAO_REALIZADA: "ring-purple-500",
+  PROPOSTA_PREPARO: "ring-amber-500",
+  PROPOSTA_ENVIADA: "ring-orange-500",
+  NEGOCIACAO: "ring-blue-500",
+  GANHO: "ring-emerald-500",
+  PERDIDO: "ring-zinc-500",
 };
 
 /**

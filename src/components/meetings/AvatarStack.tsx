@@ -27,7 +27,7 @@ export function AvatarStack({
         <TooltipTrigger asChild>
           <div className="flex shrink-0 -space-x-2">
             {shown.map((p) => (
-              <Avatar key={p.id} className={`${dim} border-2 border-background`}>
+              <Avatar key={p.id} className={`${dim} ring-2 ring-card`}>
                 {p.photo && <AvatarImage src={p.photo} alt="" />}
                 <AvatarFallback className={`${textSize} font-medium`}>
                   {p.name.trim()[0]?.toUpperCase() ?? "?"}
@@ -36,7 +36,7 @@ export function AvatarStack({
             ))}
             {rest.length > 0 && (
               <span
-                className={`grid ${dim} place-items-center rounded-full border-2 border-background bg-muted ${textSize} font-medium text-muted-foreground`}
+                className={`grid ${dim} place-items-center rounded-full bg-muted ${textSize} font-medium text-text-secondary ring-2 ring-card`}
               >
                 +{rest.length}
               </span>

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, Gauge, Plus, Search } from "lucide-react";
 import {
   META_AREAS,
   type Indicador,
@@ -13,6 +13,8 @@ import {
   indicadorStatusAtualizacao,
   type StatusAtualizacao,
 } from "@/lib/metas-engine";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
 import { IndicadorGlobalRow } from "./IndicadorGlobalRow";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
@@ -29,13 +31,21 @@ const STATUS_ATUALIZACAO_LABEL: Record<StatusAtualizacao, string> = {
   muito_desatualizado: "Muito desatualizado",
 };
 
+const SORT_LABEL: Record<SortKey, string> = {
+  prioridade: "Prioridade",
+  nome: "Nome",
+  atualizacao: "Última atualização",
+  impacto: "Objetivos impactados",
+};
+
 /** Visão global de Indicadores — painel operacional pra ver/priorizar/
  * atualizar todas as métricas do negócio, já que cada uma pode
- * alimentar vários Objetivos ao mesmo tempo. Lista densa (não grid de
- * cards, item 37), nunca um badge de saúde único por indicador (item
- * 38 — saúde é sempre por vínculo, aqui só agregada). Impacto
- * pré-computado numa passada só sobre `indicadores`/`objetivos` (já
- * carregados por inteiro em memória — sem N+1, item 51). */
+ * alimentar vários Objetivos ao mesmo tempo. Lista estruturada (não
+ * grid de cards), nunca um badge de saúde único por indicador (saúde é
+ * sempre por vínculo, aqui só agregada em "impacta objetivos em
+ * risco"). Impacto pré-computado numa passada só sobre
+ * `indicadores`/`objetivos` (já carregados por inteiro em memória —
+ * sem N+1). */
 export function IndicadoresView({
   indicadores,
   objetivos,
@@ -165,66 +175,71 @@ export function IndicadoresView({
   };
 
   return (
-    <div>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          {resumo.total} indicador{resumo.total === 1 ? "" : "es"}
-          {resumo.precisamAtualizar > 0 && (
-            <>
-              {" · "}
-              <span className="font-medium text-amber-600 dark:text-amber-400">
-                {resumo.precisamAtualizar} precisa{resumo.precisamAtualizar === 1 ? "" : "m"}{" "}
-                atualizar
-              </span>
-            </>
-          )}
-          {resumo.impactamEmRisco > 0 && (
-            <>
-              {" · "}
-              <span className="font-medium text-rose-600 dark:text-rose-400">
-                {resumo.impactamEmRisco} impacta{resumo.impactamEmRisco === 1 ? "" : "m"} objetivos
-                em risco
-              </span>
-            </>
-          )}
-        </p>
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
-        >
-          <Plus className="h-3.5 w-3.5" /> Novo indicador
-        </button>
+    <div className="space-y-6">
+      {/* Resumo — faixa compacta, nunca 3 cards grandes iguais; o que
+       * exige ação (precisam atualizar / impactam risco) ganha destaque
+       * semântico, o total fica neutro. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-4 dark:shadow-none">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
+          <span>
+            <span className="text-base font-semibold text-foreground">{resumo.total}</span>{" "}
+            <span className="text-text-secondary">
+              {resumo.total === 1 ? "indicador" : "indicadores"}
+            </span>
+          </span>
+          <span className="text-border">·</span>
+          <span
+            className={
+              resumo.precisamAtualizar > 0 ? "font-medium text-warning" : "text-text-secondary"
+            }
+          >
+            {resumo.precisamAtualizar} precisa{resumo.precisamAtualizar === 1 ? "" : "m"} atualizar
+          </span>
+          <span className="text-border">·</span>
+          <span
+            className={
+              resumo.impactamEmRisco > 0 ? "font-medium text-danger" : "text-text-secondary"
+            }
+          >
+            {resumo.impactamEmRisco} impacta{resumo.impactamEmRisco === 1 ? "" : "m"} objetivos em
+            risco
+          </span>
+        </div>
+        <Button variant="primary" size="comfortable" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" /> Novo indicador
+        </Button>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Toolbar única — busca + filtros + ordenação, sincronizados. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
         <div className="relative w-full max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
+          <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar indicador..."
-            className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 border-0 bg-background pl-8 text-sm focus-visible:ring-brand"
           />
         </div>
         <div ref={filtersRef} className="relative">
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium ${
+            aria-expanded={filtersOpen}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
               hasFilters
-                ? "border-foreground bg-muted text-foreground"
-                : "border-border text-muted-foreground hover:bg-muted/40"
+                ? "bg-brand-subtle text-brand"
+                : "bg-background text-text-secondary hover:text-foreground"
             }`}
           >
             <Filter className="h-3.5 w-3.5" /> {hasFilters ? `Filtros · ${filterCount}` : "Filtros"}
           </button>
           {filtersOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-72 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
+            <div className="absolute right-0 top-full z-20 mt-1.5 w-72 space-y-2 rounded-2xl bg-popover p-3 shadow-lg dark:shadow-none">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <option value="">Status de atualização</option>
                 {(Object.keys(STATUS_ATUALIZACAO_LABEL) as StatusAtualizacao[]).map((s) => (
@@ -236,7 +251,7 @@ export function IndicadoresView({
               <select
                 value={cadenciaFilter}
                 onChange={(e) => setCadenciaFilter(e.target.value as typeof cadenciaFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <option value="">Toda cadência</option>
                 {CADENCE_OPTIONS.map((f) => (
@@ -248,7 +263,7 @@ export function IndicadoresView({
               <select
                 value={areaFilter}
                 onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <option value="">Toda área</option>
                 {META_AREAS.map((a) => (
@@ -261,7 +276,7 @@ export function IndicadoresView({
                 <select
                   value={objetivoFilter}
                   onChange={(e) => setObjetivoFilter(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <option value="">Todo objetivo</option>
                   {objetivos.map((o) => (
@@ -277,25 +292,27 @@ export function IndicadoresView({
         <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
-          className="h-9 rounded-md border border-input bg-background px-2 text-xs"
+          aria-label="Ordenar por"
+          className="h-9 rounded-md border-0 bg-background px-2 text-xs text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
-          <option value="prioridade">Ordenar: Prioridade</option>
-          <option value="nome">Ordenar: Nome</option>
-          <option value="atualizacao">Ordenar: Última atualização</option>
-          <option value="impacto">Ordenar: Objetivos impactados</option>
+          {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
+            <option key={k} value={k}>
+              Ordenar: {SORT_LABEL[k]}
+            </option>
+          ))}
         </select>
         {hasFilters && (
           <button
             type="button"
             onClick={clearFilters}
-            className="inline-flex h-9 items-center gap-1 px-1 text-xs text-muted-foreground hover:text-foreground"
+            className="inline-flex h-9 items-center gap-1 rounded px-1 text-xs text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             Limpar filtros
           </button>
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
             ["", `Todos ${indicadores.length}`],
@@ -307,10 +324,10 @@ export function IndicadoresView({
             key={key || "todos"}
             type="button"
             onClick={() => setQuickChip(key)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+            className={`rounded-full px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
               quickChip === key
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted/60"
+                ? "bg-brand-subtle text-brand"
+                : "text-text-secondary hover:bg-muted/60"
             }`}
           >
             {label}
@@ -319,33 +336,52 @@ export function IndicadoresView({
       </div>
 
       {indicadores.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-border p-10 text-center">
-          <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado ainda.</p>
-          <button
-            type="button"
+        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+          <Gauge className="mx-auto h-8 w-8 text-text-secondary/50" />
+          <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador cadastrado</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Crie o primeiro indicador pra começar a acompanhar uma métrica.
+          </p>
+          <Button
+            variant="primary"
+            size="comfortable"
+            className="mt-5"
             onClick={() => setCreateOpen(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            <Plus className="h-4 w-4" /> Criar o primeiro indicador
-          </button>
+            <Plus className="h-4 w-4" /> Novo indicador
+          </Button>
         </div>
       ) : ordenados.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Nenhum indicador encontrado.
-        </p>
+        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+          <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
+          <p className="mt-3 text-sm font-medium text-foreground">Nenhum indicador encontrado</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Ajuste a busca, os filtros ou o chip selecionado.
+          </p>
+        </div>
       ) : (
-        <div className="mt-3">
-          {ordenados.map((ind) => (
-            <IndicadorGlobalRow
-              key={ind.id}
-              indicador={ind}
-              objetivosVinculados={impactoPorIndicador.get(ind.id)?.objetivos ?? []}
-              status={indicadorStatusAtualizacao(ind)}
-              onOpen={() => onOpenIndicador(ind.id)}
-              onQuickUpdate={() => setQuickUpdateTarget(ind)}
-              onOpenObjetivo={onOpenObjetivo}
-            />
-          ))}
+        <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+          <div className="hidden grid-cols-[1fr_5.5rem_6rem_6rem_9rem_2rem] gap-3 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary sm:grid">
+            <span>Indicador</span>
+            <span className="text-right">Valor atual</span>
+            <span className="text-right">Atualização</span>
+            <span className="text-center">Saúde</span>
+            <span>Objetivos vinculados</span>
+            <span className="sr-only">Ações</span>
+          </div>
+          <div className="divide-y divide-border/60">
+            {ordenados.map((ind) => (
+              <IndicadorGlobalRow
+                key={ind.id}
+                indicador={ind}
+                objetivosVinculados={impactoPorIndicador.get(ind.id)?.objetivos ?? []}
+                status={indicadorStatusAtualizacao(ind)}
+                onOpen={() => onOpenIndicador(ind.id)}
+                onQuickUpdate={() => setQuickUpdateTarget(ind)}
+                onOpenObjetivo={onOpenObjetivo}
+              />
+            ))}
+          </div>
         </div>
       )}
 

@@ -10,7 +10,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DateField } from "@/components/ui/date-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +34,7 @@ function MiniAvatar({ member, fallback }: { member?: TeamMember; fallback: strin
   }
   const label = member?.name ?? fallback;
   return (
-    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-text-secondary">
       {label.trim()[0]?.toUpperCase() ?? "?"}
     </span>
   );
@@ -224,23 +224,20 @@ export function MeetingSummaryDialog({
     !!meeting.notas;
 
   return (
-    <Dialog open={!!meeting} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="flex max-h-[85vh] w-full max-w-[520px] flex-col gap-0 overflow-hidden rounded-2xl p-0"
-        mobileFullScreen
-      >
+    <Sheet open={!!meeting} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]">
         {/* Header — título, data+hora numa linha só, status só quando
             "Sua resposta" (abaixo) não existir pra representar esse dado. */}
-        <div className="flex items-start gap-3 px-6 pb-1 pt-6">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <div className="flex items-start gap-3 border-b border-border/60 px-6 pb-4 pt-6">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
             <Video className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <DialogTitle className="truncate text-base font-semibold leading-tight">
+            <SheetTitle className="truncate text-base font-semibold leading-tight">
               {meeting.titulo}
-            </DialogTitle>
-            <DialogDescription className="sr-only">Resumo da reunião</DialogDescription>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
+            </SheetTitle>
+            <SheetDescription className="sr-only">Resumo da reunião</SheetDescription>
+            <p className="mt-1 truncate text-sm text-text-secondary">
               {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)}
             </p>
             {!showsResponseSection && (
@@ -258,7 +255,7 @@ export function MeetingSummaryDialog({
           {/* Criador/organizador — sempre visível, nunca em Mais detalhes */}
           {meeting.criadorId && (
             <div className="mt-3">
-              <p className="text-xs text-muted-foreground">Criada por</p>
+              <p className="text-xs text-text-secondary">Criada por</p>
               <div className="mt-1 flex items-center gap-2">
                 <MiniAvatar
                   member={memberFor(meeting.criadorId)}
@@ -272,7 +269,7 @@ export function MeetingSummaryDialog({
           {/* CTA principal */}
           {joinUrl && (
             <a href={joinUrl} target="_blank" rel="noreferrer" className="mt-4 block">
-              <Button size="lg" className="w-full">
+              <Button variant="primary" size="lg" className="w-full">
                 <LogIn className="h-4 w-4" />
                 {isNow ? "Entrar agora" : "Entrar na reunião"}
               </Button>
@@ -289,14 +286,14 @@ export function MeetingSummaryDialog({
                 ? meeting.convidadosExternos!.map((g) => (
                     <li
                       key={g.email}
-                      className="rounded-lg px-2 py-1.5 text-sm text-muted-foreground"
+                      className="rounded-lg px-2 py-1.5 text-sm text-text-secondary"
                     >
                       {g.nome} <span className="text-xs">(externo · {g.email})</span>
                     </li>
                   ))
                 : participantIds.length === 0 &&
                   meeting.com && (
-                    <li className="rounded-lg px-2 py-1.5 text-sm text-muted-foreground">
+                    <li className="rounded-lg px-2 py-1.5 text-sm text-text-secondary">
                       {meeting.com} (externo)
                     </li>
                   )}
@@ -321,7 +318,7 @@ export function MeetingSummaryDialog({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{nameFor(id)}</p>
                       {id === meeting.criadorId && (
-                        <p className="text-xs text-muted-foreground">Organizador</p>
+                        <p className="text-xs text-text-secondary">Organizador</p>
                       )}
                     </div>
                     <span
@@ -337,7 +334,7 @@ export function MeetingSummaryDialog({
               <button
                 type="button"
                 onClick={() => setShowAllParticipants(true)}
-                className="ml-2 mt-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                className="ml-2 mt-1 text-xs font-medium text-text-secondary hover:text-foreground"
               >
                 Ver todos os {participantIds.length}
               </button>
@@ -353,13 +350,13 @@ export function MeetingSummaryDialog({
                     <span className="text-sm font-semibold text-foreground">Sua resposta</span>
                     <div className="flex items-center gap-3">
                       <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <Check className="h-3.5 w-3.5 text-success" />
                         {myResponse === "confirmed" ? "Confirmado" : "Recusado"}
                       </span>
                       <button
                         type="button"
                         onClick={() => setChangingResponse(true)}
-                        className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                        className="text-xs font-medium text-text-secondary hover:text-foreground"
                       >
                         Alterar
                       </button>
@@ -382,9 +379,7 @@ export function MeetingSummaryDialog({
                       type="button"
                       onClick={() => setProposing((v) => !v)}
                       className={`inline-flex items-center gap-1 text-xs font-medium ${
-                        proposing
-                          ? "text-foreground"
-                          : "text-muted-foreground hover:text-foreground"
+                        proposing ? "text-foreground" : "text-text-secondary hover:text-foreground"
                       }`}
                     >
                       <CalendarClock className="h-3 w-3" /> Sugerir outro horário
@@ -395,8 +390,8 @@ export function MeetingSummaryDialog({
             )}
 
             {meeting.rescheduleProposal && (
-              <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <div className="rounded-lg bg-warning-soft px-3 py-2.5 text-sm">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-warning-soft-foreground">
                   <CalendarClock className="h-3.5 w-3.5" />
                   Novo horário sugerido
                 </div>
@@ -406,7 +401,7 @@ export function MeetingSummaryDialog({
                     ` — sugerido por ${meeting.rescheduleProposal.proposedByName}`}
                 </p>
                 {meeting.rescheduleProposal.note && (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-text-secondary">
                     {meeting.rescheduleProposal.note}
                   </p>
                 )}
@@ -415,7 +410,7 @@ export function MeetingSummaryDialog({
                     <button
                       type="button"
                       onClick={acceptProposal}
-                      className="rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400"
+                      className="rounded-md bg-success-soft px-2.5 py-1 text-xs font-medium text-success-soft-foreground hover:bg-success-soft/70"
                     >
                       Aceitar sugestão
                     </button>
@@ -436,7 +431,7 @@ export function MeetingSummaryDialog({
                 <p className="text-sm font-semibold text-foreground">Sugerir novo horário</p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Nova data</label>
+                    <label className="text-xs font-medium text-text-secondary">Nova data</label>
                     <DateField
                       value={propData || undefined}
                       onChange={(v) => setPropData(v ?? "")}
@@ -444,12 +439,12 @@ export function MeetingSummaryDialog({
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Nova hora</label>
+                    <label className="text-xs font-medium text-text-secondary">Nova hora</label>
                     <input
                       type="time"
                       value={propHora}
                       onChange={(e) => setPropHora(e.target.value)}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     />
                   </div>
                 </div>
@@ -458,7 +453,7 @@ export function MeetingSummaryDialog({
                   value={propNote}
                   onChange={(e) => setPropNote(e.target.value)}
                   placeholder="Observação (opcional)"
-                  className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="mt-2 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
                 <div className="mt-2 flex gap-2">
                   <Button size="sm" onClick={sendProposal}>
@@ -481,19 +476,19 @@ export function MeetingSummaryDialog({
                       {meeting.attendanceRecorded ? (
                         <>
                           <AvatarStack people={attendedPeople} max={4} />
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-text-secondary">
                             {attendedPeople.length} participou
                             {attendedPeople.length === 1 ? "" : "ram"}
                           </span>
                         </>
                       ) : (
-                        <span className="text-sm text-muted-foreground">Ainda não registrada</span>
+                        <span className="text-sm text-text-secondary">Ainda não registrada</span>
                       )}
                       {isCreator && (
                         <button
                           type="button"
                           onClick={() => setEditingAttendance(true)}
-                          className="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                          className="shrink-0 text-xs font-medium text-text-secondary hover:text-foreground"
                         >
                           {meeting.attendanceRecorded ? "Editar" : "Marcar"}
                         </button>
@@ -503,7 +498,7 @@ export function MeetingSummaryDialog({
                 ) : (
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-foreground">Presença</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-text-secondary">
                       Selecione quem participou — sai da lista de pendentes e conta na pontuação.
                     </p>
                     <ul className="-mx-2 space-y-0.5">
@@ -515,7 +510,7 @@ export function MeetingSummaryDialog({
                               type="button"
                               onClick={() => toggleAttendance(id)}
                               className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted/50 ${
-                                checked ? "text-foreground" : "text-muted-foreground"
+                                checked ? "text-foreground" : "text-text-secondary"
                               }`}
                             >
                               <MiniAvatar member={memberFor(id)} fallback={nameFor(id)} />
@@ -527,7 +522,7 @@ export function MeetingSummaryDialog({
                       })}
                     </ul>
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground">
+                      <label className="text-xs font-medium text-text-secondary">
                         Transcrição (opcional)
                       </label>
                       <textarea
@@ -535,7 +530,7 @@ export function MeetingSummaryDialog({
                         onChange={(e) => setTranscricao(e.target.value)}
                         rows={4}
                         placeholder="Cole aqui a transcrição da reunião..."
-                        className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="mt-1 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       />
                     </div>
                     <div className="flex gap-2">
@@ -554,7 +549,7 @@ export function MeetingSummaryDialog({
                 )}
                 {meeting.transcricao && !editingAttendance && (
                   <div className="mt-2 rounded-lg bg-muted/40 p-2.5">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
                       Transcrição
                     </p>
                     <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-xs text-foreground">
@@ -571,7 +566,7 @@ export function MeetingSummaryDialog({
                 <button
                   type="button"
                   onClick={() => setDetailsOpen((v) => !v)}
-                  className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  className="flex items-center gap-1 text-sm font-medium text-text-secondary hover:text-foreground"
                 >
                   Mais detalhes
                   {detailsOpen ? (
@@ -584,31 +579,31 @@ export function MeetingSummaryDialog({
                   <div className="mt-2.5 space-y-3 text-sm">
                     {meeting.seriesId && (
                       <div>
-                        <p className="text-xs text-muted-foreground">Recorrência</p>
+                        <p className="text-xs text-text-secondary">Recorrência</p>
                         <p className="text-foreground">Reunião recorrente</p>
                       </div>
                     )}
                     {meeting.origem === "google" && (
                       <div>
-                        <p className="text-xs text-muted-foreground">Origem</p>
+                        <p className="text-xs text-text-secondary">Origem</p>
                         <p className="text-foreground">Importada do Google Calendar</p>
                       </div>
                     )}
                     {meeting.meetLink && (
                       <div>
-                        <p className="text-xs text-muted-foreground">Videoconferência</p>
+                        <p className="text-xs text-text-secondary">Videoconferência</p>
                         <p className="text-foreground">Google Meet</p>
                       </div>
                     )}
                     {meeting.local && !meeting.meetLink && (
                       <div>
-                        <p className="text-xs text-muted-foreground">Local / link</p>
+                        <p className="text-xs text-text-secondary">Local / link</p>
                         <p className="break-words text-foreground">{linkifyText(meeting.local)}</p>
                       </div>
                     )}
                     {meeting.notas && (
                       <div>
-                        <p className="text-xs text-muted-foreground">Pauta</p>
+                        <p className="text-xs text-text-secondary">Pauta</p>
                         <p className="whitespace-pre-wrap break-words text-foreground">
                           {linkifyText(meeting.notas)}
                         </p>
@@ -628,7 +623,7 @@ export function MeetingSummaryDialog({
               <button
                 type="button"
                 onClick={() => onDelete(meeting.id)}
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-danger hover:bg-danger-soft"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Excluir
               </button>
@@ -639,7 +634,7 @@ export function MeetingSummaryDialog({
               <button
                 type="button"
                 onClick={() => onEdit(meeting)}
-                className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-text-secondary hover:bg-muted hover:text-foreground"
               >
                 <Pencil className="h-3.5 w-3.5" /> Editar
               </button>
@@ -647,13 +642,13 @@ export function MeetingSummaryDialog({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs text-text-secondary hover:bg-muted hover:text-foreground"
             >
               Fechar
             </button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

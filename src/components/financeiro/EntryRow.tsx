@@ -40,15 +40,31 @@ export function EntryRow({
   const atraso = e.status === "vencido" ? diasDeAtraso(e.vencimento) : 0;
   const partial = isPartiallyPaid(e);
   return (
-    <li
+    // Div, não <li> — em toda chamada este componente já é envolvido por
+    // um <li> do pai (ver MovimentacoesTab.tsx/PendingKindTab.tsx), pra
+    // evitar o <li> dentro de <li> corrigido nesta etapa.
+    <div
       onClick={onView}
-      className="group flex cursor-pointer items-center gap-3 px-4 py-2.5 hover:bg-muted/40"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          onView();
+        }
+      }}
+      aria-label={`Ver detalhes de ${e.description}`}
+      // flex-wrap + items-start (achado ao vivo nesta etapa): com
+      // items-center numa linha só, quando os chips de metadado
+      // quebravam pra 2-3 linhas em telas estreitas, os botões/valor à
+      // direita ficavam centralizados na altura toda da linha e
+      // visualmente sobrepunham o texto. Agrupar tudo à direita (ver
+      // abaixo) e permitir quebra resolve sem tirar nenhuma informação.
+      className="group flex flex-wrap cursor-pointer items-start gap-3 px-4 py-2.5 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
     >
       <span
         className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-          e.kind === "receita"
-            ? "bg-emerald-500/10 text-emerald-600"
-            : "bg-rose-500/10 text-rose-600"
+          e.kind === "receita" ? "bg-success-soft text-success" : "bg-danger-soft text-danger"
         }`}
       >
         {e.kind === "receita" ? (
@@ -88,12 +104,12 @@ export function EntryRow({
             {e.payment?.pagamento && ` ${formatIsoDate(e.payment.pagamento)}`}
           </span>
           {atraso > 0 && (
-            <span className="rounded bg-rose-500/10 px-1.5 py-0.5 text-rose-600">
+            <span className="rounded bg-danger-soft px-1.5 py-0.5 text-danger">
               {atraso}d de atraso
             </span>
           )}
           {partial && (
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-amber-600">
+            <span className="rounded bg-warning-soft px-1.5 py-0.5 text-warning">
               Parcial · saldo {fmtBRL(remainingBalance(e))}
             </span>
           )}
@@ -104,61 +120,68 @@ export function EntryRow({
           )}
         </div>
       </div>
-      {onRegistrarCobranca && !isTerminal && (
-        <button
-          onClick={(ev) => {
-            ev.stopPropagation();
-            onRegistrarCobranca();
-          }}
-          className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground"
-          title="Registrar cobrança"
-        >
-          <PhoneCall className="h-3.5 w-3.5" />
-        </button>
-      )}
-      {!isTerminal && (
-        <button
-          onClick={(ev) => {
-            ev.stopPropagation();
-            onMarkPaid();
-          }}
-          className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground"
-        >
-          {e.kind === "receita" ? "Marcar recebido" : "Marcar pago"}
-        </button>
-      )}
+      {/* Grupo à direita — anda junto pra uma 2ª linha em telas estreitas
+       * (nunca um botão isolado sobrepondo o texto do meio). */}
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {onRegistrarCobranca && !isTerminal && (
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation();
+              onRegistrarCobranca();
+            }}
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            title="Registrar cobrança"
+          >
+            <PhoneCall className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {!isTerminal && (
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation();
+              onMarkPaid();
+            }}
+            className="shrink-0 cursor-pointer whitespace-nowrap rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            {e.kind === "receita" ? "Marcar recebido" : "Marcar pago"}
+          </button>
+        )}
 
-      <span
-        className={`shrink-0 text-sm font-medium tabular-nums ${
-          e.kind === "receita" ? "text-emerald-600" : "text-rose-600"
-        }`}
-      >
-        {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
-      </span>
-      {e.editable && (
-        <div className="ml-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={(ev) => {
-              ev.stopPropagation();
-              onEdit();
-            }}
-            aria-label="Editar"
-            className="cursor-pointer rounded p-1 hover:bg-muted"
-          >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-          </button>
-          <button
-            onClick={(ev) => {
-              ev.stopPropagation();
-              onDelete();
-            }}
-            aria-label="Remover"
-            className="cursor-pointer rounded p-1 hover:bg-muted"
-          >
-            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-          </button>
-        </div>
-      )}
-    </li>
+        <span
+          className={`shrink-0 whitespace-nowrap text-sm font-medium tabular-nums ${
+            e.kind === "receita" ? "text-success" : "text-danger"
+          }`}
+        >
+          {e.kind === "receita" ? "+" : "-"} {fmtBRL(e.amount)}
+        </span>
+        {e.editable && (
+          // Sempre visível no mobile (sem hover) — só fica oculto até o
+          // hover/foco a partir de `md:` (desktop), onde há espaço e o
+          // gesto de mouse existe.
+          <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+            <button
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onEdit();
+              }}
+              aria-label="Editar"
+              className="cursor-pointer rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            </button>
+            <button
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onDelete();
+              }}
+              aria-label="Remover"
+              className="cursor-pointer rounded p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

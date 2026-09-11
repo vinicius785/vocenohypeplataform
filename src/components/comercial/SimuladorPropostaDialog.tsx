@@ -198,37 +198,45 @@ export function SimuladorPropostaForm({
         </div>
       </div>
 
-      <div className="rounded-2xl border-2 border-foreground bg-muted/40 p-4">
+      {/* Preço final + ação de aplicar na mesma superfície azul — visualmente
+       * ligados (Etapa 7), sem borda grossa. */}
+      <div className="rounded-[20px] bg-brand p-5">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-xs font-medium text-foreground">Preço final ao cliente (R$)</label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+            Preço final ao cliente
+          </label>
           {editadoManualmente && (
             <button
               type="button"
               onClick={() => setPrecoManual(null)}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-foreground-secondary hover:text-brand-foreground"
             >
               <RotateCcw className="h-3 w-3" /> usar valor calculado
             </button>
           )}
         </div>
+        {/* Correção de contraste (Etapa 8): antes era `bg-black/10` sobre o
+         * próprio azul — lia como uma variação mais escura da mesma
+         * superfície, não como um campo editável. `bg-background` +
+         * `text-foreground` são o par de maior contraste do app (quase
+         * preto no claro, quase branco no escuro — sempre nítido contra o
+         * card, que é azul nos dois temas) e já são validados em toda a
+         * plataforma. */}
         <FormattedNumberInput
           mode="currency"
           value={precoManual ?? Math.round(precoCalculado)}
           onValueChange={(v) => setPrecoManual(v ?? null)}
-          className="mt-2 h-12 w-full rounded-lg border border-border bg-background px-3 text-2xl font-bold outline-none focus:ring-2 focus:ring-ring"
+          className="mt-2 h-14 w-full rounded-2xl border border-black/10 bg-background px-4 text-[28px] font-bold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         />
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-[11px] text-brand-foreground-secondary">
           {editadoManualmente
             ? "Ajustado manualmente — a quebra acima recalcula com base neste valor."
             : "Calculado a partir do custo + percentuais. Pode editar por cima."}
         </p>
-      </div>
-
-      <div className="flex justify-end">
         <button
           type="button"
           onClick={apply}
-          className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
+          className="mt-4 w-full rounded-full bg-brand-foreground py-3 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
         >
           {applyLabel}
         </button>

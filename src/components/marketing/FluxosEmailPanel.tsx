@@ -88,7 +88,7 @@ export function FluxosEmailPanel() {
           <button
             type="button"
             onClick={() => setNovaOpen(true)}
-            className="mb-1 inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            className="mb-1 inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
           >
             <Plus className="h-3.5 w-3.5" /> Nova campanha
           </button>

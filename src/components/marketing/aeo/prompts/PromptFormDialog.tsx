@@ -125,7 +125,7 @@ export function PromptFormDialog({
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button size="sm" onClick={submit}>
+          <Button size="sm" variant="primary" onClick={submit}>
             {prompt ? "Salvar" : "Criar prompt"}
           </Button>
         </DialogFooter>

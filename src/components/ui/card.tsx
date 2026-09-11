@@ -2,15 +2,26 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn("rounded-xl border bg-card text-card-foreground shadow", className)}
-      {...props}
-    />
-  ),
-);
+/** `variant` é aditivo (Etapa 2) — omitir a prop continua rendendo
+ * exatamente a mesma classe de sempre (`default`), então nenhum dos
+ * consumidores atuais muda visualmente. */
+const CARD_VARIANT_CLASS = {
+  default: "border bg-card text-card-foreground shadow",
+  interactive:
+    "border bg-card text-card-foreground shadow cursor-pointer transition-colors hover:border-foreground/20",
+  elevated: "border bg-card text-card-foreground shadow-md",
+  selected: "border-2 border-brand bg-card text-card-foreground shadow",
+  muted: "border border-transparent bg-muted text-foreground shadow-none",
+} as const;
+
+export type CardVariant = keyof typeof CARD_VARIANT_CLASS;
+
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { variant?: CardVariant }
+>(({ className, variant = "default", ...props }, ref) => (
+  <div ref={ref} className={cn("rounded-xl", CARD_VARIANT_CLASS[variant], className)} {...props} />
+));
 Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

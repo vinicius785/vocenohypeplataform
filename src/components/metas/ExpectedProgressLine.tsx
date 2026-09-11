@@ -23,7 +23,7 @@ export function ExpectedProgressLine({
 
   if (diff === 0) {
     return (
-      <p className="text-xs text-muted-foreground" title={`Esperado hoje: ${esperadoRounded}%`}>
+      <p className="text-xs text-text-secondary" title={`Esperado hoje: ${esperadoRounded}%`}>
         No ritmo
       </p>
     );
@@ -32,7 +32,7 @@ export function ExpectedProgressLine({
   const acima = diff > 0;
   return (
     <p
-      className={`text-xs font-medium ${acima ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+      className={`text-xs font-medium ${acima ? "text-success" : "text-danger"}`}
       title={`Esperado hoje: ${esperadoRounded}%`}
     >
       {acima ? "↑" : "↓"} {Math.abs(diff)} p.p. {acima ? "acima" : "abaixo"} do ritmo

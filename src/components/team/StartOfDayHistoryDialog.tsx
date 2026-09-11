@@ -53,9 +53,10 @@ export function averageStartTime(
 }
 
 /** Histórico + média de "Início do dia" de UM membro — único lugar do app
- * que renderiza essa lista, reaproveitado tanto pelo bloco consolidado da
- * aba Time (`TeamStartOfDay`) quanto pelo card da ficha individual
- * (`MemberProfileDialog`), pra nunca divergir a lógica entre os dois. */
+ * que renderiza essa lista, reaproveitado tanto pelo bloco "Jornada e
+ * horas trabalhadas" (`TeamJourneyAndHours`) quanto pelo card da ficha
+ * individual (`MemberProfileDialog`), pra nunca divergir a lógica entre
+ * os dois. */
 export function StartOfDayHistoryDialog({
   member,
   open,
@@ -82,20 +83,20 @@ export function StartOfDayHistoryDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-muted-foreground" /> Início do dia
+            <Clock className="h-4 w-4 text-text-secondary" /> Início do dia
           </DialogTitle>
           <DialogDescription>{member?.name}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
-          <span className="text-xs text-muted-foreground">Média no período</span>
+          <span className="text-xs text-text-secondary">Média no período</span>
           <span className="text-sm font-semibold tabular-nums text-foreground">
             {average ?? "—"}
           </span>
         </div>
 
         {entries.length === 0 ? (
-          <p className="py-3 text-center text-xs text-muted-foreground">
+          <p className="py-3 text-center text-xs text-text-secondary">
             Nenhum registro de início nesse período.
           </p>
         ) : (
@@ -105,7 +106,7 @@ export function StartOfDayHistoryDialog({
                 key={d}
                 className="flex items-center justify-between rounded-md bg-muted/40 px-2.5 py-1.5 text-xs"
               >
-                <span className="text-muted-foreground">
+                <span className="text-text-secondary">
                   {d === today ? "Hoje" : formatStartOfDayDateBR(d)}
                 </span>
                 <span className="font-medium tabular-nums text-foreground">{h}</span>

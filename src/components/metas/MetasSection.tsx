@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronDown, Plus, Target, TrendingUp } from "lucide-react";
-import { SectionHeader, type SectionTab } from "../SectionHeader";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
+import { Plus, Target, TrendingUp } from "lucide-react";
+import { PageContainer } from "@/components/shared/PageContainer";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { resolveMetasTab } from "@/lib/section-nav";
 import { useConfirm } from "@/hooks/use-confirm";
 import { getMe } from "@/lib/chat-store";
 import { loadTeamMembers } from "@/lib/projetos";
@@ -23,7 +31,6 @@ import { ObjetivoQuickDialog } from "./ObjetivoQuickDialog";
 import { IndicadorQuickCreateDialog } from "./IndicadorQuickCreateDialog";
 import { type IndicadorQuickPatch } from "./IndicadorQuickUpdate";
 import { colorFor, initialsOf } from "./metas-ui-utils";
-import { useDropdown } from "./use-dropdown";
 
 type MetasView =
   | { kind: "list" }
@@ -45,10 +52,7 @@ export function MetasSection() {
   const members = useMemo(() => loadTeamMembers(), []);
 
   const search = useSearch({ from: "/_authenticated/time" });
-  const navigate = useNavigate();
-  const metasView = search.metasView ?? "objetivos";
-  const setMetasView = (v: "objetivos" | "indicadores") =>
-    void navigate({ to: "/time", search: (prev) => ({ ...prev, metasView: v }), replace: true });
+  const metasView = resolveMetasTab(search.metasView);
 
   const [viewStack, setViewStack] = useState<MetasView[]>([{ kind: "list" }]);
   const view = viewStack[viewStack.length - 1];
@@ -57,9 +61,6 @@ export function MetasSection() {
 
   const [objetivoDialog, setObjetivoDialog] = useState<{ data?: Objetivo } | null>(null);
   const [indicadorCreateDialog, setIndicadorCreateDialog] = useState(false);
-  const novoMenu = useRef<HTMLDivElement>(null);
-  const [novoOpen, setNovoOpen] = useState(false);
-  useDropdown(novoMenu, novoOpen, () => setNovoOpen(false));
   const { confirm, confirmDialog } = useConfirm();
 
   const persist = (next: MetaItem[]) => {
@@ -311,121 +312,100 @@ export function MetasSection() {
     );
   }
 
-  const tabs: SectionTab[] = [
-    {
-      key: "objetivos",
-      label: "Objetivos",
-      active: metasView === "objetivos",
-      onClick: () => setMetasView("objetivos"),
-    },
-    {
-      key: "indicadores",
-      label: "Indicadores",
-      active: metasView === "indicadores",
-      onClick: () => setMetasView("indicadores"),
-    },
-  ];
-
   return (
-    <div className="mx-auto w-full max-w-6xl">
-      <SectionHeader
-        title="Metas"
-        subtitle={
-          metasView === "indicadores"
-            ? "Acompanhe e atualize as principais métricas do negócio."
-            : "Objetivos e indicadores operacionais do time."
-        }
-        tabs={tabs}
-        action={
-          metasView === "indicadores" ? undefined : (
-            <div ref={novoMenu} className="relative">
-              <button
-                type="button"
-                onClick={() => setNovoOpen((o) => !o)}
-                className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-              >
-                <Plus className="h-3.5 w-3.5" /> Criar
-                <ChevronDown className="h-3 w-3 opacity-70" />
-              </button>
-              {novoOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-border bg-popover p-1 shadow-md">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setObjetivoDialog({});
-                      setNovoOpen(false);
-                    }}
-                    className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted"
-                  >
-                    <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      <span className="block text-xs font-medium text-foreground">
-                        Criar Objetivo
-                      </span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        Um resultado maior acompanhado por um ou mais indicadores.
-                      </span>
+    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+      <PageContainer className="space-y-6">
+        {/* Etapa 3: barra interna removida — Objetivos/Indicadores agora
+         * são subitens de "Metas" na sidebar (`SECTION_SUBNAV.metas`);
+         * `metasView` continua vindo da URL, só deixou de ter um controle
+         * visual dentro da página. */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+              Metas
+            </p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              {metasView === "indicadores"
+                ? "Acompanhe e atualize as principais métricas do negócio."
+                : "Objetivos e indicadores operacionais do time."}
+            </p>
+          </div>
+          {metasView !== "indicadores" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="primary" size="comfortable">
+                  <Plus className="h-4 w-4" /> Criar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuItem
+                  onClick={() => setObjetivoDialog({})}
+                  className="items-start gap-2 py-2"
+                >
+                  <Target className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">
+                      Criar Objetivo
                     </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIndicadorCreateDialog(true);
-                      setNovoOpen(false);
-                    }}
-                    className="flex w-full items-start gap-2 rounded px-2 py-2 text-left hover:bg-muted"
-                  >
-                    <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      <span className="block text-xs font-medium text-foreground">
-                        Criar Indicador
-                      </span>
-                      <span className="block text-[11px] text-muted-foreground">
-                        Uma métrica individual para acompanhar.
-                      </span>
+                    <span className="block text-xs text-text-secondary">
+                      Um resultado maior acompanhado por um ou mais indicadores.
                     </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        }
-      />
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setIndicadorCreateDialog(true)}
+                  className="items-start gap-2 py-2"
+                >
+                  <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">
+                      Criar Indicador
+                    </span>
+                    <span className="block text-xs text-text-secondary">
+                      Uma métrica individual para acompanhar.
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
 
-      {metasView === "indicadores" ? (
-        <IndicadoresView
-          indicadores={indicadores}
-          objetivos={objetivos}
+        {metasView === "indicadores" ? (
+          <IndicadoresView
+            indicadores={indicadores}
+            objetivos={objetivos}
+            members={members}
+            onOpenIndicador={(id) => push({ kind: "indicador", id })}
+            onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
+            onQuickUpdate={updateIndicadorPatch}
+            onCreate={createIndicadorStandalone}
+          />
+        ) : (
+          <ObjetivosView
+            objetivos={objetivos}
+            indicadores={indicadores}
+            members={members}
+            meName={me.name}
+            onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
+          />
+        )}
+
+        <ObjetivoQuickDialog
+          open={!!objetivoDialog}
+          initial={objetivoDialog?.data}
           members={members}
-          onOpenIndicador={(id) => push({ kind: "indicador", id })}
-          onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
-          onQuickUpdate={updateIndicadorPatch}
+          onClose={() => setObjetivoDialog(null)}
+          onSave={saveObjetivoBasic}
+        />
+        <IndicadorQuickCreateDialog
+          open={indicadorCreateDialog}
+          members={members}
+          onClose={() => setIndicadorCreateDialog(false)}
           onCreate={createIndicadorStandalone}
         />
-      ) : (
-        <ObjetivosView
-          objetivos={objetivos}
-          indicadores={indicadores}
-          members={members}
-          meName={me.name}
-          onOpenObjetivo={(id) => push({ kind: "objetivo", id })}
-        />
-      )}
-
-      <ObjetivoQuickDialog
-        open={!!objetivoDialog}
-        initial={objetivoDialog?.data}
-        members={members}
-        onClose={() => setObjetivoDialog(null)}
-        onSave={saveObjetivoBasic}
-      />
-      <IndicadorQuickCreateDialog
-        open={indicadorCreateDialog}
-        members={members}
-        onClose={() => setIndicadorCreateDialog(false)}
-        onCreate={createIndicadorStandalone}
-      />
-      {confirmDialog}
+        {confirmDialog}
+      </PageContainer>
     </div>
   );
 }

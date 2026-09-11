@@ -11,11 +11,12 @@ import {
   AlertTriangle,
   Check,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { DateField } from "@/components/ui/date-field";
 import { TimeField } from "@/components/ui/time-field";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useConfirmChoice } from "@/hooks/use-confirm";
 import {
   type Meeting,
@@ -332,61 +333,59 @@ export function MeetingDialog({
   };
 
   const fieldCls =
-    "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+    "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand";
   const weekdayOfData = data ? DIAS_LABEL[parseISODate(data).getDay()] : "";
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        mobileFullScreen
-        className="flex max-h-[88vh] max-w-lg flex-col gap-0 overflow-hidden p-0"
-      >
-        <div className="px-6 pb-2 pt-6">
-          <DialogTitle className="sr-only">
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]">
+        <div className="border-b border-border/60 px-6 pb-4 pt-6">
+          <SheetTitle className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
             {initial ? "Editar reunião" : "Nova reunião"}
-          </DialogTitle>
-          <DialogDescription className="sr-only">Cadastro de reunião</DialogDescription>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {initial ? "Editar reunião" : "Nova reunião"}
-          </p>
+          </SheetTitle>
+          <SheetDescription className="sr-only">Cadastro de reunião</SheetDescription>
+          <Label htmlFor="meeting-titulo" className="sr-only">
+            Título da reunião
+          </Label>
           <input
+            id="meeting-titulo"
             type="text"
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
             placeholder="Título da reunião"
-            className="w-full border-0 bg-transparent p-0 text-xl font-light tracking-tight text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+            className="mt-1.5 w-full border-0 bg-transparent p-0 text-xl font-medium tracking-tight text-foreground outline-none placeholder:text-text-secondary/50 focus-visible:ring-0"
           />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-5 pt-2">
-          {/* Quando: data + início → fim como um único grupo */}
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-5 pt-4">
+          {/* Informações da reunião: data + início → fim como um único grupo */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Quando
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+              Informações da reunião
             </p>
             <div className="mt-2">
               <DateField value={data || undefined} onChange={(v) => setData(v ?? "")} />
             </div>
             <div className="mt-2 flex items-end gap-2">
               <div className="flex-1">
-                <label className="text-xs text-muted-foreground">Início</label>
+                <Label className="text-xs text-text-secondary">Início</Label>
                 <div className="mt-1">
                   <TimeField value={horaInicio} onChange={changeStart} ariaLabel="Início" />
                 </div>
               </div>
-              <span className="mb-2 text-muted-foreground">→</span>
+              <span className="mb-2 text-text-secondary">→</span>
               <div className="flex-1">
-                <label className="text-xs text-muted-foreground">Fim</label>
+                <Label className="text-xs text-text-secondary">Fim</Label>
                 <div className="mt-1">
                   <TimeField value={horaFim} onChange={setHoraFim} ariaLabel="Fim" />
                 </div>
               </div>
             </div>
             {timeError ? (
-              <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{timeError}</p>
+              <p className="mt-1.5 text-xs text-danger">{timeError}</p>
             ) : (
               durationLabel(horaInicio, horaFim) && (
-                <p className="mt-1.5 text-xs text-muted-foreground">
+                <p className="mt-1.5 text-xs text-text-secondary">
                   {durationLabel(horaInicio, horaFim)}
                   {weekdayOfData ? ` · ${weekdayOfData}` : ""}
                 </p>
@@ -396,7 +395,7 @@ export function MeetingDialog({
 
           <div className="border-t border-border/60 pt-4">
             {/* Participantes */}
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
               Participantes
             </p>
             {(selectedMembers.length > 0 || convidadosExternos.length > 0) && (
@@ -408,7 +407,7 @@ export function MeetingDialog({
                       {m.photo ? (
                         <img src={m.photo} alt="" className="h-7 w-7 rounded-full object-cover" />
                       ) : (
-                        <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                        <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-text-secondary">
                           {m.name.trim()[0]?.toUpperCase() ?? "?"}
                         </span>
                       )}
@@ -416,7 +415,7 @@ export function MeetingDialog({
                         <p className="truncate text-sm text-foreground">{m.name}</p>
                         {conflict && (
                           <p
-                            className="flex items-center gap-1 truncate text-xs text-amber-700 dark:text-amber-400"
+                            className="flex items-center gap-1 truncate text-xs text-warning"
                             title={conflict.detail}
                           >
                             <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -430,7 +429,7 @@ export function MeetingDialog({
                         type="button"
                         onClick={() => toggleMember(m.id)}
                         aria-label={`Remover ${m.name}`}
-                        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="shrink-0 rounded p-1 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -439,18 +438,18 @@ export function MeetingDialog({
                 })}
                 {convidadosExternos.map((g) => (
                   <li key={g.email} className="flex items-center gap-2.5 rounded-lg px-1 py-1.5">
-                    <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium text-text-secondary">
                       {g.nome.trim()[0]?.toUpperCase() ?? "?"}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{g.nome}</p>
-                      <p className="truncate text-xs text-muted-foreground">{g.email} · Externo</p>
+                      <p className="truncate text-xs text-text-secondary">{g.email} · Externo</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => removeGuest(g.email)}
                       aria-label={`Remover ${g.nome}`}
-                      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="shrink-0 rounded p-1 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -464,14 +463,14 @@ export function MeetingDialog({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded text-sm font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     <Plus className="h-3.5 w-3.5" /> Adicionar participantes
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="max-h-48 w-64 overflow-auto p-1">
                   {team.length === 0 && (
-                    <div className="px-2 py-2 text-xs text-muted-foreground">
+                    <div className="px-2 py-2 text-xs text-text-secondary">
                       Nenhum membro no time
                     </div>
                   )}
@@ -486,7 +485,7 @@ export function MeetingDialog({
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleMember(t.id)}
-                          className="h-3.5 w-3.5"
+                          className="h-3.5 w-3.5 accent-brand"
                         />
                         {t.photo ? (
                           <img src={t.photo} alt="" className="h-5 w-5 rounded-full object-cover" />
@@ -507,7 +506,7 @@ export function MeetingDialog({
               <button
                 type="button"
                 onClick={() => setAddingGuest(true)}
-                className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                className="mt-1.5 flex items-center gap-1.5 rounded text-sm font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <UserPlus className="h-3.5 w-3.5" /> Convidar pessoa externa
               </button>
@@ -538,14 +537,14 @@ export function MeetingDialog({
                   type="button"
                   onClick={addGuest}
                   disabled={!guestNome.trim() || !EMAIL_RE.test(guestEmail.trim())}
-                  className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted disabled:opacity-40"
+                  className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-40"
                 >
                   Adicionar
                 </button>
               </div>
             )}
             {participanteIds.length > 0 && !initial && (
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-text-secondary">
                 Uma solicitação será enviada pra cada pessoa (fica em Solicitações como Pendente).
               </p>
             )}
@@ -556,7 +555,9 @@ export function MeetingDialog({
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+              aria-expanded={showAdvanced}
+              aria-controls="meeting-advanced-options"
+              className="flex items-center gap-1 rounded text-sm font-medium text-text-secondary transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               {showAdvanced ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -567,15 +568,15 @@ export function MeetingDialog({
             </button>
 
             {showAdvanced && (
-              <div className="mt-3 space-y-4">
+              <div id="meeting-advanced-options" className="mt-3 space-y-4">
                 {!initial && (
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <label className="text-sm text-foreground">Recorrência</label>
+                      <Label className="text-sm text-foreground">Recorrência</Label>
                       <select
                         value={repeat}
                         onChange={(e) => setRepeat(e.target.value as typeof repeat)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                        className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       >
                         <option value="none">Não repete</option>
                         <option value="daily">Diariamente</option>
@@ -586,9 +587,9 @@ export function MeetingDialog({
                     {repeat !== "none" && (
                       <div className="mt-2 space-y-2">
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground">
+                          <Label className="text-xs font-medium text-text-secondary">
                             Repetir até
-                          </label>
+                          </Label>
                           <DateField
                             value={repeatUntil || undefined}
                             onChange={(v) => setRepeatUntil(v ?? "")}
@@ -601,10 +602,10 @@ export function MeetingDialog({
                             <button
                               type="button"
                               onClick={() => setDailyWeekdaysOnly(true)}
-                              className={`rounded-full px-3 py-1 text-xs ${
+                              className={`rounded-full px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                                 dailyWeekdaysOnly
-                                  ? "bg-foreground text-background"
-                                  : "border border-border text-muted-foreground hover:bg-muted"
+                                  ? "bg-brand text-brand-foreground"
+                                  : "border border-border text-text-secondary hover:bg-muted"
                               }`}
                             >
                               Só dias de semana
@@ -612,10 +613,10 @@ export function MeetingDialog({
                             <button
                               type="button"
                               onClick={() => setDailyWeekdaysOnly(false)}
-                              className={`rounded-full px-3 py-1 text-xs ${
+                              className={`rounded-full px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                                 !dailyWeekdaysOnly
-                                  ? "bg-foreground text-background"
-                                  : "border border-border text-muted-foreground hover:bg-muted"
+                                  ? "bg-brand text-brand-foreground"
+                                  : "border border-border text-text-secondary hover:bg-muted"
                               }`}
                             >
                               Incluir fim de semana
@@ -629,10 +630,10 @@ export function MeetingDialog({
                                 key={label}
                                 type="button"
                                 onClick={() => toggleWeekDay(i)}
-                                className={`h-8 w-11 rounded-md border text-xs font-medium ${
+                                className={`h-8 w-11 rounded-md border text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                                   weekDays.includes(i)
-                                    ? "border-foreground bg-foreground text-background"
-                                    : "border-border text-muted-foreground hover:bg-muted"
+                                    ? "border-brand bg-brand text-brand-foreground"
+                                    : "border-border text-text-secondary hover:bg-muted"
                                 }`}
                               >
                                 {label}
@@ -647,17 +648,17 @@ export function MeetingDialog({
 
                 <div>
                   <p className="text-sm text-foreground">Videoconferência</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-secondary">
                     <Video className="h-3 w-3 shrink-0" />
                     Google Meet será criado automaticamente
-                    <Check className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <Check className="h-3 w-3 shrink-0 text-success" />
                   </p>
                 </div>
 
                 <div>
-                  <label className="flex items-center gap-1 text-sm text-foreground">
+                  <Label className="flex items-center gap-1 text-sm text-foreground">
                     <MapPin className="h-3.5 w-3.5" /> Local
-                  </label>
+                  </Label>
                   <input
                     type="text"
                     value={local}
@@ -669,17 +670,17 @@ export function MeetingDialog({
 
                 {initial && (
                   <div>
-                    <label className="text-sm text-foreground">Status</label>
+                    <Label className="text-sm text-foreground">Status</Label>
                     <div className="mt-1.5 flex gap-1.5">
                       {(["Confirmada", "Pendente", "Cancelada"] as MeetingStatus[]).map((s) => (
                         <button
                           key={s}
                           type="button"
                           onClick={() => setStatus(s)}
-                          className={`rounded-full px-3 py-1 text-xs ${
+                          className={`rounded-full px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                             status === s
                               ? statusTone(s)
-                              : "border border-border text-muted-foreground hover:bg-muted"
+                              : "border border-border text-text-secondary hover:bg-muted"
                           }`}
                         >
                           {s}
@@ -690,13 +691,16 @@ export function MeetingDialog({
                 )}
 
                 <div>
-                  <label className="text-sm text-foreground">Notas</label>
+                  <Label htmlFor="meeting-notas" className="text-sm text-foreground">
+                    Notas
+                  </Label>
                   <textarea
+                    id="meeting-notas"
                     value={notas}
                     onChange={(e) => setNotas(e.target.value)}
                     rows={3}
                     placeholder="Adicionar pauta, contexto ou links..."
-                    className="mt-1.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    className="mt-1.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   />
                 </div>
               </div>
@@ -710,18 +714,19 @@ export function MeetingDialog({
               <button
                 type="button"
                 onClick={() => onDelete(initial.id)}
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-danger hover:bg-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <Trash2 className="h-4 w-4" /> Excluir
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
+            <Button variant="outline" size="comfortable" onClick={onClose}>
               Cancelar
             </Button>
             <Button
-              size="sm"
+              variant="primary"
+              size="comfortable"
               onClick={() => void submit()}
               disabled={
                 !titulo.trim() ||
@@ -735,8 +740,8 @@ export function MeetingDialog({
             </Button>
           </div>
         </div>
-      </DialogContent>
+      </SheetContent>
       {confirmChoiceDialog}
-    </Dialog>
+    </Sheet>
   );
 }

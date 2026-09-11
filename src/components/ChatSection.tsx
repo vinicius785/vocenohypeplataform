@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Hash,
   Send,
@@ -108,10 +109,76 @@ import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory"
  * avulsas do Marketing). Mesmo shape de sempre, só o nome do tipo mudou. */
 type ChatTaskInfo = TaskDirectoryEntry;
 
+/** Altura realmente visível no mobile, considerando o teclado virtual —
+ * `100dvh` sozinho não é confiável no Safari/Chrome iOS/Android quando o
+ * teclado abre (a viewport de LAYOUT nem sempre encolhe, só a VISUAL).
+ * `window.visualViewport` reflete a área visível de verdade; sem ele (SSR,
+ * navegador sem suporte), cai pro fallback via classe `h-dvh` no elemento —
+ * por isso retorna `null` até o primeiro cálculo, nunca um valor errado.
+ * rAF-throttled pra não gerar tremulação a cada pixel de resize. */
+function useVisualViewportHeight(
+  containerRef: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+): number | null {
+  const [height, setHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setHeight(null);
+      return;
+    }
+    const vv = window.visualViewport;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const container = containerRef.current;
+        const main = container?.closest("main");
+        if (!container || !main) return;
+        // Baseado só no `clientHeight`/padding de `<main>` (layout puro),
+        // nunca em `getBoundingClientRect()` — esse é afetado pelo próprio
+        // `scrollTop` de `<main>` (que tem `overflow-auto`), o que criava
+        // um ciclo: altura errada → `<main>` rola → nova medição errada de
+        // novo. O Chat é sempre o único filho de `<main>`, logo após o
+        // padding-top dele, então a altura disponível é só `clientHeight`
+        // menos os dois paddings — nenhuma medição de posição envolvida.
+        const mainStyle = getComputedStyle(main);
+        const mainPaddingTop = parseFloat(mainStyle.paddingTop || "0");
+        const mainPaddingBottom = parseFloat(mainStyle.paddingBottom || "0");
+        const availableInMain = main.clientHeight - mainPaddingTop - mainPaddingBottom;
+        const layoutViewportHeight = window.innerHeight;
+        const visualViewportHeight = vv?.height ?? layoutViewportHeight;
+        const keyboardOverlap = Math.max(0, layoutViewportHeight - visualViewportHeight);
+        setHeight(Math.max(0, Math.round(availableInMain - keyboardOverlap)));
+      });
+    };
+    update();
+    // No primeiro mount o container pode ainda não estar no lugar final
+    // (flexbox/paint em andamento) — uma segunda medição logo depois
+    // corrige sem esperar por um resize real do usuário.
+    const settleTimeout = window.setTimeout(update, 100);
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(settleTimeout);
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [containerRef, enabled]);
+
+  return height;
+}
+
 export function ChatSection() {
   const [, force] = useState(0);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   const callState = useCallState();
+  const isMobile = useIsMobile();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const visualViewportHeight = useVisualViewportHeight(rootRef, isMobile);
 
   const me = getMe();
   const members = loadMembers();
@@ -385,9 +452,13 @@ export function ChatSection() {
   const canStartChannelCall = !isDm && (!!activeChannel || !!activeCampaign || !!activeProject);
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] w-full overflow-hidden rounded-lg border border-border bg-background">
+    <div
+      ref={rootRef}
+      style={isMobile && visualViewportHeight ? { height: visualViewportHeight } : undefined}
+      className="flex h-dvh w-full max-w-full overflow-hidden rounded-none border-0 bg-background md:h-[calc(100dvh-9rem)] md:w-full md:rounded-lg md:border md:border-border"
+    >
       <div
-        className={`w-full shrink-0 flex-col overflow-hidden border-r border-border md:flex md:w-[320px] ${
+        className={`w-full shrink-0 flex-col overflow-hidden border-r border-border md:flex md:w-[280px] lg:w-[320px] ${
           activeId ? "hidden" : "flex"
         }`}
       >
@@ -403,9 +474,9 @@ export function ChatSection() {
         />
       </div>
       <div
-        className={`min-w-0 flex-1 flex-col overflow-hidden md:flex ${activeId ? "flex" : "hidden"}`}
+        className={`min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex ${activeId ? "flex" : "hidden"}`}
       >
-        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <header className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           {activeId && (
             <button
               type="button"
@@ -423,7 +494,9 @@ export function ChatSection() {
               ) : (
                 <Hash className="h-4 w-4 text-muted-foreground" />
               )}
-              <h2 className="min-w-0 truncate text-sm font-semibold">{activeChannel.name}</h2>
+              <p className="min-w-0 truncate text-sm font-semibold md:text-base">
+                {activeChannel.name}
+              </p>
               <span className="ml-2 flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Users className="h-3 w-3" /> {members.length}
               </span>
@@ -431,7 +504,9 @@ export function ChatSection() {
           ) : activeCampaign ? (
             <>
               <Hash className="h-4 w-4 text-muted-foreground" />
-              <h2 className="min-w-0 truncate text-sm font-semibold">{activeCampaign.name}</h2>
+              <p className="min-w-0 truncate text-sm font-semibold md:text-base">
+                {activeCampaign.name}
+              </p>
               <span className="text-[11px] text-muted-foreground">
                 campanha · {activeCampaign.empresa}
               </span>
@@ -439,7 +514,9 @@ export function ChatSection() {
           ) : activeProject ? (
             <>
               <Hash className="h-4 w-4 text-muted-foreground" />
-              <h2 className="min-w-0 truncate text-sm font-semibold">{activeProject.name}</h2>
+              <p className="min-w-0 truncate text-sm font-semibold md:text-base">
+                {activeProject.name}
+              </p>
               <span className="text-[11px] text-muted-foreground">projeto</span>
             </>
           ) : activeDmPartner ? (
@@ -464,13 +541,15 @@ export function ChatSection() {
                       className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
                     />
                   </span>
-                  <h2 className="min-w-0 truncate text-sm font-semibold">{activeDmPartner.name}</h2>
+                  <p className="min-w-0 truncate text-sm font-semibold md:text-base">
+                    {activeDmPartner.name}
+                  </p>
                   <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</span>
                 </>
               );
             })()
           ) : (
-            <h2 className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</h2>
+            <p className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</p>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {activeId && (
@@ -529,7 +608,7 @@ export function ChatSection() {
         </header>
 
         {!activeId ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.5} />
             <p className="text-sm text-muted-foreground">
               Selecione uma conversa pra começar a conversar.
@@ -538,7 +617,7 @@ export function ChatSection() {
         ) : (
           <>
             {searchQuery && (
-              <div className="border-b border-border bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
+              <div className="shrink-0 border-b border-border bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground">
                 {visibleMessages.length} resultado(s) para "{search.trim()}"
               </div>
             )}
@@ -600,12 +679,12 @@ export function ChatSection() {
             onClick={() => setCallPickerOpen(false)}
           >
             <div
-              className="w-full max-w-sm rounded-lg border border-border bg-background shadow-xl"
+              className="flex max-h-[85dvh] w-full max-w-sm flex-col overflow-hidden rounded-lg border border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div>
-                  <h3 className="text-sm font-semibold">Ligar para</h3>
+                  <p className="text-sm font-semibold">Ligar para</p>
                   <p className="text-[11px] text-muted-foreground">
                     Escolha até {MAX_GROUP_PARTICIPANTS} pessoas — mais de uma vira chamada em
                     grupo.
@@ -696,7 +775,7 @@ export function ChatSection() {
                       activeId,
                     );
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Phone className="h-3.5 w-3.5" />
                   Ligar {callPickerSelected.size > 0 ? `(${callPickerSelected.size})` : ""}
@@ -732,7 +811,7 @@ function ChatListRow({
   return (
     <div
       className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
-        active ? "bg-foreground/10" : "hover:bg-muted/60"
+        active ? "bg-brand-subtle" : "hover:bg-muted/60"
       }`}
     >
       <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -773,7 +852,7 @@ function ChatListRow({
         </span>
       </button>
       {item.unread > 0 && (
-        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-semibold text-background">
+        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-semibold text-brand-foreground">
           {item.unread > 9 ? "9+" : item.unread}
         </span>
       )}
@@ -899,7 +978,7 @@ function ChatConversationList({
     <>
       <header className="flex items-center gap-2 border-b border-border px-4 py-3.5">
         <div>
-          <h1 className="text-lg font-light tracking-tighter text-foreground">Conversas</h1>
+          <p className="text-base font-semibold tracking-tight text-foreground">Conversas</p>
           <p className="text-[11px] text-muted-foreground">
             {totalUnread > 0
               ? `${totalUnread} não lida${totalUnread > 1 ? "s" : ""}`
@@ -925,7 +1004,7 @@ function ChatConversationList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar conversas..."
-            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-base outline-none focus:ring-2 focus:ring-ring md:h-8 md:text-xs"
           />
         </div>
       </div>
@@ -1176,6 +1255,15 @@ function MessageList({
   onOpenMention: (m: ChatMention) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Posição de rolagem por conversa (o próprio `scrollRef` é reaproveitado
+  // entre trocas de conversa — `MessageList` não remonta — então sem isso
+  // toda troca "esquecia" onde a pessoa tinha parado de ler).
+  const scrollPositions = useRef<Map<string, number>>(new Map());
+  const isNearBottomRef = useRef(true);
+  const [showNewMessagesPill, setShowNewMessagesPill] = useState(false);
+  const prefersReducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -1221,20 +1309,43 @@ function MessageList({
     return { groups, hidden };
   }, [messages]);
   const prevConvoIdRef = useRef(convoId);
+  const prevLastMessageIdRef = useRef<string | undefined>(undefined);
+  // Guarda a posição ao SAIR da conversa atual, não só ao entrar na nova —
+  // sem isso, a última posição salva de uma conversa seria sempre a de
+  // antes da penúltima troca, nunca a mais recente.
+  useEffect(() => {
+    const el = scrollRef.current;
+    const positions = scrollPositions.current;
+    return () => {
+      if (el) positions.set(convoId, el.scrollTop);
+    };
+  }, [convoId]);
   useEffect(() => {
     const switchedConvo = prevConvoIdRef.current !== convoId;
     prevConvoIdRef.current = convoId;
     const el = scrollRef.current;
     if (!el) return;
-    // Trocar de conversa precisa ir direto pro fim, sem animação — e mais
-    // de uma vez, porque avatares/anexos ainda carregando mudam a altura
-    // do conteúdo depois desse primeiro scroll (senão parava "no meio",
-    // antes do conteúdo terminar de renderizar). Mensagem nova na MESMA
-    // conversa continua com scroll suave, de onde já estava.
-    const scroll = () =>
-      el.scrollTo({ top: el.scrollHeight, behavior: switchedConvo ? "auto" : "smooth" });
-    scroll();
+    const lastMessage = messages[messages.length - 1];
+    const isOwnNewMessage =
+      !switchedConvo &&
+      lastMessage &&
+      lastMessage.id !== prevLastMessageIdRef.current &&
+      lastMessage.authorId === meId;
+    prevLastMessageIdRef.current = lastMessage?.id;
+
     if (switchedConvo) {
+      setShowNewMessagesPill(false);
+      const saved = scrollPositions.current.get(convoId);
+      // Trocar de conversa precisa ir direto pro ponto certo, sem animação —
+      // e mais de uma vez, porque avatares/anexos ainda carregando mudam a
+      // altura do conteúdo depois desse primeiro scroll (senão parava "no
+      // meio", antes do conteúdo terminar de renderizar).
+      const scroll = () => {
+        if (saved != null) el.scrollTop = saved;
+        else el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+      };
+      scroll();
+      isNearBottomRef.current = saved == null || el.scrollHeight - saved - el.clientHeight < 120;
       const raf = requestAnimationFrame(scroll);
       const timeout = window.setTimeout(scroll, 150);
       return () => {
@@ -1242,11 +1353,39 @@ function MessageList({
         window.clearTimeout(timeout);
       };
     }
+
+    // Mensagem nova na MESMA conversa: só acompanha automaticamente se a
+    // pessoa já estava perto do fim, ou se a mensagem nova é dela mesma
+    // (mandou agora) — se estiver lendo mensagens antigas, não arranca a
+    // leitura de volta pro fim; só avisa com o botão "Novas mensagens".
+    if (isNearBottomRef.current || isOwnNewMessage) {
+      el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? "auto" : "smooth" });
+      setShowNewMessagesPill(false);
+    } else if (lastMessage?.authorId !== meId) {
+      setShowNewMessagesPill(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, convoId]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 120;
+    if (isNearBottomRef.current) setShowNewMessagesPill(false);
+    scrollPositions.current.set(convoId, el.scrollTop);
+  };
+
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: prefersReducedMotion ? "auto" : "smooth" });
+    setShowNewMessagesPill(false);
+  };
   const jumpToMessage = (id: string) => {
     const el = document.getElementById(`msg-${id}`);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "center" });
     setHighlightedId(id);
     window.setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 1500);
   };
@@ -1255,379 +1394,422 @@ function MessageList({
 
   if (messages.length === 0) {
     return (
-      <div ref={scrollRef} className="flex flex-1 items-center justify-center overflow-y-auto p-8">
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
         <p className="text-xs text-muted-foreground">Nenhuma mensagem ainda. Diga olá!</p>
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
-      {messages.map((m, i) => {
-        // Absorvido num grupo de tentativas de chamada representado por um
-        // item anterior (ver `callGroups` acima) — nunca renderiza sozinho.
-        if (callGroups.hidden.has(m.id)) return null;
-        const prev = messages[i - 1];
-        const next = messages[i + 1];
-        const grouped =
-          prev &&
-          prev.authorId === m.authorId &&
-          m.createdAt - prev.createdAt < 5 * 60 * 1000 &&
-          isSameDay(prev.createdAt, m.createdAt);
-        // Última mensagem de uma sequência do mesmo remetente — é onde o
-        // recibo (enviado/entregue/visto) aparece, nunca na primeira: é a
-        // mensagem mais recente que reflete o estado de verdade da
-        // conversa, e enquanto a sequência continua o recibo da anterior
-        // ficaria "preso" num estado que a próxima mensagem já superou.
-        const lastOfGroup =
-          !next ||
-          next.authorId !== m.authorId ||
-          next.createdAt - m.createdAt >= 5 * 60 * 1000 ||
-          !isSameDay(m.createdAt, next.createdAt);
-        const mine = m.authorId === meId;
-        const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
-        const editing = editingId === m.id;
-        if (m.authorId === "system") {
-          const isCallRecord = m.text.startsWith("📞");
-          const dayDividerEl = showDayDivider && (
-            <div className="my-4 flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {formatDayLabel(m.createdAt)}
-              </span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          );
-          // Registro de chamada é metadado do histórico (nível "Hoje"/"Lucas
-          // entrou na sala"), nunca deve competir visualmente com mensagens
-          // de verdade — monocromático, pequeno, sem pill colorida. Cor fica
-          // reservada só pro pontinho sutil de "perdida" (item 5 do pedido).
-          if (isCallRecord) {
-            const groupMsgs = callGroups.groups.get(m.id);
-            const fmtTime = (t: number) =>
-              new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-            if (groupMsgs) {
-              const expanded = expandedCallGroups.has(m.id);
-              const range = `${fmtTime(groupMsgs[0].createdAt)}–${fmtTime(groupMsgs[groupMsgs.length - 1].createdAt)}`;
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-8"
+      >
+        <div className="mx-auto w-full max-w-full md:max-w-5xl">
+          {messages.map((m, i) => {
+            // Absorvido num grupo de tentativas de chamada representado por um
+            // item anterior (ver `callGroups` acima) — nunca renderiza sozinho.
+            if (callGroups.hidden.has(m.id)) return null;
+            const prev = messages[i - 1];
+            const next = messages[i + 1];
+            const grouped =
+              prev &&
+              prev.authorId === m.authorId &&
+              m.createdAt - prev.createdAt < 5 * 60 * 1000 &&
+              isSameDay(prev.createdAt, m.createdAt);
+            // Última mensagem de uma sequência do mesmo remetente — é onde o
+            // recibo (enviado/entregue/visto) aparece, nunca na primeira: é a
+            // mensagem mais recente que reflete o estado de verdade da
+            // conversa, e enquanto a sequência continua o recibo da anterior
+            // ficaria "preso" num estado que a próxima mensagem já superou.
+            const lastOfGroup =
+              !next ||
+              next.authorId !== m.authorId ||
+              next.createdAt - m.createdAt >= 5 * 60 * 1000 ||
+              !isSameDay(m.createdAt, next.createdAt);
+            const mine = m.authorId === meId;
+            const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
+            const editing = editingId === m.id;
+            if (m.authorId === "system") {
+              const isCallRecord = m.text.startsWith("📞");
+              const dayDividerEl = showDayDivider && (
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {formatDayLabel(m.createdAt)}
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              );
+              // Registro de chamada é metadado do histórico (nível "Hoje"/"Lucas
+              // entrou na sala"), nunca deve competir visualmente com mensagens
+              // de verdade — monocromático, pequeno, sem pill colorida. Cor fica
+              // reservada só pro pontinho sutil de "perdida" (item 5 do pedido).
+              if (isCallRecord) {
+                const groupMsgs = callGroups.groups.get(m.id);
+                const fmtTime = (t: number) =>
+                  new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                if (groupMsgs) {
+                  const expanded = expandedCallGroups.has(m.id);
+                  const range = `${fmtTime(groupMsgs[0].createdAt)}–${fmtTime(groupMsgs[groupMsgs.length - 1].createdAt)}`;
+                  return (
+                    <div key={m.id}>
+                      {dayDividerEl}
+                      <div className="my-1.5 flex flex-col items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedCallGroups((prevSet) => {
+                              const next = new Set(prevSet);
+                              if (next.has(m.id)) next.delete(m.id);
+                              else next.add(m.id);
+                              return next;
+                            })
+                          }
+                          className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/30"
+                        >
+                          {expanded ? (
+                            <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
+                          )}
+                          <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
+                          <span>{groupMsgs.length} tentativas de chamada</span>
+                          <span className="text-[10px] opacity-60">{range}</span>
+                        </button>
+                        {expanded && (
+                          <div className="flex flex-col gap-0.5 rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
+                            {groupMsgs.map((gm) => (
+                              <div key={gm.id} className="flex items-center gap-1.5">
+                                <span className="text-[10px] opacity-60">
+                                  {fmtTime(gm.createdAt)}
+                                </span>
+                                <span>·</span>
+                                <span>{formatCallRecordLabel(gm.text).label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                const { label, kind } = formatCallRecordLabel(m.text);
+                const detailsOpen = expandedCallDetails.has(m.id);
+                const otherName = isDm
+                  ? members.find((mem) => mem.id === otherUserId)?.name
+                  : undefined;
+                return (
+                  <div key={m.id}>
+                    {dayDividerEl}
+                    <div className="my-1.5 flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          kind === "answered" &&
+                          setExpandedCallDetails((prevSet) => {
+                            const next = new Set(prevSet);
+                            if (next.has(m.id)) next.delete(m.id);
+                            else next.add(m.id);
+                            return next;
+                          })
+                        }
+                        className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground ${
+                          kind === "answered"
+                            ? "cursor-pointer hover:bg-muted/30"
+                            : "cursor-default"
+                        }`}
+                      >
+                        {kind === "missed" ? (
+                          <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
+                        ) : (
+                          <Phone className="h-3 w-3 shrink-0 opacity-70" />
+                        )}
+                        <span>{label}</span>
+                        {/* Único toque de cor do redesign, de propósito: só pra
+                        "perdida" ter alguma diferenciação além do texto, e
+                        mesmo assim é só um pontinho, nunca card/ícone colorido. */}
+                        {kind === "missed" && (
+                          <span
+                            className="h-1 w-1 rounded-full bg-amber-500/70"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="text-[10px] opacity-60">{fmtTime(m.createdAt)}</span>
+                      </button>
+                      {detailsOpen && kind === "answered" && (
+                        <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
+                          <p className="font-medium text-foreground">
+                            Chamada{otherName ? ` com ${otherName}` : ""}
+                          </p>
+                          <p>{formatIsoDate(new Date(m.createdAt).toISOString().slice(0, 10))}</p>
+                          <p>
+                            {fmtTime(m.createdAt - parseCallDurationMs(m.text))} –{" "}
+                            {fmtTime(m.createdAt)}
+                          </p>
+                          <p>Duração: {label.split("· ")[1]}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div key={m.id}>
                   {dayDividerEl}
-                  <div className="my-1.5 flex flex-col items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedCallGroups((prevSet) => {
-                          const next = new Set(prevSet);
-                          if (next.has(m.id)) next.delete(m.id);
-                          else next.add(m.id);
-                          return next;
-                        })
-                      }
-                      className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/30"
-                    >
-                      {expanded ? (
-                        <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
-                      ) : (
-                        <ChevronRight className="h-3 w-3 shrink-0 opacity-60" />
-                      )}
-                      <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
-                      <span>{groupMsgs.length} tentativas de chamada</span>
-                      <span className="text-[10px] opacity-60">{range}</span>
-                    </button>
-                    {expanded && (
-                      <div className="flex flex-col gap-0.5 rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
-                        {groupMsgs.map((gm) => (
-                          <div key={gm.id} className="flex items-center gap-1.5">
-                            <span className="text-[10px] opacity-60">{fmtTime(gm.createdAt)}</span>
-                            <span>·</span>
-                            <span>{formatCallRecordLabel(gm.text).label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div className="my-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
+                      {m.text}
+                      <span className="ml-2 text-[10px] opacity-70">
+                        {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </span>
                   </div>
                 </div>
               );
             }
-            const { label, kind } = formatCallRecordLabel(m.text);
-            const detailsOpen = expandedCallDetails.has(m.id);
-            const otherName = isDm
-              ? members.find((mem) => mem.id === otherUserId)?.name
-              : undefined;
             return (
               <div key={m.id}>
-                {dayDividerEl}
-                <div className="my-1.5 flex flex-col items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      kind === "answered" &&
-                      setExpandedCallDetails((prevSet) => {
-                        const next = new Set(prevSet);
-                        if (next.has(m.id)) next.delete(m.id);
-                        else next.add(m.id);
-                        return next;
-                      })
-                    }
-                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground ${
-                      kind === "answered" ? "cursor-pointer hover:bg-muted/30" : "cursor-default"
-                    }`}
+                {showDayDivider && (
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {formatDayLabel(m.createdAt)}
+                    </span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                )}
+                <div
+                  id={`msg-${m.id}`}
+                  className={`group relative flex gap-2.5 rounded-md px-2 py-0.5 transition-colors duration-500 hover:bg-muted/30 ${grouped ? "mt-0.5 md:mt-1.5" : "mt-3 md:mt-5"} ${highlightedId === m.id ? "bg-sky-500/10" : ""} ${mine ? "md:flex-row-reverse" : ""}`}
+                >
+                  <div className="w-8 shrink-0">
+                    {!grouped &&
+                      (m.authorPhoto ? (
+                        <img
+                          src={m.authorPhoto}
+                          alt=""
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                          {m.authorName.slice(0, 1).toUpperCase()}
+                        </div>
+                      ))}
+                  </div>
+                  <div
+                    className={`flex min-w-0 flex-1 flex-col items-start md:max-w-[68%] ${mine ? "md:items-end" : ""}`}
                   >
-                    {kind === "missed" ? (
-                      <PhoneMissed className="h-3 w-3 shrink-0 opacity-70" />
+                    {!grouped && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-semibold text-foreground">
+                          {mine ? "Você" : m.authorName}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    )}
+                    {m.replyToId &&
+                      (() => {
+                        const original = messagesById.get(m.replyToId!);
+                        if (!original) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => jumpToMessage(original.id)}
+                            className="mb-1 flex w-full max-w-[420px] items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
+                          >
+                            <Reply className="mt-0.5 h-3 w-3 shrink-0" />
+                            <div className="min-w-0">
+                              <span className="font-medium">{original.authorName}</span>{" "}
+                              <span className="line-clamp-1 break-words">
+                                {messagePreviewLabel(original)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })()}
+                    {editing ? (
+                      <InlineEditor
+                        initialText={m.text}
+                        allowUserMentions={allowUserMentions}
+                        members={members}
+                        tasks={tasks}
+                        projects={projects}
+                        campaigns={campaigns}
+                        clients={clients}
+                        onCancel={() => setEditingId(null)}
+                        onSave={(text, mentions) => {
+                          onEdit(m.id, text, mentions);
+                          setEditingId(null);
+                        }}
+                      />
                     ) : (
-                      <Phone className="h-3 w-3 shrink-0 opacity-70" />
+                      <div className="flex w-full flex-col items-start gap-1.5 md:w-fit md:max-w-full">
+                        {m.text && (
+                          <div
+                            className={`md:max-w-full md:rounded-2xl md:px-3 md:py-2 ${
+                              mine ? "md:bg-brand-subtle" : "md:bg-muted/70"
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground md:leading-normal">
+                              {renderText(m.text, m.mentions, onOpenMention)}
+                              {m.editedAt && (
+                                <span className="ml-1 text-[10px] text-muted-foreground">
+                                  (editado)
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        )}
+                        {onOpenTask &&
+                          taskMentionsOf(m.mentions, taskInfoById).map((task) => (
+                            <TaskMentionCard key={task.id} task={task} onOpen={onOpenTask} />
+                          ))}
+                        {m.attachments && m.attachments.length > 0 && (
+                          <AttachmentList message={m} attachments={m.attachments} />
+                        )}
+                        {m.reactions && Object.keys(m.reactions).length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {Object.entries(m.reactions).map(([emoji, userIds]) =>
+                              userIds.length === 0 ? null : (
+                                <button
+                                  key={emoji}
+                                  onClick={() => onReact(m.id, emoji)}
+                                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] ${
+                                    userIds.includes(meId)
+                                      ? "border-sky-500/50 bg-sky-500/10"
+                                      : "border-border bg-muted/40 hover:bg-muted"
+                                  }`}
+                                >
+                                  <span>{emoji}</span>
+                                  <span className="tabular-nums text-muted-foreground">
+                                    {userIds.length}
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
-                    <span>{label}</span>
-                    {/* Único toque de cor do redesign, de propósito: só pra
-                        "perdida" ter alguma diferenciação além do texto, e
-                        mesmo assim é só um pontinho, nunca card/ícone colorido. */}
-                    {kind === "missed" && (
-                      <span className="h-1 w-1 rounded-full bg-amber-500/70" aria-hidden="true" />
+                    {!editing && mine && isDm && lastOfGroup && (
+                      <div className="mt-0.5 flex items-center gap-1 self-end">
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <span
+                          title={
+                            otherReadAt >= m.createdAt
+                              ? "Visto"
+                              : otherDeliveredAt >= m.createdAt
+                                ? "Entregue"
+                                : "Enviado"
+                          }
+                        >
+                          {otherReadAt >= m.createdAt ? (
+                            <CheckCheck className="h-3 w-3 text-sky-500" />
+                          ) : otherDeliveredAt >= m.createdAt ? (
+                            <CheckCheck className="h-3 w-3 text-muted-foreground" />
+                          ) : (
+                            <Check className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </span>
+                      </div>
                     )}
-                    <span className="text-[10px] opacity-60">{fmtTime(m.createdAt)}</span>
-                  </button>
-                  {detailsOpen && kind === "answered" && (
-                    <div className="rounded-md border border-border/60 bg-card/50 px-3 py-2 text-[11px] text-muted-foreground">
-                      <p className="font-medium text-foreground">
-                        Chamada{otherName ? ` com ${otherName}` : ""}
-                      </p>
-                      <p>{formatIsoDate(new Date(m.createdAt).toISOString().slice(0, 10))}</p>
-                      <p>
-                        {fmtTime(m.createdAt - parseCallDurationMs(m.text))} –{" "}
-                        {fmtTime(m.createdAt)}
-                      </p>
-                      <p>Duração: {label.split("· ")[1]}</p>
+                  </div>
+                  {!editing && (
+                    <div className="absolute right-2 top-0 hidden items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm group-hover:flex">
+                      <div className="relative">
+                        <button
+                          onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
+                          aria-label="Reagir"
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Smile className="h-3 w-3" />
+                        </button>
+                        {pickerFor === m.id && (
+                          <>
+                            <div
+                              className="fixed inset-0 z-30"
+                              onClick={() => setPickerFor(null)}
+                            />
+                            <div className="absolute right-0 top-full z-40 mt-1 flex gap-0.5 rounded-md border border-border bg-background p-1 shadow-lg">
+                              {REACTION_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => {
+                                    onReact(m.id, emoji);
+                                    setPickerFor(null);
+                                  }}
+                                  className="rounded p-1 text-sm hover:bg-muted"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onReply(m)}
+                        aria-label="Responder"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Reply className="h-3 w-3" />
+                      </button>
+                      {mine && (
+                        <>
+                          <button
+                            onClick={() => setEditingId(m.id)}
+                            aria-label="Editar"
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => onDelete(m.id)}
+                            aria-label="Excluir"
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             );
-          }
-          return (
-            <div key={m.id}>
-              {dayDividerEl}
-              <div className="my-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                <span className="rounded-full border border-border bg-muted/40 px-3 py-1">
-                  {m.text}
-                  <span className="ml-2 text-[10px] opacity-70">
-                    {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </span>
-              </div>
-            </div>
-          );
-        }
-        return (
-          <div key={m.id}>
-            {showDayDivider && (
-              <div className="my-4 flex items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
-                <span className="rounded-full border border-border bg-background px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {formatDayLabel(m.createdAt)}
-                </span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-            )}
-            <div
-              id={`msg-${m.id}`}
-              className={`group relative flex gap-2.5 rounded-md px-2 py-0.5 transition-colors duration-500 hover:bg-muted/30 ${grouped ? "mt-0.5" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
-            >
-              <div className="w-8 shrink-0">
-                {!grouped &&
-                  (m.authorPhoto ? (
-                    <img src={m.authorPhoto} alt="" className="h-8 w-8 rounded-full object-cover" />
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                      {m.authorName.slice(0, 1).toUpperCase()}
-                    </div>
-                  ))}
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col items-start">
-                {!grouped && (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-semibold text-foreground">
-                      {mine ? "Você" : m.authorName}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                )}
-                {m.replyToId &&
-                  (() => {
-                    const original = messagesById.get(m.replyToId!);
-                    if (!original) return null;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => jumpToMessage(original.id)}
-                        className="mb-1 flex w-full max-w-[420px] items-start gap-1.5 rounded border-l-2 border-border pl-2 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
-                      >
-                        <Reply className="mt-0.5 h-3 w-3 shrink-0" />
-                        <div className="min-w-0">
-                          <span className="font-medium">{original.authorName}</span>{" "}
-                          <span className="line-clamp-1 break-words">{messagePreviewLabel(original)}</span>
-                        </div>
-                      </button>
-                    );
-                  })()}
-                {editing ? (
-                  <InlineEditor
-                    initialText={m.text}
-                    allowUserMentions={allowUserMentions}
-                    members={members}
-                    tasks={tasks}
-                    projects={projects}
-                    campaigns={campaigns}
-                    clients={clients}
-                    onCancel={() => setEditingId(null)}
-                    onSave={(text, mentions) => {
-                      onEdit(m.id, text, mentions);
-                      setEditingId(null);
-                    }}
-                  />
-                ) : (
-                  <div className="flex w-full flex-col items-start gap-1.5">
-                    {m.text && (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-                        {renderText(m.text, m.mentions, onOpenMention)}
-                        {m.editedAt && (
-                          <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>
-                        )}
-                      </p>
-                    )}
-                    {onOpenTask &&
-                      taskMentionsOf(m.mentions, taskInfoById).map((task) => (
-                        <TaskMentionCard key={task.id} task={task} onOpen={onOpenTask} />
-                      ))}
-                    {m.attachments && m.attachments.length > 0 && (
-                      <AttachmentList message={m} attachments={m.attachments} />
-                    )}
-                    {m.reactions && Object.keys(m.reactions).length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {Object.entries(m.reactions).map(([emoji, userIds]) =>
-                          userIds.length === 0 ? null : (
-                            <button
-                              key={emoji}
-                              onClick={() => onReact(m.id, emoji)}
-                              className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] ${
-                                userIds.includes(meId)
-                                  ? "border-sky-500/50 bg-sky-500/10"
-                                  : "border-border bg-muted/40 hover:bg-muted"
-                              }`}
-                            >
-                              <span>{emoji}</span>
-                              <span className="tabular-nums text-muted-foreground">
-                                {userIds.length}
-                              </span>
-                            </button>
-                          ),
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!editing && mine && isDm && lastOfGroup && (
-                  <div className="mt-0.5 flex items-center gap-1 self-end">
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <span
-                      title={
-                        otherReadAt >= m.createdAt
-                          ? "Visto"
-                          : otherDeliveredAt >= m.createdAt
-                            ? "Entregue"
-                            : "Enviado"
-                      }
-                    >
-                      {otherReadAt >= m.createdAt ? (
-                        <CheckCheck className="h-3 w-3 text-sky-500" />
-                      ) : otherDeliveredAt >= m.createdAt ? (
-                        <CheckCheck className="h-3 w-3 text-muted-foreground" />
-                      ) : (
-                        <Check className="h-3 w-3 text-muted-foreground" />
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {!editing && (
-                <div className="absolute right-2 top-0 hidden items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm group-hover:flex">
-                  <div className="relative">
-                    <button
-                      onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
-                      aria-label="Reagir"
-                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <Smile className="h-3 w-3" />
-                    </button>
-                    {pickerFor === m.id && (
-                      <>
-                        <div className="fixed inset-0 z-30" onClick={() => setPickerFor(null)} />
-                        <div className="absolute right-0 top-full z-40 mt-1 flex gap-0.5 rounded-md border border-border bg-background p-1 shadow-lg">
-                          {REACTION_EMOJIS.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => {
-                                onReact(m.id, emoji);
-                                setPickerFor(null);
-                              }}
-                              className="rounded p-1 text-sm hover:bg-muted"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => onReply(m)}
-                    aria-label="Responder"
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <Reply className="h-3 w-3" />
-                  </button>
-                  {mine && (
-                    <>
-                      <button
-                        onClick={() => setEditingId(m.id)}
-                        aria-label="Editar"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => onDelete(m.id)}
-                        aria-label="Excluir"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      {typingUsers.length > 0 && (
-        <p className="text-[11px] italic text-muted-foreground">
-          {typingUsers.map((u) => u.userName).join(", ")}{" "}
-          {typingUsers.length === 1 ? "está digitando..." : "estão digitando..."}
-        </p>
+          })}
+          {typingUsers.length > 0 && (
+            <p className="text-[11px] italic text-muted-foreground">
+              {typingUsers.map((u) => u.userName).join(", ")}{" "}
+              {typingUsers.length === 1 ? "está digitando..." : "estão digitando..."}
+            </p>
+          )}
+        </div>
+      </div>
+      {showNewMessagesPill && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground shadow-lg hover:bg-brand-hover"
+        >
+          Novas mensagens ↓
+        </button>
       )}
     </div>
   );
@@ -2059,7 +2241,7 @@ function MentionTextarea({
         }}
         rows={rows}
         placeholder={placeholder}
-        className="max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-ring"
+        className="max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-sm"
       />
       {query !== null && options.length > 0 && (
         <div className="absolute bottom-full left-0 z-20 mb-1 flex max-h-[28rem] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-border bg-background shadow-lg">
@@ -2111,7 +2293,7 @@ function MentionTextarea({
                   ? "Buscar..."
                   : `Buscar ${MENTION_KIND_CONFIG[tab].label.toLowerCase()}...`
               }
-              className="w-full rounded border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+              className="w-full rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-xs"
             />
           </div>
           <ul className="min-h-0 flex-1 overflow-auto py-1">
@@ -2171,7 +2353,13 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function AttachmentList({ message, attachments }: { message: ChatMessage; attachments: ChatAttachment[] }) {
+function AttachmentList({
+  message,
+  attachments,
+}: {
+  message: ChatMessage;
+  attachments: ChatAttachment[];
+}) {
   return (
     <div className="mt-1.5 flex flex-col gap-1.5">
       {attachments.map((a) => {
@@ -2282,116 +2470,118 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-border p-3">
-      {replyingTo && (
-        <div className="mb-2 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs">
-          <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <span className="font-medium">{replyingTo.authorName}</span>{" "}
-            <span className="line-clamp-1 break-words text-muted-foreground">
-              {messagePreviewLabel(replyingTo)}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onCancelReply}
-            aria-label="Cancelar resposta"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-      {pending.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {pending.map((a) => (
-            <div
-              key={a.path}
-              className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
-            >
-              {a.type.startsWith("image/") ? (
-                <img src={a.url} alt="" className="h-8 w-8 rounded object-cover" />
-              ) : (
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="max-w-[140px] truncate">{a.name}</span>
-              <button
-                type="button"
-                onClick={() => setPending((p) => p.filter((x) => x.path !== a.path))}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Remover anexo"
-              >
-                <X className="h-3 w-3" />
-              </button>
+    <div className="shrink-0 border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:px-8 md:py-4">
+      <div className="mx-auto w-full max-w-full md:max-w-5xl">
+        {replyingTo && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs">
+            <Reply className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <span className="font-medium">{replyingTo.authorName}</span>{" "}
+              <span className="line-clamp-1 break-words text-muted-foreground">
+                {messagePreviewLabel(replyingTo)}
+              </span>
             </div>
-          ))}
-        </div>
-      )}
-      {voiceMode ? (
-        <VoiceRecorderBar
-          convoId={convoId}
-          replyToId={replyingTo?.id}
-          onDone={() => setVoiceMode(false)}
-          onSent={() => {
-            setVoiceMode(false);
-            onCancelReply();
-          }}
-        />
-      ) : (
-      <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring">
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => void handleFiles(e.target.files)}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          aria-label="Anexar arquivo"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setVoiceMode(true)}
-          disabled={uploading}
-          aria-label="Gravar mensagem de voz"
-          className="inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-        >
-          <Mic className="h-4 w-4" />
-        </button>
-        <MentionTextarea
-          value={value}
-          onChange={(v) => {
-            setValue(v);
-            if (v.trim()) broadcastTyping(convoId);
-          }}
-          options={options}
-          autoFocus
-          onEnterSubmit={submit}
-          placeholder={placeholder}
-        />
-        <button
-          onClick={submit}
-          disabled={(!value.trim() && pending.length === 0) || uploading}
-          aria-label="Enviar"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-background hover:opacity-90 disabled:opacity-40"
-        >
-          <Send className="h-3.5 w-3.5" />
-        </button>
+            <button
+              type="button"
+              onClick={onCancelReply}
+              aria-label="Cancelar resposta"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+        {pending.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pending.map((a) => (
+              <div
+                key={a.path}
+                className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
+              >
+                {a.type.startsWith("image/") ? (
+                  <img src={a.url} alt="" className="h-8 w-8 rounded object-cover" />
+                ) : (
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="max-w-[140px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setPending((p) => p.filter((x) => x.path !== a.path))}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Remover anexo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {voiceMode ? (
+          <VoiceRecorderBar
+            convoId={convoId}
+            replyToId={replyingTo?.id}
+            onDone={() => setVoiceMode(false)}
+            onSent={() => {
+              setVoiceMode(false);
+              onCancelReply();
+            }}
+          />
+        ) : (
+          <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring">
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => void handleFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              aria-label="Anexar arquivo"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoiceMode(true)}
+              disabled={uploading}
+              aria-label="Gravar mensagem de voz"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+            <MentionTextarea
+              value={value}
+              onChange={(v) => {
+                setValue(v);
+                if (v.trim()) broadcastTyping(convoId);
+              }}
+              options={options}
+              autoFocus
+              onEnterSubmit={submit}
+              placeholder={placeholder}
+            />
+            <button
+              onClick={submit}
+              disabled={(!value.trim() && pending.length === 0) || uploading}
+              aria-label="Enviar"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand text-brand-foreground hover:bg-brand-hover disabled:opacity-40"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+        {!voiceMode && (
+          <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
+            <AtSign className="h-3 w-3" /> mencione tarefas{allowUserMentions ? " e pessoas" : ""}{" "}
+            com @ • Enter envia
+            {uploading && <span className="ml-2">• enviando anexo...</span>}
+          </p>
+        )}
       </div>
-      )}
-      {!voiceMode && (
-        <p className="mt-1 flex items-center gap-1 px-1 text-[10px] text-muted-foreground">
-          <AtSign className="h-3 w-3" /> mencione tarefas{allowUserMentions ? " e pessoas" : ""} com @
-          • Enter envia
-          {uploading && <span className="ml-2">• enviando anexo...</span>}
-        </p>
-      )}
     </div>
   );
 }

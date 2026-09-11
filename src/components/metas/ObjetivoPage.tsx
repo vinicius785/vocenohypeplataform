@@ -2,13 +2,15 @@ import { useMemo, useRef, useState } from "react";
 import { ArrowLeft, MoreHorizontal, Percent, Plus, Trash2 } from "lucide-react";
 import type { ComparisonOperator, Indicador, Objetivo } from "@/lib/metas-store";
 import {
-  INDICADOR_SAUDE_BAR,
+  INDICADOR_SAUDE_DOT,
+  INDICADOR_SAUDE_LABEL,
   indicadorSaudeParaObjetivo,
   objetivoProgresso,
   objetivoResumoSaude,
   objetivoStats,
   progressoEsperado,
 } from "@/lib/metas-engine";
+import { Button } from "@/components/ui/button";
 import { fmtPeriodo } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ExpectedProgressLine } from "./ExpectedProgressLine";
@@ -109,165 +111,221 @@ export function ObjetivoPage({
     filtro === "em_risco" ? emRisco : filtro === "saudaveis" ? saudaveis : indicadoresDoObjetivo;
 
   return (
-    <div className="mx-auto w-full max-w-4xl">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Metas
-        </button>
-        <div ref={menuRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Mais ações"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-border bg-popover p-1 shadow-md">
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
-                className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
-              >
-                Editar objetivo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-                className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-muted"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Excluir objetivo
-              </button>
+    <div className="mx-auto w-full max-w-4xl space-y-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 rounded text-sm text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      >
+        <ArrowLeft className="h-4 w-4" /> Metas
+      </button>
+
+      {/* Hero — protagonista brand blue com título/dono/área/período,
+       * progresso (sempre dominante e azul) e saúde à parte, como chip
+       * semântico, nunca pintando a superfície inteira de vermelho. */}
+      <div className="rounded-[28px] bg-brand p-6 dark:shadow-none md:p-7">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Avatar
+              name={objetivo.dono}
+              photo={members.find((m) => m.name === objetivo.dono)?.photo}
+            />
+            <p className="min-w-0 truncate text-sm text-brand-foreground-secondary">
+              {objetivo.dono || "Sem dono"} · {objetivo.area}
+              {periodo ? ` · ${periodo}` : ""}
+            </p>
+          </div>
+          <div ref={menuRef} className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Mais ações"
+              aria-expanded={menuOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-brand-foreground-secondary hover:bg-black/10 hover:text-brand-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl bg-popover p-1 text-foreground shadow-lg dark:shadow-none">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEdit();
+                  }}
+                  className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-muted"
+                >
+                  Editar objetivo
+                </button>
+                {stats.total >= 2 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setPesosOpen(true);
+                    }}
+                    className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-muted"
+                  >
+                    Ajustar pesos
+                  </button>
+                )}
+                <div className="my-1 border-t border-border/60" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete();
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir objetivo
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <h1 className="mt-3 text-2xl font-bold tracking-tight text-brand-foreground md:text-3xl">
+          {objetivo.titulo}
+        </h1>
+        {objetivo.descricao && (
+          <p className="mt-1.5 max-w-xl text-sm text-brand-foreground-secondary">
+            {objetivo.descricao}
+          </p>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-4">
+          <div>
+            <p className="whitespace-nowrap text-[44px] font-bold leading-none tracking-tight text-brand-foreground">
+              {progresso == null ? "—" : Math.round(progresso)}
+              {progresso != null && <span className="text-2xl">%</span>}
+            </p>
+            <p className="mt-1.5 text-xs font-medium uppercase tracking-wide text-brand-foreground-secondary">
+              Progresso
+            </p>
+          </div>
+          <div className="min-w-[160px] flex-1">
+            <div
+              className="h-2 w-full overflow-hidden rounded-full bg-black/10"
+              role="progressbar"
+              aria-valuenow={progresso == null ? undefined : Math.round(progresso)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Progresso de ${objetivo.titulo}`}
+            >
+              <div
+                className="h-full rounded-full bg-background transition-[width] duration-300"
+                style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
+              />
+            </div>
+            <div className="mt-1.5">
+              <ExpectedProgressLine progresso={progresso} esperado={esperado} />
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-full bg-black/10 px-3 py-1.5">
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${INDICADOR_SAUDE_DOT[resumoSaude]}`}
+            />
+            <span className="text-xs font-medium text-brand-foreground">
+              {INDICADOR_SAUDE_LABEL[resumoSaude]}
+            </span>
+          </div>
+          {stats.total > 0 && (
+            <div>
+              <p className="text-lg font-semibold text-brand-foreground">{stats.total}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-brand-foreground-secondary">
+                {stats.total === 1 ? "Indicador" : "Indicadores"}
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
-        {objetivo.titulo}
-      </h1>
-      <div className="mt-2 flex items-center gap-2">
-        <Avatar name={objetivo.dono} photo={members.find((m) => m.name === objetivo.dono)?.photo} />
-        <p className="text-sm text-muted-foreground">
-          {objetivo.dono || "Sem dono"} · {objetivo.area}
-          {periodo ? ` · ${periodo}` : ""}
-        </p>
-      </div>
-      {objetivo.descricao && (
-        <p className="mt-2 text-sm text-muted-foreground">{objetivo.descricao}</p>
-      )}
+      {/* Indicadores vinculados — superfície estruturada com cabeçalho
+       * claro, filtros contextuais preservados, ações em cada linha. */}
+      <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[15px] font-semibold text-foreground">
+            Indicadores{" "}
+            {stats.total > 0 && <span className="text-text-secondary">({stats.total})</span>}
+          </h2>
+          <div className="flex items-center gap-2">
+            {stats.total >= 2 && (
+              <button
+                type="button"
+                onClick={() => setPesosOpen(true)}
+                className="inline-flex items-center gap-1 rounded text-xs font-medium text-text-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <Percent className="h-3.5 w-3.5" /> Ajustar pesos
+              </button>
+            )}
+            <Button variant="primary" size="sm" onClick={() => setVincularOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Vincular indicador
+            </Button>
+          </div>
+        </div>
 
-      <div className="mt-6 flex items-baseline gap-1.5">
-        <span className="text-5xl font-light tracking-tight text-foreground">
-          {progresso == null ? "—" : Math.round(progresso)}
-        </span>
-        {progresso != null && (
-          <span className="text-base font-medium text-muted-foreground">% de progresso</span>
+        {stats.total > 0 && (
+          <div className="mt-3 flex items-center gap-1">
+            {(
+              [
+                ["todos", `Todos ${stats.total}`],
+                ["em_risco", `Em risco ${emRisco.length}`],
+                ["saudaveis", `Saudáveis ${saudaveis.length}`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFiltro(key)}
+                className={`rounded-full px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                  filtro === key
+                    ? key === "em_risco"
+                      ? "bg-danger-soft text-danger-soft-foreground"
+                      : key === "saudaveis"
+                        ? "bg-success-soft text-success-soft-foreground"
+                        : "bg-muted text-foreground"
+                    : "text-text-secondary hover:bg-muted/60"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {indicadoresDoObjetivo.length === 0 ? (
+          <div className="mt-4 rounded-2xl bg-muted/40 p-8 text-center">
+            <p className="text-sm text-text-secondary">Nenhum indicador ainda.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => setVincularOpen(true)}
+            >
+              <Plus className="h-4 w-4" /> Vincular indicador
+            </Button>
+          </div>
+        ) : indicadoresFiltrados.length === 0 ? (
+          <p className="mt-6 text-center text-sm text-text-secondary">
+            {filtro === "em_risco" ? "Nenhum indicador em risco." : "Nenhum indicador saudável."}
+          </p>
+        ) : (
+          <div className="mt-3 divide-y divide-border/60">
+            {indicadoresFiltrados.map((ind) => (
+              <ObjetivoIndicadorRow
+                key={ind.id}
+                indicador={ind}
+                objetivoId={objetivo.id}
+                siblings={indicadoresDoObjetivo}
+                onOpen={() => onOpenIndicador(ind.id)}
+                onQuickUpdate={() => setQuickUpdateTarget(ind)}
+                onUnlink={() => onUnlinkIndicador(ind.id)}
+              />
+            ))}
+          </div>
         )}
       </div>
-      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full rounded-full transition-[width] duration-300 ${INDICADOR_SAUDE_BAR[resumoSaude]}`}
-          style={{ width: `${Math.max(0, Math.min(100, progresso ?? 0))}%` }}
-        />
-      </div>
-      <div className="mt-2">
-        <ExpectedProgressLine progresso={progresso} esperado={esperado} />
-      </div>
-      <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">
-          Indicadores{" "}
-          {stats.total > 0 && <span className="text-muted-foreground">({stats.total})</span>}
-        </h2>
-        <div className="flex items-center gap-2">
-          {stats.total >= 2 && (
-            <button
-              type="button"
-              onClick={() => setPesosOpen(true)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              <Percent className="h-3.5 w-3.5" /> Ajustar pesos
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setVincularOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
-            <Plus className="h-3.5 w-3.5" /> Vincular indicador
-          </button>
-        </div>
-      </div>
-
-      {stats.total > 0 && (
-        <div className="mt-3 flex items-center gap-1">
-          {(
-            [
-              ["todos", `Todos ${stats.total}`],
-              ["em_risco", `Em risco ${emRisco.length}`],
-              ["saudaveis", `Saudáveis ${saudaveis.length}`],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setFiltro(key)}
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                filtro === key
-                  ? key === "em_risco"
-                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-400"
-                    : key === "saudaveis"
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
-                      : "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {indicadoresDoObjetivo.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center">
-          <p className="text-sm text-muted-foreground">Nenhum indicador ainda.</p>
-          <button
-            type="button"
-            onClick={() => setVincularOpen(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <Plus className="h-4 w-4" /> Vincular indicador
-          </button>
-        </div>
-      ) : indicadoresFiltrados.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          {filtro === "em_risco" ? "Nenhum indicador em risco." : "Nenhum indicador saudável."}
-        </p>
-      ) : (
-        <div className="mt-3">
-          {indicadoresFiltrados.map((ind) => (
-            <ObjetivoIndicadorRow
-              key={ind.id}
-              indicador={ind}
-              objetivoId={objetivo.id}
-              onOpen={() => onOpenIndicador(ind.id)}
-              onQuickUpdate={() => setQuickUpdateTarget(ind)}
-              onUnlink={() => onUnlinkIndicador(ind.id)}
-            />
-          ))}
-        </div>
-      )}
 
       <VincularIndicadorDialog
         open={vincularOpen}

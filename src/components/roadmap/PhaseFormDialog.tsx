@@ -218,7 +218,7 @@ export function PhaseFormDialog({
           <button
             type="button"
             onClick={save}
-            className="cursor-pointer rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            className="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
           >
             {initial ? "Salvar" : "Criar fase"}
           </button>

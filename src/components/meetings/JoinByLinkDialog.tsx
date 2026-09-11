@@ -1,52 +1,95 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /** Ação secundária do header: cola um link (ou código) de videochamada e
- * entra direto — só abre a URL numa nova aba, sem validar domínio. */
+ * entra direto — só abre a URL numa nova aba, sem validar domínio. Modal
+ * pequeno e focado (não um drawer) — o fluxo é um campo só. */
 export function JoinByLinkDialog() {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const join = () => {
     const v = value.trim();
-    if (!v) return;
+    if (!v) {
+      setError("Informe um link ou código.");
+      return;
+    }
     const url = /^https?:\/\//.test(v) ? v : `https://meet.google.com/${v}`;
     window.open(url, "_blank", "noopener,noreferrer");
     setOpen(false);
     setValue("");
+    setError(null);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) {
+          setValue("");
+          setError(null);
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="comfortable">
           <LogIn className="h-3.5 w-3.5" /> Entrar com código ou link
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
-        <p className="text-xs font-medium text-muted-foreground">Entrar em uma reunião</p>
-        <div className="mt-2 flex gap-2">
-          <input
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Entrar em uma reunião</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="join-by-link-input">Código ou link do Google Meet</Label>
+          <Input
+            id="join-by-link-input"
             type="text"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (error) setError(null);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 join();
               }
             }}
-            placeholder="Link ou código do Google Meet"
+            placeholder="Ex.: abc-defg-hij ou meet.google.com/abc-defg-hij"
             autoFocus
-            className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+            className="focus-visible:ring-brand"
+            aria-invalid={!!error}
+            aria-describedby={error ? "join-by-link-error" : undefined}
           />
-          <Button size="sm" onClick={join} disabled={!value.trim()}>
-            Entrar
-          </Button>
+          {error && (
+            <p id="join-by-link-error" className="text-xs text-danger">
+              {error}
+            </p>
+          )}
         </div>
-      </PopoverContent>
-    </Popover>
+        <Button
+          variant="primary"
+          size="comfortable"
+          className="w-full"
+          onClick={join}
+          disabled={!value.trim()}
+        >
+          <LogIn className="h-3.5 w-3.5" /> Entrar
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }

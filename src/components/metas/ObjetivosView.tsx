@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Filter, Search, X } from "lucide-react";
+import { Filter, Search, Target, X } from "lucide-react";
 import { META_AREAS, type Indicador, type MetaArea, type Objetivo } from "@/lib/metas-store";
 import {
   type IndicadorSaude,
@@ -8,7 +8,10 @@ import {
   objetivoResumoSaude,
   objetivoStats,
 } from "@/lib/metas-engine";
+import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { fmtMonthYear } from "./metas-ui-utils";
+import { Avatar } from "./Avatar";
 import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
 import { useDropdown } from "./use-dropdown";
 
@@ -17,12 +20,11 @@ type Member = { name: string; photo?: string };
 const AGRUPAMENTO_KEY = "metas.agrupamento";
 
 /** Visão "Objetivos" — responde "estamos chegando onde queremos?".
- * Resumo em uma linha discreta (não cards), busca + um único popover de
- * filtros (Responsável/Área/Status/Período — o resto dos filtros
- * antigos, que serviam pra indicadores soltos, migrou pra aba
- * Indicadores), cards simplificados (uma linha de saúde só, nunca
- * várias contagens ao mesmo tempo). Estado 100% local — não recalcula
- * nada que `MetasSection` já não tenha computado, só reapresenta. */
+ * Protagonista azul com o progresso médio (dado dominante) + apoio
+ * (ativos/saudáveis/atenção/risco), toolbar única (busca + filtros +
+ * chips removíveis), "Meus objetivos" em destaque, "Objetivos do time"
+ * agrupável por pessoa/objetivo. Estado 100% local — não recalcula nada
+ * que `MetasSection` já não tenha computado, só reapresenta. */
 export function ObjetivosView({
   objetivos,
   indicadores,
@@ -75,6 +77,7 @@ export function ObjetivosView({
   const resumo = useMemo(() => {
     const ativos = objetivos.filter((o) => !o.cancelado);
     let saudaveis = 0;
+    let atencao = 0;
     let emRisco = 0;
     let progressoSum = 0;
     let progressoCount = 0;
@@ -82,6 +85,7 @@ export function ObjetivosView({
       const stats = objetivoStats(o.id, indicadores);
       const resumoSaude = objetivoResumoSaude(o, stats);
       if (resumoSaude === "saudavel") saudaveis++;
+      else if (resumoSaude === "atencao") atencao++;
       else if (resumoSaude === "em_risco") emRisco++;
       const p = objetivoProgresso(o.id, indicadores);
       if (p != null) {
@@ -92,6 +96,7 @@ export function ObjetivosView({
     return {
       ativos: ativos.length,
       saudaveis,
+      atencao,
       emRisco,
       progressoMedio: progressoCount > 0 ? Math.round(progressoSum / progressoCount) : null,
     };
@@ -141,68 +146,106 @@ export function ObjetivosView({
     },
   ].filter((c): c is { key: string; label: string; clear: () => void } => !!c);
 
+  const clearAllFilters = () => {
+    setAreaFilter("");
+    setDonoFilter("");
+    setSaudeFilter("");
+    setPeriodoFilter("");
+  };
+
   const indicadoresPorObjetivo = (o: Objetivo) =>
     indicadores.filter((i) => i.objetivoIds?.includes(o.id));
 
   return (
-    <div>
-      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-        <span>
-          {resumo.ativos} objetivo{resumo.ativos === 1 ? "" : "s"} ativo
-          {resumo.ativos === 1 ? "" : "s"}
+    <div className="space-y-6">
+      {/* Protagonista — progresso médio é o dado dominante; os demais
+       * (ativos/saudáveis/atenção/risco) são apoio dentro da mesma
+       * composição, nunca 4 cards do mesmo peso. */}
+      <div className="rounded-[28px] bg-brand p-6 dark:shadow-none md:p-7">
+        <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
+          Progresso médio
         </span>
-        <span>·</span>
-        <button
-          type="button"
-          onClick={() => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel"))}
-          className="font-medium text-emerald-600 hover:underline dark:text-emerald-400"
-        >
-          {resumo.saudaveis} saudáve{resumo.saudaveis === 1 ? "l" : "is"}
-        </button>
-        <span>·</span>
-        <button
-          type="button"
-          onClick={() => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco"))}
-          className={`font-medium hover:underline ${resumo.emRisco > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}
-        >
-          {resumo.emRisco} em risco
-        </button>
-        <span>·</span>
-        <span>
-          {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`} progresso médio
-        </span>
-      </p>
+        <p className="mt-4 whitespace-nowrap text-[48px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[56px] md:text-[64px]">
+          {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
+        </p>
+        <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
+              Ativos
+            </p>
+            <p className="text-lg font-semibold text-brand-foreground">{resumo.ativos}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel"))}
+            className="text-left"
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
+              Saudáveis
+            </p>
+            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
+              {resumo.saudaveis}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaudeFilter((s) => (s === "atencao" ? "" : "atencao"))}
+            className="text-left"
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
+              Em atenção
+            </p>
+            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
+              {resumo.atencao}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco"))}
+            className="text-left"
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
+              Em risco
+            </p>
+            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
+              {resumo.emRisco}
+            </p>
+          </button>
+        </div>
+      </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Toolbar única — busca + filtros, sincronizados com a mesma lista. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
         <div className="relative w-full max-w-xs sm:flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
+          <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar objetivos..."
-            className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 border-0 bg-background pl-8 text-sm focus-visible:ring-brand"
           />
         </div>
         <div ref={filtersRef} className="relative">
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium ${
+            aria-expanded={filtersOpen}
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
               hasFilters
-                ? "border-foreground bg-muted text-foreground"
-                : "border-border text-muted-foreground hover:bg-muted/40"
+                ? "bg-brand-subtle text-brand"
+                : "bg-background text-text-secondary hover:text-foreground"
             }`}
           >
             <Filter className="h-3.5 w-3.5" />{" "}
             {hasFilters ? `Filtros · ${activeChips.length}` : "Filtros"}
           </button>
           {filtersOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-72 space-y-2 rounded-md border border-border bg-popover p-3 shadow-md">
+            <div className="absolute right-0 top-full z-20 mt-1.5 w-72 space-y-2 rounded-2xl bg-popover p-3 shadow-lg dark:shadow-none">
               {donosEmUso.length > 0 && (
                 <select
                   value={donoFilter}
                   onChange={(e) => setDonoFilter(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <option value="">Responsável</option>
                   {donosEmUso.map((d) => (
@@ -215,7 +258,7 @@ export function ObjetivosView({
               <select
                 value={areaFilter}
                 onChange={(e) => setAreaFilter(e.target.value as typeof areaFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <option value="">Área</option>
                 {META_AREAS.map((a) => (
@@ -227,7 +270,7 @@ export function ObjetivosView({
               <select
                 value={saudeFilter}
                 onChange={(e) => setSaudeFilter(e.target.value as typeof saudeFilter)}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 <option value="">Status</option>
                 {(Object.keys(INDICADOR_SAUDE_LABEL) as IndicadorSaude[]).map((s) => (
@@ -240,7 +283,7 @@ export function ObjetivosView({
                 <select
                   value={periodoFilter}
                   onChange={(e) => setPeriodoFilter(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  className="h-9 w-full rounded-md border-0 bg-muted px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <option value="">Período</option>
                   {periodosEmUso.map((p) => (
@@ -256,29 +299,40 @@ export function ObjetivosView({
       </div>
 
       {activeChips.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {activeChips.map((c) => (
             <button
               key={c.key}
               type="button"
               onClick={c.clear}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+              className="inline-flex items-center gap-1 rounded-full bg-brand-subtle px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle/70"
             >
               {c.label} <X className="h-3 w-3" />
             </button>
           ))}
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="text-xs font-medium text-text-secondary hover:text-foreground"
+          >
+            Limpar filtros
+          </button>
         </div>
       )}
 
       {objetivos.length === 0 ? (
-        <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center">
-          <p className="text-sm text-muted-foreground">Nenhum objetivo cadastrado ainda.</p>
+        <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+          <Target className="mx-auto h-8 w-8 text-text-secondary/50" />
+          <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo cadastrado</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Crie o primeiro objetivo pelo botão "Criar" no topo da página.
+          </p>
         </div>
       ) : (
-        <div className="mt-6 space-y-8">
+        <div className="space-y-8">
           {meusObjetivos.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-foreground">Meus objetivos</h2>
+              <h2 className="text-[15px] font-semibold text-foreground">Meus objetivos</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {meusObjetivos.map((o) => (
                   <ObjetivoSummaryCard
@@ -296,53 +350,50 @@ export function ObjetivosView({
           {outrosObjetivos.length > 0 && (
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-foreground">Objetivos do time</h2>
-                <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setAgrupamento("pessoa")}
-                    className={`rounded px-2 py-1 font-medium ${
-                      agrupamento === "pessoa"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Por pessoa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAgrupamento("objetivo")}
-                    className={`rounded px-2 py-1 font-medium ${
-                      agrupamento === "objetivo"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Por objetivo
-                  </button>
-                </div>
+                <h2 className="text-[15px] font-semibold text-foreground">Objetivos do time</h2>
+                <SegmentedControl
+                  aria-label="Agrupamento dos objetivos do time"
+                  size="sm"
+                  value={agrupamento}
+                  onChange={setAgrupamento}
+                  options={[
+                    { value: "pessoa", label: "Por pessoa" },
+                    { value: "objetivo", label: "Por objetivo" },
+                  ]}
+                />
               </div>
 
               {agrupamento === "pessoa" ? (
-                objetivosPorDono.map(([dono, objs]) => (
-                  <div key={dono} className="space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {dono}
-                    </h3>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {objs.map((o) => (
-                        <ObjetivoSummaryCard
-                          key={o.id}
-                          objetivo={o}
-                          indicadores={indicadoresPorObjetivo(o)}
-                          members={members}
-                          onOpen={() => onOpenObjetivo(o.id)}
-                          compact
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))
+                <div className="space-y-6">
+                  {objetivosPorDono.map(([dono, objs]) => {
+                    const donoMember = members.find((m) => m.name === dono);
+                    return (
+                      <div key={dono} className="rounded-[24px] bg-card p-5 dark:shadow-none">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar name={dono} photo={donoMember?.photo} size="md" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-foreground">{dono}</p>
+                            <p className="text-xs text-text-secondary">
+                              {objs.length} {objs.length === 1 ? "objetivo" : "objetivos"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {objs.map((o) => (
+                            <ObjetivoSummaryCard
+                              key={o.id}
+                              objetivo={o}
+                              indicadores={indicadoresPorObjetivo(o)}
+                              members={members}
+                              onOpen={() => onOpenObjetivo(o.id)}
+                              compact
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {outrosObjetivos.map((o) => (
@@ -360,9 +411,15 @@ export function ObjetivosView({
           )}
 
           {meusObjetivos.length === 0 && outrosObjetivos.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Nenhum objetivo corresponde aos filtros selecionados.
-            </p>
+            <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
+              <Search className="mx-auto h-8 w-8 text-text-secondary/50" />
+              <p className="mt-3 text-sm font-medium text-foreground">Nenhum objetivo encontrado</p>
+              <p className="mt-1 text-sm text-text-secondary">
+                {busca.trim()
+                  ? "Ajuste a busca ou remova filtros ativos."
+                  : "Nenhum objetivo corresponde aos filtros selecionados."}
+              </p>
+            </div>
           )}
         </div>
       )}

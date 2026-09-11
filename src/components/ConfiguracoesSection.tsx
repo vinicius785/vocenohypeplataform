@@ -97,6 +97,15 @@ import { loadPricing, fetchPricing, savePricing, type PricingSettings } from "@/
 import { TIERS, FORMATOS, type TierId, type FormatoId } from "@/lib/pricing";
 import { TimePermissoesTab } from "@/components/configuracoes/TimePermissoesTab";
 import { logSettingsAudit } from "@/lib/settings-audit";
+import { PageContainer } from "@/components/shared/PageContainer";
+import { DisponibilidadeTab } from "@/components/meetings/DisponibilidadeTab";
+import {
+  loadMeetings,
+  loadDisponibilidades,
+  saveMyDisponibilidade,
+  onDisponibilidadesChange,
+  defaultAvailability,
+} from "@/lib/reunioes-store";
 
 type TabKey =
   | "perfil"
@@ -108,7 +117,8 @@ type TabKey =
   | "time_permissoes"
   | "seguranca"
   | "dados_backup"
-  | "score_operacional";
+  | "score_operacional"
+  | "disponibilidade";
 
 type Perfil = {
   nome: string;
@@ -216,6 +226,10 @@ const SETTINGS_GROUPS: {
     tabs: [
       { k: "perfil", label: "Meu Perfil", icon: User },
       { k: "preferencias", label: "Preferências", icon: Bell },
+      // Movido de Reuniões na Etapa 3 (era um item da barra interna de
+      // lá) — é preferência pessoal do usuário, não navegação/visão da
+      // agenda em si, então faz mais sentido aqui do que em "Workspace".
+      { k: "disponibilidade", label: "Disponibilidade de reuniões", icon: Clock },
       { k: "novidades", label: "Novidades", icon: Sparkles },
     ],
   },
@@ -240,6 +254,16 @@ export function ConfiguracoesSection() {
   const [tab, setTab] = useState<TabKey>("perfil");
   const [perfil, setPerfil] = useState<Perfil>(() => loadPerfil());
   const [status, setStatus] = useState<UserStatus>(() => loadStatus());
+  // Mesmos helpers que `ReunioesSection` já usava pra Disponibilidade —
+  // nenhuma camada de dados nova, só um novo lugar que os chama.
+  const me = getMe();
+  const [meetings] = useState(() => loadMeetings());
+  const [disponibilidades, setDisponibilidades] = useState(() => loadDisponibilidades());
+  const myAvail = useMemo(
+    () => disponibilidades.find((a) => a.id === me.id) ?? defaultAvailability(me.id),
+    [disponibilidades, me.id],
+  );
+  useEffect(() => onDisponibilidadesChange(() => setDisponibilidades(loadDisponibilidades())), []);
   const access = useMyAccess();
   const canConfig = hasPermission(access, "configuracoes");
   const canSeeTimePermissoes = canConfig || hasPermission(access, "membros");
@@ -265,7 +289,7 @@ export function ConfiguracoesSection() {
   if (!canSeeTimePermissoes) locked.add("time_permissoes");
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <PageContainer>
       <SectionHeader title="Configurações" subtitle="Preferências do workspace." />
 
       <div className="mt-6 flex flex-col gap-8 sm:flex-row">
@@ -276,6 +300,13 @@ export function ConfiguracoesSection() {
           {tab === "workspace" && (canConfig ? <WorkspaceTab /> : <LockedSection title="Geral" />)}
           {tab === "preferencias" && <PreferenciasTab />}
           {tab === "novidades" && <NovidadesTab />}
+          {tab === "disponibilidade" && (
+            <DisponibilidadeTab
+              avail={myAvail}
+              meetings={meetings}
+              onChange={(next) => saveMyDisponibilidade(next)}
+            />
+          )}
           {tab === "integracoes" && <IntegracoesTab />}
           {tab === "precificacao" &&
             (canConfig ? <PrecificacaoTab /> : <LockedSection title="Custos e precificação" />)}
@@ -303,7 +334,7 @@ export function ConfiguracoesSection() {
           <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

@@ -105,7 +105,7 @@ function InfoTip({ text }: { text: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Info className="h-3 w-3 shrink-0 cursor-help text-muted-foreground/70" />
+        <Info className="h-3 w-3 shrink-0 cursor-help text-text-secondary/70" />
       </TooltipTrigger>
       <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
     </Tooltip>
@@ -132,7 +132,7 @@ function ProfileCard({
   return (
     <section className="rounded-lg border border-border p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
           {icon}
           {title}
         </p>
@@ -156,17 +156,17 @@ function StartOfDayContent({ member }: { member: Member }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">Hoje</span>
+        <span className="text-text-secondary">Hoje</span>
         <span className="font-medium tabular-nums text-foreground">{todayTime ?? "—"}</span>
       </div>
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">Média últimos 30 dias</span>
+        <span className="text-text-secondary">Média últimos 30 dias</span>
         <span className="font-medium tabular-nums text-foreground">{avg30 ?? "—"}</span>
       </div>
       <button
         type="button"
         onClick={() => setShowHistory(true)}
-        className="mt-1 cursor-pointer text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        className="mt-1 cursor-pointer text-[11px] font-medium text-text-secondary underline underline-offset-2 hover:text-foreground"
       >
         Ver histórico →
       </button>
@@ -350,7 +350,7 @@ export function MemberProfileDialog({
 
   const scoreTone =
     score.score == null
-      ? "text-muted-foreground"
+      ? "text-text-secondary"
       : score.score >= 90
         ? "text-emerald-600 dark:text-emerald-400"
         : score.score < 60
@@ -586,7 +586,7 @@ export function MemberProfileDialog({
                     {show("name") ? member.name || "(sem nome)" : "Membro"}
                   </p>
                   {show("role") && member.role && (
-                    <p className="truncate text-sm text-muted-foreground">{member.role}</p>
+                    <p className="truncate text-sm text-text-secondary">{member.role}</p>
                   )}
                   <div className="mt-1.5 flex items-center gap-1.5">
                     {member.isAdmin && (
@@ -597,9 +597,7 @@ export function MemberProfileDialog({
                         <ShieldCheck className="h-2.5 w-2.5" /> Admin
                       </Badge>
                     )}
-                    <span className="text-[11px] text-muted-foreground">
-                      {STATUS_LABEL[status]}
-                    </span>
+                    <span className="text-[11px] text-text-secondary">{STATUS_LABEL[status]}</span>
                   </div>
                 </div>
               </div>
@@ -620,7 +618,7 @@ export function MemberProfileDialog({
             <TooltipProvider delayDuration={200}>
               <section className="rounded-lg border border-border p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
                     <Gauge className="h-3.5 w-3.5" /> Score Operacional
                   </p>
                   <div className="text-right">
@@ -629,7 +627,7 @@ export function MemberProfileDialog({
                     >
                       {score.score == null ? "—" : score.score}
                       {score.score != null && (
-                        <span className="text-base text-muted-foreground">/100</span>
+                        <span className="text-base text-text-secondary">/100</span>
                       )}
                       {score.guardrails.length > 0 && (
                         <InfoTip
@@ -638,7 +636,7 @@ export function MemberProfileDialog({
                       )}
                     </p>
                     {score.dataState === "sem_dados" && (
-                      <p className="text-xs font-medium text-muted-foreground">Sem dados</p>
+                      <p className="text-xs font-medium text-text-secondary">Sem dados</p>
                     )}
                     {score.dataState === "provisorio" && (
                       <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
@@ -646,17 +644,17 @@ export function MemberProfileDialog({
                       </p>
                     )}
                     {score.classificacao && (
-                      <p className="text-xs font-medium text-muted-foreground">
+                      <p className="text-xs font-medium text-text-secondary">
                         {score.classificacao}
                       </p>
                     )}
                     {trendLabel && score.dataState !== "sem_dados" && (
-                      <p className="text-[11px] text-muted-foreground">{trendLabel}</p>
+                      <p className="text-[11px] text-text-secondary">{trendLabel}</p>
                     )}
                   </div>
                 </div>
                 {score.dataState === "sem_dados" && (
-                  <p className="mt-3 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-3 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-text-secondary">
                     Nenhuma atividade operacional suficiente no período selecionado — sem tarefa
                     concluída, atualmente atrasada, ou vencendo neste recorte, não há base pra
                     calcular um score.
@@ -670,7 +668,7 @@ export function MemberProfileDialog({
                   </p>
                 )}
                 {score.dataState === "definitivo" && (
-                  <p className="mt-3 text-[11px] text-muted-foreground">
+                  <p className="mt-3 text-[11px] text-text-secondary">
                     Baseado em {score.amostra} tarefas no período.
                   </p>
                 )}
@@ -678,7 +676,7 @@ export function MemberProfileDialog({
                 <div className="mt-5 space-y-5">
                   <div>
                     <div className="mb-2.5 flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                         <CheckCircle2 className="h-3 w-3" /> Entrega
                       </p>
                       <span className="text-xs font-semibold tabular-nums text-foreground">
@@ -702,7 +700,7 @@ export function MemberProfileDialog({
                   </div>
                   <div className="border-t border-border pt-5">
                     <div className="mb-2.5 flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                         <RefreshCcw className="h-3 w-3" /> Previsibilidade
                         <InfoTip text="Mede a estabilidade do planejamento considerando alterações de prazo e o momento em que ocorreram." />
                       </p>
@@ -734,7 +732,7 @@ export function MemberProfileDialog({
                   </div>
                   <div className="border-t border-border pt-5">
                     <div className="mb-2.5 flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                         <CalendarClock className="h-3 w-3" /> Compromissos
                         {!score.compromissosAplicavel && (
                           <InfoTip text="Sem reunião esperada desta pessoa no período — a dimensão não entra no cálculo do score (nem soma, nem penaliza)." />
@@ -744,7 +742,7 @@ export function MemberProfileDialog({
                         {score.compromissosAplicavel ? (
                           <>{score.compromissosPontos} / 15</>
                         ) : (
-                          <span className="text-muted-foreground">Não aplicável</span>
+                          <span className="text-text-secondary">Não aplicável</span>
                         )}
                       </span>
                     </div>
@@ -778,7 +776,7 @@ export function MemberProfileDialog({
                 <button
                   type="button"
                   onClick={() => setShowComposition((s) => !s)}
-                  className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                  className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-[11px] font-medium text-text-secondary hover:text-foreground"
                 >
                   Ver composição do score
                   <ChevronDown
@@ -791,11 +789,11 @@ export function MemberProfileDialog({
                     <div>
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-foreground">Entrega</span>
-                        <span className="tabular-nums text-muted-foreground">
+                        <span className="tabular-nums text-text-secondary">
                           {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
                         </span>
                       </div>
-                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                      <div className="mt-1.5 space-y-0.5 text-text-secondary">
                         <p>
                           Taxa de conclusão no prazo:{" "}
                           {entrega.concluidas > 0
@@ -812,12 +810,12 @@ export function MemberProfileDialog({
                     <div className="border-t border-border pt-3">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-foreground">Previsibilidade</span>
-                        <span className="tabular-nums text-muted-foreground">
+                        <span className="tabular-nums text-text-secondary">
                           {score.previsibilidadePontos == null ? "—" : score.previsibilidadePontos}{" "}
                           / 35
                         </span>
                       </div>
-                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                      <div className="mt-1.5 space-y-0.5 text-text-secondary">
                         <p>
                           Taxa de replanejamento:{" "}
                           {fmtTaxaComN(
@@ -835,10 +833,10 @@ export function MemberProfileDialog({
                         previsibilidade.porTiming.apos_vencimento > 0 ||
                         (previsibilidade.taxaReplanejamento ?? 0) > 0.15) && (
                         <div className="mt-2 rounded-md bg-background/60 p-2">
-                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
                             Principais impactos
                           </p>
-                          <ul className="space-y-0.5 text-muted-foreground">
+                          <ul className="space-y-0.5 text-text-secondary">
                             {previsibilidade.porTiming.no_dia > 0 && (
                               <li>
                                 · {previsibilidade.porTiming.no_dia} prazo
@@ -868,13 +866,13 @@ export function MemberProfileDialog({
                     <div className="border-t border-border pt-3">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-foreground">Compromissos</span>
-                        <span className="tabular-nums text-muted-foreground">
+                        <span className="tabular-nums text-text-secondary">
                           {score.compromissosAplicavel
                             ? `${score.compromissosPontos} / 15`
                             : "Não aplicável"}
                         </span>
                       </div>
-                      <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+                      <div className="mt-1.5 space-y-0.5 text-text-secondary">
                         {score.compromissosAplicavel ? (
                           <>
                             <p>Reuniões consideradas: {compromissos.expected}</p>
@@ -894,7 +892,7 @@ export function MemberProfileDialog({
 
                     {completions.length > 0 && (
                       <div className="border-t border-border pt-2">
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
                           Tarefas concluídas no período
                         </p>
                         <ul className="space-y-0.5">
@@ -914,7 +912,7 @@ export function MemberProfileDialog({
                                   {c.taskTitle ?? "Tarefa"}
                                 </span>
                                 <span
-                                  className={`shrink-0 ${c.outcome === "late" ? "text-destructive" : "text-muted-foreground"}`}
+                                  className={`shrink-0 ${c.outcome === "late" ? "text-destructive" : "text-text-secondary"}`}
                                 >
                                   {label}
                                 </span>
@@ -931,7 +929,7 @@ export function MemberProfileDialog({
                                     {content}
                                   </button>
                                 ) : (
-                                  <div className="flex items-center gap-2 px-1 py-0.5 text-muted-foreground">
+                                  <div className="flex items-center gap-2 px-1 py-0.5 text-text-secondary">
                                     {content}
                                   </div>
                                 )}
@@ -940,7 +938,7 @@ export function MemberProfileDialog({
                           })}
                         </ul>
                         {completions.length > 8 && (
-                          <p className="mt-1 text-[10px] text-muted-foreground">
+                          <p className="mt-1 text-[10px] text-text-secondary">
                             +{completions.length - 8} outra{completions.length - 8 === 1 ? "" : "s"}
                           </p>
                         )}
@@ -949,7 +947,7 @@ export function MemberProfileDialog({
 
                     {deadlineChanges.length > 0 && (
                       <div className="border-t border-border pt-2">
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
                           Replanejamentos no período
                         </p>
                         <ul className="space-y-0.5">
@@ -971,7 +969,7 @@ export function MemberProfileDialog({
                                   {d.taskTitle ?? "Tarefa"}
                                 </span>
                                 <span
-                                  className={`shrink-0 ${isSevere ? "text-destructive" : "text-muted-foreground"}`}
+                                  className={`shrink-0 ${isSevere ? "text-destructive" : "text-text-secondary"}`}
                                 >
                                   {timing ? REPLAN_TIMING_LABEL[timing] : "—"}
                                   {d.motivo &&
@@ -990,7 +988,7 @@ export function MemberProfileDialog({
 
             {memberInsights.length > 0 && (
               <section className="space-y-1 rounded-lg border border-border p-4">
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
                   <Sparkles className="h-3.5 w-3.5" /> Insights operacionais
                 </p>
                 <div className="divide-y divide-border">
@@ -1052,7 +1050,7 @@ export function MemberProfileDialog({
                                 {d.taskTitle ?? "Tarefa"}
                               </button>
                             ) : (
-                              <p className="truncate px-1 py-0.5 text-xs text-muted-foreground">
+                              <p className="truncate px-1 py-0.5 text-xs text-text-secondary">
                                 {d.taskTitle ?? "Tarefa"}
                               </p>
                             )}
@@ -1073,7 +1071,7 @@ export function MemberProfileDialog({
                       {missedMeetings.map((mt, i) => (
                         <li
                           key={`${mt.meetingId}_${i}`}
-                          className="flex items-center gap-1.5 truncate px-1 py-0.5 text-xs text-muted-foreground"
+                          className="flex items-center gap-1.5 truncate px-1 py-0.5 text-xs text-text-secondary"
                         >
                           <CalendarClock className="h-3 w-3 shrink-0" />
                           {(mt.meetingId && meetingsById.get(mt.meetingId)?.titulo) ?? "Reunião"}
@@ -1103,7 +1101,7 @@ export function MemberProfileDialog({
                         </span>
                         <span
                           className={`shrink-0 text-[11px] tabular-nums ${
-                            t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
+                            t.bucket === "atrasada" ? "text-destructive" : "text-text-secondary"
                           }`}
                         >
                           {t.due}
@@ -1142,7 +1140,7 @@ export function MemberProfileDialog({
                       </span>
                     ))}
                     {projectNames.length > PROJECT_CHIP_LIMIT && (
-                      <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-text-secondary">
                         +{projectNames.length - PROJECT_CHIP_LIMIT}
                       </span>
                     )}
@@ -1232,14 +1230,14 @@ function InfoSection({
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-text-secondary hover:text-foreground"
       >
         Informações do membro
         <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
       {expanded &&
         (rows.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-text-secondary">
             Sem informações liberadas para visualização.
           </p>
         ) : (
@@ -1249,7 +1247,7 @@ function InfoSection({
                 key={r.key}
                 className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2"
               >
-                <dt className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <dt className="flex items-center gap-1.5 text-[11px] text-text-secondary">
                   {r.icon}
                   {r.label}
                 </dt>

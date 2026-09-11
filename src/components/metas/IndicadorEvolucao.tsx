@@ -23,11 +23,11 @@ function EvolucaoTooltip({
   if (!active || !payload?.length) return null;
   const point = payload[0].payload as ChartPoint;
   return (
-    <div className="rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+    <div className="rounded-lg bg-popover px-2.5 py-1.5 text-xs shadow-lg dark:shadow-none">
       <p className="font-medium text-foreground">
         {formatIndicadorValor(tipo, point.valor, unidade)}
       </p>
-      <p className="text-muted-foreground">{point.label}</p>
+      <p className="text-text-secondary">{point.label}</p>
     </div>
   );
 }
@@ -62,20 +62,20 @@ export function IndicadorEvolucao({
   );
 
   return (
-    <div className="mt-9">
-      <h2 className="text-sm font-semibold text-foreground">Evolução</h2>
+    <div>
+      <h2 className="text-[15px] font-semibold text-foreground">Evolução</h2>
       {chartData.length >= 2 ? (
         <div className="mt-3 h-40 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ left: -20, right: 8, top: 4, bottom: 0 }}>
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 10, fill: "var(--text-secondary)" }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 10, fill: "var(--text-secondary)" }}
                 axisLine={false}
                 tickLine={false}
                 width={36}
@@ -84,7 +84,7 @@ export function IndicadorEvolucao({
               <Line
                 type="monotone"
                 dataKey="valor"
-                stroke="var(--chart-1)"
+                stroke="var(--brand)"
                 strokeWidth={2}
                 dot={{ r: 3 }}
                 isAnimationActive={false}
@@ -93,7 +93,7 @@ export function IndicadorEvolucao({
           </ResponsiveContainer>
         </div>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-xs text-text-secondary">
           {chartData.length === 0
             ? "Nenhuma atualização ainda."
             : "Este indicador ainda não possui histórico suficiente para mostrar uma tendência."}

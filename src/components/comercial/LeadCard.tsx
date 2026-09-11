@@ -19,14 +19,6 @@ import { avatarAccent, initialsOf } from "@/components/team/member-ui";
 
 type CardTone = "neutral" | "blue" | "amber" | "red" | "green";
 
-const TONE_BORDER: Record<CardTone, string> = {
-  neutral: "border-border",
-  blue: "border-sky-500/50",
-  amber: "border-amber-500/50",
-  red: "border-red-500/50",
-  green: "border-emerald-500/50",
-};
-
 function cardSignal(lead: Lead): { tone: CardTone; text: string | null } {
   const stage = legacyStage(lead.stage);
   if (stage === "GANHO") return { tone: "green", text: null };
@@ -88,22 +80,24 @@ export function LeadCard({
           onOpen();
         }
       }}
-      className={`cursor-pointer rounded-lg border bg-card p-3 text-sm shadow-sm transition-all hover:border-foreground/30 hover:shadow-md ${
-        TONE_BORDER[signal.tone]
-      } ${dragging ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+      className={`cursor-pointer rounded-[18px] bg-card p-4 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${
+        dragging ? "scale-[0.98] opacity-50 shadow-lg" : "shadow-sm"
+      }`}
     >
       <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">{lead.company || lead.name}</p>
+        <p className="truncate text-[15px] font-semibold text-foreground">
+          {lead.company || lead.name}
+        </p>
         {lead.company && lead.name !== lead.company && (
-          <p className="truncate text-xs text-muted-foreground">{lead.name}</p>
+          <p className="truncate text-xs text-text-secondary">{lead.name}</p>
         )}
         {lead.contact && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{lead.contact}</p>
+          <p className="mt-0.5 truncate text-xs text-text-secondary">{lead.contact}</p>
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold tabular-nums text-foreground">
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="whitespace-nowrap text-[15px] font-bold tabular-nums text-foreground">
           {formatBRL(lead.value || 0)}
         </span>
         {lead.responsible ? (
@@ -118,7 +112,7 @@ export function LeadCard({
         ) : (
           <span
             title="Sem responsável"
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-text-secondary"
           >
             —
           </span>
@@ -157,26 +151,31 @@ export function LeadCard({
             </div>
           )}
 
-          {signal.text && (
-            <div
-              className={`mt-1.5 flex items-center gap-1 text-[11px] font-medium ${
-                signal.tone === "red"
-                  ? "text-red-600 dark:text-red-400"
-                  : signal.tone === "amber"
+          {signal.text &&
+            (signal.tone === "red" ? (
+              // Oportunidade parada/vencida — badge explícito em vez de
+              // borda vermelha no card inteiro (o card continua com a
+              // mesma superfície do sistema, só o rótulo carrega o risco).
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-danger-soft px-2 py-1 text-[11px] font-medium text-danger">
+                <AlertTriangle className="h-3 w-3" />
+                {signal.text}
+              </div>
+            ) : (
+              <div
+                className={`mt-1.5 flex items-center gap-1 text-[11px] font-medium ${
+                  signal.tone === "amber"
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-sky-600 dark:text-sky-400"
-              }`}
-            >
-              {signal.tone === "red" ? (
-                <AlertTriangle className="h-3 w-3" />
-              ) : signal.tone === "amber" ? (
-                <Clock className="h-3 w-3" />
-              ) : (
-                <CalendarClock className="h-3 w-3" />
-              )}
-              {signal.text}
-            </div>
-          )}
+                }`}
+              >
+                {signal.tone === "amber" ? (
+                  <Clock className="h-3 w-3" />
+                ) : (
+                  <CalendarClock className="h-3 w-3" />
+                )}
+                {signal.text}
+              </div>
+            ))}
         </>
       )}
     </div>

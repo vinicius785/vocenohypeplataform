@@ -1,6 +1,9 @@
-import { ChevronRight, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, Circle } from "lucide-react";
 import { alertItems, fmtBRL, type AlertItem, type AlertKind } from "@/lib/financeiro-entries";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
+import { ListRow } from "@/components/shared/ListRow";
+import { SECONDARY_SURFACE } from "./PosicaoFinanceira";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -46,10 +49,10 @@ function patchFor(kind: AlertKind): Partial<AdvancedFilters> {
   return { tipo, status: [...status] };
 }
 
-const SEVERITY_DOT: Record<AlertItem["severity"], string> = {
-  alta: "bg-rose-500",
-  media: "bg-amber-500",
-  baixa: "bg-muted-foreground/50",
+const SEVERITY_TONE: Record<AlertItem["severity"], "danger" | "warning" | "neutral"> = {
+  alta: "danger",
+  media: "warning",
+  baixa: "neutral",
 };
 
 /** "Requer atenção" — lista de ações priorizadas, não um mural de avisos
@@ -67,54 +70,47 @@ export function RequerAtencaoList({
   onApplyFilter: (patch: Partial<AdvancedFilters>) => void;
 }) {
   const items = alertItems(filtered.all, 7, saldoProjetado);
+  const [expanded, setExpanded] = useState(false);
   if (items.length === 0) return null;
 
+  const COMPACT_COUNT = 2;
+  const visibleItems = expanded ? items : items.slice(0, COMPACT_COUNT);
+  const hiddenCount = items.length - visibleItems.length;
+
   return (
-    <div>
-      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Requer atenção
-      </p>
-      <div className="divide-y divide-border/60">
-        {items.map((item) => {
+    <div className={`rounded-[24px] ${SECONDARY_SURFACE} p-5`}>
+      <p className="text-[15px] font-semibold text-foreground">Requer atenção</p>
+      <div className="-mx-2 mt-2 divide-y divide-border">
+        {visibleItems.map((item) => {
           const isAlta = item.severity === "alta";
           return (
-            <button
+            <ListRow
               key={item.kind}
-              type="button"
+              icon={
+                isAlta ? (
+                  <AlertTriangle className="h-4 w-4" />
+                ) : (
+                  <Circle className="h-2.5 w-2.5 fill-current" />
+                )
+              }
+              iconTone={SEVERITY_TONE[item.severity]}
+              title={ALERT_LABEL[item.kind](item.count)}
+              description={ACAO_RECOMENDADA[item.kind]}
+              value={item.total !== 0 ? fmtBRL(item.total) : undefined}
               onClick={() => onApplyFilter(patchFor(item.kind))}
-              className={`flex w-full cursor-pointer items-center gap-2.5 py-2.5 text-left hover:bg-muted/30 ${
-                isAlta ? "rounded-md bg-rose-500/5 px-2" : ""
-              }`}
-            >
-              {isAlta ? (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
-              ) : (
-                <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_DOT[item.severity]}`}
-                />
-              )}
-              <span className="min-w-0 flex-1">
-                <span
-                  className={`block ${isAlta ? "text-sm font-semibold text-foreground" : "text-sm text-foreground"}`}
-                >
-                  {ALERT_LABEL[item.kind](item.count)}
-                  {item.total !== 0 && (
-                    <span
-                      className={`ml-1.5 tabular-nums ${isAlta ? "font-bold text-rose-600" : "text-muted-foreground"}`}
-                    >
-                      {fmtBRL(item.total)}
-                    </span>
-                  )}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  {ACAO_RECOMENDADA[item.kind]}
-                </span>
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
+            />
           );
         })}
       </div>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-1 flex w-full cursor-pointer items-center gap-1 px-2 py-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />+{hiddenCount} outro{hiddenCount > 1 ? "s" : ""}
+        </button>
+      )}
     </div>
   );
 }

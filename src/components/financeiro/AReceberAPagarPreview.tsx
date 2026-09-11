@@ -5,6 +5,9 @@ import {
   formatIsoDate,
   sortByUrgency,
 } from "@/lib/financeiro-entries";
+import { ListRow } from "@/components/shared/ListRow";
+import { Button } from "@/components/ui/button";
+import { SECONDARY_SURFACE } from "./PosicaoFinanceira";
 
 function Coluna({
   titulo,
@@ -20,42 +23,44 @@ function Coluna({
   onVerTodos: () => void;
 }) {
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {titulo} <span className="normal-case text-muted-foreground/70">· toda a carteira</span>
+    <div className={`rounded-[22px] ${SECONDARY_SURFACE} p-5`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            {titulo}
+          </p>
+          <p className="mt-1 whitespace-nowrap text-[22px] font-bold tabular-nums leading-none text-foreground">
+            {fmtBRL(total)}
+          </p>
+        </div>
+        {vencidos > 0 && (
+          <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger">
+            {vencidos} vencido{vencidos > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-[11px] text-text-secondary">
+        toda a carteira, não só o período selecionado
       </p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums text-foreground">{fmtBRL(total)}</p>
-      {vencidos > 0 && (
-        <p className="text-[11px] text-rose-600">
-          {vencidos} vencido{vencidos > 1 ? "s" : ""}
-        </p>
-      )}
+
       {itens.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">Nada pendente. 🎉</p>
+        <p className="mt-3 text-sm text-text-secondary">Nada pendente por aqui.</p>
       ) : (
-        <ul className="mt-2 space-y-1.5">
+        <div className="-mx-2 mt-2 divide-y divide-border">
           {itens.map((e) => (
-            <li key={e.id} className="flex items-center justify-between gap-2 text-xs">
-              <span className="min-w-0 flex-1 truncate text-foreground">{e.description}</span>
-              <span
-                className={`shrink-0 tabular-nums ${e.status === "vencido" ? "text-rose-600" : "text-muted-foreground"}`}
-              >
-                {formatIsoDate(e.vencimento)}
-              </span>
-              <span className="shrink-0 font-medium tabular-nums text-foreground">
-                {fmtBRL(e.amount)}
-              </span>
-            </li>
+            <ListRow
+              key={e.id}
+              title={e.description}
+              meta={formatIsoDate(e.vencimento)}
+              value={fmtBRL(e.amount)}
+              status={e.status === "vencido" ? { label: "Vencido", tone: "danger" } : undefined}
+            />
           ))}
-        </ul>
+        </div>
       )}
-      <button
-        type="button"
-        onClick={onVerTodos}
-        className="mt-2 cursor-pointer text-xs font-medium text-foreground underline underline-offset-4 hover:no-underline"
-      >
+      <Button variant="link" size="sm" className="mt-2 h-auto p-0" onClick={onVerTodos}>
         Ver {titulo.toLowerCase()} →
-      </button>
+      </Button>
     </div>
   );
 }
@@ -80,7 +85,7 @@ export function AReceberAPagarPreview({
     );
     const total = pending.reduce((s, e) => s + e.amount, 0);
     const vencidos = pending.filter((e) => e.status === "vencido").length;
-    const itens = sortByUrgency(pending).slice(0, 3);
+    const itens = sortByUrgency(pending).slice(0, 2);
     return { total, vencidos, itens };
   };
 
@@ -88,7 +93,7 @@ export function AReceberAPagarPreview({
   const aPagar = build("despesa");
 
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+    <div className="flex flex-col gap-5">
       <Coluna
         titulo="A receber"
         total={aReceber.total}

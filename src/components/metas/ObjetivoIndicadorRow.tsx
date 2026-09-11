@@ -5,6 +5,7 @@ import {
   INDICADOR_SAUDE_DOT,
   INDICADOR_SAUDE_LABEL,
   INDICADOR_SAUDE_TONE,
+  indicadorPeso,
   indicadorSaudeParaObjetivo,
   indicadorTendencia,
 } from "@/lib/metas-engine";
@@ -22,19 +23,23 @@ import { useDropdown } from "./use-dropdown";
  * grande (`IndicadorRow`) só aqui, onde comparar vários indicadores lado
  * a lado importa mais que a leitura isolada de um só. Não é `<table>`
  * HTML (flex/grid responsivo) pra poder colapsar em mobile sem quebrar
- * layout. Status/meta são sempre do VÍNCULO com este objetivo
- * (`indicadorSaudeParaObjetivo`/`formatMetaVinculo`), nunca o valor
- * global do indicador — o mesmo indicador pode aparecer diferente numa
- * linha equivalente de outro objetivo. */
+ * layout. Status/meta/peso são sempre do VÍNCULO com este objetivo
+ * (`indicadorSaudeParaObjetivo`/`formatMetaVinculo`/`indicadorPeso`),
+ * nunca o valor global do indicador — o mesmo indicador pode aparecer
+ * diferente numa linha equivalente de outro objetivo. */
 export function ObjetivoIndicadorRow({
   indicador,
   objetivoId,
+  siblings,
   onOpen,
   onQuickUpdate,
   onUnlink,
 }: {
   indicador: Indicador;
   objetivoId: string;
+  /** Todos os indicadores deste MESMO objetivo (incluindo `indicador`) —
+   * necessário pra `indicadorPeso` calcular a distribuição relativa. */
+  siblings: Indicador[];
   onOpen: () => void;
   onQuickUpdate: () => void;
   onUnlink: () => void;
@@ -43,13 +48,14 @@ export function ObjetivoIndicadorRow({
   const tendencia = indicadorTendencia(indicador);
   const valor = formatValorAtual(indicador);
   const meta = formatMetaVinculo(indicador, objetivoId);
+  const peso = indicadorPeso(indicador, siblings, objetivoId);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useDropdown(menuRef, menuOpen, () => setMenuOpen(false));
 
   return (
-    <div className="group flex flex-col gap-1.5 border-b border-border py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-3">
+    <div className="group flex flex-col gap-1.5 py-3 sm:flex-row sm:items-center sm:gap-3">
       <button
         type="button"
         onClick={onOpen}
@@ -60,7 +66,7 @@ export function ObjetivoIndicadorRow({
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{indicador.titulo}</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+          <p className="mt-0.5 truncate text-[11px] text-text-secondary">
             {indicador.dataSource === "auto"
               ? "Sincronizado automaticamente"
               : `Atualizado ${timeAgo(indicador.updatedAt ?? indicador.createdAt)}`}
@@ -73,7 +79,8 @@ export function ObjetivoIndicadorRow({
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:hidden">
             <span className="font-medium tabular-nums text-foreground">{valor}</span>
-            {meta && <span className="text-muted-foreground">{meta}</span>}
+            {meta && <span className="text-text-secondary">{meta}</span>}
+            <span className="text-text-secondary">Peso {Math.round(peso)}%</span>
             <span
               className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${INDICADOR_SAUDE_TONE[saude]}`}
             >
@@ -84,8 +91,11 @@ export function ObjetivoIndicadorRow({
         <span className="hidden w-16 shrink-0 text-right text-sm tabular-nums text-foreground sm:block">
           {valor}
         </span>
-        <span className="hidden w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground md:block">
+        <span className="hidden w-24 shrink-0 text-right text-xs tabular-nums text-text-secondary md:block">
           {meta ?? "—"}
+        </span>
+        <span className="hidden w-14 shrink-0 text-right text-xs tabular-nums text-text-secondary lg:block">
+          {Math.round(peso)}%
         </span>
         <span
           className={`hidden w-24 shrink-0 rounded px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase tracking-wide sm:block ${INDICADOR_SAUDE_TONE[saude]}`}
@@ -100,7 +110,7 @@ export function ObjetivoIndicadorRow({
             onClick={onQuickUpdate}
             title="Atualizar"
             aria-label="Atualizar indicador"
-            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
@@ -111,19 +121,20 @@ export function ObjetivoIndicadorRow({
             onClick={() => setMenuOpen((v) => !v)}
             title="Mais ações"
             aria-label="Mais ações"
-            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-expanded={menuOpen}
+            className="rounded p-1.5 text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-border bg-popover p-1 shadow-md">
+            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl bg-popover p-1 shadow-lg dark:shadow-none">
               <button
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
                   onOpen();
                 }}
-                className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-foreground hover:bg-muted"
+                className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-foreground hover:bg-muted"
               >
                 Abrir
               </button>
@@ -133,7 +144,7 @@ export function ObjetivoIndicadorRow({
                   setMenuOpen(false);
                   onUnlink();
                 }}
-                className="block w-full rounded px-2 py-1.5 text-left text-xs font-medium text-destructive hover:bg-muted"
+                className="block w-full rounded px-2 py-1.5 text-left text-sm font-medium text-danger hover:bg-danger-soft"
               >
                 Desvincular deste objetivo
               </button>

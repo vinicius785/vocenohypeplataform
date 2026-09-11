@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, X, Newspaper, ImageIcon, Calendar } from "lucide-react";
-import type { BlogPost, Project } from "@/lib/projetos";
+import { Plus, Search, Newspaper, ImageIcon, Calendar, MoreVertical, Trash2 } from "lucide-react";
+import type { BlogPost, BlogStatus, Project } from "@/lib/projetos";
 import { notifyBlogEvent } from "@/lib/marketing.functions";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { useConfirm } from "@/hooks/use-confirm";
 import { BlogEditor } from "./BlogEditor";
-import { destinoLabel, statusInfo } from "./types";
+import { destinoLabel, statusInfo, STATUS } from "./types";
+
+type DestinoFilter = "todos" | "site" | "mural" | "portal";
+type SortKey = "recentes" | "titulo";
 
 function fmtScheduled(iso: string): string {
   const d = new Date(iso);
@@ -93,6 +103,37 @@ export function BlogPanel({
   };
 
   const editing = posts.find((p) => p.id === editingId) ?? null;
+  const { confirm, confirmDialog } = useConfirm();
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BlogStatus | "todos">("todos");
+  const [destinoFilter, setDestinoFilter] = useState<DestinoFilter>("todos");
+  const [sort, setSort] = useState<SortKey>("recentes");
+
+  // `create()` sempre insere no início do array (`[p, ...posts]`), então
+  // a ordem natural já É "mais recentes primeiro" — sem precisar de um
+  // campo de data que `BlogPost` não tem.
+  const visiblePosts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let list = posts.filter((p) => {
+      const matchesQuery =
+        !q || p.title.toLowerCase().includes(q) || (p.excerpt ?? "").toLowerCase().includes(q);
+      const matchesStatus = statusFilter === "todos" || p.status === statusFilter;
+      const matchesDestino =
+        destinoFilter === "todos" ||
+        (destinoFilter === "site" && p.audience?.includes("site")) ||
+        (destinoFilter === "mural" && p.audience?.includes("mural")) ||
+        (destinoFilter === "portal" && (p.portalClienteIds?.length ?? 0) > 0);
+      return matchesQuery && matchesStatus && matchesDestino;
+    });
+    if (sort === "titulo") list = [...list].sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+    return list;
+  }, [posts, query, statusFilter, destinoFilter, sort]);
+
+  const removeWithConfirm = async (p: BlogPost) => {
+    if (!(await confirm(`Excluir "${p.title}"? Isso não pode ser desfeito.`))) return;
+    remove(p.id);
+  };
 
   if (editing) {
     return (
@@ -107,16 +148,61 @@ export function BlogPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {posts.length} {posts.length === 1 ? "artigo" : "artigos"}
         </p>
         <button
           onClick={create}
-          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+          className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
         >
           <Plus className="h-3.5 w-3.5" /> Novo artigo
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar artigo"
+            className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-48"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as BlogStatus | "todos")}
+          aria-label="Filtrar por status"
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <option value="todos">Todos os status</option>
+          {STATUS.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={destinoFilter}
+          onChange={(e) => setDestinoFilter(e.target.value as DestinoFilter)}
+          aria-label="Filtrar por destino"
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <option value="todos">Todos os destinos</option>
+          <option value="site">Site</option>
+          <option value="mural">Mural interno</option>
+          <option value="portal">Portal do cliente</option>
+        </select>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          aria-label="Ordenar artigos"
+          className="ml-auto h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <option value="recentes">Mais recentes</option>
+          <option value="titulo">Título (A–Z)</option>
+        </select>
       </div>
 
       {posts.length === 0 ? (
@@ -124,37 +210,57 @@ export function BlogPanel({
           <Newspaper className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">Nenhum artigo ainda.</p>
         </div>
+      ) : visiblePosts.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-background p-10 text-center">
+          <p className="text-xs text-muted-foreground">Nenhum resultado para esta busca/filtro.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((p) => {
+          {visiblePosts.map((p) => {
             const s = statusInfo(p.status);
             return (
               <article
                 key={p.id}
-                className="group overflow-hidden rounded-lg border border-border bg-background"
+                role="button"
+                tabIndex={0}
+                onClick={() => setEditingId(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setEditingId(p.id);
+                  }
+                }}
+                aria-label={`Editar artigo ${p.title}`}
+                className="group cursor-pointer overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none"
               >
-                <button onClick={() => setEditingId(p.id)} className="block w-full text-left">
-                  <div className="relative aspect-video w-full bg-muted">
-                    {p.cover ? (
-                      <img src={p.cover} alt={p.title} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                    <span
-                      className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] ${s.cls}`}
-                    >
-                      {p.status === "agendado" && p.publishDate
-                        ? `Agendado · ${fmtScheduled(p.publishDate)}`
-                        : s.label}
-                    </span>
-                    <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow">
-                      {destinoLabel(p)}
-                    </span>
-                  </div>
-                  <div className="p-3">
-                    <h3 className="line-clamp-2 text-sm font-semibold">{p.title}</h3>
+                <div className="relative aspect-video w-full bg-muted">
+                  {p.cover ? (
+                    <img
+                      src={p.cover}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <span
+                    className={`absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] ${s.cls}`}
+                  >
+                    {p.status === "agendado" && p.publishDate
+                      ? `Agendado · ${fmtScheduled(p.publishDate)}`
+                      : s.label}
+                  </span>
+                  <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow">
+                    {destinoLabel(p)}
+                  </span>
+                </div>
+                <div className="flex items-start gap-2 p-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
+                      {p.title}
+                    </h3>
                     <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
                       {p.excerpt || "Sem resumo."}
                     </p>
@@ -168,21 +274,34 @@ export function BlogPanel({
                       )}
                     </div>
                   </div>
-                </button>
-                <div className="flex items-center justify-end border-t border-border px-2 py-1">
-                  <button
-                    onClick={() => remove(p.id)}
-                    aria-label="Excluir"
-                    className="rounded p-1 hover:bg-muted"
-                  >
-                    <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                  </button>
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Mais opções de ${p.title}`}
+                          className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() => void removeWithConfirm(p)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               </article>
             );
           })}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

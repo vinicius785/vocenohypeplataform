@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Target } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -124,7 +125,7 @@ export function IndicadorQuickUpdate({
         <DialogTitle className="flex items-center gap-2 text-base font-semibold">
           <Target className="h-4 w-4" /> Atualizar indicador
         </DialogTitle>
-        <DialogDescription className="text-xs text-muted-foreground">
+        <DialogDescription className="text-xs text-text-secondary">
           {indicador.titulo}
         </DialogDescription>
 
@@ -142,12 +143,12 @@ export function IndicadorQuickUpdate({
             </label>
           ) : indicador.tipo === "marco" ? (
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Etapa atual</label>
+              <label className="block text-xs font-medium text-text-secondary">Etapa atual</label>
               <select
                 value={marcoStatus}
                 onChange={(e) => setMarcoStatus(e.target.value as IndicadorMarcoStatus)}
                 autoFocus
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               >
                 {INDICADOR_MARCO_STATUSES.map((s) => (
                   <option key={s} value={s}>
@@ -163,10 +164,10 @@ export function IndicadorQuickUpdate({
                   <button
                     type="button"
                     onClick={() => setCalcMode(false)}
-                    className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                    className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${
                       !calcMode
-                        ? "border-foreground bg-muted text-foreground"
-                        : "border-border text-muted-foreground hover:bg-muted/40"
+                        ? "bg-brand-subtle text-brand"
+                        : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >
                     Digitar %
@@ -174,10 +175,10 @@ export function IndicadorQuickUpdate({
                   <button
                     type="button"
                     onClick={() => setCalcMode(true)}
-                    className={`flex-1 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+                    className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${
                       calcMode
-                        ? "border-foreground bg-muted text-foreground"
-                        : "border-border text-muted-foreground hover:bg-muted/40"
+                        ? "bg-brand-subtle text-brand"
+                        : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >
                     Calcular (X de Y)
@@ -189,7 +190,7 @@ export function IndicadorQuickUpdate({
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">
+                      <label className="block text-xs font-medium text-text-secondary">
                         Quantos alcançaram
                       </label>
                       <input
@@ -198,30 +199,28 @@ export function IndicadorQuickUpdate({
                         onChange={(e) => setCalcContagem(e.target.value)}
                         placeholder="Ex: 2"
                         autoFocus
-                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">
-                        Total
-                      </label>
+                      <label className="block text-xs font-medium text-text-secondary">Total</label>
                       <input
                         type="number"
                         value={calcTotal}
                         onChange={(e) => setCalcTotal(e.target.value)}
                         placeholder="Ex: 10"
-                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                       />
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-text-secondary">
                     {calcContagem || "0"} de {calcTotal || "0"} ={" "}
                     <span className="font-medium text-foreground">{computedPercent}%</span>
                   </p>
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground">
+                  <label className="block text-xs font-medium text-text-secondary">
                     Valor atual
                     {indicador.unidade ? ` (${indicador.unidade})` : isPercentual ? " (%)" : ""}
                   </label>
@@ -231,7 +230,7 @@ export function IndicadorQuickUpdate({
                       value={valor.trim() ? Number(valor) : undefined}
                       onValueChange={(n) => setValor(n != null ? String(n) : "")}
                       autoFocus={!isPercentual}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     />
                   ) : (
                     <input
@@ -239,7 +238,7 @@ export function IndicadorQuickUpdate({
                       value={valor}
                       onChange={(e) => setValor(e.target.value)}
                       autoFocus={!isPercentual}
-                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                     />
                   )}
                 </div>
@@ -247,7 +246,7 @@ export function IndicadorQuickUpdate({
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">
+            <label className="block text-xs font-medium text-text-secondary">
               Data da atualização
             </label>
             <DateField
@@ -257,13 +256,13 @@ export function IndicadorQuickUpdate({
             />
           </div>
           {objetivosVinculados && objetivosVinculados.length > 1 && (
-            <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+            <div className="rounded-xl bg-muted/40 px-3 py-2">
               <p className="text-xs font-medium text-foreground">
                 Esta atualização impactará {objetivosVinculados.length} objetivos:
               </p>
               <ul className="mt-1 space-y-0.5">
                 {objetivosVinculados.map((o) => (
-                  <li key={o.id} className="truncate text-xs text-muted-foreground">
+                  <li key={o.id} className="truncate text-xs text-text-secondary">
                     {o.titulo}
                   </li>
                 ))}
@@ -271,34 +270,24 @@ export function IndicadorQuickUpdate({
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">
-              Nota (opcional)
-            </label>
+            <label className="block text-xs font-medium text-text-secondary">Nota (opcional)</label>
             <input
               type="text"
               value={nota}
               onChange={(e) => setNota(e.target.value)}
               placeholder="O que mudou desde a última atualização?"
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             />
           </div>
         </div>
 
         <div className="mt-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
+          <Button variant="outline" size="comfortable" onClick={onClose}>
             Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
+          </Button>
+          <Button variant="primary" size="comfortable" onClick={submit}>
             Salvar
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

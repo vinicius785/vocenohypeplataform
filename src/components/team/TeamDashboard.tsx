@@ -9,14 +9,14 @@ import type {
   PerformanceSettings,
 } from "@/lib/performance-engine";
 import type { Insight } from "@/lib/insights-engine";
-import { TeamMetricCard } from "./TeamMetricCard";
+import { TeamHero } from "./TeamHero";
 import { AttentionTasks, type AttentionTab } from "./AttentionTasks";
 import { TeamWorkload } from "./TeamWorkload";
 import { TeamDeliveriesWeek, type DeliveryMemberRow } from "./TeamDeliveriesWeek";
 import { TeamInsights } from "./TeamInsights";
 import { TeamPerformance } from "./TeamPerformance";
 import { TeamIndicators } from "./TeamIndicators";
-import { TeamStartOfDay } from "./TeamStartOfDay";
+import { TeamJourneyAndHours } from "./TeamJourneyAndHours";
 
 /**
  * Cockpit operacional do time — identifica rapidamente situação, carga,
@@ -48,6 +48,7 @@ export function TeamDashboard({
   teamInsights,
   membersById,
   onlineCount,
+  campanhaNames,
   meId,
   isAdmin,
   loading,
@@ -88,6 +89,7 @@ export function TeamDashboard({
   teamInsights: Insight[];
   membersById: Map<string, Member>;
   onlineCount: number;
+  campanhaNames: Map<string, string>;
   meId: string | null;
   isAdmin: boolean;
   loading: boolean;
@@ -138,34 +140,32 @@ export function TeamDashboard({
 
   return (
     <div className="space-y-4">
-      {/* Linha 1 — 4 cards de indicadores */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <TeamMetricCard
-          label="Membros"
-          value={allMembers.length}
-          sublabel={`${onlineCount} online agora`}
-        />
-        <TeamMetricCard
-          label="Tarefas em aberto"
-          value={openTasks.length}
-          sublabel={`${dueTodayCount} vencem hoje`}
-          onClick={() => scrollToAttention("semana")}
-        />
-        <TeamMetricCard
-          label="Atrasadas"
-          value={overdueCount}
-          tone={overdueCount > 0 ? "danger" : "neutral"}
-          onClick={() => scrollToAttention("atrasadas")}
-        />
-        <TeamMetricCard
-          label="Concluídas na semana"
-          value={thisWeek?.count ?? 0}
-          sublabel={weeklyVariation}
-        />
-      </div>
+      {/* Hero (migração visual) — protagonista azul com "Tarefas em
+       * aberto" dominante + Membros/Atrasadas de apoio, "Concluídas na
+       * semana" como card secundário — substitui os 4 cards iguais de
+       * antes, mesmos 4 indicadores, mesmos cliques (scroll até "Tarefas
+       * que precisam de atenção" na aba correspondente). */}
+      <TeamHero
+        openTasksCount={openTasks.length}
+        dueTodayCount={dueTodayCount}
+        membersCount={allMembers.length}
+        onlineCount={onlineCount}
+        overdueCount={overdueCount}
+        completedThisWeek={thisWeek?.count ?? 0}
+        weeklyVariation={weeklyVariation}
+        onOpenAberto={() => scrollToAttention("semana")}
+        onOpenAtrasadas={() => scrollToAttention("atrasadas")}
+      />
 
-      {/* Linha 1.5 — Início do dia (100%) — só admin, informativo, fora do Score Operacional */}
-      {isAdmin && <TeamStartOfDay members={allMembers} onOpenMember={onOpenMember} />}
+      {/* Linha 1.5 — Jornada e horas trabalhadas (100%) — fusão de "Início
+          do dia" com o antigo relatório de horas da subpágina removida. */}
+      <TeamJourneyAndHours
+        members={filteredMembers}
+        meId={meId}
+        isAdmin={isAdmin}
+        campanhaNames={campanhaNames}
+        onOpenMember={onOpenMember}
+      />
 
       {/* Linha 2 — Tarefas que precisam de atenção (60%) + Carga por membro (40%) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">

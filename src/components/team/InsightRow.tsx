@@ -6,7 +6,7 @@ import type { Insight } from "@/lib/insights-engine";
 const NATURE_CONFIG: Record<Insight["nature"], { label: string; className: string }> = {
   destaque: { label: "Destaque", className: "text-emerald-600 dark:text-emerald-400" },
   atencao: { label: "Atenção", className: "text-amber-600 dark:text-amber-400" },
-  tendencia: { label: "Tendência", className: "text-muted-foreground" },
+  tendencia: { label: "Tendência", className: "text-text-secondary" },
 };
 
 /** Uma linha de insight — reaproveitada por `TeamInsights.tsx` (lista do
@@ -42,7 +42,7 @@ export function InsightRow({
             {nature.label}
           </span>
         </div>
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{insight.text}</p>
+        <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">{insight.text}</p>
         {onOpenMember && (
           <button
             type="button"

@@ -78,14 +78,14 @@ export function RelatoriosTab({
                       <td className="py-1.5 pr-3 font-medium text-foreground">
                         {fmtMonth(p.bucket)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-600">
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-success">
                         {fmtBRL(p.receitaRealizada)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-rose-600">
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-danger">
                         {fmtBRL(p.despesaRealizada)}
                       </td>
                       <td
-                        className={`py-1.5 text-right font-medium tabular-nums ${resultado >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                        className={`py-1.5 text-right font-medium tabular-nums ${resultado >= 0 ? "text-success" : "text-danger"}`}
                       >
                         {fmtBRL(resultado)}
                       </td>
@@ -169,7 +169,7 @@ export function RelatoriosTab({
           <button
             type="button"
             onClick={() => onApplyFilter({ tipo: "todos" })}
-            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-left text-xs hover:bg-amber-500/10"
+            className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-warning-border bg-warning-soft px-3 py-2 text-left text-xs hover:bg-warning-soft/70"
           >
             <span className="text-foreground">
               {semVinculo.count} lançamento{semVinculo.count > 1 ? "s" : ""} em aberto sem cliente

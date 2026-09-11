@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -18,8 +19,8 @@ import { CADENCE_LABEL, CADENCE_OPTIONS } from "./metas-ui-utils";
 type Member = { name: string; photo?: string };
 
 const FIELD_CLS =
-  "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
-const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
+  "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+const LABEL_CLS = "block text-xs font-medium text-text-secondary";
 const SECTION_TITLE_CLS = "text-[11px] font-semibold uppercase tracking-wider text-foreground/70";
 
 const METRIC_TYPE_LABEL: Record<MetricType, string> = {
@@ -198,7 +199,7 @@ export function IndicadorAdvancedSettings({
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             rows={2}
-            className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="mt-1 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           />
         </div>
         <div>
@@ -386,10 +387,10 @@ export function IndicadorAdvancedSettings({
                     key={m.name}
                     type="button"
                     onClick={() => toggleColaborador(m.name)}
-                    className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
                       active
-                        ? "border-foreground bg-muted text-foreground"
-                        : "border-border text-muted-foreground hover:bg-muted/40"
+                        ? "bg-brand-subtle text-brand"
+                        : "bg-muted text-text-secondary hover:text-foreground"
                     }`}
                   >
                     {m.name}
@@ -426,7 +427,7 @@ export function IndicadorAdvancedSettings({
           <button
             type="button"
             onClick={() => setDataSource("manual")}
-            className="flex-1 rounded-md border border-foreground bg-muted px-3 py-1.5 text-xs font-medium"
+            className="flex-1 rounded-md bg-brand-subtle px-3 py-1.5 text-xs font-medium text-brand"
           >
             Manual
           </button>
@@ -434,7 +435,7 @@ export function IndicadorAdvancedSettings({
             type="button"
             disabled
             title="Reservado pro futuro — nenhuma fonte automática existe ainda"
-            className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/60"
+            className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary/60"
           >
             Automática (em breve)
           </button>
@@ -442,14 +443,9 @@ export function IndicadorAdvancedSettings({
       </div>
 
       <div className="flex justify-end border-t border-border pt-4">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!titulo.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-        >
+        <Button variant="primary" size="comfortable" onClick={submit} disabled={!titulo.trim()}>
           Salvar configurações
-        </button>
+        </Button>
       </div>
     </div>
   );

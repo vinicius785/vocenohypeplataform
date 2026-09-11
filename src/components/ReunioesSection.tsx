@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus } from "lucide-react";
 import { deleteGoogleEventsForMeetings } from "@/lib/google-calendar.functions";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageContainer } from "@/components/shared/PageContainer";
 import {
   type Meeting,
   loadMeetings,
@@ -16,35 +16,31 @@ import {
   loadDisponibilidades,
   saveMyDisponibilidade,
   onDisponibilidadesChange,
-  defaultAvailability,
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
-import { SectionHeader } from "./SectionHeader";
 import { toISODate } from "./meetings/meeting-status";
 import { loadTeam, type TeamMember } from "./meetings/team";
 import { AgendaView } from "./meetings/AgendaView";
 import { CalendarView } from "./meetings/CalendarView";
 import { SolicitacoesTab } from "./meetings/SolicitacoesTab";
-import { DisponibilidadeTab } from "./meetings/DisponibilidadeTab";
 import { MeetingDialog } from "./meetings/MeetingDialog";
 import { MeetingSummaryDialog } from "./meetings/MeetingSummaryDialog";
 import { JoinByLinkDialog } from "./meetings/JoinByLinkDialog";
+import { resolveReunioesView, type ReunioesView } from "@/lib/section-nav";
 
 export { MeetingSummaryDialog } from "./meetings/MeetingSummaryDialog";
-
-type ReunioesView = "agenda" | "calendario" | "solicitacoes" | "disponibilidade";
 
 export function ReunioesSection() {
   const me = getMe();
   const search = useSearch({ from: "/_authenticated/time" });
-  const navigate = useNavigate();
-  // A aba ativa mora na URL (mesmo mecanismo de `?metasView=` em
-  // MetasSection) — sobrevive a um refresh e permite link direto pra
-  // Calendário/Solicitações/Disponibilidade.
-  const view: ReunioesView = search.reunioesView ?? "agenda";
-  const setView = (v: ReunioesView) =>
-    void navigate({ to: "/time", search: (prev) => ({ ...prev, reunioesView: v }), replace: true });
+  // A subpágina ativa mora na URL e é escolhida pelos subitens de
+  // "Reuniões" na sidebar (mesmo mecanismo de `?financeiroTab=` em
+  // Financeiro, ver `time.tsx`'s `onSelectSubTab`) — sobrevive a um
+  // refresh e permite link direto pra Calendário/Solicitações.
+  // "Disponibilidade" saiu daqui na Etapa 3 (mudou pra Configurações) —
+  // um valor antigo na URL cai no default via `resolveReunioesView`.
+  const view: ReunioesView = resolveReunioesView(search.reunioesView);
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   useEffect(() => setTeam(loadTeam()), []);
@@ -54,10 +50,6 @@ export function ReunioesSection() {
   // porque o diálogo de nova reunião precisa enxergar quando qualquer
   // participante selecionado está indisponível, não só quem está logado.
   const [disponibilidades, setDisponibilidades] = useState(() => loadDisponibilidades());
-  const myAvail = useMemo(
-    () => disponibilidades.find((a) => a.id === me.id) ?? defaultAvailability(me.id),
-    [disponibilidades, me.id],
-  );
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: Meeting } | null>(null);
   const [newMeetingDate, setNewMeetingDate] = useState<string>(() => toISODate(new Date()));
   const [newMeetingHora, setNewMeetingHora] = useState<string | undefined>(undefined);
@@ -226,143 +218,131 @@ export function ReunioesSection() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1000px]">
-      <SectionHeader
-        title="Reuniões"
-        subtitle="Sua agenda, reuniões e disponibilidade em um só lugar."
-        kpis={[
-          { label: "HOJE", value: hojeCount },
-          { label: "ESTA SEMANA", value: semanaCount },
-          { label: "PENDENTES", value: pendentes },
-        ]}
-        action={
+    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+      <PageContainer className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+              Reuniões
+            </p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              Sua agenda e reuniões em um só lugar.
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <JoinByLinkDialog />
-            <Button size="sm" onClick={() => openNewMeeting()}>
-              <Plus className="h-3.5 w-3.5" /> Nova reunião
+            <Button variant="primary" size="comfortable" onClick={() => openNewMeeting()}>
+              <Plus className="h-4 w-4" /> Nova reunião
             </Button>
           </div>
-        }
-      />
+        </div>
 
-      <Tabs value={view} onValueChange={(v) => setView(v as ReunioesView)} className="mt-6">
-        <TabsList>
-          <TabsTrigger value="agenda">Agenda</TabsTrigger>
-          <TabsTrigger value="calendario">Calendário</TabsTrigger>
-          <TabsTrigger value="solicitacoes" className="relative">
-            Solicitações
-            {pendentes > 0 && (
-              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" />
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="disponibilidade">Disponibilidade</TabsTrigger>
-        </TabsList>
-      </Tabs>
+        {view === "agenda" && (
+          <AgendaView
+            meetings={myMeetings}
+            me={me}
+            team={team}
+            onOpen={openSummary}
+            onNewMeeting={() => openNewMeeting()}
+            hojeCount={hojeCount}
+            semanaCount={semanaCount}
+            pendentes={pendentes}
+          />
+        )}
 
-      {view === "agenda" && (
-        <AgendaView meetings={myMeetings} me={me} team={team} onOpen={openSummary} />
-      )}
+        {view === "calendario" && (
+          <CalendarView
+            meetings={myMeetings}
+            me={me}
+            team={team}
+            disponibilidades={disponibilidades}
+            onOpen={openSummary}
+            onNewMeeting={(iso, hora) => openNewMeeting(iso, hora)}
+            onSaveAvailability={(next) => saveMyDisponibilidade(next)}
+          />
+        )}
 
-      {view === "calendario" && (
-        <CalendarView
-          meetings={myMeetings}
+        {view === "solicitacoes" && (
+          <SolicitacoesTab
+            meetings={myMeetings}
+            me={me}
+            onOpen={openSummary}
+            onOpenProposing={openSummaryProposing}
+            onConfirm={(m) => void requestConfirmMeeting(m)}
+            onDecline={(m) => void requestDeclineMeeting(m)}
+          />
+        )}
+
+        <MeetingDialog
+          open={!!dialog}
+          initial={dialog?.data}
+          seriesSize={
+            dialog?.data?.seriesId
+              ? meetings.filter((m) => m.seriesId === dialog.data!.seriesId).length
+              : 0
+          }
+          defaultDate={newMeetingDate}
+          defaultHora={newMeetingHora}
           me={me}
-          team={team}
           disponibilidades={disponibilidades}
-          onOpen={openSummary}
-          onNewMeeting={(iso, hora) => openNewMeeting(iso, hora)}
-          onSaveAvailability={(next) => saveMyDisponibilidade(next)}
+          meetings={meetings}
+          onClose={() => setDialog(null)}
+          onDelete={(id) => void requestDeleteMeeting(id)}
+          onSave={(saved, opts) => {
+            if (dialog?.mode === "edit" && saved.length === 1) {
+              const m = saved[0];
+              if (opts?.applyToSeries && m.seriesId) {
+                // Só os campos compartilhados da série — cada ocorrência
+                // mantém sua própria data e todo estado por-ocorrência
+                // (confirmações, presença, reagendamento etc.).
+                const {
+                  id: _id,
+                  data: _data,
+                  status: _status,
+                  confirmedBy: _confirmedBy,
+                  declinedBy: _declinedBy,
+                  rescheduleProposal: _rescheduleProposal,
+                  attendedBy: _attendedBy,
+                  attendanceRecorded: _attendanceRecorded,
+                  transcricao: _transcricao,
+                  criadorId: _criadorId,
+                  seriesId: _seriesId,
+                  ...sharedPatch
+                } = m;
+                persist(
+                  meetings.map((x) =>
+                    x.id === m.id ? m : x.seriesId === m.seriesId ? { ...x, ...sharedPatch } : x,
+                  ),
+                );
+              } else {
+                persist(meetings.map((x) => (x.id === m.id ? m : x)));
+              }
+            } else {
+              persist([...meetings, ...saved]);
+            }
+            setDialog(null);
+          }}
         />
-      )}
 
-      {view === "solicitacoes" && (
-        <SolicitacoesTab
-          meetings={myMeetings}
+        <MeetingSummaryDialog
+          meeting={summary}
           me={me}
-          onOpen={openSummary}
-          onOpenProposing={openSummaryProposing}
+          initialProposing={summaryProposing}
+          onClose={() => setSummary(null)}
+          onEdit={(m) => {
+            setSummary(null);
+            setDialog({ mode: "edit", data: m });
+          }}
+          onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
           onConfirm={(m) => void requestConfirmMeeting(m)}
           onDecline={(m) => void requestDeclineMeeting(m)}
+          onDelete={(id) => void requestDeleteMeeting(id)}
         />
-      )}
 
-      {view === "disponibilidade" && (
-        <DisponibilidadeTab
-          avail={myAvail}
-          meetings={meetings}
-          onChange={(next) => saveMyDisponibilidade(next)}
-        />
-      )}
-
-      <MeetingDialog
-        open={!!dialog}
-        initial={dialog?.data}
-        seriesSize={
-          dialog?.data?.seriesId
-            ? meetings.filter((m) => m.seriesId === dialog.data!.seriesId).length
-            : 0
-        }
-        defaultDate={newMeetingDate}
-        defaultHora={newMeetingHora}
-        me={me}
-        disponibilidades={disponibilidades}
-        meetings={meetings}
-        onClose={() => setDialog(null)}
-        onDelete={(id) => void requestDeleteMeeting(id)}
-        onSave={(saved, opts) => {
-          if (dialog?.mode === "edit" && saved.length === 1) {
-            const m = saved[0];
-            if (opts?.applyToSeries && m.seriesId) {
-              // Só os campos compartilhados da série — cada ocorrência
-              // mantém sua própria data e todo estado por-ocorrência
-              // (confirmações, presença, reagendamento etc.).
-              const {
-                id: _id,
-                data: _data,
-                status: _status,
-                confirmedBy: _confirmedBy,
-                declinedBy: _declinedBy,
-                rescheduleProposal: _rescheduleProposal,
-                attendedBy: _attendedBy,
-                attendanceRecorded: _attendanceRecorded,
-                transcricao: _transcricao,
-                criadorId: _criadorId,
-                seriesId: _seriesId,
-                ...sharedPatch
-              } = m;
-              persist(
-                meetings.map((x) =>
-                  x.id === m.id ? m : x.seriesId === m.seriesId ? { ...x, ...sharedPatch } : x,
-                ),
-              );
-            } else {
-              persist(meetings.map((x) => (x.id === m.id ? m : x)));
-            }
-          } else {
-            persist([...meetings, ...saved]);
-          }
-          setDialog(null);
-        }}
-      />
-
-      <MeetingSummaryDialog
-        meeting={summary}
-        me={me}
-        initialProposing={summaryProposing}
-        onClose={() => setSummary(null)}
-        onEdit={(m) => {
-          setSummary(null);
-          setDialog({ mode: "edit", data: m });
-        }}
-        onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
-        onConfirm={(m) => void requestConfirmMeeting(m)}
-        onDecline={(m) => void requestDeclineMeeting(m)}
-        onDelete={(id) => void requestDeleteMeeting(id)}
-      />
-
-      {deleteConfirmDialog}
-      {deleteChoiceDialog}
-      {seriesChoiceDialog}
+        {deleteConfirmDialog}
+        {deleteChoiceDialog}
+        {seriesChoiceDialog}
+      </PageContainer>
     </div>
   );
 }

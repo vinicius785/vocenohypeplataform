@@ -13,8 +13,8 @@ import {
   ChevronDown,
   Check,
 } from "lucide-react";
-import { SectionHeader } from "./SectionHeader";
 import { useNavigate } from "@tanstack/react-router";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { loadProjetos, onProjetosChange } from "@/lib/projetos";
 import { onMeetingsChange, loadMeetings } from "@/lib/reunioes-store";
 import { useClientes } from "@/lib/clientes-store";
@@ -74,7 +74,6 @@ import {
 import { TeamDashboard } from "@/components/team/TeamDashboard";
 import type { AttentionTab } from "@/components/team/AttentionTasks";
 import { MemberProfileDialog } from "@/components/team/MemberProfileDialog";
-import { TimeTrackingReport } from "@/components/team/TimeTrackingReport";
 
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -189,7 +188,8 @@ function DiretorioTab() {
   );
   const [isAdmin, setIsAdmin] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"equipe" | "horas">("equipe");
+  // Etapa 3: aba ativa mora na URL (barra interna removida — navegação
+  // agora pelos subitens de "Time" na sidebar).
   const [, forcePresence] = useState(0);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -924,56 +924,49 @@ function DiretorioTab() {
     }
   };
 
-  const headerAction = (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar membro"
-          className="h-9 w-40 pl-8 text-xs sm:w-56"
-        />
-      </div>
-      {isAdmin && (
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Novo membro
-        </Button>
-      )}
-    </div>
-  );
-
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="space-y-6">
-        <SectionHeader
-          title="Time"
-          subtitle="Visão geral da operação, produtividade e carga do time."
-          action={headerAction}
-        />
+      {/* Canvas experimental (mesma correção do Financeiro/Comercial):
+       * `--background`/`--card` globais são idênticos no claro, então
+       * sem isso os cards do Time não se distinguiam do fundo. */}
+      <div className="-m-4 min-h-[calc(100vh-4rem)] space-y-6 bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+              Time
+            </p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              Visão geral da operação, produtividade e carga do time.
+            </p>
+          </div>
+          {isAdmin && (
+            <Button
+              variant="primary"
+              size="comfortable"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Novo membro
+            </Button>
+          )}
+        </div>
 
-        <div className="flex items-center gap-1 rounded-md border border-border p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => setTopTab("equipe")}
-            className={`cursor-pointer rounded-sm px-3 py-1.5 font-medium ${topTab === "equipe" ? "bg-muted" : "text-muted-foreground"}`}
-          >
-            Visão da equipe
-          </button>
-          <button
-            type="button"
-            onClick={() => setTopTab("horas")}
-            className={`cursor-pointer rounded-sm px-3 py-1.5 font-medium ${topTab === "horas" ? "bg-muted" : "text-muted-foreground"}`}
-          >
-            Horas trabalhadas
-          </button>
+        {/* Toolbar compacta — único campo de busca por membro da página
+         * inteira (Performance do Time + Jornada e horas trabalhadas
+         * leem o mesmo `filtered`, nenhum bloco tem busca própria). */}
+        <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar membro"
+              className="h-9 w-40 border-0 bg-background pl-8 text-xs sm:w-56"
+            />
+          </div>
         </div>
 
         {error && (
@@ -1032,46 +1025,43 @@ function DiretorioTab() {
           </div>
         )}
 
-        {topTab === "equipe" ? (
-          <TeamDashboard
-            allMembers={members}
-            filteredMembers={filtered}
-            scoreByMemberId={scoreByMemberId}
-            scorePeriod={scorePeriod}
-            onScorePeriodChange={setScorePeriod}
-            performanceEvents={performanceEvents}
-            performanceSettings={performanceSettings}
-            allTasksFlat={allTasksFlat}
-            tasksByMember={tasksByMember}
-            weeklyData={weeklyData}
-            weekRange={weekRange}
-            weekdayData={weekdayData}
-            weekdayTasksByDay={weekdayTasksByDay}
-            weeklyTrendPct={weeklyTrendPct}
-            deliveryMemberRows={deliveryMemberRows}
-            teamInsights={teamInsights}
-            membersById={membersById}
-            onlineCount={onlineCount}
-            meId={meId}
-            isAdmin={isAdmin}
-            loading={loading}
-            attentionTab={attentionTab}
-            onAttentionTabChange={setAttentionTab}
-            onOpenTask={openTask}
-            onOpenMember={(m, opts) => {
-              setViewing(m);
-              setViewingShowComposition(!!opts?.showComposition);
-            }}
-            onEditMember={(m) => {
-              setEditing(m);
-              setOpen(true);
-            }}
-            onDeleteMember={(id) => void handleDelete(id)}
-            onResetMember={(id) => void handleReset(id)}
-          />
-        ) : (
-          <TimeTrackingReport members={members} meId={meId} isAdmin={isAdmin} />
-        )}
+        <TeamDashboard
+          allMembers={members}
+          filteredMembers={filtered}
+          scoreByMemberId={scoreByMemberId}
+          scorePeriod={scorePeriod}
+          onScorePeriodChange={setScorePeriod}
+          performanceEvents={performanceEvents}
+          performanceSettings={performanceSettings}
+          allTasksFlat={allTasksFlat}
+          tasksByMember={tasksByMember}
+          weeklyData={weeklyData}
+          weekRange={weekRange}
+          weekdayData={weekdayData}
+          weekdayTasksByDay={weekdayTasksByDay}
+          weeklyTrendPct={weeklyTrendPct}
+          deliveryMemberRows={deliveryMemberRows}
+          teamInsights={teamInsights}
+          membersById={membersById}
+          onlineCount={onlineCount}
+          campanhaNames={campanhaNames}
+          meId={meId}
+          isAdmin={isAdmin}
+          loading={loading}
+          attentionTab={attentionTab}
+          onAttentionTabChange={setAttentionTab}
+          onOpenTask={openTask}
+          onOpenMember={(m, opts) => {
+            setViewing(m);
+            setViewingShowComposition(!!opts?.showComposition);
+          }}
+          onEditMember={(m) => {
+            setEditing(m);
+            setOpen(true);
+          }}
+          onDeleteMember={(id) => void handleDelete(id)}
+          onResetMember={(id) => void handleReset(id)}
+        />
 
         <MemberDialog
           open={open}
@@ -1654,8 +1644,8 @@ function Field({
  */
 export function TimeSection() {
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <PageContainer variant="wide">
       <DiretorioTab />
-    </div>
+    </PageContainer>
   );
 }

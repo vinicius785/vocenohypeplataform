@@ -33,7 +33,7 @@ const SOURCE_LABEL: Record<Source, string> = {
 };
 
 function inputCls(extra = "") {
-  return `h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring ${extra}`;
+  return `h-8 cursor-pointer rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand ${extra}`;
 }
 
 export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
@@ -45,7 +45,12 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
   const clienteCampanhas = filters.clienteId
     ? (clientes.find((c) => c.id === filters.clienteId)?.campanhas ?? [])
     : [];
-  const categoriaOpts = [...categoriasFor("receita"), ...categoriasFor("despesa")];
+  // Bug pré-existente encontrado nesta etapa: receita e despesa
+  // compartilham "Outros" como categoria, então concatenar as duas listas
+  // sem dedupe fazia "Outros" aparecer 2x no select (mesmo `key` React,
+  // warning de console) — `Set` remove a duplicata sem mudar nenhuma
+  // categoria disponível.
+  const categoriaOpts = [...new Set([...categoriasFor("receita"), ...categoriasFor("despesa")])];
 
   const setF = (patch: Partial<AdvancedFilters>) => setFilters((f) => ({ ...f, ...patch }));
   const toggleStatus = (s: EntryStatus) =>
@@ -203,7 +208,7 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
             value={filters.query}
             onChange={(e) => setF({ query: e.target.value })}
             placeholder="Buscar"
-            className="h-8 w-48 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            className="h-8 w-48 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
           />
         </div>
 
@@ -355,16 +360,16 @@ export function AdvancedFilterBar({ filtered }: { filtered: Filtered }) {
               key={c.key}
               type="button"
               onClick={c.onRemove}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground hover:bg-muted"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-brand-subtle px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               {c.label}
-              <X className="h-3 w-3 text-muted-foreground" />
+              <X className="h-3 w-3" />
             </button>
           ))}
           <button
             type="button"
             onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="cursor-pointer text-[11px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            className="cursor-pointer text-xs font-medium text-text-secondary underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             Limpar filtros
           </button>

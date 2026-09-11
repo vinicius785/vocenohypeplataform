@@ -61,13 +61,13 @@ export function TeamPerformance({
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
       <div className="flex flex-wrap items-start justify-between gap-2 px-1">
         <div>
-          <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
             <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance do Time
           </h3>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-[11px] text-text-secondary">
             Score operacional e tarefas em atraso
           </p>
         </div>
@@ -77,7 +77,7 @@ export function TeamPerformance({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-md p-1 text-text-secondary hover:bg-muted hover:text-foreground"
                 aria-label="Como o Score é calculado"
               >
                 <Info className="h-3.5 w-3.5" />
@@ -87,7 +87,7 @@ export function TeamPerformance({
               <p className="mb-2 text-xs font-semibold text-foreground">
                 Score Operacional (0-100)
               </p>
-              <ul className="space-y-1.5 text-xs text-muted-foreground">
+              <ul className="space-y-1.5 text-xs text-text-secondary">
                 <li className="flex items-center justify-between gap-3">
                   <span>Entrega — conclusão no prazo, penaliza vencidas em aberto</span>
                   <span className="shrink-0 font-semibold text-foreground">50 pts</span>
@@ -101,7 +101,7 @@ export function TeamPerformance({
                   <span className="shrink-0 font-semibold text-foreground">15 pts</span>
                 </li>
               </ul>
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-[11px] text-text-secondary">
                 Prazos encerram às 19h. Sem tarefa no período, o score não existe ("Sem dados"); com
                 poucas tarefas, é calculado mas fica "Provisório". Um problema grave de entrega
                 sempre limita o score, mesmo com boas notas nas outras dimensões. Veja o
@@ -116,21 +116,18 @@ export function TeamPerformance({
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[52px] animate-pulse rounded-xl border border-border bg-muted/30"
-              />
+              <div key={i} className="h-[52px] animate-pulse rounded-2xl bg-muted/40" />
             ))}
           </div>
         ) : ranked.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
-            <UsersIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-            <p className="mt-3 text-sm text-muted-foreground">
+          <div className="rounded-2xl bg-muted/40 p-10 text-center">
+            <UsersIcon className="mx-auto h-8 w-8 text-text-secondary/50" />
+            <p className="mt-3 text-sm text-text-secondary">
               {hasAnyMembers ? "Nenhum resultado para essa busca." : "Nenhum membro ainda."}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-border rounded-lg border border-border">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl bg-muted/40">
             {ranked.map((m) => (
               <MemberPerformanceRow
                 key={m.id}

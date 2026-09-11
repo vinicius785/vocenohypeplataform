@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Ban, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -84,58 +85,42 @@ export function CalendarView({
   };
 
   return (
-    <div className="mt-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-2 dark:shadow-none">
+        <div className="flex items-center gap-1.5 px-1">
           <button
             type="button"
             onClick={goPrev}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-text-secondary hover:bg-muted hover:text-foreground"
             aria-label="Anterior"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-[160px] text-sm font-medium">
+          <div className="min-w-[160px] text-sm font-semibold text-foreground">
             {mode === "mes" ? monthLabel(cursor) : weekRangeLabel(startOfWeek(cursor))}
           </div>
           <button
             type="button"
             onClick={goNext}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded-md p-1.5 text-text-secondary hover:bg-muted hover:text-foreground"
             aria-label="Próximo"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={goToday}
-            className="ml-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-muted"
-          >
+          <Button variant="outline" size="sm" className="ml-1" onClick={goToday}>
             Hoje
-          </button>
+          </Button>
         </div>
-        <div className="inline-flex items-center rounded-lg bg-muted p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => setMode("mes")}
-            className={`rounded-md px-3 py-1 font-medium transition-colors ${
-              mode === "mes" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
-            }`}
-          >
-            Mês
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("semana")}
-            className={`rounded-md px-3 py-1 font-medium transition-colors ${
-              mode === "semana"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground"
-            }`}
-          >
-            Semana
-          </button>
-        </div>
+        <SegmentedControl
+          aria-label="Visualização do calendário"
+          size="sm"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "mes", label: "Mês" },
+            { value: "semana", label: "Semana" },
+          ]}
+        />
       </div>
 
       {mode === "mes" ? (
@@ -145,6 +130,7 @@ export function CalendarView({
           disponibilidades={disponibilidades}
           team={team}
           me={me}
+          selectedDate={drawerDate}
           onSelectDay={setDrawerDate}
           onOpenMeeting={onOpen}
           onRemoveBlock={removeBlock}
@@ -201,11 +187,11 @@ function AvailabilityDetails({
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-semibold text-foreground">{item.ownerName}</p>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-text-secondary">
         <Ban className="h-3 w-3" /> Indisponível
       </p>
-      <p className="text-xs text-muted-foreground">{formatBR(dateISO)}</p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-text-secondary">{formatBR(dateISO)}</p>
+      <p className="text-xs text-text-secondary">
         {item.block.inicio} – {item.block.fim}
       </p>
       {item.block.motivo && <p className="text-xs text-foreground">{motivoFor(item.block)}</p>}
@@ -213,7 +199,7 @@ function AvailabilityDetails({
         <button
           type="button"
           onClick={onRemove}
-          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-danger hover:underline"
         >
           <Trash2 className="h-3 w-3" /> Excluir
         </button>
@@ -259,21 +245,21 @@ function DayDrawer({
           <>
             <SheetHeader>
               <SheetTitle>{formatBR(dateIso).split(", ")[0]}</SheetTitle>
-              <p className="text-sm text-muted-foreground">{formatBR(dateIso).split(", ")[1]}</p>
+              <p className="text-sm text-text-secondary">{formatBR(dateIso).split(", ")[1]}</p>
             </SheetHeader>
 
             {blocks.length > 0 && (
               <div className="mt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                   Indisponibilidade
                 </p>
                 <ul className="mt-2 space-y-1.5">
                   {blocks.map((item) => (
                     <li
                       key={item.block.id}
-                      className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-sm"
+                      className="flex items-center justify-between gap-2 rounded-md bg-warning-soft px-2.5 py-1.5 text-sm"
                     >
-                      <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                      <span className="flex items-center gap-1.5 text-warning-soft-foreground">
                         <Ban className="h-3 w-3 shrink-0" />
                         {item.block.inicio}–{item.block.fim} · {item.ownerName}
                         {item.block.motivo ? ` · ${motivoFor(item.block)}` : ""}
@@ -282,7 +268,7 @@ function DayDrawer({
                         <button
                           type="button"
                           onClick={() => onRemoveBlock(item.ownerId, item.block.id)}
-                          className="shrink-0 text-amber-700/70 hover:text-red-600 dark:text-amber-400/70 dark:hover:text-red-400"
+                          className="shrink-0 text-warning-soft-foreground/70 hover:text-danger"
                           aria-label="Excluir bloqueio"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -295,11 +281,11 @@ function DayDrawer({
             )}
 
             <div className="mt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                 Reuniões
               </p>
               {dayMeetings.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground/70">Nenhuma reunião nesse dia.</p>
+                <p className="mt-2 text-sm text-text-secondary/70">Nenhuma reunião nesse dia.</p>
               ) : (
                 <ul className="mt-1 divide-y divide-border/60">
                   {dayMeetings.map((m) => (
@@ -332,6 +318,7 @@ function MonthGrid({
   disponibilidades,
   team,
   me,
+  selectedDate,
   onSelectDay,
   onOpenMeeting,
   onRemoveBlock,
@@ -341,6 +328,7 @@ function MonthGrid({
   disponibilidades: Availability[];
   team: TeamMember[];
   me: { id: string; name: string };
+  selectedDate: string | null;
   onSelectDay: (iso: string) => void;
   onOpenMeeting: (m: Meeting) => void;
   onRemoveBlock: (ownerId: string, blockId: string) => void;
@@ -359,12 +347,12 @@ function MonthGrid({
   const byDate = useMemo(() => groupByDate(meetings), [meetings]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="grid grid-cols-7 border-b border-border bg-muted/30">
+    <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
+      <div className="grid grid-cols-7 border-b border-border/60">
         {DIAS_LABEL.map((d) => (
           <div
             key={d}
-            className="px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+            className="px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-text-secondary"
           >
             {d}
           </div>
@@ -375,6 +363,7 @@ function MonthGrid({
           const iso = toISODate(d);
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = iso === today;
+          const isSelected = iso === selectedDate;
           const meetingItems = byDate.get(iso) ?? [];
           const blocks = blocksForDateAllMembers(disponibilidades, team, me, iso);
           const totalCount = meetingItems.length + blocks.length;
@@ -384,9 +373,9 @@ function MonthGrid({
           return (
             <div
               key={idx}
-              className={`min-h-[112px] border-b border-r border-border p-1.5 text-left align-top transition-colors last-in-row:border-r-0 ${
-                inMonth ? "" : "bg-background/40 text-muted-foreground/60"
-              }`}
+              className={`min-h-[112px] border-b border-r border-border/60 p-1.5 text-left align-top transition-colors last-in-row:border-r-0 ${
+                inMonth ? "" : "bg-muted/20 text-text-secondary/60"
+              } ${isSelected ? "bg-brand-subtle" : ""}`}
             >
               <button
                 type="button"
@@ -394,8 +383,8 @@ function MonthGrid({
                 className="flex w-full items-center rounded hover:bg-muted/40"
               >
                 <span
-                  className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs tabular-nums ${
-                    isToday ? "bg-foreground text-background" : ""
+                  className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-medium tabular-nums ${
+                    isToday ? "bg-brand text-brand-foreground" : isSelected ? "text-brand" : ""
                   }`}
                 >
                   {d.getDate()}
@@ -431,13 +420,13 @@ function MonthGrid({
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="px-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+                        className="px-0.5 text-[10px] font-medium text-text-secondary hover:text-foreground hover:underline"
                       >
                         +{restCount}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-64 p-2">
-                      <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                         {formatBR(iso)}
                       </p>
                       <ul className="space-y-0.5">
@@ -451,7 +440,7 @@ function MonthGrid({
                               <span
                                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(meetingDisplayStatus(m))}`}
                               />
-                              <span className="shrink-0 tabular-nums text-muted-foreground">
+                              <span className="shrink-0 tabular-nums text-text-secondary">
                                 {m.hora}
                               </span>
                               <span className="truncate">{m.titulo}</span>
@@ -463,11 +452,11 @@ function MonthGrid({
                             key={item.block.id}
                             className="flex items-center gap-1.5 px-1.5 py-1 text-xs"
                           >
-                            <Ban className="h-3 w-3 shrink-0 text-amber-500" />
-                            <span className="shrink-0 tabular-nums text-muted-foreground">
+                            <Ban className="h-3 w-3 shrink-0 text-warning" />
+                            <span className="shrink-0 tabular-nums text-text-secondary">
                               {item.block.inicio}
                             </span>
-                            <span className="truncate text-amber-700 dark:text-amber-400">
+                            <span className="truncate text-warning-soft-foreground">
                               {item.ownerName} · {motivoFor(item.block)}
                             </span>
                           </li>
@@ -497,7 +486,7 @@ function EventChip({ meeting, onOpen }: { meeting: Meeting; onOpen: () => void }
             className="flex w-full cursor-pointer items-center gap-1 truncate rounded px-0.5 text-left text-[11px] leading-4 hover:bg-muted/60"
           >
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusDot(status)}`} />
-            <span className="shrink-0 tabular-nums text-muted-foreground">{meeting.hora}</span>
+            <span className="shrink-0 tabular-nums text-text-secondary">{meeting.hora}</span>
             <span className="truncate text-foreground">{meeting.titulo}</span>
           </button>
         </TooltipTrigger>
@@ -531,11 +520,11 @@ function AvailabilityChip({
                 type="button"
                 className="flex w-full cursor-pointer items-center gap-1 truncate rounded px-0.5 text-left text-[11px] leading-4 hover:bg-muted/60"
               >
-                <Ban className="h-2.5 w-2.5 shrink-0 text-amber-500" />
-                <span className="shrink-0 tabular-nums text-muted-foreground">
+                <Ban className="h-2.5 w-2.5 shrink-0 text-warning" />
+                <span className="shrink-0 tabular-nums text-text-secondary">
                   {item.block.inicio}
                 </span>
-                <span className="truncate text-amber-700 dark:text-amber-400">
+                <span className="truncate text-warning-soft-foreground">
                   {item.ownerName} · Indisponível
                 </span>
               </button>
@@ -598,9 +587,9 @@ function WeekGrid({
   };
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+    <div className="overflow-x-auto rounded-[24px] bg-card dark:shadow-none">
       <div className="min-w-[720px]">
-        <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-border bg-muted/30">
+        <div className="grid grid-cols-[3.5rem_repeat(7,1fr)] border-b border-border/60">
           <div />
           {days.map((d) => {
             const iso = toISODate(d);
@@ -610,14 +599,14 @@ function WeekGrid({
                 key={iso}
                 type="button"
                 onClick={() => onSelectDay(iso)}
-                className="flex flex-col items-center gap-0.5 py-2 hover:bg-muted/50"
+                className="flex flex-col items-center gap-0.5 py-2.5 hover:bg-muted/50"
               >
-                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
                   {DIAS_LABEL[d.getDay()]}
                 </span>
                 <span
-                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums ${
-                    isToday ? "bg-foreground text-background" : "text-foreground"
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
+                    isToday ? "bg-brand text-brand-foreground" : "text-foreground"
                   }`}
                 >
                   {d.getDate()}
@@ -632,7 +621,7 @@ function WeekGrid({
             {hours.slice(0, -1).map((h, i) => (
               <div
                 key={h}
-                className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-muted-foreground"
+                className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-text-secondary"
                 style={{ top: i * HOUR_ROW_PX }}
               >
                 {String(h).padStart(2, "0")}:00
@@ -677,14 +666,14 @@ function WeekGrid({
                         <button
                           type="button"
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute inset-x-0.5 overflow-hidden rounded-sm border-l-2 border-amber-500 bg-amber-500/10 px-1.5 py-0.5 text-left transition-colors hover:bg-amber-500/20"
+                          className="absolute inset-x-0.5 overflow-hidden rounded-sm border-l-2 border-warning bg-warning-soft px-1.5 py-0.5 text-left transition-colors hover:bg-warning-soft/80"
                           style={{ top, height }}
                         >
-                          <p className="flex items-center gap-1 truncate text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          <p className="flex items-center gap-1 truncate text-[10px] font-medium text-warning-soft-foreground">
                             <Ban className="h-2.5 w-2.5 shrink-0" /> {item.ownerName}
                           </p>
                           {height > 30 && (
-                            <p className="truncate text-[10px] text-amber-700/80 dark:text-amber-400/80">
+                            <p className="truncate text-[10px] text-warning-soft-foreground/80">
                               {motivoFor(item.block)}
                             </p>
                           )}
@@ -714,7 +703,7 @@ function WeekGrid({
                               e.stopPropagation();
                               onOpenMeeting(m);
                             }}
-                            className="absolute inset-x-0.5 overflow-hidden rounded-md border-l-2 border-primary bg-primary/10 px-1.5 py-0.5 text-left transition-colors hover:bg-primary/20"
+                            className="absolute inset-x-0.5 overflow-hidden rounded-md border-l-2 border-brand bg-brand-subtle px-1.5 py-0.5 text-left transition-colors hover:bg-brand-subtle/70"
                             style={{ top, height }}
                           >
                             <p className="truncate text-[11px] font-medium text-foreground">

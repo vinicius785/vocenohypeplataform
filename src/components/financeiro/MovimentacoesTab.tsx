@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Inbox } from "lucide-react";
 import { useClientes } from "@/lib/clientes-store";
 import {
   type Entry,
@@ -16,6 +16,9 @@ import { EntryDialog } from "./EntryDialog";
 import { EntryDetailsDialog } from "./EntryDetailsDialog";
 import { MarkAsPaidDialog } from "./MarkAsPaidDialog";
 import { ImportDialog } from "./ImportDialog";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 
@@ -157,15 +160,15 @@ export function MovimentacoesTab({
   return (
     <div className="space-y-6">
       {syncError && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
-          <span>{syncError}</span>
+        <Alert variant="destructive" className="flex items-start justify-between gap-3">
+          <AlertDescription className="pr-2">{syncError}</AlertDescription>
           <button
             onClick={() => onSyncError(null)}
-            className="shrink-0 cursor-pointer font-medium underline underline-offset-2"
+            className="shrink-0 cursor-pointer text-xs font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             fechar
           </button>
-        </div>
+        </Alert>
       )}
 
       {importOpen && (
@@ -197,32 +200,26 @@ export function MovimentacoesTab({
         <AdvancedFilterBar filtered={filtered} />
         <div className="flex items-center gap-2">
           {editableSelected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void handleBulkDelete()}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-destructive/30 px-2.5 py-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/10"
-            >
+            <Button variant="destructive" size="sm" onClick={() => void handleBulkDelete()}>
               Excluir {editableSelected.length} selecionado{editableSelected.length > 1 ? "s" : ""}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={() => exportCsv(visible)}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
+          <Button variant="outline" size="sm" onClick={() => exportCsv(visible)}>
             <Download className="h-3 w-3" /> Exportar CSV
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Lista */}
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
+      <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
         {pagedOpen.length === 0 ? (
-          <p className="px-4 py-12 text-center text-xs text-muted-foreground">
-            {visible.length === 0
-              ? "Nenhum lançamento encontrado neste período."
-              : "Nenhum lançamento em aberto neste período."}
-          </p>
+          <EmptyState
+            icon={<Inbox className="h-5 w-5" />}
+            title={
+              visible.length === 0 ? "Nenhum lançamento encontrado" : "Nenhum lançamento em aberto"
+            }
+            description="Ajuste o período ou os filtros para ver outros lançamentos."
+          />
         ) : (
           <ul className="divide-y divide-border">
             {pagedOpen.map((e) => (
@@ -259,31 +256,31 @@ export function MovimentacoesTab({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
-          <button
-            type="button"
+        <div className="flex items-center justify-center gap-3 text-xs text-text-secondary">
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={pageSafe === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="cursor-pointer rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
-          </button>
+          </Button>
           <span>
             Página {pageSafe + 1} de {totalPages} · {openEntries.length} lançamentos em aberto
           </span>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={pageSafe >= totalPages - 1}
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            className="cursor-pointer rounded-md border border-border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Próxima
-          </button>
+          </Button>
         </div>
       )}
 
       {concludedEntries.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="overflow-hidden rounded-[24px] bg-card dark:shadow-none">
           <button
             type="button"
             onClick={() => setShowConcluded((v) => !v)}
@@ -299,41 +296,41 @@ export function MovimentacoesTab({
           {showConcluded && (
             <ul className="divide-y divide-border border-t border-border">
               {concludedEntries.map((e) => (
-                <EntryRow
-                  key={e.id}
-                  e={e}
-                  onView={() => setViewing(e)}
-                  onMarkPaid={() => setMarkingPaid(e)}
-                  onEdit={() => {
-                    const m = findManual(e.id);
-                    if (m) {
-                      setEditing(m);
-                      setDialogOpen(true);
-                    }
-                  }}
-                  onDelete={() => void handleDelete(e)}
-                />
+                <li key={e.id}>
+                  <EntryRow
+                    e={e}
+                    onView={() => setViewing(e)}
+                    onMarkPaid={() => setMarkingPaid(e)}
+                    onEdit={() => {
+                      const m = findManual(e.id);
+                      if (m) {
+                        setEditing(m);
+                        setDialogOpen(true);
+                      }
+                    }}
+                    onDelete={() => void handleDelete(e)}
+                  />
+                </li>
               ))}
             </ul>
           )}
         </div>
       )}
 
-      {dialogOpen && (
-        <EntryDialog
-          initial={editing}
-          clientes={clientes.map((c) => ({
-            id: c.id,
-            nome: c.empresa,
-            campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
-          }))}
-          onClose={() => {
-            setDialogOpen(false);
-            setEditing(null);
-          }}
-          onSave={(m) => void handleSave(m)}
-        />
-      )}
+      <EntryDialog
+        open={dialogOpen}
+        initial={editing}
+        clientes={clientes.map((c) => ({
+          id: c.id,
+          nome: c.empresa,
+          campanhas: (c.campanhas ?? []).map((k) => ({ id: k.id, nome: k.nome })),
+        }))}
+        onClose={() => {
+          setDialogOpen(false);
+          setEditing(null);
+        }}
+        onSave={(m) => void handleSave(m)}
+      />
 
       {viewing && (
         <EntryDetailsDialog

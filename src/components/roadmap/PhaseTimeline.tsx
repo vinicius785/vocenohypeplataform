@@ -389,7 +389,7 @@ export function PhaseTimeline({
           <button
             type="button"
             onClick={onNewFase}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover"
           >
             <Plus className="h-3.5 w-3.5" /> Nova fase
           </button>

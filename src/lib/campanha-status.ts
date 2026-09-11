@@ -72,20 +72,39 @@ export const INFLU_STATUS_LABEL_CLIENTE: Record<InfluStatus, string> = {
   RECUSADO: "Recusado",
 };
 
+// Cores corrigidas (rodada corretiva forte): "Inscrito" é neutro (chegou,
+// nada aconteceu ainda), "Em curadoria" é azul (time trabalhando nisso —
+// mesma cor de "em andamento" em Tarefas), "Enviado ao cliente" usa
+// violeta (não amber — amber fica reservado pra alerta/atenção real, não
+// pra "aguardando alguém"), "Aprovado" verde, "Recusado" vermelho. Único
+// lugar que define essas cores — Kanban, pill e badge leem daqui.
 export const INFLU_STATUS_TONE: Record<InfluStatus, string> = {
-  INSCRITO: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  EM_CURADORIA: "bg-muted text-muted-foreground",
-  ENVIADO_AO_CLIENTE: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  INSCRITO: "bg-muted text-muted-foreground",
+  EM_CURADORIA: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  ENVIADO_AO_CLIENTE: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
   APROVADO: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   RECUSADO: "bg-red-500/10 text-red-700 dark:text-red-400",
 };
 export const INFLU_STATUS_BORDER: Record<InfluStatus, string> = {
-  INSCRITO: "border-blue-500",
-  EM_CURADORIA: "border-muted-foreground/40",
-  ENVIADO_AO_CLIENTE: "border-amber-500",
+  INSCRITO: "border-muted-foreground/40",
+  EM_CURADORIA: "border-sky-500",
+  ENVIADO_AO_CLIENTE: "border-violet-500",
   APROVADO: "border-emerald-500",
   RECUSADO: "border-red-500",
 };
+
+/**
+ * Fonte única de verdade pra "quem gera conteúdo/entrega na campanha" —
+ * vive aqui (não em `campanha-ui.ts`) porque este módulo já é importado
+ * tanto por `campanha-ui.ts` quanto por `InfluencerBoard.tsx`, evitando
+ * um import circular entre os dois. `INFLU_STATUSES` só tem 5 valores e
+ * não existe nenhum status "posterior a aprovado" (produção/publicação
+ * vivem em `EntregaStage`, não aqui) — portanto "elegível" é exatamente
+ * `status === "APROVADO"`.
+ */
+export function isInfluencerEligibleForDeliveries(status: InfluStatus): boolean {
+  return status === "APROVADO";
+}
 
 // ============================================================
 // Entrega

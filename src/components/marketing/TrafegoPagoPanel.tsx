@@ -4,12 +4,13 @@ import type { Campaign, CampaignPlatform, CampaignStatus, Creative, Project } fr
 import { resizeImageToDataUrl } from "@/lib/image-upload";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
+import { useConfirm } from "@/hooks/use-confirm";
 
 const PLATFORMS: CampaignPlatform[] = ["Meta", "Google", "TikTok", "LinkedIn", "Outro"];
 const STATUS: { key: CampaignStatus; label: string; cls: string }[] = [
   { key: "rascunho", label: "Rascunho", cls: "bg-muted text-foreground" },
-  { key: "ativa", label: "Ativa", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
-  { key: "pausada", label: "Pausada", cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  { key: "ativa", label: "Ativa", cls: "bg-success-soft text-success-soft-foreground" },
+  { key: "pausada", label: "Pausada", cls: "bg-warning-soft text-warning-soft-foreground" },
   { key: "encerrada", label: "Encerrada", cls: "bg-muted text-muted-foreground" },
 ];
 
@@ -46,8 +47,13 @@ export function TrafegoPagoPanel({
   const updateCampaign = (id: string, patch: Partial<Campaign>) => {
     setCampaigns(campaigns.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
-  const removeCampaign = (id: string) => {
-    const next = campaigns.filter((c) => c.id !== id);
+  const { confirm, confirmDialog } = useConfirm();
+  const removeCampaign = async (id: string) => {
+    const c = campaigns.find((x) => x.id === id);
+    if (!(await confirm(`Excluir a campanha "${c?.name ?? ""}"? Isso não pode ser desfeito.`))) {
+      return;
+    }
+    const next = campaigns.filter((x) => x.id !== id);
     setCampaigns(next);
     if (selectedId === id) setSelectedId(next[0]?.id ?? null);
   };
@@ -98,13 +104,14 @@ export function TrafegoPagoPanel({
           key={selected.id}
           campaign={selected}
           onChange={(patch) => updateCampaign(selected.id, patch)}
-          onDelete={() => removeCampaign(selected.id)}
+          onDelete={() => void removeCampaign(selected.id)}
         />
       ) : (
         <div className="flex items-center justify-center rounded-lg border border-dashed border-border p-8 text-xs text-muted-foreground">
           Selecione ou crie uma campanha.
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -460,7 +467,7 @@ function CreativeAdder({ onAdd }: { onAdd: (c: Creative) => void }) {
       >
         <Upload className="h-3.5 w-3.5" /> Enviar imagem
       </button>
-      <button className="inline-flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90">
+      <button className="inline-flex items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover">
         <Plus className="h-3.5 w-3.5" /> Adicionar
       </button>
     </form>

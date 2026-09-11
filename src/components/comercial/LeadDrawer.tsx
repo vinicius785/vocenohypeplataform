@@ -19,6 +19,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DateField } from "@/components/ui/date-field";
+import { Button } from "@/components/ui/button";
 import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaDialog";
 import { formatBRL, type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
@@ -42,7 +43,7 @@ import { convertLeadToClienteEProjeto } from "./convertLead";
 
 const inputCls =
   "h-9 w-full rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-2 focus:ring-ring";
-const labelCls = "block space-y-1 text-xs font-medium text-muted-foreground";
+const labelCls = "block space-y-1 text-xs font-medium text-text-secondary";
 const SOURCES = ["Indicação", "Instagram", "Google", "LinkedIn", "Site", "Evento", "Outro"];
 const PERDIDO_MOTIVOS = [
   "Sem orçamento",
@@ -254,21 +255,23 @@ export function LeadDrawer({
       <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[608px]">
         <SheetTitle className="sr-only">{name.trim() || "Nova oportunidade"}</SheetTitle>
 
-        {/* Cabeçalho */}
-        <div className="border-b border-border pr-10">
-          <div className="flex items-start justify-between gap-3 px-5 pt-4">
+        {/* Cabeçalho — hierarquia real (Etapa 7): nome/valor protagonistas,
+         * etapa/responsável subordinados, em vez de uma sequência de
+         * textos do mesmo peso. */}
+        <div className="bg-card pr-10 dark:shadow-none">
+          <div className="flex items-start justify-between gap-3 px-6 pt-6">
             <div className="min-w-0">
-              <h3 className="truncate text-lg font-semibold tracking-tight text-foreground">
+              <h3 className="truncate text-[22px] font-bold tracking-tight text-foreground">
                 {company.trim() || name.trim() || "Nova oportunidade"}
               </h3>
               {contact.trim() && (
-                <p className="truncate text-sm text-muted-foreground">{contact}</p>
+                <p className="mt-0.5 truncate text-sm text-text-secondary">{contact}</p>
               )}
             </div>
             {autosaveStatus !== "idle" && (
               <span
                 className={`shrink-0 text-[11px] ${
-                  autosaveStatus === "error" ? "text-destructive" : "text-muted-foreground"
+                  autosaveStatus === "error" ? "text-destructive" : "text-text-secondary"
                 }`}
               >
                 {autosaveStatus === "saving"
@@ -280,23 +283,23 @@ export function LeadDrawer({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 px-5 pt-2 text-xs text-muted-foreground">
-            <span className="text-base font-semibold text-foreground">
+          <div className="flex flex-wrap items-center gap-3 px-6 pt-3">
+            <span className="whitespace-nowrap text-[28px] font-bold tabular-nums leading-none text-foreground">
               {formatBRL(parsedValue)}
             </span>
             <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${OPPORTUNITY_STAGE_TONE[stage]}`}
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${OPPORTUNITY_STAGE_TONE[stage]}`}
             >
               {currentStageLabel}
             </span>
-            {responsible && <span>· {responsible}</span>}
+            {responsible && <span className="text-xs text-text-secondary">{responsible}</span>}
           </div>
 
-          <div className="flex flex-wrap items-end justify-between gap-3 px-5 pb-4 pt-3">
+          <div className="flex flex-wrap items-end justify-between gap-3 px-6 pb-5 pt-4">
             <div className="min-w-0">
               {liveLead && nextStep && (
                 <>
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                     Próxima ação
                   </div>
                   <div className="text-sm font-medium text-foreground">
@@ -304,7 +307,7 @@ export function LeadDrawer({
                       (nextStep.actor === "CLIENTE" ? "Aguardar retorno do cliente" : "Nenhuma")}
                   </div>
                   {nextStep.actor && (
-                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="mt-1 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
                       {OPPORTUNITY_ACTOR_LABEL[nextStep.actor]}
                     </span>
                   )}
@@ -365,7 +368,7 @@ export function LeadDrawer({
                     type="button"
                     onClick={() => setShowEtapaMenu((v) => !v)}
                     aria-label="Mais ações"
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary hover:bg-muted hover:text-foreground"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
@@ -409,7 +412,7 @@ export function LeadDrawer({
                         </button>
                       )}
                       <div className="border-t border-border pt-1">
-                        <p className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">
+                        <p className="mb-1 px-2 text-[11px] font-medium text-text-secondary">
                           Alterar etapa manualmente
                         </p>
                         <select
@@ -602,7 +605,7 @@ export function LeadDrawer({
 
               <Section title="Qualificação" icon={<Star className="h-4 w-4" />}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-medium text-muted-foreground">Qualificação</span>
+                  <span className="text-xs font-medium text-text-secondary">Qualificação</span>
                   <div className="flex h-9 items-center gap-1">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
@@ -616,7 +619,7 @@ export function LeadDrawer({
                       >
                         <Star
                           className={`h-4 w-4 ${
-                            n <= score ? "fill-foreground text-foreground" : "text-muted-foreground"
+                            n <= score ? "fill-foreground text-foreground" : "text-text-secondary"
                           }`}
                         />
                       </button>
@@ -718,7 +721,7 @@ export function LeadDrawer({
                       .map((h) => (
                         <li
                           key={h.id}
-                          className="truncate text-xs text-muted-foreground"
+                          className="truncate text-xs text-text-secondary"
                           title={h.text}
                         >
                           • {h.text}
@@ -782,21 +785,13 @@ export function LeadDrawer({
         )}
 
         {!liveLead && (
-          <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-            >
+          <div className="flex items-center justify-end gap-2 bg-card px-5 py-3 dark:shadow-none">
+            <Button variant="ghost" size="comfortable" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              className="rounded-full border-2 border-foreground bg-foreground px-5 py-2 text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground"
-            >
+            </Button>
+            <Button variant="primary" size="comfortable" onClick={submit}>
               Criar oportunidade
-            </button>
+            </Button>
           </div>
         )}
       </SheetContent>
@@ -972,9 +967,18 @@ function ProposalTabContent({
     <>
       {proposta && (
         <Section title="Proposta atual" icon={<Calculator className="h-4 w-4" />}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* Preço final protagonista (Etapa 7) — o valor que mais importa
+           * na aba, não mais um MiniStat igual aos outros. */}
+          <div className="rounded-[20px] bg-brand p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+              Preço final ao cliente
+            </p>
+            <p className="mt-1 whitespace-nowrap text-[32px] font-bold tabular-nums leading-none text-brand-foreground">
+              {formatBRL(proposta.precoFinal)}
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <MiniStat label="Custo total" value={formatBRL(proposta.custoTotal)} />
-            <MiniStat label="Preço final" value={formatBRL(proposta.precoFinal)} />
             <MiniStat
               label="Margem (R$)"
               value={formatBRL(margemReaisAtual ?? 0)}
@@ -994,7 +998,7 @@ function ProposalTabContent({
             </p>
           )}
           {proposta.ajustadoManualmente && (
-            <p className="text-[11px] italic text-muted-foreground">Ajustado manualmente</p>
+            <p className="text-[11px] italic text-text-secondary">Ajustado manualmente</p>
           )}
           {liveLead && nextStep?.action === "enviar_proposta" && (
             <div className="flex flex-wrap items-center gap-2">
@@ -1029,7 +1033,7 @@ function ProposalTabContent({
           )
         }
       >
-        <p className="-mt-1 mb-3 text-[11px] text-muted-foreground">
+        <p className="-mt-1 mb-3 text-[11px] text-text-secondary">
           Monte o pacote, calcule custo/impostos/comissão/bonificação/margem e aplique o preço final
           ao negócio.
         </p>
@@ -1062,20 +1066,20 @@ function HistoryTabContent({ history }: { history: Lead["history"] }) {
   return (
     <Section title="Histórico" icon={<History className="h-4 w-4" />}>
       {sorted.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Sem eventos registrados.</p>
+        <p className="text-xs text-text-secondary">Sem eventos registrados.</p>
       ) : (
         <ul className="space-y-4 border-l border-border pl-4">
           {sorted.map((h) => {
             const Icon = (h.kind && HISTORY_ICON[h.kind]) || History;
             return (
               <li key={h.id} className="relative text-xs leading-relaxed">
-                <span className="absolute -left-[21px] flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-background">
+                <span className="absolute -left-[21px] flex h-4 w-4 items-center justify-center rounded-full bg-muted text-text-secondary ring-2 ring-background">
                   <Icon className="h-2.5 w-2.5" />
                 </span>
                 <div className="min-w-0 break-words text-foreground [overflow-wrap:anywhere]">
                   {linkifyText(h.text)}
                 </div>
-                <div className="text-muted-foreground/70">
+                <div className="text-text-secondary/70">
                   {new Date(h.createdAt).toLocaleString("pt-BR", {
                     timeZone: BRASILIA_TZ,
                     day: "2-digit",
@@ -1110,7 +1114,7 @@ function ActionButton({
       type="button"
       disabled={busy}
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
+      className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60"
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
       {label}
@@ -1140,9 +1144,9 @@ function MiniActionDialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl border border-border bg-background p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-[22px] bg-card p-5 shadow-2xl dark:shadow-none"
       >
-        <h4 className="mb-3 text-sm font-medium text-foreground">{title}</h4>
+        <h4 className="mb-3 text-[15px] font-semibold text-foreground">{title}</h4>
         <div className="space-y-3">{children}</div>
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -1156,7 +1160,7 @@ function MiniActionDialog({
             type="button"
             disabled={busy}
             onClick={onConfirm}
-            className="inline-flex items-center gap-1.5 rounded-full border-2 border-foreground bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-2 text-xs font-semibold text-brand-foreground hover:opacity-90 disabled:opacity-60"
           >
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {confirmLabel}
@@ -1178,11 +1182,14 @@ function Section({
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  // Seção definida por tipografia/espaço (Etapa 7) — sem card-dentro-de-
+  // card; a separação entre seções vem de uma borda inferior discreta, não
+  // de mais um retângulo com fundo próprio.
   return (
-    <div className="mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
+    <div className="space-y-3 border-b border-border/60 pb-5">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border">
+        <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-text-secondary">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-text-secondary">
             {icon}
           </span>
           {title}
@@ -1204,8 +1211,8 @@ function MiniStat({
   tone?: "neutral" | "danger";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-background p-2.5">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-text-secondary">{label}</p>
       <p
         className={`mt-0.5 text-sm font-semibold tabular-nums ${
           tone === "danger" ? "text-destructive" : "text-foreground"

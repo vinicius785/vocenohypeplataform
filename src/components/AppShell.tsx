@@ -15,6 +15,7 @@ import {
   Settings,
   Search,
   Bell,
+  Check,
   Moon,
   Sun,
   PanelLeft,
@@ -27,6 +28,7 @@ import {
   Timer,
   AlertTriangle,
   Bug,
+  ChevronRight,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, getTaskAssignees } from "@/lib/projetos";
 import { metricasPendentes, type Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -63,27 +65,21 @@ import {
 import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { messagePreviewLabel } from "@/lib/voice-messages";
 import { type NotifPrefs, loadNotifPrefs, subscribeNotifPrefs } from "@/lib/notif-prefs";
-import { loadMeetings, onMeetingsChange, meetingNeedsMyAction } from "@/lib/reunioes-store";
+import {
+  loadMeetings,
+  onMeetingsChange,
+  meetingNeedsMyAction,
+  type Meeting,
+} from "@/lib/reunioes-store";
 import { useFinanceiroEntries } from "@/lib/financeiro-entries";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 import { useRunningTimer, stopTimer } from "@/lib/time-entries";
 import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
+import { type SectionKey, SECTION_SUBNAV } from "@/lib/section-nav";
 
-export type SectionKey =
-  | "inicio"
-  | "clientes"
-  | "campanhas"
-  | "projetos"
-  | "reunioes"
-  | "comercial"
-  | "financeiro"
-  | "time"
-  | "influenciadores"
-  | "metas"
-  | "chat"
-  | "configuracoes";
+export type { SectionKey };
 
 /** Usado pra abrir uma campanha + tarefa específica ao clicar no indicador
  * de timer ativo — CampanhasSection lê isso ao montar (não é URL-driven
@@ -281,10 +277,17 @@ export function AppShell({
   children,
   active,
   onSelect,
+  activeSubTab,
+  onSelectSubTab,
 }: {
   children: ReactNode;
   active: SectionKey;
   onSelect: (key: SectionKey) => void;
+  /** Chave do subitem ativo dentro da seção atual (Financeiro/Time/Metas)
+   * — undefined quando a seção ativa não tem subnav (ver `SECTION_SUBNAV`
+   * em `@/lib/section-nav`). */
+  activeSubTab?: string;
+  onSelectSubTab?: (section: SectionKey, subKey: string) => void;
 }) {
   const [ws, setWs] = useState<Workspace>(() =>
     typeof window !== "undefined" ? loadWorkspace() : { nome: "Você no Hype" },
@@ -298,12 +301,63 @@ export function AppShell({
   const access = useMyAccess();
   const [bugsOpen, setBugsOpen] = useState(false);
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsedState] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem("sidebar:collapsed") === "1",
+  );
+  // Persistido localmente (Etapa 3) — não afeta permissões nem esconde
+  // ações essenciais, só lembra a preferência de largura entre sessões.
+  const setCollapsed = (value: boolean | ((c: boolean) => boolean)) => {
+    setCollapsedState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      try {
+        localStorage.setItem("sidebar:collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
   const showFull = !collapsed || mobileOpen;
   useEffect(() => {
     setMobileOpen(false);
   }, [active]);
+
+  // Grupos com subitens abertos/recolhidos (rodada corretiva da Etapa 3)
+  // — só isso é persistido em localStorage; a página ATIVA nunca vem daqui,
+  // sempre da rota (`active`/`activeSubTab`, controlados por `time.tsx`).
+  const [expandedNav, setExpandedNav] = useState<Set<SectionKey>>(() => {
+    let stored: unknown = [];
+    try {
+      stored = JSON.parse(localStorage.getItem("sidebar:expanded") ?? "[]");
+    } catch {
+      stored = [];
+    }
+    const set = new Set<SectionKey>(Array.isArray(stored) ? stored : []);
+    if (SECTION_SUBNAV[active]) set.add(active);
+    return set;
+  });
+  // Ao navegar pra uma seção com subnav ainda não vista nesta sessão,
+  // abre o grupo automaticamente — mas só adiciona, nunca remove, então
+  // um recolhimento manual do grupo atualmente ativo não é desfeito por
+  // esse efeito (só dispara de novo se `active` mudar).
+  useEffect(() => {
+    if (!SECTION_SUBNAV[active]) return;
+    setExpandedNav((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
+  }, [active]);
+  const toggleExpanded = (key: SectionKey) => {
+    setExpandedNav((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        localStorage.setItem("sidebar:expanded", JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
 
   // Foco/Escape do menu mobile: ao abrir, entra no primeiro item de
   // navegação (leitor de tela já sabe que um novo painel apareceu); ao
@@ -395,7 +449,16 @@ export function AppShell({
               )}
               <ul className="space-y-1">
                 {group.items.map((item) => {
-                  const isActive = active === item.key;
+                  const subnav = SECTION_SUBNAV[item.key];
+                  const hasSubnav = !!subnav;
+                  const isActiveSection = active === item.key;
+                  // Só recebe o tratamento "ativo" (fundo brand-subtle,
+                  // texto/ícone brand) quem NÃO tem subpáginas — quando
+                  // tem, só a subpágina fica marcada como ativa, o pai
+                  // fica neutro (nunca dupla seleção). Ver rodada
+                  // corretiva §1.
+                  const isActiveLeaf = isActiveSection && !hasSubnav;
+                  const expanded = hasSubnav && expandedNav.has(item.key);
                   const Icon = item.icon;
                   const allowed = hasPermission(access, SECTION_PERMISSION[item.key]);
                   const showDot =
@@ -424,14 +487,28 @@ export function AppShell({
                                 ? item.label
                                 : undefined
                         }
-                        className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                        aria-current={isActiveLeaf ? "page" : undefined}
+                        className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                           !showFull ? "justify-center" : ""
                         } ${
                           !allowed
                             ? "cursor-not-allowed text-muted-foreground/40"
-                            : `pill-nav-item ${isActive ? "pill-nav-item-active font-medium" : "text-muted-foreground"}`
+                            : isActiveLeaf
+                              ? "bg-brand-subtle font-medium text-brand"
+                              : hasSubnav && isActiveSection
+                                ? // Pai com subpágina ativa: neutro, só um
+                                  // pouco mais forte que o resto — nunca
+                                  // parece a página selecionada.
+                                  "pill-nav-item font-medium text-foreground"
+                                : "pill-nav-item text-muted-foreground"
                         }`}
                       >
+                        {isActiveLeaf && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
+                          />
+                        )}
                         <span className="relative shrink-0">
                           <Icon className="h-4 w-4" aria-hidden="true" />
                           {showDot && !showFull && (
@@ -455,7 +532,76 @@ export function AppShell({
                             )}
                           </span>
                         )}
+                        {showFull && hasSubnav && allowed && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label={
+                              expanded ? `Recolher ${item.label}` : `Expandir ${item.label}`
+                            }
+                            aria-expanded={expanded}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpanded(item.key);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleExpanded(item.key);
+                              }
+                            }}
+                            className="shrink-0 rounded p-1.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                          >
+                            <ChevronRight
+                              className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+                              aria-hidden="true"
+                            />
+                          </span>
+                        )}
                       </button>
+                      {/* Subitens recolhíveis — visíveis quando o grupo
+                       * está expandido (independente de rota; ver
+                       * `expandedNav` acima), nunca escondidos só porque
+                       * a seção deixou de ser a ativa. */}
+                      {showFull && expanded && subnav && (
+                        <ul className="mt-1 space-y-0.5 border-l border-border pl-3.5">
+                          {subnav.map((sub) => {
+                            const subActive = isActiveSection && activeSubTab === sub.key;
+                            return (
+                              <li key={sub.key}>
+                                <button
+                                  type="button"
+                                  aria-current={subActive ? "page" : undefined}
+                                  onClick={() => {
+                                    onSelectSubTab?.(item.key, sub.key);
+                                    // O `useEffect` que fecha o drawer no
+                                    // mobile só reage a troca de SEÇÃO
+                                    // (`active`) — trocar de subitem
+                                    // dentro da mesma seção não muda
+                                    // `active`, então fecha aqui também
+                                    // (bug real encontrado nesta rodada).
+                                    setMobileOpen(false);
+                                  }}
+                                  className={`relative w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+                                    subActive
+                                      ? "bg-brand-subtle font-medium text-brand"
+                                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  }`}
+                                >
+                                  {subActive && (
+                                    <span
+                                      aria-hidden="true"
+                                      className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
+                                    />
+                                  )}
+                                  {sub.label}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}
@@ -1071,6 +1217,7 @@ function BellItem({
   time,
   badge,
   onClick,
+  onMarkRead,
 }: {
   icon: ReactNode;
   iconTone: string;
@@ -1079,31 +1226,51 @@ function BellItem({
   time?: string;
   badge?: number;
   onClick: () => void;
+  /** Marca esta notificação como lida sem navegar até o item de origem —
+   * ausente quando o item não tem um "lida" independente da navegação
+   * (ex: mensagens não lidas de um canal, que só somem ao abrir a conversa). */
+  onMarkRead?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
-    >
-      <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconTone}`}
+    <div className="group flex w-full items-start gap-1 rounded-lg text-left transition-colors hover:bg-muted/60">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left"
       >
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-xs font-semibold text-foreground">{title}</span>
-          {time && <span className="shrink-0 text-[10px] text-muted-foreground">{time}</span>}
-        </div>
-        <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
-      </div>
-      {!!badge && (
-        <span className="mt-0.5 inline-flex min-w-[16px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
-          {badge}
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconTone}`}
+        >
+          {icon}
         </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs font-semibold text-foreground">{title}</span>
+            {time && <span className="shrink-0 text-[10px] text-muted-foreground">{time}</span>}
+          </div>
+          <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
+        </div>
+        {!!badge && (
+          <span className="mt-0.5 inline-flex min-w-[16px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
+            {badge}
+          </span>
+        )}
+      </button>
+      {onMarkRead && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMarkRead();
+          }}
+          aria-label="Marcar como lida"
+          title="Marcar como lida"
+          className="mr-1.5 mt-1.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -1678,6 +1845,16 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
       : d.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
   };
 
+  // `m.data` é "yyyy-mm-dd" (sem hora) — igual sameDay do fmtTime, mas a
+  // partir de uma data+hora separadas em vez de um timestamp único.
+  const fmtMeetingWhen = (m: Meeting) => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    if (m.data === todayStr) return m.hora;
+    const [, mo, da] = m.data.split("-");
+    return `${da}/${mo} ${m.hora}`;
+  };
+
   const openBell = () => {
     setOpen((o) => {
       const next = !o;
@@ -1771,6 +1948,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                         onSelect("projetos");
                         setOpen(false);
                       }}
+                      onMarkRead={() => dismissTask(t.id)}
                     />
                   ))}
                   {taskActivityItems.map((a) => (
@@ -1780,11 +1958,13 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                       iconTone="bg-violet-500/15 text-violet-600 dark:text-violet-400"
                       title={a.taskTitle}
                       subtitle={`${a.action} · ${a.projectName}`}
+                      time={fmtTime(Date.parse(a.createdAt) || Date.now())}
                       onClick={() => {
                         dismissTaskActivity(a.id);
                         onSelect("projetos");
                         setOpen(false);
                       }}
+                      onMarkRead={() => dismissTaskActivity(a.id)}
                     />
                   ))}
                 </>
@@ -1809,6 +1989,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                         dismissMention(m.id);
                         openConvo(m.convoId);
                       }}
+                      onMarkRead={() => dismissMention(m.id)}
                     />
                   ))}
                   {chatItems.map((i) => (
@@ -1828,6 +2009,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                       time={fmtTime(i.last.createdAt)}
                       badge={i.count}
                       onClick={() => openConvo(i.convoId)}
+                      onMarkRead={() => void markRead(i.convoId)}
                     />
                   ))}
                 </>
@@ -1847,11 +2029,13 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                       iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
                       title={m.titulo}
                       subtitle="Aguardando confirmação"
+                      time={fmtMeetingWhen(m)}
                       onClick={() => {
                         dismissMeeting(m.id);
                         onSelect("reunioes");
                         setOpen(false);
                       }}
+                      onMarkRead={() => dismissMeeting(m.id)}
                     />
                   ))}
                   {rescheduleItems.map((m) => (
@@ -1865,11 +2049,13 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                           ? ` por ${m.rescheduleProposal.proposedByName}`
                           : ""
                       }`}
+                      time={fmtMeetingWhen(m)}
                       onClick={() => {
                         dismissReschedule(m.id);
                         onSelect("reunioes");
                         setOpen(false);
                       }}
+                      onMarkRead={() => dismissReschedule(m.id)}
                     />
                   ))}
                 </>
@@ -1893,6 +2079,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                       }
                       title={it.title}
                       subtitle={it.action}
+                      time={fmtTime(Date.parse(it.at) || Date.now())}
                       onClick={() => {
                         dismissOutrosItems([it.key]);
                         try {
@@ -1909,6 +2096,7 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                         onSelect("campanhas");
                         setOpen(false);
                       }}
+                      onMarkRead={() => dismissOutrosItems([it.key])}
                     />
                   ))}
                 </>

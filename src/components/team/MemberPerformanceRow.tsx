@@ -17,7 +17,7 @@ const OVERDUE_PREVIEW_LIMIT = 4;
  * junto, nunca só a cor) é o que carrega o significado de verdade (item
  * 9 do pedido — reduzir dependência de cor). */
 function scoreToneClass(score: number | null): string {
-  if (score == null) return "text-muted-foreground";
+  if (score == null) return "text-text-secondary";
   if (score >= 90) return "text-emerald-600 dark:text-emerald-400";
   if (score >= 75) return "text-foreground";
   if (score >= 60) return "text-amber-600 dark:text-amber-400";
@@ -38,7 +38,7 @@ function OverdueTaskRow({
       className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-muted/60"
     >
       <span className="truncate text-xs font-medium text-foreground">{task.title}</span>
-      <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+      <span className="flex items-center justify-between gap-2 text-[11px] text-text-secondary">
         <span className="truncate">{task.projectName}</span>
         <span className="shrink-0 text-destructive">{task.due}</span>
       </span>
@@ -63,7 +63,7 @@ function OverdueTasksPopover({
   const visible = showAll ? overdueTasks : overdueTasks.slice(0, OVERDUE_PREVIEW_LIMIT);
   return (
     <div className="w-72">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
         Tarefas atrasadas
       </p>
       <p className="mt-0.5 text-xs text-foreground">
@@ -161,7 +161,7 @@ export function MemberPerformanceRow({
               </Badge>
             )}
           </div>
-          {showRole && m.role && <p className="truncate text-xs text-muted-foreground">{m.role}</p>}
+          {showRole && m.role && <p className="truncate text-xs text-text-secondary">{m.role}</p>}
         </div>
       </button>
 
@@ -190,7 +190,7 @@ export function MemberPerformanceRow({
           ) : (
             <span
               title={OVERDUE_TOOLTIP}
-              className="flex items-center gap-1 px-1.5 py-1 text-xs text-muted-foreground"
+              className="flex items-center gap-1 px-1.5 py-1 text-xs text-text-secondary"
             >
               <AlertTriangle className="h-3.5 w-3.5" />0 atrasadas
             </span>
@@ -208,7 +208,7 @@ export function MemberPerformanceRow({
             {score.score == null ? "—" : score.score}
           </span>
           {score.dataState === "sem_dados" && (
-            <span className="text-[10px] text-muted-foreground">Sem dados</span>
+            <span className="text-[10px] text-text-secondary">Sem dados</span>
           )}
           {score.dataState === "provisorio" && (
             <span className="text-[10px] text-amber-600 dark:text-amber-400">
@@ -216,7 +216,7 @@ export function MemberPerformanceRow({
             </span>
           )}
           {score.classificacao && (
-            <span className="text-[10px] text-muted-foreground">{score.classificacao}</span>
+            <span className="text-[10px] text-text-secondary">{score.classificacao}</span>
           )}
         </button>
       )}

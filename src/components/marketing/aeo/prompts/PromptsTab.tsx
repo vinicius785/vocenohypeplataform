@@ -123,6 +123,7 @@ export function PromptsTab({ prompts }: { prompts: AeoPrompt[] }) {
         </div>
         <Button
           size="sm"
+          variant="primary"
           onClick={() => {
             setEditando(null);
             setDialogOpen(true);

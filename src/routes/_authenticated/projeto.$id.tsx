@@ -13,8 +13,6 @@ import {
   CalendarDays,
   Megaphone,
   Newspaper,
-  LayoutList,
-  LayoutPanelTop,
   Radar,
   Bug,
   Mail,
@@ -32,8 +30,11 @@ import {
   MoreHorizontal,
   Paperclip,
   Pencil,
+  Trash2,
+  Search,
   type LucideIcon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -45,8 +46,9 @@ import {
 import { useConfirm } from "@/hooks/use-confirm";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { AppShell, type SectionKey } from "@/components/AppShell";
-import { BackButton } from "@/components/BackButton";
 import { MarketingSection } from "@/components/MarketingSection";
+import { ProjectWizard } from "@/components/ProjetosSection";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { ProjectBugsPanel } from "@/components/projetos/ProjectBugsPanel";
 import {
   TaskBoard,
@@ -58,6 +60,7 @@ import {
   getProjeto,
   onProjetosChange,
   upsertProjeto,
+  deleteProjeto,
   type FeatureKey,
   type Project,
   type ProjectLayout,
@@ -200,16 +203,35 @@ function ProjetoPage() {
   };
 
   const layout: ProjectLayout = project?.layout ?? "tabs";
-  const setLayout = (l: ProjectLayout) => update({ layout: l });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
+
+  const requestDelete = async () => {
+    if (!project) return;
+    if (
+      !(await confirm(
+        `Excluir "${project.name}"? Isso remove o projeto e todo o conteúdo dele (tarefas, arquivos, roadmap). Não pode ser desfeito.`,
+      ))
+    ) {
+      return;
+    }
+    deleteProjeto(project.id);
+    navigate({ to: "/time", search: { section: "projetos" } });
+  };
 
   if (!project) {
     return (
       <AppShell active="projetos" onSelect={goToSection}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
           <p className="text-sm text-muted-foreground">Projeto não encontrado.</p>
-          <BackButton
+          <button
+            type="button"
             onClick={() => void navigate({ to: "/time", search: { section: "projetos" } })}
-          />
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Voltar para Projetos
+          </button>
         </div>
       </AppShell>
     );
@@ -227,57 +249,87 @@ function ProjetoPage() {
 
   return (
     <AppShell active="projetos" onSelect={goToSection}>
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <BackButton onClick={() => goToSection("projetos")} />
+      <PageContainer className="space-y-6">
+        {/* Breadcrumb — troca o antigo botão "Voltar" isolado. */}
+        <nav aria-label="Navegação" className="flex items-center gap-1.5 text-sm">
+          <button
+            type="button"
+            onClick={() => goToSection("projetos")}
+            className="text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Projetos
+          </button>
+          <span className="text-muted-foreground">/</span>
+          <span className="min-w-0 truncate font-medium text-foreground">{project.name}</span>
+        </nav>
 
-        {/* Header — foto/ícone + nome + descrição */}
-        <header className="flex items-center gap-5">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted ring-1 ring-border">
+        {/* Cabeçalho compacto — capa pequena, nome, descrição curta,
+         * quantidade de funcionalidades, editar + mais opções. A
+         * alternância Abas/Página única virou uma configuração do
+         * projeto (dentro de "Editar projeto"), não mais uma ação
+         * permanente aqui. */}
+        <header className="flex items-center gap-3">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted ring-1 ring-border">
             {project.cover ? (
-              <img src={project.cover} alt={project.name} className="h-full w-full object-cover" />
+              <img
+                src={project.cover}
+                alt=""
+                className="h-full w-full object-cover object-center"
+              />
             ) : (
-              <ImageIcon className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
+              <ImageIcon className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-3xl font-semibold tracking-tight text-foreground">
+            <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
               {project.name}
             </h1>
-            {project.description && (
-              <p className="mt-1 max-w-2xl truncate text-sm text-muted-foreground">
-                {project.description}
-              </p>
-            )}
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+              {project.description && <span className="truncate">{project.description}</span>}
+              {project.description && <span>·</span>}
+              <span className="shrink-0">
+                {availableTabs.length}{" "}
+                {availableTabs.length === 1 ? "funcionalidade" : "funcionalidades"}
+              </span>
+            </p>
           </div>
-          {availableTabs.length > 0 && (
-            <div className="inline-flex shrink-0 rounded-md border border-border bg-background p-0.5">
-              <button
-                onClick={() => setLayout("tabs")}
-                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  layout === "tabs"
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-label="Ver em abas"
-              >
-                <LayoutPanelTop className="h-3.5 w-3.5" />
-                Abas
-              </button>
-              <button
-                onClick={() => setLayout("single")}
-                className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  layout === "single"
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                aria-label="Ver em página única"
-              >
-                <LayoutList className="h-3.5 w-3.5" />
-                Página única
-              </button>
-            </div>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Mais opções"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => void requestDelete()}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir projeto
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
+
+        {editOpen && (
+          <ProjectWizard
+            initial={project}
+            onClose={() => setEditOpen(false)}
+            onSave={(p) => {
+              update(p);
+              setEditOpen(false);
+            }}
+          />
+        )}
+        {confirmDialog}
 
         <div>
           {availableTabs.length === 0 ? (
@@ -339,7 +391,7 @@ function ProjetoPage() {
             </>
           )}
         </div>
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }
@@ -795,73 +847,74 @@ function DocRow({
   };
 
   return (
-    <div className="group flex items-center gap-2.5 px-3 py-2">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => window.open(doc.url, "_blank", "noopener,noreferrer")}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          window.open(doc.url, "_blank", "noopener,noreferrer");
+        }
+      }}
+      className="group flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+    >
       <SourceIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
           {doc.isPinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-          <a
-            href={doc.url}
-            target="_blank"
-            rel="noreferrer"
-            title={doc.name}
-            className="min-w-0 truncate text-sm text-foreground hover:underline"
-          >
+          <span title={doc.name} className="min-w-0 truncate text-sm text-foreground">
             {doc.name}
-          </a>
+          </span>
         </div>
         <p className="truncate text-[11px] text-muted-foreground">
           {sourceLabel} · {DOC_CATEGORY_LABEL[category]}
         </p>
       </div>
       {copied && <span className="shrink-0 text-[11px] text-muted-foreground">Copiado!</span>}
-      <a
-        href={doc.url}
-        target="_blank"
-        rel="noreferrer"
-        aria-label="Abrir"
-        className="shrink-0 rounded p-1 opacity-0 hover:bg-muted group-hover:opacity-100"
-      >
-        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-      </a>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Mais ações"
-            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem asChild>
-            <a href={doc.url} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-3.5 w-3.5" /> Abrir
-            </a>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="h-3.5 w-3.5" /> Editar
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onTogglePin}>
-            {doc.isPinned ? (
-              <>
-                <PinOff className="h-3.5 w-3.5" /> Desafixar do projeto
-              </>
-            ) : (
-              <>
-                <Pin className="h-3.5 w-3.5" /> Fixar no projeto
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={copyLink}>
-            <Copy className="h-3.5 w-3.5" /> Copiar link
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-            <X className="h-3.5 w-3.5" /> Excluir
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Mais ações"
+              className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem asChild>
+              <a href={doc.url} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" /> Abrir
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="h-3.5 w-3.5" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onTogglePin}>
+              {doc.isPinned ? (
+                <>
+                  <PinOff className="h-3.5 w-3.5" /> Desafixar do projeto
+                </>
+              ) : (
+                <>
+                  <Pin className="h-3.5 w-3.5" /> Fixar no projeto
+                </>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={copyLink}>
+              <Copy className="h-3.5 w-3.5" /> Copiar link
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <X className="h-3.5 w-3.5" /> Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
@@ -876,6 +929,8 @@ function DocsPanel({
   const [addOpen, setAddOpen] = useState(false);
   const [addStep, setAddStep] = useState<"choose" | "link">("choose");
   const [editing, setEditing] = useState<DocItem | null>(null);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<DocCategory | "todas">("todas");
   const { confirm, confirmDialog } = useConfirm();
 
   const closeAdd = () => {
@@ -926,72 +981,108 @@ function DocsPanel({
 
   // Fixados primeiro — `sort` é estável, então a ordem relativa dentro
   // de cada grupo (fixados / não-fixados) nunca muda, só o agrupamento.
-  const sortedDocs = [...project.docs].sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
+  const sortedDocs = [...project.docs]
+    .filter((d) => {
+      const q = query.trim().toLowerCase();
+      const matchesQuery =
+        !q || d.name.toLowerCase().includes(q) || d.url.toLowerCase().includes(q);
+      const matchesCategory =
+        categoryFilter === "todas" || (d.category ?? "outro") === categoryFilter;
+      return matchesQuery && matchesCategory;
+    })
+    .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold text-foreground">Arquivos e links</h2>
+          <span className="text-xs text-muted-foreground">({project.docs.length})</span>
         </div>
-        <Popover
-          open={addOpen}
-          onOpenChange={(o) => {
-            setAddOpen(o);
-            if (!o) setAddStep("choose");
-          }}
-        >
-          <PopoverTrigger asChild>
-            <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90">
-              <Plus className="h-3.5 w-3.5" /> Adicionar
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 p-0">
-            {addStep === "choose" ? (
-              <div className="p-1">
-                <p className="px-2 py-1.5 text-[11px] font-semibold text-foreground">
-                  Adicionar ao projeto
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setAddStep("link")}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted/60"
-                >
-                  <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>
-                    <span className="block text-foreground">Adicionar link</span>
-                    <span className="block text-[11px] text-muted-foreground">
-                      Google Drive, Docs, Figma, Miro, Notion, Canva etc.
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar"
+              className="h-8 w-36 rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-44"
+            />
+          </div>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as DocCategory | "todas")}
+            aria-label="Filtrar por categoria"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <option value="todas">Todas as categorias</option>
+            {(Object.keys(DOC_CATEGORY_LABEL) as DocCategory[]).map((c) => (
+              <option key={c} value={c}>
+                {DOC_CATEGORY_LABEL[c]}
+              </option>
+            ))}
+          </select>
+          <Popover
+            open={addOpen}
+            onOpenChange={(o) => {
+              setAddOpen(o);
+              if (!o) setAddStep("choose");
+            }}
+          >
+            <PopoverTrigger asChild>
+              <button className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background hover:opacity-90">
+                <Plus className="h-3.5 w-3.5" /> Adicionar
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+              {addStep === "choose" ? (
+                <div className="p-1">
+                  <p className="px-2 py-1.5 text-[11px] font-semibold text-foreground">
+                    Adicionar ao projeto
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setAddStep("link")}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-muted/60"
+                  >
+                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>
+                      <span className="block text-foreground">Adicionar link</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        Google Drive, Docs, Figma, Miro, Notion, Canva etc.
+                      </span>
                     </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  title="Ainda não disponível — sem infraestrutura de upload"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs opacity-40"
-                >
-                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span>
-                    <span className="block text-foreground">Enviar arquivo</span>
-                    <span className="block text-[11px] text-muted-foreground">
-                      PDF, imagem, planilha, apresentação etc.
+                  </button>
+                  <button
+                    type="button"
+                    disabled
+                    title="Ainda não disponível — sem infraestrutura de upload"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs opacity-40"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>
+                      <span className="block text-foreground">Enviar arquivo</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        PDF, imagem, planilha, apresentação etc.
+                      </span>
                     </span>
-                  </span>
-                </button>
-              </div>
-            ) : (
-              <DocLinkForm onSubmit={createDoc} onCancel={closeAdd} />
-            )}
-          </PopoverContent>
-        </Popover>
+                  </button>
+                </div>
+              ) : (
+                <DocLinkForm onSubmit={createDoc} onCancel={closeAdd} />
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {project.docs.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           Nenhum material adicionado ainda. Adicione links importantes deste projeto.
         </p>
+      ) : sortedDocs.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Nenhum resultado para esta busca/filtro.</p>
       ) : (
         <div className="divide-y divide-border rounded-md border border-border bg-background">
           {sortedDocs.map((d) => (

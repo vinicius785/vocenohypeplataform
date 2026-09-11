@@ -45,7 +45,7 @@ export function MonitorTab({
     return (
       <div className="space-y-4">
         <div className="flex justify-end">
-          <Button size="sm" onClick={() => setNovaRodadaOpen(true)}>
+          <Button size="sm" variant="primary" onClick={() => setNovaRodadaOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> Nova rodada
           </Button>
         </div>
@@ -78,7 +78,7 @@ export function MonitorTab({
             ))}
           </select>
         </div>
-        <Button size="sm" onClick={() => setNovaRodadaOpen(true)}>
+        <Button size="sm" variant="primary" onClick={() => setNovaRodadaOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> Nova rodada
         </Button>
       </div>

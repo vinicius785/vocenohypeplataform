@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Filter, X, ArrowUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { Lead } from "@/lib/comercial";
 import {
   OPPORTUNITY_STAGES,
@@ -144,21 +146,16 @@ const pillCls = (active: boolean) =>
       : "border-border text-muted-foreground hover:bg-muted"
   }`;
 
-export function LeadFiltersBar({
-  filters,
-  onChange,
-  team,
-}: {
-  filters: LeadFiltersState;
-  onChange: (f: LeadFiltersState) => void;
-  team: TeamMemberLite[];
-}) {
-  const [open, setOpen] = useState(false);
-  const activeCount = countActiveFilters(filters);
-
-  const clearAll = () => onChange(DEFAULT_LEAD_FILTERS);
-
-  const chips: { id: string; label: string; onRemove: () => void }[] = [
+/** Lista de chips removíveis — extraída pra ser compartilhada entre
+ * `LeadFiltersControls` (não usa) e `LeadFiltersChips` (usa), única fonte
+ * de verdade sobre o que conta como "filtro ativo" pra exibição (a
+ * contagem do botão "Filtros" vem de `countActiveFilters`, já existente,
+ * sobre o mesmo objeto `filters`). */
+function buildChips(
+  filters: LeadFiltersState,
+  onChange: (f: LeadFiltersState) => void,
+): { id: string; label: string; onRemove: () => void }[] {
+  return [
     ...filters.responsibles.map((r) => ({
       id: `resp-${r}`,
       label: `Responsável: ${r || "(sem responsável)"}`,
@@ -211,25 +208,39 @@ export function LeadFiltersBar({
         ]
       : []),
   ];
+}
+
+/** Controles do painel avançado (Filtrar + Ordenar) — vivem na MESMA
+ * toolbar de Período/Busca em `ComercialSection.tsx` (correção: antes
+ * ficavam soltos numa segunda linha, abaixo do card "Pipeline total").
+ * Os chips ativos NÃO fazem parte deste componente — ver
+ * `LeadFiltersChips`, renderizado à parte, logo abaixo da toolbar. */
+export function LeadFiltersControls({
+  filters,
+  onChange,
+  team,
+}: {
+  filters: LeadFiltersState;
+  onChange: (f: LeadFiltersState) => void;
+  team: TeamMemberLite[];
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = countActiveFilters(filters);
+  const clearAll = () => onChange(DEFAULT_LEAD_FILTERS);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className={`inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/40 ${
-              activeCount > 0 ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
+          <Button variant="outline" size="sm" className="gap-1.5">
             <Filter className="h-3.5 w-3.5" />
-            Filtrar
+            Filtros
             {activeCount > 0 && (
-              <span className="rounded-full bg-foreground px-1.5 text-[10px] text-background">
+              <Badge variant="brand" className="px-1.5 py-0 text-[10px] leading-4">
                 {activeCount}
-              </span>
+              </Badge>
             )}
-          </button>
+          </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-3">
           <div className="flex items-center justify-between">
@@ -354,13 +365,13 @@ export function LeadFiltersBar({
 
       <Popover>
         <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/40"
-          >
+          <Button variant="outline" size="sm" className="gap-1.5">
             <ArrowUpDown className="h-3.5 w-3.5" />
             Ordenar: {SORT_LABEL[filters.sort]}
-          </button>
+            <span aria-label={filters.sortDir === "asc" ? "crescente" : "decrescente"}>
+              {filters.sortDir === "asc" ? "↑" : "↓"}
+            </span>
+          </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-56 space-y-1 p-2">
           {(Object.keys(SORT_LABEL) as LeadSortKey[]).map((k) => (
@@ -395,34 +406,49 @@ export function LeadFiltersBar({
           </div>
         </PopoverContent>
       </Popover>
+    </>
+  );
+}
 
-      {chips.length > 0 && (
-        <>
-          {chips.map((chip) => (
-            <span
-              key={chip.id}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
-            >
-              {chip.label}
-              <button
-                type="button"
-                onClick={chip.onRemove}
-                aria-label={`Remover filtro ${chip.label}`}
-                className="hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
+/** Chips dos filtros ativos — renderizada à parte (correção), logo abaixo
+ * da toolbar unificada. Some por completo (nenhum espaço vazio) quando
+ * não há filtro ativo. Mesma fonte de verdade que o contador do botão
+ * "Filtros" (`countActiveFilters(filters)` em `LeadFiltersControls`) e
+ * que os indicadores clicáveis do `PipelineSummary` — todos os três leem/
+ * escrevem o mesmo objeto `filters` de `useLeadFilters()`, sem estado
+ * duplicado. */
+export function LeadFiltersChips({
+  filters,
+  onChange,
+}: {
+  filters: LeadFiltersState;
+  onChange: (f: LeadFiltersState) => void;
+}) {
+  const chips = buildChips(filters, onChange);
+  if (chips.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {chips.map((chip) => (
+        <Badge key={chip.id} variant="brand" className="gap-1 py-1 pl-2.5 pr-1.5">
+          {chip.label}
           <button
             type="button"
-            onClick={clearAll}
-            className="text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={chip.onRemove}
+            aria-label={`Remover filtro ${chip.label}`}
+            className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand/20"
           >
-            Limpar tudo
+            <X className="h-3 w-3" />
           </button>
-        </>
-      )}
+        </Badge>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange(DEFAULT_LEAD_FILTERS)}
+        className="text-[11px] font-medium text-text-secondary hover:text-foreground"
+      >
+        Limpar tudo
+      </button>
     </div>
   );
 }

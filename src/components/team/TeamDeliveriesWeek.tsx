@@ -51,10 +51,10 @@ function formatCompletedAt(iso: string): string {
 }
 
 function trendTone(pct: number | null): string {
-  if (pct == null) return "text-muted-foreground";
+  if (pct == null) return "text-text-secondary";
   if (pct > 5) return "text-emerald-600 dark:text-emerald-400";
   if (pct < -5) return "text-destructive";
-  return "text-muted-foreground";
+  return "text-text-secondary";
 }
 
 function trendLabel(pct: number | null): string {
@@ -103,7 +103,7 @@ function DeliveryTasksDialog({
           <DialogDescription>{subtitle}</DialogDescription>
         </DialogHeader>
         {tasks.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
+          <p className="py-4 text-center text-sm text-text-secondary">
             Não foi possível carregar os detalhes.
           </p>
         ) : (
@@ -117,10 +117,10 @@ function DeliveryTasksDialog({
                   className="flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2 py-2 text-left hover:bg-muted/60"
                 >
                   <span className="truncate text-sm text-foreground">{t.title}</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="truncate text-xs text-text-secondary">
                     {t.assignees.join(", ") || "Sem responsável"} · {t.projectName}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] text-text-secondary">
                     Concluída {t.completedAt ? formatCompletedAt(t.completedAt) : "—"}
                   </span>
                 </button>
@@ -165,7 +165,7 @@ function MemberRow({
           type="button"
           onClick={() => setExpanded((e) => !e)}
           aria-label={expanded ? "Recolher" : "Expandir"}
-          className="shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
+          className="shrink-0 cursor-pointer text-text-secondary hover:text-foreground"
         >
           {expanded ? (
             <ChevronDown className="h-3.5 w-3.5" />
@@ -189,7 +189,7 @@ function MemberRow({
             <p className="truncate text-sm font-semibold text-foreground group-hover:underline">
               {member.name || "(sem nome)"}
             </p>
-            {member.role && <p className="truncate text-xs text-muted-foreground">{member.role}</p>}
+            {member.role && <p className="truncate text-xs text-text-secondary">{member.role}</p>}
           </div>
         </button>
 
@@ -197,17 +197,17 @@ function MemberRow({
           type="button"
           onClick={onOpenTasks}
           disabled={row.thisWeek === 0}
-          className="w-16 shrink-0 cursor-pointer text-right text-sm font-semibold tabular-nums text-foreground hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
+          className="w-16 shrink-0 cursor-pointer text-right text-sm font-semibold tabular-nums text-foreground hover:underline disabled:cursor-default disabled:text-text-secondary disabled:no-underline"
         >
           {row.thisWeek}
         </button>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground md:inline">
+        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary md:inline">
           {fmtAvg(row.monthlyAvg)}
         </span>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground lg:inline">
+        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary lg:inline">
           {fmtAvg(row.quarterlyAvg)}
         </span>
-        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-muted-foreground lg:inline">
+        <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-text-secondary lg:inline">
           {fmtAvg(row.yearlyAvg)}
         </span>
         <span className={`w-16 shrink-0 text-right text-xs font-medium ${trendTone(row.trendPct)}`}>
@@ -219,34 +219,34 @@ function MemberRow({
         <div className="space-y-2 border-t border-border/60 bg-muted/20 px-4 py-3 text-xs">
           <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
             <div>
-              <p className="text-muted-foreground">Esta semana</p>
+              <p className="text-text-secondary">Esta semana</p>
               <p className="font-semibold tabular-nums text-foreground">{row.thisWeek}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Média mensal</p>
+              <p className="text-text-secondary">Média mensal</p>
               <p className="font-semibold tabular-nums text-foreground">
                 {fmtAvg(row.monthlyAvg)} / semana
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">Média trimestral</p>
+              <p className="text-text-secondary">Média trimestral</p>
               <p className="font-semibold tabular-nums text-foreground">
                 {fmtAvg(row.quarterlyAvg)} / semana
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">Média anual</p>
+              <p className="text-text-secondary">Média anual</p>
               <p className="font-semibold tabular-nums text-foreground">
                 {fmtAvg(row.yearlyAvg)} / semana
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground">Melhor dia</p>
+              <p className="text-text-secondary">Melhor dia</p>
               <p className="font-semibold text-foreground">{bestDay ? bestDay.label : "—"}</p>
             </div>
           </div>
           <div>
-            <p className="mb-1 text-muted-foreground">Distribuição da semana</p>
+            <p className="mb-1 text-text-secondary">Distribuição da semana</p>
             <div className="flex flex-wrap gap-x-3 gap-y-1">
               {row.byWeekday.map((d) => (
                 <span key={d.label} className="tabular-nums text-foreground">
@@ -278,7 +278,7 @@ function SortableHeader({
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`shrink-0 cursor-pointer text-right text-[10px] font-medium uppercase tracking-wide hover:text-foreground ${currentKey === sortKey ? "text-foreground" : "text-muted-foreground"} ${className ?? ""}`}
+      className={`shrink-0 cursor-pointer text-right text-[10px] font-medium uppercase tracking-wide hover:text-foreground ${currentKey === sortKey ? "text-foreground" : "text-text-secondary"} ${className ?? ""}`}
     >
       {label}
     </button>
@@ -376,16 +376,14 @@ export function TeamDeliveriesWeek({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="rounded-[24px] bg-card p-5 dark:shadow-none">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Entregas da Semana
-          </h3>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{weekRangeLabel}</p>
+          <h3 className="text-[15px] font-semibold text-foreground">Entregas da Semana</h3>
+          <p className="mt-0.5 text-[11px] text-text-secondary">{weekRangeLabel}</p>
         </div>
         {thisWeekTotal > 0 && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
             <span className="font-semibold text-foreground">
               {thisWeekTotal} entrega{thisWeekTotal === 1 ? "" : "s"}
             </span>
@@ -419,7 +417,7 @@ export function TeamDeliveriesWeek({
       </div>
 
       {thisWeekTotal === 0 ? (
-        <p className="flex h-36 items-center justify-center text-center text-sm text-muted-foreground">
+        <p className="flex h-36 items-center justify-center text-center text-sm text-text-secondary">
           Não há entregas registradas nesta semana.
         </p>
       ) : (
@@ -429,7 +427,7 @@ export function TeamDeliveriesWeek({
               <CartesianGrid vertical={false} strokeOpacity={0.15} stroke="var(--border)" />
               <XAxis
                 dataKey="shortLabel"
-                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -461,7 +459,7 @@ export function TeamDeliveriesWeek({
         <div className="mt-4 border-t border-border pt-3">
           <div className="flex items-center gap-3 px-3 pb-1.5">
             <span className="w-3.5 shrink-0" />
-            <span className="flex-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="flex-1 text-[10px] font-medium uppercase tracking-wide text-text-secondary">
               Membro
             </span>
             <SortableHeader
@@ -512,7 +510,7 @@ export function TeamDeliveriesWeek({
               className="w-16"
             />
           </div>
-          <div className="rounded-lg border border-border">
+          <div className="overflow-hidden rounded-2xl bg-muted/40">
             {sortedRows.map((row) => (
               <MemberRow
                 key={row.member.id}

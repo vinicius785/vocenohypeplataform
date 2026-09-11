@@ -29,9 +29,9 @@ function WorkloadTooltip({ active, payload }: TooltipProps<number, string>) {
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="mb-1 font-semibold text-foreground">{row.name}</p>
-      <p className="text-muted-foreground">{row.total} tarefas abertas</p>
+      <p className="text-text-secondary">{row.total} tarefas abertas</p>
       <p className="text-destructive">{row.atrasada} atrasadas</p>
-      <p className="text-muted-foreground">{row.vencemSemana} vencem esta semana</p>
+      <p className="text-text-secondary">{row.vencemSemana} vencem esta semana</p>
     </div>
   );
 }
@@ -82,12 +82,10 @@ export function TeamWorkload({
   };
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Carga por membro
-      </h3>
+    <div className="flex h-full flex-col rounded-[22px] bg-card p-5 dark:shadow-none">
+      <h3 className="text-[15px] font-semibold text-foreground">Carga por membro</h3>
       {data.length === 0 ? (
-        <p className="flex flex-1 items-center justify-center py-8 text-center text-sm text-muted-foreground">
+        <p className="flex flex-1 items-center justify-center py-8 text-center text-sm text-text-secondary">
           Ninguém com tarefa aberta no momento.
         </p>
       ) : (
@@ -98,7 +96,7 @@ export function TeamWorkload({
               <XAxis
                 type="number"
                 allowDecimals={false}
-                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 10, fill: "var(--text-secondary)" }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -106,7 +104,7 @@ export function TeamWorkload({
                 type="category"
                 dataKey="name"
                 width={90}
-                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -147,7 +145,7 @@ export function TeamWorkload({
           </ResponsiveContainer>
         </div>
       )}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-2)" }} />
           Dentro do prazo

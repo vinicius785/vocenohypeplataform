@@ -1,6 +1,9 @@
 /* Estilo "pílula" (React Bits PillNav) aplicado aos botões de navegação
  * existentes (sidebar e sub-abas de Configurações) — puramente visual,
- * via classe adicional, sem tocar na lógica de onClick/active/disabled. */
+ * via classe adicional, sem tocar na lógica de onClick/active/disabled.
+ * Usa `--brand`/`--brand-foreground` (não `--primary`) desde a Etapa 3 —
+ * `--primary` é o tom monocromático quase-preto/quase-branco antigo, que
+ * fazia o item ativo virar uma cápsula branca no modo escuro. */
 .pill-nav-item {
   position: relative;
   overflow: hidden;
@@ -16,7 +19,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--primary);
+  background: var(--brand);
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -28,7 +31,7 @@
 }
 
 .pill-nav-item:hover {
-  color: var(--primary-foreground) !important;
+  color: var(--brand-foreground) !important;
 }
 
 .pill-nav-item-active {
@@ -37,9 +40,9 @@
 
 .pill-nav-item-active::before {
   transform: scaleX(1);
-  background: var(--primary);
+  background: var(--brand);
 }
 
 .pill-nav-item-active {
-  color: var(--primary-foreground) !important;
+  color: var(--brand-foreground) !important;
 }

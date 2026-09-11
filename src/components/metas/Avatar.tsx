@@ -23,7 +23,7 @@ export function Avatar({
       ) : name ? (
         initialsOf(name) || "?"
       ) : (
-        <User className="h-3 w-3 text-muted-foreground" />
+        <User className="h-3 w-3 text-text-secondary" />
       )}
     </span>
   );

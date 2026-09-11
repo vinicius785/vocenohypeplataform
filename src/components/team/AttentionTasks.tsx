@@ -6,6 +6,7 @@ import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask, type DashTaskFlat } from "@/lib/task-aggregation";
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf } from "./member-ui";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 export type AttentionTab = "atrasadas" | "hoje" | "semana";
 
@@ -58,32 +59,23 @@ export function AttentionTasks({
   const findMember = (name: string) => members.find((m) => m.name === name);
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-4">
+    <div className="flex h-full flex-col rounded-[22px] bg-card p-5 dark:shadow-none">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <h3 className="text-[15px] font-semibold text-foreground">
           Tarefas que precisam de atenção
         </h3>
-        <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-          {TAB_DEFS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => onTabChange(tab.key)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                activeTab === tab.key
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label="Filtro de tarefas por prazo"
+          size="sm"
+          value={activeTab}
+          onChange={onTabChange}
+          options={TAB_DEFS.map((t) => ({ value: t.key, label: t.label }))}
+        />
       </div>
 
       <div className="mt-3 min-h-0 flex-1">
         {filtered.length === 0 ? (
-          <p className="flex h-full items-center justify-center py-8 text-center text-sm text-muted-foreground">
+          <p className="flex h-full items-center justify-center py-8 text-center text-sm text-text-secondary">
             {EMPTY_MESSAGE[activeTab]}
           </p>
         ) : (
@@ -116,7 +108,7 @@ export function AttentionTasks({
                         );
                       })}
                       {assignees.length > 3 && (
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-card">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-text-secondary ring-2 ring-card">
                           +{assignees.length - 3}
                         </span>
                       )}
@@ -125,13 +117,13 @@ export function AttentionTasks({
                     <div className="min-w-0 flex-1">
                       <p className="flex min-w-0 items-center gap-1.5 truncate text-sm text-foreground group-hover:underline">
                         {t.parentTitle && (
-                          <span className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground">
+                          <span className="inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-text-secondary">
                             Sub
                           </span>
                         )}
                         <span className="truncate">{t.title}</span>
                       </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-text-secondary">
                         {assignees.join(", ")} · {t.projectName}
                       </p>
                     </div>
@@ -153,7 +145,7 @@ export function AttentionTasks({
 
                     <span
                       className={`shrink-0 text-xs tabular-nums ${
-                        t.bucket === "atrasada" ? "text-destructive" : "text-muted-foreground"
+                        t.bucket === "atrasada" ? "text-destructive" : "text-text-secondary"
                       }`}
                     >
                       {t.due}
@@ -167,7 +159,7 @@ export function AttentionTasks({
       </div>
 
       {activeTab === "atrasadas" && filtered.length > 0 && (
-        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-text-secondary">
           <AlertTriangle className="h-3 w-3 text-destructive" />
           Tarefas atrasadas pesam negativo na pontuação de quem está com elas em aberto.
         </p>

@@ -60,6 +60,37 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Tokens FUTUROS do design system (Etapa 2) — ainda não usados por
+   * nenhuma tela real. `--color-primary` acima continua sendo a cor viva
+   * em produção; `--color-brand` é a marca (#6F95FF) pra onde a migração
+   * vai apontar quando cada tela for migrada (ver /design-system). */
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-foreground-secondary: var(--brand-foreground-secondary);
+  --color-brand-border: var(--brand-border);
+  /* Texto secundário com contraste garantido pro design system novo —
+   * NÃO é o `--muted-foreground` global (esse continua intocado, ainda
+   * usado por toda tela real hoje). Ver comentário junto do valor. */
+  --color-text-secondary: var(--text-secondary);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-danger-border: var(--danger-border);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
+  --color-info-border: var(--info-border);
 }
 
 :root {
@@ -97,6 +128,52 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+
+  /* Tokens futuros (Etapa 2 do design system) — marca #6F95FF e cores
+   * semânticas. Convertidos de hex pra oklch (fórmula sRGB→OKLab padrão);
+   * o hex original fica documentado ao lado de cada um pra nunca perder a
+   * referência exata pedida. Nenhum destes é consumido por telas reais
+   * ainda — só pela página /design-system. */
+  --brand: oklch(0.6907 0.1616 267.26); /* #6F95FF — hex oficial, inalterado */
+  --brand-hover: oklch(0.6281 0.1455 267.06); /* #6183E0 — tom mais escuro no claro */
+  --brand-subtle: oklch(0.6907 0.1616 267.26 / 12%); /* rgba(111,149,255,0.12) */
+  /* Correção de contraste (rodada corretiva): texto branco sobre #6F95FF
+   * mede só 2.83:1 (falha WCAG AA, que exige 4.5:1 pra texto normal) — o
+   * valor original assumia "branco em cima da marca" sem validar. #0B1020
+   * sobre #6F95FF mede 6.69:1 (passa AA com folga). Mesmo valor nos dois
+   * temas porque o fundo da marca (#6F95FF) não muda entre claro/escuro. */
+  --brand-foreground: oklch(0.1773 0.0341 269.56); /* #0B1020 — 6.69:1 sobre a marca */
+  /* Rodada de correção cirúrgica — paleta própria pra texto/controle sobre
+   * a superfície de marca (#6F95FF), pra parar de resolver hierarquia com
+   * opacidade (que quebra contraste: `brand-foreground/70` media 4.03:1,
+   * abaixo do 4.5:1 exigido). Ambos sólidos, mesmo valor nos dois temas —
+   * a marca não muda entre claro/escuro. */
+  --brand-foreground-secondary: oklch(0.2936 0.066 267.94); /* #1E2A4D — 4.97:1 sobre a marca (texto normal) */
+  --brand-border: oklch(0.3958 0.0751 265.53); /* #33456F — 3.34:1 sobre a marca (borda/controle) */
+  --success: oklch(0.6959 0.1491 162.48); /* #10B981 */
+  --success-soft: oklch(0.6959 0.1491 162.48 / 12%);
+  --success-soft-foreground: oklch(0.4 0.1 162.48);
+  --success-border: oklch(0.6959 0.1491 162.48 / 30%);
+  --warning: oklch(0.7686 0.1647 70.08); /* #F59E0B */
+  --warning-soft: oklch(0.7686 0.1647 70.08 / 14%);
+  --warning-soft-foreground: oklch(0.42 0.11 70.08);
+  --warning-border: oklch(0.7686 0.1647 70.08 / 32%);
+  --danger: oklch(0.6368 0.2078 25.331); /* #EF4444 */
+  --danger-soft: oklch(0.6368 0.2078 25.331 / 12%);
+  --danger-soft-foreground: oklch(0.4 0.15 25.331);
+  --danger-border: oklch(0.6368 0.2078 25.331 / 30%);
+  --info: oklch(0.6231 0.188 259.815); /* #3B82F6 */
+  --info-soft: oklch(0.6231 0.188 259.815 / 12%);
+  --info-soft-foreground: oklch(0.38 0.12 259.815);
+  --info-border: oklch(0.6231 0.188 259.815 / 30%);
+  /* Texto secundário só do design system novo (rodada corretiva) — o
+   * `--muted-foreground` global mede 4.33:1 sobre o fundo real de página
+   * (#F3F4F6), abaixo do 4.5:1 exigido pra texto normal, e tem tom
+   * azulado (hue 257) que o usuário percebeu como "usado em excesso".
+   * Este token é cinza neutro com folga (7.56:1 sobre branco, 6.87:1
+   * sobre #F3F4F6) e só é usado pelos componentes novos — NÃO substitui
+   * `--muted-foreground` nas telas reais. */
+  --text-secondary: oklch(0.4461 0.0263 256.8); /* #4B5563 */
 }
 
 .dark {
@@ -133,6 +210,38 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Mesmos tokens futuros, valores ajustados pro escuro (marca em hover
+   * mais clara, não mais escura; fundo suave semântico com mais alpha pra
+   * compensar o fundo escuro). */
+  --brand: oklch(0.6907 0.1616 267.26); /* #6F95FF */
+  --brand-hover: oklch(0.7246 0.142 268.111); /* #80A1FF — tom mais claro no escuro */
+  --brand-subtle: oklch(0.6907 0.1616 267.26 / 14%); /* rgba(111,149,255,0.14) */
+  /* Mesmo valor do claro — a marca (#6F95FF) não muda entre temas, então
+   * o texto sobre ela também não precisa mudar (6.69:1, ver comentário no
+   * bloco claro). */
+  --brand-foreground: oklch(0.1773 0.0341 269.56); /* #0B1020 */
+  /* Mesmos valores do claro — ver comentário no bloco `:root`. */
+  --brand-foreground-secondary: oklch(0.2936 0.066 267.94); /* #1E2A4D — 4.97:1 sobre a marca */
+  --brand-border: oklch(0.3958 0.0751 265.53); /* #33456F — 3.34:1 sobre a marca */
+  --success: oklch(0.7729 0.1535 163.223); /* #34D399 */
+  --success-soft: oklch(0.7729 0.1535 163.223 / 14%);
+  --success-soft-foreground: oklch(0.85 0.14 163.223);
+  --success-border: oklch(0.7729 0.1535 163.223 / 30%);
+  --warning: oklch(0.8369 0.1644 84.429); /* #FBBF24 */
+  --warning-soft: oklch(0.8369 0.1644 84.429 / 16%);
+  --warning-soft-foreground: oklch(0.88 0.15 84.429);
+  --warning-border: oklch(0.8369 0.1644 84.429 / 32%);
+  --danger: oklch(0.7106 0.1661 22.216); /* #F87171 */
+  --danger-soft: oklch(0.7106 0.1661 22.216 / 14%);
+  --danger-soft-foreground: oklch(0.82 0.15 22.216);
+  --danger-border: oklch(0.7106 0.1661 22.216 / 30%);
+  --info: oklch(0.7137 0.1434 254.624); /* #60A5FA */
+  --info-soft: oklch(0.7137 0.1434 254.624 / 14%);
+  --info-soft-foreground: oklch(0.82 0.11 254.624);
+  --info-border: oklch(0.7137 0.1434 254.624 / 30%);
+  /* 7.8:1 sobre o fundo escuro real — mesma lógica do claro. */
+  --text-secondary: oklch(0.7137 0.0192 261.32); /* #9CA3AF */
 }
 
 @layer base {

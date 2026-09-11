@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import {
   AlertTriangle,
+  ArrowLeft,
   AtSign,
   BarChart3,
   Camera,
@@ -21,7 +22,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Circle,
   CircleDot,
@@ -41,6 +41,7 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  MoreVertical,
   Package,
   Paperclip,
   Pencil,
@@ -57,14 +58,9 @@ import {
   Youtube,
   X,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { DateField } from "@/components/ui/date-field";
@@ -80,7 +76,12 @@ import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
 import { formatDateToIso } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
-import { formatSeguidores } from "@/lib/format";
+import {
+  formatSeguidores,
+  formatCompactSeguidores,
+  formatCompactNumber,
+  formatPercentBR,
+} from "@/lib/format";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 
 /* ============================================================
@@ -502,6 +503,7 @@ import {
   canTransitionEntrega,
   legacyInfluStatus,
   migrateLegacyEntregaStage,
+  isInfluencerEligibleForDeliveries,
   type InfluStatus,
   type EntregaStage,
   type NextActor,
@@ -1335,11 +1337,34 @@ function RedeMetricsFields({
   );
 }
 
-/** Métricas do perfil — uma card por rede social já cadastrada (não mais um
- * seletor de pills escondendo as demais), no mesmo estilo visual usado no
- * Portal do cliente (`portal.$token.tsx`, seção "Métricas do perfil"): ícone
- * da plataforma + handle no topo do card, métricas gerais e demografia
- * dentro. Diferença pro VC (que é só leitura): aqui os campos são editáveis. */
+/** Resumo compacto (só leitura) de uma rede — número compacto pt-BR
+ * ("878,8 mil seguidores"), nunca substitui o valor editável abaixo (esse
+ * continua no formato bruto/agrupado, pra não perder precisão ao editar). */
+function RedeMetricsCompactSummary({
+  seguidores,
+  metrics,
+}: {
+  seguidores?: string;
+  metrics?: RedeMetrics;
+}) {
+  const parts: string[] = [];
+  const seg = formatCompactSeguidores(seguidores);
+  if (seg) parts.push(`${seg} seguidores`);
+  if (metrics?.interacoes != null)
+    parts.push(`${formatCompactNumber(metrics.interacoes)} interações`);
+  if (metrics?.visualizacoes != null)
+    parts.push(`${formatCompactNumber(metrics.visualizacoes)} visualizações`);
+  if (metrics?.taxaInteracao != null)
+    parts.push(`${formatPercentBR(metrics.taxaInteracao)} de taxa de interação`);
+  if (parts.length === 0) return null;
+  return <p className="text-xs text-muted-foreground">{parts.join(" · ")}</p>;
+}
+
+/** Métricas do perfil — uma rede social só (o caso comum) mostra o card
+ * direto, sem seletor nenhum; com mais de uma rede cadastrada, um seletor
+ * compacto de pills troca qual rede está em foco, em vez de empilhar todas
+ * as métricas de todas as redes ao mesmo tempo (ficava comprido demais e
+ * confuso sobre a qual rede cada bloco pertencia). */
 function ProfileMetricsEditor({
   redes,
   onChangeRedes,
@@ -1352,31 +1377,59 @@ function ProfileMetricsEditor({
   onChange: (m: ProfileMetrics) => void;
 }) {
   const porRede = value?.porRede ?? {};
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (redes.length === 0) {
     return (
-      <EmptyHint text="Adicione redes sociais em Perfil antes de preencher as métricas — cada rede tem suas próprias métricas." />
+      <EmptyHint text="Adicione redes sociais acima antes de preencher as métricas — cada rede tem suas próprias métricas." />
     );
   }
 
+  const activeRede = redes.find((r) => r.id === selectedId) ?? redes[0];
+
   return (
     <div className="space-y-4">
-      {redes.map((r) => (
-        <div key={r.id} className="space-y-5 rounded-xl border border-border bg-muted/20 p-4">
+      {redes.length > 1 && (
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Rede social">
+          {redes.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              role="tab"
+              aria-selected={activeRede.id === r.id}
+              onClick={() => setSelectedId(r.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeRede.id === r.id
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              }`}
+            >
+              <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
+              {r.handle ? `@${r.handle}` : r.plataforma}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+        <div>
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-            {r.handle ? `@${r.handle}` : r.plataforma}
+            <PlatformIcon plataforma={activeRede.plataforma} className="h-3.5 w-3.5" />
+            {activeRede.handle ? `@${activeRede.handle}` : activeRede.plataforma}
           </p>
-          <RedeMetricsFields
-            seguidores={r.seguidores}
-            onChangeSeguidores={(seguidores) =>
-              onChangeRedes(redes.map((x) => (x.id === r.id ? { ...x, seguidores } : x)))
-            }
-            value={porRede[r.id]}
-            onChange={(m) => onChange({ ...value, porRede: { ...porRede, [r.id]: m } })}
+          <RedeMetricsCompactSummary
+            seguidores={activeRede.seguidores}
+            metrics={porRede[activeRede.id]}
           />
         </div>
-      ))}
+        <RedeMetricsFields
+          seguidores={activeRede.seguidores}
+          onChangeSeguidores={(seguidores) =>
+            onChangeRedes(redes.map((x) => (x.id === activeRede.id ? { ...x, seguidores } : x)))
+          }
+          value={porRede[activeRede.id]}
+          onChange={(m) => onChange({ ...value, porRede: { ...porRede, [activeRede.id]: m } })}
+        />
+      </div>
     </div>
   );
 }
@@ -1458,9 +1511,6 @@ export function InfluencerBoard({
   const viewMenu = useDropdown();
   const [query, setQuery] = useState("");
   const [hideReprovados, setHideReprovados] = useState(false);
-  const carRef = useRef<HTMLDivElement>(null);
-  const scrollBy = (dir: 1 | -1) =>
-    carRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
 
   // Sempre aponta pro `influs` mais recente, mesmo entre dois handlers que
   // disparam no mesmo tick (ex: blur de um campo + clique em outro logo
@@ -1977,38 +2027,20 @@ export function InfluencerBoard({
           })}
         </div>
       ) : (
-        <div className="group/carousel relative">
-          <div
-            ref={carRef}
-            className="-mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3"
-          >
-            {filteredInflus.map((i) => (
-              <InfluCard
-                key={i.id}
-                influ={i}
-                has={has}
-                onView={() => setViewing(i)}
-                onStatus={(status) => changeStatus(i.id, status)}
-                onRemove={() => void removeInflu(i.id)}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => scrollBy(-1)}
-            className="absolute -left-3 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-background p-1.5 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/carousel:opacity-100 md:block"
-            aria-label="Anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollBy(1)}
-            className="absolute -right-3 top-1/2 hidden -translate-y-1/2 rounded-full border border-border bg-background p-1.5 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/carousel:opacity-100 md:block"
-            aria-label="Próximo"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        // Grade responsiva (rodada corretiva forte) — substitui o carrossel
+        // horizontal com scroll-snap, que cortava o último card na lateral.
+        // Nunca scroll horizontal aqui; os cards quebram pra próxima linha.
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredInflus.map((i) => (
+            <InfluCard
+              key={i.id}
+              influ={i}
+              has={has}
+              onView={() => setViewing(i)}
+              onStatus={(status) => changeStatus(i.id, status)}
+              onRemove={() => void removeInflu(i.id)}
+            />
+          ))}
         </div>
       )}
 
@@ -2023,7 +2055,7 @@ export function InfluencerBoard({
       />
 
       {viewing && (
-        <InfluencerProfileDialog
+        <InfluencerWorkspaceSheet
           influ={viewing}
           has={has}
           cicloMesOptions={cicloMesOptions}
@@ -2113,8 +2145,16 @@ function InfluCard({
         : undefined;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
   const totalPago = totalAceito(influ.pagamento);
+  const overdueDays = approvalSlaOverdueDays(influ);
+  const elegivel = isInfluencerEligibleForDeliveries(influ.status);
+  const producao = has("entregas") && elegivel ? producaoResumo(influ.entregas) : null;
 
   return (
+    // Card compacto e horizontal (rodada corretiva forte) — foto pequena à
+    // esquerda em vez de uma área alta só pra centralizar a foto; nunca um
+    // <button> envolvendo outro botão: o card inteiro é clicável via um
+    // <article role="button"> próprio, e cada ação interna (status, menu,
+    // link de contrato) para a propagação do clique/tecla.
     <article
       role="button"
       tabIndex={0}
@@ -2125,147 +2165,134 @@ function InfluCard({
           onView();
         }
       }}
-      className="flex w-[280px] shrink-0 snap-start cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-colors hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-ring"
+      aria-label={`Ver detalhes de ${influ.nome || "influenciador"}`}
+      className="flex w-full cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-colors hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-brand"
     >
-      <div className="flex flex-col items-center gap-3 px-4 pb-4 pt-6 text-center">
-        <div className="relative h-20 w-20 shrink-0">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+      <div className="flex items-start gap-3 p-4">
+        <div className="relative h-12 w-12 shrink-0">
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {influ.foto ? (
               <img src={influ.foto} alt="" className="h-full w-full object-cover" />
             ) : (
-              <User className="h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
+              <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
             )}
           </div>
           {approval && (
             <span
               title={approval.status === "reprovado" ? approval.motivo : undefined}
-              className={`absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-background ${
+              className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background ${
                 approval.status === "aprovado"
                   ? "bg-emerald-500 text-white"
                   : "bg-rose-500 text-white"
               }`}
             >
               {approval.status === "aprovado" ? (
-                <CheckCircle2 className="h-3.5 w-3.5" />
+                <CheckCircle2 className="h-2.5 w-2.5" />
               ) : (
-                <XCircle className="h-3.5 w-3.5" />
+                <XCircle className="h-2.5 w-2.5" />
               )}
             </span>
           )}
         </div>
-        <div className="min-w-0 w-full">
-          <p className="truncate text-base font-semibold text-foreground">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">
             {influ.nome || "Sem nome"}
           </p>
-          {influ.nicho && (
-            <span className="mt-1 inline-block max-w-full truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {influ.nicho}
-            </span>
-          )}
-          {has("redes") && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {influ.redes
-                .map((r) => r.handle || r.plataforma)
-                .filter(Boolean)
-                .join(" · ") || "—"}
-            </p>
-          )}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+            {influ.nicho && <span className="truncate">{influ.nicho}</span>}
+            {influ.nicho && has("redes") && <span>·</span>}
+            {has("redes") && (
+              <span className="truncate">
+                {influ.redes
+                  .map((r) => r.handle || r.plataforma)
+                  .filter(Boolean)
+                  .join(" · ") || "Sem rede cadastrada"}
+              </span>
+            )}
+          </div>
         </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={stop}
+              aria-label={`Mais ações para ${influ.nome || "influenciador"}`}
+              className="relative z-10 -m-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={stop}>
+            <DropdownMenuItem onSelect={onView}>Ver detalhes</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={onRemove}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {has("status") && (
-        <div className="px-4 pb-4" onClick={stop}>
-          <div className={`relative rounded-lg ${INFLU_STATUS_TONE[influ.status]}`}>
-            <select
-              value={influ.status}
-              onChange={(e) => onStatus(e.target.value as InfluStatus)}
-              className="w-full cursor-pointer appearance-none rounded-lg bg-transparent px-3 py-2 pr-8 text-xs font-semibold outline-none focus:ring-2 focus:ring-ring"
-            >
-              {INFLU_STATUSES.map((s) => (
-                <option key={s} value={s} className="bg-background text-foreground">
-                  {INFLU_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-            <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rotate-90 opacity-70" />
-          </div>
-          <div className="mt-1.5">
+        <div className="px-4 pb-3" onClick={stop}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <InfluStatusPill value={influ.status} onChange={onStatus} />
             <NextActionBadge actor={nextActionForInflu(influ.status)} />
           </div>
-          {(() => {
-            const overdueDays = approvalSlaOverdueDays(influ);
-            if (!overdueDays) return null;
-            return (
-              <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-3 w-3" /> Aguardando aprovação há {overdueDays} dias
-              </p>
-            );
-          })()}
+          {overdueDays ? (
+            <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3" /> Aguardando aprovação há {overdueDays} dias
+            </p>
+          ) : null}
         </div>
       )}
 
-      {has("entregas") && influ.entregas.length > 0 && (
-        <div className="border-t border-border/60 bg-muted/20 px-4 py-2.5">
-          {(() => {
-            const { total, publicadas } = producaoResumo(influ.entregas);
-            return (
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="font-medium text-foreground/80">
-                  {publicadas}/{total} publicadas
-                </span>
-                <span className="text-muted-foreground">Ver na aba Entregas</span>
-              </div>
-            );
-          })()}
+      {producao && producao.total > 0 && (
+        <div className="border-t border-border/60 px-4 py-2.5">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="font-medium text-foreground/80">
+              {producao.publicadas}/{producao.total} publicadas
+            </span>
+          </div>
+          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-brand"
+              style={{ width: `${Math.round((producao.publicadas / producao.total) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {has("entregas") && !elegivel && (
+        <div className="border-t border-border/60 px-4 py-2.5">
+          <p className="text-[11px] text-text-secondary">Não elegível para entregas</p>
         </div>
       )}
 
       {(has("pagamentos") || (has("contrato") && influ.contrato)) && (
-        <dl className="space-y-1 border-t border-border/60 bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground">
+        <dl className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-[11px] text-muted-foreground">
           {has("pagamentos") && (
-            <MetaRow label="Valor" value={totalPago > 0 ? fmtBRL(totalPago) : "—"} />
+            <div className="flex items-baseline gap-1">
+              <dt>Valor</dt>
+              <dd className="font-medium text-foreground/80">
+                {totalPago > 0 ? fmtBRL(totalPago) : "—"}
+              </dd>
+            </div>
           )}
           {has("contrato") && influ.contrato && (
-            <MetaRow
-              label="Contrato"
-              value={
-                <a
-                  href={influ.contrato}
-                  download
-                  onClick={stop}
-                  className="underline underline-offset-2"
-                >
-                  Anexo
-                </a>
-              }
-            />
+            <a
+              href={influ.contrato}
+              download
+              onClick={stop}
+              className="underline underline-offset-2"
+            >
+              Contrato
+            </a>
           )}
         </dl>
       )}
-
-      <div className="flex items-center justify-end border-t border-border/60 px-4 py-2">
-        <button
-          type="button"
-          onClick={(e) => {
-            stop(e);
-            onRemove();
-          }}
-          className="text-muted-foreground hover:text-foreground"
-          aria-label="Remover"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
     </article>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt>{label}</dt>
-      <dd className="min-w-0 flex-1 truncate text-right text-foreground/80">{value}</dd>
-    </div>
   );
 }
 
@@ -2276,10 +2303,14 @@ function ChecklistSection({
   checklist,
   onChange,
   onApplyToAll,
+  bare = false,
 }: {
   checklist: ChecklistItem[];
   onChange: (next: ChecklistItem[]) => void;
   onApplyToAll: (checklist: ChecklistItem[]) => void;
+  /** Sem a moldura de card (borda/fundo/padding) — pra viver direto no
+   * fluxo do workspace lateral, que evita card-dentro-de-card. */
+  bare?: boolean;
 }) {
   const [newText, setNewText] = useState("");
   const { confirm, confirmDialog } = useConfirm();
@@ -2302,7 +2333,9 @@ function ChecklistSection({
   const doneCount = checklist.filter((c) => c.done).length;
 
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+    <div
+      className={bare ? "space-y-2" : "space-y-2 rounded-lg border border-border bg-background p-3"}
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -2503,6 +2536,16 @@ function EntregasEditor({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = entregas.find((e) => e.id === selectedId) ?? null;
+  const { confirm, confirmDialog } = useConfirm();
+
+  const removeEntrega = async (e: Entrega): Promise<boolean> => {
+    const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "esta entrega";
+    if (!(await confirm(`Remover "${label}"? Isso apaga o histórico e os anexos dela.`))) {
+      return false;
+    }
+    onChange(entregas.filter((x) => x.id !== e.id));
+    return true;
+  };
 
   const update = (id: string, patch: Partial<Entrega>) =>
     onChange(entregas.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -2609,7 +2652,7 @@ function EntregasEditor({
                 <div onClick={(ev) => ev.stopPropagation()} className="justify-self-end">
                   <button
                     type="button"
-                    onClick={() => onChange(entregas.filter((x) => x.id !== e.id))}
+                    onClick={() => void removeEntrega(e)}
                     aria-label="Remover entrega"
                     className="rounded p-1.5 text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
                   >
@@ -2660,12 +2703,12 @@ function EntregasEditor({
           onChange={(patch) => update(selected.id, patch)}
           onRunAction={(action, opts) => runAction(selected.id, action, opts)}
           onSetStage={(coluna) => setStage(selected.id, coluna)}
-          onRemove={() => {
-            onChange(entregas.filter((x) => x.id !== selected.id));
-            setSelectedId(null);
+          onRemove={async () => {
+            if (await removeEntrega(selected)) setSelectedId(null);
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -2976,13 +3019,16 @@ function entregaFaseColuna(stage: EntregaStage): EntregaFaseColuna {
  * passado), progresso, próxima ação, prazos, arquivos e histórico. Abre
  * num Sheet lateral ao clicar numa linha de `EntregasEditor`, em vez de
  * expandir inline. */
-function EntregaDetailSheet({
+/** Conteúdo puro do detalhe de uma entrega — sem casca de `Sheet`/`Dialog`
+ * própria, pra poder ser renderizado tanto dentro de um `Sheet` isolado
+ * (`EntregaDetailSheet`, usado pelo formulário de criação) quanto embutido
+ * no MESMO workspace lateral do influenciador (sem empilhar um segundo
+ * overlay por cima do primeiro — rodada de reestruturação). */
+function EntregaDetailBody({
   influNome,
   influFoto,
   entrega,
   influActivity,
-  open,
-  onOpenChange,
   onChange,
   onRunAction,
   onSetStage,
@@ -2992,8 +3038,6 @@ function EntregaDetailSheet({
   influFoto?: string;
   entrega: Entrega;
   influActivity: InfluActivity[];
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   onChange: (patch: Partial<Entrega>) => void;
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onSetStage: (coluna: EntregaFaseColuna) => void;
@@ -3003,7 +3047,6 @@ function EntregaDetailSheet({
   const step = deriveEntregaNextStep(entrega);
   const colunaAtual = entregaFaseColuna(stage);
   const colunaAtualIndex = ENTREGA_FASE_COLUNAS.indexOf(colunaAtual);
-  const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -3056,6 +3099,302 @@ function EntregaDetailSheet({
   };
 
   return (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (fileRef.current) fileRef.current.value = "";
+          if (file) void handleFileForAction(file);
+        }}
+      />
+
+      <div className="space-y-5">
+        {/* Cabeçalho — de quem é (quando `influNome` é passado) + o quê
+              é; edição de tipo/título/quantidade fica atrás de "Editar"
+              pra não competir com o resto. */}
+        <div className="space-y-2 border-b border-border pb-4 pr-8">
+          <div className="flex items-start gap-3">
+            {influNome && (
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                {influFoto ? (
+                  <img src={influFoto} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+                )}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              {influNome && (
+                <p className="truncate text-xs font-medium text-muted-foreground">{influNome}</p>
+              )}
+              <p className="truncate text-lg font-bold text-foreground">
+                {entrega.tipo || "Sem tipo"}
+                <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                  · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
+                </span>
+              </p>
+              {entrega.titulo && (
+                <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditandoCabecalho((v) => !v)}
+              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Editar tipo, título e quantidade"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {editandoCabecalho && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 p-2">
+              <input
+                list="entregas-tipos"
+                value={entrega.tipo}
+                onChange={(ev) => onChange({ tipo: ev.target.value })}
+                placeholder="Tipo (Reels, Stories...)"
+                className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                value={entrega.titulo ?? ""}
+                onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
+                placeholder="Título (opcional)"
+                className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex shrink-0 items-center rounded-md bg-background">
+                <button
+                  type="button"
+                  onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
+                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  −
+                </button>
+                <span className="w-7 text-center text-xs font-medium tabular-nums">
+                  {entrega.quantidade}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
+                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Progresso — as 4 fases num stepper único, sem repetir
+              "Situação atual"/"Etapas" como dois blocos dizendo quase a
+              mesma coisa. */}
+        <div className="space-y-2">
+          <FieldLabel title="Progresso" />
+          <div className="flex items-center gap-1.5">
+            {ENTREGA_FASE_COLUNAS.map((c, i) => (
+              <div key={c} className="flex flex-1 flex-col items-center gap-1">
+                <span
+                  className={`h-1.5 w-full rounded-full ${
+                    i <= colunaAtualIndex ? ENTREGA_FASE_COLUNA_DOT[c] : "bg-muted"
+                  }`}
+                />
+                <span
+                  className={`text-center text-[9px] font-medium ${
+                    i === colunaAtualIndex ? "text-foreground" : "text-muted-foreground/70"
+                  }`}
+                >
+                  {ENTREGA_FASE_COLUNA_LABEL[c]}
+                </span>
+              </div>
+            ))}
+          </div>
+          <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
+        </div>
+
+        {/* Próxima ação — um botão só, sem repetir o rótulo por cima. */}
+        {step.action ? (
+          <button
+            type="button"
+            onClick={handleActionClick}
+            disabled={uploading}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+          >
+            {uploading ? "Enviando..." : step.actionLabel}
+          </button>
+        ) : (
+          stage !== "PUBLICADA" && (
+            <p className="text-xs text-muted-foreground">
+              {step.responsavel === "cliente"
+                ? "Aguardando aprovação do cliente."
+                : "Nenhuma ação pendente no momento."}
+            </p>
+          )
+        )}
+        {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+
+        {/* Mover manualmente — mesma liberdade de arrastar num kanban,
+              aqui como botões: dá pra colocar a entrega na fase desejada
+              direto, sem depender de rodar a ação certa. */}
+        <div className="space-y-2">
+          <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {ENTREGA_FASE_COLUNAS.map((c) => {
+              const ativo = c === colunaAtual;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => onSetStage(c)}
+                  className={`rounded-md border px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors ${
+                    ativo
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                  }`}
+                >
+                  {ENTREGA_FASE_COLUNA_LABEL[c]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Prazos — grade compacta (rótulo em cima do input, não ao
+              lado), sem indicador de atrasado/no prazo (ver comentário de
+              formatDataCurta/nextPrazoData: essas datas não distinguem
+              "prazo planejado" de "recebimento real"). */}
+        <div className="space-y-2">
+          <FieldLabel title="Prazos" />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <PrazoField
+              label="Roteiro"
+              value={entrega.dataRecebimentoRoteiro}
+              onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
+            />
+            <PrazoField
+              label="Conteúdo"
+              value={entrega.dataRecebimentoConteudo}
+              onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
+            />
+            <PrazoField
+              label="Publicação"
+              value={entrega.dataPostagem}
+              onChange={(v) => onChange({ dataPostagem: v })}
+            />
+          </div>
+        </div>
+
+        {/* Arquivos */}
+        <div className="space-y-2">
+          <FieldLabel title="Arquivos" />
+          <EntregaAnexosEditor
+            anexos={entrega.anexos ?? []}
+            onChange={(anexos) => onChange({ anexos })}
+          />
+        </div>
+
+        {/* Publicação — só quando já concluída (link + métricas). O
+              motivo de reprovação do cliente já aparece em Situação
+              atual, não fica mais numa seção "Aprovação" separada. */}
+        {stage === "PUBLICADA" && (
+          <div className="space-y-2 border-t border-border pt-4">
+            <FieldLabel title="Publicação" />
+            <div className="space-y-2">
+              <AutoSaveInput
+                key={entrega.id}
+                value={entrega.url ?? ""}
+                onSave={(v) => onChange({ url: v })}
+                placeholder="Link do conteúdo publicado"
+              />
+              <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
+            </div>
+          </div>
+        )}
+
+        {/* Histórico */}
+        <div className="space-y-2 border-t border-border pt-4">
+          <FieldLabel title="Histórico" />
+          {historico.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">Nenhum evento registrado ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {historico.map((a) => (
+                <div key={a.id} className="text-xs leading-relaxed">
+                  <span className="font-medium text-foreground">{a.author}</span>{" "}
+                  <span className="text-muted-foreground">{a.action}</span>
+                  <div className="text-[10px] text-muted-foreground/70">
+                    {new Date(a.createdAt).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ações secundárias — remoção só atrás de menu, nunca exposta
+              como botão permanente (rodada de reestruturação). */}
+        <div className="flex justify-end border-t border-border pt-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <MoreVertical className="h-3.5 w-3.5" /> Mais ações
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={onRemove}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remover entrega
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Casca `Sheet` fina em volta de `EntregaDetailBody` — usada só pelo
+ * formulário de criação de influenciador (`InfluenciadorDialog`, via
+ * `EntregasEditor` sem `onOpenEntrega`), que ainda não tem um workspace
+ * próprio pra embutir o detalhe. O workspace do influenciador já salvo
+ * (`InfluencerWorkspaceSheet`) usa `EntregaDetailBody` direto, sem esta
+ * casca, pra nunca empilhar um segundo overlay. */
+function EntregaDetailSheet({
+  influNome,
+  influFoto,
+  entrega,
+  influActivity,
+  open,
+  onOpenChange,
+  onChange,
+  onRunAction,
+  onSetStage,
+  onRemove,
+}: {
+  influNome?: string;
+  influFoto?: string;
+  entrega: Entrega;
+  influActivity: InfluActivity[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (patch: Partial<Entrega>) => void;
+  onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
+  onSetStage: (coluna: EntregaFaseColuna) => void;
+  onRemove: () => void;
+}) {
+  const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
+  return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
@@ -3065,397 +3404,34 @@ function EntregaDetailSheet({
         <SheetDescription className="sr-only">
           Detalhes de cronograma, progresso, arquivos, aprovação e histórico desta entrega.
         </SheetDescription>
-
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (fileRef.current) fileRef.current.value = "";
-            if (file) void handleFileForAction(file);
-          }}
-        />
-
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          {/* Cabeçalho — de quem é (quando `influNome` é passado) + o quê
-              é; edição de tipo/título/quantidade fica atrás de "Editar"
-              pra não competir com o resto. */}
-          <div className="space-y-2 border-b border-border pb-4 pr-8">
-            <div className="flex items-start gap-3">
-              {influNome && (
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
-                  {influFoto ? (
-                    <img src={influFoto} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
-                  )}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                {influNome && (
-                  <p className="truncate text-xs font-medium text-muted-foreground">{influNome}</p>
-                )}
-                <p className="truncate text-lg font-bold text-foreground">
-                  {entrega.tipo || "Sem tipo"}
-                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                    · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
-                  </span>
-                </p>
-                {entrega.titulo && (
-                  <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditandoCabecalho((v) => !v)}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Editar tipo, título e quantidade"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {editandoCabecalho && (
-              <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 p-2">
-                <input
-                  list="entregas-tipos"
-                  value={entrega.tipo}
-                  onChange={(ev) => onChange({ tipo: ev.target.value })}
-                  placeholder="Tipo (Reels, Stories...)"
-                  className="min-w-[130px] rounded-md border border-border bg-background px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-ring"
-                />
-                <input
-                  value={entrega.titulo ?? ""}
-                  onChange={(ev) => onChange({ titulo: ev.target.value || undefined })}
-                  placeholder="Título (opcional)"
-                  className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
-                />
-                <div className="flex shrink-0 items-center rounded-md bg-background">
-                  <button
-                    type="button"
-                    onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    −
-                  </button>
-                  <span className="w-7 text-center text-xs font-medium tabular-nums">
-                    {entrega.quantidade}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
-                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Progresso — as 4 fases num stepper único, sem repetir
-              "Situação atual"/"Etapas" como dois blocos dizendo quase a
-              mesma coisa. */}
-          <div className="space-y-2">
-            <FieldLabel title="Progresso" />
-            <div className="flex items-center gap-1.5">
-              {ENTREGA_FASE_COLUNAS.map((c, i) => (
-                <div key={c} className="flex flex-1 flex-col items-center gap-1">
-                  <span
-                    className={`h-1.5 w-full rounded-full ${
-                      i <= colunaAtualIndex ? ENTREGA_FASE_COLUNA_DOT[c] : "bg-muted"
-                    }`}
-                  />
-                  <span
-                    className={`text-center text-[9px] font-medium ${
-                      i === colunaAtualIndex ? "text-foreground" : "text-muted-foreground/70"
-                    }`}
-                  >
-                    {ENTREGA_FASE_COLUNA_LABEL[c]}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <EntregaSituacaoBanner stage={stage} reprovacao={reprovacao} />
-          </div>
-
-          {/* Próxima ação — um botão só, sem repetir o rótulo por cima. */}
-          {step.action ? (
-            <button
-              type="button"
-              onClick={handleActionClick}
-              disabled={uploading}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
-            >
-              {uploading ? "Enviando..." : step.actionLabel}
-            </button>
-          ) : (
-            stage !== "PUBLICADA" && (
-              <p className="text-xs text-muted-foreground">
-                {step.responsavel === "cliente"
-                  ? "Aguardando aprovação do cliente."
-                  : "Nenhuma ação pendente no momento."}
-              </p>
-            )
-          )}
-          {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
-
-          {/* Mover manualmente — mesma liberdade de arrastar num kanban,
-              aqui como botões: dá pra colocar a entrega na fase desejada
-              direto, sem depender de rodar a ação certa. */}
-          <div className="space-y-2">
-            <FieldLabel title="Mover para" hint="Direto, sem passar pela ação." />
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              {ENTREGA_FASE_COLUNAS.map((c) => {
-                const ativo = c === colunaAtual;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => onSetStage(c)}
-                    className={`rounded-md border px-1.5 py-1.5 text-center text-[11px] font-medium transition-colors ${
-                      ativo
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                    }`}
-                  >
-                    {ENTREGA_FASE_COLUNA_LABEL[c]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Prazos — grade compacta (rótulo em cima do input, não ao
-              lado), sem indicador de atrasado/no prazo (ver comentário de
-              formatDataCurta/nextPrazoData: essas datas não distinguem
-              "prazo planejado" de "recebimento real"). */}
-          <div className="space-y-2">
-            <FieldLabel title="Prazos" />
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <PrazoField
-                label="Roteiro"
-                value={entrega.dataRecebimentoRoteiro}
-                onChange={(v) => onChange({ dataRecebimentoRoteiro: v })}
-              />
-              <PrazoField
-                label="Conteúdo"
-                value={entrega.dataRecebimentoConteudo}
-                onChange={(v) => onChange({ dataRecebimentoConteudo: v })}
-              />
-              <PrazoField
-                label="Publicação"
-                value={entrega.dataPostagem}
-                onChange={(v) => onChange({ dataPostagem: v })}
-              />
-            </div>
-          </div>
-
-          {/* Arquivos */}
-          <div className="space-y-2">
-            <FieldLabel title="Arquivos" />
-            <EntregaAnexosEditor
-              anexos={entrega.anexos ?? []}
-              onChange={(anexos) => onChange({ anexos })}
-            />
-          </div>
-
-          {/* Publicação — só quando já concluída (link + métricas). O
-              motivo de reprovação do cliente já aparece em Situação
-              atual, não fica mais numa seção "Aprovação" separada. */}
-          {stage === "PUBLICADA" && (
-            <div className="space-y-2 border-t border-border pt-4">
-              <FieldLabel title="Publicação" />
-              <div className="space-y-2">
-                <AutoSaveInput
-                  key={entrega.id}
-                  value={entrega.url ?? ""}
-                  onSave={(v) => onChange({ url: v })}
-                  placeholder="Link do conteúdo publicado"
-                />
-                <MetricsEditor value={entrega.metrics} onChange={(m) => onChange({ metrics: m })} />
-              </div>
-            </div>
-          )}
-
-          {/* Histórico */}
-          <div className="space-y-2 border-t border-border pt-4">
-            <FieldLabel title="Histórico" />
-            {historico.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground">Nenhum evento registrado ainda.</p>
-            ) : (
-              <div className="space-y-2">
-                {historico.map((a) => (
-                  <div key={a.id} className="text-xs leading-relaxed">
-                    <span className="font-medium text-foreground">{a.author}</span>{" "}
-                    <span className="text-muted-foreground">{a.action}</span>
-                    <div className="text-[10px] text-muted-foreground/70">
-                      {new Date(a.createdAt).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-border bg-muted/30 p-3">
-          <button
-            type="button"
-            onClick={onRemove}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" /> Remover entrega
-          </button>
+        <div className="flex-1 overflow-y-auto p-5">
+          <EntregaDetailBody
+            influNome={influNome}
+            influFoto={influFoto}
+            entrega={entrega}
+            influActivity={influActivity}
+            onChange={onChange}
+            onRunAction={onRunAction}
+            onSetStage={onSetStage}
+            onRemove={onRemove}
+          />
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-/** Aba "Visão geral" do perfil — em poucos segundos dá pra entender status
- * atual, próxima ação e pendências, sem percorrer a página inteira (é o
- * resumo/hub; os detalhes completos ficam nas outras abas). */
-function InfluVisaoGeralTab({
-  influ,
-  onGoToTab,
-  onSetChecklist,
-  onApplyChecklistToAll,
-}: {
-  influ: Influ;
-  onGoToTab: (tab: string) => void;
-  onSetChecklist: (checklist: ChecklistItem[]) => void;
-  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
-}) {
-  const entregas = influ.entregas;
-  const publicadas = entregas.filter((e) => e.stage === "PUBLICADA").length;
-  const aguardandoCliente = entregas.filter(
-    (e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO",
-  ).length;
-  const pendentes = entregas.length - publicadas;
-  const nextActor = nextActionForInflu(influ.status);
-
-  const porTipo = new Map<string, Entrega[]>();
-  for (const e of entregas) {
-    porTipo.set(e.tipo || "Sem tipo", [...(porTipo.get(e.tipo || "Sem tipo") ?? []), e]);
-  }
-
-  return (
-    <div className="space-y-5">
-      {/* Resumo + próxima ação em destaque */}
-      <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {entregas.length} {entregas.length === 1 ? "entrega" : "entregas"} · {publicadas}{" "}
-              publicada{publicadas === 1 ? "" : "s"} · {pendentes} pendente
-              {pendentes === 1 ? "" : "s"}
-              {aguardandoCliente > 0 && ` · ${aguardandoCliente} aguardando cliente`}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Status: {INFLU_STATUS_LABEL[influ.status]}
-            </p>
-          </div>
-          <NextActionBadge actor={nextActor} />
-        </div>
-      </div>
-
-      {/* Entregas por tipo — resumo compacto, sem abrir detalhes aqui */}
-      <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <FieldLabel title="Entregas" hint="Resumo por tipo." />
-          <button
-            type="button"
-            onClick={() => onGoToTab("entregas")}
-            className="text-xs font-medium text-foreground underline underline-offset-2"
-          >
-            Abrir
-          </button>
-        </div>
-        {porTipo.size === 0 ? (
-          <EmptyHint text="Nenhuma entrega adicionada." />
-        ) : (
-          <div className="space-y-1.5">
-            {[...porTipo.entries()].map(([tipo, list]) => (
-              <div key={tipo} className="flex items-center justify-between gap-2 text-xs">
-                <span className="font-medium text-foreground">
-                  {tipo}: {list.length} entrega{list.length === 1 ? "" : "s"}
-                </span>
-                <span className="text-muted-foreground">
-                  {list.filter((e) => e.stage === "PUBLICADA").length} publicada(s)
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Outros dados — checkmarks linkando pra aba correspondente */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => onGoToTab("briefing")}
-          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
-        >
-          <span>Briefing</span>
-          {influ.briefingPersonalizado || influ.briefingAnexoUrl ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => onGoToTab("financeiro")}
-          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
-        >
-          <span>Contrato</span>
-          {influ.contrato ? (
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => onGoToTab("financeiro")}
-          className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-xs hover:bg-muted/40"
-        >
-          <span>Pagamento</span>
-          <span
-            className={
-              influ.pagamento?.aprovacao === "aceito"
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-muted-foreground"
-            }
-          >
-            {influ.pagamento ? APROVACAO_LABEL[influ.pagamento.aprovacao] : "—"}
-          </span>
-        </button>
-      </div>
-
-      <ChecklistSection
-        checklist={influ.checklist ?? []}
-        onChange={onSetChecklist}
-        onApplyToAll={onApplyChecklistToAll}
-      />
-    </div>
-  );
-}
-
 /* ============================================================
- * Perfil do influenciador — diálogo único de visualização + edição.
- * Tudo salva imediato (sem botão "Salvar") e toda seção fica sempre
- * visível, empilhada por ordem de importância — nada fica atrás de um
- * clique pra revelar, e nunca abre um segundo diálogo.
+ * Workspace lateral do influenciador (rodada de reestruturação) —
+ * substitui o antigo modal centralizado com abas horizontais por um
+ * painel lateral largo, com navegação vertical contínua e seções
+ * secundárias recolhíveis. Entrega e Atividade trocam o CONTEÚDO do
+ * mesmo painel (nunca empilham um segundo overlay por cima).
  * ============================================================ */
 
-function InfluencerProfileDialog({
+type InfluWorkspaceView = "detail" | "entrega" | "activity";
+
+function InfluencerWorkspaceSheet({
   influ,
   has,
   cicloMesOptions,
@@ -3491,10 +3467,15 @@ function InfluencerProfileDialog({
   onPatch: (patch: Partial<Influ>) => void;
   onSendToClient: () => void;
 }) {
+  const [view, setView] = useState<InfluWorkspaceView>("detail");
+  const [selectedEntregaId, setSelectedEntregaId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const savedScrollRef = useRef(0);
   const [commentText, setCommentText] = useState("");
-  const [activeTab, setActiveTab] = useState("visao-geral");
-  const bank = influ.bank ?? {};
-  const fotoRef = useRef<HTMLInputElement>(null);
+  const [activityFilter, setActivityFilter] = useState<"tudo" | "comentarios" | "historico">(
+    "tudo",
+  );
+  const { confirm, confirmDialog } = useConfirm();
 
   const [editingHeader, setEditingHeader] = useState(false);
   const [draft, setDraft] = useState({
@@ -3522,512 +3503,1112 @@ function InfluencerProfileDialog({
     setEditingHeader(false);
   };
 
+  const fotoRef = useRef<HTMLInputElement>(null);
+  const initials = (influ.nome || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
+  const bank = influ.bank ?? {};
+  const activityCount = (influ.activity?.length ?? 0) + (influ.comments?.length ?? 0);
+  const selectedEntrega = influ.entregas.find((e) => e.id === selectedEntregaId) ?? null;
+
+  const goToScrollTop = (top: number) => {
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = top;
+    });
+  };
+
+  const openEntrega = (id: string) => {
+    savedScrollRef.current = scrollRef.current?.scrollTop ?? 0;
+    setSelectedEntregaId(id);
+    setView("entrega");
+    goToScrollTop(0);
+  };
+  const backToDetail = () => {
+    setView("detail");
+    setSelectedEntregaId(null);
+    goToScrollTop(savedScrollRef.current);
+  };
+  const openActivity = () => {
+    savedScrollRef.current = scrollRef.current?.scrollTop ?? 0;
+    setView("activity");
+    goToScrollTop(0);
+  };
+  const closeActivity = () => {
+    setView("detail");
+    goToScrollTop(savedScrollRef.current);
+  };
+
+  const removeEntrega = async (e: Entrega): Promise<boolean> => {
+    const label = e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "esta entrega";
+    if (!(await confirm(`Remover "${label}"? Isso apaga o histórico e os anexos dela.`))) {
+      return false;
+    }
+    onPatch({ entregas: influ.entregas.filter((x) => x.id !== e.id) });
+    return true;
+  };
+
+  const addEntrega = () => {
+    const id = crypto.randomUUID();
+    onPatch({
+      entregas: [
+        ...influ.entregas,
+        { id, tipo: "Reels", quantidade: 1, status: "combinado", stage: "ROTEIRO_PRODUCAO" },
+      ],
+    });
+    openEntrega(id);
+  };
+
   return (
-    <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent
-        className="flex h-[92vh] max-w-6xl flex-col gap-0 overflow-hidden p-0"
-        mobileFullScreen
-        onPointerDownOutside={() => {
-          // Clicar fora fecha o diálogo antes do evento de blur do campo
-          // focado terminar de disparar — o rascunho (ex: link de
-          // publicação em AutoSaveInput) nunca chegava a salvar. Forçar o
-          // blur aqui, síncrono, garante que o salvamento roda antes do
-          // Radix desmontar o diálogo.
-          (document.activeElement as HTMLElement | null)?.blur();
+    <Sheet open onOpenChange={onOpenChange}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 focus:outline-none sm:w-[820px] sm:max-w-[85vw]"
+        onEscapeKeyDown={(e) => {
+          // Esc fecha primeiro Atividade/Entrega (o que estiver aberto),
+          // só depois o workspace inteiro.
+          if (view !== "detail") {
+            e.preventDefault();
+            if (view === "entrega") backToDetail();
+            else closeActivity();
+          }
         }}
       >
-        <DialogTitle className="sr-only">Perfil do influenciador</DialogTitle>
-        <DialogDescription className="sr-only">
-          Informações completas do influenciador.
-        </DialogDescription>
+        <SheetTitle className="sr-only">
+          {view === "entrega" && selectedEntrega
+            ? `Entrega · ${selectedEntrega.tipo}`
+            : view === "activity"
+              ? `Atividade de ${influ.nome}`
+              : `Workspace de ${influ.nome || "influenciador"}`}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Painel operacional do influenciador dentro da campanha.
+        </SheetDescription>
 
-        {/* CABEÇALHO — avatar grande + nome; status/próxima ação numa linha
-            própria abaixo do nome (não espremidos junto), contato como
-            chips com contraste de verdade contra o card. Sem banner/degradê
-            no topo — fundo plano, no mesmo tom do resto da plataforma. */}
-        <div className="shrink-0 border-b border-border bg-background">
-          <div className="px-7 pt-6 pb-6">
-            <div className="flex flex-wrap items-start gap-5">
-              <button
-                type="button"
-                onClick={() => fotoRef.current?.click()}
-                aria-label="Trocar foto"
-                className="group relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted shadow-sm"
-              >
-                {influ.foto ? (
-                  <img src={influ.foto} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <User className="h-9 w-9 text-muted-foreground" strokeWidth={1.5} />
-                )}
-                <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
-                  <Camera className="h-5 w-5" />
-                </span>
-              </button>
-              <input
-                ref={fotoRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  void uploadInfluFoto(file).then((url) => {
-                    if (url) onPatch({ foto: url });
-                  });
+        {view === "detail" && (
+          <WorkspaceDetailHeader
+            influ={influ}
+            has={has}
+            cicloMesOptions={cicloMesOptions}
+            editingHeader={editingHeader}
+            draft={draft}
+            setDraft={setDraft}
+            startEditing={startEditing}
+            saveHeader={saveHeader}
+            setEditingHeader={setEditingHeader}
+            onSetStatus={onSetStatus}
+            onSendToClient={onSendToClient}
+            onPatch={onPatch}
+            fotoRef={fotoRef}
+            initials={initials}
+            activityCount={activityCount}
+            onOpenActivity={openActivity}
+            onRemove={onRemove}
+          />
+        )}
+        {view === "entrega" && selectedEntrega && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
+            <button
+              type="button"
+              onClick={backToDetail}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao influenciador
+            </button>
+            <span className="text-muted-foreground">·</span>
+            <p className="min-w-0 truncate text-xs font-medium text-foreground">
+              {influ.nome} — {selectedEntrega.tipo}
+              {selectedEntrega.titulo ? ` · ${selectedEntrega.titulo}` : ""} ·{" "}
+              {selectedEntrega.quantidade}{" "}
+              {selectedEntrega.quantidade === 1 ? "unidade" : "unidades"}
+            </p>
+          </div>
+        )}
+        {view === "activity" && (
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <button
+              type="button"
+              onClick={closeActivity}
+              className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Voltar aos detalhes
+            </button>
+            <p className="text-sm font-semibold text-foreground">Atividade</p>
+            <span className="w-[120px]" />
+          </div>
+        )}
+
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          {view === "detail" && (
+            <WorkspaceDetailBody
+              influ={influ}
+              has={has}
+              bank={bank}
+              onPatch={onPatch}
+              onOpenEntrega={openEntrega}
+              onAddEntrega={addEntrega}
+              onRemoveEntrega={removeEntrega}
+              onSetChecklist={onSetChecklist}
+              onApplyChecklistToAll={onApplyChecklistToAll}
+              onRunEntregaAction={onRunEntregaAction}
+            />
+          )}
+          {view === "entrega" && selectedEntrega && (
+            <div className="p-5">
+              <EntregaDetailBody
+                influNome={influ.nome}
+                influFoto={influ.foto}
+                entrega={selectedEntrega}
+                influActivity={influ.activity ?? []}
+                onChange={(patch) =>
+                  onPatch({
+                    entregas: influ.entregas.map((x) =>
+                      x.id === selectedEntrega.id ? { ...x, ...patch } : x,
+                    ),
+                  })
+                }
+                onRunAction={(action, opts) => onRunEntregaAction(selectedEntrega.id, action, opts)}
+                onSetStage={(coluna) => onSetEntregaStage(selectedEntrega.id, coluna)}
+                onRemove={async () => {
+                  if (await removeEntrega(selectedEntrega)) backToDetail();
                 }}
               />
-              <div className="min-w-0 flex-1 space-y-3 pt-2.5">
-                {editingHeader ? (
-                  <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <input
-                        value={draft.nome}
-                        onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
-                        placeholder="Nome"
-                        autoFocus
-                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
-                      />
-                      <select
-                        value={draft.nicho}
-                        onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
-                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                      >
-                        <option value="">Selecione um nicho</option>
-                        {NICHOS.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={draft.telefone}
-                        onChange={(e) =>
-                          setDraft((d) => ({ ...d, telefone: formatPhoneBR(e.target.value) }))
-                        }
-                        placeholder="Telefone"
-                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                      />
-                      <input
-                        value={draft.email}
-                        onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                        placeholder="E-mail"
-                        className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingHeader(false)}
-                        className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveHeader}
-                        className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
-                      >
-                        Salvar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="group/name flex flex-wrap items-center gap-2">
-                      <p className="truncate text-2xl font-bold tracking-tight text-foreground">
-                        {influ.nome || "Sem nome"}
-                      </p>
-                      {influ.nicho && (
-                        <span className="inline-block rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                          {influ.nicho}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={startEditing}
-                        className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
-                        aria-label="Editar nome, nicho e contato"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {has("status") && (
-                        <InfluStatusPill value={influ.status} onChange={onSetStatus} />
-                      )}
-                      <NextActionBadge actor={nextActionForInflu(influ.status)} />
-                      {influ.status === "EM_CURADORIA" && (
-                        <button
-                          type="button"
-                          onClick={onSendToClient}
-                          className="inline-flex items-center gap-1 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-sm hover:opacity-90"
-                        >
-                          Enviar para cliente
-                        </button>
-                      )}
-                      {cicloMesOptions && cicloMesOptions.length > 0 && (
-                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                          Mês
-                          <select
-                            value={influ.cicloMes ?? ""}
-                            onChange={(e) => onPatch({ cicloMes: e.target.value })}
-                            className="h-7 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
-                          >
-                            {!influ.cicloMes && <option value="">Sem mês definido</option>}
-                            {cicloMesOptions.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                  {has("redes") &&
-                    influ.redes.map((r) => (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm"
-                      >
-                        <PlatformIcon plataforma={r.plataforma} className="h-3.5 w-3.5" />
-                        {r.handle ? `@${r.handle}` : r.plataforma}
-                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                      </span>
-                    ))}
-                  {influ.telefone && !editingHeader && (
-                    <a
-                      href={`tel:${influ.telefone.replace(/\D/g, "")}`}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
-                    >
-                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                      {formatPhoneBR(influ.telefone)}
-                    </a>
-                  )}
-                  {influ.email && !editingHeader && (
-                    <a
-                      href={`mailto:${influ.email}`}
-                      className="inline-flex min-w-0 max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted"
-                    >
-                      <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{influ.email}</span>
-                    </a>
-                  )}
-                </div>
+            </div>
+          )}
+          {view === "activity" && (
+            <WorkspaceActivityBody
+              influ={influ}
+              filter={activityFilter}
+              onFilterChange={setActivityFilter}
+              commentText={commentText}
+              setCommentText={setCommentText}
+              onComment={onComment}
+            />
+          )}
+        </div>
+      </SheetContent>
+      {confirmDialog}
+    </Sheet>
+  );
+}
+
+/** Cabeçalho compacto (~80-96px) — uma linha de identidade (foto + nome +
+ * nicho + edição) e uma linha secundária (status + mês + rede principal),
+ * sem faixa vazia entre elas; ações à direita alinhadas ao centro da
+ * identidade. `pr-8` reserva espaço pro X de fechar do `SheetContent`
+ * (absolute, top-4 right-4). */
+function WorkspaceDetailHeader({
+  influ,
+  has,
+  cicloMesOptions,
+  editingHeader,
+  draft,
+  setDraft,
+  startEditing,
+  saveHeader,
+  setEditingHeader,
+  onSetStatus,
+  onSendToClient,
+  onPatch,
+  fotoRef,
+  initials,
+  activityCount,
+  onOpenActivity,
+  onRemove,
+}: {
+  influ: Influ;
+  has: (k: InfluencerFieldKey) => boolean;
+  cicloMesOptions?: { value: string; label: string }[];
+  editingHeader: boolean;
+  draft: { nome: string; nicho: string; telefone: string; email: string };
+  setDraft: React.Dispatch<
+    React.SetStateAction<{ nome: string; nicho: string; telefone: string; email: string }>
+  >;
+  startEditing: () => void;
+  saveHeader: () => void;
+  setEditingHeader: (v: boolean) => void;
+  onSetStatus: (status: InfluStatus) => void;
+  onSendToClient: () => void;
+  onPatch: (patch: Partial<Influ>) => void;
+  fotoRef: React.RefObject<HTMLInputElement | null>;
+  initials: string;
+  activityCount: number;
+  onOpenActivity: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="shrink-0 border-b border-border bg-background px-5 py-2.5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => fotoRef.current?.click()}
+          aria-label="Trocar foto"
+          className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted shadow-sm sm:h-14 sm:w-14"
+        >
+          {influ.foto ? (
+            <img src={influ.foto} alt="" className="h-full w-full object-cover object-center" />
+          ) : initials ? (
+            <span className="text-sm font-semibold text-muted-foreground">{initials}</span>
+          ) : (
+            <User className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} />
+          )}
+          <span className="absolute inset-0 flex items-center justify-center bg-foreground/60 text-background opacity-0 transition-opacity group-hover:opacity-100">
+            <Camera className="h-4 w-4" />
+          </span>
+        </button>
+        <input
+          ref={fotoRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            void uploadInfluFoto(file).then((url) => {
+              if (url) onPatch({ foto: url });
+            });
+          }}
+        />
+
+        <div className="min-w-0 flex-1">
+          {editingHeader ? (
+            <div className="space-y-2 rounded-lg border border-border bg-background p-3 shadow-sm">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  value={draft.nome}
+                  onChange={(e) => setDraft((d) => ({ ...d, nome: e.target.value }))}
+                  placeholder="Nome"
+                  autoFocus
+                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:ring-1 focus:ring-ring"
+                />
+                <select
+                  value={draft.nicho}
+                  onChange={(e) => setDraft((d) => ({ ...d, nicho: e.target.value }))}
+                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Selecione um nicho</option>
+                  {NICHOS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={draft.telefone}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, telefone: formatPhoneBR(e.target.value) }))
+                  }
+                  placeholder="Telefone"
+                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                />
+                <input
+                  value={draft.email}
+                  onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+                  placeholder="E-mail"
+                  className="rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingHeader(false)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={saveHeader}
+                  className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90"
+                >
+                  Salvar
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="flex min-h-0 flex-col overflow-hidden"
-          >
-            <TabsList className="mx-7 mt-4 w-fit shrink-0">
-              <TabsTrigger value="visao-geral">Visão geral</TabsTrigger>
-              <TabsTrigger value="entregas">Entregas</TabsTrigger>
-              <TabsTrigger value="perfil">Perfil</TabsTrigger>
-              <TabsTrigger value="briefing">Briefing</TabsTrigger>
-              <TabsTrigger value="metricas">Métricas</TabsTrigger>
-              <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="visao-geral" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <InfluVisaoGeralTab
-                influ={influ}
-                onGoToTab={setActiveTab}
-                onSetChecklist={onSetChecklist}
-                onApplyChecklistToAll={onApplyChecklistToAll}
-              />
-            </TabsContent>
-
-            <TabsContent value="entregas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              {has("entregas") && (
-                <div className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-                  <EntregasEditor
-                    entregas={influ.entregas}
-                    onChange={(next) => onPatch({ entregas: next })}
-                    influActivity={influ.activity ?? []}
-                    influNome={influ.nome}
-                    influFoto={influ.foto}
-                    onRunAction={onRunEntregaAction}
-                    onSetStage={onSetEntregaStage}
-                  />
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="perfil" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                {has("redes") && (
-                  <ProfileSectionCard
-                    title="Redes sociais"
-                    icon={<Share2 className="h-3.5 w-3.5" />}
-                    span="full"
+          ) : (
+            <>
+              <div className="group/name flex flex-wrap items-center gap-1.5">
+                <p className="truncate text-base font-bold tracking-tight text-foreground">
+                  {influ.nome || "Sem nome"}
+                </p>
+                {influ.nicho && (
+                  <span className="inline-block shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {influ.nicho}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={startEditing}
+                  className="rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover/name:opacity-100"
+                  aria-label="Editar nome, nicho e contato"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-none text-muted-foreground">
+                {has("status") && <InfluStatusPill value={influ.status} onChange={onSetStatus} />}
+                {cicloMesOptions && cicloMesOptions.length > 0 && (
+                  <select
+                    value={influ.cicloMes ?? ""}
+                    onChange={(e) => onPatch({ cicloMes: e.target.value })}
+                    aria-label="Mês de referência"
+                    className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
                   >
-                    <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
-                  </ProfileSectionCard>
+                    {!influ.cicloMes && <option value="">Sem mês</option>}
+                    {cicloMesOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {has("redes") && influ.redes[0] && (
+                  <span className="inline-flex items-center gap-1">
+                    <PlatformIcon plataforma={influ.redes[0].plataforma} className="h-3 w-3" />
+                    {influ.redes[0].handle
+                      ? `@${influ.redes[0].handle}`
+                      : influ.redes[0].plataforma}
+                    {influ.redes[0].seguidores
+                      ? ` · ${formatCompactSeguidores(influ.redes[0].seguidores)} seguidores`
+                      : ""}
+                  </span>
                 )}
               </div>
-            </TabsContent>
+            </>
+          )}
+        </div>
 
-            <TabsContent value="briefing" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <ProfileSectionCard
-                title="Briefing e observações"
-                icon={<FileText className="h-3.5 w-3.5" />}
-                span="full"
+        <div className="flex shrink-0 items-center gap-1.5 pr-7">
+          <button
+            type="button"
+            onClick={onOpenActivity}
+            aria-label={`Atividade${activityCount > 0 ? ` (${activityCount})` : ""}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-muted sm:px-3"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Atividade</span>
+            {activityCount > 0 && (
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+                {activityCount}
+              </span>
+            )}
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Mais opções"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <FieldLabel
-                      title="Briefing personalizado"
-                      hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
-                    />
-                    <AutoSaveTextarea
-                      key={influ.id}
-                      value={influ.briefingPersonalizado ?? ""}
-                      onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
-                      placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
-                    />
-                    {influ.briefingAnexoUrl ? (
-                      <div className="flex items-center gap-2 text-xs">
-                        <a
-                          href={influ.briefingAnexoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
-                        >
-                          <Paperclip className="h-3 w-3" />
-                          {influ.briefingAnexoNome || "Anexo"}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
-                          }
-                          className="text-muted-foreground hover:text-destructive"
-                          aria-label="Remover anexo"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <BriefingAnexoUploadButton
-                        onUpload={(nome, url) =>
-                          onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
-                        }
-                      />
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {influ.status === "EM_CURADORIA" && (
+                <DropdownMenuItem onSelect={onSendToClient}>Enviar para cliente</DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={onRemove}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remover da campanha
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Seção recolhível reutilizada por Perfil/Briefing/Financeiro — fechada
+ * ocupa só a altura do título + resumo de uma linha (~44-52px), sem
+ * `min-height` artificial. */
+function CollapsibleSection({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 py-3 text-left"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-foreground">{title}</p>
+            {!open && summary && (
+              <div className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</div>
+            )}
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pb-5">{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+/** Lista operacional de entregas — linhas com divisor, não cards; menu de
+ * ações em vez de ícone de lixeira exposto, com confirmação. */
+function EntregasOperationalList({
+  entregas,
+  onOpenEntrega,
+  onAddEntrega,
+  onRemoveEntrega,
+}: {
+  entregas: Entrega[];
+  onOpenEntrega: (id: string) => void;
+  onAddEntrega: () => void;
+  onRemoveEntrega: (e: Entrega) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-foreground">Entregas</h2>
+        <button
+          type="button"
+          onClick={onAddEntrega}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" /> Adicionar entrega
+        </button>
+      </div>
+
+      {entregas.length === 0 ? (
+        <div className="mt-3">
+          <EmptyHint text="Nenhuma entrega adicionada ainda." />
+        </div>
+      ) : (
+        <div className="mt-2 divide-y divide-border">
+          {entregas.map((e) => {
+            const step = deriveEntregaNextStep(e);
+            const stage = e.stage ?? "ROTEIRO_PRODUCAO";
+            const fase = entregaFaseConceitual(stage);
+            const prazo = nextPrazoData(e);
+            const aguardandoCliente = !step.action && step.responsavel === "cliente";
+            return (
+              <div
+                key={e.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpenEntrega(e.id)}
+                onKeyDown={(ev) => {
+                  if (ev.key === "Enter" || ev.key === " ") onOpenEntrega(e.id);
+                }}
+                className="flex cursor-pointer items-center gap-3 py-2.5 transition-colors hover:bg-muted/30"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${ENTREGA_STAGE_TONE[stage]}`}
+                    >
+                      {fase.fase}
+                    </span>
+                    <span className="truncate">{fase.subLabel}</span>
+                    {prazo && (
+                      <span className="shrink-0">
+                        · {prazo.label}: {formatDataCurta(prazo.data)}
+                      </span>
                     )}
+                  </p>
+                </div>
+                <div className="w-[160px] shrink-0 text-right text-xs">
+                  {step.action ? (
+                    <span className="font-medium text-foreground">{step.actionLabel}</span>
+                  ) : aguardandoCliente ? (
+                    <span className="text-muted-foreground">Aguardando cliente</span>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </div>
+                <div onClick={(ev) => ev.stopPropagation()} className="shrink-0">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Mais ações da entrega"
+                        className="flex h-7 w-7 items-center justify-center rounded p-1 text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => void onRemoveEntrega(e)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Remover entrega
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bloco "Próxima ação" — a peça central da tela: sempre deriva do estado
+ * real das entregas (`deriveEntregaNextStep`), nunca de uma prioridade
+ * inventada. A mais urgente (prazo mais próximo entre as acionáveis) vira
+ * o CTA primário; as demais entram como lista secundária compacta. */
+function NextActionPanel({
+  influ,
+  onOpenEntrega,
+  onRunEntregaAction,
+}: {
+  influ: Influ;
+  onOpenEntrega: (id: string) => void;
+  onRunEntregaAction: (
+    entregaId: string,
+    action: EntregaEngineActionKind,
+    opts?: { anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string } },
+  ) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const steps = influ.entregas.map((e) => ({
+    entrega: e,
+    step: deriveEntregaNextStep(e),
+    prazo: nextPrazoData(e),
+  }));
+  const actionable = steps
+    .filter((s) => s.step.action)
+    .sort((a, b) => {
+      if (!a.prazo && !b.prazo) return 0;
+      if (!a.prazo) return 1;
+      if (!b.prazo) return -1;
+      return a.prazo.data.localeCompare(b.prazo.data);
+    });
+  const primary = actionable[0] ?? null;
+  const secondary = actionable.slice(1);
+  const aguardandoCliente = steps.filter((s) => !s.step.action && s.step.responsavel === "cliente");
+
+  const handlePrimaryClick = () => {
+    if (!primary?.step.action) return;
+    if (primary.step.action === "anexar_roteiro" || primary.step.action === "anexar_conteudo") {
+      fileRef.current?.click();
+      return;
+    }
+    onRunEntregaAction(primary.entrega.id, primary.step.action);
+  };
+
+  const handlePrimaryFile = async (file: File) => {
+    if (!primary?.step.action) return;
+    if (primary.step.action !== "anexar_roteiro" && primary.step.action !== "anexar_conteudo") {
+      return;
+    }
+    setUploading(true);
+    try {
+      const url = await uploadEntregaAnexo(file);
+      const categoria: EntregaAnexoCategoria =
+        primary.step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      onRunEntregaAction(primary.entrega.id, primary.step.action, {
+        anexo: { categoria, nome: file.name, url },
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-card p-4 shadow-sm">
+      <input
+        ref={fileRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (fileRef.current) fileRef.current.value = "";
+          if (file) void handlePrimaryFile(file);
+        }}
+      />
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Próxima ação
+      </p>
+      {primary ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-sm text-foreground">
+            {primary.entrega.tipo}
+            {primary.entrega.titulo ? ` · ${primary.entrega.titulo}` : ""}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrimaryClick}
+              disabled={uploading}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background shadow-sm hover:opacity-90 disabled:opacity-60"
+            >
+              {uploading ? "Enviando..." : primary.step.actionLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenEntrega(primary.entrega.id)}
+              className="text-xs font-medium text-foreground underline underline-offset-2"
+            >
+              Ver entrega
+            </button>
+          </div>
+        </div>
+      ) : aguardandoCliente.length > 0 ? (
+        <p className="mt-2 text-sm text-foreground">Aguardando aprovação do cliente</p>
+      ) : influ.entregas.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">Nenhuma entrega adicionada ainda.</p>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">Nenhuma ação pendente</p>
+      )}
+
+      {secondary.length > 0 && (
+        <ul className="mt-3 space-y-1 border-t border-border/60 pt-3">
+          {secondary.map((s) => (
+            <li key={s.entrega.id}>
+              <button
+                type="button"
+                onClick={() => onOpenEntrega(s.entrega.id)}
+                className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground hover:text-foreground"
+              >
+                <span className="truncate">
+                  {s.entrega.tipo}
+                  {s.entrega.titulo ? ` · ${s.entrega.titulo}` : ""}
+                </span>
+                <span className="shrink-0 font-medium">{s.step.actionLabel}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Corpo do workspace no modo "detalhe" — ordem fixa: resumo, próxima
+ * ação, entregas, checklist, perfil/briefing/financeiro recolhíveis. */
+function WorkspaceDetailBody({
+  influ,
+  has,
+  bank,
+  onPatch,
+  onOpenEntrega,
+  onAddEntrega,
+  onRemoveEntrega,
+  onSetChecklist,
+  onApplyChecklistToAll,
+  onRunEntregaAction,
+}: {
+  influ: Influ;
+  has: (k: InfluencerFieldKey) => boolean;
+  bank: BankInfo;
+  onPatch: (patch: Partial<Influ>) => void;
+  onOpenEntrega: (id: string) => void;
+  onAddEntrega: () => void;
+  onRemoveEntrega: (e: Entrega) => Promise<boolean>;
+  onSetChecklist: (checklist: ChecklistItem[]) => void;
+  onApplyChecklistToAll: (checklist: ChecklistItem[]) => void;
+  onRunEntregaAction: (
+    entregaId: string,
+    action: EntregaEngineActionKind,
+    opts?: { anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string } },
+  ) => void;
+}) {
+  const entregas = influ.entregas;
+  const publicadas = entregas.filter((e) => e.stage === "PUBLICADA").length;
+  const pendentes = entregas.length - publicadas;
+  const nearestPrazo = entregas
+    .map((e) => nextPrazoData(e))
+    .filter((p): p is { label: string; data: string } => !!p)
+    .sort((a, b) => a.data.localeCompare(b.data))[0];
+
+  const temRedeConfig = has("redes") || has("metricas");
+  const temFinanceiro = has("pagamentos") || has("bancario") || has("contrato");
+
+  return (
+    <div className="space-y-6 px-5 py-5">
+      {/* Resumo operacional — não repete Status (já visível no cabeçalho);
+       * a 4ª célula é o prazo mais próximo, informação nova. */}
+      <div className="flex overflow-hidden rounded-lg border border-border">
+        {[
+          { label: "Entregas", value: String(entregas.length) },
+          { label: "Publicadas", value: String(publicadas) },
+          { label: "Pendentes", value: String(pendentes) },
+          {
+            label: "Prazo mais próximo",
+            value: nearestPrazo ? formatDataCurta(nearestPrazo.data) : "—",
+          },
+        ].map((s, i) => (
+          <div
+            key={s.label}
+            className={`flex-1 px-3 py-2.5 ${i > 0 ? "border-l border-border" : ""}`}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {s.label}
+            </p>
+            <p className="mt-0.5 truncate text-sm font-bold text-foreground">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <NextActionPanel
+        influ={influ}
+        onOpenEntrega={onOpenEntrega}
+        onRunEntregaAction={onRunEntregaAction}
+      />
+
+      {has("entregas") && (
+        <EntregasOperationalList
+          entregas={entregas}
+          onOpenEntrega={onOpenEntrega}
+          onAddEntrega={onAddEntrega}
+          onRemoveEntrega={onRemoveEntrega}
+        />
+      )}
+
+      <ChecklistSection
+        checklist={influ.checklist ?? []}
+        onChange={onSetChecklist}
+        onApplyToAll={onApplyChecklistToAll}
+        bare
+      />
+
+      <div className="divide-y divide-border border-y border-border">
+        {temRedeConfig && (
+          <CollapsibleSection
+            title="Perfil e audiência"
+            summary={
+              influ.redes[0]
+                ? `${influ.redes[0].handle ? `@${influ.redes[0].handle}` : influ.redes[0].plataforma}${
+                    influ.redes[0].seguidores
+                      ? ` · ${formatCompactSeguidores(influ.redes[0].seguidores)} seguidores`
+                      : ""
+                  }${influ.nicho ? ` · ${influ.nicho}` : ""}`
+                : "Nenhuma rede cadastrada"
+            }
+          >
+            <div className="space-y-5">
+              {has("redes") && (
+                <div>
+                  <FieldLabel title="Redes sociais" />
+                  <div className="mt-2">
+                    <RedesEditor redes={influ.redes} onChange={(redes) => onPatch({ redes })} />
                   </div>
-                  <div className="space-y-1.5">
-                    <FieldLabel
-                      title="Observações"
-                      hint="Nota livre — visível pro time e também no portal do cliente."
-                    />
-                    <AutoSaveTextarea
-                      key={influ.id}
-                      value={influ.observacoes ?? ""}
-                      onSave={(v) => onPatch({ observacoes: v || undefined })}
-                      placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+                </div>
+              )}
+              {has("metricas") && (
+                <div>
+                  <FieldLabel title="Métricas do perfil" hint="Por rede social." />
+                  <div className="mt-2">
+                    <ProfileMetricsEditor
+                      redes={influ.redes}
+                      onChangeRedes={(redes) => onPatch({ redes })}
+                      value={influ.profileMetrics}
+                      onChange={(profileMetrics) => onPatch({ profileMetrics })}
                     />
                   </div>
                 </div>
-              </ProfileSectionCard>
-
-              {influ.inscricaoRespostas && influ.inscricaoRespostas.length > 0 && (
-                <ProfileSectionCard
-                  title="Respostas da inscrição"
-                  hint="Perguntas personalizadas da Página de Inscrição, respondidas no momento em que este influenciador se candidatou."
-                  icon={<FileText className="h-3.5 w-3.5" />}
-                  span="full"
-                >
-                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {influ.inscricaoRespostas.map((r) => (
-                      <div key={r.questionId} className="space-y-0.5">
-                        <dt className="text-xs font-medium text-muted-foreground">{r.label}</dt>
-                        <dd className="text-sm text-foreground">
-                          {Array.isArray(r.value) ? r.value.join(", ") || "—" : r.value || "—"}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </ProfileSectionCard>
               )}
-            </TabsContent>
+            </div>
+          </CollapsibleSection>
+        )}
 
-            <TabsContent value="metricas" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              {has("metricas") && (
-                <ProfileSectionCard
-                  title="Métricas do perfil"
-                  hint="Por rede social."
-                  icon={<BarChart3 className="h-3.5 w-3.5" />}
-                  span="full"
-                >
-                  <ProfileMetricsEditor
-                    redes={influ.redes}
-                    onChangeRedes={(redes) => onPatch({ redes })}
-                    value={influ.profileMetrics}
-                    onChange={(profileMetrics) => onPatch({ profileMetrics })}
-                  />
-                </ProfileSectionCard>
+        <CollapsibleSection
+          title="Briefing e observações"
+          summary={`${influ.briefingPersonalizado ? "Briefing personalizado" : "Sem briefing"}${
+            influ.briefingAnexoUrl ? " · 1 anexo" : ""
+          }${influ.observacoes ? " · com observações" : ""}`}
+        >
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <FieldLabel
+                title="Briefing personalizado"
+                hint="Instruções específicas pra este influenciador — aparece no portal do cliente."
+              />
+              <AutoSaveTextarea
+                key={influ.id}
+                value={influ.briefingPersonalizado ?? ""}
+                onSave={(v) => onPatch({ briefingPersonalizado: v || undefined })}
+                placeholder="Ex: focar no tom descontraído, evitar mencionar concorrentes..."
+              />
+              {influ.briefingAnexoUrl ? (
+                <div className="flex items-center gap-2 text-xs">
+                  <a
+                    href={influ.briefingAnexoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    {influ.briefingAnexoNome || "Anexo"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onPatch({ briefingAnexoNome: undefined, briefingAnexoUrl: undefined })
+                    }
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <BriefingAnexoUploadButton
+                  onUpload={(nome, url) =>
+                    onPatch({ briefingAnexoNome: nome, briefingAnexoUrl: url })
+                  }
+                />
               )}
-            </TabsContent>
+            </div>
+            <div className="space-y-1.5">
+              <FieldLabel
+                title="Observações internas"
+                hint="Nota livre — visível pro time e também no portal do cliente."
+              />
+              <AutoSaveTextarea
+                key={influ.id}
+                value={influ.observacoes ?? ""}
+                onSave={(v) => onPatch({ observacoes: v || undefined })}
+                placeholder="Ex: prefere ser contatado por WhatsApp à tarde..."
+              />
+            </div>
+          </div>
 
-            <TabsContent value="financeiro" className="mt-0 flex-1 overflow-y-auto px-7 py-6">
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          {influ.inscricaoRespostas && influ.inscricaoRespostas.length > 0 && (
+            <div className="mt-5 border-t border-border/60 pt-4">
+              <FieldLabel
+                title="Respostas da inscrição"
+                hint="Perguntas personalizadas da Página de Inscrição, respondidas no momento em que este influenciador se candidatou."
+              />
+              <dl className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {influ.inscricaoRespostas.map((r) => (
+                  <div key={r.questionId} className="space-y-0.5">
+                    <dt className="text-xs font-medium text-muted-foreground">{r.label}</dt>
+                    <dd className="text-sm text-foreground">
+                      {Array.isArray(r.value) ? r.value.join(", ") || "—" : r.value || "—"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {temFinanceiro && (
+          <CollapsibleSection
+            title="Financeiro e contrato"
+            summary={[
+              has("pagamentos") && influ.pagamento ? pagamentoResumo(influ.pagamento) : null,
+              has("contrato") ? (influ.contrato ? "Contrato anexado" : "Sem contrato") : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          >
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2fr_3fr]">
                 {has("pagamentos") && (
-                  <ProfileSectionCard
-                    title="Pagamento"
-                    hint="Valor combinado, cobrindo todas as entregas."
-                    icon={<Coins className="h-3.5 w-3.5" />}
-                  >
-                    <PagamentoInfluSection
-                      value={influ.pagamento}
-                      onChange={(pagamento) => onPatch({ pagamento })}
+                  <div>
+                    <FieldLabel
+                      title="Pagamento"
+                      hint="Valor combinado, cobrindo todas as entregas."
                     />
-                  </ProfileSectionCard>
+                    <div className="mt-2">
+                      <PagamentoInfluSection
+                        value={influ.pagamento}
+                        onChange={(pagamento) => onPatch({ pagamento })}
+                      />
+                    </div>
+                  </div>
                 )}
-
                 {has("bancario") && (
-                  <ProfileSectionCard
-                    title="Dados bancários"
-                    icon={<Landmark className="h-3.5 w-3.5" />}
-                  >
-                    <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} compact />
-                  </ProfileSectionCard>
+                  <div>
+                    <FieldLabel title="Dados bancários" />
+                    <div className="mt-2">
+                      <BankFields value={bank} onChange={(b) => onPatch({ bank: b })} />
+                    </div>
+                  </div>
                 )}
-
-                {has("contrato") && (
-                  <ProfileSectionCard
-                    title="Contrato"
-                    icon={<FileSignature className="h-3.5 w-3.5" />}
-                    span="full"
-                  >
+              </div>
+              {has("contrato") && (
+                <div className="border-t border-border/60 pt-5">
+                  <FieldLabel title="Contrato" />
+                  <div className="mt-2">
                     <ContratoEditor
                       value={influ.contrato}
                       onChange={(contrato) => onPatch({ contrato })}
                     />
-                  </ProfileSectionCard>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-
-          <div className="flex min-h-0 flex-col border-l border-border">
-            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-              <p className="text-sm font-semibold">Atividade</p>
-              <span className="text-[10px] text-muted-foreground">
-                {(influ.activity?.length ?? 0) + (influ.comments?.length ?? 0)}
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-3">
-              {(influ.comments?.length ?? 0) + (influ.activity?.length ?? 0) === 0 ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Nenhuma atividade ou comentário ainda.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {[
-                    ...(influ.activity ?? []).map((a) => ({ kind: "activity" as const, item: a })),
-                    ...(influ.comments ?? []).map((c) => ({ kind: "comment" as const, item: c })),
-                  ]
-                    .sort(
-                      (a, b) =>
-                        new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime(),
-                    )
-                    .map((e) => (
-                      <div key={e.item.id} className="flex min-w-0 items-start gap-2">
-                        <span
-                          className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
-                        >
-                          {e.item.initials}
-                        </span>
-                        {e.kind === "activity" ? (
-                          <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                            <span className="font-medium text-foreground">{e.item.author}</span>{" "}
-                            <span className="text-muted-foreground">{e.item.action}</span>
-                            <div className="text-[10px] text-muted-foreground/70">
-                              {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
-                            <div className="mb-0.5 flex items-baseline gap-1.5">
-                              <span className="text-xs font-medium">{e.item.author}</span>
-                              <span className="text-[10px] text-muted-foreground/70">
-                                {new Date(e.item.createdAt).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            </div>
-                            <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
-                              {linkifyText(e.item.text)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  </div>
                 </div>
               )}
             </div>
-            <div className="border-t border-border bg-background p-3">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    if (commentText.trim()) {
-                      onComment(commentText);
-                      setCommentText("");
-                    }
-                  }
-                }}
-                rows={2}
-                placeholder="Escreva um comentário..."
-                className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
-              />
-              <div className="mt-1 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!commentText.trim()) return;
-                    onComment(commentText);
-                    setCommentText("");
-                  }}
-                  disabled={!commentText.trim()}
-                  className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
-                >
-                  Comentar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          </CollapsibleSection>
+        )}
+      </div>
+    </div>
+  );
+}
 
-        <DialogFooter className="flex-row items-center justify-between border-t border-border bg-muted/30 px-6 py-3 sm:justify-between">
+/** Atividade no modo "secundário" — mesmo workspace, troca de conteúdo em
+ * vez de abrir um segundo overlay. Filtros preservados (Tudo/Comentários/
+ * Histórico) e campo de comentário sticky no rodapé. */
+function WorkspaceActivityBody({
+  influ,
+  filter,
+  onFilterChange,
+  commentText,
+  setCommentText,
+  onComment,
+}: {
+  influ: Influ;
+  filter: "tudo" | "comentarios" | "historico";
+  onFilterChange: (f: "tudo" | "comentarios" | "historico") => void;
+  commentText: string;
+  setCommentText: (v: string) => void;
+  onComment: (text: string) => void;
+}) {
+  const items = [
+    ...(influ.activity ?? []).map((a) => ({ kind: "activity" as const, item: a })),
+    ...(influ.comments ?? []).map((c) => ({ kind: "comment" as const, item: c })),
+  ]
+    .filter((e) => {
+      if (filter === "comentarios") return e.kind === "comment";
+      if (filter === "historico") return e.kind === "activity";
+      return true;
+    })
+    .sort((a, b) => new Date(a.item.createdAt).getTime() - new Date(b.item.createdAt).getTime());
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-1.5 border-b border-border px-4 py-2.5">
+        {(
+          [
+            ["tudo", "Tudo"],
+            ["comentarios", "Comentários"],
+            ["historico", "Histórico"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onFilterChange(value)}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              filter === value
+                ? "bg-foreground text-background"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {items.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">
+            Nenhuma atividade ou comentário ainda.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((e) => (
+              <div key={e.item.id} className="flex min-w-0 items-start gap-2">
+                <span
+                  className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold ${e.item.color}`}
+                >
+                  {e.item.initials}
+                </span>
+                {e.kind === "activity" ? (
+                  <div className="min-w-0 flex-1 break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                    <span className="font-medium text-foreground">{e.item.author}</span>{" "}
+                    <span className="text-muted-foreground">{e.item.action}</span>
+                    <div className="text-[10px] text-muted-foreground/70">
+                      {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-2">
+                    <div className="mb-0.5 flex items-baseline gap-1.5">
+                      <span className="text-xs font-medium">{e.item.author}</span>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {new Date(e.item.createdAt).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <div className="whitespace-pre-wrap break-words text-xs leading-relaxed [overflow-wrap:anywhere]">
+                      {linkifyText(e.item.text)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="shrink-0 border-t border-border bg-background p-3">
+        <label htmlFor="influ-comment-input" className="sr-only">
+          Novo comentário
+        </label>
+        <textarea
+          id="influ-comment-input"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              if (commentText.trim()) {
+                onComment(commentText);
+                setCommentText("");
+              }
+            }
+          }}
+          rows={2}
+          placeholder="Escreva um comentário..."
+          className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+        />
+        <div className="mt-1 flex justify-end">
           <button
             type="button"
-            onClick={onRemove}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => {
+              if (!commentText.trim()) return;
+              onComment(commentText);
+              setCommentText("");
+            }}
+            disabled={!commentText.trim()}
+            className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Remover
+            Comentar
           </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -1,90 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, X, MapPin, MoreVertical, Pencil, FileBadge2, Trash2 } from "lucide-react";
 import {
-  Camera,
-  Plus,
-  Search,
-  Trash2,
-  X,
-  MapPin,
-  History,
-  FileBadge2,
-  Users,
-  Eye,
-  Heart,
-  MessageCircle,
-  Share2,
-  Bookmark,
-  Radar,
-  ShieldCheck,
-} from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  LabelList,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { BackButton } from "./BackButton";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { useClientes } from "@/lib/clientes-store";
 import { formatSeguidores } from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
+import { PageContainer } from "@/components/shared/PageContainer";
 import {
   PlatformIcon,
   NICHOS,
   computeReliability,
-  type Rede,
-  type Influ,
   type ReliabilityStats,
 } from "@/components/influenciadores/InfluencerBoard";
 import { useConfirm } from "@/hooks/use-confirm";
-import {
-  type BankInflu,
-  type Endereco,
-  loadBank,
-  saveBank,
-  onBankChange,
-} from "@/lib/banco-influs-store";
+import { type BankInflu, loadBank, saveBank, onBankChange } from "@/lib/banco-influs-store";
 import { getAllCampanhaInflus } from "@/lib/campanha-scoped-store";
-import DriftWall from "@/components/DriftWall";
-import { TIERS, suggestTier } from "@/lib/pricing";
+import { BankInfluWizard } from "@/components/influenciadores/BankInfluWizard";
+import {
+  BankInfluWorkspace,
+  type HistoryItem,
+} from "@/components/influenciadores/BankInfluWorkspace";
 
 const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
 
-/** Soma os seguidores de todas as redes cadastradas — usado pro badge do
- * card e pro filtro "Seguidores". */
-function totalSeguidores(redes: Rede[]): number {
+function totalSeguidores(redes: BankInflu["redes"]): number {
   return redes.reduce((sum, r) => sum + (Number(r.seguidores?.replace(/\D/g, "")) || 0), 0);
-}
-
-/** Monta a URL do perfil a partir da plataforma + @handle — se o handle já
- * for um link (o time às vezes cola a URL inteira ali), usa ele direto. */
-function redeUrl(plataforma: string, handle: string): string | null {
-  const raw = handle.trim();
-  if (!raw) return null;
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const h = raw.replace(/^@/, "");
-  if (!h) return null;
-  switch (plataforma) {
-    case "Instagram":
-      return `https://instagram.com/${h}`;
-    case "TikTok":
-      return `https://tiktok.com/@${h}`;
-    case "YouTube":
-      return h.startsWith("channel/") || h.startsWith("@")
-        ? `https://youtube.com/${h}`
-        : `https://youtube.com/@${h}`;
-    case "X":
-      return `https://x.com/${h}`;
-    case "LinkedIn":
-      return h.includes("/") ? `https://linkedin.com/${h}` : `https://linkedin.com/in/${h}`;
-    case "Facebook":
-      return `https://facebook.com/${h}`;
-    default:
-      return null;
-  }
 }
 
 const SEGUIDORES_BUCKETS = [
@@ -95,59 +40,43 @@ const SEGUIDORES_BUCKETS = [
   { value: "1000000", label: "1 milhão+" },
 ];
 
-function DetailKpi({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <div className="flex items-center gap-1.5 text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[10px] font-semibold uppercase tracking-wide">{label}</span>
-      </div>
-      <div className="mt-1 text-xl font-semibold text-foreground">{value}</div>
-    </div>
-  );
-}
+type SortKey = "nome" | "seguidores" | "confiabilidade" | "campanhas" | "recentes";
+const SORT_OPTS: { value: SortKey; label: string }[] = [
+  { value: "recentes", label: "Atualização mais recente" },
+  { value: "nome", label: "Nome (A–Z)" },
+  { value: "seguidores", label: "Mais seguidores" },
+  { value: "confiabilidade", label: "Mais confiáveis" },
+  { value: "campanhas", label: "Mais campanhas" },
+];
 
-function initialsAvatarInflu(name: string): string {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#27272a"/><text x="50%" y="50%" dy=".1em" font-family="sans-serif" font-size="150" font-weight="600" fill="#a1a1aa" text-anchor="middle" dominant-baseline="middle">${initials || "?"}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+function reliabilityBadge(r?: ReliabilityStats): { text: string; cls: string } | null {
+  if (!r) return null;
+  if (r.total === 0) return { text: "Sem histórico", cls: "bg-muted text-muted-foreground" };
+  if (r.total < 3) return { text: "Amostra insuficiente", cls: "bg-muted text-muted-foreground" };
+  const cls =
+    r.score >= 80
+      ? "bg-success-soft text-success-soft-foreground"
+      : r.score >= 50
+        ? "bg-warning-soft text-warning-soft-foreground"
+        : "bg-danger-soft text-danger-soft-foreground";
+  return { text: `${r.score}% confiável`, cls };
 }
-
-type HistoryItem = {
-  clienteId: string;
-  clienteEmpresa: string;
-  campanhaId: string;
-  campanhaNome: string;
-  status: string;
-  influ: Influ;
-};
 
 export function InfluenciadoresSection() {
   const clientes = useClientes();
   const [list, setList] = useState<BankInflu[]>(() => loadBank());
   const [query, setQuery] = useState("");
   const [nichoFilter, setNichoFilter] = useState("");
+  const [tierFilter, setTierFilter] = useState("");
   const [cidadeFilter, setCidadeFilter] = useState("");
   const [redeFilter, setRedeFilter] = useState("");
   const [seguidoresMin, setSeguidoresMin] = useState("");
   const [confiabilidadeMin, setConfiabilidadeMin] = useState("");
+  const [sort, setSort] = useState<SortKey>("recentes");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 30;
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: BankInflu } | null>(null);
-  const [detail, setDetail] = useState<BankInflu | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const { confirm, confirmDialog } = useConfirm();
 
   const persist = (next: BankInflu[]) => {
@@ -157,7 +86,7 @@ export function InfluenciadoresSection() {
   useEffect(() => onBankChange(() => setList(loadBank())), []);
   useEffect(
     () => setPage(1),
-    [query, nichoFilter, cidadeFilter, redeFilter, seguidoresMin, confiabilidadeMin],
+    [query, nichoFilter, tierFilter, cidadeFilter, redeFilter, seguidoresMin, confiabilidadeMin],
   );
 
   const historyFor = (nome: string): HistoryItem[] => {
@@ -175,6 +104,8 @@ export function InfluenciadoresSection() {
               clienteEmpresa: c.empresa,
               campanhaId: camp.id,
               campanhaNome: camp.nome,
+              campDataInicio: camp.dataInicio,
+              campPrazo: camp.prazo,
               status: inf.status,
               influ: inf,
             });
@@ -186,7 +117,7 @@ export function InfluenciadoresSection() {
   };
 
   // Calculada uma vez por influ (não a cada render de card) — reusada pro
-  // filtro "Confiabilidade" e pro badge/gráfico do card e da página de perfil.
+  // filtro "Confiabilidade", pro badge do card e pro workspace de detalhe.
   const reliabilityById = useMemo(() => {
     const map = new Map<string, ReliabilityStats>();
     for (const i of list) {
@@ -196,12 +127,26 @@ export function InfluenciadoresSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, clientes]);
 
+  const historyCountById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const i of list) map.set(i.id, historyFor(i.nome).length);
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, clientes]);
+
+  const comCampanha = useMemo(
+    () => list.filter((i) => (historyCountById.get(i.id) ?? 0) > 0).length,
+    [list, historyCountById],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const min = seguidoresMin ? Number(seguidoresMin) : 0;
     const confMin = confiabilidadeMin ? Number(confiabilidadeMin) : 0;
-    return list.filter((i) => {
+    let out = list.filter((i) => {
+      if (i.arquivado) return false;
       if (nichoFilter && i.nicho !== nichoFilter) return false;
+      if (tierFilter && i.tier !== tierFilter) return false;
       if (cidadeFilter && i.endereco?.cidade !== cidadeFilter) return false;
       if (redeFilter && !i.redes.some((r) => r.plataforma === redeFilter)) return false;
       if (min && totalSeguidores(i.redes) < min) return false;
@@ -211,16 +156,55 @@ export function InfluenciadoresSection() {
         i.nome.toLowerCase().includes(q) || i.redes.some((r) => r.handle.toLowerCase().includes(q))
       );
     });
+    out = [...out].sort((a, b) => {
+      switch (sort) {
+        case "nome":
+          return a.nome.localeCompare(b.nome, "pt-BR");
+        case "seguidores":
+          return totalSeguidores(b.redes) - totalSeguidores(a.redes);
+        case "confiabilidade":
+          return (reliabilityById.get(b.id)?.score ?? 0) - (reliabilityById.get(a.id)?.score ?? 0);
+        case "campanhas":
+          return (historyCountById.get(b.id) ?? 0) - (historyCountById.get(a.id) ?? 0);
+        case "recentes":
+        default:
+          return (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "");
+      }
+    });
+    return out;
   }, [
     list,
     query,
     nichoFilter,
+    tierFilter,
     cidadeFilter,
     redeFilter,
     seguidoresMin,
     confiabilidadeMin,
+    sort,
     reliabilityById,
+    historyCountById,
   ]);
+
+  const activeFilterCount = [
+    nichoFilter,
+    tierFilter,
+    cidadeFilter,
+    redeFilter,
+    seguidoresMin,
+    confiabilidadeMin,
+  ].filter(Boolean).length;
+  const hasAnyFilter = activeFilterCount > 0 || !!query;
+
+  const clearFilters = () => {
+    setQuery("");
+    setNichoFilter("");
+    setTierFilter("");
+    setCidadeFilter("");
+    setRedeFilter("");
+    setSeguidoresMin("");
+    setConfiabilidadeMin("");
+  };
 
   const nichosEmUso = useMemo(() => NICHOS.filter((n) => list.some((i) => i.nicho === n)), [list]);
   const cidadesEmUso = useMemo(
@@ -232,6 +216,11 @@ export function InfluenciadoresSection() {
   );
   const redesEmUso = useMemo(
     () => REDES_OPTS.filter((r) => list.some((i) => i.redes.some((rede) => rede.plataforma === r))),
+    [list],
+  );
+  const tiersEmUso = useMemo(
+    () =>
+      Array.from(new Set(list.map((i) => i.tier).filter((t): t is NonNullable<typeof t> => !!t))),
     [list],
   );
 
@@ -253,9 +242,6 @@ export function InfluenciadoresSection() {
     }
     const fmt = (n: number) => (n > 0 ? n.toLocaleString("pt-BR") : "—");
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    // `b.foto` ia direto pro atributo `src`, sem escapar aspas — uma URL
-    // contendo `"` seguido de outro atributo (ex: `" onerror="...`) quebrava
-    // fora do atributo e executava JS na janela de impressão.
     const escAttr = (s: string) => esc(s).replace(/"/g, "&quot;");
     const win = window.open("", "_blank");
     if (!win) return;
@@ -264,8 +250,8 @@ export function InfluenciadoresSection() {
 <style>
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #111; padding: 40px; max-width: 720px; margin: 0 auto; }
   .header { display: flex; align-items: center; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 20px; }
-  .photo { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: #eee; }
-  .photo-fallback { width: 96px; height: 96px; border-radius: 50%; background: #eee; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 600; color: #999; }
+  .photo { width: 96px; height: 96px; border-radius: 16px; object-fit: cover; background: #eee; }
+  .photo-fallback { width: 96px; height: 96px; border-radius: 16px; background: #eee; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 600; color: #999; }
   h1 { margin: 0; font-size: 28px; }
   .nicho { display: inline-block; background: #f2f2f2; border-radius: 999px; padding: 3px 10px; font-size: 12px; margin-top: 6px; }
   .redes { margin-top: 8px; font-size: 13px; color: #555; }
@@ -326,452 +312,46 @@ export function InfluenciadoresSection() {
     win.focus();
   };
 
-  if (detail) {
-    const history = historyFor(detail.nome);
-    const reliability = computeReliability(history.map((h) => h.influ));
-    const seguidores = totalSeguidores(detail.redes);
-
-    // Desempenho agregado (mesmo cálculo do media kit) + por campanha, pra
-    // alimentar o gráfico de barras abaixo.
-    const metrics = { views: 0, likes: 0, comments: 0, shares: 0, saves: 0, reach: 0 };
-    let publicadas = 0;
-    const porCampanha: { name: string; views: number }[] = [];
-    for (const h of history) {
-      let campViews = 0;
-      for (const e of h.influ.entregas) {
-        if (e.status !== "publicado") continue;
-        publicadas += 1;
-        const m = e.metrics ?? {};
-        metrics.views += m.views ?? 0;
-        metrics.likes += m.likes ?? 0;
-        metrics.comments += m.comments ?? 0;
-        metrics.shares += m.shares ?? 0;
-        metrics.saves += m.saves ?? 0;
-        metrics.reach += m.reach ?? 0;
-        campViews += m.views ?? 0;
-      }
-      if (campViews > 0) porCampanha.push({ name: h.campanhaNome, views: campViews });
-    }
-
-    const metricCards = [
-      { key: "views", label: "Views", value: metrics.views, icon: Eye },
-      { key: "reach", label: "Alcance", value: metrics.reach, icon: Radar },
-      { key: "likes", label: "Curtidas", value: metrics.likes, icon: Heart },
-      { key: "comments", label: "Comentários", value: metrics.comments, icon: MessageCircle },
-      { key: "shares", label: "Compart.", value: metrics.shares, icon: Share2 },
-      { key: "saves", label: "Salvos", value: metrics.saves, icon: Bookmark },
-    ];
-
-    return (
-      <div>
-        <BackButton onClick={() => setDetail(null)} className="mb-4" />
-
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div
-            className="h-24 w-full"
-            style={{
-              background: "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
-            }}
-          />
-          <div className="flex flex-wrap items-end gap-5 px-6 pb-5 -mt-12">
-            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-card bg-muted shadow-sm">
-              {detail.foto ? (
-                <img src={detail.foto} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-2xl font-semibold text-muted-foreground">
-                  {detail.nome.charAt(0).toUpperCase() || "?"}
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1 pt-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{detail.nome}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {detail.nicho && (
-                  <span className="inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {detail.nicho}
-                  </span>
-                )}
-                {detail.endereco?.cidade && (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <MapPin className="h-3 w-3" /> {detail.endereco.cidade}
-                    {detail.endereco.estado ? `/${detail.endereco.estado}` : ""}
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {detail.redes.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Sem redes cadastradas</span>
-                ) : (
-                  detail.redes.map((r) => {
-                    const url = r.handle ? redeUrl(r.plataforma, r.handle) : null;
-                    const content = (
-                      <>
-                        <PlatformIcon plataforma={r.plataforma} className="h-3 w-3" />
-                        {r.plataforma}
-                        {r.handle ? ` · ${r.handle}` : ""}
-                        {r.seguidores ? ` · ${formatSeguidores(r.seguidores)} seg.` : ""}
-                      </>
-                    );
-                    return url ? (
-                      <a
-                        key={r.id}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground transition-colors hover:bg-foreground hover:text-background"
-                      >
-                        {content}
-                      </a>
-                    ) : (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
-                      >
-                        {content}
-                      </span>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => openMediaKit(detail, history)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
-              >
-                <FileBadge2 className="h-3.5 w-3.5" /> Media kit
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialog({ mode: "edit", data: detail })}
-                className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
-              >
-                Editar
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await confirm(`Remover "${detail.nome}" do banco de influenciadores?`);
-                  if (!ok) return;
-                  persist(list.filter((i) => i.id !== detail.id));
-                  setDetail(null);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Remover
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <DetailKpi
-            icon={Users}
-            label="Seguidores"
-            value={seguidores > 0 ? formatSeguidores(String(seguidores)) : "—"}
-          />
-          <DetailKpi icon={History} label="Campanhas" value={history.length.toString()} />
-          <DetailKpi
-            icon={ShieldCheck}
-            label="Confiabilidade"
-            value={reliability.total > 0 ? `${reliability.score}%` : "—"}
-          />
-          <DetailKpi icon={Eye} label="Publicações" value={publicadas.toString()} />
-        </div>
-
-        <div className="mt-8">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <MapPin className="h-3.5 w-3.5" /> Endereço
-          </h2>
-          {(() => {
-            const e = detail.endereco;
-            const hasAny =
-              e &&
-              (e.rua ||
-                e.numero ||
-                e.bairro ||
-                e.cep ||
-                e.cidade ||
-                e.estado ||
-                e.pais ||
-                e.complemento);
-            if (!hasAny) {
-              return (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Nenhum endereço cadastrado. Clique em “Editar” para adicionar.
-                </p>
-              );
-            }
-            const linha1 = [e!.rua, e!.numero].filter(Boolean).join(", ");
-            const linha2 = [e!.bairro, e!.complemento].filter(Boolean).join(" · ");
-            const linha3 = [[e!.cidade, e!.estado].filter(Boolean).join(" / "), e!.cep, e!.pais]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div className="mt-2 space-y-0.5 text-sm text-foreground">
-                {linha1 && <div>{linha1}</div>}
-                {linha2 && <div className="text-muted-foreground">{linha2}</div>}
-                {linha3 && <div className="text-muted-foreground">{linha3}</div>}
-              </div>
-            );
-          })()}
-        </div>
-
-        {reliability.total > 0 && (
-          <div className="mt-8 rounded-xl border border-border p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" /> Confiabilidade
-              </h2>
-              <span className="text-lg font-semibold text-foreground">{reliability.score}%</span>
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Baseado nas {reliability.total} entregas mais recentes (últimos 12 meses, ou todo o
-              histórico se ainda não há amostra suficiente): prazo cumprido, etapas intermediárias
-              (roteiro/gravação) em dia e reprovações abertas do cliente.
-            </p>
-            <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              {reliability.onTime > 0 && (
-                <div
-                  style={{
-                    width: `${(reliability.onTime / reliability.total) * 100}%`,
-                    background: "var(--chart-2)",
-                  }}
-                />
-              )}
-              {reliability.late > 0 && (
-                <div
-                  style={{
-                    width: `${(reliability.late / reliability.total) * 100}%`,
-                    background: "var(--chart-4)",
-                  }}
-                />
-              )}
-              {reliability.overdue > 0 && (
-                <div
-                  style={{
-                    width: `${(reliability.overdue / reliability.total) * 100}%`,
-                    background: "var(--chart-5)",
-                  }}
-                />
-              )}
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-2)" }} />
-                {reliability.onTime} no prazo
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-4)" }} />
-                {reliability.late} atrasada{reliability.late === 1 ? "" : "s"}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-5)" }} />
-                {reliability.overdue} vencida{reliability.overdue === 1 ? "" : "s"}
-              </span>
-            </div>
-            {(reliability.etapasAtrasadas > 0 || reliability.reprovacoesAbertas > 0) && (
-              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
-                {reliability.etapasAtrasadas > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                    {reliability.etapasAtrasadas} etapa
-                    {reliability.etapasAtrasadas === 1 ? "" : "s"} intermediária
-                    {reliability.etapasAtrasadas === 1 ? "" : "s"} atrasada
-                    {reliability.etapasAtrasadas === 1 ? "" : "s"}
-                  </span>
-                )}
-                {reliability.reprovacoesAbertas > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-700 dark:text-rose-400"
-                    title="Reprovações ainda não resolvidas (o time reenvia e o cliente aprova de novo pra limpar)"
-                  >
-                    {reliability.reprovacoesAbertas} reprovaç
-                    {reliability.reprovacoesAbertas === 1 ? "ão" : "ões"} aberta
-                    {reliability.reprovacoesAbertas === 1 ? "" : "s"} agora
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {publicadas > 0 && (
-          <div className="mt-8">
-            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-              <Eye className="h-3.5 w-3.5" /> Desempenho ({publicadas} publicaç
-              {publicadas === 1 ? "ão" : "ões"})
-            </h2>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              {metricCards.map((m) => (
-                <div key={m.key} className="rounded-lg border border-border p-3 text-center">
-                  <m.icon className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
-                  <div className="mt-1 text-base font-semibold text-foreground">
-                    {m.value > 0 ? m.value.toLocaleString("pt-BR") : "—"}
-                  </div>
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {m.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {porCampanha.length > 1 && (
-              <div className="mt-4 h-[140px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={porCampanha} layout="vertical" margin={{ left: 0, right: 28 }}>
-                    <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={110}
-                      tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Bar
-                      dataKey="views"
-                      fill="var(--chart-1)"
-                      radius={3}
-                      barSize={14}
-                      isAnimationActive={false}
-                    >
-                      <LabelList
-                        dataKey="views"
-                        position="right"
-                        formatter={(v: number) => v.toLocaleString("pt-BR")}
-                        style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-8">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <History className="h-3.5 w-3.5" /> Histórico de campanhas
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Campanhas em que {detail.nome || "este influenciador"} participou com a gente.
-          </p>
-
-          {history.length === 0 ? (
-            <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              Nenhuma campanha registrada ainda.
-            </div>
-          ) : (
-            <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
-              {history.map((h, idx) => (
-                <li
-                  key={`${h.campanhaId}-${idx}`}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {h.campanhaNome}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">{h.clienteEmpresa}</div>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground">
-                    {h.status}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {confirmDialog}
-
-        <BankInfluDialog
-          open={!!dialog}
-          initial={dialog?.data}
-          onClose={() => setDialog(null)}
-          onSave={(i) => {
-            if (dialog?.mode === "edit") {
-              const next = list.map((x) => (x.id === i.id ? i : x));
-              persist(next);
-              setDetail(i);
-            } else {
-              persist([...list, i]);
-            }
-            setDialog(null);
-          }}
-        />
-      </div>
-    );
-  }
+  const detail = detailId ? (list.find((i) => i.id === detailId) ?? null) : null;
+  const detailHistory = detail ? historyFor(detail.nome) : [];
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <PageContainer>
       <SectionHeader
         title="Banco de influenciadores"
-        subtitle="Cadastre criadores e veja o histórico de campanhas com cada um."
+        subtitle="Cadastro global de criadores — identidade, redes e histórico agregado de campanhas."
         kpis={[
-          { label: "TOTAL", value: list.length },
+          { label: "TOTAL", value: list.filter((i) => !i.arquivado).length },
+          { label: "COM CAMPANHA", value: comCampanha },
           {
-            label: "COM CAMPANHA",
-            value: list.filter((i) => historyFor(i.nome).length > 0).length,
-            tone: "text-emerald-600 dark:text-emerald-400",
+            label: "SEM CAMPANHA",
+            value: list.filter((i) => !i.arquivado).length - comCampanha,
           },
-          {
-            label: "RESULTADOS",
-            value: filtered.length,
-            tone: "text-sky-600 dark:text-sky-400",
-          },
+          { label: "EXIBIDOS", value: filtered.length },
         ]}
         action={
-          <button
-            type="button"
-            onClick={() => setDialog({ mode: "new" })}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90"
-          >
+          <Button variant="primary" onClick={() => setDialog({ mode: "new" })}>
             <Plus className="h-3.5 w-3.5" /> Novo influenciador
-          </button>
+          </Button>
         }
       />
 
-      {filtered.length > 0 && (
-        <div
-          className="mt-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-background"
-          style={{ height: "380px" }}
-        >
-          <DriftWall
-            items={filtered.map((i) => ({
-              image: i.foto || initialsAvatarInflu(i.nome),
-              title: i.nome || "Sem nome",
-              onClick: () => setDetail(i),
-            }))}
-            columns={Math.max(6, filtered.length)}
-            tileWidth={160}
-            tileHeight={160}
-            speed={30}
-            tilt={8}
-            turn={0}
-            overlayColor="var(--muted)"
-          />
-        </div>
-      )}
-
-      <>
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-1 mt-6 space-y-2 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nome ou @"
-              className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Buscar por nome ou @handle"
+              className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <select
             value={nichoFilter}
             onChange={(e) => setNichoFilter(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">Todos os nichos</option>
             {nichosEmUso.map((n) => (
@@ -783,7 +363,7 @@ export function InfluenciadoresSection() {
           <select
             value={redeFilter}
             onChange={(e) => setRedeFilter(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">Todas as redes</option>
             {redesEmUso.map((r) => (
@@ -795,7 +375,7 @@ export function InfluenciadoresSection() {
           <select
             value={seguidoresMin}
             onChange={(e) => setSeguidoresMin(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">Qualquer nº de seguidores</option>
             {SEGUIDORES_BUCKETS.map((b) => (
@@ -804,11 +384,34 @@ export function InfluenciadoresSection() {
               </option>
             ))}
           </select>
+          <select
+            value={confiabilidadeMin}
+            onChange={(e) => setConfiabilidadeMin(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">Qualquer confiabilidade</option>
+            <option value="80">80%+ confiável</option>
+            <option value="50">50%+ confiável</option>
+          </select>
+          {tiersEmUso.length > 0 && (
+            <select
+              value={tierFilter}
+              onChange={(e) => setTierFilter(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">Todos os tiers</option>
+              {tiersEmUso.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
           {cidadesEmUso.length > 0 && (
             <select
               value={cidadeFilter}
               onChange={(e) => setCidadeFilter(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="">Todas as cidades</option>
               {cidadesEmUso.map((c) => (
@@ -819,73 +422,89 @@ export function InfluenciadoresSection() {
             </select>
           )}
           <select
-            value={confiabilidadeMin}
-            onChange={(e) => setConfiabilidadeMin(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className="h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="">Qualquer confiabilidade</option>
-            <option value="80">80%+ confiável</option>
-            <option value="50">50%+ confiável</option>
+            {SORT_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
-          {(nichoFilter ||
-            cidadeFilter ||
-            redeFilter ||
-            seguidoresMin ||
-            confiabilidadeMin ||
-            query) && (
+          {hasAnyFilter && (
             <button
               type="button"
-              onClick={() => {
-                setQuery("");
-                setNichoFilter("");
-                setCidadeFilter("");
-                setRedeFilter("");
-                setSeguidoresMin("");
-                setConfiabilidadeMin("");
-              }}
+              onClick={clearFilters}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" /> Limpar filtros
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           )}
         </div>
+      </div>
 
-        {filtered.length === 0 ? (
-          <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              {list.length === 0
-                ? "Nenhum influenciador cadastrado ainda."
-                : "Nenhum resultado para essa busca."}
-            </p>
-            {list.length === 0 && (
+      {filtered.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border p-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            {list.length === 0
+              ? "Nenhum influenciador cadastrado ainda."
+              : hasAnyFilter
+                ? "Nenhum influenciador corresponde aos filtros aplicados. Tente ajustar ou limpar os filtros."
+                : "Nenhum resultado."}
+          </p>
+          {list.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setDialog({ mode: "new" })}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <Plus className="h-4 w-4" /> Adicionar o primeiro
+            </button>
+          ) : (
+            hasAnyFilter && (
               <button
                 type="button"
-                onClick={() => setDialog({ mode: "new" })}
+                onClick={clearFilters}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
               >
-                <Plus className="h-4 w-4" /> Adicionar o primeiro
+                <X className="h-4 w-4" /> Limpar filtros
               </button>
-            )}
-          </div>
-        ) : (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((i) => {
-              const count = historyFor(i.nome).length;
-              const reliability = reliabilityById.get(i.id);
-              const seguidores = totalSeguidores(i.redes);
-              return (
-                <div
-                  key={i.id}
-                  className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:bg-muted/40"
+            )
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((i) => {
+            const count = historyCountById.get(i.id) ?? 0;
+            const reliability = reliabilityById.get(i.id);
+            const badge = reliabilityBadge(reliability);
+            const seguidores = totalSeguidores(i.redes);
+            const redePrincipal = i.redes.find((r) => r.id === i.redePrincipalId) ?? i.redes[0];
+            return (
+              <div
+                key={i.id}
+                className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-foreground/20 hover:bg-muted/40"
+              >
+                <button
+                  type="button"
+                  onClick={() => setDetailId(i.id)}
+                  className="flex flex-1 flex-col items-start p-3 text-left"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setDetail(i)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  >
-                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                  <div className="flex w-full items-center gap-3">
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted ring-1 ring-border">
                       {i.foto ? (
-                        <img src={i.foto} alt="" className="h-full w-full object-cover" />
+                        <img
+                          src={i.foto}
+                          alt=""
+                          className="h-full w-full object-cover object-center"
+                          loading="lazy"
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">
                           {i.nome.charAt(0).toUpperCase() || "?"}
@@ -896,98 +515,118 @@ export function InfluenciadoresSection() {
                       <div className="truncate text-sm font-medium text-foreground">
                         {i.nome || "Sem nome"}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                        {seguidores > 0 && (
-                          <span className="inline-flex items-center gap-1">
-                            <Users className="h-3 w-3" /> {formatSeguidores(String(seguidores))}
+                      {redePrincipal && (
+                        <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                          <PlatformIcon
+                            plataforma={redePrincipal.plataforma}
+                            className="h-3 w-3 shrink-0"
+                          />
+                          <span className="truncate">
+                            {redePrincipal.handle || redePrincipal.plataforma}
                           </span>
-                        )}
-                        {i.endereco?.cidade && (
-                          <span className="inline-flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3 shrink-0" /> {i.endereco.cidade}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        {i.nicho && (
-                          <span className="max-w-[120px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            {i.nicho}
-                          </span>
-                        )}
-                        <span className="shrink-0 text-[11px] text-muted-foreground">
-                          {count} {count === 1 ? "campanha" : "campanhas"}
-                        </span>
-                        {reliability && reliability.total > 0 && (
-                          <span
-                            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                              reliability.score >= 80
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                : reliability.score >= 50
-                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                                  : "bg-rose-500/10 text-rose-700 dark:text-rose-400"
-                            }`}
-                            title="Confiabilidade: prazo cumprido, etapas intermediárias em dia e reprovações abertas (últimos 12 meses)"
-                          >
-                            {reliability.score}% confiável
-                          </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
+                      {i.endereco?.cidade && (
+                        <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3 shrink-0" /> {i.endereco.cidade}
+                        </div>
+                      )}
                     </div>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Apagar influenciador"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const ok = await confirm(`Apagar "${i.nome}" do banco?`);
-                      if (ok) {
-                        persist(list.filter((x) => x.id !== i.id));
-                      }
-                    }}
-                    className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-destructive group-hover:opacity-100"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {filtered.length > PAGE_SIZE &&
-          (() => {
-            const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-            return (
-              <div className="mt-6 flex items-center justify-between text-sm">
-                <p className="text-xs text-muted-foreground">
-                  Página {page} de {totalPages} · {filtered.length} influenciadores
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page <= 1}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page >= totalPages}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Próxima
-                  </button>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {i.nicho && (
+                      <span className="max-w-[110px] truncate rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {i.nicho}
+                      </span>
+                    )}
+                    {seguidores > 0 && (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {formatSeguidores(String(seguidores))} seg.
+                      </span>
+                    )}
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {count} {count === 1 ? "campanha" : "campanhas"}
+                    </span>
+                    {badge && (
+                      <span
+                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${badge.cls}`}
+                      >
+                        {badge.text}
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <div className="absolute right-1.5 top-1.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`Mais opções de ${i.nome}`}
+                        className="rounded-md bg-background/80 p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setDetailId(i.id)}>Abrir</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setDialog({ mode: "edit", data: i })}>
+                        <Pencil className="h-3.5 w-3.5" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openMediaKit(i, historyFor(i.nome))}>
+                        <FileBadge2 className="h-3.5 w-3.5" /> Media kit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={async () => {
+                          const ok = await confirm(`Apagar "${i.nome}" do banco?`);
+                          if (ok) persist(list.filter((x) => x.id !== i.id));
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Remover
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             );
-          })()}
-      </>
+          })}
+        </div>
+      )}
 
-      <BankInfluDialog
+      {filtered.length > PAGE_SIZE &&
+        (() => {
+          const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+          return (
+            <div className="mt-6 flex items-center justify-between text-sm">
+              <p className="text-xs text-muted-foreground">
+                Página {page} de {totalPages} · {filtered.length} influenciadores
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+      <BankInfluWizard
         open={!!dialog}
         initial={dialog?.data}
+        allInflus={list}
         onClose={() => setDialog(null)}
         onSave={(i) => {
           if (dialog?.mode === "edit") {
@@ -996,319 +635,24 @@ export function InfluenciadoresSection() {
             persist([...list, i]);
           }
           setDialog(null);
+          setDetailId(i.id);
         }}
       />
+
+      <BankInfluWorkspace
+        influ={detail}
+        history={detailHistory}
+        onClose={() => setDetailId(null)}
+        onEdit={() => detail && setDialog({ mode: "edit", data: detail })}
+        onMediaKit={() => detail && openMediaKit(detail, detailHistory)}
+        onRemove={async () => {
+          if (!detail) return;
+          persist(list.filter((x) => x.id !== detail.id));
+          setDetailId(null);
+        }}
+      />
+
       {confirmDialog}
-    </div>
-  );
-}
-
-/* ============================================================
- * Dialog
- * ============================================================ */
-
-function BankInfluDialog({
-  open,
-  initial,
-  onClose,
-  onSave,
-}: {
-  open: boolean;
-  initial?: BankInflu;
-  onClose: () => void;
-  onSave: (i: BankInflu) => void;
-}) {
-  const [nome, setNome] = useState("");
-  const [nicho, setNicho] = useState("");
-  const [tier, setTier] = useState("");
-  const [foto, setFoto] = useState<string | undefined>(undefined);
-  const [redes, setRedes] = useState<Rede[]>([]);
-  const [endereco, setEndereco] = useState<Endereco>({});
-
-  useEffect(() => {
-    if (!open) return;
-    setNome(initial?.nome ?? "");
-    setNicho(initial?.nicho ?? "");
-    setTier(initial?.tier ?? "");
-    setFoto(initial?.foto);
-    setRedes(
-      initial?.redes && initial.redes.length > 0
-        ? initial.redes.map((r) => ({ ...r }))
-        : [{ id: crypto.randomUUID(), plataforma: "Instagram", handle: "" }],
-    );
-    setEndereco(initial?.endereco ? { ...initial.endereco } : {});
-  }, [open, initial]);
-
-  const handlePhoto = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => setFoto(reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const setEnd = (k: keyof Endereco, v: string) => setEndereco((e) => ({ ...e, [k]: v }));
-
-  const submit = () => {
-    if (!nome.trim()) return;
-    const cleanedEnd: Endereco = Object.fromEntries(
-      Object.entries(endereco).filter(([, v]) => v && String(v).trim()),
-    );
-    onSave({
-      id: initial?.id ?? crypto.randomUUID(),
-      nome: nome.trim(),
-      nicho: nicho || undefined,
-      tier: (tier || undefined) as BankInflu["tier"],
-      foto,
-      redes: redes.filter((r) => r.plataforma || r.handle),
-      endereco: Object.keys(cleanedEnd).length ? cleanedEnd : undefined,
-    });
-  };
-
-  const maiorSeguidores = Math.max(
-    0,
-    ...redes.map((r) => Number((r.seguidores ?? "").replace(/\D/g, "")) || 0),
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[85vh] max-w-md flex-col">
-        <DialogTitle>{initial ? "Editar influenciador" : "Novo influenciador"}</DialogTitle>
-        <DialogDescription className="sr-only">
-          Cadastro simplificado do banco de influenciadores.
-        </DialogDescription>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-          <div className="flex items-center gap-4">
-            <label className="relative h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-full bg-muted">
-              {foto ? (
-                <img src={foto} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                  <Camera className="h-5 w-5" />
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handlePhoto(f);
-                }}
-              />
-            </label>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-muted-foreground">Nome</label>
-              <input
-                type="text"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                placeholder="Nome do influenciador"
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground">Nicho</label>
-            <select
-              value={nicho}
-              onChange={(e) => setNicho(e.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Selecione um nicho</option>
-              {NICHOS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">
-                Tier (faixa de audiência)
-              </label>
-              {maiorSeguidores > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTier(suggestTier(maiorSeguidores))}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Sugerir a partir dos seguidores
-                </button>
-              )}
-            </div>
-            <select
-              value={tier}
-              onChange={(e) => setTier(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Sem tier definido</option>
-              {TIERS.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="mb-1.5 flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">Redes</label>
-              <button
-                type="button"
-                onClick={() =>
-                  setRedes((r) => [
-                    ...r,
-                    { id: crypto.randomUUID(), plataforma: "Instagram", handle: "" },
-                  ])
-                }
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <Plus className="h-3 w-3" /> adicionar
-              </button>
-            </div>
-            <div className="space-y-2">
-              {redes.map((r) => (
-                <div key={r.id} className="flex items-center gap-2">
-                  <select
-                    value={r.plataforma}
-                    onChange={(e) =>
-                      setRedes((list) =>
-                        list.map((x) => (x.id === r.id ? { ...x, plataforma: e.target.value } : x)),
-                      )
-                    }
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  >
-                    {REDES_OPTS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={r.handle}
-                    onChange={(e) =>
-                      setRedes((list) =>
-                        list.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)),
-                      )
-                    }
-                    placeholder="@handle"
-                    className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={formatSeguidores(r.seguidores)}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "");
-                      setRedes((list) =>
-                        list.map((x) => (x.id === r.id ? { ...x, seguidores: digits } : x)),
-                      );
-                    }}
-                    placeholder="Seguidores"
-                    title="Seguidores"
-                    className="h-9 w-28 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setRedes((list) => list.filter((x) => x.id !== r.id))}
-                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Remover rede"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Endereço
-            </label>
-            <div className="grid grid-cols-6 gap-2">
-              <input
-                type="text"
-                value={endereco.rua ?? ""}
-                onChange={(e) => setEnd("rua", e.target.value)}
-                placeholder="Rua / Logradouro"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-4"
-              />
-              <input
-                type="text"
-                value={endereco.numero ?? ""}
-                onChange={(e) => setEnd("numero", e.target.value)}
-                placeholder="Número"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-2"
-              />
-              <input
-                type="text"
-                value={endereco.complemento ?? ""}
-                onChange={(e) => setEnd("complemento", e.target.value)}
-                placeholder="Complemento"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
-              />
-              <input
-                type="text"
-                value={endereco.bairro ?? ""}
-                onChange={(e) => setEnd("bairro", e.target.value)}
-                placeholder="Bairro"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
-              />
-              <input
-                type="text"
-                value={endereco.cidade ?? ""}
-                onChange={(e) => setEnd("cidade", e.target.value)}
-                placeholder="Cidade"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-3"
-              />
-              <input
-                type="text"
-                value={endereco.estado ?? ""}
-                onChange={(e) => setEnd("estado", e.target.value)}
-                placeholder="UF"
-                maxLength={2}
-                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm uppercase focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-1"
-              />
-              <input
-                type="text"
-                value={endereco.cep ?? ""}
-                onChange={(e) => setEnd("cep", e.target.value)}
-                placeholder="CEP"
-                className="col-span-3 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:col-span-2"
-              />
-              <input
-                type="text"
-                value={endereco.pais ?? ""}
-                onChange={(e) => setEnd("pais", e.target.value)}
-                placeholder="País"
-                className="col-span-6 h-9 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <X className="h-4 w-4" /> Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!nome.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-          >
-            Salvar
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    </PageContainer>
   );
 }

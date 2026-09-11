@@ -17,6 +17,8 @@ import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculado
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
+import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './routes/_authenticated/design-system-finance-concept'
+import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -65,6 +67,18 @@ const AuthenticatedPrimeiroAcessoRoute =
     path: '/primeiro-acesso',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDesignSystemFinanceConceptRoute =
+  AuthenticatedDesignSystemFinanceConceptRouteImport.update({
+    id: '/design-system-finance-concept',
+    path: '/design-system-finance-concept',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedDesignSystemRoute =
+  AuthenticatedDesignSystemRouteImport.update({
+    id: '/design-system',
+    path: '/design-system',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   id: '/email/descadastro/$token',
   path: '/email/descadastro/$token',
@@ -98,6 +112,8 @@ const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/design-system': typeof AuthenticatedDesignSystemRoute
+  '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -113,6 +129,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/design-system': typeof AuthenticatedDesignSystemRoute
+  '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -130,6 +148,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
+  '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
   '/bugs/$token': typeof BugsTokenRoute
@@ -147,6 +167,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/design-system'
+    | '/design-system-finance-concept'
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
@@ -162,6 +184,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/design-system'
+    | '/design-system-finance-concept'
     | '/primeiro-acesso'
     | '/time'
     | '/bugs/$token'
@@ -178,6 +202,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/_authenticated/design-system'
+    | '/_authenticated/design-system-finance-concept'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
     | '/bugs/$token'
@@ -264,6 +290,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrimeiroAcessoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/design-system-finance-concept': {
+      id: '/_authenticated/design-system-finance-concept'
+      path: '/design-system-finance-concept'
+      fullPath: '/design-system-finance-concept'
+      preLoaderRoute: typeof AuthenticatedDesignSystemFinanceConceptRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/design-system': {
+      id: '/_authenticated/design-system'
+      path: '/design-system'
+      fullPath: '/design-system'
+      preLoaderRoute: typeof AuthenticatedDesignSystemRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/email/descadastro/$token': {
       id: '/email/descadastro/$token'
       path: '/email/descadastro/$token'
@@ -310,12 +350,17 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedDesignSystemRoute: typeof AuthenticatedDesignSystemRoute
+  AuthenticatedDesignSystemFinanceConceptRoute: typeof AuthenticatedDesignSystemFinanceConceptRoute
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedDesignSystemRoute: AuthenticatedDesignSystemRoute,
+  AuthenticatedDesignSystemFinanceConceptRoute:
+    AuthenticatedDesignSystemFinanceConceptRoute,
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,

@@ -259,7 +259,7 @@ export function LinkTasksPanel({
               type="button"
               onClick={confirmLink}
               disabled={selected.size === 0}
-              className="cursor-pointer rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="cursor-pointer rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {confirmingMove ? "Confirmar e mover" : "Vincular tarefas"}
             </button>

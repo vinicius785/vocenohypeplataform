@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Check, Minus, TrendingDown, TrendingUp, X } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Check, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { DateField } from "@/components/ui/date-field";
 import {
@@ -14,8 +16,8 @@ import {
 type Member = { name: string; photo?: string };
 
 const FIELD_CLS =
-  "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring";
-const LABEL_CLS = "block text-xs font-medium text-muted-foreground";
+  "mt-1 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand";
+const LABEL_CLS = "text-xs font-medium text-text-secondary";
 
 type HowKind = "alcancar" | "acima" | "abaixo" | "concluir";
 
@@ -175,18 +177,23 @@ export function IndicadorQuickCreateDialog({
   const canSubmit = titulo.trim().length > 0 && how !== null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogTitle>Novo indicador</DialogTitle>
-        <DialogDescription className="text-xs text-muted-foreground">
-          Uma métrica individual para acompanhar. Detalhes mais finos (baseline, meta mínima,
-          excelência...) dá pra ajustar depois, na página do indicador.
-        </DialogDescription>
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <div className="border-b border-border/60 px-6 py-5">
+          <SheetTitle>Novo indicador</SheetTitle>
+          <SheetDescription className="text-xs text-text-secondary">
+            Uma métrica individual para acompanhar. Detalhes mais finos (baseline, meta mínima,
+            excelência...) dá pra ajustar depois, na página do indicador.
+          </SheetDescription>
+        </div>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
           <div>
-            <label className={LABEL_CLS}>Nome</label>
+            <Label htmlFor="indicador-nome" className={LABEL_CLS}>
+              Nome
+            </Label>
             <input
+              id="indicador-nome"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               placeholder="Ex: Margem média da carteira"
@@ -196,17 +203,17 @@ export function IndicadorQuickCreateDialog({
           </div>
 
           <div>
-            <label className={LABEL_CLS}>Como essa meta funciona?</label>
+            <Label className={LABEL_CLS}>Como essa meta funciona?</Label>
             <div className="mt-1.5 grid grid-cols-2 gap-2">
               {HOW_OPTIONS.map(({ kind, label, icon: Icon }) => (
                 <button
                   key={kind}
                   type="button"
                   onClick={() => setHow(kind)}
-                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-left text-xs font-medium ${
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-2 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                     how === kind
-                      ? "border-foreground bg-muted text-foreground"
-                      : "border-border text-muted-foreground hover:bg-muted/40"
+                      ? "bg-brand-subtle text-brand"
+                      : "bg-muted text-text-secondary hover:text-foreground"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -218,25 +225,25 @@ export function IndicadorQuickCreateDialog({
 
           {how === "alcancar" && (
             <div>
-              <label className={LABEL_CLS}>Meta</label>
+              <Label className={LABEL_CLS}>Meta</Label>
               <div className="mt-1 flex gap-2">
                 <MetaValueInput
                   unit={unit}
                   value={meta}
                   onChange={setMeta}
                   placeholder="63"
-                  className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
-                <div className="flex overflow-hidden rounded-md border border-input">
+                <div className="flex overflow-hidden rounded-md bg-muted p-0.5">
                   {UNIT_OPTIONS.map(({ unit: u, label }) => (
                     <button
                       key={u}
                       type="button"
                       onClick={() => setUnit(u)}
-                      className={`px-3 text-xs font-medium ${
+                      className={`rounded px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                         unit === u
-                          ? "bg-foreground text-background"
-                          : "bg-background text-muted-foreground hover:bg-muted"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-text-secondary hover:text-foreground"
                       }`}
                     >
                       {label}
@@ -249,7 +256,7 @@ export function IndicadorQuickCreateDialog({
                   value={unidadeLivre}
                   onChange={(e) => setUnidadeLivre(e.target.value)}
                   placeholder="Unidade (opcional) — clientes, operações..."
-                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
               )}
             </div>
@@ -257,27 +264,27 @@ export function IndicadorQuickCreateDialog({
 
           {(how === "acima" || how === "abaixo") && (
             <div>
-              <label className={LABEL_CLS}>
+              <Label className={LABEL_CLS}>
                 {how === "acima" ? "Manter acima de" : "Manter abaixo de"}
-              </label>
+              </Label>
               <div className="mt-1 flex gap-2">
                 <MetaValueInput
                   unit={unit}
                   value={meta}
                   onChange={setMeta}
                   placeholder="Ex: 6"
-                  className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="h-9 flex-1 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
-                <div className="flex overflow-hidden rounded-md border border-input">
+                <div className="flex overflow-hidden rounded-md bg-muted p-0.5">
                   {UNIT_OPTIONS.map(({ unit: u, label }) => (
                     <button
                       key={u}
                       type="button"
                       onClick={() => setUnit(u)}
-                      className={`px-3 text-xs font-medium ${
+                      className={`rounded px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                         unit === u
-                          ? "bg-foreground text-background"
-                          : "bg-background text-muted-foreground hover:bg-muted"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-text-secondary hover:text-foreground"
                       }`}
                     >
                       {label}
@@ -290,14 +297,14 @@ export function IndicadorQuickCreateDialog({
                   value={unidadeLivre}
                   onChange={(e) => setUnidadeLivre(e.target.value)}
                   placeholder="Unidade (opcional) — clientes, operações..."
-                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 />
               )}
             </div>
           )}
 
           {how === "concluir" && (
-            <p className="flex items-center gap-1.5 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+            <p className="flex items-center gap-1.5 rounded-2xl bg-muted/40 p-3 text-xs text-text-secondary">
               <Minus className="h-3.5 w-3.5 shrink-0" /> Sem valor numérico — o indicador fica
               "concluído" ou "em aberto".
             </p>
@@ -305,8 +312,11 @@ export function IndicadorQuickCreateDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={LABEL_CLS}>Área</label>
+              <Label htmlFor="indicador-area" className={LABEL_CLS}>
+                Área
+              </Label>
               <select
+                id="indicador-area"
                 value={area}
                 onChange={(e) => setArea(e.target.value as MetaArea)}
                 className={FIELD_CLS}
@@ -319,8 +329,15 @@ export function IndicadorQuickCreateDialog({
               </select>
             </div>
             <div>
-              <label className={LABEL_CLS}>Dono</label>
-              <select value={dono} onChange={(e) => setDono(e.target.value)} className={FIELD_CLS}>
+              <Label htmlFor="indicador-dono" className={LABEL_CLS}>
+                Dono
+              </Label>
+              <select
+                id="indicador-dono"
+                value={dono}
+                onChange={(e) => setDono(e.target.value)}
+                className={FIELD_CLS}
+              >
                 <option value="">Sem dono</option>
                 {members.map((m) => (
                   <option key={m.name} value={m.name}>
@@ -331,7 +348,7 @@ export function IndicadorQuickCreateDialog({
             </div>
           </div>
           <div>
-            <label className={LABEL_CLS}>Período (opcional)</label>
+            <Label className={LABEL_CLS}>Período (opcional)</Label>
             <div className="mt-1 grid grid-cols-2 gap-3">
               <DateField
                 value={dataInicio || undefined}
@@ -347,24 +364,15 @@ export function IndicadorQuickCreateDialog({
           </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            <X className="h-4 w-4" /> Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSubmit}
-            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
-          >
+        <div className="flex items-center justify-end gap-2 border-t border-border/60 px-6 py-4">
+          <Button variant="outline" size="comfortable" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" size="comfortable" onClick={submit} disabled={!canSubmit}>
             Criar indicador
-          </button>
+          </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -8,12 +8,12 @@ import {
 } from "@/lib/financeiro-entries";
 
 export const inputCls =
-  "h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring";
+  "h-8 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-brand";
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-[11px] font-medium text-text-secondary">{label}</span>
       {children}
     </label>
   );

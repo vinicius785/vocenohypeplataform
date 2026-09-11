@@ -3,6 +3,7 @@ import { ArrowUpDown } from "lucide-react";
 import { groupByCampanha, fmtBRL, type CampanhaResultado } from "@/lib/financeiro-entries";
 import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
 import type { AdvancedFilters, useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
 type SortKey = "receita" | "custos" | "resultado" | "margem";
@@ -37,26 +38,20 @@ export function ResultadoPorCampanhaTable({
       title="Resultado por campanha"
       action={
         <div className="flex flex-wrap items-center gap-1.5">
-          <div className="inline-flex rounded-md border border-border bg-background p-0.5 text-[11px]">
-            {(["completo", "realizado"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                className={`cursor-pointer rounded px-2 py-0.5 font-medium ${
-                  mode === m
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {m === "completo" ? "Contratado" : "Realizado"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            aria-label="Modo de exibição do resultado por campanha"
+            size="sm"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "completo", label: "Contratado" },
+              { value: "realizado", label: "Realizado" },
+            ]}
+          />
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+            className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -67,7 +62,7 @@ export function ResultadoPorCampanhaTable({
           <button
             type="button"
             onClick={() => setAscending((v) => !v)}
-            className="cursor-pointer rounded-md border border-border p-1 hover:bg-muted"
+            className="cursor-pointer rounded-md border border-border p-1 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             aria-label="Inverter ordem"
           >
             <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
@@ -106,28 +101,36 @@ export function ResultadoPorCampanhaTable({
                 <tr
                   key={r.campanhaId}
                   onClick={() => onApplyFilter({ campanhaId: r.campanhaId })}
-                  className="cursor-pointer hover:bg-muted/40"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(ev) => {
+                    if (ev.key === "Enter" || ev.key === " ") {
+                      ev.preventDefault();
+                      onApplyFilter({ campanhaId: r.campanhaId });
+                    }
+                  }}
+                  className="cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
                 >
                   <td className="py-1.5 pr-3 font-medium text-foreground">{r.campanhaNome}</td>
-                  <td className="py-1.5 pr-3 text-muted-foreground">{r.clienteNome}</td>
+                  <td className="py-1.5 pr-3 text-text-secondary">{r.clienteNome}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBRL(r.receita)}</td>
                   {mode === "completo" && (
                     <>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-600">
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-success">
                         {fmtBRL(r.receitaRecebida)}
                       </td>
-                      <td className="py-1.5 pr-3 text-right tabular-nums text-amber-600">
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-warning">
                         {fmtBRL(r.receitaPendente)}
                       </td>
                     </>
                   )}
                   <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBRL(r.custos)}</td>
                   <td
-                    className={`py-1.5 pr-3 text-right font-medium tabular-nums ${r.resultado >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                    className={`py-1.5 pr-3 text-right font-medium tabular-nums ${r.resultado >= 0 ? "text-success" : "text-danger"}`}
                   >
                     {fmtBRL(r.resultado)}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+                  <td className="py-1.5 text-right tabular-nums text-text-secondary">
                     {r.receita > 0 ? `${r.margem.toFixed(0)}%` : "—"}
                   </td>
                 </tr>

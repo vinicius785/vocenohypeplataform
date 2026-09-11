@@ -36,35 +36,38 @@ export const INDICADOR_SAUDE_LABEL: Record<IndicadorSaude, string> = {
 };
 
 export const INDICADOR_SAUDE_TONE: Record<IndicadorSaude, string> = {
-  saudavel: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  atencao: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  em_risco: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-  atrasado: "bg-red-500/10 text-red-700 dark:text-red-400",
-  concluido: "bg-foreground text-background",
-  nao_iniciado: "bg-muted text-muted-foreground",
-  cancelado: "bg-muted/60 text-muted-foreground line-through",
+  saudavel: "bg-success-soft text-success-soft-foreground",
+  atencao: "bg-warning-soft text-warning-soft-foreground",
+  em_risco: "bg-danger-soft text-danger-soft-foreground",
+  atrasado: "bg-danger-soft text-danger-soft-foreground",
+  concluido: "bg-brand-subtle text-brand",
+  nao_iniciado: "bg-muted text-text-secondary",
+  cancelado: "bg-muted/60 text-text-secondary line-through",
 };
 
 export const INDICADOR_SAUDE_DOT: Record<IndicadorSaude, string> = {
-  saudavel: "bg-emerald-500",
-  atencao: "bg-amber-500",
-  em_risco: "bg-rose-500",
-  atrasado: "bg-red-500",
-  concluido: "bg-foreground",
-  nao_iniciado: "bg-muted-foreground/40",
-  cancelado: "bg-muted-foreground/30",
+  saudavel: "bg-success",
+  atencao: "bg-warning",
+  em_risco: "bg-danger",
+  atrasado: "bg-danger",
+  concluido: "bg-brand",
+  nao_iniciado: "bg-border",
+  cancelado: "bg-border",
 };
 
-/** Barra de progresso colorida pela mesma saúde do badge — usado nos
- * cards em vez do `bg-foreground` fixo de sempre. */
+/** Barra de saúde (NÃO é a barra de progresso) — reservada pra
+ * indicadores de linha (cada um com sua própria performance), nunca
+ * pro progresso agregado de um Objetivo: progresso é sempre brand blue
+ * (regra do design system — progresso ≠ saúde), a saúde aparece à parte
+ * como badge/ícone (`INDICADOR_SAUDE_TONE`/`_DOT`). */
 export const INDICADOR_SAUDE_BAR: Record<IndicadorSaude, string> = {
-  saudavel: "bg-emerald-500",
-  atencao: "bg-amber-500",
-  em_risco: "bg-rose-500",
-  atrasado: "bg-red-500",
-  concluido: "bg-foreground",
-  nao_iniciado: "bg-muted-foreground/30",
-  cancelado: "bg-muted-foreground/20",
+  saudavel: "bg-success",
+  atencao: "bg-warning",
+  em_risco: "bg-danger",
+  atrasado: "bg-danger",
+  concluido: "bg-brand",
+  nao_iniciado: "bg-border",
+  cancelado: "bg-border",
 };
 
 export const COMPARISON_OPERATOR_LABEL: Record<ComparisonOperator, string> = {

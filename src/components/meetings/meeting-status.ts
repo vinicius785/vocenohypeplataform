@@ -58,27 +58,27 @@ export function monthLabel(d: Date) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Única convenção de cor de status do app — emerald=Confirmada,
- * amber=Pendente, muted+riscado=Cancelada. Não existe token semântico
- * `--success`/`--warning` no design system nem variante de `Badge` pra
- * isso, então mantemos esse par de helpers em vez de inventar uma
- * linguagem visual nova de badge. */
+/** Única convenção de cor de status do app — verde=Confirmada,
+ * amarelo=Pendente, neutro+riscado=Cancelada. Usa os tokens semânticos
+ * `--success`/`--warning` (via `bg-success-soft`/`text-success-soft-
+ * foreground` etc., os mesmos reaproveitados pelo `Badge` canônico) em
+ * vez dos hexadecimais `emerald`/`amber`/`red` hardcoded de antes. */
 export function statusTone(s: MeetingStatus) {
-  if (s === "Confirmada") return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (s === "Pendente") return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
-  return "bg-muted text-muted-foreground line-through";
+  if (s === "Confirmada") return "bg-success-soft text-success-soft-foreground";
+  if (s === "Pendente") return "bg-warning-soft text-warning-soft-foreground";
+  return "bg-muted text-text-secondary line-through";
 }
 
 export function statusDot(s: MeetingStatus) {
-  if (s === "Confirmada") return "bg-emerald-500";
-  if (s === "Pendente") return "bg-amber-500";
-  return "bg-muted-foreground/40";
+  if (s === "Confirmada") return "bg-success";
+  if (s === "Pendente") return "bg-warning";
+  return "bg-border";
 }
 
 export function participantBadge(kind: "confirmed" | "declined" | "pending") {
-  if (kind === "confirmed") return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
-  if (kind === "declined") return "bg-red-500/10 text-red-700 dark:text-red-400";
-  return "bg-amber-500/10 text-amber-700 dark:text-amber-400";
+  if (kind === "confirmed") return "bg-success-soft text-success-soft-foreground";
+  if (kind === "declined") return "bg-danger-soft text-danger-soft-foreground";
+  return "bg-warning-soft text-warning-soft-foreground";
 }
 
 /** "Agora" / "Em 8 min" / "Em 2h" / "Amanhã" — sempre complementa o

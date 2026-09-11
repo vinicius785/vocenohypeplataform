@@ -18,10 +18,29 @@ import {
   type CashFlowPoint,
 } from "@/lib/financeiro-entries";
 import { useSaldoInicial } from "@/lib/financeiro-saldo-inicial-store";
-import { ChartCard, ChartEmptyState, abbreviateBRL } from "./financeiro-charts-shared";
+import { ChartCard, ChartEmptyState } from "./financeiro-charts-shared";
 import type { useFinanceiroFilteredEntries } from "./useFinanceiroFilteredEntries";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 type Filtered = ReturnType<typeof useFinanceiroFilteredEntries>;
+
+/** Correção cirúrgica do eixo Y — formato mais compacto que
+ * `abbreviateBRL` (sem "R$" e sem espaço antes do sufixo), só pra caber
+ * numa linha só dentro da largura reservada do `YAxis`. Local a este
+ * gráfico só (não mexe em `abbreviateBRL`, usado só aqui mesmo, pra não
+ * arriscar nenhum outro consumidor). O tooltip continua usando `fmtBRL`
+ * (valor completo), esta função é só pros rótulos do eixo. */
+function axisTickBRL(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) {
+    return `${sign}${(abs / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}mi`;
+  }
+  if (abs >= 1_000) {
+    return `${sign}${(abs / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}mil`;
+  }
+  return `${sign}${abs.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
+}
 type ViewMode = "diario" | "acumulado";
 type FlowHorizon = "7dias" | "30dias" | "90dias" | "mes_atual";
 
@@ -71,8 +90,8 @@ function DiarioTooltip({ active, payload }: TooltipProps<number, string>) {
   const saldoDia =
     row.receitaRealizada + row.receitaProjetada - (row.despesaRealizada + row.despesaProjetada);
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-      <p className="mb-1 font-semibold text-foreground">{row.label}</p>
+    <div className="rounded-xl border border-border bg-popover px-4 py-3 text-xs shadow-lg">
+      <p className="mb-1.5 text-[13px] font-semibold text-foreground">{row.label}</p>
       {row.receitaRealizada > 0 && (
         <p className="text-muted-foreground">
           Entradas realizadas{" "}
@@ -97,7 +116,7 @@ function DiarioTooltip({ active, payload }: TooltipProps<number, string>) {
           <span className="font-medium text-foreground">{fmtBRL(row.despesaProjetada)}</span>
         </p>
       )}
-      <p className={saldoDia >= 0 ? "text-emerald-600" : "text-rose-600"}>
+      <p className={saldoDia >= 0 ? "text-success" : "text-danger"}>
         Saldo do dia {saldoDia >= 0 ? "+" : ""}
         {fmtBRL(saldoDia)}
       </p>
@@ -118,11 +137,9 @@ function AcumuladoTooltip({ active, payload }: TooltipProps<number, string>) {
   const row = payload[0].payload as AcumuladoPoint;
   const saldo = row.saldoRealizado ?? row.saldoProjetado ?? 0;
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-      <p className="mb-1 font-semibold text-foreground">{row.label}</p>
-      <p className={saldo >= 0 ? "text-emerald-600" : "text-rose-600"}>
-        Saldo acumulado {fmtBRL(saldo)}
-      </p>
+    <div className="rounded-xl border border-border bg-popover px-4 py-3 text-xs shadow-lg">
+      <p className="mb-1.5 text-[13px] font-semibold text-foreground">{row.label}</p>
+      <p className={saldo >= 0 ? "text-success" : "text-danger"}>Saldo acumulado {fmtBRL(saldo)}</p>
       <p className="text-muted-foreground">
         {row.natureza === "realizado" ? "Realizado" : "Projetado"}
       </p>
@@ -205,28 +222,23 @@ export function FluxoCaixaChart({ filtered }: { filtered: Filtered }) {
   return (
     <ChartCard
       title="Projeção de fluxo de caixa"
+      description="Realizado (linha sólida) e projetado (linha tracejada), sempre pra frente — não segue o período selecionado no topo."
       action={
         <div className="flex flex-wrap items-center gap-1.5">
-          <div className="inline-flex rounded-md border border-border bg-background p-0.5 text-[11px]">
-            {(["diario", "acumulado"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setViewMode(m)}
-                className={`cursor-pointer rounded px-2 py-0.5 font-medium ${
-                  viewMode === m
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {m === "diario" ? "Fluxo diário" : "Saldo acumulado"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            aria-label="Modo de visualização do fluxo de caixa"
+            size="sm"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: "diario", label: "Fluxo diário" },
+              { value: "acumulado", label: "Saldo acumulado" },
+            ]}
+          />
           <select
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as FlowHorizon)}
-            className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus:ring-2 focus:ring-ring"
+            className="h-7 cursor-pointer rounded-md border border-border bg-background px-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
             {HORIZON_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -242,127 +254,138 @@ export function FluxoCaixaChart({ filtered }: { filtered: Filtered }) {
       ) : !hasData ? (
         <ChartEmptyState message="Sem movimentações neste horizonte." />
       ) : (
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            {viewMode === "diario" ? (
-              <LineChart data={diarioPoints} margin={{ left: 0, right: 8, top: 4 }}>
-                <CartesianGrid vertical={false} strokeOpacity={0.1} stroke="var(--border)" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={(v: number) => abbreviateBRL(v)}
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={56}
-                />
-                <Tooltip content={<DiarioTooltip />} cursor={{ stroke: "var(--border)" }} />
-                <ReferenceLine y={0} stroke="var(--border)" />
-                <Line
-                  type="linear"
-                  dataKey="receitaRealizada"
-                  name="Entradas realizadas"
-                  stroke="var(--chart-2)"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="linear"
-                  dataKey="receitaProjetada"
-                  name="Entradas projetadas"
-                  stroke="var(--chart-2)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="linear"
-                  dataKey="despesaRealizada"
-                  name="Saídas realizadas"
-                  stroke="var(--chart-5)"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="linear"
-                  dataKey="despesaProjetada"
-                  name="Saídas projetadas"
-                  stroke="var(--chart-5)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            ) : (
-              <LineChart data={acumuladoPoints} margin={{ left: 0, right: 8, top: 4 }}>
-                <CartesianGrid vertical={false} strokeOpacity={0.1} stroke="var(--border)" />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tickFormatter={(v: number) => abbreviateBRL(v)}
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={56}
-                />
-                <Tooltip content={<AcumuladoTooltip />} cursor={{ stroke: "var(--border)" }} />
-                <ReferenceLine y={0} stroke="var(--rose-500, #f43f5e)" strokeDasharray="3 3" />
-                <Line
-                  type="linear"
-                  dataKey="saldoRealizado"
-                  name="Saldo realizado"
-                  stroke="var(--foreground)"
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="linear"
-                  dataKey="saldoProjetado"
-                  name="Saldo projetado"
-                  stroke="var(--foreground)"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            )}
-          </ResponsiveContainer>
-          <div className="mt-1.5 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
+        // Correção cirúrgica: `lg:h-auto lg:flex-1 lg:min-h-0` deixa a área
+        // de plotagem crescer pra preencher a altura que o `ChartCard` (com
+        // `h-full`) recebeu da célula do grid esticada — sem isso, sobrava
+        // vazio abaixo do gráfico quando a coluna direita (Vencidos + A
+        // receber/pagar) era mais alta que o card do gráfico. Abaixo de
+        // `lg` (bento vira 1 coluna) mantém a altura fixa de sempre
+        // (280-320px, legível em mobile/tablet).
+        <div className="flex h-72 flex-col md:h-80 lg:h-auto lg:flex-1 lg:min-h-0">
+          <div className="min-h-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%">
+              {viewMode === "diario" ? (
+                <LineChart data={diarioPoints} margin={{ left: 4, right: 8, top: 12 }}>
+                  <CartesianGrid vertical={false} strokeOpacity={0.15} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v: number) => axisTickBRL(v)}
+                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={64}
+                    tickMargin={8}
+                  />
+                  <Tooltip content={<DiarioTooltip />} cursor={{ stroke: "var(--border)" }} />
+                  <ReferenceLine y={0} stroke="var(--border)" />
+                  <Line
+                    type="linear"
+                    dataKey="receitaRealizada"
+                    name="Entradas realizadas"
+                    stroke="var(--success)"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="receitaProjetada"
+                    name="Entradas projetadas"
+                    stroke="var(--success)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="despesaRealizada"
+                    name="Saídas realizadas"
+                    stroke="var(--danger)"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="despesaProjetada"
+                    name="Saídas projetadas"
+                    stroke="var(--danger)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              ) : (
+                <LineChart data={acumuladoPoints} margin={{ left: 4, right: 8, top: 12 }}>
+                  <CartesianGrid vertical={false} strokeOpacity={0.15} stroke="var(--border)" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(v: number) => axisTickBRL(v)}
+                    tick={{ fontSize: 11, fill: "var(--text-secondary)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={64}
+                    tickMargin={8}
+                  />
+                  <Tooltip content={<AcumuladoTooltip />} cursor={{ stroke: "var(--border)" }} />
+                  <ReferenceLine y={0} stroke="var(--danger)" strokeDasharray="3 3" />
+                  <Line
+                    type="linear"
+                    dataKey="saldoRealizado"
+                    name="Saldo realizado"
+                    stroke="var(--brand)"
+                    strokeWidth={2.5}
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="saldoProjetado"
+                    name="Saldo projetado"
+                    stroke="var(--brand)"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-3 shrink-0 flex flex-wrap items-center gap-4 text-[11px] text-text-secondary">
             {viewMode === "diario" ? (
               <>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-0.5 w-4" style={{ background: "var(--chart-2)" }} />
+                  <span className="h-0.5 w-4" style={{ background: "var(--success)" }} />
                   Realizado
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span
                     className="h-0.5 w-4 border-t border-dashed"
-                    style={{ borderColor: "var(--chart-2)" }}
+                    style={{ borderColor: "var(--success)" }}
                   />
                   Projetado
                 </span>
                 <span className="ml-2 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-2)" }} />
+                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--success)" }} />
                   Entradas
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--chart-5)" }} />
+                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--danger)" }} />
                   Saídas
                 </span>
               </>
