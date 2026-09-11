@@ -30,7 +30,6 @@ export function WeatherHeaderEffect({
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const dark = document.documentElement.classList.contains("dark");
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     const mode = condition === "snow" ? "snow" : "rain";
     const densityFactor =
@@ -46,22 +45,24 @@ export function WeatherHeaderEffect({
                 ? 0.5
                 : 0;
 
-    type Particle = { x: number; y: number; len: number; speed: number; opacity: number };
+    // "opacityFactor" (não um valor final já pronto) porque o tema pode
+    // trocar com a tela aberta (item 10: "a troca de tema não deve
+    // reiniciar animações") — o brilho-base é recalculado A CADA FRAME a
+    // partir do tema atual, sem regenerar as partículas.
+    type Particle = { x: number; y: number; len: number; speed: number; opacityFactor: number };
     let particles: Particle[] = [];
     let width = 0;
     let height = 0;
     let raf = 0;
     let paused = document.hidden;
 
-    const baseOpacity = dark ? 0.09 : 0.05;
-
     const makeParticle = (): Particle => ({
       x: Math.random() * width,
       y: Math.random() * height,
-      len: mode === "snow" ? 2.5 + Math.random() * 2 : 8 + Math.random() * 10,
+      len: mode === "snow" ? 2.5 + Math.random() * 2 : 10 + Math.random() * 12,
       speed:
         mode === "snow" ? 14 + Math.random() * 12 : (60 + Math.random() * 50) * densityFactor + 30,
-      opacity: baseOpacity * (0.5 + Math.random() * 0.7),
+      opacityFactor: 0.6 + Math.random() * 0.7,
     });
 
     const resize = () => {
@@ -85,9 +86,17 @@ export function WeatherHeaderEffect({
       }
       const dt = Math.min(0.05, (t - lastT) / 1000);
       lastT = t;
+      // Lido a cada frame (não capturado uma vez no início do efeito) —
+      // reagir na hora a uma troca de tema sem reiniciar a animação.
+      const dark = document.documentElement.classList.contains("dark");
+      // Mais visível no claro que no escuro: um traço translúcido soma
+      // pouco contra um fundo quase branco, então precisa de bem mais
+      // opacidade pra ficar igualmente perceptível (item do pedido:
+      // "precisam ser vistos no modo claro também").
+      const baseOpacity = dark ? 0.22 : 0.4;
       ctx.clearRect(0, 0, width, height);
-      ctx.strokeStyle = dark ? "rgba(200, 210, 225, 1)" : "rgba(90, 100, 120, 1)";
-      ctx.fillStyle = dark ? "rgba(220, 228, 240, 1)" : "rgba(110, 120, 140, 1)";
+      ctx.strokeStyle = dark ? "rgba(215, 224, 238, 1)" : "rgba(51, 65, 96, 1)";
+      ctx.fillStyle = dark ? "rgba(225, 232, 244, 1)" : "rgba(51, 65, 96, 1)";
       ctx.lineCap = "round";
       for (const p of particles) {
         p.y += p.speed * dt;
@@ -95,13 +104,13 @@ export function WeatherHeaderEffect({
           p.y = -p.len;
           p.x = Math.random() * width;
         }
-        ctx.globalAlpha = p.opacity;
+        ctx.globalAlpha = Math.min(1, baseOpacity * p.opacityFactor);
         if (mode === "snow") {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.len, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(p.x - p.len * 0.1, p.y + p.len);
