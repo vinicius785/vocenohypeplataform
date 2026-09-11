@@ -14,6 +14,16 @@ import {
   Star,
   Trash2,
   X,
+  Sun,
+  Moon,
+  Cloud,
+  CloudSun,
+  CloudMoon,
+  CloudFog,
+  CloudDrizzle,
+  CloudRain,
+  CloudLightning,
+  Snowflake,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, type BlogPost } from "@/lib/projetos";
 import { renderMarkdownLite, ArticleReader } from "@/components/marketing/BlogPanel";
@@ -66,6 +76,7 @@ import { useWeather } from "@/hooks/use-weather";
 import type { WeatherSnapshot } from "@/lib/weather-cache";
 import { WeatherHeaderEffect } from "@/components/inicio/WeatherHeaderEffect";
 import { WEATHER_CONDITION_LABEL_PT } from "@/lib/weather-condition";
+import { currentHourInBrasilia } from "@/lib/timezone";
 
 type PersonalItem = { id: string; text: string; done: boolean };
 
@@ -84,17 +95,70 @@ function toISODate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-/** Linha discreta de clima da saudação (item 7 do pedido) —
- * "22 °C · Chuva leve". Temperatura sempre arredondada; condição
- * "unknown" nunca aparece como texto (nem código, nem "undefined") —
- * nesse caso a linha só mostra a temperatura. A localização (Itaim
- * Bibi) continua fixa como fonte real do clima (`weather-location.ts`),
- * só não aparece mais escrita na saudação — pedido explícito do
- * usuário. */
-function formatWeatherLine(weather: WeatherSnapshot): string {
-  const temp = `${Math.round(weather.temperatureC)} °C`;
+/** Estimativa de dia/noite pelo fuso `America/Sao_Paulo` (item 1: "usar
+ * o fuso America/Sao_Paulo") — só usada como fallback pro fundo
+ * atmosférico ANTES do primeiro clima carregar ou se o provedor estiver
+ * fora do ar (`weather` ainda `null`); assim que a consulta real resolve,
+ * `weather.isDay` (vindo do provedor, calculado pra Itaim Bibi) assume.
+ * Nunca exibida — só decide entre o tratamento visual de dia ou de
+ * noite do fundo. */
+function isDayNowInSaoPaulo(): boolean {
+  const hour = currentHourInBrasilia();
+  return hour >= 6 && hour < 18;
+}
+
+/** Descrição acessível do bloco de clima — "Tempo nublado, 24 graus".
+ * Nunca inclui localização (a localização fixa do serviço,
+ * `weather-location.ts`, é só configuração interna da consulta, nunca
+ * aparece pra quem usa a plataforma nem por texto nem por leitor de
+ * tela). Condição "unknown" some da frase em vez de virar texto técnico
+ * ou "undefined". */
+function formatWeatherAccessibleLabel(weather: WeatherSnapshot): string {
   const label = WEATHER_CONDITION_LABEL_PT[weather.condition];
-  return [temp, label].filter(Boolean).join(" · ");
+  const temp = `${Math.round(weather.temperatureC)} graus`;
+  return label ? `Tempo ${label.toLowerCase()}, ${temp}` : temp;
+}
+
+/** Ícone decorativo do clima — só depende de `condition`/`isDay`, os
+ * únicos dois dados que a interface conhece sobre o clima. */
+function WeatherIcon({
+  condition,
+  isDay,
+  className,
+}: {
+  condition: WeatherSnapshot["condition"];
+  isDay: boolean;
+  className?: string;
+}) {
+  switch (condition) {
+    case "clear":
+      return isDay ? (
+        <Sun className={className} aria-hidden="true" />
+      ) : (
+        <Moon className={className} aria-hidden="true" />
+      );
+    case "partly-cloudy":
+      return isDay ? (
+        <CloudSun className={className} aria-hidden="true" />
+      ) : (
+        <CloudMoon className={className} aria-hidden="true" />
+      );
+    case "cloudy":
+      return <Cloud className={className} aria-hidden="true" />;
+    case "fog":
+      return <CloudFog className={className} aria-hidden="true" />;
+    case "drizzle":
+      return <CloudDrizzle className={className} aria-hidden="true" />;
+    case "rain":
+    case "heavy-rain":
+      return <CloudRain className={className} aria-hidden="true" />;
+    case "thunderstorm":
+      return <CloudLightning className={className} aria-hidden="true" />;
+    case "snow":
+      return <Snowflake className={className} aria-hidden="true" />;
+    default:
+      return <Cloud className={className} aria-hidden="true" />;
+  }
 }
 
 function loadPerfil(): { nome?: string; foto?: string } {
@@ -563,119 +627,160 @@ export function InicioDashboard() {
 
   return (
     <PageContainer className="space-y-10">
-      {/* Header — ambiente climático (item 2 do pedido) fica restrito a
-       * este cabeçalho: camada própria atrás do conteúdo, nunca no resto
-       * da Home. `overflow-hidden` garante que nenhuma gota/névoa escape
-       * pros cards abaixo; a altura mínima por breakpoint evita virar um
-       * "hero" gigante. */}
-      <header className="relative overflow-hidden rounded-2xl min-h-0 sm:min-h-[170px] md:min-h-[200px]">
-        {weatherEnabled && weather && (
-          <WeatherHeaderEffect condition={weather.condition} isDay={weather.isDay} />
-        )}
-        {/* Esmaece o efeito antes da primeira seção operacional (item 2:
-         * "o efeito deve desaparecer gradualmente antes da primeira
-         * seção operacional"). */}
-        {weatherEnabled && weather && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-b from-transparent to-background" />
+      {/* Header — bloco único: saudação+clima em cima, indicadores
+       * embutidos embaixo (item 2/3 do pedido). O ambiente climático
+       * (`WeatherHeaderEffect`) fica restrito a este cabeçalho, nunca no
+       * resto da Home, e nunca expõe a localização real da consulta
+       * (Itaim Bibi é só configuração interna do serviço, item 1) — a
+       * interface só conhece `condition`/`isDay`. `overflow-hidden`
+       * garante que nenhuma gota/névoa escape pra fora do cabeçalho. */}
+      <header className="relative overflow-hidden rounded-2xl">
+        {/* Fundo sempre válido pra qualquer clima (item 4) — renderizado
+         * sempre que a preferência está ligada, mesmo antes do primeiro
+         * clima carregar ou se a consulta falhar (`weather` ainda
+         * `null`): nesses casos usa "unknown" + um dia/noite estimado
+         * pelo fuso America/Sao_Paulo só pra decidir o tom do fundo,
+         * nunca exibido. Assim que o clima real chega, ele assume. */}
+        {weatherEnabled && (
+          <WeatherHeaderEffect
+            condition={weather?.condition ?? "unknown"}
+            isDay={weather?.isDay ?? isDayNowInSaoPaulo()}
+          />
         )}
 
-        <div className="relative z-10 flex h-full flex-wrap items-center justify-between gap-4 p-5 md:p-7">
-          <div className="flex items-center gap-3.5">
-            {foto ? (
-              <img
-                src={foto}
-                alt=""
-                className="h-12 w-12 rounded-full object-cover md:h-14 md:w-14"
-              />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background md:h-14 md:w-14">
-                {name.slice(0, 1).toUpperCase()}
-              </div>
-            )}
-            <div>
-              <p className="text-2xl font-semibold tracking-tight text-foreground">
-                {greeting}, {name}
-              </p>
-              <p className="text-sm text-muted-foreground">{today}</p>
-              {weatherEnabled && weather && (
-                <p className="mt-0.5 text-xs text-muted-foreground/80">
-                  {formatWeatherLine(weather)}
-                </p>
+        <div className="relative z-10 flex flex-col">
+          <div className="flex flex-1 flex-wrap items-center justify-between gap-4 p-5 sm:min-h-[150px] md:min-h-[170px] md:p-7">
+            {/* Esquerda: foto + saudação + data (item 2) */}
+            <div className="flex items-center gap-4">
+              {foto ? (
+                <img
+                  src={foto}
+                  alt=""
+                  className="h-14 w-14 rounded-full object-cover md:h-16 md:w-16"
+                />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-xl font-semibold text-background md:h-16 md:w-16">
+                  {name.slice(0, 1).toUpperCase()}
+                </div>
               )}
+              <div>
+                <p className="text-2xl font-semibold tracking-tight text-foreground md:text-[26px]">
+                  {greeting}, {name}
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{today}</p>
+              </div>
+            </div>
+
+            {/* Direita: só ícone + temperatura + condição + ação (item
+             * 2) — nunca uma terceira linha com bairro/cidade (item 1).
+             * Some inteiro (sem placeholder, sem espaço reservado) se o
+             * clima não estiver disponível — a altura do cabeçalho não
+             * depende dele (item 5). */}
+            <div className="flex items-center gap-4">
+              {weatherEnabled && weather && (
+                <div
+                  className="flex items-center gap-2.5"
+                  aria-label={formatWeatherAccessibleLabel(weather)}
+                >
+                  <WeatherIcon
+                    condition={weather.condition}
+                    isDay={weather.isDay}
+                    className="h-7 w-7 shrink-0 text-muted-foreground/70"
+                  />
+                  <div className="text-right leading-tight">
+                    <p className="text-4xl font-semibold tracking-tight text-foreground">
+                      {Math.round(weather.temperatureC)}°
+                    </p>
+                    {WEATHER_CONDITION_LABEL_PT[weather.condition] && (
+                      <p className="text-sm text-muted-foreground">
+                        {WEATHER_CONDITION_LABEL_PT[weather.condition]}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setManageOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Gerenciar cards
+                </button>
+                {manageOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
+                      <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Cards da tela inicial
+                      </p>
+                      {CARD_DEFS.map((c) => (
+                        <label
+                          key={c.key}
+                          className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
+                        >
+                          <span>{c.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={visible[c.key]}
+                            onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
+                            className="h-3.5 w-3.5 accent-brand"
+                          />
+                        </label>
+                      ))}
+                      <div className="my-1.5 border-t border-border" />
+                      <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted">
+                        <span>Ambiente climático no cabeçalho</span>
+                        <input
+                          type="checkbox"
+                          checked={weatherEnabled}
+                          onChange={() => setWeatherEnabled((v) => !v)}
+                          className="h-3.5 w-3.5 accent-brand"
+                          aria-label="Ativar ou desativar o ambiente climático no cabeçalho"
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          <div className="relative flex items-center gap-3">
-            <button
-              onClick={() => setManageOpen((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Gerenciar cards
-            </button>
-            {manageOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
-                <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
-                  <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Cards da tela inicial
-                  </p>
-                  {CARD_DEFS.map((c) => (
-                    <label
-                      key={c.key}
-                      className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
-                    >
-                      <span>{c.label}</span>
-                      <input
-                        type="checkbox"
-                        checked={visible[c.key]}
-                        onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
-                        className="h-3.5 w-3.5 accent-brand"
-                      />
-                    </label>
-                  ))}
-                  <div className="my-1.5 border-t border-border" />
-                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted">
-                    <span>Ambiente climático no cabeçalho</span>
-                    <input
-                      type="checkbox"
-                      checked={weatherEnabled}
-                      onChange={() => setWeatherEnabled((v) => !v)}
-                      className="h-3.5 w-3.5 accent-brand"
-                      aria-label="Ativar ou desativar o ambiente climático no cabeçalho"
-                    />
-                  </label>
-                </div>
-              </>
-            )}
-          </div>
+
+          {/* Indicadores embutidos no cabeçalho (item 3) — faixa
+           * segmentada de largura total no desktop, grade 2×2 no
+           * mobile; divisores discretos entre células, nunca quatro
+           * cards isolados. Superfície sólida (não a camada
+           * atmosférica) pra continuar legível em qualquer clima. */}
+          {visible.stats && (
+            <div className="relative z-10 grid grid-cols-2 divide-x divide-y divide-border/60 border-t border-border/60 bg-background/90 md:grid-cols-4 md:divide-y-0">
+              <HeaderIndicatorCell
+                label="Hoje"
+                value={hoje}
+                active={filter === "hoje"}
+                onClick={() => goToWork("hoje")}
+              />
+              <HeaderIndicatorCell
+                label="Amanhã"
+                value={amanha}
+                onClick={() => goToWork("semana")}
+              />
+              <HeaderIndicatorCell
+                label="Próximos 7 dias"
+                value={proximos7Dias}
+                active={filter === "semana"}
+                onClick={() => goToWork("semana")}
+              />
+              <HeaderIndicatorCell
+                label="Atrasadas"
+                value={atrasadas}
+                tone="danger"
+                active={filter === "atrasada"}
+                onClick={() => goToWork("atrasada")}
+              />
+            </div>
+          )}
         </div>
       </header>
-
-      {/* Stat strip */}
-      {visible.stats && (
-        <div className="-mt-4 flex gap-x-2 overflow-x-auto pb-1 sm:gap-x-3">
-          <StatChip
-            label="Hoje"
-            value={hoje}
-            active={filter === "hoje"}
-            onClick={() => goToWork("hoje")}
-          />
-          <StatChip label="Amanhã" value={amanha} onClick={() => goToWork("semana")} />
-          <StatChip
-            label="Próximos 7 dias"
-            value={proximos7Dias}
-            active={filter === "semana"}
-            onClick={() => goToWork("semana")}
-          />
-          <StatChip
-            label="Atrasadas"
-            value={atrasadas}
-            tone="danger"
-            active={filter === "atrasada"}
-            onClick={() => goToWork("atrasada")}
-          />
-        </div>
-      )}
 
       {/* Linha operacional principal */}
       {(visible.work || visible.agenda) && (
@@ -1112,7 +1217,11 @@ function Tab({
   );
 }
 
-function StatChip({
+/** Célula de indicador embutida no cabeçalho (item 3 do pedido) — faixa
+ * segmentada única, sem borda/raio próprios (os divisores vêm do
+ * `divide-x`/`divide-y` do contêiner pai); vermelho só quando `tone`
+ * é "danger" E há tarefas de verdade (nunca decorativo). */
+function HeaderIndicatorCell({
   label,
   value,
   tone = "default",
@@ -1130,10 +1239,8 @@ function StatChip({
     <button
       type="button"
       onClick={onClick}
-      className={`flex shrink-0 flex-col items-start gap-0.5 rounded-lg border px-3.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        active
-          ? "border-brand/40 bg-brand-subtle"
-          : "border-border bg-background hover:border-foreground/20 hover:bg-muted/40"
+      className={`flex flex-col items-center justify-center gap-0.5 px-3 py-3 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset ${
+        active ? "bg-brand/10" : "hover:bg-muted/50"
       }`}
     >
       <span

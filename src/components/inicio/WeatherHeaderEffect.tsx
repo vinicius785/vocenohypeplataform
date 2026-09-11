@@ -1,16 +1,25 @@
 import { useEffect, useRef } from "react";
 import type { WeatherCondition } from "@/lib/weather-condition";
 
-/** Camada atmosférica do cabeçalho da Home (item 8 do pedido) —
- * implementação PRÓPRIA, independente do motor de chuva do Modo Foco
+/** Camada atmosférica do cabeçalho da Home — implementação PRÓPRIA,
+ * independente do motor de chuva do Modo Foco
  * (`src/components/focus/RainOverlay.tsx`): mesma convenção geral
  * (Canvas, `pointer-events-none`, DPR limitado, pausa em aba oculta,
  * respeita `prefers-reduced-motion`), mas densidade/área/intensidade
- * próprias e restritas ao próprio cabeçalho — nunca importado/reusado
- * literalmente, como o pedido pediu explicitamente.
+ * próprias e restritas ao próprio cabeçalho.
  *
  * Sempre atrás do conteúdo (`absolute inset-0`, z abaixo do texto), sem
- * nenhum áudio, sem relâmpagos/flashes mesmo em tempestade. */
+ * nenhum áudio, sem relâmpagos/flashes mesmo em tempestade. Nunca
+ * recebe nem exibe localização — só `condition`/`isDay`, os únicos dois
+ * dados que a interface tem permissão de conhecer sobre o clima (a
+ * localização fixa vive só em `weather-location.ts`, usada apenas pelo
+ * serviço que busca o dado).
+ *
+ * Sempre tem uma composição válida, mesmo em "unknown" (ainda sem
+ * clima carregado, ou provedor fora do ar) — uma base neutra cobre o
+ * cabeçalho inteiro, e o tratamento específico de cada condição fica
+ * concentrado numa faixa do lado direito, preservando uma área limpa
+ * atrás da saudação (a saudação fica na metade esquerda do cabeçalho). */
 export function WeatherHeaderEffect({
   condition,
   isDay,
@@ -71,7 +80,7 @@ export function WeatherHeaderEffect({
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      // Menos partículas em telas estreitas (mobile) — item 8/13.
+      // Menos partículas em telas estreitas (mobile).
       const widthFactor = Math.min(1, width / 900);
       const count = Math.round(Math.max(6, (width / 40) * densityFactor * widthFactor));
       particles = Array.from({ length: count }, makeParticle);
@@ -91,8 +100,7 @@ export function WeatherHeaderEffect({
       const dark = document.documentElement.classList.contains("dark");
       // Mais visível no claro que no escuro: um traço translúcido soma
       // pouco contra um fundo quase branco, então precisa de bem mais
-      // opacidade pra ficar igualmente perceptível (item do pedido:
-      // "precisam ser vistos no modo claro também").
+      // opacidade pra ficar igualmente perceptível.
       const baseOpacity = dark ? 0.22 : 0.4;
       ctx.clearRect(0, 0, width, height);
       ctx.strokeStyle = dark ? "rgba(215, 224, 238, 1)" : "rgba(51, 65, 96, 1)";
@@ -138,8 +146,21 @@ export function WeatherHeaderEffect({
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <AtmosphereTint condition={condition} isDay={isDay} />
-      {precipitation && <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />}
+      {/* Base sempre presente, cabeçalho inteiro — nunca deixa a tela
+       * parecer um retângulo vazio/quebrado, nem em "unknown" nem antes
+       * do primeiro clima carregar. Deliberadamente quase imperceptível
+       * (a composição de verdade fica na faixa da direita, abaixo). */}
+      <div
+        className={`absolute inset-0 ${isDay ? "bg-foreground/[0.012]" : "bg-foreground/[0.03]"}`}
+      />
+
+      {/* Faixa de efeitos — só do lado direito/bordas, preservando uma
+       * região limpa atrás da saudação (que ocupa a metade esquerda do
+       * cabeçalho). */}
+      <div className="absolute inset-y-0 right-0 w-[64%] sm:w-[58%] md:w-[52%]">
+        <AtmosphereTint condition={condition} isDay={isDay} />
+        {precipitation && <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />}
+      </div>
     </div>
   );
 }
@@ -150,22 +171,51 @@ function isPrecipitation(c: WeatherCondition): boolean {
   );
 }
 
+/** Posições fixas (não `Math.random()` a cada render, senão as
+ * "estrelas" pulariam de lugar a cada atualização de estado) das poucos
+ * pontos discretos da noite de céu limpo. */
+const NIGHT_DOTS = [
+  { top: "18%", left: "12%", size: 2 },
+  { top: "30%", left: "38%", size: 1.5 },
+  { top: "14%", left: "58%", size: 1.5 },
+  { top: "44%", left: "22%", size: 1.5 },
+  { top: "24%", left: "78%", size: 2 },
+  { top: "52%", left: "64%", size: 1.5 },
+  { top: "62%", left: "40%", size: 1.5 },
+];
+
 /** Fundo/nuvens/neblina — tudo CSS (sem canvas, sem centenas de nós),
- * movimento lento e opcional via `motion-reduce:animate-none` (item 9).
- * Cores só dos tokens do design system (`bg-foreground`/`bg-muted`),
- * nunca ilustração literal de nuvem. */
+ * movimento lento e opcional via `motion-reduce:animate-none`. Cores só
+ * dos tokens do design system (`bg-foreground`), nunca ilustração
+ * literal de nuvem. Escopada à faixa direita definida pelo componente
+ * pai — todo `absolute` aqui é relativo a essa faixa, não ao cabeçalho
+ * inteiro. */
 function AtmosphereTint({ condition, isDay }: { condition: WeatherCondition; isDay: boolean }) {
+  // "unknown" não precisa de tratamento próprio — a base neutra do
+  // componente pai (sempre presente) já cobre esse caso.
   if (condition === "unknown") return null;
 
   if (condition === "clear") {
+    if (!isDay) {
+      // Céu limpo à noite: fundo mais profundo + poucos pontos
+      // discretos, estáticos (não depende de movimento pra comunicar
+      // nada).
+      return (
+        <>
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-foreground/[0.09] via-transparent to-transparent" />
+          {NIGHT_DOTS.map((d, i) => (
+            <span
+              key={i}
+              className="absolute rounded-full bg-foreground/25"
+              style={{ top: d.top, left: d.left, width: d.size, height: d.size }}
+            />
+          ))}
+        </>
+      );
+    }
+    // Céu limpo de dia: luminosidade neutra e suave.
     return (
-      <div
-        className={`absolute inset-0 ${
-          isDay
-            ? "bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-foreground/[0.03] via-transparent to-transparent"
-            : "bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-foreground/[0.06] via-transparent to-transparent"
-        }`}
-      />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-foreground/[0.045] via-transparent to-transparent" />
     );
   }
 
@@ -174,15 +224,21 @@ function AtmosphereTint({ condition, isDay }: { condition: WeatherCondition; isD
     // necessário pro scanner do Tailwind conseguir gerar as classes de
     // opacidade arbitrária em build; um template string com a
     // intensidade interpolada dentro do valor nunca seria reconhecido.
-    const blobClass = condition === "cloudy" ? "bg-foreground/[0.05]" : "bg-foreground/[0.035]";
+    const blobClass = condition === "cloudy" ? "bg-foreground/[0.06]" : "bg-foreground/[0.04]";
     return (
       <>
         <div
-          className={`absolute -left-1/4 top-[-30%] h-[140%] w-3/4 rounded-full blur-3xl motion-reduce:animate-none animate-[weather-drift_60s_linear_infinite] ${blobClass}`}
+          className={`absolute -top-[20%] left-[5%] h-[120%] w-2/3 rounded-full blur-3xl motion-reduce:animate-none animate-[weather-drift_60s_linear_infinite] ${blobClass}`}
         />
         <div
-          className={`absolute -right-1/4 top-[-20%] h-[130%] w-3/4 rounded-full blur-3xl motion-reduce:animate-none animate-[weather-drift-reverse_75s_linear_infinite] ${blobClass}`}
+          className={`absolute -top-[10%] right-[-10%] h-[110%] w-2/3 rounded-full blur-3xl motion-reduce:animate-none animate-[weather-drift-reverse_75s_linear_infinite] ${blobClass}`}
         />
+        {/* Áreas limpas entre os volumes (item 4: "volumes suaves com
+         * áreas limpas") — só no parcialmente nublado, pra distingui-lo
+         * visualmente do nublado fechado. */}
+        {condition === "partly-cloudy" && (
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-transparent via-transparent to-foreground/[0.02]" />
+        )}
       </>
     );
   }
@@ -190,14 +246,14 @@ function AtmosphereTint({ condition, isDay }: { condition: WeatherCondition; isD
   if (condition === "fog") {
     return (
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-y-0 -left-1/3 w-2/3 bg-gradient-to-r from-transparent via-foreground/[0.05] to-transparent motion-reduce:animate-none animate-[weather-drift_40s_linear_infinite]" />
+        <div className="absolute inset-y-0 -left-1/3 w-2/3 bg-gradient-to-r from-transparent via-foreground/[0.07] to-transparent motion-reduce:animate-none animate-[weather-drift_40s_linear_infinite]" />
+        <div className="absolute inset-y-0 -right-1/3 w-2/3 bg-gradient-to-l from-transparent via-foreground/[0.05] to-transparent motion-reduce:animate-none animate-[weather-drift-reverse_50s_linear_infinite]" />
       </div>
     );
   }
 
   // Precipitação (garoa/chuva/chuva forte/tempestade/neve): mantém só um
   // tom neutro por trás das gotas/flocos desenhados no canvas, sem
-  // escurecer nem esconder o conteúdo (item 5: "não escurecer nem
-  // esconder o conteúdo").
-  return <div className="absolute inset-0 bg-foreground/[0.02]" />;
+  // escurecer nem esconder o conteúdo.
+  return <div className="absolute inset-0 bg-foreground/[0.025]" />;
 }

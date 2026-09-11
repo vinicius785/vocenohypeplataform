@@ -1,6 +1,7 @@
 {
-  "version": "1.272.0",
+  "version": "1.273.0",
   "notes": [
+    "1.273.0: Adiciona @menção de usuários e opção de excluir comentário nos artigos do Mural de novidades. Deixa o efeito de chuva do cabeçalho do Início mais visível, inclusive no tema claro. Corrige o aviso de chamada encerrada aparecendo duplicado (às vezes até 9x) no chat quando havia mais de uma aba aberta. Reformula o cabeçalho climático do Início: saudação, clima e indicadores (Hoje/Amanhã/Próximos 7 dias/Atrasadas) agora vivem num único bloco visual coeso, com composição válida pra qualquer condição do tempo — a localização usada pra buscar o clima nunca aparece na interface, só internamente.",
     "1.272.0: Adiciona o Modo Foco (Pomodoro imersivo, rota própria /foco, acesso pelo cabeçalho global e pelas tarefas, tarefas reais da plataforma, áudio ambiente gerado por síntese e chuva visual em canvas). Adiciona ambiente climático dinâmico no cabeçalho do Início (clima real de Itaim Bibi via Open-Meteo, cache de 25min, camada visual sutil restrita ao cabeçalho). Repagina o módulo Projetos (cabeçalho azul compacto, Roadmap, Bugs e sugestões). Corrige botões brancos do padrão antigo no Kanban de tarefas (Nova Tarefa, Adicionar subtarefa, Criar/Salvar tarefa) para o azul da marca e links longos cortados nos comentários de tarefa.",
     "1.271.0: Migração visual para o novo design system em toda a plataforma (tokens de tipografia/cor/espaçamento); refatoração do Chat com layouts desktop/mobile distintos; aviso de nova versão atualizado para o novo design system.",
     "Auditoria e correção de responsividade mobile em toda a plataforma (320px a desktop). Corrigida a causa raiz mais séria: o `TabsList` compartilhado (shadcn) era `inline-flex` sem limite de largura — com várias abas (ex.: as 6 do Financeiro) ele crescia além da tela e, como o container principal tem rolagem própria, a página inteira virava arrastável na horizontal. Agora a lista de abas rola só dentro de si mesma quando não cabe, sem afetar o desktop. Corrigido também em Reuniões: o cabeçalho da \"Próxima reunião\" (avatares + status + duração) e os botões de ação do topo vazavam ~65px da tela em 320px por falta de `flex-wrap`. Menu mobile (sidebar) ganhou fechamento por Escape, gerenciamento de foco (entra no primeiro item ao abrir, volta pro botão hambúrguer ao fechar) e bloqueio de interação com o conteúdo atrás (`inert`) — reforça o backdrop que já existia. Kanban de tarefas e Pipeline comercial ganham um modo mobile: em vez da faixa de colunas lado a lado, mostram só a etapa ativa (largura cheia, zero scroll horizontal) com chips no topo pra trocar — arrastar card não funciona em toque (é HTML5 nativo), então fica desativado no mobile; trocar de etapa continua possível pelo campo Status/Etapa já existente dentro do diálogo/drawer. \"+Filtros\" do Financeiro trocado de painel posicionado à mão (sem limite de largura) para o Popover real do design system (colisão com a borda da tela tratada automaticamente). Diversos diálogos e tabelas menores (Financeiro, Configurações, AEO Monitor, Cronômetro) ganharam o mesmo tratamento de tela cheia no mobile e rolagem horizontal contida já usado em outros diálogos grandes do app. Nenhuma regra de negócio, dado ou comportamento no desktop mudou — só a adaptação a telas estreitas.",
@@ -408,6 +409,50 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.273.0",
+      "summary": "Cabeçalho do Início reformulado (clima + indicadores num só bloco); @menção e exclusão de comentário no Mural; corrige spam de chamada encerrada.",
+      "modules": [
+        {
+          "name": "INÍCIO",
+          "tagline": "Cabeçalho unificado: saudação, clima e indicadores",
+          "items": [
+            {
+              "title": "Clima e indicadores no mesmo bloco",
+              "description": "Hoje, Amanhã, Próximos 7 dias e Atrasadas saem da fileira de cards separada e passam a viver dentro do próprio cabeçalho, junto com a saudação e o clima. Composição sempre coerente, para qualquer condição do tempo."
+            },
+            {
+              "title": "Chuva do cabeçalho mais visível",
+              "description": "O efeito visual de chuva ficou mais perceptível, inclusive no tema claro, e reage instantaneamente à troca de tema sem reiniciar a animação."
+            }
+          ]
+        },
+        {
+          "name": "MURAL DE NOVIDADES",
+          "tagline": "Menção de pessoas e exclusão de comentário",
+          "items": [
+            {
+              "title": "@menção nos comentários de artigo",
+              "description": "Digite @ num comentário de artigo interno pra marcar alguém do time, igual já funciona nas tarefas."
+            },
+            {
+              "title": "Excluir comentário",
+              "description": "Comentários de artigo agora podem ser excluídos."
+            }
+          ]
+        },
+        {
+          "name": "CHAT",
+          "tagline": "Correção de mensagem duplicada",
+          "items": [
+            {
+              "title": "Aviso de chamada encerrada não duplica mais",
+              "description": "Com mais de uma aba aberta, o encerramento de uma chamada podia gerar várias mensagens idênticas de \"Chamada encerrada\" no chat. Agora só uma é enviada."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.272.0",
       "summary": "Novo Modo Foco (Pomodoro) e clima ao vivo no cabeçalho do Início; Projetos com novo visual.",
