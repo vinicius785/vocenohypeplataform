@@ -1243,6 +1243,14 @@ function finish(explicitReason?: CallEndReason) {
         connectedAt: previous.connectedAt,
         endedAt,
         seconds,
+        // Cada lado da chamada (e cada aba aberta do mesmo usuário, já
+        // que o sinal é broadcast por `userId`, não por aba — ver
+        // `handle()`) roda seu próprio `finish()` e dispara seu próprio
+        // "call:ended" local. Sem isso, o card de "Chamada encerrada" no
+        // Chat era postado uma vez por (lado × aba), virando spam. Só
+        // quem iniciou a chamada (`isHost`) registra o card — o outro
+        // lado só usa o evento pra parar de tocar/mostrar overlay.
+        isHost: previous.isHost,
       },
     }),
   );

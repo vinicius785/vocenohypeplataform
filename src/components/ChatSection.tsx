@@ -109,6 +109,38 @@ import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory"
  * avulsas do Marketing). Mesmo shape de sempre, só o nome do tipo mudou. */
 type ChatTaskInfo = TaskDirectoryEntry;
 
+/** "Reivindica" o registro do card de "Chamada encerrada" pra um
+ * `callId` — cobre o caso de o próprio host da chamada ter mais de uma
+ * aba aberta (o sinal de fim de chamada é broadcast por usuário, não por
+ * aba, então cada aba roda seu próprio `finish()`/"call:ended" local).
+ * `localStorage` é compartilhado entre abas da mesma origem, então a
+ * primeira aba a chegar aqui grava a reivindicação e as outras veem que
+ * já foi feita. Não é atômico entre abas (não há trava de verdade), mas
+ * pra um evento raro disparado por interação humana, a janela de corrida
+ * é desprezível — o objetivo é eliminar o spam visto na prática, não
+ * garantir exclusividade perfeita. Poda entradas com mais de 1h pra não
+ * crescer pra sempre. */
+const CALL_ENDED_CLAIM_KEY = "chat:call-ended-claims";
+const CALL_ENDED_CLAIM_TTL_MS = 60 * 60_000;
+function claimCallEndedMessage(callId: string): boolean {
+  try {
+    const raw = localStorage.getItem(CALL_ENDED_CLAIM_KEY);
+    const now = Date.now();
+    const claims: Record<string, number> = raw ? JSON.parse(raw) : {};
+    for (const [id, ts] of Object.entries(claims)) {
+      if (now - ts > CALL_ENDED_CLAIM_TTL_MS) delete claims[id];
+    }
+    if (claims[callId]) return false;
+    claims[callId] = now;
+    localStorage.setItem(CALL_ENDED_CLAIM_KEY, JSON.stringify(claims));
+    return true;
+  } catch {
+    // Sem localStorage (modo privado, quota etc.) — melhor arriscar uma
+    // duplicata rara do que nunca registrar a chamada encerrada.
+    return true;
+  }
+}
+
 /** Altura realmente visível no mobile, considerando o teclado virtual —
  * `100dvh` sozinho não é confiável no Safari/Chrome iOS/Android quando o
  * teclado abre (a viewport de LAYOUT nem sempre encolhe, só a VISUAL).
@@ -410,14 +442,27 @@ export function ChatSection() {
     const onEnded = (ev: Event) => {
       const detail = (
         ev as CustomEvent<{
+          callId?: string;
           conversationId?: string;
           connected: boolean;
           reason: "answered" | "rejected" | "missed" | "cancelled";
           seconds: number;
           endedAt: number;
+          isHost?: boolean;
         }>
       ).detail;
       if (!detail?.conversationId) return;
+      // Os dois lados da chamada (e cada aba aberta do mesmo usuário,
+      // já que o sinal é broadcast por usuário, não por aba) recebem seu
+      // próprio "call:ended" local — sem isso, o card era postado uma
+      // vez por lado × aba (visto na prática como o mesmo aviso
+      // repetido várias vezes, sempre com a mesma duração). Só quem
+      // iniciou a chamada registra o card no histórico; e mesmo essa
+      // única postagem é "reivindicada" por `callId` em localStorage
+      // (compartilhado entre abas da mesma origem) pra cobrir o caso de
+      // o próprio host ter mais de uma aba aberta.
+      if (!detail.isHost) return;
+      if (detail.callId && !claimCallEndedMessage(detail.callId)) return;
       let text: string;
       if (detail.reason === "answered") {
         const mm = String(Math.floor(detail.seconds / 60)).padStart(2, "0");
