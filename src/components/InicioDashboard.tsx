@@ -296,14 +296,27 @@ export function InicioDashboard() {
       .sort((a, b) => a.hora.localeCompare(b.hora));
   }, [meetings, todayISO]);
 
-  const nowHHMM = useMemo(() => {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  // Atualiza a cada minuto — sem isso, quem deixa a aba aberta nunca vê uma
+  // reunião "passar" pra atrasada/concluída sozinha, só dando F5.
+  const [nowDate, setNowDate] = useState(() => new Date());
+  useEffect(() => {
+    const iv = window.setInterval(() => setNowDate(new Date()), 60_000);
+    return () => window.clearInterval(iv);
   }, []);
-  const nextMeeting =
-    todaysMeetings.find((m) => m.hora >= nowHHMM) ??
-    (todaysMeetings.length > 0 ? todaysMeetings[0] : null);
-  const otherMeetings = todaysMeetings.filter((m) => m.id !== nextMeeting?.id);
+  const nowHHMM = `${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
+  const meetingEndHHMM = (m: Meeting) => {
+    const [h, min] = m.hora.split(":").map(Number);
+    const total = h * 60 + min + m.duracao;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  };
+  // A "próxima" é a primeira que ainda não terminou (em andamento conta como
+  // próxima, não como passada) — as demais continuam todas visíveis, na
+  // mesma ordem cronológica, só com destaque/opacidade diferentes conforme
+  // já passaram ou ainda vêm a seguir (pedido explícito: manter as que já
+  // foram, só deixar a ordem clara).
+  const nextMeetingId =
+    todaysMeetings.find((m) => meetingEndHHMM(m) > nowHHMM)?.id ??
+    todaysMeetings[todaysMeetings.length - 1]?.id;
   const members = useMemo(() => loadMembers(), []);
   const meetingParticipants = (m: Meeting) =>
     (m.participanteIds ?? [])
@@ -676,55 +689,61 @@ export function InicioDashboard() {
                   Nenhuma reunião hoje.
                 </p>
               ) : (
-                <div className="p-3">
-                  {nextMeeting && (
-                    <button
-                      type="button"
-                      onClick={() => setMeetingSummary(nextMeeting)}
-                      className="flex w-full items-start gap-3 rounded-lg border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left hover:bg-brand-subtle/70"
-                    >
-                      <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-brand">
-                        {nextMeeting.hora}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {nextMeeting.titulo}
-                        </p>
-                        <p className="truncate text-[11px] text-muted-foreground">
-                          {nextMeeting.duracao} min · {nextMeeting.local || nextMeeting.com}
-                        </p>
-                      </div>
-                      {meetingParticipants(nextMeeting).length > 0 && (
-                        <AvatarStack people={meetingParticipants(nextMeeting)} max={3} size="sm" />
-                      )}
-                    </button>
-                  )}
-                  {otherMeetings.length > 0 && (
-                    <ol className="relative mt-1 space-y-0.5">
-                      {otherMeetings.map((m) => (
+                <ol className="space-y-0.5 p-3">
+                  {todaysMeetings.map((m) => {
+                    const isNext = m.id === nextMeetingId;
+                    const isPast = meetingEndHHMM(m) <= nowHHMM && !isNext;
+                    if (isNext) {
+                      return (
                         <li key={m.id}>
                           <button
                             type="button"
                             onClick={() => setMeetingSummary(m)}
-                            className="flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40"
+                            className="flex w-full items-start gap-3 rounded-lg border border-brand/30 bg-brand-subtle px-3 py-2.5 text-left hover:bg-brand-subtle/70"
                           >
-                            <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                            <div className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-brand">
                               {m.hora}
                             </div>
-                            <div className="min-w-0 flex-1 pb-0.5">
-                              <p className="truncate text-xs font-medium text-foreground">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">
                                 {m.titulo}
                               </p>
                               <p className="truncate text-[11px] text-muted-foreground">
                                 {m.duracao} min · {m.local || m.com}
                               </p>
                             </div>
+                            {meetingParticipants(m).length > 0 && (
+                              <AvatarStack people={meetingParticipants(m)} max={3} size="sm" />
+                            )}
                           </button>
                         </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
+                      );
+                    }
+                    return (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          onClick={() => setMeetingSummary(m)}
+                          className={`flex w-full items-start gap-3 rounded-md px-1 py-1.5 text-left hover:bg-muted/40 ${
+                            isPast ? "opacity-50" : ""
+                          }`}
+                        >
+                          <div className="w-11 shrink-0 pt-0.5 text-right text-[11px] tabular-nums text-muted-foreground">
+                            {m.hora}
+                          </div>
+                          <div className="min-w-0 flex-1 pb-0.5">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {m.titulo}
+                            </p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {m.duracao} min · {m.local || m.com}
+                            </p>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
               )}
             </Card>
           )}
