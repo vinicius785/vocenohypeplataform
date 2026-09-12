@@ -1151,6 +1151,27 @@ export type Database = {
           },
         ]
       }
+      hypito_conversation_state: {
+        Row: {
+          user_id: string;
+          workspace_id: string;
+          state: Json;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          workspace_id?: string;
+          state?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          workspace_id?: string;
+          state?: Json;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       hypito_pending_actions: {
         Row: {
           created_at: string

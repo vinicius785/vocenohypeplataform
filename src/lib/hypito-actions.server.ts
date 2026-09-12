@@ -1,12 +1,17 @@
 /**
- * Ações do Hypito (mutações) — SEMPRE em duas etapas (pedido, seção 3):
- * `prepare*` interpreta o pedido e grava um rascunho em
- * `hypito_pending_actions` (nunca escreve no dado real); `confirm*` só
- * executa depois que o PRÓPRIO usuário confirma essa linha específica —
- * a policy RLS de `hypito_pending_actions` já impede outra pessoa de
- * confirmar (USING/WITH CHECK `user_id = auth.uid()`), e a transição
- * condicional `status='pending' -> 'confirmed'` (`.eq("status","pending")`
- * no UPDATE) impede execução dupla em reenvio/duplo clique.
+ * Persistência e execução de ações do Hypito — SEMPRE em duas etapas
+ * (pedido, seção 3): `createPendingAction` grava um rascunho JÁ
+ * completo (título resolvido, entidades resolvidas) em
+ * `hypito_pending_actions`; `confirmPendingAction` só executa depois que
+ * o PRÓPRIO usuário confirma essa linha específica — a policy RLS
+ * (`user_id = auth.uid()`) já impede outra pessoa de confirmar, e a
+ * transição condicional `status='pending' -> 'confirmed'` impede
+ * execução dupla em reenvio/duplo clique.
+ *
+ * Extração de texto (`hypito-extract.ts`) e resolução de entidades
+ * (`hypito-tools.server.ts`) acontecem ANTES de chegar aqui, orquestradas
+ * por `hypito-conversation.server.ts` — este arquivo só persiste/executa,
+ * nunca interpreta linguagem natural.
  *
  * Nenhuma tabela de tarefa tem hoje uma coluna de "criado por Hypito" —
  * fica registrado dentro do próprio `data` JSONB (`createdVia`,
@@ -15,16 +20,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { HypitoError } from "@/lib/hypito-errors";
 import { assertCan, type UserAccess } from "@/lib/hypito-permissions.server";
-import { resolvePersonByName } from "@/lib/hypito-tools.server";
-import {
-  extractAssigneeName,
-  extractDateTime,
-  extractedDateTimeToUtcMs,
-  extractPriority,
-  extractScopeName,
-  extractTitle,
-} from "@/lib/hypito-extract";
 
 type DB = SupabaseClient<Database>;
 
@@ -39,110 +36,82 @@ export type TaskDraft = {
   scopeName: string | null;
   dueAtIso: string | null;
   priority: "Urgente" | "Alta" | "Normal" | "Baixa";
-  warnings: string[];
 };
 
-async function resolveScope(
+export type ReminderDraft = {
+  title: string;
+  remindAtIso: string;
+  relatedKind: "task" | "project" | "campaign" | "meeting" | "none";
+  relatedId: string | null;
+  relatedLink: string | null;
+};
+
+async function resolveScopeStillValid(
   db: DB,
   scope: "projeto" | "campanha",
-  nameQuery: string,
-): Promise<{ id: string; name: string } | null> {
+  scopeId: string,
+): Promise<boolean> {
   const table = scope === "projeto" ? "projetos" : "clientes";
-  const { data, error } = await db.from(table).select("id, data");
-  if (error) return null;
-  const q = nameQuery.trim().toLowerCase();
   if (scope === "projeto") {
-    const match = (data ?? []).find((row) =>
-      ((row.data as { name?: string } | null)?.name ?? "").toLowerCase().includes(q),
-    );
-    return match
-      ? { id: match.id, name: (match.data as { name?: string }).name ?? nameQuery }
-      : null;
+    const { data } = await db.from(table).select("id").eq("id", scopeId).maybeSingle();
+    return Boolean(data);
   }
-  type RawCampanha = { id?: string; nome?: string };
-  for (const row of data ?? []) {
-    const campanhas = ((row.data as { campanhas?: RawCampanha[] } | null)?.campanhas ??
-      []) as RawCampanha[];
-    const match = campanhas.find((c) => (c.nome ?? "").toLowerCase().includes(q));
-    if (match?.id) return { id: match.id, name: match.nome ?? nameQuery };
-  }
-  return null;
+  // Campanha vive dentro do JSONB de `clientes` — confirma percorrendo,
+  // já que não há uma linha própria por campanha nessa tabela.
+  const { data } = await db.from("clientes").select("data");
+  type RawCampanha = { id?: string };
+  return (data ?? []).some((row) =>
+    ((row.data as { campanhas?: RawCampanha[] } | null)?.campanhas ?? []).some(
+      (c) => c.id === scopeId,
+    ),
+  );
 }
 
-/** Interpreta o texto e grava um rascunho — NUNCA cria a tarefa de
- * verdade aqui. Ambiguidade/erro viram `warnings` no rascunho, exibidas
- * no card de confirmação, nunca decididas sozinhas. */
-export async function prepareTaskCreation(
+export async function createPendingAction(
   db: DB,
-  access: UserAccess,
-  requesterId: string,
-  rawText: string,
-): Promise<{ pendingActionId: string; draft: TaskDraft }> {
-  assertCan(access, "projetos");
-  const warnings: string[] = [];
-
-  const assigneeName = extractAssigneeName(rawText);
-  let assigneeId: string | null = null;
-  if (assigneeName) {
-    const person = await resolvePersonByName(db, assigneeName);
-    if (person === "ambiguous") {
-      warnings.push(
-        `Existe mais de uma pessoa chamada "${assigneeName}" — informe o nome completo.`,
-      );
-    } else if (!person) {
-      warnings.push(`Não encontrei "${assigneeName}" no time.`);
-    } else {
-      assigneeId = person.id;
-    }
-  }
-
-  const scopeMatch = extractScopeName(rawText);
-  let scopeId: string | null = null;
-  let scopeName: string | null = null;
-  if (scopeMatch) {
-    if (scopeMatch.scope === "campanha") assertCan(access, "campanhas");
-    const resolved = await resolveScope(db, scopeMatch.scope, scopeMatch.name);
-    if (!resolved) {
-      warnings.push(
-        `Não encontrei ${scopeMatch.scope === "projeto" ? "o projeto" : "a campanha"} "${scopeMatch.name}".`,
-      );
-    } else {
-      scopeId = resolved.id;
-      scopeName = resolved.name;
-    }
-  }
-
-  const dt = extractDateTime(rawText);
-  const dueAtIso = dt ? new Date(extractedDateTimeToUtcMs(dt)).toISOString() : null;
-  if (rawText.match(/\bàs?\s*\d/) && !dt) {
-    warnings.push("Não consegui entender o horário informado — confira antes de confirmar.");
-  }
-
-  const draft: TaskDraft = {
-    title: extractTitle(rawText),
-    assigneeName,
-    assigneeId,
-    scope: scopeMatch?.scope ?? null,
-    scopeId,
-    scopeName,
-    dueAtIso,
-    priority: extractPriority(rawText) ?? "Normal",
-    warnings,
-  };
-
-  const { data: inserted, error } = await db
+  userId: string,
+  kind: "create_task" | "create_reminder",
+  payload: TaskDraft | ReminderDraft,
+): Promise<string> {
+  const { data, error } = await db
     .from("hypito_pending_actions")
     .insert({
-      user_id: requesterId,
-      kind: "create_task",
-      payload: draft as unknown as never,
+      user_id: userId,
+      kind,
+      payload: payload as unknown as never,
       expires_at: new Date(Date.now() + PENDING_ACTION_TTL_MS).toISOString(),
     })
     .select("id")
     .single();
-  if (error || !inserted) throw new Error(error?.message ?? "falha ao preparar tarefa");
+  if (error || !data) {
+    throw new HypitoError("persistence_unavailable");
+  }
+  return data.id;
+}
 
-  return { pendingActionId: inserted.id, draft };
+/** Ação pendente ainda em aberto pra este usuário — usada pra restaurar
+ * o card de confirmação quando a conversa é reaberta/a página é
+ * recarregada (pedido, seção 16: "atualização da página no meio de uma
+ * ação"), em vez de depender só do estado efêmero do componente React. */
+export async function getActivePendingAction(
+  db: DB,
+  userId: string,
+): Promise<{ id: string; kind: string; payload: TaskDraft | ReminderDraft } | null> {
+  const { data } = await db
+    .from("hypito_pending_actions")
+    .select("id, kind, payload, expires_at")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  if (new Date(data.expires_at).getTime() < Date.now()) return null;
+  return {
+    id: data.id,
+    kind: data.kind,
+    payload: data.payload as unknown as TaskDraft | ReminderDraft,
+  };
 }
 
 export type ConfirmResult =
@@ -161,7 +130,9 @@ export async function confirmPendingAction(
     .eq("id", pendingActionId)
     .eq("user_id", requesterId)
     .maybeSingle();
-  if (error || !pending) return { ok: false, error: "Ação não encontrada." };
+  if (error || !pending) {
+    return { ok: false, error: new HypitoError("action_not_found").message };
+  }
 
   if (pending.status === "confirmed" && pending.result) {
     const result = pending.result as { taskId?: string; link?: string };
@@ -170,11 +141,11 @@ export async function confirmPendingAction(
     }
   }
   if (pending.status !== "pending") {
-    return { ok: false, error: "Esta ação já foi confirmada, cancelada ou expirou." };
+    return { ok: false, error: new HypitoError("action_already_resolved").message };
   }
   if (new Date(pending.expires_at).getTime() < Date.now()) {
     await db.from("hypito_pending_actions").update({ status: "expired" }).eq("id", pendingActionId);
-    return { ok: false, error: "Essa confirmação expirou — peça novamente." };
+    return { ok: false, error: new HypitoError("action_expired").message };
   }
 
   // Transição condicional: só UMA chamada concorrente consegue passar de
@@ -187,20 +158,27 @@ export async function confirmPendingAction(
     .select("id")
     .maybeSingle();
   if (claimError || !claimed) {
-    return { ok: false, error: "Esta ação já foi processada." };
+    return { ok: false, error: new HypitoError("action_already_resolved").message };
   }
 
   try {
     if (pending.kind === "create_task") {
       const draft = pending.payload as unknown as TaskDraft;
-      if (!draft.scope || !draft.scopeId) {
-        throw new Error("Escolha um projeto ou campanha antes de confirmar.");
-      }
-      // Revalida (dado pode ter mudado entre o preparo e a confirmação —
-      // pedido: "invalidar se os dados de origem mudarem").
-      const stillExists = await resolveScope(db, draft.scope, draft.scopeName ?? "");
-      if (!stillExists || stillExists.id !== draft.scopeId) {
-        throw new Error("O projeto/campanha desta tarefa não existe mais.");
+      if (!draft.title) throw new HypitoError("missing_field", "Falta o título da tarefa.");
+      // Revalida permissão NO MOMENTO da confirmação, não só quando o
+      // rascunho foi preparado (pedido, seção 12: "deve respeitar as
+      // permissões atuais no momento da confirmação").
+      assertCan(access, draft.scope === "campanha" ? "campanhas" : "projetos");
+      if (draft.scope && draft.scopeId) {
+        // Revalida (dado pode ter mudado entre o preparo e a confirmação
+        // — pedido: "invalidar se os dados de origem mudarem").
+        const stillValid = await resolveScopeStillValid(db, draft.scope, draft.scopeId);
+        if (!stillValid) {
+          throw new HypitoError(
+            "entity_not_found",
+            "O projeto/campanha desta tarefa não existe mais.",
+          );
+        }
       }
       const id = crypto.randomUUID();
       const taskData = {
@@ -214,22 +192,30 @@ export async function confirmPendingAction(
         createdVia: "hypito",
         requestedBy: requesterId,
       };
-      const insertError =
-        draft.scope === "projeto"
-          ? (
-              await db
-                .from("projeto_tarefas")
-                .insert({ id, projeto_id: draft.scopeId, data: taskData as unknown as never })
-            ).error
-          : (
-              await db
-                .from("campanha_tarefas")
-                .insert({ id, campanha_id: draft.scopeId, data: taskData as unknown as never })
-            ).error;
-      if (insertError) throw new Error(insertError.message);
+      let insertError: { message: string } | null = null;
+      if (draft.scope === "projeto" && draft.scopeId) {
+        insertError = (
+          await db
+            .from("projeto_tarefas")
+            .insert({ id, projeto_id: draft.scopeId, data: taskData as unknown as never })
+        ).error;
+      } else if (draft.scope === "campanha" && draft.scopeId) {
+        insertError = (
+          await db
+            .from("campanha_tarefas")
+            .insert({ id, campanha_id: draft.scopeId, data: taskData as unknown as never })
+        ).error;
+      } else {
+        insertError = (
+          await db
+            .from("marketing_standalone_tasks")
+            .insert({ id, data: taskData as unknown as never })
+        ).error;
+      }
+      if (insertError) throw new HypitoError("persistence_unavailable");
 
       const link =
-        draft.scope === "projeto"
+        draft.scope === "projeto" && draft.scopeId
           ? `/projeto/${draft.scopeId}?taskId=${id}`
           : `/time?section=campanhas`;
       await db
@@ -239,7 +225,7 @@ export async function confirmPendingAction(
       await db.from("hypito_action_log").insert({
         user_id: requesterId,
         kind: "create_task",
-        target_kind: draft.scope,
+        target_kind: draft.scope ?? "marketing",
         target_id: id,
         detail: { title: draft.title, scopeId: draft.scopeId, viaHypito: true } as unknown as never,
       });
@@ -248,7 +234,8 @@ export async function confirmPendingAction(
 
     if (pending.kind === "create_reminder") {
       const draft = pending.payload as unknown as ReminderDraft;
-      if (!draft.remindAtIso) throw new Error("Não entendi quando você quer ser avisado.");
+      if (!draft.remindAtIso)
+        throw new HypitoError("missing_field", "Falta o horário do lembrete.");
       const { data: reminder, error: insertError } = await db
         .from("hypito_reminders")
         .insert({
@@ -262,8 +249,7 @@ export async function confirmPendingAction(
         })
         .select("id")
         .single();
-      if (insertError || !reminder)
-        throw new Error(insertError?.message ?? "falha ao criar lembrete");
+      if (insertError || !reminder) throw new HypitoError("persistence_unavailable");
 
       const link = "/time?section=chat";
       await db
@@ -280,13 +266,13 @@ export async function confirmPendingAction(
       return { ok: true, alreadyDone: false, taskId: reminder.id, link };
     }
 
-    throw new Error("Tipo de ação desconhecido.");
+    throw new HypitoError("unknown");
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await db
-      .from("hypito_pending_actions")
-      .update({ status: "expired", result: { error: message } as unknown as never })
-      .eq("id", pendingActionId);
+    const message = err instanceof HypitoError ? err.message : new HypitoError("unknown").message;
+    if (!(err instanceof HypitoError)) {
+      console.error("[hypito:confirmPendingAction]", err);
+    }
+    await db.from("hypito_pending_actions").update({ status: "expired" }).eq("id", pendingActionId);
     return { ok: false, error: message };
   }
 }
@@ -303,47 +289,4 @@ export async function cancelPendingAction(
     .eq("user_id", requesterId)
     .eq("status", "pending");
   return { ok: true };
-}
-
-export type ReminderDraft = {
-  title: string;
-  remindAtIso: string | null;
-  relatedKind: "task" | "project" | "campaign" | "meeting" | "none";
-  relatedId: string | null;
-  relatedLink: string | null;
-  warnings: string[];
-};
-
-export async function prepareReminderCreation(
-  db: DB,
-  requesterId: string,
-  rawText: string,
-): Promise<{ pendingActionId: string; draft: ReminderDraft }> {
-  const warnings: string[] = [];
-  const dt = extractDateTime(rawText);
-  const remindAtIso = dt ? new Date(extractedDateTimeToUtcMs(dt)).toISOString() : null;
-  if (!dt) warnings.push("Não entendi quando você quer ser avisado — informe dia e horário.");
-
-  const draft: ReminderDraft = {
-    title: extractTitle(rawText),
-    remindAtIso,
-    relatedKind: "none",
-    relatedId: null,
-    relatedLink: null,
-    warnings,
-  };
-
-  const { data: inserted, error } = await db
-    .from("hypito_pending_actions")
-    .insert({
-      user_id: requesterId,
-      kind: "create_reminder",
-      payload: draft as unknown as never,
-      expires_at: new Date(Date.now() + PENDING_ACTION_TTL_MS).toISOString(),
-    })
-    .select("id")
-    .single();
-  if (error || !inserted) throw new Error(error?.message ?? "falha ao preparar lembrete");
-
-  return { pendingActionId: inserted.id, draft };
 }

@@ -106,19 +106,34 @@ describe("extractTitle", () => {
     const title = extractTitle(
       "Hypito, crie uma tarefa para Toni cobrar as métricas da campanha Jackery amanhã às 10h",
     );
-    expect(title.toLowerCase()).toContain("cobrar as métricas");
+    expect(title).not.toBeNull();
+    expect(title!.toLowerCase()).toContain("cobrar as métricas");
     expect(title).not.toMatch(/toni/i);
     expect(title).not.toMatch(/jackery/i);
     expect(title).not.toMatch(/amanh[ãa]/i);
   });
 
-  it("nunca fica vazio — cai pro texto bruto se nada sobrar", () => {
-    const title = extractTitle("crie uma tarefa para");
-    expect(title.length).toBeGreaterThan(0);
+  it("comando puro (sem conteúdo) devolve null — nunca vira título sozinho", () => {
+    expect(extractTitle("Criar uma tarefa")).toBeNull();
+    expect(extractTitle("criar tarefa")).toBeNull();
+    expect(extractTitle("crie uma tarefa para")).toBeNull();
+  });
+
+  it("comando puro com erro de digitação também devolve null (mesma tolerância do reconhecimento de intenção)", () => {
+    expect(extractTitle("Criar tarefs")).toBeNull();
+    expect(extractTitle("cria uma tarefaa")).toBeNull();
+  });
+
+  it("remove 'amanhã'/'às Hh' mesmo com acento (evita bug de \\b do JS com letra acentuada)", () => {
+    const title = extractTitle("Falar com o cliente da Jackery amanhã às 15h");
+    expect(title).not.toBeNull();
+    expect(title).not.toMatch(/amanh[ãa]/i);
+    expect(title).not.toMatch(/\bàs\b/i);
+    expect(title).not.toMatch(/15h/);
   });
 
   it("primeira letra maiúscula", () => {
-    const title = extractTitle("me lembre de revisar a proposta amanhã às 14h");
+    const title = extractTitle("me lembre de revisar a proposta amanhã às 14h")!;
     expect(title[0]).toBe(title[0].toUpperCase());
   });
 });

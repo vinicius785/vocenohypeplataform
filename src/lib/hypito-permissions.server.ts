@@ -18,6 +18,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { HypitoError } from "@/lib/hypito-errors";
 
 type DB = SupabaseClient<Database>;
 
@@ -54,6 +55,6 @@ export function can(access: UserAccess, permission: HypitoPermission): boolean {
  * ampliar seu acesso pedindo isso ao Hypito"). */
 export function assertCan(access: UserAccess, permission: HypitoPermission): void {
   if (!can(access, permission)) {
-    throw new Error(`Sem permissão de "${permission}" para esta consulta.`);
+    throw new HypitoError("permission_denied");
   }
 }

@@ -22,6 +22,11 @@ import {
 } from "@/lib/hypito-data.server";
 import { assertCan, type UserAccess } from "@/lib/hypito-permissions.server";
 import type { LinkedRef } from "@/lib/hypito-insights";
+import {
+  resolveEntity,
+  type EntityCandidate,
+  type ScoredCandidate,
+} from "@/lib/hypito-entity-resolver";
 
 type DB = SupabaseClient<Database>;
 
@@ -73,25 +78,28 @@ function limitList<T>(items: T[]): ListResult<T> {
   return { items: items.slice(0, LIST_LIMIT), total: items.length };
 }
 
-/** Resolve um nome de pessoa (texto livre, possivelmente parcial) contra
- * o diretório real do time — nunca aceita um id "inventado" pelo texto.
- * Devolve `null` (não encontrado) ou `"ambiguous"` (mais de um homônimo)
- * pra quem chama pedir esclarecimento, nunca adivinhar. */
+/** Resultado padrão de resolução de entidade — usado por campanha,
+ * projeto e pessoa, pra tratar os três de forma igual em quem chama
+ * (`hypito-conversation.server.ts`). */
+export type EntityLookup<T extends EntityCandidate> =
+  | { kind: "resolved"; entity: T }
+  | { kind: "ambiguous"; candidates: ScoredCandidate<T>[] }
+  | { kind: "not_found" };
+
+/** Resolve um nome de pessoa (texto livre, possivelmente parcial,
+ * com acento/hífen/maiúscula diferentes) contra o diretório real do
+ * time — nunca aceita um id "inventado" pelo texto. Usa o mesmo
+ * resolvedor genérico com pontuação de campanhas/projetos, então
+ * "toni", "Tôni" ou um pequeno erro de digitação também resolvem. */
 export async function resolvePersonByName(
   db: DB,
   nameQuery: string,
-): Promise<{ id: string; name: string } | "ambiguous" | null> {
+): Promise<EntityLookup<{ id: string; name: string }>> {
   const people = await fetchTeamDirectory(db);
-  const q = nameQuery.trim().toLowerCase();
-  if (!q) return null;
-  const matches = people.filter((p) => p.name.toLowerCase().includes(q));
-  if (matches.length === 0) return null;
-  if (matches.length > 1) {
-    const exact = matches.find((p) => p.name.toLowerCase() === q);
-    if (exact) return { id: exact.id, name: exact.name };
-    return "ambiguous";
-  }
-  return { id: matches[0].id, name: matches[0].name };
+  const result = resolveEntity(nameQuery, people);
+  if (result.kind === "resolved") return { kind: "resolved", entity: result.match.entity };
+  if (result.kind === "ambiguous") return { kind: "ambiguous", candidates: result.candidates };
+  return { kind: "not_found" };
 }
 
 async function loadTasksFor(
@@ -221,85 +229,131 @@ export async function getNextMeeting(
   return upcoming[0] ? toMeetingSummary(upcoming[0]) : null;
 }
 
-export type ProjectSummaryResult = {
+export type ScopeSummaryResult = {
   id: string;
   name: string;
   openTasks: number;
   overdueTasks: number;
   completedTasks: number;
+  nextDueTask: { title: string; dueDateIso: string; link: LinkedRef } | null;
+  pendingApprovals: number;
   link: LinkedRef;
-} | null;
+};
 
-export async function getProjectSummary(
-  db: DB,
-  access: UserAccess,
-  nameQuery: string,
-  now: Date = new Date(),
-): Promise<ProjectSummaryResult> {
-  assertCan(access, "projetos");
+export async function fetchAllProjects(db: DB): Promise<EntityCandidate[]> {
   const { data, error } = await db.from("projetos").select("id, data");
   if (error) throw new Error(error.message);
-  const q = nameQuery.trim().toLowerCase();
-  const match = (data ?? []).find((row) => {
-    const name = ((row.data as { name?: string } | null)?.name ?? "").toLowerCase();
-    return name.includes(q);
-  });
-  if (!match) return null;
-  const name = (match.data as { name?: string }).name ?? "(sem nome)";
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: (row.data as { name?: string } | null)?.name ?? "(sem nome)",
+  }));
+}
+
+type RawCampanha = { id?: string; nome?: string };
+
+export async function fetchAllCampaigns(db: DB): Promise<EntityCandidate[]> {
+  const { data, error } = await db.from("clientes").select("id, data");
+  if (error) throw new Error(error.message);
+  const out: EntityCandidate[] = [];
+  for (const row of data ?? []) {
+    const campanhas = ((row.data as { campanhas?: RawCampanha[] } | null)?.campanhas ??
+      []) as RawCampanha[];
+    for (const c of campanhas) {
+      if (c.id) out.push({ id: c.id, name: c.nome ?? "(sem nome)" });
+    }
+  }
+  return out;
+}
+
+/** Resolve só a ENTIDADE (campanha/projeto) — nunca decide sozinho
+ * quando há ambiguidade (pedido, seção 6: "dois ou mais candidatos
+ * próximos: perguntar qual deles"). Separado da consulta de dados
+ * (`summarizeScope`) pra poder ser reaproveitado tanto numa pergunta
+ * nova quanto numa resposta de esclarecimento (`hypito-conversation.server.ts`). */
+export async function resolveCampaign(
+  db: DB,
+  access: UserAccess,
+  query: string,
+): Promise<EntityLookup<EntityCandidate>> {
+  assertCan(access, "campanhas");
+  const pool = await fetchAllCampaigns(db);
+  const result = resolveEntity(query, pool);
+  if (result.kind === "resolved") return { kind: "resolved", entity: result.match.entity };
+  if (result.kind === "ambiguous") return { kind: "ambiguous", candidates: result.candidates };
+  return { kind: "not_found" };
+}
+
+export async function resolveProject(
+  db: DB,
+  access: UserAccess,
+  query: string,
+): Promise<EntityLookup<EntityCandidate>> {
+  assertCan(access, "projetos");
+  const pool = await fetchAllProjects(db);
+  const result = resolveEntity(query, pool);
+  if (result.kind === "resolved") return { kind: "resolved", entity: result.match.entity };
+  if (result.kind === "ambiguous") return { kind: "ambiguous", candidates: result.candidates };
+  return { kind: "not_found" };
+}
+
+/** Consulta os dados reais de uma campanha/projeto JÁ resolvido (pedido,
+ * seção 9: "não mostrar apenas que existe — consultar os dados reais e
+ * produzir um resumo útil"). Nunca inventa campo — cada valor vem de
+ * `fetchAllTasks`, o mesmo agregador usado pelo relatório semanal. */
+export async function summarizeScope(
+  db: DB,
+  scope: "projeto" | "campanha",
+  entity: EntityCandidate,
+  now: Date = new Date(),
+): Promise<ScopeSummaryResult> {
   const { tasks } = await fetchAllTasks(db);
-  const projectTasks = tasks.filter((t) => t.scope === "projeto" && t.scopeId === match.id);
+  const scoped = tasks.filter((t) => t.scope === scope && t.scopeId === entity.id);
+  const open = scoped.filter((t) => isOpenStatus(t.status));
+  const overdue = open.filter((t) => t.dueDate && t.dueDate < now);
+  const upcoming = open
+    .filter((t) => t.dueDate && t.dueDate >= now)
+    .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0));
+  const nextDue = upcoming[0];
   return {
-    id: match.id,
-    name,
-    openTasks: projectTasks.filter((t) => isOpenStatus(t.status)).length,
-    overdueTasks: projectTasks.filter((t) => isOpenStatus(t.status) && t.dueDate && t.dueDate < now)
-      .length,
-    completedTasks: projectTasks.filter((t) => t.status === "Concluído").length,
-    link: { label: "projeto", href: `/projeto/${match.id}` },
+    id: entity.id,
+    name: entity.name,
+    openTasks: open.length,
+    overdueTasks: overdue.length,
+    completedTasks: scoped.filter((t) => t.status === "Concluído").length,
+    nextDueTask: nextDue?.dueDate
+      ? { title: nextDue.title, dueDateIso: nextDue.dueDate.toISOString(), link: nextDue.link }
+      : null,
+    pendingApprovals: scoped.filter((t) => t.status === "Em aprovação").length,
+    link:
+      scope === "projeto"
+        ? { label: "projeto", href: `/projeto/${entity.id}` }
+        : { label: "campanha", href: "/time?section=campanhas" },
   };
 }
 
-export type CampaignSummaryResult = {
-  id: string;
-  name: string;
-  openTasks: number;
-  overdueTasks: number;
-  completedTasks: number;
-  link: LinkedRef;
-} | null;
-
-export async function getCampaignSummary(
+/** Tarefas de uma campanha/projeto (não de uma pessoa) — usada na
+ * continuação de contexto ("Quais tarefas estão atrasadas?" logo depois
+ * de resolver uma campanha, pedido seção 7, segundo exemplo). */
+export async function getScopedTasks(
   db: DB,
-  access: UserAccess,
-  nameQuery: string,
+  scope: "projeto" | "campanha",
+  scopeId: string,
+  filter: "overdue" | "upcoming" | "pending_approval",
   now: Date = new Date(),
-): Promise<CampaignSummaryResult> {
-  assertCan(access, "campanhas");
-  const { data: clientes, error } = await db.from("clientes").select("id, data");
-  if (error) throw new Error(error.message);
-  const q = nameQuery.trim().toLowerCase();
-  type RawCampanha = { id?: string; nome?: string };
-  let found: { id: string; name: string } | null = null;
-  for (const row of clientes ?? []) {
-    const campanhas = ((row.data as { campanhas?: RawCampanha[] } | null)?.campanhas ??
-      []) as RawCampanha[];
-    const match = campanhas.find((c) => (c.nome ?? "").toLowerCase().includes(q));
-    if (match?.id) {
-      found = { id: match.id, name: match.nome ?? "(sem nome)" };
-      break;
-    }
-  }
-  if (!found) return null;
+): Promise<ListResult<TaskSummary>> {
   const { tasks } = await fetchAllTasks(db);
-  const campaignTasks = tasks.filter((t) => t.scope === "campanha" && t.scopeId === found!.id);
-  return {
-    id: found.id,
-    name: found.name,
-    openTasks: campaignTasks.filter((t) => isOpenStatus(t.status)).length,
-    overdueTasks: campaignTasks.filter(
-      (t) => isOpenStatus(t.status) && t.dueDate && t.dueDate < now,
-    ).length,
-    completedTasks: campaignTasks.filter((t) => t.status === "Concluído").length,
-    link: { label: "campanha", href: "/time?section=campanhas" },
-  };
+  const scoped = tasks.filter((t) => t.scope === scope && t.scopeId === scopeId);
+  let filtered: ParsedTask[];
+  if (filter === "overdue") {
+    filtered = scoped.filter((t) => isOpenStatus(t.status) && t.dueDate && t.dueDate < now);
+  } else if (filter === "upcoming") {
+    const end = new Date(now.getTime() + 7 * 86_400_000);
+    filtered = scoped.filter(
+      (t) => isOpenStatus(t.status) && t.dueDate && t.dueDate >= now && t.dueDate < end,
+    );
+  } else {
+    filtered = scoped.filter((t) => t.status === "Em aprovação");
+  }
+  filtered.sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0));
+  return limitList(filtered.map(toTaskSummary));
 }

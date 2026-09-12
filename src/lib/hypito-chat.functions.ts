@@ -10,6 +10,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { HYPITO_AUTHOR_ID, HYPITO_NAME, HYPITO_AVATAR_URL } from "@/lib/hypito";
+import { logHypitoError, HypitoError } from "@/lib/hypito-errors";
 
 /** Mesmo formato de `dmId()` em `chat-store.ts` — reimplementado aqui
  * (em vez de importar `chat-store.ts`, um módulo client com estado de
@@ -60,7 +61,10 @@ export const sendHypitoMessage = createServerFn({ method: "POST" })
       author_photo: HYPITO_AVATAR_URL,
       text: reply.text,
     });
-    if (error) return { ok: false as const, error: error.message };
+    if (error) {
+      logHypitoError("sendHypitoMessage:insert", error, { userId: context.userId });
+      return { ok: false as const, error: new HypitoError("persistence_unavailable").message };
+    }
     // `chat_messages` não tem (ainda) uma coluna pra referenciar a
     // confirmação pendente — ver nota em `hypito-actions.server.ts`.
     // Por isso o card de confirmação não fica anexado à MENSAGEM (o
@@ -68,6 +72,19 @@ export const sendHypitoMessage = createServerFn({ method: "POST" })
     // id volta aqui na resposta síncrona pra quem enviou renderizar os
     // botões Confirmar/Cancelar localmente, sem depender de nova coluna.
     return { ok: true as const, pendingActionId: reply.pendingActionId ?? null };
+  });
+
+/** Restaura o card de confirmação ao (re)abrir a conversa — a ação
+ * pendente vive em `hypito_pending_actions` (persistida), nunca só no
+ * estado efêmero do componente React, então sobrevive a um F5 (pedido,
+ * seção 16: "atualização da página no meio de uma ação"). */
+export const getHypitoActivePendingAction = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getActivePendingAction } = await import("@/lib/hypito-actions.server");
+    const active = await getActivePendingAction(supabaseAdmin, context.userId);
+    return { pendingActionId: active?.id ?? null };
   });
 
 const ConfirmInput = z.object({ pendingActionId: z.string().uuid() });
@@ -101,20 +118,29 @@ export const confirmHypitoAction = createServerFn({ method: "POST" })
     return result;
   });
 
+const CancelInput = z.object({
+  pendingActionId: z.string().uuid(),
+  reason: z.enum(["cancel", "edit"]).default("cancel"),
+});
+
 export const cancelHypitoAction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof ConfirmInput>) => ConfirmInput.parse(input))
+  .inputValidator((input: z.infer<typeof CancelInput>) => CancelInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { cancelPendingAction } = await import("@/lib/hypito-actions.server");
     const result = await cancelPendingAction(supabaseAdmin, context.userId, data.pendingActionId);
     const convoId = dmId(context.userId, HYPITO_AUTHOR_ID);
+    const text =
+      data.reason === "edit"
+        ? "Sem problema — me diga de novo os detalhes, com o que quiser mudar."
+        : "Ok, cancelei essa ação. Se quiser, me diga de novo o que precisa.";
     await supabaseAdmin.from("chat_messages").insert({
       convo_id: convoId,
       author_id: HYPITO_AUTHOR_ID,
       author_name: HYPITO_NAME,
       author_photo: HYPITO_AVATAR_URL,
-      text: "Ok, cancelei essa ação. Se quiser, me diga de novo o que precisa.",
+      text,
     });
     return result;
   });

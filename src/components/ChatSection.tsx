@@ -42,6 +42,7 @@ import {
   sendHypitoMessage,
   confirmHypitoAction,
   cancelHypitoAction,
+  getHypitoActivePendingAction,
 } from "@/lib/hypito-chat.functions";
 import {
   getMe,
@@ -262,7 +263,21 @@ export function ChatSection() {
   }, [activeId, isDm, members, me.id]);
   const isHypitoDm = isDm && isHypitoAuthorId(activeDmPartner?.id);
   const [hypitoPendingActionId, setHypitoPendingActionId] = useState<string | null>(null);
-  useEffect(() => setHypitoPendingActionId(null), [activeId]);
+  // A ação pendente vive persistida em `hypito_pending_actions` — ao
+  // (re)abrir a conversa (ou dar F5 no meio de uma confirmação), busca
+  // se já existe uma em aberto, em vez de só zerar o estado local (o que
+  // fazia o card "sumir" sem ter sido cancelado de verdade).
+  useEffect(() => {
+    setHypitoPendingActionId(null);
+    if (!isHypitoDm) return;
+    let cancelled = false;
+    void getHypitoActivePendingAction().then((res) => {
+      if (!cancelled) setHypitoPendingActionId(res.pendingActionId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, isHypitoDm]);
 
   const convoMessages = useMemo(
     () => messages.filter((m) => m.convoId === activeId).sort((a, b) => a.createdAt - b.createdAt),
@@ -760,6 +775,13 @@ export function ChatSection() {
               <HypitoConfirmBar
                 pendingActionId={hypitoPendingActionId}
                 onResolved={() => setHypitoPendingActionId(null)}
+                onEdit={() => {
+                  /* "Editar" hoje cancela e convida a pessoa a reescrever
+                   * o pedido (ver `cancelHypitoAction`, reason:"edit") —
+                   * não existe ainda uma UI de formulário pra editar
+                   * campo a campo sem perder o resto (documentado como
+                   * limitação). */
+                }}
               />
             )}
 
@@ -1340,33 +1362,56 @@ const CHAT_TASK_PRIORITY_TONE: Record<string, string> = {
 function HypitoConfirmBar({
   pendingActionId,
   onResolved,
+  onEdit,
 }: {
   pendingActionId: string;
   onResolved: () => void;
+  /** "Editar" cancela a ação pendente E foca o composer pra reescrever
+   * — nunca abre um formulário próprio (nenhuma UI de edição de tarefa
+   * duplicada), mas também nunca é interpretado como um "Cancelar"
+   * silencioso: some cópia distinta é postada pra deixar claro o que
+   * aconteceu. */
+  onEdit: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"confirm" | "cancel" | "edit" | null>(null);
+  const disabled = busy !== null;
   return (
-    <div className="flex items-center gap-2 border-t border-border bg-brand-subtle/40 px-4 py-2">
-      <p className="flex-1 text-xs text-muted-foreground">Confirmar a ação sugerida pelo Hypito?</p>
+    <div className="flex flex-wrap items-center gap-2 border-t border-border bg-brand-subtle/40 px-4 py-2">
+      <p className="w-full text-xs text-muted-foreground sm:w-auto sm:flex-1">
+        Confirmar a ação sugerida pelo Hypito?
+      </p>
       <Button
         size="sm"
         variant="primary"
-        disabled={busy}
+        disabled={disabled}
         onClick={async () => {
-          setBusy(true);
+          setBusy("confirm");
           await confirmHypitoAction({ data: { pendingActionId } });
           onResolved();
         }}
       >
-        Confirmar
+        {busy === "confirm" ? "Confirmando…" : "Confirmar criação"}
       </Button>
       <Button
         size="sm"
         variant="outline"
-        disabled={busy}
+        disabled={disabled}
         onClick={async () => {
-          setBusy(true);
-          await cancelHypitoAction({ data: { pendingActionId } });
+          setBusy("edit");
+          await cancelHypitoAction({ data: { pendingActionId, reason: "edit" } });
+          onResolved();
+          onEdit();
+        }}
+      >
+        Editar
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={disabled}
+        onClick={async () => {
+          setBusy("cancel");
+          await cancelHypitoAction({ data: { pendingActionId, reason: "cancel" } });
           onResolved();
         }}
       >
