@@ -1881,7 +1881,7 @@ function MessageList({
                     className={`flex min-w-0 flex-1 flex-col items-start md:max-w-[68%] ${mine ? "md:items-end" : ""}`}
                   >
                     {!grouped && (
-                      <div className="flex items-baseline gap-2">
+                      <div className="mb-2 flex items-baseline gap-2">
                         <span className="text-xs font-semibold text-foreground">
                           {mine ? "Você" : m.authorName}
                         </span>
