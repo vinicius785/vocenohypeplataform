@@ -4,9 +4,12 @@ import { timingSafeEqual } from "node:crypto";
 /**
  * Alvo do Vercel Cron pros alertas operacionais preventivos — mesmo
  * padrão de autenticação dos outros crons do Hypito. `schedule` em
- * `vercel.json`: `0 12,15,18 * * 1-5` = 09h/12h/15h America/Sao_Paulo,
- * dias úteis — frequência baixa o bastante pra nunca virar spam, mesmo
- * sem o cooldown por tipo (`hypito-alerts.server.ts`) já cuidar disso.
+ * `vercel.json`: `0 12 * * 1-5` = 09h America/Sao_Paulo, dias úteis —
+ * uma vez por dia (o plano Hobby da Vercel só permite cron diário; um
+ * schedule com mais de uma execução por dia derruba o deploy inteiro
+ * com "deploy_failed", achado ao vivo nesta sessão). Frequência baixa o
+ * bastante pra nunca virar spam, mesmo sem o cooldown por tipo
+ * (`hypito-alerts.server.ts`) já cuidar disso.
  */
 function secretsMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
