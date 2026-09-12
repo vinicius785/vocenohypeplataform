@@ -17,9 +17,13 @@ import type { WeatherCondition } from "@/lib/weather-condition";
  *
  * Sempre tem uma composição válida, mesmo em "unknown" (ainda sem
  * clima carregado, ou provedor fora do ar) — uma base neutra cobre o
- * cabeçalho inteiro, e o tratamento específico de cada condição fica
- * concentrado numa faixa do lado direito, preservando uma área limpa
- * atrás da saudação (a saudação fica na metade esquerda do cabeçalho). */
+ * cabeçalho inteiro, e o tratamento específico de cada condição cobre
+ * a área superior INTEIRA (atrás da saudação, foto, temperatura,
+ * condição e botão), não só uma faixa lateral — uma única ambientação,
+ * sem corte vertical entre a metade da saudação e a do clima. A leve
+ * concentração de luz/gotas fica só a cargo de gradientes que já
+ * desaparecem gradualmente para a esquerda (`ellipse_at_top_right`),
+ * nunca de uma caixa que recorta metade da largura. */
 export function WeatherHeaderEffect({
   condition,
   isDay,
@@ -149,15 +153,18 @@ export function WeatherHeaderEffect({
       {/* Base sempre presente, cabeçalho inteiro — nunca deixa a tela
        * parecer um retângulo vazio/quebrado, nem em "unknown" nem antes
        * do primeiro clima carregar. Deliberadamente quase imperceptível
-       * (a composição de verdade fica na faixa da direita, abaixo). */}
+       * (a composição de verdade é a faixa de efeitos logo abaixo, que
+       * agora cobre a mesma largura total). */}
       <div
         className={`absolute inset-0 ${isDay ? "bg-foreground/[0.012]" : "bg-foreground/[0.03]"}`}
       />
 
-      {/* Faixa de efeitos — só do lado direito/bordas, preservando uma
-       * região limpa atrás da saudação (que ocupa a metade esquerda do
-       * cabeçalho). */}
-      <div className="absolute inset-y-0 right-0 w-[64%] sm:w-[58%] md:w-[52%]">
+      {/* Faixa de efeitos — cobre a área superior INTEIRA (mesma largura
+       * do cabeçalho), passando atrás da saudação e do bloco de clima
+       * igualmente. Nada de recortar por coluna: a distribuição das
+       * partículas (`resize()` abaixo) lê a largura real deste container,
+       * que agora é a largura total do cabeçalho. */}
+      <div className="absolute inset-0">
         <AtmosphereTint condition={condition} isDay={isDay} />
         {precipitation && <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />}
       </div>
@@ -187,9 +194,9 @@ const NIGHT_DOTS = [
 /** Fundo/nuvens/neblina — tudo CSS (sem canvas, sem centenas de nós),
  * movimento lento e opcional via `motion-reduce:animate-none`. Cores só
  * dos tokens do design system (`bg-foreground`), nunca ilustração
- * literal de nuvem. Escopada à faixa direita definida pelo componente
- * pai — todo `absolute` aqui é relativo a essa faixa, não ao cabeçalho
- * inteiro. */
+ * literal de nuvem. Relativa ao container pai, que agora é a área
+ * superior INTEIRA do cabeçalho (não mais uma faixa lateral) — todo
+ * `absolute` aqui cobre a largura total. */
 function AtmosphereTint({ condition, isDay }: { condition: WeatherCondition; isDay: boolean }) {
   // "unknown" não precisa de tratamento próprio — a base neutra do
   // componente pai (sempre presente) já cobre esse caso.
