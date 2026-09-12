@@ -1,6 +1,7 @@
 {
-  "version": "1.274.0",
+  "version": "1.275.0",
   "notes": [
+    "1.275.0: Lança a primeira fase do Hypito, o assistente operacional da Você no Hype — conversa direta fixada no Chat (consulta tarefas, agenda, projetos e campanhas em linguagem natural, com permissões aplicadas no backend), criação assistida de tarefas e lembretes sempre com confirmação explícita antes de gravar qualquer coisa, resumo diário pessoal, relatório semanal automático no canal Geral com insights individuais reais (sem ranking, sem comparação entre pessoas), alertas operacionais preventivos com deduplicação e cooldown, e identidade visual do Hypito no aviso de reunião 5 minutos antes. Nesta primeira versão o Hypito é 100% determinístico (sem IA) e avisa que está em beta na própria conversa.",
     "1.274.0: Repagina as seções abaixo do cabeçalho climático do Início (Meu trabalho, Agenda, Mural de novidades, Comentários atribuídos e Lista pessoal) com o mesmo acabamento premium do restante da plataforma: cantos, superfícies, tipografia e estados vazios agora consistentes entre os cards, sem alterar nenhum dado ou comportamento existente.",
     "1.273.0: Adiciona @menção de usuários e opção de excluir comentário nos artigos do Mural de novidades. Deixa o efeito de chuva do cabeçalho do Início mais visível, inclusive no tema claro. Corrige o aviso de chamada encerrada aparecendo duplicado (às vezes até 9x) no chat quando havia mais de uma aba aberta. Reformula o cabeçalho climático do Início: saudação, clima e indicadores (Hoje/Amanhã/Próximos 7 dias/Atrasadas) agora vivem num único bloco visual coeso, com composição válida pra qualquer condição do tempo — a localização usada pra buscar o clima nunca aparece na interface, só internamente.",
     "1.272.0: Adiciona o Modo Foco (Pomodoro imersivo, rota própria /foco, acesso pelo cabeçalho global e pelas tarefas, tarefas reais da plataforma, áudio ambiente gerado por síntese e chuva visual em canvas). Adiciona ambiente climático dinâmico no cabeçalho do Início (clima real de Itaim Bibi via Open-Meteo, cache de 25min, camada visual sutil restrita ao cabeçalho). Repagina o módulo Projetos (cabeçalho azul compacto, Roadmap, Bugs e sugestões). Corrige botões brancos do padrão antigo no Kanban de tarefas (Nova Tarefa, Adicionar subtarefa, Criar/Salvar tarefa) para o azul da marca e links longos cortados nos comentários de tarefa.",
@@ -410,6 +411,34 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.275.0",
+      "summary": "Lança o Hypito — assistente operacional com conversa no Chat, resumo diário, relatório semanal e alertas preventivos.",
+      "modules": [
+        {
+          "name": "HYPITO",
+          "tagline": "Assistente operacional da Você no Hype",
+          "items": [
+            {
+              "title": "Converse com o Hypito no Chat",
+              "description": "Pergunte sobre suas tarefas, agenda, projetos e campanhas em linguagem natural. As respostas sempre respeitam suas permissões e trazem links diretos pros itens citados."
+            },
+            {
+              "title": "Criação assistida de tarefas e lembretes",
+              "description": "Peça pro Hypito criar uma tarefa ou lembrete — ele monta um rascunho e só grava depois da sua confirmação explícita."
+            },
+            {
+              "title": "Resumo diário e relatório semanal",
+              "description": "Todo dia útil de manhã, um resumo pessoal na DM com o Hypito. Toda sexta às 17h, um relatório semanal no canal Geral com destaques, riscos e um insight individual por pessoa."
+            },
+            {
+              "title": "Alertas preventivos",
+              "description": "O Hypito avisa sobre tarefas atrasadas, prioridades sem prazo e reuniões sem confirmação antes que virem problema — sem repetir o mesmo aviso sem necessidade."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.274.0",
       "summary": "Home repaginada: as seções abaixo do clima ganham o acabamento premium do design system.",

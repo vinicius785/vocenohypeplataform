@@ -28,6 +28,21 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  isHypitoAuthorId,
+  HYPITO_AUTHOR_ID,
+  HYPITO_NAME,
+  HYPITO_AVATAR_URL,
+  HYPITO_TAGLINE,
+  HYPITO_BADGE_LABEL,
+} from "@/lib/hypito";
+import {
+  sendHypitoMessage,
+  confirmHypitoAction,
+  cancelHypitoAction,
+} from "@/lib/hypito-chat.functions";
 import {
   getMe,
   loadMembers,
@@ -53,6 +68,8 @@ import {
   getOtherReadAt,
   getOtherDeliveredAt,
   buildChatList,
+  getLastMessageByConvo,
+  getUnreadCount,
   createChannel,
   updateChannel,
   deleteChannel as deleteChannelDb,
@@ -235,8 +252,17 @@ export function ChatSection() {
     if (!isDm) return null;
     const parts = activeId.slice(3).split("|");
     const otherId = parts.find((p) => p !== me.id) ?? parts[0];
+    // Hypito nunca é uma linha de `profiles` (ver `src/lib/hypito.ts`), então
+    // nunca aparece em `members` — sem este caso especial, o fallback
+    // genérico abaixo mostraria o UUID cru como "nome".
+    if (isHypitoAuthorId(otherId)) {
+      return { id: HYPITO_AUTHOR_ID, name: HYPITO_NAME, photo: HYPITO_AVATAR_URL };
+    }
     return members.find((m) => m.id === otherId) ?? { id: otherId, name: otherId };
   }, [activeId, isDm, members, me.id]);
+  const isHypitoDm = isDm && isHypitoAuthorId(activeDmPartner?.id);
+  const [hypitoPendingActionId, setHypitoPendingActionId] = useState<string | null>(null);
+  useEffect(() => setHypitoPendingActionId(null), [activeId]);
 
   const convoMessages = useMemo(
     () => messages.filter((m) => m.convoId === activeId).sort((a, b) => a.createdAt - b.createdAt),
@@ -413,6 +439,21 @@ export function ChatSection() {
       attachments,
       replyToId: replyingTo?.id,
     });
+    // O Hypito nunca lê o Chat sozinho — cada mensagem enviada NA conversa
+    // dele dispara, à parte, um pedido ao motor server-side (que valida
+    // permissão, consulta os dados e publica a resposta como uma mensagem
+    // normal — o Realtime já existente entrega ela pra este cliente e pra
+    // qualquer outra aba aberta, sem nenhum código de tempo real novo).
+    if (isHypitoDm && trimmed) {
+      setHypitoPendingActionId(null);
+      void sendHypitoMessage({ data: { text: trimmed } })
+        .then((res) => {
+          if (res.ok && res.pendingActionId) setHypitoPendingActionId(res.pendingActionId);
+        })
+        .catch((err: unknown) => {
+          console.warn("[hypito] falha ao processar mensagem", err);
+        });
+    }
     setReplyingTo(null);
   };
 
@@ -564,6 +605,21 @@ export function ChatSection() {
               </p>
               <span className="text-[11px] text-muted-foreground">projeto</span>
             </>
+          ) : isHypitoDm ? (
+            <>
+              <span className="relative h-7 w-7 shrink-0">
+                <img
+                  src={HYPITO_AVATAR_URL}
+                  alt=""
+                  className="h-7 w-7 rounded-full object-cover"
+                  aria-hidden="true"
+                />
+              </span>
+              <p className="min-w-0 truncate text-sm font-semibold md:text-base">{HYPITO_NAME}</p>
+              <Badge variant="brand" title={HYPITO_TAGLINE} aria-label={HYPITO_BADGE_LABEL}>
+                {HYPITO_BADGE_LABEL}
+              </Badge>
+            </>
           ) : activeDmPartner ? (
             (() => {
               const status = getStatus(activeDmPartner.id);
@@ -608,7 +664,7 @@ export function ChatSection() {
                 />
               </div>
             )}
-            {activeDmPartner && !isSelfDm && (
+            {activeDmPartner && !isSelfDm && !isHypitoDm && (
               <button
                 onClick={() => {
                   if (callState.status !== "idle") return;
@@ -652,6 +708,13 @@ export function ChatSection() {
           </div>
         </header>
 
+        {isHypitoDm && (
+          <div className="shrink-0 border-b border-border bg-warning-soft px-4 py-2 text-center text-xs text-warning-soft-foreground">
+            O Hypito está em beta e pode cometer erros — confira as informações antes de confiar
+            nelas.
+          </div>
+        )}
+
         {!activeId ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.5} />
@@ -667,27 +730,38 @@ export function ChatSection() {
               </div>
             )}
 
-            <MessageList
-              convoId={activeId}
-              messages={visibleMessages}
-              messagesById={messagesById}
-              meId={me.id}
-              onEdit={updateMessage}
-              onDelete={deleteMessage}
-              onReply={setReplyingTo}
-              onReact={(id, emoji) => void toggleReaction(id, emoji)}
-              allowUserMentions={!isDm}
-              members={members}
-              tasks={tasks}
-              projects={projects}
-              campaigns={campaigns}
-              clients={clientMentions}
-              isDm={isDm}
-              otherUserId={activeDmPartner?.id}
-              typingUsers={typingUsers}
-              onOpenTask={openTask}
-              onOpenMention={openMention}
-            />
+            {isHypitoDm && convoMessages.length === 0 ? (
+              <HypitoEmptyState onPick={(suggestion) => sendMessage(suggestion, [], [])} />
+            ) : (
+              <MessageList
+                convoId={activeId}
+                messages={visibleMessages}
+                messagesById={messagesById}
+                meId={me.id}
+                onEdit={updateMessage}
+                onDelete={deleteMessage}
+                onReply={setReplyingTo}
+                onReact={(id, emoji) => void toggleReaction(id, emoji)}
+                allowUserMentions={!isDm}
+                members={members}
+                tasks={tasks}
+                projects={projects}
+                campaigns={campaigns}
+                clients={clientMentions}
+                isDm={isDm}
+                otherUserId={activeDmPartner?.id}
+                typingUsers={typingUsers}
+                onOpenTask={openTask}
+                onOpenMention={openMention}
+              />
+            )}
+
+            {isHypitoDm && hypitoPendingActionId && (
+              <HypitoConfirmBar
+                pendingActionId={hypitoPendingActionId}
+                onResolved={() => setHypitoPendingActionId(null)}
+              />
+            )}
 
             {!isSelfDm && (
               <Composer
@@ -845,6 +919,7 @@ function ChatListRow({
   onSelect,
   onEdit,
   onDelete,
+  assistant,
 }: {
   item: ChatListItem;
   active: boolean;
@@ -852,6 +927,9 @@ function ChatListRow({
   onSelect: () => void;
   onEdit?: (e: React.MouseEvent) => void;
   onDelete?: (e: React.MouseEvent) => void;
+  /** Linha fixada do Hypito — mostra o selo "Assistente" em vez do ponto
+   * de presença (o bot nunca simula presença humana). */
+  assistant?: boolean;
 }) {
   return (
     <div
@@ -880,11 +958,18 @@ function ChatListRow({
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span
-            className={`block truncate text-sm ${item.unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}
-          >
-            {item.name}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`block truncate text-sm ${item.unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}
+            >
+              {item.name}
+            </span>
+            {assistant && (
+              <Badge variant="brand" className="shrink-0 px-1.5 py-0 text-[9px] normal-case">
+                {HYPITO_BADGE_LABEL}
+              </Badge>
+            )}
+          </div>
           <span className="block truncate text-xs text-muted-foreground">
             {item.lastMessage
               ? `${item.lastMessage.authorId === meId ? "Você: " : ""}${messagePreviewLabel(item.lastMessage)}`
@@ -934,6 +1019,55 @@ function ChatListRow({
  * dentro da própria aba, estilo WhatsApp Web: diretas por mais recente
  * primeiro, canais/campanhas/projetos numa seção fixa embaixo (também por
  * recência). Clicar abre a conversa ao lado, sem sair da tela. */
+const HYPITO_SUGGESTIONS = [
+  "O que tenho para hoje?",
+  "Quais tarefas estão atrasadas?",
+  "Qual é minha próxima reunião?",
+  "Quais campanhas precisam de atenção?",
+  "Criar uma tarefa",
+  "Criar um lembrete",
+];
+
+/** Estado vazio da conversa com o Hypito — some assim que a primeira
+ * mensagem é trocada (a checagem é `convoMessages.length === 0`, não um
+ * flag próprio), igual ao padrão de qualquer outra conversa nova. */
+function HypitoEmptyState({ onPick }: { onPick: (text: string) => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8 text-center">
+      <img
+        src={HYPITO_AVATAR_URL}
+        alt=""
+        className="h-14 w-14 rounded-full object-cover"
+        aria-hidden="true"
+      />
+      <div className="max-w-sm space-y-1">
+        <div className="flex items-center justify-center gap-1.5 text-sm font-semibold text-foreground">
+          {HYPITO_NAME}
+          <Badge variant="brand" className="text-[9px] normal-case">
+            {HYPITO_BADGE_LABEL}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Olá! Eu sou o Hypito. Posso consultar suas tarefas, agenda, projetos e campanhas, além de
+          ajudar a criar tarefas e lembretes.
+        </p>
+      </div>
+      <div className="flex max-w-md flex-wrap items-center justify-center gap-1.5">
+        {HYPITO_SUGGESTIONS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onPick(s)}
+            className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-brand/40 hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ChatConversationList({
   channels,
   campaignChannels,
@@ -968,6 +1102,19 @@ function ChatConversationList({
   const byRecency = (a: ChatListItem, b: ChatListItem) =>
     (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0);
   const byName = (a: ChatListItem, b: ChatListItem) => a.name.localeCompare(b.name, "pt-BR");
+  const hypitoConvoId = dmId(meId, HYPITO_AUTHOR_ID);
+  const hypitoItem: ChatListItem = useMemo(
+    () => ({
+      id: hypitoConvoId,
+      name: HYPITO_NAME,
+      photo: HYPITO_AVATAR_URL,
+      kind: "dm",
+      lastMessage: getLastMessageByConvo(messages).get(hypitoConvoId),
+      unread: getUnreadCount(hypitoConvoId, messages, meId),
+    }),
+
+    [messages, meId, hypitoConvoId],
+  );
   const diretas = filtered.filter((i) => i.kind === "dm").sort(byRecency);
   const canais = filtered.filter((i) => i.kind === "channel").sort(byName);
   const campanhas = filtered.filter((i) => i.kind === "campanha").sort(byName);
@@ -1061,6 +1208,17 @@ function ChatConversationList({
           </p>
         ) : (
           <>
+            {(!q || hypitoItem.name.toLowerCase().includes(q)) && (
+              <div className="mb-2">
+                <ChatListRow
+                  item={hypitoItem}
+                  active={hypitoItem.id === activeId}
+                  meId={meId}
+                  onSelect={() => onSelectConvo(hypitoItem.id)}
+                  assistant
+                />
+              </div>
+            )}
             {diretas.length > 0 && (
               <div className="mb-2">
                 <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1166,6 +1324,57 @@ const CHAT_TASK_PRIORITY_TONE: Record<string, string> = {
   Normal: "text-sky-600 dark:text-sky-400",
   Baixa: "text-muted-foreground",
 };
+
+/** Barra de confirmação do Hypito (criar tarefa/lembrete) — nunca
+ * executa nada sozinho: só chama `confirmHypitoAction`/
+ * `cancelHypitoAction`, que revalidam permissão/expiração no servidor
+ * antes de qualquer escrita real (pedido, seção 3: "nunca permitir que o
+ * modelo altere dados diretamente"). Renderizada acima do composer
+ * enquanto há uma ação pendente da última mensagem enviada — `chat_messages`
+ * não tem (ainda) uma coluna pra anexar isso a uma mensagem específica
+ * (exigiria uma migration aplicada remotamente, fora do escopo desta
+ * tarefa), então o id vem direto da resposta de `sendHypitoMessage`,
+ * guardado só no estado deste componente. "Editar" não abre um
+ * formulário — cancela esta ação e deixa a pessoa reescrever o pedido
+ * corrigido, mais simples e sem duplicar UI de edição de tarefa. */
+function HypitoConfirmBar({
+  pendingActionId,
+  onResolved,
+}: {
+  pendingActionId: string;
+  onResolved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex items-center gap-2 border-t border-border bg-brand-subtle/40 px-4 py-2">
+      <p className="flex-1 text-xs text-muted-foreground">Confirmar a ação sugerida pelo Hypito?</p>
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await confirmHypitoAction({ data: { pendingActionId } });
+          onResolved();
+        }}
+      >
+        Confirmar
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await cancelHypitoAction({ data: { pendingActionId } });
+          onResolved();
+        }}
+      >
+        Cancelar
+      </Button>
+    </div>
+  );
+}
 
 function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: string) => void }) {
   return (
@@ -1655,6 +1864,16 @@ function MessageList({
                         <span className="text-xs font-semibold text-foreground">
                           {mine ? "Você" : m.authorName}
                         </span>
+                        {isHypitoAuthorId(m.authorId) && (
+                          <Badge
+                            variant="brand"
+                            className="px-1.5 py-0 text-[9px] normal-case"
+                            title={HYPITO_TAGLINE}
+                            aria-label={HYPITO_BADGE_LABEL}
+                          >
+                            {HYPITO_BADGE_LABEL}
+                          </Badge>
+                        )}
                         <span className="text-[10px] text-muted-foreground">
                           {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
                             hour: "2-digit",

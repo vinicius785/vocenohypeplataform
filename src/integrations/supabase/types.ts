@@ -320,6 +320,7 @@ export type Database = {
           is_private: boolean;
           name: string;
           photo: string | null;
+          slug: string | null;
           sort_order: number;
           updated_at: string;
         };
@@ -330,6 +331,7 @@ export type Database = {
           is_private?: boolean;
           name: string;
           photo?: string | null;
+          slug?: string | null;
           sort_order?: number;
           updated_at?: string;
         };
@@ -340,6 +342,7 @@ export type Database = {
           is_private?: boolean;
           name?: string;
           photo?: string | null;
+          slug?: string | null;
           sort_order?: number;
           updated_at?: string;
         };
@@ -1821,6 +1824,339 @@ export type Database = {
           key?: string;
           secret?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hypito_pending_actions: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          payload: Json;
+          status: string;
+          result: Json | null;
+          expires_at: string;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          payload: Json;
+          status?: string;
+          result?: Json | null;
+          expires_at: string;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          kind?: string;
+          payload?: Json;
+          status?: string;
+          result?: Json | null;
+          expires_at?: string;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      hypito_reminders: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          remind_at: string;
+          related_kind: string | null;
+          related_id: string | null;
+          related_link: string | null;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          remind_at: string;
+          related_kind?: string | null;
+          related_id?: string | null;
+          related_link?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          remind_at?: string;
+          related_kind?: string | null;
+          related_id?: string | null;
+          related_link?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Relationships: [];
+      };
+      hypito_user_prefs: {
+        Row: {
+          user_id: string;
+          daily_briefing_enabled: boolean;
+          meeting_reminder_enabled: boolean;
+          muted_alert_types: string[];
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          daily_briefing_enabled?: boolean;
+          meeting_reminder_enabled?: boolean;
+          muted_alert_types?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          daily_briefing_enabled?: boolean;
+          meeting_reminder_enabled?: boolean;
+          muted_alert_types?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hypito_alerts_sent: {
+        Row: {
+          id: string;
+          user_id: string;
+          alert_type: string;
+          item_key: string;
+          first_detected_at: string;
+          last_sent_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          alert_type: string;
+          item_key: string;
+          first_detected_at?: string;
+          last_sent_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          alert_type?: string;
+          item_key?: string;
+          first_detected_at?: string;
+          last_sent_at?: string;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      hypito_meeting_reminders_sent: {
+        Row: {
+          id: string;
+          user_id: string;
+          meeting_id: string;
+          idempotency_key: string;
+          dismissed_at: string | null;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          meeting_id: string;
+          idempotency_key: string;
+          dismissed_at?: string | null;
+          sent_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          meeting_id?: string;
+          idempotency_key?: string;
+          dismissed_at?: string | null;
+          sent_at?: string;
+        };
+        Relationships: [];
+      };
+      hypito_daily_briefing_runs: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          local_date: string;
+          idempotency_key: string;
+          status: string;
+          message_id: string | null;
+          error: string | null;
+          started_at: string;
+          finished_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          local_date: string;
+          idempotency_key: string;
+          status?: string;
+          message_id?: string | null;
+          error?: string | null;
+          started_at?: string;
+          finished_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          user_id?: string;
+          local_date?: string;
+          idempotency_key?: string;
+          status?: string;
+          message_id?: string | null;
+          error?: string | null;
+          started_at?: string;
+          finished_at?: string | null;
+        };
+        Relationships: [];
+      };
+      hypito_action_log: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          target_kind: string | null;
+          target_id: string | null;
+          detail: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          target_kind?: string | null;
+          target_id?: string | null;
+          detail?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          kind?: string;
+          target_kind?: string | null;
+          target_id?: string | null;
+          detail?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      hypito_report_settings: {
+        Row: {
+          workspace_id: string;
+          enabled: boolean;
+          channel_slug: string;
+          weekday: number;
+          hour: number;
+          timezone: string;
+          mention_users: boolean;
+          included_user_ids: string[] | null;
+          excluded_user_ids: string[];
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          workspace_id?: string;
+          enabled?: boolean;
+          channel_slug?: string;
+          weekday?: number;
+          hour?: number;
+          timezone?: string;
+          mention_users?: boolean;
+          included_user_ids?: string[] | null;
+          excluded_user_ids?: string[];
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          workspace_id?: string;
+          enabled?: boolean;
+          channel_slug?: string;
+          weekday?: number;
+          hour?: number;
+          timezone?: string;
+          mention_users?: boolean;
+          included_user_ids?: string[] | null;
+          excluded_user_ids?: string[];
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      hypito_report_runs: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          idempotency_key: string;
+          week_start: string;
+          status: string;
+          trigger: string;
+          triggered_by: string | null;
+          preview: boolean;
+          message_id: string | null;
+          channel_id: string | null;
+          mentioned_user_ids: string[];
+          unavailable_sources: string[];
+          error: string | null;
+          report: Json | null;
+          started_at: string;
+          finished_at: string | null;
+          duration_ms: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          idempotency_key: string;
+          week_start: string;
+          status?: string;
+          trigger: string;
+          triggered_by?: string | null;
+          preview?: boolean;
+          message_id?: string | null;
+          channel_id?: string | null;
+          mentioned_user_ids?: string[];
+          unavailable_sources?: string[];
+          error?: string | null;
+          report?: Json | null;
+          started_at?: string;
+          finished_at?: string | null;
+          duration_ms?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          idempotency_key?: string;
+          week_start?: string;
+          status?: string;
+          trigger?: string;
+          triggered_by?: string | null;
+          preview?: boolean;
+          message_id?: string | null;
+          channel_id?: string | null;
+          mentioned_user_ids?: string[];
+          unavailable_sources?: string[];
+          error?: string | null;
+          report?: Json | null;
+          started_at?: string;
+          finished_at?: string | null;
+          duration_ms?: number | null;
+          created_at?: string;
         };
         Relationships: [];
       };

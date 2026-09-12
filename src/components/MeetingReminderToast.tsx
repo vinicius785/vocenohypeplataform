@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { LogIn, Video, X } from "lucide-react";
+import { LogIn, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { HYPITO_AVATAR_URL, HYPITO_NAME, HYPITO_BADGE_LABEL, HYPITO_TAGLINE } from "@/lib/hypito";
 import {
   loadMeetings,
   saveMeetings,
@@ -160,17 +162,39 @@ export function MeetingReminderToast() {
        * (todos z-50) — antes o card cobria o rodapé de drawers/diálogos
        * abertos em qualquer módulo (achado real durante a rodada corretiva
        * de Clientes, corrigido aqui porque a causa é deste componente
-       * global, não do módulo). Nenhuma lógica de exibição/dedupe mudou. */}
-      <div className="fixed bottom-24 right-4 z-40 w-full max-w-[420px]">
-        <div className="rounded-2xl border border-border bg-background p-4 shadow-xl">
+       * global, não do módulo). Nenhuma lógica de exibição/dedupe mudou.
+       *
+       * Identidade do Hypito (pedido, seção 13): mesmo popup de sempre,
+       * agora com avatar/nome/selo — nunca deve parecer uma notificação
+       * genérica do navegador. Desktop: entra pela lateral direita
+       * (`slide-in-from-right`); no mobile vira um card ancorado embaixo,
+       * respeitando a safe area do teclado/gestos do sistema. Em
+       * `prefers-reduced-motion`, some a animação (`motion-reduce:animate-none`),
+       * mas o popup continua aparecendo normalmente — nunca escondido. */}
+      <div className="fixed inset-x-4 bottom-4 z-40 sm:inset-x-auto sm:bottom-24 sm:right-4 sm:w-full sm:max-w-[420px] [padding-bottom:env(safe-area-inset-bottom)]">
+        <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border border-border bg-background p-4 shadow-xl duration-300 motion-reduce:animate-none sm:slide-in-from-bottom-0 sm:slide-in-from-right-4">
           <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Video className="h-4 w-4" />
-            </span>
+            <img
+              src={HYPITO_AVATAR_URL}
+              alt=""
+              aria-hidden="true"
+              className="h-9 w-9 shrink-0 rounded-full object-cover"
+            />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-tight text-foreground">
-                {meeting.titulo}
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-xs font-semibold text-foreground">{HYPITO_NAME}</p>
+                <Badge
+                  variant="brand"
+                  title={HYPITO_TAGLINE}
+                  className="px-1.5 py-0 text-[9px] normal-case"
+                >
+                  {HYPITO_BADGE_LABEL}
+                </Badge>
+              </div>
+              <p className="mt-0.5 text-sm font-medium leading-tight text-foreground">
+                Sua reunião começa em 5 minutos
               </p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{meeting.titulo}</p>
               <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                 {countdownLabel(meeting, now)}
               </p>
@@ -179,7 +203,7 @@ export function MeetingReminderToast() {
               type="button"
               onClick={() => dismiss(meeting.id)}
               className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Dispensar"
+              aria-label="Dispensar aviso de reunião"
             >
               <X className="h-3.5 w-3.5" />
             </button>

@@ -30,6 +30,7 @@ import {
   DollarSign,
   Bug,
   Sliders,
+  Bot,
   Users,
   History,
   Sparkles,
@@ -98,6 +99,7 @@ import { TIERS, FORMATOS, type TierId, type FormatoId } from "@/lib/pricing";
 import { TimePermissoesTab } from "@/components/configuracoes/TimePermissoesTab";
 import { logSettingsAudit } from "@/lib/settings-audit";
 import { PageContainer } from "@/components/shared/PageContainer";
+import { HypitoReportTab } from "@/components/configuracoes/HypitoReportTab";
 import { DisponibilidadeTab } from "@/components/meetings/DisponibilidadeTab";
 import {
   loadMeetings,
@@ -118,6 +120,7 @@ type TabKey =
   | "seguranca"
   | "dados_backup"
   | "score_operacional"
+  | "hypito"
   | "disponibilidade";
 
 type Perfil = {
@@ -127,7 +130,7 @@ type Perfil = {
   aniversario: string;
   foto?: string;
 };
-export const APP_VERSION = "1.274.0";
+export const APP_VERSION = "1.275.0";
 
 const PERFIL_KEY = "config:perfil";
 const loadPerfil = (): Perfil => {
@@ -210,7 +213,7 @@ const loadSenhas = (): Senha[] => {
  * decorativa "membros" já libera a navegação até ela (ver `permissions.ts`). */
 const RESTRICTED_TABS: TabKey[] = ["workspace", "precificacao", "seguranca"];
 /** Só admin de verdade — nada aqui é liberável por permissão granular. */
-const ADMIN_TABS: TabKey[] = ["dados_backup", "score_operacional"];
+const ADMIN_TABS: TabKey[] = ["dados_backup", "score_operacional", "hypito"];
 
 /** 3 grupos fixos (item 1 do pedido de reorganização): Minha conta,
  * Workspace, Administração. Navegação vertical (não pílulas horizontais
@@ -246,7 +249,10 @@ const SETTINGS_GROUPS: {
   },
   {
     label: "Administração",
-    tabs: [{ k: "score_operacional", label: "Score Operacional", icon: Sliders }],
+    tabs: [
+      { k: "score_operacional", label: "Score Operacional", icon: Sliders },
+      { k: "hypito", label: "Relatório semanal do Hypito", icon: Bot },
+    ],
   },
 ];
 
@@ -329,6 +335,12 @@ export function ConfiguracoesSection() {
               <ScoreOperacionalTab />
             ) : (
               <LockedSection title="Configuração do Score Operacional" />
+            ))}
+          {tab === "hypito" &&
+            (access?.isAdmin ? (
+              <HypitoReportTab />
+            ) : (
+              <LockedSection title="Relatório semanal do Hypito" />
             ))}
 
           <p className="pt-2 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>

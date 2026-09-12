@@ -24,6 +24,9 @@ import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descad
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
 import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/oauth-callback'
+import { Route as ApiCronHypitoWeeklyReportRouteImport } from './routes/api/cron/hypito-weekly-report'
+import { Route as ApiCronHypitoDailyBriefingRouteImport } from './routes/api/cron/hypito-daily-briefing'
+import { Route as ApiCronHypitoAlertsRouteImport } from './routes/api/cron/hypito-alerts'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 
@@ -105,6 +108,23 @@ const ApiGoogleOauthCallbackRoute = ApiGoogleOauthCallbackRouteImport.update({
   path: '/api/google/oauth-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronHypitoWeeklyReportRoute =
+  ApiCronHypitoWeeklyReportRouteImport.update({
+    id: '/api/cron/hypito-weekly-report',
+    path: '/api/cron/hypito-weekly-report',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronHypitoDailyBriefingRoute =
+  ApiCronHypitoDailyBriefingRouteImport.update({
+    id: '/api/cron/hypito-daily-briefing',
+    path: '/api/cron/hypito-daily-briefing',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronHypitoAlertsRoute = ApiCronHypitoAlertsRouteImport.update({
+  id: '/api/cron/hypito-alerts',
+  path: '/api/cron/hypito-alerts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronEmailFlowsRoute = ApiCronEmailFlowsRouteImport.update({
   id: '/api/cron/email-flows',
   path: '/api/cron/email-flows',
@@ -129,6 +149,9 @@ export interface FileRoutesByFullPath {
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
+  '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
+  '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -147,6 +170,9 @@ export interface FileRoutesByTo {
   '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
+  '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
+  '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -167,6 +193,9 @@ export interface FileRoutesById {
   '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
+  '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
+  '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
   '/api/google/oauth-callback': typeof ApiGoogleOauthCallbackRoute
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
@@ -187,6 +216,9 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/hypito-alerts'
+    | '/api/cron/hypito-daily-briefing'
+    | '/api/cron/hypito-weekly-report'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
@@ -205,6 +237,9 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/hypito-alerts'
+    | '/api/cron/hypito-daily-briefing'
+    | '/api/cron/hypito-weekly-report'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
@@ -224,6 +259,9 @@ export interface FileRouteTypes {
     | '/portal/$token'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/hypito-alerts'
+    | '/api/cron/hypito-daily-briefing'
+    | '/api/cron/hypito-weekly-report'
     | '/api/google/oauth-callback'
     | '/api/public/leads'
     | '/api/webhooks/resend'
@@ -238,6 +276,9 @@ export interface RootRouteChildren {
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   PortalTokenRoute: typeof PortalTokenRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
+  ApiCronHypitoAlertsRoute: typeof ApiCronHypitoAlertsRoute
+  ApiCronHypitoDailyBriefingRoute: typeof ApiCronHypitoDailyBriefingRoute
+  ApiCronHypitoWeeklyReportRoute: typeof ApiCronHypitoWeeklyReportRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
   ApiPublicLeadsRoute: typeof ApiPublicLeadsRoute
   ApiWebhooksResendRoute: typeof ApiWebhooksResendRoute
@@ -351,6 +392,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGoogleOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/hypito-weekly-report': {
+      id: '/api/cron/hypito-weekly-report'
+      path: '/api/cron/hypito-weekly-report'
+      fullPath: '/api/cron/hypito-weekly-report'
+      preLoaderRoute: typeof ApiCronHypitoWeeklyReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/hypito-daily-briefing': {
+      id: '/api/cron/hypito-daily-briefing'
+      path: '/api/cron/hypito-daily-briefing'
+      fullPath: '/api/cron/hypito-daily-briefing'
+      preLoaderRoute: typeof ApiCronHypitoDailyBriefingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/hypito-alerts': {
+      id: '/api/cron/hypito-alerts'
+      path: '/api/cron/hypito-alerts'
+      fullPath: '/api/cron/hypito-alerts'
+      preLoaderRoute: typeof ApiCronHypitoAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/email-flows': {
       id: '/api/cron/email-flows'
       path: '/api/cron/email-flows'
@@ -398,6 +460,9 @@ const rootRouteChildren: RootRouteChildren = {
   InscricaoTokenRoute: InscricaoTokenRoute,
   PortalTokenRoute: PortalTokenRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
+  ApiCronHypitoAlertsRoute: ApiCronHypitoAlertsRoute,
+  ApiCronHypitoDailyBriefingRoute: ApiCronHypitoDailyBriefingRoute,
+  ApiCronHypitoWeeklyReportRoute: ApiCronHypitoWeeklyReportRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,
   ApiPublicLeadsRoute: ApiPublicLeadsRoute,
   ApiWebhooksResendRoute: ApiWebhooksResendRoute,
