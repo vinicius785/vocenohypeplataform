@@ -710,7 +710,7 @@ export function ChatSection() {
 
         {isHypitoDm && (
           <div className="shrink-0 border-b border-border bg-warning-soft px-4 py-2 text-center text-xs text-warning-soft-foreground">
-            O Hypito está em beta e pode cometer erros — confira as informações antes de confiar
+            O Hypito está em beta e pode cometer erros. Confira as informações antes de confiar
             nelas.
           </div>
         )}
