@@ -42,8 +42,13 @@ import {
   sendHypitoMessage,
   confirmHypitoAction,
   cancelHypitoAction,
-  getHypitoActivePendingAction,
 } from "@/lib/hypito-chat.functions";
+import {
+  parseHypitoMessage,
+  type HypitoEntityRef,
+  type HypitoTaskFilterKind,
+} from "@/lib/hypito-messages";
+import { HypitoMessageCard, type HypitoCardHandlers } from "@/components/hypito/HypitoMessageCards";
 import {
   getMe,
   loadMembers,
@@ -262,22 +267,6 @@ export function ChatSection() {
     return members.find((m) => m.id === otherId) ?? { id: otherId, name: otherId };
   }, [activeId, isDm, members, me.id]);
   const isHypitoDm = isDm && isHypitoAuthorId(activeDmPartner?.id);
-  const [hypitoPendingActionId, setHypitoPendingActionId] = useState<string | null>(null);
-  // A ação pendente vive persistida em `hypito_pending_actions` — ao
-  // (re)abrir a conversa (ou dar F5 no meio de uma confirmação), busca
-  // se já existe uma em aberto, em vez de só zerar o estado local (o que
-  // fazia o card "sumir" sem ter sido cancelado de verdade).
-  useEffect(() => {
-    setHypitoPendingActionId(null);
-    if (!isHypitoDm) return;
-    let cancelled = false;
-    void getHypitoActivePendingAction().then((res) => {
-      if (!cancelled) setHypitoPendingActionId(res.pendingActionId);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeId, isHypitoDm]);
 
   const convoMessages = useMemo(
     () => messages.filter((m) => m.convoId === activeId).sort((a, b) => a.createdAt - b.createdAt),
@@ -460,16 +449,79 @@ export function ChatSection() {
     // normal — o Realtime já existente entrega ela pra este cliente e pra
     // qualquer outra aba aberta, sem nenhum código de tempo real novo).
     if (isHypitoDm && trimmed) {
-      setHypitoPendingActionId(null);
-      void sendHypitoMessage({ data: { text: trimmed } })
-        .then((res) => {
-          if (res.ok && res.pendingActionId) setHypitoPendingActionId(res.pendingActionId);
-        })
-        .catch((err: unknown) => {
-          console.warn("[hypito] falha ao processar mensagem", err);
-        });
+      // A resposta chega como uma mensagem normal (Realtime já existente)
+      // com `hypitoPayload` estruturado — o card de confirmação (se
+      // houver) vem embutido nela mesma, sem estado local separado pra
+      // sincronizar.
+      void sendHypitoMessage({ data: { text: trimmed } }).catch((err: unknown) => {
+        console.warn("[hypito] falha ao processar mensagem", err);
+      });
     }
     setReplyingTo(null);
+  };
+
+  /** Navegação a partir de uma `HypitoEntityRef` (nunca uma rota crua
+   * vinda do backend) — reaproveita exatamente os mesmos caminhos já
+   * usados pelas @menções do Chat (`openTask`/`openCampanha`/etc.),
+   * então nenhuma rota nova precisou ser inventada. Tarefa com escopo
+   * (campanha/projeto) usa o `meta` do próprio ref pra ir direto, sem
+   * depender do índice local de tarefas já estar atualizado logo após a
+   * criação. */
+  const onOpenHypitoEntity = (ref: HypitoEntityRef) => {
+    if (ref.type === "task") {
+      const scope = ref.meta?.scope as string | null | undefined;
+      const scopeId = ref.meta?.scopeId as string | null | undefined;
+      if (scope === "campanha" && scopeId) {
+        sessionStorage.setItem(
+          OPEN_CAMPANHA_TASK_KEY,
+          JSON.stringify({ campanhaId: scopeId, taskId: ref.id }),
+        );
+        navigate({ to: "/time", search: { section: "campanhas" satisfies SectionKey } });
+        return;
+      }
+      if (scope === "projeto" && scopeId) {
+        navigate({ to: "/projeto/$id", params: { id: scopeId }, search: { taskId: ref.id } });
+        return;
+      }
+      openTask(ref.id);
+      return;
+    }
+    if (ref.type === "campaign") return openCampanha(ref.id);
+    if (ref.type === "project") {
+      navigate({ to: "/projeto/$id", params: { id: ref.id } });
+      return;
+    }
+    if (ref.type === "user") return openMemberProfile(ref.id);
+    if (ref.type === "client") return openCliente(ref.id);
+    if (ref.type === "meeting") {
+      // Não existe ainda uma rota de detalhe por reunião — abre a lista
+      // real de Reuniões em vez de inventar uma URL nova.
+      navigate({ to: "/time", search: { section: "reunioes" satisfies SectionKey } });
+    }
+  };
+  const onOpenHypitoFilter = (filter: { kind: HypitoTaskFilterKind; scopeId?: string }) => {
+    if (filter.kind === "campanha" && filter.scopeId) return openCampanha(filter.scopeId);
+    if (filter.kind === "projeto" && filter.scopeId) {
+      navigate({ to: "/projeto/$id", params: { id: filter.scopeId } });
+      return;
+    }
+    navigate({ to: "/time", search: { section: "projetos" satisfies SectionKey } });
+  };
+  const hypitoHandlers: HypitoCardHandlers = {
+    onOpenEntity: onOpenHypitoEntity,
+    onOpenFilter: onOpenHypitoFilter,
+    onOpenAgenda: () =>
+      navigate({ to: "/time", search: { section: "reunioes" satisfies SectionKey } }),
+    onConfirmTask: async (pendingActionId) => {
+      await confirmHypitoAction({ data: { pendingActionId } });
+    },
+    onCancelTask: async (pendingActionId) => {
+      await cancelHypitoAction({ data: { pendingActionId, reason: "cancel" } });
+    },
+    onEditTask: async (pendingActionId) => {
+      await cancelHypitoAction({ data: { pendingActionId, reason: "edit" } });
+    },
+    onSelectChoice: (name) => sendMessage(name, [], []),
   };
 
   const updateMessage = (id: string, text: string, mentions: ChatMention[]) => {
@@ -768,20 +820,7 @@ export function ChatSection() {
                 typingUsers={typingUsers}
                 onOpenTask={openTask}
                 onOpenMention={openMention}
-              />
-            )}
-
-            {isHypitoDm && hypitoPendingActionId && (
-              <HypitoConfirmBar
-                pendingActionId={hypitoPendingActionId}
-                onResolved={() => setHypitoPendingActionId(null)}
-                onEdit={() => {
-                  /* "Editar" hoje cancela e convida a pessoa a reescrever
-                   * o pedido (ver `cancelHypitoAction`, reason:"edit") —
-                   * não existe ainda uma UI de formulário pra editar
-                   * campo a campo sem perder o resto (documentado como
-                   * limitação). */
-                }}
+                hypitoHandlers={hypitoHandlers}
               />
             )}
 
@@ -1347,80 +1386,6 @@ const CHAT_TASK_PRIORITY_TONE: Record<string, string> = {
   Baixa: "text-muted-foreground",
 };
 
-/** Barra de confirmação do Hypito (criar tarefa/lembrete) — nunca
- * executa nada sozinho: só chama `confirmHypitoAction`/
- * `cancelHypitoAction`, que revalidam permissão/expiração no servidor
- * antes de qualquer escrita real (pedido, seção 3: "nunca permitir que o
- * modelo altere dados diretamente"). Renderizada acima do composer
- * enquanto há uma ação pendente da última mensagem enviada — `chat_messages`
- * não tem (ainda) uma coluna pra anexar isso a uma mensagem específica
- * (exigiria uma migration aplicada remotamente, fora do escopo desta
- * tarefa), então o id vem direto da resposta de `sendHypitoMessage`,
- * guardado só no estado deste componente. "Editar" não abre um
- * formulário — cancela esta ação e deixa a pessoa reescrever o pedido
- * corrigido, mais simples e sem duplicar UI de edição de tarefa. */
-function HypitoConfirmBar({
-  pendingActionId,
-  onResolved,
-  onEdit,
-}: {
-  pendingActionId: string;
-  onResolved: () => void;
-  /** "Editar" cancela a ação pendente E foca o composer pra reescrever
-   * — nunca abre um formulário próprio (nenhuma UI de edição de tarefa
-   * duplicada), mas também nunca é interpretado como um "Cancelar"
-   * silencioso: some cópia distinta é postada pra deixar claro o que
-   * aconteceu. */
-  onEdit: () => void;
-}) {
-  const [busy, setBusy] = useState<"confirm" | "cancel" | "edit" | null>(null);
-  const disabled = busy !== null;
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-border bg-brand-subtle/40 px-4 py-2">
-      <p className="w-full text-xs text-muted-foreground sm:w-auto sm:flex-1">
-        Confirmar a ação sugerida pelo Hypito?
-      </p>
-      <Button
-        size="sm"
-        variant="primary"
-        disabled={disabled}
-        onClick={async () => {
-          setBusy("confirm");
-          await confirmHypitoAction({ data: { pendingActionId } });
-          onResolved();
-        }}
-      >
-        {busy === "confirm" ? "Confirmando…" : "Confirmar criação"}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled}
-        onClick={async () => {
-          setBusy("edit");
-          await cancelHypitoAction({ data: { pendingActionId, reason: "edit" } });
-          onResolved();
-          onEdit();
-        }}
-      >
-        Editar
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={disabled}
-        onClick={async () => {
-          setBusy("cancel");
-          await cancelHypitoAction({ data: { pendingActionId, reason: "cancel" } });
-          onResolved();
-        }}
-      >
-        Cancelar
-      </Button>
-    </div>
-  );
-}
-
 function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: string) => void }) {
   return (
     <button
@@ -1532,6 +1497,7 @@ function MessageList({
   typingUsers,
   onOpenTask,
   onOpenMention,
+  hypitoHandlers,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -1552,6 +1518,7 @@ function MessageList({
   typingUsers: { userId: string; userName: string }[];
   onOpenTask: (taskId: string) => void;
   onOpenMention: (m: ChatMention) => void;
+  hypitoHandlers?: HypitoCardHandlers;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Posição de rolagem por conversa (o próprio `scrollRef` é reaproveitado
@@ -1731,6 +1698,15 @@ function MessageList({
             const mine = m.authorId === meId;
             const showDayDivider = !prev || !isSameDay(prev.createdAt, m.createdAt);
             const editing = editingId === m.id;
+            // Payload estruturado do Hypito (cards/ações) — só mensagens
+            // do próprio Hypito têm isso; versão desconhecida/malformada
+            // ou de mensagem antiga (sem payload) cai pro texto simples
+            // de sempre (pedido, seção 19: "payload inválido usa
+            // textFallback"/"mensagem antiga continua como texto").
+            const hypitoPayload =
+              isHypitoAuthorId(m.authorId) && hypitoHandlers
+                ? parseHypitoMessage(m.hypitoPayload)
+                : null;
             if (m.authorId === "system") {
               const isCallRecord = m.text.startsWith("📞");
               const dayDividerEl = showDayDivider && (
@@ -1964,21 +1940,25 @@ function MessageList({
                       />
                     ) : (
                       <div className="flex w-full flex-col items-start gap-1.5 md:w-fit md:max-w-full">
-                        {m.text && (
-                          <div
-                            className={`md:max-w-full md:rounded-2xl md:px-3 md:py-2 ${
-                              mine ? "md:bg-brand-subtle" : "md:bg-muted/70"
-                            }`}
-                          >
-                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground md:leading-normal">
-                              {renderText(m.text, m.mentions, onOpenMention)}
-                              {m.editedAt && (
-                                <span className="ml-1 text-[10px] text-muted-foreground">
-                                  (editado)
-                                </span>
-                              )}
-                            </p>
-                          </div>
+                        {hypitoPayload && hypitoPayload.kind !== "text" ? (
+                          <HypitoMessageCard payload={hypitoPayload} handlers={hypitoHandlers!} />
+                        ) : (
+                          m.text && (
+                            <div
+                              className={`md:max-w-full md:rounded-2xl md:px-3 md:py-2 ${
+                                mine ? "md:bg-brand-subtle" : "md:bg-muted/70"
+                              }`}
+                            >
+                              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground md:leading-normal">
+                                {renderText(m.text, m.mentions, onOpenMention)}
+                                {m.editedAt && (
+                                  <span className="ml-1 text-[10px] text-muted-foreground">
+                                    (editado)
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          )
                         )}
                         {onOpenTask &&
                           taskMentionsOf(m.mentions, taskInfoById).map((task) => (

@@ -31,6 +31,10 @@ export type TaskDraft = {
   title: string;
   assigneeName: string | null;
   assigneeId: string | null;
+  /** `true` quando `assigneeId` é um default sugerido (o próprio
+   * solicitante), não um nome dado explicitamente — só informativo pro
+   * log de auditoria, não muda a persistência. */
+  assigneeIsRequester?: boolean;
   scope: "projeto" | "campanha" | null;
   scopeId: string | null;
   scopeName: string | null;
@@ -115,7 +119,24 @@ export async function getActivePendingAction(
 }
 
 export type ConfirmResult =
-  | { ok: true; alreadyDone: boolean; taskId: string; link: string }
+  | {
+      ok: true;
+      alreadyDone: boolean;
+      kind: "create_task" | "create_reminder";
+      taskId: string;
+      title: string;
+      /** Nunca uma rota — só o suficiente pra quem monta o card
+       * (`hypito-chat.functions.ts`) construir uma `HypitoEntityRef` real
+       * (a navegação de verdade é decidida pelo frontend, nunca por uma
+       * URL vinda daqui). `null`/`null` = tarefa sem campanha/projeto. */
+      scope: "projeto" | "campanha" | null;
+      scopeId: string | null;
+      scopeName: string | null;
+      assigneeName: string | null;
+      assigneeIsRequester: boolean;
+      dueAtIso: string | null;
+      priority: "Urgente" | "Alta" | "Normal" | "Baixa";
+    }
   | { ok: false; error: string };
 
 export async function confirmPendingAction(
@@ -135,9 +156,9 @@ export async function confirmPendingAction(
   }
 
   if (pending.status === "confirmed" && pending.result) {
-    const result = pending.result as { taskId?: string; link?: string };
-    if (result.taskId && result.link) {
-      return { ok: true, alreadyDone: true, taskId: result.taskId, link: result.link };
+    const result = pending.result as (ConfirmResult & { ok: true }) | null;
+    if (result?.taskId) {
+      return { ...result, alreadyDone: true };
     }
   }
   if (pending.status !== "pending") {
@@ -214,13 +235,23 @@ export async function confirmPendingAction(
       }
       if (insertError) throw new HypitoError("persistence_unavailable");
 
-      const link =
-        draft.scope === "projeto" && draft.scopeId
-          ? `/projeto/${draft.scopeId}?taskId=${id}`
-          : `/time?section=campanhas`;
+      const result: ConfirmResult = {
+        ok: true,
+        alreadyDone: false,
+        kind: "create_task",
+        taskId: id,
+        title: draft.title,
+        scope: draft.scope,
+        scopeId: draft.scopeId,
+        scopeName: draft.scopeName,
+        assigneeName: draft.assigneeName,
+        assigneeIsRequester: draft.assigneeIsRequester ?? false,
+        dueAtIso: draft.dueAtIso,
+        priority: draft.priority,
+      };
       await db
         .from("hypito_pending_actions")
-        .update({ result: { taskId: id, link } })
+        .update({ result: result as unknown as never })
         .eq("id", pendingActionId);
       await db.from("hypito_action_log").insert({
         user_id: requesterId,
@@ -229,7 +260,7 @@ export async function confirmPendingAction(
         target_id: id,
         detail: { title: draft.title, scopeId: draft.scopeId, viaHypito: true } as unknown as never,
       });
-      return { ok: true, alreadyDone: false, taskId: id, link };
+      return result;
     }
 
     if (pending.kind === "create_reminder") {
@@ -251,10 +282,23 @@ export async function confirmPendingAction(
         .single();
       if (insertError || !reminder) throw new HypitoError("persistence_unavailable");
 
-      const link = "/time?section=chat";
+      const result: ConfirmResult = {
+        ok: true,
+        alreadyDone: false,
+        kind: "create_reminder",
+        taskId: reminder.id,
+        title: draft.title,
+        scope: null,
+        scopeId: null,
+        scopeName: null,
+        assigneeName: null,
+        assigneeIsRequester: false,
+        dueAtIso: draft.remindAtIso,
+        priority: "Normal",
+      };
       await db
         .from("hypito_pending_actions")
-        .update({ result: { taskId: reminder.id, link } })
+        .update({ result: result as unknown as never })
         .eq("id", pendingActionId);
       await db.from("hypito_action_log").insert({
         user_id: requesterId,
@@ -263,7 +307,7 @@ export async function confirmPendingAction(
         target_id: reminder.id,
         detail: { title: draft.title, remindAtIso: draft.remindAtIso } as unknown as never,
       });
-      return { ok: true, alreadyDone: false, taskId: reminder.id, link };
+      return result;
     }
 
     throw new HypitoError("unknown");

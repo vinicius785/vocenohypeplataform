@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractAssigneeName,
+  extractBareEntityCandidate,
   extractDateTime,
   extractedDateTimeToUtcMs,
   extractPriority,
@@ -84,6 +85,26 @@ describe("extractScopeName", () => {
 
   it("sem menção a projeto/campanha, devolve null", () => {
     expect(extractScopeName("revisar a proposta amanhã")).toBeNull();
+  });
+});
+
+describe("extractBareEntityCandidate", () => {
+  it("captura o nome quando ele é literalmente a última palavra da frase", () => {
+    expect(extractBareEntityCandidate("cobrar as métricas da Jackery")).toBe("Jackery");
+  });
+
+  it("captura o nome mesmo com data/hora depois dele (bug real corrigido — regex antiga exigia fim de frase)", () => {
+    expect(extractBareEntityCandidate("Falar com o cliente da Jackery amanhã às 15h")).toBe(
+      "Jackery",
+    );
+  });
+
+  it("captura o nome mesmo com dia da semana depois dele", () => {
+    expect(extractBareEntityCandidate("cobrar métricas da Jackery sexta às 10h")).toBe("Jackery");
+  });
+
+  it("sem 'da/do/na/no' + nome próprio, devolve null", () => {
+    expect(extractBareEntityCandidate("revisar a proposta amanhã às 15h")).toBeNull();
   });
 });
 

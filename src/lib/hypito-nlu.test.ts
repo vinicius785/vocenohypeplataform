@@ -102,4 +102,26 @@ describe("resolveDateRange", () => {
     // 2026-09-07 é segunda-feira.
     expect(range.start.toISOString().slice(0, 10)).toBe("2026-09-07");
   });
+
+  it("'this_week' termina na segunda seguinte (exclusivo) — não em 'agora + 14 dias'", () => {
+    const range = resolveDateRange({ kind: "this_week" }, now)!;
+    expect(range.end.toISOString().slice(0, 10)).toBe("2026-09-14");
+  });
+
+  it("'next_week' num sábado devolve segunda a domingo da semana seguinte, não 'hoje+7/+14 dias' (bug real corrigido)", () => {
+    const saturday = new Date("2026-09-12T15:00:00.000Z"); // sábado, 12/09
+    const range = resolveDateRange({ kind: "next_week" }, saturday)!;
+    // Início: segunda 14/09 00:00 BRT. Fim (exclusivo): segunda 21/09 00:00
+    // BRT — ou seja, cobre até domingo 20/09, nunca 21/09 ou 22/09.
+    expect(range.start.toISOString().slice(0, 10)).toBe("2026-09-14");
+    expect(range.end.toISOString().slice(0, 10)).toBe("2026-09-21");
+  });
+
+  it("'next_week' nunca se confunde com 'próximos 7 dias' (janelas diferentes)", () => {
+    const saturday = new Date("2026-09-12T15:00:00.000Z");
+    const nextWeek = resolveDateRange({ kind: "next_week" }, saturday)!;
+    const next7Days = { start: saturday, end: new Date(saturday.getTime() + 7 * 86_400_000) };
+    expect(nextWeek.start.getTime()).not.toBe(next7Days.start.getTime());
+    expect(nextWeek.end.getTime()).not.toBe(next7Days.end.getTime());
+  });
 });

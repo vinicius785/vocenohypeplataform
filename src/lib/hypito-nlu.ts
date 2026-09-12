@@ -15,7 +15,8 @@
  * tarefas", "criar tarefa" reconhecem a mesma intenção sem precisar de
  * uma lista crescente de frases fixas (pedido, seção 3/4).
  */
-import { computeReportWindow } from "@/lib/hypito-window";
+import { zonedWallTimeToUtcMs } from "@/lib/hypito-window";
+import { startOfWeekIsoBrasilia, addDaysIso, BRASILIA_TZ } from "@/lib/timezone";
 import { normalizeForMatch, stripStopwords, tokenize, hasCloseToken } from "@/lib/hypito-normalize";
 
 export type DateRangeIntent =
@@ -192,13 +193,29 @@ export function classify(rawText: string): ClassifiedIntent {
   return { intent, confidence: "high" };
 }
 
-/** Janela de datas real (America/Sao_Paulo) pro intent de data — usa a
- * mesma base de `hypito-window.ts` (nunca reimplementa fuso horário). */
+/** Início (segunda 00:00, inclusivo) e fim (segunda seguinte 00:00,
+ * exclusivo) da semana de calendário que começa em `weekStartIso`, como
+ * instantes UTC — sempre em `America/Sao_Paulo`, nunca no fuso do
+ * processo. */
+function weekRangeFrom(weekStartIso: string): { start: Date; end: Date } {
+  const start = new Date(zonedWallTimeToUtcMs(weekStartIso, 0, 0, BRASILIA_TZ));
+  const end = new Date(zonedWallTimeToUtcMs(addDaysIso(weekStartIso, 7), 0, 0, BRASILIA_TZ));
+  return { start, end };
+}
+
+/** Janela de datas real (America/Sao_Paulo) pro intent de data.
+ *
+ * "esta semana"/"próxima semana" usam limites de CALENDÁRIO (segunda a
+ * domingo), nunca "hoje + N dias" — antes disso, "próxima semana" pedida
+ * num sábado (ex.: 12/09) reaproveitava `computeReportWindow` (pensado
+ * pro relatório semanal, baseado em "agora + 7/14 dias") e devolvia
+ * 19/09–26/09 em vez de segunda 14/09 a domingo 20/09, um bug real
+ * observado em produção. "Próximos 7 dias" continua sendo um intent
+ * separado (`upcoming_tasks`), nunca confundido com "próxima semana". */
 export function resolveDateRange(
   range: DateRangeIntent,
   now: Date = new Date(),
 ): { start: Date; end: Date } | null {
-  const window = computeReportWindow(now);
   switch (range.kind) {
     case "today": {
       const start = new Date(now);
@@ -214,9 +231,9 @@ export function resolveDateRange(
       return { start, end };
     }
     case "this_week":
-      return { start: window.periodStart, end: window.nextWeekEnd };
+      return weekRangeFrom(startOfWeekIsoBrasilia(now));
     case "next_week":
-      return { start: window.next7DaysEnd, end: window.nextWeekEnd };
+      return weekRangeFrom(addDaysIso(startOfWeekIsoBrasilia(now), 7));
     case "none":
       return null;
   }

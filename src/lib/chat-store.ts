@@ -80,6 +80,12 @@ export type ChatMessage = {
   /** emoji -> user ids who reacted with it */
   reactions?: Record<string, string[]>;
   replyToId?: string;
+  /** Payload estruturado do Hypito (cards/ações) — só mensagens do
+   * próprio Hypito têm isso; `text` continua sendo o fallback legível
+   * pra busca/notificações/clientes antigos. Tipo real em
+   * `hypito-messages.ts` (não importado aqui pra manter este módulo
+   * genérico de chat sem depender de tipos específicos do Hypito). */
+  hypitoPayload?: unknown;
 };
 
 export const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
@@ -187,10 +193,11 @@ type MessageRow = {
   reply_to_id?: string | null;
   created_at: string;
   edited_at: string | null;
+  hypito_payload?: unknown;
 };
 
 const MESSAGE_COLUMNS =
-  "id,convo_id,author_id,author_name,author_photo,text,mentions,attachments,reactions,reply_to_id,created_at,edited_at";
+  "id,convo_id,author_id,author_name,author_photo,text,mentions,attachments,reactions,reply_to_id,created_at,edited_at,hypito_payload";
 type ReadRow = { convo_id: string; last_read_at: string };
 type StatusRow = { user_id: string; status: string; updated_at: string };
 
@@ -225,6 +232,7 @@ function mapMessage(r: MessageRow): ChatMessage {
     attachments,
     reactions,
     replyToId: r.reply_to_id ?? undefined,
+    hypitoPayload: r.hypito_payload ?? undefined,
   };
 }
 
@@ -696,7 +704,10 @@ export async function updateMessageAttachmentMeta(
  * (upload falhou) — só em memória, por tempId; some sozinho se a página
  * recarregar (a mensagem otimista também não sobrevive a isso, já que nunca
  * chegou a ser persistida). */
-const pendingVoiceBlobs = new Map<string, { blob: Blob; mimeType: string; convoId: string; replyToId?: string }>();
+const pendingVoiceBlobs = new Map<
+  string,
+  { blob: Blob; mimeType: string; convoId: string; replyToId?: string }
+>();
 
 async function uploadAndInsertVoiceMessage(
   tempId: string,

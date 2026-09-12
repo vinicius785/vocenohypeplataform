@@ -43,7 +43,7 @@ export function weekdayIndexInBrasilia(date: Date = new Date()): number {
   return order.indexOf(weekdayName);
 }
 
-function addDaysIso(iso: string, days: number): string {
+export function addDaysIso(iso: string, days: number): string {
   const d = parseIsoDateLocal(iso);
   d.setDate(d.getDate() + days);
   return formatDateToIso(d);

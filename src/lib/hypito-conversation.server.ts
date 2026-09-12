@@ -8,6 +8,12 @@
  * então consulta ou prepara uma ação (`hypito-actions.server.ts`) —
  * nunca confirma uma mutação sozinho.
  *
+ * Toda resposta é um `HypitoMessage` estruturado (`hypito-messages.ts`)
+ * — nunca HTML/JSX/rota crua. O `textFallback` de cada payload é sempre
+ * um resumo legível equivalente, usado pra busca/notificações/histórico/
+ * clientes antigos e como rede de segurança se o payload não for
+ * reconhecido pelo frontend.
+ *
  * Sempre no contexto do usuário autenticado da sessão real — nunca de
  * algo que o texto da mensagem afirma (pedido, seção 4: "o usuário nunca
  * deve conseguir ampliar seu acesso pedindo isso ao Hypito").
@@ -37,6 +43,7 @@ import {
   type TaskSummary,
   type MeetingSummary,
   type ScopeSummaryResult,
+  type ListResult,
   type EntityLookup,
 } from "@/lib/hypito-tools.server";
 import {
@@ -67,10 +74,17 @@ import {
   type EntityCandidate,
 } from "@/lib/hypito-entity-resolver";
 import { HypitoError, toSafeReply } from "@/lib/hypito-errors";
+import {
+  HYPITO_MESSAGE_VERSION,
+  type HypitoMessage,
+  type HypitoEntityRef,
+  type HypitoAction,
+  type TaskListItem,
+} from "@/lib/hypito-messages";
 
 type DB = SupabaseClient<Database>;
 
-export type ConversationReply = { text: string; pendingActionId?: string };
+export type ConversationReply = { payload: HypitoMessage };
 
 function fmtDate(iso?: string | null): string {
   if (!iso) return "sem prazo";
@@ -80,32 +94,143 @@ function fmtTime(iso?: string | null): string {
   if (!iso) return "";
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
-function reply(text: string): ConversationReply {
-  return { text };
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
-function renderTaskList(result: { items: TaskSummary[]; total: number }, emptyMsg: string): string {
-  if (result.items.length === 0) return emptyMsg;
-  const lines = result.items.map((t) => `• ${t.title} — ${fmtDate(t.dueDateIso)} → ${t.link.href}`);
+function textMessage(text: string): ConversationReply {
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "text",
+      textFallback: text,
+      state: "default",
+      timestamp: nowIso(),
+      actions: [],
+    },
+  };
+}
+
+function taskRef(t: TaskSummary): HypitoEntityRef {
+  return {
+    type: "task",
+    id: t.id,
+    name: t.title,
+    meta: { scope: t.scope, scopeId: t.scopeId ?? null },
+  };
+}
+
+function scopeRef(scope: "projeto" | "campanha", id: string, name: string): HypitoEntityRef {
+  return { type: scope === "projeto" ? "project" : "campaign", id, name };
+}
+
+/** Card de lista de tarefas (pedido, seção 15) — nunca uma bolha por
+ * tarefa. `viewAllAction`, quando presente, é a única forma de "ver
+ * mais" (sempre uma entidade real — campanha/projeto —, nunca uma rota
+ * de filtro inventada que não existe hoje na plataforma). */
+function taskListMessage(
+  result: ListResult<TaskSummary>,
+  title: string,
+  emptyMessage: string,
+  viewAllAction?: HypitoAction,
+): ConversationReply {
+  if (result.items.length === 0) return textMessage(emptyMessage);
+  const items: TaskListItem[] = result.items.map((t) => ({
+    task: taskRef(t),
+    status: t.status,
+    dueDateIso: t.dueDateIso,
+    priority: t.priority,
+    assignees: t.assignees,
+  }));
+  const lines = result.items.map((t) => `• ${t.title} — ${fmtDate(t.dueDateIso)}`);
   const suffix =
     result.total > result.items.length
       ? `\n\n${result.total - result.items.length} outra(s) não mostrada(s).`
       : "";
-  return `Encontrei ${result.total}:\n${lines.join("\n")}${suffix}`;
+  const textFallback = `${title}\n${lines.join("\n")}${suffix}`;
+  const actions: HypitoAction[] = [];
+  if (viewAllAction && result.total > result.items.length) actions.push(viewAllAction);
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "task_list",
+      title,
+      textFallback,
+      state: "default",
+      timestamp: nowIso(),
+      actions,
+      data: { items, total: result.total, emptyMessage },
+    },
+  };
 }
 
-function renderMeetingList(
-  result: { items: MeetingSummary[]; total: number },
-  emptyMsg: string,
-): string {
-  if (result.items.length === 0) return emptyMsg;
-  const lines = result.items.map(
-    (m) => `• ${m.titulo} — ${fmtDate(m.whenIso)} às ${fmtTime(m.whenIso)} → ${m.link.href}`,
-  );
-  return `Encontrei ${result.total}:\n${lines.join("\n")}`;
+function agendaMessage(
+  result: ListResult<MeetingSummary>,
+  periodLabel: string,
+  emptyMessage: string,
+): ConversationReply {
+  if (result.items.length === 0) return textMessage(emptyMessage);
+  const byDay = new Map<string, MeetingSummary[]>();
+  for (const m of result.items) {
+    if (!m.whenIso) continue;
+    const dateIso = m.whenIso.slice(0, 10);
+    const list = byDay.get(dateIso) ?? [];
+    list.push(m);
+    byDay.set(dateIso, list);
+  }
+  const dayKeys = [...byDay.keys()].sort();
+  const groups = dayKeys.map((dateIso) => {
+    const items = (byDay.get(dateIso) ?? []).sort((a, b) =>
+      (a.whenIso ?? "").localeCompare(b.whenIso ?? ""),
+    );
+    const label = new Date(`${dateIso}T12:00:00`).toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    });
+    return {
+      dateIso,
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      items: items.map((m) => ({
+        meeting: { type: "meeting" as const, id: m.id, name: m.titulo },
+        whenIso: m.whenIso!,
+        durationMin: m.durationMin,
+        hasLink: Boolean(m.local && /^https?:\/\//i.test(m.local)),
+      })),
+    };
+  });
+  const textLines = groups.flatMap((g) => [
+    g.label,
+    ...g.items.map((it) => `${fmtTime(it.whenIso)} — ${it.meeting.name}`),
+  ]);
+  const suffix =
+    result.total > result.items.length
+      ? `\n\n${result.total - result.items.length} outra(s) não mostrada(s).`
+      : "";
+  const textFallback = `${periodLabel}\n${result.total} compromisso(s) encontrado(s)\n${textLines.join("\n")}${suffix}`;
+  const actions: HypitoAction[] =
+    result.total > result.items.length
+      ? [{ id: "open_agenda", label: "Abrir agenda completa", variant: "link" }]
+      : [];
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "agenda_summary",
+      title: periodLabel,
+      textFallback,
+      state: "default",
+      timestamp: nowIso(),
+      actions,
+      data: { periodLabel, total: result.total, groups },
+    },
+  };
 }
 
-function renderScopeSummary(scopeLabel: string, s: ScopeSummaryResult): string {
+function scopeSummaryMessage(
+  scope: "projeto" | "campanha",
+  s: ScopeSummaryResult,
+): ConversationReply {
+  const scopeLabel = scope === "projeto" ? "o projeto" : "a campanha";
   const parts: string[] = [];
   if (s.openTasks > 0)
     parts.push(
@@ -121,19 +246,77 @@ function renderScopeSummary(scopeLabel: string, s: ScopeSummaryResult): string {
       `Próxima entrega: "${s.nextDueTask.title}" em ${fmtDate(s.nextDueTask.dueDateIso)}.`,
     );
   }
-  lines.push(`→ ${s.link.href}`);
-  return lines.join("\n");
+  const attentionNote =
+    s.pendingApprovals > 0 ? `${s.pendingApprovals} conteúdo(s) aguardam aprovação.` : null;
+  const entity = scopeRef(scope, s.id, s.name);
+  const actions: HypitoAction[] = [
+    {
+      id: scope === "projeto" ? "open_project" : "open_campaign",
+      label: scope === "projeto" ? "Abrir projeto" : "Abrir campanha",
+      variant: "primary",
+      entity,
+    },
+  ];
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: scope === "projeto" ? "project_summary" : "campaign_summary",
+      title: s.name,
+      textFallback: lines.join("\n"),
+      state: "default",
+      timestamp: nowIso(),
+      actions,
+      data: {
+        entity,
+        openTasks: s.openTasks,
+        overdueTasks: s.overdueTasks,
+        pendingApprovals: s.pendingApprovals,
+        nextDueTask: s.nextDueTask
+          ? {
+              title: s.nextDueTask.title,
+              dueDateIso: s.nextDueTask.dueDateIso,
+              task: {
+                type: "task",
+                id: s.nextDueTask.id,
+                name: s.nextDueTask.title,
+                meta: { scope, scopeId: s.id },
+              },
+            }
+          : null,
+        attentionNote,
+      },
+    },
+  };
 }
 
-function renderClarificationQuestion(
-  entityLabel: string,
+function entityChoiceMessage(
+  entityType: "campanha" | "projeto" | "pessoa",
+  query: string,
   candidates: PendingClarificationCandidate[],
-): string {
-  if (candidates.length === 1) {
-    return `Encontrei ${entityLabel} ${candidates[0].name}. É essa?`;
-  }
-  const names = candidates.map((c) => c.name).join(", ");
-  return `Encontrei mais de uma opção parecida: ${names}. Qual delas?`;
+): ConversationReply {
+  const typeMap = { campanha: "campaign", projeto: "project", pessoa: "user" } as const;
+  const label = { campanha: "a campanha", projeto: "o projeto", pessoa: "a pessoa" }[entityType];
+  const textFallback =
+    candidates.length === 1
+      ? `Encontrei ${label} ${candidates[0].name}. É essa?`
+      : `Encontrei mais de uma opção parecida: ${candidates.map((c) => c.name).join(", ")}. Qual delas?`;
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "entity_choice",
+      textFallback,
+      state: "default",
+      timestamp: nowIso(),
+      actions: [],
+      data: {
+        entityType: typeMap[entityType],
+        query,
+        options: candidates.map((c) => ({
+          ref: { type: typeMap[entityType], id: c.id, name: c.name },
+        })),
+      },
+    },
+  };
 }
 
 function toCandidates<T extends EntityCandidate>(
@@ -142,24 +325,52 @@ function toCandidates<T extends EntityCandidate>(
   return list.map((c) => ({ id: c.entity.id, name: c.entity.name, score: c.score }));
 }
 
-function draftSummaryText(draft: HypitoDraft): string {
+function taskDraftMessage(draft: HypitoDraft, pendingActionId: string): ConversationReply {
+  const assignee: HypitoEntityRef | null = draft.assigneeId
+    ? { type: "user", id: draft.assigneeId, name: draft.assigneeName ?? "" }
+    : null;
+  const scope: HypitoEntityRef | null =
+    draft.scope && draft.scopeId
+      ? scopeRef(draft.scope, draft.scopeId, draft.scopeName ?? "")
+      : null;
   const lines = [
     "Criar tarefa",
     `Título: ${draft.title}`,
-    `Responsável: ${draft.assigneeName ?? "não definido"}`,
+    `Responsável: ${draft.assigneeIsRequester ? "você" : (draft.assigneeName ?? "não definido")}`,
     `Projeto/campanha: ${draft.scopeName ?? "sem projeto/campanha"}`,
     `Prazo: ${draft.dueAtIso ? `${fmtDate(draft.dueAtIso)} às ${fmtTime(draft.dueAtIso)}` : "sem prazo"}`,
     `Prioridade: ${draft.priority}`,
   ];
-  return lines.join("\n");
-}
-
-function reminderSummaryText(title: string, remindAtIso: string): string {
-  return [
-    "Criar lembrete",
-    `Título: ${title}`,
-    `Quando: ${fmtDate(remindAtIso)} às ${fmtTime(remindAtIso)}`,
-  ].join("\n");
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "task_draft",
+      title: "Criar tarefa",
+      textFallback: lines.join("\n"),
+      state: "default",
+      timestamp: nowIso(),
+      pendingActionId,
+      actions: [
+        {
+          id: "confirm_task_creation",
+          label: "Confirmar criação",
+          variant: "primary",
+          pendingActionId,
+        },
+        { id: "edit_task_draft", label: "Editar", variant: "secondary", pendingActionId },
+        { id: "cancel_pending_action", label: "Cancelar", variant: "destructive", pendingActionId },
+      ],
+      data: {
+        title: draft.title ?? "",
+        assignee,
+        assigneeIsRequester: draft.assigneeIsRequester ?? false,
+        scope,
+        dueAtIso: draft.dueAtIso,
+        priority: draft.priority,
+        description: null,
+      },
+    },
+  };
 }
 
 function emptyDraft(kind: "create_task" | "create_reminder"): HypitoDraft {
@@ -168,6 +379,7 @@ function emptyDraft(kind: "create_task" | "create_reminder"): HypitoDraft {
     title: null,
     assigneeName: null,
     assigneeId: null,
+    assigneeIsRequester: false,
     scope: null,
     scopeId: null,
     scopeName: null,
@@ -179,9 +391,9 @@ function emptyDraft(kind: "create_task" | "create_reminder"): HypitoDraft {
 
 /** Tenta resolver o nome de escopo (campanha/projeto) contra os dois
  * tipos quando não há palavra-gatilho explícita ("Cobrar as métricas da
- * Jackery") — pedido, seção 10, exemplo de continuação. Nunca decide
- * sozinho em caso de ambiguidade real entre TIPOS diferentes: prioriza
- * o resultado com maior confiança entre campanha e projeto. */
+ * Jackery") — pedido, seção 8. Nunca decide sozinho em caso de
+ * ambiguidade real entre TIPOS diferentes: prioriza o resultado com
+ * maior confiança entre campanha e projeto. */
 async function resolveBareScope(
   db: DB,
   access: UserAccess,
@@ -198,7 +410,6 @@ async function resolveBareScope(
   if (projectLookup.kind !== "not_found" && campaignLookup.kind === "not_found") {
     return { scope: "projeto", lookup: projectLookup };
   }
-  // Ambos bateram algo — prioriza o mais forte (resolvido > ambíguo).
   if (campaignLookup.kind === "resolved") return { scope: "campanha", lookup: campaignLookup };
   if (projectLookup.kind === "resolved") return { scope: "projeto", lookup: projectLookup };
   return { scope: "campanha", lookup: campaignLookup };
@@ -264,13 +475,17 @@ const SKIP_WORDS = [
   "não sei",
 ];
 
-/** Continua um rascunho de tarefa/lembrete até ter o mínimo (só o
- * título é obrigatório — pedido, seção 10) ou até precisar perguntar
- * responsável/prazo UMA única vez. Nunca monta a confirmação sem
- * título real. */
+/** Continua um rascunho de tarefa até ter o mínimo (só o título é
+ * obrigatório) ou até precisar perguntar responsável/prazo UMA única
+ * vez. Nunca monta a confirmação sem título real. Quando o usuário não
+ * dá um responsável e a plataforma não tem um "dono" mais específico pra
+ * sugerir, o padrão vira o PRÓPRIO solicitante — nunca fica em
+ * "responsável: não definido" sem isso ficar explícito no card (pedido,
+ * seção 9). */
 async function advanceTaskDraft(
   db: DB,
   requesterId: string,
+  requesterName: string,
   access: UserAccess,
   draft: HypitoDraft,
   rawText: string,
@@ -280,12 +495,12 @@ async function advanceTaskDraft(
   if (!draft.title) {
     // NUNCA cai pro texto bruto do comando — se `extractTitle` não achou
     // nada de conteúdo real, pergunta em vez de usar o comando como
-    // título (pedido, seção 3/10: "o comando nunca deve ser reutilizado
+    // título (pedido, seção 3: "o comando nunca deve ser reutilizado
     // como conteúdo do campo solicitado").
     draft.title = extractTitle(rawText);
     if (!draft.title) {
       await saveContext(db, requesterId, stateWithDraft(draft, "title"));
-      return reply("Claro. O que precisa ser feito?");
+      return textMessage("Claro. O que precisa ser feito?");
     }
   }
 
@@ -306,14 +521,14 @@ async function advanceTaskDraft(
           forIntent: "task_assignee",
         },
       });
-      return reply(renderClarificationQuestion("a pessoa", candidates));
+      return entityChoiceMessage("pessoa", draft.assigneeName, candidates);
     }
     if (lookup.kind === "resolved") {
       draft.assigneeId = lookup.entity.id;
       draft.assigneeName = lookup.entity.name;
     } else {
-      // Nome dado mas não encontrado — segue sem travar (pedido: "sem
-      // responsável" é permitido), avisando com transparência.
+      // Nome dado mas não encontrado — segue sem travar, avisando com
+      // transparência (o card final mostra "não definido").
       draft.assigneeName = null;
     }
   }
@@ -334,12 +549,7 @@ async function advanceTaskDraft(
           forIntent: draft.scope === "campanha" ? "campaign_summary" : "project_summary",
         },
       });
-      return reply(
-        renderClarificationQuestion(
-          draft.scope === "campanha" ? "a campanha" : "o projeto",
-          candidates,
-        ),
-      );
+      return entityChoiceMessage(draft.scope, draft.scopeName, candidates);
     }
     if (lookup.kind === "resolved") {
       draft.scopeId = lookup.entity.id;
@@ -353,16 +563,27 @@ async function advanceTaskDraft(
   if (!draft.assigneeId && !draft.dueAtIso && !draft.askedAssigneeAndDate && !skip) {
     draft.askedAssigneeAndDate = true;
     await saveContext(db, requesterId, stateWithDraft(draft, "assignee_and_date"));
-    return reply("Para quem e para quando?");
+    return textMessage("Para quem e para quando?");
   }
 
-  // Pronto — grava a confirmação pendente e limpa o contexto (a ação
-  // agora vive em `hypito_pending_actions`, não precisa mais do rascunho
-  // em memória de conversa).
+  // Ninguém foi resolvido e a pergunta já foi feita (ou pulada) — em vez
+  // de deixar "não definido" silenciosamente, sugere o próprio
+  // solicitante como responsável (comportamento já usado pra tarefas
+  // pessoais na plataforma) e deixa isso EXPLÍCITO no card final, nunca
+  // escondido (pedido, seção 9).
+  let assigneeIsRequester = false;
+  if (!draft.assigneeId) {
+    draft.assigneeId = requesterId;
+    draft.assigneeName = requesterName;
+    assigneeIsRequester = true;
+  }
+  draft.assigneeIsRequester = assigneeIsRequester;
+
   const actionDraft: ActionTaskDraft = {
     title: draft.title,
     assigneeName: draft.assigneeName,
     assigneeId: draft.assigneeId,
+    assigneeIsRequester,
     scope: draft.scope,
     scopeId: draft.scopeId,
     scopeName: draft.scopeName,
@@ -371,7 +592,7 @@ async function advanceTaskDraft(
   };
   const pendingActionId = await createPendingAction(db, requesterId, "create_task", actionDraft);
   await clearContext(db, requesterId);
-  return { text: draftSummaryText(draft), pendingActionId };
+  return taskDraftMessage(draft, pendingActionId);
 }
 
 async function advanceReminderDraft(
@@ -381,8 +602,6 @@ async function advanceReminderDraft(
   rawText: string,
 ): Promise<ConversationReply> {
   if (!draft.title) {
-    // Mesmo cuidado do rascunho de tarefa: nunca cai pro texto bruto do
-    // comando quando não sobra conteúdo real.
     draft.title = extractTitle(rawText);
     if (!draft.title) {
       await saveContext(db, requesterId, {
@@ -390,7 +609,7 @@ async function advanceReminderDraft(
         draft: { ...emptyDraft("create_reminder"), title: null },
         awaitingField: "title",
       });
-      return reply("Claro. Do que você quer que eu lembre?");
+      return textMessage("Claro. Do que você quer que eu lembre?");
     }
   }
   if (!draft.dueAtIso) {
@@ -403,7 +622,7 @@ async function advanceReminderDraft(
       draft: { ...emptyDraft("create_reminder"), title: draft.title },
       awaitingField: "assignee_and_date",
     });
-    return reply("Para quando devo te avisar?");
+    return textMessage("Para quando devo te avisar?");
   }
 
   const pendingActionId = await createPendingAction(db, requesterId, "create_reminder", {
@@ -414,7 +633,35 @@ async function advanceReminderDraft(
     relatedLink: null,
   });
   await clearContext(db, requesterId);
-  return { text: reminderSummaryText(draft.title, draft.dueAtIso), pendingActionId };
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "task_draft",
+      title: "Criar lembrete",
+      textFallback: `Criar lembrete\nTítulo: ${draft.title}\nQuando: ${fmtDate(draft.dueAtIso)} às ${fmtTime(draft.dueAtIso)}`,
+      state: "default",
+      timestamp: nowIso(),
+      pendingActionId,
+      actions: [
+        {
+          id: "confirm_task_creation",
+          label: "Confirmar criação",
+          variant: "primary",
+          pendingActionId,
+        },
+        { id: "cancel_pending_action", label: "Cancelar", variant: "destructive", pendingActionId },
+      ],
+      data: {
+        title: draft.title,
+        assignee: null,
+        assigneeIsRequester: false,
+        scope: null,
+        dueAtIso: draft.dueAtIso,
+        priority: "Normal",
+        description: null,
+      },
+    },
+  };
 }
 
 function emptyStateBase(): HypitoConversationState {
@@ -424,7 +671,7 @@ function emptyStateBase(): HypitoConversationState {
     pendingClarification: null,
     draft: null,
     awaitingField: null,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   };
 }
 function stateWithDraft(
@@ -445,20 +692,20 @@ async function dispatchFreshIntent(
 ): Promise<ConversationReply> {
   switch (intent.type) {
     case "greeting":
-      return reply("Olá! Pode me perguntar sobre tarefas, agenda, projetos ou campanhas.");
+      return textMessage("Olá! Pode me perguntar sobre tarefas, agenda, projetos ou campanhas.");
 
     case "help":
-      return reply(
+      return textMessage(
         'Posso consultar suas tarefas, agenda, projetos e campanhas, e ajudar a criar tarefas e lembretes. É só perguntar, por exemplo: "o que tenho para hoje?" ou "criar uma tarefa".',
       );
 
     case "cancel":
-      return reply("Não tem nada pendente pra cancelar agora.");
+      return textMessage("Não tem nada pendente pra cancelar agora.");
 
     case "my_tasks": {
       const range = resolveDateRange(intent.range);
       const result = await getMyTasks(db, access, myName, range ?? undefined);
-      return reply(renderTaskList(result, "Nada pendente por aqui. Bom trabalho."));
+      return taskListMessage(result, "Suas tarefas", "Nada pendente por aqui. Bom trabalho.");
     }
 
     case "overdue_tasks": {
@@ -469,12 +716,20 @@ async function dispatchFreshIntent(
           state.lastEntity.id,
           "overdue",
         );
-        return reply(
-          renderTaskList(result, `Nenhuma tarefa atrasada em ${state.lastEntity.name}.`),
+        return taskListMessage(
+          result,
+          `Tarefas atrasadas em ${state.lastEntity.name}`,
+          `Nenhuma tarefa atrasada em ${state.lastEntity.name}.`,
+          {
+            id: state.lastEntity.type === "campanha" ? "open_campaign" : "open_project",
+            label: `Abrir ${state.lastEntity.type}`,
+            variant: "link",
+            entity: scopeRef(state.lastEntity.type, state.lastEntity.id, state.lastEntity.name),
+          },
         );
       }
       const result = await getOverdueTasks(db, access, myName);
-      return reply(renderTaskList(result, "Nenhuma tarefa atrasada. 🎉"));
+      return taskListMessage(result, "Tarefas atrasadas", "Nenhuma tarefa atrasada. 🎉");
     }
 
     case "upcoming_tasks": {
@@ -485,12 +740,14 @@ async function dispatchFreshIntent(
           state.lastEntity.id,
           "upcoming",
         );
-        return reply(
-          renderTaskList(result, `Nada vencendo nos próximos dias em ${state.lastEntity.name}.`),
+        return taskListMessage(
+          result,
+          `Próximos 7 dias em ${state.lastEntity.name}`,
+          `Nada vencendo nos próximos dias em ${state.lastEntity.name}.`,
         );
       }
       const result = await getUpcomingTasks(db, access, myName, intent.days);
-      return reply(renderTaskList(result, "Nada vencendo nos próximos dias."));
+      return taskListMessage(result, "Próximos 7 dias", "Nada vencendo nos próximos dias.");
     }
 
     case "pending_approvals": {
@@ -501,38 +758,52 @@ async function dispatchFreshIntent(
           state.lastEntity.id,
           "pending_approval",
         );
-        return reply(
-          renderTaskList(result, `Sem aprovações pendentes em ${state.lastEntity.name}.`),
+        return taskListMessage(
+          result,
+          `Aprovações pendentes em ${state.lastEntity.name}`,
+          `Sem aprovações pendentes em ${state.lastEntity.name}.`,
         );
       }
       const result = await getPendingApprovals(db, access, myName);
-      return reply(renderTaskList(result, "Sem aprovações aguardando você."));
+      return taskListMessage(result, "Aprovações pendentes", "Sem aprovações aguardando você.");
     }
 
     case "next_meeting": {
       const meeting = await getNextMeeting(db, access, requesterId);
-      if (!meeting) return reply("Não encontrei nenhuma reunião futura na sua agenda.");
-      return reply(
-        `Sua próxima reunião: ${meeting.titulo} em ${fmtDate(meeting.whenIso)} às ${fmtTime(meeting.whenIso)} → ${meeting.link.href}`,
+      if (!meeting) return textMessage("Não encontrei nenhuma reunião futura na sua agenda.");
+      return agendaMessage(
+        { items: [meeting], total: 1 },
+        "Próxima reunião",
+        "Sem reuniões futuras.",
       );
     }
 
     case "my_meetings": {
       const range = resolveDateRange(intent.range) ?? undefined;
+      const periodLabel =
+        intent.range.kind === "next_week"
+          ? "Agenda da próxima semana"
+          : intent.range.kind === "this_week"
+            ? "Agenda desta semana"
+            : intent.range.kind === "today"
+              ? "Agenda de hoje"
+              : intent.range.kind === "tomorrow"
+                ? "Agenda de amanhã"
+                : "Sua agenda";
       const result = await getMyMeetings(db, access, requesterId, range);
-      return reply(renderMeetingList(result, "Nenhuma reunião encontrada nesse período."));
+      return agendaMessage(result, periodLabel, "Nenhuma reunião encontrada nesse período.");
     }
 
     case "project_summary":
     case "campaign_summary": {
       const scope = intent.type === "project_summary" ? "projeto" : "campanha";
-      const query = intent.type === "project_summary" ? intent.query : intent.query;
+      const query = intent.query;
       const lookup =
         scope === "projeto"
           ? await resolveProject(db, access, query)
           : await resolveCampaign(db, access, query);
       if (lookup.kind === "not_found") {
-        return reply(
+        return textMessage(
           `Não encontrei ${scope === "projeto" ? "um projeto chamado" : "uma campanha chamada"} "${query}". Quer tentar com outro nome?`,
         );
       }
@@ -547,9 +818,7 @@ async function dispatchFreshIntent(
             forIntent: scope === "projeto" ? "project_summary" : "campaign_summary",
           },
         });
-        return reply(
-          renderClarificationQuestion(scope === "projeto" ? "o projeto" : "a campanha", candidates),
-        );
+        return entityChoiceMessage(scope, query, candidates);
       }
       const summary = await summarizeScope(db, scope, lookup.entity);
       await saveContext(db, requesterId, {
@@ -557,18 +826,18 @@ async function dispatchFreshIntent(
         lastEntity: { type: scope, id: summary.id, name: summary.name },
         lastIntent: intent.type,
       });
-      return reply(renderScopeSummary(scope === "projeto" ? "o projeto" : "a campanha", summary));
+      return scopeSummaryMessage(scope, summary);
     }
 
     case "campaigns_attention":
-      return reply(
+      return textMessage(
         "Ainda não consigo consolidar quais campanhas precisam de atenção nesta versão — posso resumir uma campanha específica se você me disser o nome.",
       );
 
     case "person_tasks": {
       const lookup = await resolvePersonByName(db, intent.personQuery);
       if (lookup.kind === "not_found")
-        return reply(`Não encontrei "${intent.personQuery}" no time.`);
+        return textMessage(`Não encontrei "${intent.personQuery}" no time.`);
       if (lookup.kind === "ambiguous") {
         const candidates = toCandidates(lookup.candidates);
         await saveContext(db, requesterId, {
@@ -580,21 +849,32 @@ async function dispatchFreshIntent(
             forIntent: "person_tasks",
           },
         });
-        return reply(renderClarificationQuestion("a pessoa", candidates));
+        return entityChoiceMessage("pessoa", intent.personQuery, candidates);
       }
       const result = await getPersonTasks(db, access, lookup.entity.name);
-      return reply(renderTaskList(result, `${lookup.entity.name} não tem tarefas em aberto.`));
+      return taskListMessage(
+        result,
+        `Tarefas de ${lookup.entity.name}`,
+        `${lookup.entity.name} não tem tarefas em aberto.`,
+      );
     }
 
     case "create_task":
-      return advanceTaskDraft(db, requesterId, access, emptyDraft("create_task"), intent.raw);
+      return advanceTaskDraft(
+        db,
+        requesterId,
+        myName,
+        access,
+        emptyDraft("create_task"),
+        intent.raw,
+      );
 
     case "create_reminder":
       return advanceReminderDraft(db, requesterId, { title: null, dueAtIso: null }, intent.raw);
 
     case "unknown":
     default:
-      return reply(
+      return textMessage(
         'Não entendi. Tente algo como "o que tenho para hoje?", "quais tarefas estão atrasadas?" ou "criar uma tarefa".',
       );
   }
@@ -603,6 +883,7 @@ async function dispatchFreshIntent(
 async function continueClarification(
   db: DB,
   requesterId: string,
+  requesterName: string,
   access: UserAccess,
   state: HypitoConversationState,
   rawText: string,
@@ -616,11 +897,13 @@ async function continueClarification(
   const resolved = resolveFollowUp(rawText, scored);
 
   if (resolved === "ambiguous") {
-    return reply("Ainda não consegui identificar qual das opções — pode escrever o nome completo?");
+    return textMessage(
+      "Ainda não consegui identificar qual das opções — pode escrever o nome completo?",
+    );
   }
   if (!resolved) {
     await clearContext(db, requesterId);
-    return reply("Sem problema. Em que mais posso ajudar?");
+    return textMessage("Sem problema. Em que mais posso ajudar?");
   }
 
   switch (pc.forIntent) {
@@ -633,18 +916,22 @@ async function continueClarification(
         lastEntity: { type: scope, id: resolved.id, name: resolved.name },
         lastIntent: pc.forIntent,
       });
-      return reply(renderScopeSummary(scope === "projeto" ? "o projeto" : "a campanha", summary));
+      return scopeSummaryMessage(scope, summary);
     }
     case "person_tasks": {
       const result = await getPersonTasks(db, access, resolved.name);
       await clearContext(db, requesterId);
-      return reply(renderTaskList(result, `${resolved.name} não tem tarefas em aberto.`));
+      return taskListMessage(
+        result,
+        `Tarefas de ${resolved.name}`,
+        `${resolved.name} não tem tarefas em aberto.`,
+      );
     }
     case "task_assignee": {
       const draft = state.draft ?? emptyDraft("create_task");
       draft.assigneeId = resolved.id;
       draft.assigneeName = resolved.name;
-      return advanceTaskDraft(db, requesterId, access, draft, "");
+      return advanceTaskDraft(db, requesterId, requesterName, access, draft, "");
     }
   }
 }
@@ -652,6 +939,7 @@ async function continueClarification(
 async function continueDraft(
   db: DB,
   requesterId: string,
+  requesterName: string,
   access: UserAccess,
   state: HypitoConversationState,
   rawText: string,
@@ -665,7 +953,7 @@ async function continueDraft(
       rawText,
     );
   }
-  return advanceTaskDraft(db, requesterId, access, draft, rawText);
+  return advanceTaskDraft(db, requesterId, requesterName, access, draft, rawText);
 }
 
 /** Ponto único de entrada — usado por `hypito-chat.functions.ts`
@@ -689,20 +977,23 @@ export async function handleUserMessage(
     // pedir" — nunca só por tempo ou automaticamente).
     if (parseIntent(rawText).type === "cancel" && (state.pendingClarification || state.draft)) {
       await clearContext(db, requesterId);
-      return reply("Ok, cancelei. Em que mais posso ajudar?");
+      return textMessage("Ok, cancelei. Em que mais posso ajudar?");
     }
 
     if (state.awaitingField && state.draft) {
-      return await continueDraft(db, requesterId, access, state, rawText);
+      return await continueDraft(db, requesterId, myName, access, state, rawText);
     }
     if (state.pendingClarification) {
-      return await continueClarification(db, requesterId, access, state, rawText);
+      return await continueClarification(db, requesterId, myName, access, state, rawText);
     }
 
     const { intent } = classify(rawText);
     return await dispatchFreshIntent(db, requesterId, access, myName, state, intent, rawText);
   } catch (err) {
-    if (err instanceof HypitoError) return reply(err.message);
-    return reply(toSafeReply("handleUserMessage", err, { requesterId }));
+    const message =
+      err instanceof HypitoError
+        ? err.message
+        : toSafeReply("handleUserMessage", err, { requesterId });
+    return textMessage(message);
   }
 }

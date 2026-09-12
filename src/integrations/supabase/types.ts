@@ -381,6 +381,7 @@ export type Database = {
           convo_id: string
           created_at: string
           edited_at: string | null
+          hypito_payload: Json | null
           id: string
           mentions: Json
           reactions: Json
@@ -395,6 +396,7 @@ export type Database = {
           convo_id: string
           created_at?: string
           edited_at?: string | null
+          hypito_payload?: Json | null
           id?: string
           mentions?: Json
           reactions?: Json
@@ -409,6 +411,7 @@ export type Database = {
           convo_id?: string
           created_at?: string
           edited_at?: string | null
+          hypito_payload?: Json | null
           id?: string
           mentions?: Json
           reactions?: Json

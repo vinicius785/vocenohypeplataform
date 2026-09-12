@@ -36,9 +36,12 @@ export type TaskSummary = {
   id: string;
   title: string;
   status: string;
+  priority?: string;
   dueDateIso?: string;
   assignees: string[];
   link: LinkedRef;
+  scope: "projeto" | "campanha" | "marketing";
+  scopeId?: string;
 };
 
 export type MeetingSummary = {
@@ -57,9 +60,12 @@ function toTaskSummary(t: ParsedTask): TaskSummary {
     id: t.id,
     title: t.title,
     status: t.status,
+    priority: t.priority,
     dueDateIso: t.dueDate ? t.dueDate.toISOString() : undefined,
     assignees: t.assignees,
     link: t.link,
+    scope: t.scope,
+    scopeId: t.scopeId,
   };
 }
 
@@ -235,9 +241,8 @@ export type ScopeSummaryResult = {
   openTasks: number;
   overdueTasks: number;
   completedTasks: number;
-  nextDueTask: { title: string; dueDateIso: string; link: LinkedRef } | null;
+  nextDueTask: { id: string; title: string; dueDateIso: string } | null;
   pendingApprovals: number;
-  link: LinkedRef;
 };
 
 export async function fetchAllProjects(db: DB): Promise<EntityCandidate[]> {
@@ -321,13 +326,9 @@ export async function summarizeScope(
     overdueTasks: overdue.length,
     completedTasks: scoped.filter((t) => t.status === "Concluído").length,
     nextDueTask: nextDue?.dueDate
-      ? { title: nextDue.title, dueDateIso: nextDue.dueDate.toISOString(), link: nextDue.link }
+      ? { id: nextDue.id, title: nextDue.title, dueDateIso: nextDue.dueDate.toISOString() }
       : null,
     pendingApprovals: scoped.filter((t) => t.status === "Em aprovação").length,
-    link:
-      scope === "projeto"
-        ? { label: "projeto", href: `/projeto/${entity.id}` }
-        : { label: "campanha", href: "/time?section=campanhas" },
   };
 }
 

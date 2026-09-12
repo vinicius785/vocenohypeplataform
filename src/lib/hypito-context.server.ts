@@ -29,6 +29,11 @@ export type HypitoDraft = {
   title: string | null;
   assigneeName: string | null;
   assigneeId: string | null;
+  /** `true` quando `assigneeId` foi um DEFAULT sugerido (o próprio
+   * solicitante), não um nome que o usuário deu — o card final precisa
+   * saber disso pra mostrar "Responsável: você" em vez de tratar como
+   * se o usuário tivesse dito o nome (pedido, seção 9). */
+  assigneeIsRequester: boolean;
   scope: "projeto" | "campanha" | null;
   scopeId: string | null;
   scopeName: string | null;

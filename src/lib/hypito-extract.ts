@@ -101,13 +101,33 @@ export function extractScopeName(
   return null;
 }
 
+/** Remove só o "rabo" de data/hora do fim da frase (mesmos padrões de
+ * `extractTitle`, com os mesmos lookarounds em vez de `\b` — letra
+ * acentuada não conta como caractere de palavra pro `\b` do JS) — usada
+ * antes de `extractBareEntityCandidate` pra "da Jackery amanhã às 15h"
+ * não perder o candidato só porque ele não é literalmente a ÚLTIMA
+ * palavra da frase. */
+function stripTrailingDateNoise(text: string): string {
+  return text
+    .replace(/(?<![\p{L}\p{N}_])(amanha|amanhã|hoje)(?![\p{L}\p{N}_])/giu, "")
+    .replace(
+      new RegExp(`(?<![\\p{L}\\p{N}_])(${WEEKDAYS.join("|")})(-feira)?(?![\\p{L}\\p{N}_])`, "giu"),
+      "",
+    )
+    .replace(/(?<![\p{L}\p{N}_])às?\s*\d{1,2}[h:]\d{0,2}(?![\p{L}\p{N}_])/giu, "")
+    .replace(/\b\d{1,2}h\d{0,2}\b/gi, "")
+    .trim();
+}
+
 /** Quando não há a palavra "campanha"/"projeto" explícita ("Cobrar as
- * métricas da Jackery"), tenta capturar um nome próprio depois de
- * "da/do/na/no" no FIM da frase — candidato a campanha OU projeto, quem
- * chama resolve contra os dois tipos e decide qual bateu. Nunca decide
- * sozinho qual tipo é — só oferece o texto candidato. */
+ * métricas da Jackery amanhã às 15h"), tenta capturar um nome próprio
+ * depois de "da/do/na/no" no FIM da frase ÚTIL (depois de tirar só o
+ * rabo de data/hora, nunca o conteúdo em si) — candidato a campanha OU
+ * projeto, quem chama resolve contra os dois tipos e decide qual bateu.
+ * Nunca decide sozinho qual tipo é — só oferece o texto candidato. */
 export function extractBareEntityCandidate(rawText: string): string | null {
-  const m = rawText.match(/\b(?:da|do|na|no)\s+([A-ZÀ-Ú][\wÀ-ÿ]*(?:\s+[A-ZÀ-Ú][\wÀ-ÿ]*){0,2})\s*$/);
+  const cleaned = stripTrailingDateNoise(rawText);
+  const m = cleaned.match(/\b(?:da|do|na|no)\s+([A-ZÀ-Ú][\wÀ-ÿ]*(?:\s+[A-ZÀ-Ú][\wÀ-ÿ]*){0,2})\s*$/);
   return m ? m[1].trim() : null;
 }
 
