@@ -95,7 +95,7 @@ export function UpcomingMeetingAlert({
     <div
       role="alertdialog"
       aria-label={`Aviso do Hypito: reunião "${meeting.titulo}" ${urgency.label.toLowerCase()}`}
-      className="fixed inset-x-3 bottom-3 z-40 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-full sm:[width:min(400px,calc(100vw-32px))] [padding-bottom:env(safe-area-inset-bottom)]"
+      className="fixed inset-x-3 bottom-3 z-40 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:[width:min(400px,calc(100vw-32px))] [padding-bottom:env(safe-area-inset-bottom)]"
     >
       <div className="relative animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-xl duration-300 motion-reduce:animate-none sm:slide-in-from-bottom-0 sm:slide-in-from-right-4 sm:p-5">
         {/* Identidade sutil do Hypito — brilho azul discreto atrás do
