@@ -74,10 +74,15 @@ export const getInscricaoCampanhaData = createServerFn({ method: "GET" })
     };
   });
 
+// `profileUrl`/`isPrimary` são aditivos (múltiplos perfis por rede
+// social) — opcionais pra aceitar tanto o formato antigo (sem esses
+// campos) quanto o novo, sem quebrar nenhum cliente.
 const RedeInput = z.object({
   plataforma: z.string().min(1),
   handle: z.string().min(1),
   seguidores: z.string().optional(),
+  profileUrl: z.string().optional(),
+  isPrimary: z.boolean().optional(),
 });
 
 const RespostaInput = z.object({
@@ -157,11 +162,14 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       telefone: data.telefone.trim(),
       email: data.email.trim(),
       nicho: data.nicho?.trim() || undefined,
-      redes: data.redes.map((r) => ({
+      redes: data.redes.map((r, i) => ({
         id: crypto.randomUUID(),
         plataforma: r.plataforma,
         handle: r.handle.trim(),
         seguidores: r.seguidores?.trim() || undefined,
+        profileUrl: r.profileUrl?.trim() || undefined,
+        isPrimary: r.isPrimary,
+        order: i,
       })),
       entregas: [],
       status: "INSCRITO",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ShieldCheck, Search } from "lucide-react";
+import { Users, Search, ChevronRight } from "lucide-react";
 import { getTeamDirectory, updateTeamMember } from "@/lib/team.functions";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { MemberDialog, type Member, type MemberFormPayload } from "@/components/TimeSection";
@@ -8,6 +8,8 @@ import type { Permission } from "@/lib/permissions";
 import type { TimeField } from "@/components/TimeSection";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { SettingsCard, SettingsSectionHeader } from "./settings-shared";
 
 type TeamDirEntry = {
   id: string;
@@ -103,60 +105,61 @@ export function TimePermissoesTab() {
   );
 
   return (
-    <div className="max-w-2xl space-y-4">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-semibold">Time e permissões</h3>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Clique em um membro para configurar o que ele pode acessar na plataforma.
-      </p>
+    <div className="space-y-6">
+      <SettingsSectionHeader
+        icon={<Users className="h-4 w-4" />}
+        title="Time e permissões"
+        description="Clique em um membro para configurar o que ele pode acessar na plataforma."
+      />
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar membro"
-          className="h-9 w-full max-w-xs pl-8 text-xs"
-        />
-      </div>
+      <SettingsCard>
+        <div className="relative mb-3 w-64 max-w-full">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar membro"
+            className="h-9 w-full pl-8 text-xs"
+          />
+        </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
+        {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
+        {loading && <p className="text-xs text-muted-foreground">Carregando...</p>}
 
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
-        {!loading && filtered.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-            Nenhum membro encontrado.
-          </p>
-        )}
-        {filtered.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => setEditing(m)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40"
-          >
-            <Avatar className="h-8 w-8 shrink-0">
-              <AvatarImage src={m.photo} alt={m.name} />
-              <AvatarFallback className="text-[11px]">{initialsOf(m.name || "?")}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-foreground">{m.name || "Sem nome"}</p>
-              <p className="truncate text-xs text-muted-foreground">{m.role || "Sem cargo"}</p>
-            </div>
-            {m.isAdmin && (
-              <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-[10px] font-medium text-foreground">
-                Admin
+        <div className="divide-y divide-border">
+          {!loading && filtered.length === 0 && (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              Nenhum membro encontrado.
+            </p>
+          )}
+          {filtered.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setEditing(m)}
+              className="flex w-full items-center gap-3 py-3 text-left hover:bg-muted/40"
+            >
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarImage src={m.photo} alt={m.name} />
+                <AvatarFallback className="text-[11px]">{initialsOf(m.name || "?")}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {m.name || "Sem nome"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{m.role || "Sem cargo"}</p>
+              </div>
+              {m.isAdmin && <Badge className="shrink-0">Admin</Badge>}
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {m.isAdmin
+                  ? "Acesso total"
+                  : `${m.permissions.length} permissõe${m.permissions.length === 1 ? "" : "s"}`}
               </span>
-            )}
-            <span className="shrink-0 text-[11px] text-muted-foreground">
-              {m.permissions.length} permissõe{m.permissions.length === 1 ? "" : "s"}
-            </span>
-          </button>
-        ))}
-      </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </SettingsCard>
 
       <MemberDialog
         open={!!editing}

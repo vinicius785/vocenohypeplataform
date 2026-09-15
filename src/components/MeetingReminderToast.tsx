@@ -1,24 +1,21 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { LogIn, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { HYPITO_AVATAR_URL, HYPITO_NAME, HYPITO_BADGE_LABEL, HYPITO_TAGLINE } from "@/lib/hypito";
 import {
   loadMeetings,
   saveMeetings,
   onMeetingsChange,
   meetingStartTime,
-  meetingEndTime,
   confirmMeetingFor,
   declineMeetingFor,
   type Meeting,
 } from "@/lib/reunioes-store";
 import { getMe, playMeetingReminderSound } from "@/lib/chat-store";
-import { Button } from "@/components/ui/button";
-import { AvatarStack } from "@/components/meetings/AvatarStack";
 import { peopleFor, joinUrlFor } from "@/components/meetings/MeetingLine";
-import { participantBadge } from "@/components/meetings/meeting-status";
 import { loadTeam, type TeamMember } from "@/components/meetings/team";
+import {
+  UpcomingMeetingAlert,
+  type ParticipantState,
+} from "@/components/meetings/UpcomingMeetingAlert";
 // Importa direto do componente (não do barrel `ReunioesSection`) — esse
 // arquivo é montado globalmente no AppShell, em toda página; importar via
 // `ReunioesSection` puxaria CalendarView/DisponibilidadeTab/MeetingDialog
@@ -48,32 +45,6 @@ function writeSeen(ids: Set<string>) {
   } catch {
     /* ignore */
   }
-}
-
-function endTimeLabel(m: Meeting): string {
-  const end = new Date(meetingStartTime(m) + m.duracao * 60_000);
-  return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-}
-
-/** Contagem regressiva textual — mesmo card, só o texto muda conforme o
- * tempo passa (não gera notificação nova a cada minuto). */
-function countdownLabel(m: Meeting, now: number): string {
-  const start = meetingStartTime(m);
-  const diffMs = start - now;
-  if (diffMs > 0) {
-    const min = Math.max(1, Math.round(diffMs / 60_000));
-    return min === 1 ? "Em 1 minuto" : `Em ${min} minutos`;
-  }
-  if (now <= meetingEndTime(m)) return "Começando agora";
-  const minSince = Math.max(1, Math.round((now - start) / 60_000));
-  return `Começou há ${minSince} min`;
-}
-
-function namesLabel(people: { name: string }[]): string {
-  if (people.length === 0) return "";
-  const firstNames = people.slice(0, 2).map((p) => p.name.split(" ")[0]);
-  const rest = people.length - firstNames.length;
-  return rest > 0 ? `${firstNames.join(", ")} +${rest}` : firstNames.join(", ");
 }
 
 /**
@@ -147,125 +118,40 @@ export function MeetingReminderToast() {
   const meeting = queue[Math.min(activeIndex, queue.length - 1)];
   const people = peopleFor(meeting, team, me);
   const joinUrl = joinUrlFor(meeting);
-  const myStatus = meeting.confirmedBy?.includes(me.id)
+  const participantState: ParticipantState = meeting.confirmedBy?.includes(me.id)
     ? "confirmed"
     : meeting.declinedBy?.includes(me.id)
       ? "declined"
       : "pending";
-  const myStatusLabel =
-    myStatus === "confirmed" ? "Confirmado" : myStatus === "declined" ? "Recusado" : "Pendente";
 
   return (
     <>
       {/* z-40 (não mais z-190): fica acima do conteúdo normal da página mas
        * abaixo de qualquer Sheet/Dialog/AlertDialog/DropdownMenu/Popover
        * (todos z-50) — antes o card cobria o rodapé de drawers/diálogos
-       * abertos em qualquer módulo (achado real durante a rodada corretiva
-       * de Clientes, corrigido aqui porque a causa é deste componente
-       * global, não do módulo). Nenhuma lógica de exibição/dedupe mudou.
-       *
-       * Identidade do Hypito (pedido, seção 13): mesmo popup de sempre,
-       * agora com avatar/nome/selo — nunca deve parecer uma notificação
-       * genérica do navegador. Desktop: entra pela lateral direita
-       * (`slide-in-from-right`); no mobile vira um card ancorado embaixo,
-       * respeitando a safe area do teclado/gestos do sistema. Em
-       * `prefers-reduced-motion`, some a animação (`motion-reduce:animate-none`),
-       * mas o popup continua aparecendo normalmente — nunca escondido. */}
-      <div className="fixed inset-x-4 bottom-4 z-40 sm:inset-x-auto sm:bottom-24 sm:right-4 sm:w-full sm:max-w-[420px] [padding-bottom:env(safe-area-inset-bottom)]">
-        <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border border-border bg-background p-4 shadow-xl duration-300 motion-reduce:animate-none sm:slide-in-from-bottom-0 sm:slide-in-from-right-4">
-          <div className="flex items-start gap-3">
-            <img
-              src={HYPITO_AVATAR_URL}
-              alt=""
-              aria-hidden="true"
-              className="h-9 w-9 shrink-0 rounded-full object-cover"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <p className="truncate text-xs font-semibold text-foreground">{HYPITO_NAME}</p>
-                <Badge
-                  variant="brand"
-                  title={HYPITO_TAGLINE}
-                  className="px-1.5 py-0 text-[9px] normal-case"
-                >
-                  {HYPITO_BADGE_LABEL}
-                </Badge>
-              </div>
-              <p className="mt-0.5 text-sm font-medium leading-tight text-foreground">
-                Sua reunião começa em 5 minutos
-              </p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{meeting.titulo}</p>
-              <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                {countdownLabel(meeting, now)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => dismiss(meeting.id)}
-              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label="Dispensar aviso de reunião"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              {meeting.hora} — {endTimeLabel(meeting)}
-            </p>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${participantBadge(myStatus)}`}
-            >
-              {myStatusLabel}
-            </span>
-          </div>
-
-          {people.length > 0 && (
-            <div className="mt-2 flex items-center gap-2">
-              <AvatarStack people={people} max={3} />
-              <span className="truncate text-xs text-muted-foreground">{namesLabel(people)}</span>
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                setSummaryMeeting(meeting);
-                dismiss(meeting.id);
-              }}
-            >
-              Ver detalhes
-            </Button>
-            {joinUrl && (
-              <a
-                href={joinUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1"
-                onClick={() => dismiss(meeting.id)}
-              >
-                <Button size="sm" className="w-full">
-                  <LogIn className="h-3.5 w-3.5" /> Entrar na reunião
-                </Button>
-              </a>
-            )}
-          </div>
-
-          {queue.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setActiveIndex((i) => (i + 1) % queue.length)}
-              className="mt-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              +{queue.length - 1} reunião{queue.length - 1 === 1 ? "" : "ões"} próxima
-              {queue.length - 1 === 1 ? "" : "s"}
-            </button>
-          )}
-        </div>
-      </div>
+       * abertos em qualquer módulo. Nenhuma lógica de exibição/dedupe
+       * mudou; a apresentação em si foi extraída pro componente
+       * reutilizável `UpcomingMeetingAlert`, que renderiza em Portal
+       * direto em `document.body` (nunca cortado por overflow de algum
+       * container no meio do caminho). */}
+      <UpcomingMeetingAlert
+        meeting={meeting}
+        now={now}
+        people={people}
+        joinUrl={joinUrl}
+        participantState={participantState}
+        queueExtraCount={queue.length - 1}
+        onCycleQueue={() => setActiveIndex((i) => (i + 1) % queue.length)}
+        onClose={() => dismiss(meeting.id)}
+        onViewDetails={() => {
+          setSummaryMeeting(meeting);
+          dismiss(meeting.id);
+        }}
+        onJoin={() => {
+          if (joinUrl) window.open(joinUrl, "_blank", "noopener,noreferrer");
+          dismiss(meeting.id);
+        }}
+      />
 
       <MeetingSummaryDialog
         meeting={summaryMeeting}

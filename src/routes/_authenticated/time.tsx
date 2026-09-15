@@ -8,9 +8,11 @@ import {
   resolveFinanceiroTab,
   resolveMetasTab,
   resolveReunioesView,
+  resolveConfigTab,
   type FinanceiroTab,
   type MetasTab,
   type ReunioesView,
+  type ConfigTab,
 } from "@/lib/section-nav";
 
 // Cada seção vira o próprio chunk JS, baixado só quando o usuário navega até
@@ -89,6 +91,7 @@ export const Route = createFileRoute("/_authenticated/time")({
     metasView?: MetasTab;
     reunioesView?: ReunioesView;
     financeiroTab?: FinanceiroTab;
+    configTab?: ConfigTab;
   } => {
     const v = s.section;
     return {
@@ -110,6 +113,9 @@ export const Route = createFileRoute("/_authenticated/time")({
       ...(typeof s.financeiroTab === "string" &&
       s.financeiroTab === resolveFinanceiroTab(s.financeiroTab)
         ? { financeiroTab: s.financeiroTab as FinanceiroTab }
+        : {}),
+      ...(typeof s.configTab === "string" && s.configTab === resolveConfigTab(s.configTab)
+        ? { configTab: s.configTab as ConfigTab }
         : {}),
       // `timeTab` saiu do schema (a subpágina "Horas trabalhadas" foi
       // incorporada à "Visão da equipe") — um link antigo com

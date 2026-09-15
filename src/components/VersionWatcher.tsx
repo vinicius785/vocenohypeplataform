@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw, Sparkles, X } from "lucide-react";
-import { APP_VERSION } from "./ConfiguracoesSection";
+import { APP_VERSION } from "@/lib/app-version";
 import {
   fetchVersionInfo,
   getSeenVersion,

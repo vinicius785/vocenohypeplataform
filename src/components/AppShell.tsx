@@ -60,6 +60,7 @@ import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspa
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
 import { VersionWatcher } from "./VersionWatcher";
+import { NovidadesButton } from "./configuracoes/NovidadesButton";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
   getMe,
@@ -646,6 +647,12 @@ export function AppShell({
               <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
               {showFull && "Configurações"}
             </button>
+            <NovidadesButton
+              showLabel={showFull}
+              className={`mt-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item ${
+                !showFull ? "justify-center" : ""
+              }`}
+            />
             {access?.isAdmin && (
               <button
                 type="button"

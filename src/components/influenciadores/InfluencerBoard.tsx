@@ -83,6 +83,16 @@ import {
   formatPercentBR,
 } from "@/lib/format";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
+import { IconButton } from "@/components/ui/icon-button";
+import {
+  PLATAFORMAS,
+  platformDef,
+  normalizeSocialInput,
+  isDuplicateProfile,
+  groupByPlatform,
+  ensurePrimary,
+  resolveProfileUrl,
+} from "@/lib/social-profiles";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -204,7 +214,18 @@ export function formatPhoneBR(raw: string): string {
   return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 }
 
-export type Rede = { id: string; plataforma: string; handle: string; seguidores?: string };
+/** `profileUrl`/`isPrimary`/`order` são aditivos (múltiplos perfis por
+ * rede social) — um registro antigo sem eles continua válido; ver
+ * `ensurePrimary`/`normalizeSocialInput` em `@/lib/social-profiles`. */
+export type Rede = {
+  id: string;
+  plataforma: string;
+  handle: string;
+  seguidores?: string;
+  profileUrl?: string;
+  isPrimary?: boolean;
+  order?: number;
+};
 export type PostMetrics = {
   views?: number;
   likes?: number;
@@ -879,7 +900,10 @@ export function normalizeInflus(list: unknown): Influ[] {
   });
 }
 
-export const REDES_OPTS = ["Instagram", "TikTok", "YouTube", "X", "LinkedIn", "Facebook"];
+/** @deprecated Mantido só pra compatibilidade de import — usar
+ * `PLATAFORMAS` de `@/lib/social-profiles`, que já é a mesma lista com
+ * placeholder/tipo de campo por plataforma. */
+export const REDES_OPTS = PLATAFORMAS.map((p) => p.key) as string[];
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Instagram,
   YouTube: Youtube,
@@ -2770,57 +2794,132 @@ function PagamentoInfluSection({
 /** Editor de redes sociais — mesmos toggles de plataforma + handle usados
  * na criação, reaproveitados aqui pra edição imediata de um influenciador
  * já existente. */
+/**
+ * Editor de redes sociais com suporte a MÚLTIPLOS perfis por plataforma
+ * (ex.: 2 contas de Instagram) — agrupa por `plataforma`
+ * (`groupByPlatform`), cada grupo tem "+ Adicionar outro {Rede}" em vez
+ * de um botão que só liga/desliga uma entrada única. Bloqueia duplicata
+ * exata na mesma plataforma (`isDuplicateProfile`) com erro inline no
+ * item, sem apagar o texto digitado. "Principal" só aparece quando o
+ * grupo tem 2+ perfis.
+ */
 function RedesEditor({ redes, onChange }: { redes: Rede[]; onChange: (next: Rede[]) => void }) {
+  const [dupError, setDupError] = useState<string | null>(null);
+  const groups = groupByPlatform(redes);
+  const usedPlatforms = new Set(groups.map(([p]) => p));
+  const availableToAdd = PLATAFORMAS.filter((p) => !usedPlatforms.has(p.key));
+
+  const addPlatform = (plataforma: string) => {
+    onChange([...redes, { id: crypto.randomUUID(), plataforma, handle: "" }]);
+  };
+  const addAnother = (plataforma: string) => {
+    onChange([...redes, { id: crypto.randomUUID(), plataforma, handle: "" }]);
+  };
+  const updateHandle = (id: string, value: string) => {
+    setDupError(null);
+    onChange(redes.map((r) => (r.id === id ? { ...r, handle: value } : r)));
+  };
+  const commitHandle = (r: Rede) => {
+    const { handle, profileUrl } = normalizeSocialInput(r.plataforma, r.handle);
+    if (isDuplicateProfile(redes, r.plataforma, handle, r.id)) {
+      setDupError(r.id);
+      return;
+    }
+    onChange(redes.map((x) => (x.id === r.id ? { ...x, handle, profileUrl } : x)));
+  };
+  const remove = (id: string) => onChange(redes.filter((r) => r.id !== id));
+  const setPrimary = (plataforma: string, id: string) =>
+    onChange(
+      redes.map((r) => (r.plataforma === plataforma ? { ...r, isPrimary: r.id === id } : r)),
+    );
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5">
-        {REDES_OPTS.map((p) => {
-          const active = redes.some((r) => r.plataforma === p);
-          return (
+      {availableToAdd.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {availableToAdd.map((p) => (
             <button
-              key={p}
+              key={p.key}
               type="button"
-              onClick={() =>
-                onChange(
-                  active
-                    ? redes.filter((r) => r.plataforma !== p)
-                    : [...redes, { id: crypto.randomUUID(), plataforma: p, handle: "" }],
-                )
-              }
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                active
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-foreground hover:bg-muted"
-              }`}
+              onClick={() => addPlatform(p.key)}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
             >
-              {p}
+              <Plus className="h-3 w-3" />
+              {p.label}
             </button>
-          );
-        })}
-      </div>
-      {redes.length === 0 ? (
+          ))}
+        </div>
+      )}
+      {groups.length === 0 ? (
         <EmptyHint text="Nenhuma rede selecionada." />
       ) : (
-        <div className="space-y-2">
-          {redes.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center gap-3 rounded-md border border-border bg-background px-3 py-2"
-            >
-              <span className="w-20 shrink-0 text-xs font-semibold text-foreground/80">
-                {r.plataforma}
-              </span>
-              <span className="text-sm text-muted-foreground">@</span>
-              <input
-                value={r.handle}
-                onChange={(e) =>
-                  onChange(redes.map((x) => (x.id === r.id ? { ...x, handle: e.target.value } : x)))
-                }
-                placeholder="usuario"
-                className="flex-1 bg-transparent text-sm outline-none"
-              />
-            </div>
-          ))}
+        <div className="space-y-4">
+          {groups.map(([plataforma, items]) => {
+            const def = platformDef(plataforma);
+            const resolved = ensurePrimary(items);
+            return (
+              <div key={plataforma} className="space-y-1.5">
+                <p className="text-xs font-semibold text-foreground/80">{plataforma}</p>
+                <div className="space-y-1.5">
+                  {resolved.map((r) => (
+                    <div key={r.id} className="space-y-1">
+                      <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
+                        {def?.usesHandle && (
+                          <span className="text-sm text-muted-foreground">@</span>
+                        )}
+                        <input
+                          value={r.handle}
+                          onChange={(e) => updateHandle(r.id, e.target.value)}
+                          onBlur={() => commitHandle(r)}
+                          placeholder={def?.placeholder ?? "usuario"}
+                          className="flex-1 bg-transparent text-sm outline-none"
+                        />
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimary(plataforma, r.id)}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              r.isPrimary
+                                ? "bg-brand-subtle text-brand"
+                                : "text-muted-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {r.isPrimary ? "Principal" : "Definir como principal"}
+                          </button>
+                        )}
+                        {resolveProfileUrl(r) && (
+                          <IconButton
+                            label="Abrir perfil"
+                            onClick={() =>
+                              window.open(resolveProfileUrl(r)!, "_blank", "noopener,noreferrer")
+                            }
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </IconButton>
+                        )}
+                        <IconButton label="Remover perfil" onClick={() => remove(r.id)}>
+                          <X className="h-3.5 w-3.5" />
+                        </IconButton>
+                      </div>
+                      {dupError === r.id && (
+                        <p className="px-1 text-[11px] text-destructive">
+                          Já existe um perfil igual nesta plataforma.
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addAnother(plataforma)}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-3 w-3" />
+                  Adicionar outro {plataforma}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -5946,7 +6045,17 @@ function DownloadInflusDialog({
       if (has("status")) headers.push("Status");
       const csvRows = rows.map((i) => {
         const row = [i.nome];
-        if (has("redes")) row.push(i.redes.map((r) => `${r.plataforma}:${r.handle}`).join(" | "));
+        if (has("redes")) {
+          const withPrimary = ensurePrimary(i.redes);
+          row.push(
+            withPrimary
+              .map(
+                (r) =>
+                  `${r.plataforma}:${r.handle}${r.isPrimary && withPrimary.filter((x) => x.plataforma === r.plataforma).length > 1 ? " (Principal)" : ""}`,
+              )
+              .join(" | "),
+          );
+        }
         if (has("entregas"))
           row.push(i.entregas.map((e) => `${e.quantidade}x ${e.tipo} (${e.status})`).join(" | "));
         if (has("pagamentos")) row.push(totalAceito(i.pagamento).toString());

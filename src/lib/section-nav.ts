@@ -83,3 +83,38 @@ export function resolveReunioesView(value: string | undefined): ReunioesView {
     ? value
     : "agenda";
 }
+
+/** Chave de cada seção interna de Configurações — mesma lista que já
+ * existia como `TabKey` local em `ConfiguracoesSection.tsx`, só que agora
+ * fica na URL (`?configTab=`) em vez de só `useState`. "novidades" saiu
+ * daqui de propósito: o changelog não é mais uma aba de Configurações. */
+export type ConfigTab =
+  | "perfil"
+  | "preferencias"
+  | "disponibilidade"
+  | "workspace"
+  | "integracoes"
+  | "precificacao"
+  | "time_permissoes"
+  | "seguranca"
+  | "dados_backup"
+  | "score_operacional"
+  | "hypito";
+
+const CONFIG_TAB_VALUES: ConfigTab[] = [
+  "perfil",
+  "preferencias",
+  "disponibilidade",
+  "workspace",
+  "integracoes",
+  "precificacao",
+  "time_permissoes",
+  "seguranca",
+  "dados_backup",
+  "score_operacional",
+  "hypito",
+];
+
+export function resolveConfigTab(value: string | undefined): ConfigTab {
+  return CONFIG_TAB_VALUES.includes(value as ConfigTab) ? (value as ConfigTab) : "perfil";
+}
