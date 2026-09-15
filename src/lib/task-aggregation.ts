@@ -21,6 +21,12 @@ export type DashTask = {
   title: string;
   bucket: "hoje" | "amanha" | "semana" | "atrasada" | "outro";
   due: string;
+  /** Mesma referência de data usada por `bucket`/`due`
+   * (`performanceDueDate ?? dueDate`, "YYYY-MM-DD") — só pra ORDENAR por
+   * prazo real dentro de uma lista (ex.: "Meu trabalho" no Início), já
+   * que `due` é só o texto formatado ("Seg 27/8"/"Atrasada 3d"), não
+   * comparável diretamente. */
+  dueISO?: string;
   priority?: ProjTask["priority"];
   status: ProjTask["status"];
   /** Ausente = tarefa de projeto (rota própria); presente = tarefa de
@@ -187,6 +193,7 @@ export function loadTasksByAssignee(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -207,6 +214,7 @@ export function loadTasksByAssignee(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -245,6 +253,7 @@ export function loadTasksByAssignee(
             title: t.title,
             bucket: b,
             due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            dueISO: t.performanceDueDate ?? t.dueDate,
             priority: t.priority,
             status: t.status,
             parentTitle,
@@ -317,6 +326,7 @@ export function loadAllTasksFlat(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
           parentTitle,
@@ -339,6 +349,7 @@ export function loadAllTasksFlat(
           title: t.title,
           bucket: b,
           due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+          dueISO: t.performanceDueDate ?? t.dueDate,
           priority: t.priority,
           status: t.status,
           campanhaId,
@@ -369,6 +380,7 @@ export function loadAllTasksFlat(
             title: t.title,
             bucket: b,
             due: formatDue(t.dueDate, b, t.performanceDueDate, cutoffHour),
+            dueISO: t.performanceDueDate ?? t.dueDate,
             priority: t.priority,
             status: t.status,
             parentTitle,

@@ -61,17 +61,33 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
     let marketingProjectId: string | undefined;
     const projectTasks: TaskDirectoryEntry[] = projs.flatMap((p) => {
       if (p.name.trim().toUpperCase() === "MARKETING") marketingProjectId = p.id;
-      return (p.tasks ?? []).map((t) => ({
-        id: t.id,
-        rawId: t.id,
-        label: t.title,
-        project: p.name,
-        projectId: p.id,
-        status: t.status,
-        priority: t.priority,
-        dueDate: t.dueDate,
-        assignees: getTaskAssignees(t),
-      }));
+      return (p.tasks ?? []).flatMap((t) => [
+        {
+          id: t.id,
+          rawId: t.id,
+          label: t.title,
+          project: p.name,
+          projectId: p.id,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          assignees: getTaskAssignees(t),
+        },
+        // Subtarefas entram no diretório com a própria identidade — sem
+        // isso, @mencionar/abrir uma subtarefa (Chat, dependências) não
+        // achava nada, ou só conseguia referenciar a tarefa-mãe.
+        ...(t.subtasks ?? []).map((s) => ({
+          id: s.id,
+          rawId: s.id,
+          label: `${s.title} (${t.title})`,
+          project: p.name,
+          projectId: p.id,
+          status: s.status,
+          priority: s.priority,
+          dueDate: s.dueDate,
+          assignees: getTaskAssignees(s),
+        })),
+      ]);
     });
     const campanhaTasks: TaskDirectoryEntry[] = [];
     for (const [campanhaId, campTasks] of getAllCampanhaTarefas()) {
@@ -88,19 +104,46 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           dueDate: t.dueDate,
           assignees: getTaskAssignees(t),
         });
+        for (const s of t.subtasks ?? []) {
+          campanhaTasks.push({
+            id: s.id,
+            rawId: s.id,
+            label: `${s.title} (${t.title})`,
+            project: campanhaNameMap.get(campanhaId),
+            projectId: "",
+            campanhaId,
+            status: s.status,
+            priority: s.priority,
+            dueDate: s.dueDate,
+            assignees: getTaskAssignees(s),
+          });
+        }
       }
     }
     const standaloneTasks: TaskDirectoryEntry[] = marketingProjectId
-      ? loadStandalone().map((s) => ({
-          id: `mkt:${s.id}`,
-          rawId: s.id,
-          label: s.title,
-          project: "Marketing",
-          projectId: marketingProjectId!,
-          status: s.status,
-          dueDate: s.dueDate,
-          assignees: getTaskAssignees(s),
-        }))
+      ? loadStandalone().flatMap((s) => [
+          {
+            id: `mkt:${s.id}`,
+            rawId: s.id,
+            label: s.title,
+            project: "Marketing",
+            projectId: marketingProjectId!,
+            status: s.status,
+            dueDate: s.dueDate,
+            assignees: getTaskAssignees(s),
+          },
+          ...(s.subtasks ?? []).map((sub) => ({
+            id: sub.id,
+            rawId: sub.id,
+            label: `${sub.title} (${s.title})`,
+            project: "Marketing",
+            projectId: marketingProjectId!,
+            status: sub.status,
+            priority: sub.priority,
+            dueDate: sub.dueDate,
+            assignees: getTaskAssignees(sub),
+          })),
+        ])
       : [];
     return [...projectTasks, ...campanhaTasks, ...standaloneTasks];
   }, [campanhaNameMap]);
@@ -267,6 +310,39 @@ export function findTaskContext(taskId: string): TaskContext | null {
         },
       };
     }
+    // Mesma busca em `subtasks` já feita acima pros tasks de projeto —
+    // faltava aqui, então uma subtarefa de campanha nunca resolvia por
+    // conta própria (só a tarefa-mãe).
+    for (const parent of campTasks) {
+      const subs = (parent as unknown as Task).subtasks ?? [];
+      const subIdx = subs.findIndex((s) => s.id === taskId);
+      if (subIdx >= 0) {
+        const sub = subs[subIdx];
+        return {
+          task: sub,
+          scope: { kind: "campanha", id: campanhaId },
+          breadcrumb: `Campanha · ${parent.title}`,
+          save: (t) => {
+            const nextParent = {
+              ...parent,
+              subtasks: subs.map((x) => (x.id === taskId ? t : x)),
+            };
+            saveCampanhaTarefas(
+              campanhaId,
+              campTasks.map((x) => (x.id === parent.id ? (nextParent as unknown as typeof x) : x)),
+            );
+          },
+          remove: () => {
+            const nextParent = { ...parent, subtasks: subs.filter((x) => x.id !== taskId) };
+            saveCampanhaTarefas(
+              campanhaId,
+              campTasks.map((x) => (x.id === parent.id ? (nextParent as unknown as typeof x) : x)),
+            );
+            void cleanupDependenciesForTask(taskId);
+          },
+        };
+      }
+    }
   }
 
   const standalone = loadStandalone();
@@ -283,6 +359,34 @@ export function findTaskContext(taskId: string): TaskContext | null {
         void cleanupDependenciesForTask(taskId);
       },
     };
+  }
+  // Mesma busca em `subtasks` pras tarefas avulsas do Marketing.
+  for (const parent of standalone) {
+    const subs = parent.subtasks ?? [];
+    const subIdx = subs.findIndex((s) => s.id === taskId);
+    if (subIdx >= 0) {
+      const sub = subs[subIdx];
+      return {
+        task: sub,
+        scope: { kind: "marketing" },
+        breadcrumb: `Marketing · ${parent.title}`,
+        save: (t) => {
+          const nextSubs = subs.map((x) => (x.id === taskId ? t : x));
+          updateStandalone(
+            parent.id,
+            taskToStandalonePatch({ ...standaloneToTask(parent), subtasks: nextSubs }),
+          );
+        },
+        remove: () => {
+          const nextSubs = subs.filter((x) => x.id !== taskId);
+          updateStandalone(
+            parent.id,
+            taskToStandalonePatch({ ...standaloneToTask(parent), subtasks: nextSubs }),
+          );
+          void cleanupDependenciesForTask(taskId);
+        },
+      };
+    }
   }
 
   return null;

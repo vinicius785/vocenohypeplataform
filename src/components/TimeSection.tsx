@@ -847,16 +847,18 @@ function DiretorioTab() {
   // (Início) e no indicador de timer ativo — abrir uma tarefa da lista de
   // alguém na aba Time precisa cair no mesmo lugar.
   const openTask = (t: DashTask) => {
-    const targetId = t.parentId ?? t.id;
+    // `?taskId=` já resolve subtarefa (procura dentro de `subtasks` da
+    // mãe e abre o mesmo diálogo já direto nela — `TaskBoard.tsx`), então
+    // passa o id de verdade, nunca mais colapsado pro pai.
     if (t.campanhaId) {
       sessionStorage.setItem(
         OPEN_CAMPANHA_TASK_KEY,
-        JSON.stringify({ campanhaId: t.campanhaId, taskId: targetId }),
+        JSON.stringify({ campanhaId: t.campanhaId, taskId: t.id }),
       );
       navigate({ to: "/time", search: { section: "campanhas" as SectionKey } });
       return;
     }
-    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 
   const handleSave = async (payload: MemberFormPayload) => {

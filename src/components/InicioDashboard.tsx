@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Newspaper,
   Plus,
-  Sparkles,
   Star,
   Trash2,
   X,
@@ -24,6 +23,8 @@ import {
   CloudRain,
   CloudLightning,
   Snowflake,
+  Wallet,
+  TrendingUp,
 } from "lucide-react";
 import { loadProjetos, onProjetosChange, loadTeamMembers, type BlogPost } from "@/lib/projetos";
 import { renderMarkdownLite, ArticleReader } from "@/components/marketing/BlogPanel";
@@ -81,6 +82,14 @@ import type { WeatherSnapshot } from "@/lib/weather-cache";
 import { WeatherHeaderEffect } from "@/components/inicio/WeatherHeaderEffect";
 import { WEATHER_CONDITION_LABEL_PT } from "@/lib/weather-condition";
 import { currentHourInBrasilia } from "@/lib/timezone";
+import { ManageCardsMenu } from "@/components/inicio/ManageCardsMenu";
+import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
+import { useFinanceiroEntries, remainingBalance, fmtBRL } from "@/lib/financeiro-entries";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { listLeads } from "@/lib/comercial.functions";
+import { legacyStage } from "@/lib/comercial-engine";
+import { formatBRL as formatLeadBRL } from "@/lib/comercial";
 
 type PersonalItem = { id: string; text: string; done: boolean };
 
@@ -194,13 +203,47 @@ function cachePersonal(items: PersonalItem[]) {
   }
 }
 
-type CardKey = "stats" | "work" | "agenda" | "comments" | "personal";
-const CARD_DEFS: { key: CardKey; label: string }[] = [
-  { key: "stats", label: "Resumo (chips)" },
-  { key: "work", label: "Meu trabalho" },
-  { key: "agenda", label: "Agenda" },
-  { key: "comments", label: "Comentários atribuídos" },
-  { key: "personal", label: "Lista pessoal" },
+export type CardKey =
+  | "stats"
+  | "work"
+  | "agenda"
+  | "comments"
+  | "personal"
+  | "financeiro"
+  | "comercial";
+/** `permission`, quando presente, é checado contra `SECTION_PERMISSION`
+ * antes de o card aparecer tanto na lista "Gerenciar cards" quanto no
+ * corpo da página — quem não tem a permissão da seção correspondente
+ * nunca vê a opção de ligar o card, nem por engano via localStorage
+ * (`visible.financeiro`/`visible.comercial` são sempre revalidados contra
+ * o acesso atual no render, nunca só confiados do que foi salvo). */
+const CARD_DEFS: {
+  key: CardKey;
+  label: string;
+  description: string;
+  permission?: "financeiro" | "comercial";
+}[] = [
+  { key: "stats", label: "Resumo", description: "Contadores rápidos de hoje, amanhã e atrasadas" },
+  { key: "work", label: "Meu trabalho", description: "Suas tarefas organizadas por prazo" },
+  { key: "agenda", label: "Agenda", description: "Próximos compromissos e reuniões" },
+  {
+    key: "financeiro",
+    label: "Financeiro",
+    description: "Resumo de valores vencidos",
+    permission: "financeiro",
+  },
+  {
+    key: "comercial",
+    label: "Comercial",
+    description: "Leads novos do pipeline",
+    permission: "comercial",
+  },
+  {
+    key: "comments",
+    label: "Comentários atribuídos",
+    description: "Menções recentes em comentários",
+  },
+  { key: "personal", label: "Lista pessoal", description: "Sua lista de tarefas pessoais" },
 ];
 const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   stats: true,
@@ -208,6 +251,8 @@ const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   agenda: true,
   comments: true,
   personal: true,
+  financeiro: true,
+  comercial: true,
 };
 /** Ids de cards removidos em rodadas anteriores — se sobrar no localStorage
  * de alguém, é só ignorado (nunca lido em nenhum `visible.*`), sem quebrar
@@ -237,6 +282,19 @@ function loadWeatherEnabledPref(): boolean {
 
 type TaskFilter = "hoje" | "atrasada" | "semana";
 
+/** Prazo mais próximo primeiro — antes a lista de "Meu trabalho" ficava
+ * na ordem de varredura (por pessoa/projeto), sem nenhum critério de
+ * urgência visível; `dueISO` é a mesma data usada pra calcular `bucket`,
+ * então ordenar por ela nunca diverge do agrupamento hoje/amanhã/semana
+ * já exibido. Tarefa sem prazo (não deveria acontecer nesses buckets,
+ * mas por segurança) vai pro fim, nunca primeiro. */
+function byDueAsc(a: DashTask, b: DashTask): number {
+  if (!a.dueISO && !b.dueISO) return 0;
+  if (!a.dueISO) return 1;
+  if (!b.dueISO) return -1;
+  return a.dueISO.localeCompare(b.dueISO);
+}
+
 const WORK_PAGE_SIZE = 6;
 const COMMENTS_PAGE_SIZE = 3;
 
@@ -256,7 +314,6 @@ export function InicioDashboard() {
   const [greeting, setGreeting] = useState("Olá");
   const [today, setToday] = useState("");
   const [filter, setFilter] = useState<TaskFilter>("hoje");
-  const [manageOpen, setManageOpen] = useState(false);
   const [tasks, setTasks] = useState<DashTask[]>([]);
   const [taskCommentMentions, setTaskCommentMentions] = useState<TaskCommentMention[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -267,6 +324,25 @@ export function InicioDashboard() {
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const workCardRef = useRef<HTMLDivElement>(null);
   const { confirm, confirmDialog } = useConfirm();
+  const access = useMyAccess();
+  const canFinanceiro = hasPermission(access, SECTION_PERMISSION.financeiro);
+  const canComercial = hasPermission(access, SECTION_PERMISSION.comercial);
+  const visibleCardDefs = CARD_DEFS.filter(
+    (c) => !c.permission || (c.permission === "financeiro" ? canFinanceiro : canComercial),
+  );
+  const financeiroEntries = useFinanceiroEntries();
+  const financeiroVencido = useMemo(() => {
+    if (!canFinanceiro) return { aReceber: 0, aPagar: 0 };
+    let aReceber = 0;
+    let aPagar = 0;
+    for (const e of financeiroEntries) {
+      if (e.status !== "vencido") continue;
+      if (e.kind === "receita") aReceber += remainingBalance(e);
+      else aPagar += remainingBalance(e);
+    }
+    return { aReceber, aPagar };
+  }, [financeiroEntries, canFinanceiro]);
+
   const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
     if (typeof window === "undefined") return DEFAULT_VISIBLE;
     try {
@@ -277,6 +353,22 @@ export function InicioDashboard() {
     }
     return DEFAULT_VISIBLE;
   });
+
+  // Mesma `queryKey` já usada em `ComercialSection.tsx` — compartilha
+  // cache/refetch com a tela cheia do Comercial em vez de duplicar a
+  // busca; só dispara quando o card está visível E a pessoa tem permissão
+  // (nunca busca leads pra quem não pode ver Comercial).
+  const listLeadsFn = useServerFn(listLeads);
+  const { data: comercialLeads = [] } = useQuery({
+    queryKey: ["leads"],
+    queryFn: () => listLeadsFn(),
+    enabled: canComercial && visible.comercial,
+    refetchInterval: 15000,
+  });
+  const novosLeads = useMemo(
+    () => comercialLeads.filter((l) => legacyStage(l.stage) === "LEAD_RECEBIDO"),
+    [comercialLeads],
+  );
 
   useEffect(() => {
     try {
@@ -388,9 +480,9 @@ export function InicioDashboard() {
   const proximos7Dias = semana + hoje + amanha;
 
   const filteredTasks = useMemo(() => {
-    if (filter === "hoje") return tasks.filter((t) => t.bucket === "hoje");
-    if (filter === "atrasada") return tasks.filter((t) => t.bucket === "atrasada");
-    return tasks.filter((t) => ["hoje", "amanha", "semana"].includes(t.bucket));
+    if (filter === "hoje") return tasks.filter((t) => t.bucket === "hoje").sort(byDueAsc);
+    if (filter === "atrasada") return tasks.filter((t) => t.bucket === "atrasada").sort(byDueAsc);
+    return tasks.filter((t) => ["hoje", "amanha", "semana"].includes(t.bucket)).sort(byDueAsc);
   }, [filter, tasks]);
 
   useEffect(() => setWorkExpanded(false), [filter]);
@@ -598,26 +690,28 @@ export function InicioDashboard() {
   };
 
   const openTask = (t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">) => {
-    // Subtarefa não tem dialog próprio pra abrir sozinha (só é editada de
-    // dentro do dialog da tarefa-mãe de nível raiz) — abre o pai em vez
-    // dela; a subtarefa aparece logo na lista de subtarefas já expandida.
-    const targetId = t.parentId ?? t.id;
+    // O deep-link (`?taskId=`) já resolve subtarefa (procura dentro de
+    // `subtasks` da tarefa-mãe e abre o mesmo diálogo já direto nela —
+    // ver `initialOpenTaskId` em `TaskBoard.tsx`), então passa o id da
+    // própria tarefa/subtarefa clicada, nunca mais o do pai.
     if (t.campanhaId) {
       // Campanhas não têm rota própria (é tudo dentro de /time?section=campanhas,
       // navegação client-side) — mesmo deep-link por sessionStorage que o
       // indicador de timer ativo (AppShell) já usa pra abrir campanha + tarefa.
       sessionStorage.setItem(
         OPEN_CAMPANHA_TASK_KEY,
-        JSON.stringify({ campanhaId: t.campanhaId, taskId: targetId }),
+        JSON.stringify({ campanhaId: t.campanhaId, taskId: t.id }),
       );
       navigate({ to: "/time", search: { section: "campanhas" as SectionKey } });
       return;
     }
-    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: targetId } });
+    navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 
   const goToFocus = (t: Pick<DashTask, "id" | "parentId">) => {
-    const targetId = (t.parentId ?? t.id).replace(/^mkt:/, "");
+    // `findTaskContext` (Modo Foco) já procura em `subtasks` também —
+    // passa o id de verdade, sem colapsar pro pai.
+    const targetId = t.id.replace(/^mkt:/, "");
     navigate({
       to: "/foco",
       search: { taskId: targetId, from: `${window.location.pathname}${window.location.search}` },
@@ -703,50 +797,14 @@ export function InicioDashboard() {
                   </div>
                 </div>
               )}
-              <div className="relative flex items-center">
-                <button
-                  onClick={() => setManageOpen((v) => !v)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Gerenciar cards
-                </button>
-                {manageOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setManageOpen(false)} />
-                    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-lg border border-border bg-background p-2 shadow-lg">
-                      <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Cards da tela inicial
-                      </p>
-                      {CARD_DEFS.map((c) => (
-                        <label
-                          key={c.key}
-                          className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
-                        >
-                          <span>{c.label}</span>
-                          <input
-                            type="checkbox"
-                            checked={visible[c.key]}
-                            onChange={() => setVisible((v) => ({ ...v, [c.key]: !v[c.key] }))}
-                            className="h-3.5 w-3.5 accent-brand"
-                          />
-                        </label>
-                      ))}
-                      <div className="my-1.5 border-t border-border" />
-                      <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-muted">
-                        <span>Ambiente climático no cabeçalho</span>
-                        <input
-                          type="checkbox"
-                          checked={weatherEnabled}
-                          onChange={() => setWeatherEnabled((v) => !v)}
-                          className="h-3.5 w-3.5 accent-brand"
-                          aria-label="Ativar ou desativar o ambiente climático no cabeçalho"
-                        />
-                      </label>
-                    </div>
-                  </>
-                )}
-              </div>
+              <ManageCardsMenu
+                cardDefs={visibleCardDefs}
+                visible={visible}
+                onToggleCard={(key) => setVisible((v) => ({ ...v, [key]: !v[key] }))}
+                onRestoreDefaults={() => setVisible(DEFAULT_VISIBLE)}
+                weatherEnabled={weatherEnabled}
+                onToggleWeather={() => setWeatherEnabled((v) => !v)}
+              />
             </div>
           </div>
 
@@ -1134,6 +1192,91 @@ export function InicioDashboard() {
                   </div>
                 ))}
               </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Financeiro/Comercial — só aparecem pra quem tem a permissão da
+       * seção correspondente (`visibleCardDefs` já filtra a opção fora do
+       * menu "Gerenciar cards", e aqui a mesma checagem é revalidada antes
+       * de renderizar, nunca só confiando no que ficou salvo em
+       * `visible.*` no localStorage de antes de uma permissão mudar). */}
+      {((visible.financeiro && canFinanceiro) || (visible.comercial && canComercial)) && (
+        <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
+          {visible.financeiro && canFinanceiro && (
+            <Card>
+              <CardHeader icon={<Wallet className="h-4 w-4" />} title="Financeiro" />
+              <div className="grid grid-cols-2 gap-3 p-3 md:p-4">
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[11px] text-muted-foreground">Vencido a receber</p>
+                  <p className="mt-0.5 text-lg font-semibold text-foreground">
+                    {fmtBRL(financeiroVencido.aReceber)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/40 p-3">
+                  <p className="text-[11px] text-muted-foreground">Vencido a pagar</p>
+                  <p className="mt-0.5 text-lg font-semibold text-foreground">
+                    {fmtBRL(financeiroVencido.aPagar)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({ to: "/time", search: { section: "financeiro" as SectionKey } })
+                }
+                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+              >
+                Abrir Financeiro
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </Card>
+          )}
+
+          {visible.comercial && canComercial && (
+            <Card>
+              <CardHeader
+                icon={<TrendingUp className="h-4 w-4" />}
+                title="Comercial"
+                action={
+                  <span className="text-[11px] text-muted-foreground">
+                    {novosLeads.length} novo{novosLeads.length === 1 ? "" : "s"}
+                  </span>
+                }
+              />
+              {novosLeads.length === 0 ? (
+                <EmptyState compact title="Nenhum lead novo no momento." />
+              ) : (
+                <ul className="divide-y divide-border/70">
+                  {novosLeads.slice(0, 5).map((l) => (
+                    <li
+                      key={l.id}
+                      className="flex items-center justify-between gap-2 px-4 py-2 md:px-5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">{l.name}</p>
+                        {l.company && (
+                          <p className="truncate text-[11px] text-muted-foreground">{l.company}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-xs font-medium text-foreground">
+                        {formatLeadBRL(l.value)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  navigate({ to: "/time", search: { section: "comercial" as SectionKey } })
+                }
+                className="flex w-full items-center justify-center gap-1 border-t border-border/70 px-4 py-2.5 text-xs font-medium text-brand hover:underline"
+              >
+                Abrir Comercial
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
             </Card>
           )}
         </div>

@@ -1,6 +1,7 @@
 {
-  "version": "1.275.0",
+  "version": "1.276.0",
   "notes": [
+    "1.276.0: O Hypito agora responde com cards visuais (tarefa criada, resumo de campanha/projeto, agenda agrupada por dia, listas de tarefas, confirmação e escolha entre opções) em vez de texto cru, com botões reais e links diretos pros itens certos — sem mais rota interna aparecendo na conversa. Corrigido também o cálculo de \"próxima semana\" (antes podia incluir dias da semana seguinte à pedida) e a associação de campanha ao criar uma tarefa mencionando o nome dela junto com um prazo. O Hypito continua em desenvolvimento: a conversa ainda é baseada em regras (sem IA generativa), então frases fora do padrão esperado podem não ser entendidas, e o tom da resposta pode soar menos natural do que uma conversa humana — se algo não funcionar como esperado, tente reformular de um jeito mais direto.",
     "1.275.0: Lança a primeira fase do Hypito, o assistente operacional da Você no Hype — conversa direta fixada no Chat (consulta tarefas, agenda, projetos e campanhas em linguagem natural, com permissões aplicadas no backend), criação assistida de tarefas e lembretes sempre com confirmação explícita antes de gravar qualquer coisa, resumo diário pessoal, relatório semanal automático no canal Geral com insights individuais reais (sem ranking, sem comparação entre pessoas), alertas operacionais preventivos com deduplicação e cooldown, e identidade visual do Hypito no aviso de reunião 5 minutos antes. Nesta primeira versão o Hypito é 100% determinístico (sem IA) e avisa que está em beta na própria conversa.",
     "1.274.0: Repagina as seções abaixo do cabeçalho climático do Início (Meu trabalho, Agenda, Mural de novidades, Comentários atribuídos e Lista pessoal) com o mesmo acabamento premium do restante da plataforma: cantos, superfícies, tipografia e estados vazios agora consistentes entre os cards, sem alterar nenhum dado ou comportamento existente.",
     "1.273.0: Adiciona @menção de usuários e opção de excluir comentário nos artigos do Mural de novidades. Deixa o efeito de chuva do cabeçalho do Início mais visível, inclusive no tema claro. Corrige o aviso de chamada encerrada aparecendo duplicado (às vezes até 9x) no chat quando havia mais de uma aba aberta. Reformula o cabeçalho climático do Início: saudação, clima e indicadores (Hoje/Amanhã/Próximos 7 dias/Atrasadas) agora vivem num único bloco visual coeso, com composição válida pra qualquer condição do tempo — a localização usada pra buscar o clima nunca aparece na interface, só internamente.",
@@ -411,6 +412,30 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.276.0",
+      "summary": "Hypito ganha cards visuais nas respostas do Chat — ainda em desenvolvimento.",
+      "modules": [
+        {
+          "name": "HYPITO",
+          "tagline": "Assistente operacional da Você no Hype — em desenvolvimento",
+          "items": [
+            {
+              "title": "Respostas em cards, não mais em texto cru",
+              "description": "Tarefa criada, resumo de campanha/projeto, agenda agrupada por dia e listas de tarefas agora aparecem em cards visuais com botões reais e links diretos pro item certo — sem rota interna aparecendo na conversa."
+            },
+            {
+              "title": "Confirmação e escolha entre opções mais claras",
+              "description": "Criar uma tarefa mostra um card de confirmação antes de gravar qualquer coisa; quando há mais de uma campanha ou pessoa parecida, o Hypito oferece opções clicáveis em vez de pedir pra você repetir a pergunta."
+            },
+            {
+              "title": "Ainda em desenvolvimento",
+              "description": "O Hypito continua sem IA generativa (é baseado em regras), então a conversa ainda pode soar menos natural que uma conversa humana e nem toda frase é reconhecida da primeira vez. Estamos evoluindo isso aos poucos — se algo não for entendido, tente reformular de um jeito mais direto."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.275.0",
       "summary": "Lança o Hypito — assistente operacional com conversa no Chat, resumo diário, relatório semanal e alertas preventivos.",

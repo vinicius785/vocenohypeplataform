@@ -40,6 +40,22 @@ import { getTheme, setTheme } from "@/lib/theme";
 import { setFaviconBadge } from "@/lib/favicon-badge";
 import { SidebarProfile, BugsReportadosTab } from "./ConfiguracoesSection";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
+import { IconButton } from "@/components/ui/icon-button";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ListRow } from "@/components/shared/ListRow";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { SURFACE, type SemanticTone } from "@/lib/design-tokens";
+import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
@@ -1211,6 +1227,12 @@ function ActiveTimerIndicator({ onSelect }: { onSelect: (key: SectionKey) => voi
 
 type BellTab = "tarefas" | "mensagens" | "reunioes" | "outros";
 
+/** Uma notificação — sempre `ListRow` (design system), nunca um card
+ * hand-rolled próprio. Tudo mostrado aqui já é implicitamente "não lida"
+ * (o dado de origem já filtra fora o que foi visto/dismissado — não
+ * existe hoje um estado "lida mas ainda na lista" pra diferenciar), então
+ * `unread` é sempre `true`: o indicador visual é honesto com o modelo de
+ * dado real, não decorativo. */
 function BellItem({
   icon,
   iconTone,
@@ -1222,8 +1244,8 @@ function BellItem({
   onMarkRead,
 }: {
   icon: ReactNode;
-  iconTone: string;
-  title: ReactNode;
+  iconTone: SemanticTone;
+  title: string;
   subtitle: ReactNode;
   time?: string;
   badge?: number;
@@ -1234,45 +1256,26 @@ function BellItem({
   onMarkRead?: () => void;
 }) {
   return (
-    <div className="group flex w-full items-start gap-1 rounded-lg text-left transition-colors hover:bg-muted/60">
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex min-w-0 flex-1 items-start gap-3 px-3 py-2.5 text-left"
-      >
-        <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconTone}`}
-        >
-          {icon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-xs font-semibold text-foreground">{title}</span>
-            {time && <span className="shrink-0 text-[10px] text-muted-foreground">{time}</span>}
-          </div>
-          <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
-        </div>
-        {!!badge && (
-          <span className="mt-0.5 inline-flex min-w-[16px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
-            {badge}
-          </span>
-        )}
-      </button>
-      {onMarkRead && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMarkRead();
-          }}
-          aria-label="Marcar como lida"
-          title="Marcar como lida"
-          className="mr-1.5 mt-1.5 shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100"
-        >
-          <Check className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
+    <ListRow
+      icon={icon}
+      iconTone={iconTone}
+      title={title}
+      description={subtitle}
+      time={time}
+      unread
+      multiline
+      onClick={onClick}
+      status={badge ? { label: String(badge), tone: "brand" } : undefined}
+      secondaryAction={
+        onMarkRead
+          ? {
+              icon: <Check className="h-3.5 w-3.5" />,
+              label: "Marcar como lida",
+              onClick: onMarkRead,
+            }
+          : undefined
+      }
+    />
   );
 }
 
@@ -1857,256 +1860,344 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     return `${da}/${mo} ${m.hora}`;
   };
 
-  const openBell = () => {
-    setOpen((o) => {
-      const next = !o;
-      if (next) {
-        const firstWithItems = BELL_TABS.find((t) => t.count > 0);
-        setTab(firstWithItems?.key ?? "tarefas");
-      }
-      return next;
-    });
-  };
-
   const activeCount = BELL_TABS.find((t) => t.key === tab)?.count ?? 0;
+  const isMobile = useIsMobile();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const tabRefs = useRef<Partial<Record<BellTab, HTMLButtonElement | null>>>({});
 
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={openBell}
-        className="relative rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-        aria-label="Notificações"
-      >
-        <Bell className="h-4 w-4" />
-        {total > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground">
-            {total > 99 ? "99+" : total}
-          </span>
-        )}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-sm font-semibold text-foreground">Notificações</span>
-              {activeCount > 0 && (
-                <button
-                  onClick={() => markTab(tab)}
-                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                >
-                  Marcar esta aba como lida
-                </button>
-              )}
-            </div>
+  // Traz a categoria ativa pra área visível da faixa de tabs (relevante
+  // quando ela rola horizontalmente em larguras intermediárias) e decide
+  // qual aba abrir (a primeira com itens, preservando o comportamento
+  // de antes) sempre que o painel abre.
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      const firstWithItems = BELL_TABS.find((t) => t.count > 0);
+      setTab(firstWithItems?.key ?? "tarefas");
+    } else {
+      // Restaura o foco no sino ao fechar (clique fora, Esc ou botão de
+      // fechar) — nunca deixa o foco perdido na página.
+      triggerRef.current?.focus();
+    }
+    setOpen(next);
+  };
+  useEffect(() => {
+    if (open) tabRefs.current[tab]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [open, tab]);
 
-            <div className="flex gap-1 border-b border-border px-2 pb-2">
-              {BELL_TABS.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
-                    tab === t.key
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {t.label}
-                  {t.count > 0 && (
-                    <span
-                      className={`inline-flex min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-4 ${
-                        tab === t.key
-                          ? "bg-background/20 text-background"
-                          : "bg-destructive text-destructive-foreground"
-                      }`}
-                    >
-                      {t.count > 99 ? "99+" : t.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+  const trigger = (
+    <button
+      ref={triggerRef}
+      type="button"
+      className="relative rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label="Notificações"
+    >
+      <Bell className="h-4 w-4" />
+      {total > 0 && (
+        <span
+          aria-hidden="true"
+          className="absolute -right-0.5 -top-0.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-4 text-destructive-foreground"
+        >
+          {total > 99 ? "99+" : total}
+        </span>
+      )}
+    </button>
+  );
 
-            <div className="max-h-[26rem] overflow-y-auto p-1.5">
-              {tab === "tarefas" && (
+  const header = (
+    <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-3 pt-4">
+      <p className="text-sm font-semibold text-foreground">Notificações</p>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={activeCount === 0}
+          onClick={() => markTab(tab)}
+          className="text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          Marcar como lidas
+        </Button>
+        <IconButton label="Fechar" onClick={() => handleOpenChange(false)}>
+          <X className="h-4 w-4" />
+        </IconButton>
+      </div>
+    </div>
+  );
+
+  // Faixa de categorias: rola na horizontal sem barra visível (nenhum
+  // plugin novo — `[&::-webkit-scrollbar]:hidden` + `scrollbarWidth`
+  // inline cobrem Chrome/Safari e Firefox) em vez de cortar/comprimir os
+  // 4 nomes; a categoria ativa nunca fica de fora graças ao
+  // `scrollIntoView` acima. `bg-brand-subtle`/`text-brand` na ativa —
+  // nunca mais o fundo quase-branco (`bg-foreground`) de antes.
+  const tabsRow = (
+    <div
+      role="tablist"
+      aria-label="Categorias de notificação"
+      className="flex shrink-0 gap-1.5 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden"
+      style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+    >
+      {BELL_TABS.map((t) => {
+        const active = tab === t.key;
+        return (
+          <button
+            key={t.key}
+            ref={(el) => {
+              tabRefs.current[t.key] = el;
+            }}
+            role="tab"
+            id={`bell-tab-${t.key}`}
+            aria-selected={active}
+            aria-controls={`bell-tabpanel-${t.key}`}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              active ? "bg-brand-subtle text-brand" : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span
+                className={cn(
+                  "inline-flex h-4 min-w-[16px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                  active ? "bg-brand text-brand-foreground" : "bg-foreground/10 text-foreground",
+                )}
+              >
+                {t.count > 99 ? "99+" : t.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const listBody = (
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      {tab === "tarefas" && (
+        <div role="tabpanel" id="bell-tabpanel-tarefas" aria-labelledby="bell-tab-tarefas">
+          {taskItems.length === 0 && taskActivityItems.length === 0 && (
+            <EmptyState
+              compact
+              icon={<CheckSquare className="h-4 w-4" />}
+              title="Nenhuma notificação de tarefa"
+            />
+          )}
+          {taskItems.map((t) => (
+            <BellItem
+              key={t.id}
+              icon={<CheckSquare className="h-4 w-4" />}
+              iconTone="info"
+              title={t.title}
+              subtitle={t.projectName}
+              time={t.dueDate}
+              onClick={() => {
+                dismissTask(t.id);
+                onSelect("projetos");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissTask(t.id)}
+            />
+          ))}
+          {taskActivityItems.map((a) => (
+            <BellItem
+              key={a.id}
+              icon={<CheckSquare className="h-4 w-4" />}
+              iconTone="brand"
+              title={a.taskTitle}
+              subtitle={`${a.action} · ${a.projectName}`}
+              time={fmtTime(Date.parse(a.createdAt) || Date.now())}
+              onClick={() => {
+                dismissTaskActivity(a.id);
+                onSelect("projetos");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissTaskActivity(a.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {tab === "mensagens" && (
+        <div role="tabpanel" id="bell-tabpanel-mensagens" aria-labelledby="bell-tab-mensagens">
+          {mentionItems.length === 0 && chatItems.length === 0 && (
+            <EmptyState
+              compact
+              icon={<AtSign className="h-4 w-4" />}
+              title="Nenhuma mensagem nova"
+            />
+          )}
+          {mentionItems.map((m) => (
+            <BellItem
+              key={m.id}
+              icon={<AtSign className="h-4 w-4" />}
+              iconTone="brand"
+              title={`${m.authorName} · ${labelFor(m.convoId)}`}
+              subtitle={m.text}
+              time={fmtTime(m.createdAt)}
+              onClick={() => {
+                dismissMention(m.id);
+                openConvo(m.convoId);
+              }}
+              onMarkRead={() => dismissMention(m.id)}
+            />
+          ))}
+          {chatItems.map((i) => (
+            <BellItem
+              key={i.convoId}
+              icon={<MessageSquare className="h-4 w-4" />}
+              iconTone="brand"
+              title={labelFor(i.convoId)}
+              subtitle={
                 <>
-                  {taskItems.length === 0 && taskActivityItems.length === 0 && (
-                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                      Nenhuma notificação de tarefa
-                    </p>
-                  )}
-                  {taskItems.map((t) => (
-                    <BellItem
-                      key={t.id}
-                      icon={<CheckSquare className="h-4 w-4" />}
-                      iconTone="bg-sky-500/15 text-sky-600 dark:text-sky-400"
-                      title={t.title}
-                      subtitle={t.projectName}
-                      time={t.dueDate}
-                      onClick={() => {
-                        dismissTask(t.id);
-                        onSelect("projetos");
-                        setOpen(false);
-                      }}
-                      onMarkRead={() => dismissTask(t.id)}
-                    />
-                  ))}
-                  {taskActivityItems.map((a) => (
-                    <BellItem
-                      key={a.id}
-                      icon={<CheckSquare className="h-4 w-4" />}
-                      iconTone="bg-violet-500/15 text-violet-600 dark:text-violet-400"
-                      title={a.taskTitle}
-                      subtitle={`${a.action} · ${a.projectName}`}
-                      time={fmtTime(Date.parse(a.createdAt) || Date.now())}
-                      onClick={() => {
-                        dismissTaskActivity(a.id);
-                        onSelect("projetos");
-                        setOpen(false);
-                      }}
-                      onMarkRead={() => dismissTaskActivity(a.id)}
-                    />
-                  ))}
+                  <span className="font-medium text-foreground/80">{i.last.authorName}:</span>{" "}
+                  {i.last.text}
                 </>
-              )}
+              }
+              time={fmtTime(i.last.createdAt)}
+              badge={i.count}
+              onClick={() => openConvo(i.convoId)}
+              onMarkRead={() => void markRead(i.convoId)}
+            />
+          ))}
+        </div>
+      )}
 
-              {tab === "mensagens" && (
-                <>
-                  {mentionItems.length === 0 && chatItems.length === 0 && (
-                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                      Nenhuma mensagem nova
-                    </p>
-                  )}
-                  {mentionItems.map((m) => (
-                    <BellItem
-                      key={m.id}
-                      icon={<AtSign className="h-4 w-4" />}
-                      iconTone="bg-primary/15 text-primary"
-                      title={`${m.authorName} · ${labelFor(m.convoId)}`}
-                      subtitle={m.text}
-                      time={fmtTime(m.createdAt)}
-                      onClick={() => {
-                        dismissMention(m.id);
-                        openConvo(m.convoId);
-                      }}
-                      onMarkRead={() => dismissMention(m.id)}
-                    />
-                  ))}
-                  {chatItems.map((i) => (
-                    <BellItem
-                      key={i.convoId}
-                      icon={<MessageSquare className="h-4 w-4" />}
-                      iconTone="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                      title={labelFor(i.convoId)}
-                      subtitle={
-                        <>
-                          <span className="font-medium text-foreground/80">
-                            {i.last.authorName}:
-                          </span>{" "}
-                          {i.last.text}
-                        </>
-                      }
-                      time={fmtTime(i.last.createdAt)}
-                      badge={i.count}
-                      onClick={() => openConvo(i.convoId)}
-                      onMarkRead={() => void markRead(i.convoId)}
-                    />
-                  ))}
-                </>
-              )}
+      {tab === "reunioes" && (
+        <div role="tabpanel" id="bell-tabpanel-reunioes" aria-labelledby="bell-tab-reunioes">
+          {meetingItems.length === 0 && rescheduleItems.length === 0 && (
+            <EmptyState
+              compact
+              icon={<CalendarClock className="h-4 w-4" />}
+              title="Nenhuma notificação de reunião"
+            />
+          )}
+          {meetingItems.map((m) => (
+            <BellItem
+              key={m.id}
+              icon={<CalendarClock className="h-4 w-4" />}
+              iconTone="warning"
+              title={m.titulo}
+              subtitle="Aguardando confirmação"
+              time={fmtMeetingWhen(m)}
+              onClick={() => {
+                dismissMeeting(m.id);
+                onSelect("reunioes");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissMeeting(m.id)}
+            />
+          ))}
+          {rescheduleItems.map((m) => (
+            <BellItem
+              key={m.id}
+              icon={<CalendarClock className="h-4 w-4" />}
+              iconTone="warning"
+              title={m.titulo}
+              subtitle={`Novo horário sugerido${
+                m.rescheduleProposal?.proposedByName
+                  ? ` por ${m.rescheduleProposal.proposedByName}`
+                  : ""
+              }`}
+              time={fmtMeetingWhen(m)}
+              onClick={() => {
+                dismissReschedule(m.id);
+                onSelect("reunioes");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissReschedule(m.id)}
+            />
+          ))}
+        </div>
+      )}
 
-              {tab === "reunioes" && (
-                <>
-                  {meetingItems.length === 0 && rescheduleItems.length === 0 && (
-                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                      Nenhuma notificação de reunião
-                    </p>
-                  )}
-                  {meetingItems.map((m) => (
-                    <BellItem
-                      key={m.id}
-                      icon={<CalendarClock className="h-4 w-4" />}
-                      iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                      title={m.titulo}
-                      subtitle="Aguardando confirmação"
-                      time={fmtMeetingWhen(m)}
-                      onClick={() => {
-                        dismissMeeting(m.id);
-                        onSelect("reunioes");
-                        setOpen(false);
-                      }}
-                      onMarkRead={() => dismissMeeting(m.id)}
-                    />
-                  ))}
-                  {rescheduleItems.map((m) => (
-                    <BellItem
-                      key={m.id}
-                      icon={<CalendarClock className="h-4 w-4" />}
-                      iconTone="bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                      title={m.titulo}
-                      subtitle={`Novo horário sugerido${
-                        m.rescheduleProposal?.proposedByName
-                          ? ` por ${m.rescheduleProposal.proposedByName}`
-                          : ""
-                      }`}
-                      time={fmtMeetingWhen(m)}
-                      onClick={() => {
-                        dismissReschedule(m.id);
-                        onSelect("reunioes");
-                        setOpen(false);
-                      }}
-                      onMarkRead={() => dismissReschedule(m.id)}
-                    />
-                  ))}
-                </>
-              )}
-
-              {tab === "outros" && (
-                <>
-                  {outrosItems.length === 0 && (
-                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                      Nenhuma notificação por aqui ainda
-                    </p>
-                  )}
-                  {outrosItems.map((it) => (
-                    <BellItem
-                      key={it.key}
-                      icon={<Users className="h-4 w-4" />}
-                      iconTone={
-                        it.action.toLowerCase().includes("reprovou")
-                          ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
-                          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                      }
-                      title={it.title}
-                      subtitle={it.action}
-                      time={fmtTime(Date.parse(it.at) || Date.now())}
-                      onClick={() => {
-                        dismissOutrosItems([it.key]);
-                        try {
-                          sessionStorage.setItem(
-                            OPEN_CAMPANHA_TASK_KEY,
-                            JSON.stringify({
-                              campanhaId: it.campanhaId,
-                              taskId: "taskId" in it ? it.taskId : undefined,
-                            }),
-                          );
-                        } catch {
-                          /* ignore */
-                        }
-                        onSelect("campanhas");
-                        setOpen(false);
-                      }}
-                      onMarkRead={() => dismissOutrosItems([it.key])}
-                    />
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        </>
+      {tab === "outros" && (
+        <div role="tabpanel" id="bell-tabpanel-outros" aria-labelledby="bell-tab-outros">
+          {outrosItems.length === 0 && (
+            <EmptyState
+              compact
+              icon={<Users className="h-4 w-4" />}
+              title="Nenhuma notificação por aqui ainda"
+            />
+          )}
+          {outrosItems.map((it) => (
+            <BellItem
+              key={it.key}
+              icon={<Users className="h-4 w-4" />}
+              iconTone={it.action.toLowerCase().includes("reprovou") ? "danger" : "success"}
+              title={it.title}
+              subtitle={it.action}
+              time={fmtTime(Date.parse(it.at) || Date.now())}
+              onClick={() => {
+                dismissOutrosItems([it.key]);
+                try {
+                  sessionStorage.setItem(
+                    OPEN_CAMPANHA_TASK_KEY,
+                    JSON.stringify({
+                      campanhaId: it.campanhaId,
+                      taskId: "taskId" in it ? it.taskId : undefined,
+                    }),
+                  );
+                } catch {
+                  /* ignore */
+                }
+                onSelect("campanhas");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissOutrosItems([it.key])}
+            />
+          ))}
+        </div>
       )}
     </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerTrigger asChild>{trigger}</DrawerTrigger>
+        <DrawerContent
+          className={cn(
+            "flex max-h-[85vh] flex-col gap-0 border-t p-0 pb-[env(safe-area-inset-bottom)]",
+            SURFACE.raised,
+          )}
+        >
+          <DrawerHeader className="sr-only">
+            <DrawerTitle>Notificações</DrawerTitle>
+            <DrawerDescription>Lista de notificações por categoria</DrawerDescription>
+          </DrawerHeader>
+          {header}
+          {tabsRow}
+          <div className="shrink-0 border-t border-border/60" />
+          {listBody}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        align="end"
+        sideOffset={8}
+        collisionPadding={12}
+        className={cn(
+          "z-50 flex flex-col gap-0 overflow-hidden rounded-2xl border-border/60 p-0 shadow-lg",
+          SURFACE.raised,
+        )}
+        style={{
+          width: "min(420px, calc(100vw - 24px))",
+          maxHeight: "min(32rem, calc(100vh - 24px))",
+        }}
+      >
+        {header}
+        {tabsRow}
+        <div className="shrink-0 border-t border-border/60" />
+        {listBody}
+      </PopoverContent>
+    </Popover>
   );
 }

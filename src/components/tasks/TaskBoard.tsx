@@ -1313,12 +1313,29 @@ export function TaskBoard({
   const members = useTeamMembers();
   const { settings: performanceSettings } = usePerformanceSettings();
 
+  // Um deep-link (`?taskId=`) pode apontar pra uma SUBTAREFA — antes,
+  // como esse efeito só procurava no nível raiz, clicar em qualquer
+  // referência a uma subtarefa (Início, @menção, Time, notificação) só
+  // conseguia abrir a tarefa-mãe, nunca a subtarefa em si. Agora procura
+  // também dentro de `subtasks` e, quando acha, abre o mesmo diálogo da
+  // mãe já direto na subtarefa (`openSubtaskId`) — o mecanismo que o
+  // clique numa subtarefa DENTRO do board já usa (ver `t.__parentTask`
+  // acima), só que agora também alimentado pelo deep-link externo.
   useEffect(() => {
     if (!initialOpenTaskId) return;
-    const t = tasks.find((x) => x.id === initialOpenTaskId);
-    if (t) {
-      setTaskDialog({ mode: "edit", data: t });
+    const direct = tasks.find((x) => x.id === initialOpenTaskId);
+    if (direct) {
+      setTaskDialog({ mode: "edit", data: direct });
       onInitialOpenTaskHandled?.();
+      return;
+    }
+    for (const parent of tasks) {
+      const sub = parent.subtasks?.find((s) => s.id === initialOpenTaskId);
+      if (sub) {
+        setTaskDialog({ mode: "edit", data: parent, openSubtaskId: sub.id });
+        onInitialOpenTaskHandled?.();
+        return;
+      }
     }
   }, [initialOpenTaskId, tasks, onInitialOpenTaskHandled]);
 
