@@ -9,10 +9,16 @@ import {
   ChevronDown,
   ImageIcon,
   Loader2,
+  ListChecks,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { formatDateToIso } from "@/lib/utils";
+import { formatDateToIso, cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { useConfirm } from "@/hooks/use-confirm";
 import { supabase } from "@/integrations/supabase/client";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { Influ } from "@/components/influenciadores/InfluencerBoard";
@@ -110,7 +116,8 @@ export function InscricaoPageDialog({
   onSave: (patch: Partial<Campaign>) => void;
 }) {
   const effective = getEffectiveInscricaoPage(campaign);
-  const [tab, setTab] = useState("geral");
+  const { confirm, confirmDialog } = useConfirm();
+  const [tab, setTab] = useState("conteudo");
   // Estado do campo é o valor CRU salvo (não o `effective.publicTitle` já
   // com o fallback aplicado) — senão o campo sempre chegaria pré-preenchido
   // com o nome real da campanha, e o toggle "Mostrar nome da campanha"
@@ -141,6 +148,8 @@ export function InscricaoPageDialog({
   const [linkCopied, setLinkCopied] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
+  const [baseline, setBaseline] = useState("");
   const bannerRef = useRef<HTMLInputElement>(null);
 
   // Re-sincroniza o estado local sempre que abre (ou troca de campanha) —
@@ -163,9 +172,53 @@ export function InscricaoPageDialog({
     setFields(eff.fields);
     setCustomQuestions(eff.customQuestions);
     setMesReferencia(eff.mesReferencia);
-    setTab("geral");
+    setTab("conteudo");
+    setBaseline(
+      JSON.stringify({
+        publicTitle: campaign.inscricaoPage?.publicTitle ?? "",
+        publicSubtitle: eff.publicSubtitle,
+        bannerUrl: eff.bannerUrl ?? "",
+        description: eff.description,
+        sobre: eff.sobre,
+        thankYouMessage: eff.thankYouMessage,
+        dos: eff.dos,
+        donts: eff.donts,
+        showDos: eff.showDos,
+        showDonts: eff.showDonts,
+        showClientName: eff.showClientName,
+        showCampaignName: campaign.inscricaoPage?.showCampaignName ?? true,
+        fields: eff.fields,
+        customQuestions: eff.customQuestions,
+        mesReferencia: eff.mesReferencia,
+      }),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, campaign.id]);
+
+  // Detecta alterações não salvas comparando o rascunho atual com o
+  // snapshot salvo ao abrir/publicar/salvar — não depende de comparar
+  // contra `effective` de novo (que já reflete o `campaign` mais recente
+  // só depois de `onSave` re-renderizar o pai).
+  const dirty =
+    baseline !== "" &&
+    baseline !==
+      JSON.stringify({
+        publicTitle,
+        publicSubtitle,
+        bannerUrl,
+        description,
+        sobre,
+        thankYouMessage,
+        dos,
+        donts,
+        showDos,
+        showDonts,
+        showClientName,
+        showCampaignName,
+        fields,
+        customQuestions,
+        mesReferencia,
+      });
 
   const submissoes = influs.filter((i) => i.submittedVia === "inscricao_page");
   const totalInscricoes = submissoes.length;
@@ -212,7 +265,39 @@ export function InscricaoPageDialog({
     setJustSaved(true);
     if (savedTimeout.current) window.clearTimeout(savedTimeout.current);
     savedTimeout.current = window.setTimeout(() => setJustSaved(false), 1800);
+    // "Salvar" só grava o rascunho — nunca muda `status` sozinho (Publicar/
+    // Encerrar/Reabrir são as únicas ações que trocam status, cada uma seu
+    // próprio botão). O snapshot vira o novo "sem alterações pendentes".
+    setBaseline(
+      JSON.stringify({
+        publicTitle,
+        publicSubtitle,
+        bannerUrl,
+        description,
+        sobre,
+        thankYouMessage,
+        dos,
+        donts,
+        showDos,
+        showDonts,
+        showClientName,
+        showCampaignName,
+        fields,
+        customQuestions,
+        mesReferencia,
+      }),
+    );
     return patch;
+  };
+
+  const requestClose = async () => {
+    if (dirty) {
+      const ok = await confirm(
+        "Você tem alterações não salvas na página de inscrição. Fechar sem salvar?",
+      );
+      if (!ok) return;
+    }
+    onOpenChange(false);
   };
   useEffect(
     () => () => {
@@ -247,6 +332,13 @@ export function InscricaoPageDialog({
     setNewDont("");
   };
 
+  const handleEncerrar = async () => {
+    const ok = await confirm(
+      "Encerrar as inscrições? A página pública deixa de aceitar novas respostas até você reabrir.",
+    );
+    if (ok) handleSave("ENCERRADA");
+  };
+
   const addQuestion = () => setCustomQuestions((prev) => [...prev, newCustomQuestion()]);
   const patchQuestion = (id: string, patch: Partial<CustomQuestion>) =>
     setCustomQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
@@ -254,12 +346,32 @@ export function InscricaoPageDialog({
     setCustomQuestions((prev) => prev.filter((q) => q.id !== id));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col gap-0 p-0" mobileFullScreen>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(next) : void requestClose())}>
+      <DialogContent
+        className="flex max-h-[calc(100vh-2rem)] max-w-[1280px] flex-col gap-0 p-0"
+        mobileFullScreen
+      >
+        {confirmDialog}
         <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-lg font-light tracking-tight text-foreground">
-            Página de inscrição
-          </DialogTitle>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+              Página de inscrição
+            </DialogTitle>
+            <span className="text-sm text-muted-foreground">
+              {showCampaignName ? campaign.nome : ANONYMOUS_CAMPAIGN_TITLE}
+            </span>
+            <Badge
+              variant={
+                effective.status === "PUBLICADA"
+                  ? "success"
+                  : effective.status === "ENCERRADA"
+                    ? "secondary"
+                    : "warning"
+              }
+            >
+              {INSCRICAO_STATUS_LABEL[effective.status]}
+            </Badge>
+          </div>
           <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
             Porta de entrada pública da campanha pros influenciadores.
           </DialogDescription>
@@ -267,18 +379,6 @@ export function InscricaoPageDialog({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-6 py-3">
           <div className="flex flex-wrap items-center gap-4">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  effective.status === "PUBLICADA"
-                    ? "bg-foreground"
-                    : effective.status === "ENCERRADA"
-                      ? "border border-foreground bg-transparent"
-                      : "bg-muted-foreground"
-                }`}
-              />
-              {INSCRICAO_STATUS_LABEL[effective.status]}
-            </span>
             {isRecorrente && (
               <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                 Mês de referência
@@ -331,7 +431,7 @@ export function InscricaoPageDialog({
             {effective.status === "PUBLICADA" && (
               <button
                 type="button"
-                onClick={() => handleSave("ENCERRADA")}
+                onClick={() => void handleEncerrar()}
                 className="rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
               >
                 Encerrar inscrições
@@ -351,14 +451,38 @@ export function InscricaoPageDialog({
 
         <div className="flex min-h-0 flex-1">
           <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <TabsList className="mx-6 mt-3 w-fit shrink-0">
-              <TabsTrigger value="geral">Geral</TabsTrigger>
-              <TabsTrigger value="dos-donts">Do's &amp; Don'ts</TabsTrigger>
-              <TabsTrigger value="formulario">Formulário</TabsTrigger>
-            </TabsList>
+            <div className="mx-6 mt-3 flex flex-wrap items-center justify-between gap-2">
+              <TabsList className="w-fit shrink-0 bg-transparent p-0 gap-1">
+                <TabsTrigger
+                  value="conteudo"
+                  className="rounded-full data-[state=active]:bg-brand-subtle data-[state=active]:text-brand data-[state=active]:shadow-none"
+                >
+                  Conteúdo
+                </TabsTrigger>
+                <TabsTrigger
+                  value="orientacoes"
+                  className="rounded-full data-[state=active]:bg-brand-subtle data-[state=active]:text-brand data-[state=active]:shadow-none"
+                >
+                  Orientações
+                </TabsTrigger>
+                <TabsTrigger
+                  value="formulario"
+                  className="rounded-full data-[state=active]:bg-brand-subtle data-[state=active]:text-brand data-[state=active]:shadow-none"
+                >
+                  Formulário
+                </TabsTrigger>
+              </TabsList>
+              <button
+                type="button"
+                onClick={() => setMobilePreviewOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted lg:hidden"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Ver prévia
+              </button>
+            </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              <TabsContent value="geral" className="mt-0 space-y-5">
+              <TabsContent value="conteudo" className="mt-0 space-y-5">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className={labelCls}>
                     <span>Título público</span>
@@ -382,22 +506,14 @@ export function InscricaoPageDialog({
                   </label>
                 </div>
 
-                <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-2xl border border-border bg-muted/40 p-3">
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={showClientName}
-                      onChange={(e) => setShowClientName(e.target.checked)}
-                    />
-                    Mostrar nome do cliente ({clienteNome})
+                <div className="space-y-3 rounded-2xl border border-border bg-muted/40 p-3">
+                  <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Mostrar nome do cliente ({clienteNome})</span>
+                    <Switch checked={showClientName} onCheckedChange={setShowClientName} />
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={showCampaignName}
-                      onChange={(e) => setShowCampaignName(e.target.checked)}
-                    />
-                    Mostrar nome real da campanha se o título público ficar em branco
+                  <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Mostrar nome real da campanha se o título público ficar em branco</span>
+                    <Switch checked={showCampaignName} onCheckedChange={setShowCampaignName} />
                   </label>
                 </div>
                 {(!showClientName || !showCampaignName) && (
@@ -561,7 +677,7 @@ export function InscricaoPageDialog({
                 </label>
               </TabsContent>
 
-              <TabsContent value="dos-donts" className="mt-0 space-y-5">
+              <TabsContent value="orientacoes" className="mt-0 space-y-5">
                 <DoDontEditor
                   title="O que fazer"
                   items={dos}
@@ -613,33 +729,36 @@ export function InscricaoPageDialog({
                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm"
                       >
                         <span>{INSCRICAO_FIELD_LABEL[key]}</span>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
+                            Visível
+                            <Switch
                               checked={fields[key].visible}
-                              onChange={(e) =>
+                              onCheckedChange={(v) =>
                                 setFields((f) => ({
                                   ...f,
-                                  [key]: { ...f[key], visible: e.target.checked },
+                                  [key]: { ...f[key], visible: v },
                                 }))
                               }
                             />
-                            Visível
                           </label>
-                          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
+                          <label
+                            className={cn(
+                              "flex items-center gap-1.5 text-xs text-muted-foreground",
+                              !fields[key].visible && "opacity-40",
+                            )}
+                          >
+                            Obrigatório
+                            <Switch
                               disabled={!fields[key].visible}
                               checked={fields[key].required}
-                              onChange={(e) =>
+                              onCheckedChange={(v) =>
                                 setFields((f) => ({
                                   ...f,
-                                  [key]: { ...f[key], required: e.target.checked },
+                                  [key]: { ...f[key], required: v },
                                 }))
                               }
                             />
-                            Obrigatório
                           </label>
                         </div>
                       </div>
@@ -737,13 +856,12 @@ export function InscricaoPageDialog({
                               />
                             </label>
                           )}
-                          <label className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              checked={q.required}
-                              onChange={(e) => patchQuestion(q.id, { required: e.target.checked })}
-                            />
+                          <label className="mt-2 flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
                             Obrigatória
+                            <Switch
+                              checked={q.required}
+                              onCheckedChange={(v) => patchQuestion(q.id, { required: v })}
+                            />
                           </label>
                         </div>
                       ))}
@@ -754,7 +872,19 @@ export function InscricaoPageDialog({
             </div>
           </Tabs>
 
-          <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-border bg-muted/20 lg:block">
+          <aside className="hidden w-[35%] min-w-[320px] max-w-[420px] shrink-0 overflow-y-auto border-l border-border bg-muted/20 lg:block">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2 backdrop-blur">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Prévia
+              </p>
+              <button
+                type="button"
+                onClick={handlePreview}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-foreground hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Abrir prévia completa
+              </button>
+            </div>
             <LivePreview
               publicTitle={publicTitle}
               publicSubtitle={publicSubtitle}
@@ -775,31 +905,73 @@ export function InscricaoPageDialog({
           </aside>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3.5">
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-          >
-            Fechar
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSave()}
-            className={`inline-flex items-center gap-1.5 rounded-full border-2 px-5 py-2 text-sm font-medium transition-colors duration-200 ${
-              justSaved
-                ? "border-emerald-600 bg-emerald-600 text-white"
-                : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
-            }`}
-          >
-            {justSaved ? (
-              <>
-                <Check className="h-4 w-4" /> Salvo!
-              </>
-            ) : (
-              "Salvar"
+        <Sheet open={mobilePreviewOpen} onOpenChange={setMobilePreviewOpen}>
+          <SheetContent side="bottom" className="h-[90vh] overflow-y-auto p-0">
+            <SheetTitle className="sr-only">Prévia da página de inscrição</SheetTitle>
+            <SheetDescription className="sr-only">
+              Como a página pública vai ficar pro influenciador
+            </SheetDescription>
+            <LivePreview
+              publicTitle={publicTitle}
+              publicSubtitle={publicSubtitle}
+              bannerUrl={bannerUrl}
+              description={description}
+              sobre={sobre}
+              dos={dos}
+              donts={donts}
+              showDos={showDos}
+              showDonts={showDonts}
+              fields={fields}
+              customQuestions={customQuestions}
+              thankYouMessage={thankYouMessage}
+              fallbackTitle={showCampaignName ? campaign.nome : ANONYMOUS_CAMPAIGN_TITLE}
+              clienteNome={clienteNome}
+              showClientName={showClientName}
+            />
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex items-center justify-between gap-3 border-t border-border px-6 py-3.5">
+          <p className="text-xs text-muted-foreground">
+            {dirty ? "Você possui alterações não salvas" : justSaved ? "Tudo salvo." : ""}
+          </p>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <button
+                type="button"
+                onClick={() => void requestClose()}
+                className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Descartar
+              </button>
             )}
-          </button>
+            {!dirty && (
+              <button
+                type="button"
+                onClick={() => void requestClose()}
+                className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Fechar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleSave()}
+              className={`inline-flex items-center gap-1.5 rounded-full border-2 px-5 py-2 text-sm font-medium transition-colors duration-200 ${
+                justSaved
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-foreground bg-foreground text-background hover:bg-transparent hover:text-foreground"
+              }`}
+            >
+              {justSaved ? (
+                <>
+                  <Check className="h-4 w-4" /> Salvo!
+                </>
+              ) : (
+                "Salvar alterações"
+              )}
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -836,12 +1008,17 @@ function DoDontEditor({
           {title}
         </p>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input type="checkbox" checked={show} onChange={(e) => onToggleShow(e.target.checked)} />
           Mostrar na página
+          <Switch checked={show} onCheckedChange={onToggleShow} />
         </label>
       </div>
       {items.length === 0 ? (
-        <p className="mb-2 text-xs text-muted-foreground">Nenhum item cadastrado.</p>
+        <EmptyState
+          compact
+          icon={<ListChecks className="h-5 w-5" />}
+          title="Nenhum item cadastrado"
+          description="Adicione abaixo — pressione Enter ou clique em Adicionar."
+        />
       ) : (
         <ul className="mb-2 space-y-1.5">
           {items.map((item, i) => (
@@ -962,9 +1139,6 @@ function LivePreview({
 
   return (
     <div className="p-4">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Como vai ficar pro influenciador
-      </p>
       <div className="overflow-hidden rounded-xl border border-border bg-background text-[11px] shadow-sm">
         {bannerUrl && <img src={bannerUrl} alt="" className="aspect-video w-full object-cover" />}
         <div className="space-y-3 p-3">
