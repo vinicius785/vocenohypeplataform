@@ -134,6 +134,11 @@ const pt: Dict = {
   histConteudoAprovado: "Você aprovou o conteúdo",
   histRoteiroAjustesSolicitados: "Você pediu ajustes no roteiro",
   histConteudoAjustesSolicitados: "Você pediu ajustes no conteúdo",
+  navRelatorios: "Relatórios",
+  navSolicitacoes: "Solicitações",
+  verEncerradas: "Ver campanhas encerradas ({n})",
+  ocultarEncerradas: "Ocultar campanhas encerradas",
+  navNoCampanhasEncerradas: "Nenhuma campanha encerrada.",
 };
 
 const es: Dict = {
@@ -250,6 +255,11 @@ const es: Dict = {
   histConteudoAprovado: "Aprobaste el contenido",
   histRoteiroAjustesSolicitados: "Pediste ajustes en el guion",
   histConteudoAjustesSolicitados: "Pediste ajustes en el contenido",
+  navRelatorios: "Informes",
+  navSolicitacoes: "Solicitudes",
+  verEncerradas: "Ver campañas finalizadas ({n})",
+  ocultarEncerradas: "Ocultar campañas finalizadas",
+  navNoCampanhasEncerradas: "Ninguna campaña finalizada.",
 };
 
 const en: Dict = {
@@ -366,6 +376,11 @@ const en: Dict = {
   histConteudoAprovado: "You approved the content",
   histRoteiroAjustesSolicitados: "You requested changes to the script",
   histConteudoAjustesSolicitados: "You requested changes to the content",
+  navRelatorios: "Reports",
+  navSolicitacoes: "Requests",
+  verEncerradas: "Show closed campaigns ({n})",
+  ocultarEncerradas: "Hide closed campaigns",
+  navNoCampanhasEncerradas: "No closed campaigns.",
 };
 
 const DICTS: Record<PortalLang, Dict> = { "pt-BR": pt, es, "en-US": en };

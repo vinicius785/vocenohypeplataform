@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as PortalTokenRouteImport } from './routes/portal.$token'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
@@ -20,6 +19,11 @@ import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authe
 import { Route as AuthenticatedFocoRouteImport } from './routes/_authenticated/foco'
 import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './routes/_authenticated/design-system-finance-concept'
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
+import { Route as PortalTokenRouteRouteImport } from './routes/portal.$token/route'
+import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token/index'
+import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$token/solicitacoes'
+import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
+import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -29,6 +33,9 @@ import { Route as ApiCronHypitoDailyBriefingRouteImport } from './routes/api/cro
 import { Route as ApiCronHypitoAlertsRouteImport } from './routes/api/cron/hypito-alerts'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
+import { Route as PortalTokenCampanhasIndexRouteImport } from './routes/portal.$token/campanhas.index'
+import { Route as PortalTokenCampanhasCampanhaIdRouteImport } from './routes/portal.$token/campanhas.$campanhaId'
+import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './routes/portal.$token/campanhas.$campanhaId.aprovacoes'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -37,11 +44,6 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalTokenRoute = PortalTokenRouteImport.update({
-  id: '/portal/$token',
-  path: '/portal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
@@ -88,6 +90,31 @@ const AuthenticatedDesignSystemRoute =
     path: '/design-system',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const PortalTokenRouteRoute = PortalTokenRouteRouteImport.update({
+  id: '/portal/$token',
+  path: '/portal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalTokenIndexRoute = PortalTokenIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PortalTokenRouteRoute,
+} as any)
+const PortalTokenSolicitacoesRoute = PortalTokenSolicitacoesRouteImport.update({
+  id: '/solicitacoes',
+  path: '/solicitacoes',
+  getParentRoute: () => PortalTokenRouteRoute,
+} as any)
+const PortalTokenRelatoriosRoute = PortalTokenRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => PortalTokenRouteRoute,
+} as any)
+const PortalTokenInicioRoute = PortalTokenInicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
+  getParentRoute: () => PortalTokenRouteRoute,
+} as any)
 const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   id: '/email/descadastro/$token',
   path: '/email/descadastro/$token',
@@ -135,9 +162,28 @@ const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
   path: '/projeto/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const PortalTokenCampanhasIndexRoute =
+  PortalTokenCampanhasIndexRouteImport.update({
+    id: '/campanhas/',
+    path: '/campanhas/',
+    getParentRoute: () => PortalTokenRouteRoute,
+  } as any)
+const PortalTokenCampanhasCampanhaIdRoute =
+  PortalTokenCampanhasCampanhaIdRouteImport.update({
+    id: '/campanhas/$campanhaId',
+    path: '/campanhas/$campanhaId',
+    getParentRoute: () => PortalTokenRouteRoute,
+  } as any)
+const PortalTokenCampanhasCampanhaIdAprovacoesRoute =
+  PortalTokenCampanhasCampanhaIdAprovacoesRouteImport.update({
+    id: '/aprovacoes',
+    path: '/aprovacoes',
+    getParentRoute: () => PortalTokenCampanhasCampanhaIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/foco': typeof AuthenticatedFocoRoute
@@ -146,7 +192,6 @@ export interface FileRoutesByFullPath {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -156,6 +201,13 @@ export interface FileRoutesByFullPath {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/inicio': typeof PortalTokenInicioRoute
+  '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
+  '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal/$token/': typeof PortalTokenIndexRoute
+  '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
+  '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -167,7 +219,6 @@ export interface FileRoutesByTo {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -177,11 +228,19 @@ export interface FileRoutesByTo {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/inicio': typeof PortalTokenInicioRoute
+  '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
+  '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal/$token': typeof PortalTokenIndexRoute
+  '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/portal/$token/campanhas': typeof PortalTokenCampanhasIndexRoute
+  '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
   '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/_authenticated/foco': typeof AuthenticatedFocoRoute
@@ -190,7 +249,6 @@ export interface FileRoutesById {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
-  '/portal/$token': typeof PortalTokenRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -200,11 +258,19 @@ export interface FileRoutesById {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/inicio': typeof PortalTokenInicioRoute
+  '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
+  '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal/$token/': typeof PortalTokenIndexRoute
+  '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
+  '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/portal/$token'
     | '/design-system'
     | '/design-system-finance-concept'
     | '/foco'
@@ -213,7 +279,6 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
-    | '/portal/$token'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -223,6 +288,13 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/inicio'
+    | '/portal/$token/relatorios'
+    | '/portal/$token/solicitacoes'
+    | '/portal/$token/'
+    | '/portal/$token/campanhas/$campanhaId'
+    | '/portal/$token/campanhas/'
+    | '/portal/$token/campanhas/$campanhaId/aprovacoes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -234,7 +306,6 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
-    | '/portal/$token'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -244,10 +315,18 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/inicio'
+    | '/portal/$token/relatorios'
+    | '/portal/$token/solicitacoes'
+    | '/portal/$token'
+    | '/portal/$token/campanhas/$campanhaId'
+    | '/portal/$token/campanhas'
+    | '/portal/$token/campanhas/$campanhaId/aprovacoes'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/portal/$token'
     | '/_authenticated/design-system'
     | '/_authenticated/design-system-finance-concept'
     | '/_authenticated/foco'
@@ -256,7 +335,6 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
-    | '/portal/$token'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -266,15 +344,22 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/inicio'
+    | '/portal/$token/relatorios'
+    | '/portal/$token/solicitacoes'
+    | '/portal/$token/'
+    | '/portal/$token/campanhas/$campanhaId'
+    | '/portal/$token/campanhas/'
+    | '/portal/$token/campanhas/$campanhaId/aprovacoes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
-  PortalTokenRoute: typeof PortalTokenRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiCronHypitoAlertsRoute: typeof ApiCronHypitoAlertsRoute
   ApiCronHypitoDailyBriefingRoute: typeof ApiCronHypitoDailyBriefingRoute
@@ -299,13 +384,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portal/$token': {
-      id: '/portal/$token'
-      path: '/portal/$token'
-      fullPath: '/portal/$token'
-      preLoaderRoute: typeof PortalTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inscricao/$token': {
@@ -363,6 +441,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/design-system'
       preLoaderRoute: typeof AuthenticatedDesignSystemRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/portal/$token': {
+      id: '/portal/$token'
+      path: '/portal/$token'
+      fullPath: '/portal/$token'
+      preLoaderRoute: typeof PortalTokenRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal/$token/': {
+      id: '/portal/$token/'
+      path: '/'
+      fullPath: '/portal/$token/'
+      preLoaderRoute: typeof PortalTokenIndexRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal/$token/solicitacoes': {
+      id: '/portal/$token/solicitacoes'
+      path: '/solicitacoes'
+      fullPath: '/portal/$token/solicitacoes'
+      preLoaderRoute: typeof PortalTokenSolicitacoesRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal/$token/relatorios': {
+      id: '/portal/$token/relatorios'
+      path: '/relatorios'
+      fullPath: '/portal/$token/relatorios'
+      preLoaderRoute: typeof PortalTokenRelatoriosRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal/$token/inicio': {
+      id: '/portal/$token/inicio'
+      path: '/inicio'
+      fullPath: '/portal/$token/inicio'
+      preLoaderRoute: typeof PortalTokenInicioRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
     }
     '/email/descadastro/$token': {
       id: '/email/descadastro/$token'
@@ -427,6 +540,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjetoIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/portal/$token/campanhas/': {
+      id: '/portal/$token/campanhas/'
+      path: '/campanhas'
+      fullPath: '/portal/$token/campanhas/'
+      preLoaderRoute: typeof PortalTokenCampanhasIndexRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal/$token/campanhas/$campanhaId': {
+      id: '/portal/$token/campanhas/$campanhaId'
+      path: '/campanhas/$campanhaId'
+      fullPath: '/portal/$token/campanhas/$campanhaId'
+      preLoaderRoute: typeof PortalTokenCampanhasCampanhaIdRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal/$token/campanhas/$campanhaId/aprovacoes': {
+      id: '/portal/$token/campanhas/$campanhaId/aprovacoes'
+      path: '/aprovacoes'
+      fullPath: '/portal/$token/campanhas/$campanhaId/aprovacoes'
+      preLoaderRoute: typeof PortalTokenCampanhasCampanhaIdAprovacoesRouteImport
+      parentRoute: typeof PortalTokenCampanhasCampanhaIdRoute
+    }
   }
 }
 
@@ -452,13 +586,50 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface PortalTokenCampanhasCampanhaIdRouteChildren {
+  PortalTokenCampanhasCampanhaIdAprovacoesRoute: typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
+}
+
+const PortalTokenCampanhasCampanhaIdRouteChildren: PortalTokenCampanhasCampanhaIdRouteChildren =
+  {
+    PortalTokenCampanhasCampanhaIdAprovacoesRoute:
+      PortalTokenCampanhasCampanhaIdAprovacoesRoute,
+  }
+
+const PortalTokenCampanhasCampanhaIdRouteWithChildren =
+  PortalTokenCampanhasCampanhaIdRoute._addFileChildren(
+    PortalTokenCampanhasCampanhaIdRouteChildren,
+  )
+
+interface PortalTokenRouteRouteChildren {
+  PortalTokenInicioRoute: typeof PortalTokenInicioRoute
+  PortalTokenRelatoriosRoute: typeof PortalTokenRelatoriosRoute
+  PortalTokenSolicitacoesRoute: typeof PortalTokenSolicitacoesRoute
+  PortalTokenIndexRoute: typeof PortalTokenIndexRoute
+  PortalTokenCampanhasCampanhaIdRoute: typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
+  PortalTokenCampanhasIndexRoute: typeof PortalTokenCampanhasIndexRoute
+}
+
+const PortalTokenRouteRouteChildren: PortalTokenRouteRouteChildren = {
+  PortalTokenInicioRoute: PortalTokenInicioRoute,
+  PortalTokenRelatoriosRoute: PortalTokenRelatoriosRoute,
+  PortalTokenSolicitacoesRoute: PortalTokenSolicitacoesRoute,
+  PortalTokenIndexRoute: PortalTokenIndexRoute,
+  PortalTokenCampanhasCampanhaIdRoute:
+    PortalTokenCampanhasCampanhaIdRouteWithChildren,
+  PortalTokenCampanhasIndexRoute: PortalTokenCampanhasIndexRoute,
+}
+
+const PortalTokenRouteRouteWithChildren =
+  PortalTokenRouteRoute._addFileChildren(PortalTokenRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
-  PortalTokenRoute: PortalTokenRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiCronHypitoAlertsRoute: ApiCronHypitoAlertsRoute,
   ApiCronHypitoDailyBriefingRoute: ApiCronHypitoDailyBriefingRoute,
