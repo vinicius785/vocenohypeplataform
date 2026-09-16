@@ -241,15 +241,49 @@ export function CampanhasSection() {
   // abaixo — hooks (useMemo) não podem ser chamados condicionalmente, e
   // esse retorno antecipado pra `CampanhaDetail` é condicional.
   const today = new Date();
+  // Campanhas encerradas ficam escondidas por padrão (item 2 do pedido) —
+  // só quando o usuário não escolheu um status explícito no filtro
+  // principal (senão o filtro já manda: pedir "Encerrada" ali já mostra
+  // todas, sem precisar da seção separada). "Encerrada" é sempre o mesmo
+  // `campanhaStatus()` já usado em todo o resto da tela — nunca uma
+  // segunda inferência por data.
+  const statusFilterActive = filters.status !== "todos";
+  const [showEncerradas, setShowEncerradas] = useState(false);
+  const filteredRows = useMemo(
+    () => filterCampanhas(rows, query, filters, today, influsByCampanha),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, query, filters, influsByCampanha],
+  );
   const visibleRows = useMemo(
     () =>
       sortCampanhas(
-        filterCampanhas(rows, query, filters, today, influsByCampanha),
+        statusFilterActive
+          ? filteredRows
+          : filteredRows.filter((r) => campanhaStatus(r.campanha, today) !== "encerrada"),
         filters.sort,
         influsByCampanha,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, query, filters, influsByCampanha],
+    [filteredRows, statusFilterActive, filters.sort, influsByCampanha],
+  );
+  // Mesmos query/filters de cima, só forçando status="encerrada" — busca e
+  // filtros continuam valendo dentro da seção de encerradas também.
+  const encerradasFilters = useMemo(
+    () => ({ ...filters, status: "encerrada" as const }),
+    [filters],
+  );
+  const encerradasRowsAll = useMemo(
+    () =>
+      statusFilterActive
+        ? []
+        : filterCampanhas(rows, query, encerradasFilters, today, influsByCampanha),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, query, encerradasFilters, influsByCampanha, statusFilterActive],
+  );
+  const encerradasCount = encerradasRowsAll.length;
+  const encerradasRows = useMemo(
+    () => (showEncerradas ? sortCampanhas(encerradasRowsAll, filters.sort, influsByCampanha) : []),
+    [showEncerradas, encerradasRowsAll, filters.sort, influsByCampanha],
   );
 
   if (current) {
@@ -418,6 +452,60 @@ export function CampanhasSection() {
                 />
               );
             })}
+          </div>
+        )}
+
+        {encerradasCount > 0 && (
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setShowEncerradas((v) => !v)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-medium text-brand hover:underline"
+            >
+              {showEncerradas
+                ? "Ocultar campanhas encerradas"
+                : `Ver campanhas encerradas (${encerradasCount})`}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${showEncerradas ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showEncerradas && (
+              <div className="space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Campanhas encerradas
+                </p>
+                {encerradasRows.length === 0 ? (
+                  <EmptyState
+                    compact
+                    icon={<Megaphone className="h-5 w-5" />}
+                    title="Nenhuma campanha encerrada encontrada"
+                    description="Ajuste a busca ou os filtros para ver outras campanhas encerradas."
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {encerradasRows.map((row) => {
+                      const influs = influsByCampanha.get(row.campanha.id) ?? [];
+                      const entregas = influs.flatMap((i) => i.entregas ?? []);
+                      return (
+                        <CampanhaCard
+                          key={row.campanha.id}
+                          row={row}
+                          influCount={influs.length}
+                          entregasTotal={entregas.length}
+                          entregasPublicadas={
+                            entregas.filter((e) => e.stage === "PUBLICADA").length
+                          }
+                          onOpen={() => setOpenId(row.campanha.id)}
+                          onEdit={() => openEditCampanha(row)}
+                          onDelete={() => void requestDeleteCampanha(row)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </PageContainer>

@@ -54,11 +54,11 @@ export function CampanhaCard({
       : "Sem prazo definido";
 
   return (
-    <div className="group relative cursor-pointer rounded-[20px] bg-card p-4 text-left transition-colors hover:bg-accent/40 dark:shadow-none">
+    <div className="group relative cursor-pointer rounded-[20px] border border-transparent bg-card p-4 text-left transition-colors duration-150 hover:border-border hover:bg-accent/40 dark:shadow-none">
       <button
         type="button"
         onClick={onOpen}
-        className="absolute inset-0 cursor-pointer rounded-[20px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        className="absolute inset-0 cursor-pointer rounded-[20px] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
         aria-label={`Abrir campanha ${c.nome} — ${cliente.empresa}, ${CAMPANHA_STATUS_LABEL[status]}, ${influCount} influenciador(es)`}
       />
 
@@ -76,7 +76,7 @@ export function CampanhaCard({
             <button
               type="button"
               aria-label={`Mais ações para ${c.nome}`}
-              className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100"
+              className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100 sm:h-8 sm:w-8"
             >
               <MoreVertical className="h-4 w-4" />
             </button>

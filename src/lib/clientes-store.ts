@@ -20,6 +20,11 @@ export type Cliente = {
    * na conversão do lead — pré-preenche o orçamento ao montar uma nova
    * campanha pra este cliente, mas continua 100% editável à mão. */
   orcamentoSugerido?: number;
+  /** Preenchido quando o cliente nasceu de "Importar do CRM"
+   * (`ClienteFormSheet`) — id do `Lead` de origem, pra manter o vínculo
+   * cliente↔CRM sem duplicar dado. Aditivo: clientes criados antes disso
+   * simplesmente não têm o campo. */
+  crmLeadId?: string;
 };
 
 const store = createTableArrayStore<Cliente>("clientes");

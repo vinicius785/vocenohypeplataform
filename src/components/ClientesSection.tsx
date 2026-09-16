@@ -90,11 +90,23 @@ export function ClientesSection() {
     setFormOpen(true);
   };
 
-  const saveCliente = (form: Omit<Cliente, "id" | "campanhas">) => {
+  // `form.id` só vem preenchido pelo `ClienteFormSheet` em 2 casos: uma
+  // importação do CRM (id do cliente novo, já usado por ele pra gravar o
+  // vínculo em `upsertLead` no mesmo instante — precisa ser o MESMO id
+  // aqui, nunca gerar outro) ou "Usar cliente existente" na checagem de
+  // duplicidade (id de um cliente que já existe — vira uma seleção/merge,
+  // nunca uma segunda linha duplicada).
+  const saveCliente = (form: Omit<Cliente, "id" | "campanhas"> & { id?: string }) => {
+    const { id: formId, ...rest } = form;
     if (editingCliente) {
-      setClientes((prev) => prev.map((c) => (c.id === editingCliente.id ? { ...c, ...form } : c)));
+      setClientes((prev) => prev.map((c) => (c.id === editingCliente.id ? { ...c, ...rest } : c)));
+    } else if (formId && clientes.some((c) => c.id === formId)) {
+      setClientes((prev) => prev.map((c) => (c.id === formId ? { ...c, ...rest } : c)));
     } else {
-      setClientes((prev) => [...prev, { ...form, id: crypto.randomUUID(), campanhas: [] }]);
+      setClientes((prev) => [
+        ...prev,
+        { ...rest, id: formId ?? crypto.randomUUID(), campanhas: [] },
+      ]);
     }
     setFormOpen(false);
     setEditingCliente(null);
