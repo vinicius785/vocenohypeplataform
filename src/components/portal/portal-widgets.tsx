@@ -620,7 +620,7 @@ export function RelatorioMensalCard({
               onClick={onToggleView}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
             >
-              {viewing ? "Ocultar" : "Visualizar"}
+              {viewing ? "Ocultar relatório" : "Visualizar relatório"}
             </button>
           )}
           {relatorio.url && (
@@ -629,7 +629,7 @@ export function RelatorioMensalCard({
               download={relatorio.nome}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
             >
-              <Download className="h-3.5 w-3.5" /> Baixar
+              <Download className="h-3.5 w-3.5" /> Baixar relatório
             </a>
           )}
         </div>

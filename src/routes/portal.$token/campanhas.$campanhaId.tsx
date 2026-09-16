@@ -27,6 +27,7 @@ import {
   initialsOf,
 } from "@/components/portal/portal-widgets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 const CAMPANHA_TABS = [
   "visao-geral",
@@ -430,26 +431,55 @@ function PortalCampanhaPage() {
 
         {activeCampanha.cronograma.length > 0 && (
           <TabsContent value="cronograma">
-            <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-              {activeCampanha.cronograma.map((item) => (
-                <li key={item.id} className="flex items-start gap-3 px-4 py-3">
-                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      {item.recurring
-                        ? t(lang, "cronogramaMonthlyDay", {
-                            day: String(Number(item.date.slice(8, 10))),
-                          })
-                        : fmtDate(item.date)}
-                    </p>
-                    <p className="text-sm text-foreground">{item.title}</p>
-                    {item.description && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {(() => {
+              const hoje = new Date().toISOString().slice(0, 10);
+              const ordenado = [...activeCampanha.cronograma].sort((a, b) =>
+                a.date.localeCompare(b.date),
+              );
+              const proximoId = ordenado.find((item) => item.date >= hoje)?.id;
+              return (
+                <ol className="space-y-3 border-l border-border pl-4">
+                  {ordenado.map((item) => {
+                    const concluido = item.date < hoje;
+                    const proximo = item.id === proximoId;
+                    return (
+                      <li key={item.id} className="relative">
+                        <span
+                          className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full ${
+                            proximo
+                              ? "bg-brand"
+                              : concluido
+                                ? "bg-muted-foreground/40"
+                                : "bg-border"
+                          }`}
+                        />
+                        <div
+                          className={`rounded-lg px-3 py-2 ${proximo ? "border border-brand/40 bg-brand-subtle" : ""}`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              {item.recurring
+                                ? t(lang, "cronogramaMonthlyDay", {
+                                    day: String(Number(item.date.slice(8, 10))),
+                                  })
+                                : fmtDate(item.date)}
+                            </p>
+                            {proximo && <Badge variant="brand">Próximo</Badge>}
+                            {concluido && !proximo && <Badge variant="secondary">Concluído</Badge>}
+                          </div>
+                          <p className="text-sm text-foreground">{item.title}</p>
+                          {item.description && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              );
+            })()}
           </TabsContent>
         )}
 

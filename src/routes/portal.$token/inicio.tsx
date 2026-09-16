@@ -407,7 +407,7 @@ function PortalInicioPage() {
                   </p>
                 </div>
                 <span className="shrink-0 text-[11px] font-semibold text-foreground underline underline-offset-2">
-                  Ver relatório
+                  Visualizar relatório
                 </span>
               </Link>
             ))}
