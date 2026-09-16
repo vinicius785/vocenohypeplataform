@@ -1530,3 +1530,39 @@ export function InfluencerDetail({
     </div>
   );
 }
+
+export type ApprovalItem =
+  | { kind: "influ"; campanhaId: string; campanhaNome: string; inf: PublicInfluencer }
+  | {
+      kind: "roteiro" | "conteudo";
+      campanhaId: string;
+      campanhaNome: string;
+      inf: PublicInfluencer;
+      entrega: PublicEntrega;
+    };
+
+/** Coleta de pendências reais entre campanhas — mesmo critério de sempre
+ * (`pendingReason`, sem inventar um novo conceito de "pendente").
+ * Extraído (correção visual/estrutural) pra ser reusado em 3 lugares:
+ * sino de notificações do topbar, Início e página de campanha — antes
+ * só existia dentro da antiga Central de Aprovações. */
+export function collectPendingApprovals(data: {
+  campanhas: { id: string; nome: string; influencers: PublicInfluencer[] }[];
+}): ApprovalItem[] {
+  return data.campanhas.flatMap((c) => {
+    const out: ApprovalItem[] = [];
+    for (const inf of c.influencers) {
+      if (inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao) {
+        out.push({ kind: "influ", campanhaId: c.id, campanhaNome: c.nome, inf });
+      }
+      for (const entrega of inf.entregas) {
+        if (entrega.stage === "ROTEIRO_APROVACAO") {
+          out.push({ kind: "roteiro", campanhaId: c.id, campanhaNome: c.nome, inf, entrega });
+        } else if (entrega.stage === "CONTEUDO_APROVACAO") {
+          out.push({ kind: "conteudo", campanhaId: c.id, campanhaNome: c.nome, inf, entrega });
+        }
+      }
+    }
+    return out;
+  });
+}

@@ -63,7 +63,6 @@ function PortalLayout() {
   const [data] = useState<ClienteLinkData | null>(loaderData.clienteData);
   const [ws] = useState<Workspace>(loaderData.ws);
   const [lang, setLang] = usePortalLang();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -86,23 +85,17 @@ function PortalLayout() {
 
   return (
     <PortalDataProvider token={token} initialData={data} ws={ws}>
-      <PortalShellWithContext mobileOpen={mobileNavOpen} onMobileOpenChange={setMobileNavOpen} />
+      <PortalShellWithContext />
     </PortalDataProvider>
   );
 }
 
 // Precisa ficar num componente separado pra poder chamar `usePortalData()`
 // (o `PortalDataProvider` acima é quem cria o contexto).
-function PortalShellWithContext({
-  mobileOpen,
-  onMobileOpenChange,
-}: {
-  mobileOpen: boolean;
-  onMobileOpenChange: (open: boolean) => void;
-}) {
+function PortalShellWithContext() {
   const ctx = usePortalData();
   return (
-    <PortalAppShell ctx={ctx} mobileOpen={mobileOpen} onMobileOpenChange={onMobileOpenChange}>
+    <PortalAppShell ctx={ctx}>
       <PortalBugReportButton token={ctx.token} lang={ctx.lang} />
       <VersionWatcher scope="vc" />
       <Outlet />

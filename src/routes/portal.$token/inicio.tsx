@@ -1,25 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  BarChart3,
-  CalendarClock,
-  CheckCircle2,
-  Clock,
-  FileBarChart,
-  Megaphone,
-  Newspaper,
-  PlayCircle,
-  Sparkles,
-} from "lucide-react";
+import { BarChart3, Megaphone, Newspaper, PlayCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ArticleReader, renderMarkdownLite } from "@/components/marketing/BlogPanel";
 import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
-import { MetricCard } from "@/components/shared/MetricCard";
+import { HomeHeaderShell } from "@/components/shared/HomeHeaderShell";
 import { HypitoPortalSummary } from "@/components/portal/HypitoPortalSummary";
+import { PortalSectionCard } from "@/components/portal/PortalSectionCard";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import {
   loadArtigoEngagement,
@@ -45,13 +36,13 @@ function toStatusShim(c: PublicCampanha) {
 }
 
 /**
- * Página inicial do portal — Etapa 3 do redesenho (conteúdo real desta
- * página; a Etapa 2 só moveu o corpo antigo verbatim pra cá). Ordem:
- * cabeçalho → resumo do Hypito (Seção 3/14) → "Aguardando você" (sempre
- * visível, com `EmptyState` quando não há pendência) → indicadores
- * (`MetricCard`) → campanhas ativas (cards) → últimos conteúdos →
- * relatórios recentes → novidades (de-enfatizada) → artigos. Todo ponto
- * vazio usa `EmptyState` (Seção 24) em vez de `<p>` solto.
+ * Página inicial do portal — correção visual/estrutural: cabeçalho vira
+ * `HomeHeaderShell` (mesmo padrão de saudação + faixa de indicadores
+ * embutida da Início interna), seções viram `PortalSectionCard` (mesmo
+ * `SURFACE.raised`/`rounded-2xl` da Início). "Aguardando você" só
+ * renderiza quando há pendência real — o resumo do Hypito já cobre o
+ * caso vazio, evitando a duplicação de mensagem "tudo certo" apontada
+ * pelo usuário.
  */
 function PortalInicioPage() {
   const { token, data, lang } = usePortalData();
@@ -187,32 +178,49 @@ function PortalInicioPage() {
   }
 
   return (
-    <PageContainer>
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5" /> {t(lang, "visaoGeral")}
-      </div>
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight text-foreground">
-        {t(lang, "ola", { name: data.clienteNome })}
-      </h1>
+    <PageContainer className="space-y-6">
+      <HomeHeaderShell
+        avatar={
+          <Avatar className="h-14 w-14 shrink-0">
+            {data.clienteFoto && <AvatarImage src={data.clienteFoto} alt={data.clienteNome} />}
+            <AvatarFallback className="text-base font-semibold">
+              {(data.clienteNome || "C").charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+        }
+        greetingName={data.clienteNome}
+        subtitle="Acompanhe suas campanhas e aprovações."
+        indicators={[
+          {
+            label: t(lang, "statCampanhas"),
+            value: campanhasAtivas.length.toString(),
+            onClick: () => navigate({ to: "/portal/$token/campanhas", params: { token } }),
+          },
+          {
+            label: t(lang, "aguardandoVoce"),
+            value: totalAguardando.toString(),
+            tone: totalAguardando > 0 ? "warning" : "neutral",
+            onClick: () =>
+              document.getElementById("aguardando-voce")?.scrollIntoView({ behavior: "smooth" }),
+          },
+          { label: t(lang, "postados"), value: publicadosEsteMes.toString() },
+          {
+            label: t(lang, "navRelatorios"),
+            value: relatoriosNovos.toString(),
+            onClick: () =>
+              document
+                .getElementById("relatorios-recentes")
+                ?.scrollIntoView({ behavior: "smooth" }),
+          },
+        ]}
+      />
 
-      <div className="mb-6">
-        <HypitoPortalSummary token={token} data={data} lang={lang} />
-      </div>
+      <HypitoPortalSummary token={token} data={data} lang={lang} />
 
-      {/* AGUARDANDO VOCÊ — sempre visível, EmptyState quando não há nada
-          (nunca só um contador zerado, per Seção 3 do pedido). */}
-      <section id="aguardando-voce" className="mb-6 space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Clock className="h-4 w-4" /> {t(lang, "acoesPendentes")}
-        </h2>
-        {feed.length === 0 ? (
-          <EmptyState
-            compact
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            title="Tudo certo por aqui"
-            description="Nenhuma ação sua é necessária no momento."
-          />
-        ) : (
+      {/* AGUARDANDO VOCÊ — só renderiza quando há pendência real; o
+          resumo do Hypito já cobre o estado vazio, sem duplicar. */}
+      {feed.length > 0 && (
+        <PortalSectionCard id="aguardando-voce" title={t(lang, "acoesPendentes")}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {feed.map((item) => (
               <Link
@@ -241,45 +249,11 @@ function PortalInicioPage() {
               </Link>
             ))}
           </div>
-        )}
-      </section>
-
-      {/* INDICADORES */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard
-          label={t(lang, "statCampanhas")}
-          value={campanhasAtivas.length.toString()}
-          icon={<Megaphone className="h-4 w-4" />}
-          onClick={() => navigate({ to: "/portal/$token/campanhas", params: { token } })}
-        />
-        <MetricCard
-          label={t(lang, "aguardandoVoce")}
-          value={totalAguardando.toString()}
-          tone={totalAguardando > 0 ? "warning" : "neutral"}
-          icon={<Clock className="h-4 w-4" />}
-          onClick={() =>
-            document.getElementById("aguardando-voce")?.scrollIntoView({ behavior: "smooth" })
-          }
-        />
-        <MetricCard
-          label={t(lang, "postados")}
-          value={publicadosEsteMes.toString()}
-          icon={<PlayCircle className="h-4 w-4" />}
-          complement="Este mês"
-        />
-        <MetricCard
-          label={t(lang, "navRelatorios")}
-          value={relatoriosNovos.toString()}
-          icon={<FileBarChart className="h-4 w-4" />}
-          onClick={() => navigate({ to: "/portal/$token/relatorios", params: { token } })}
-        />
-      </div>
+        </PortalSectionCard>
+      )}
 
       {/* CAMPANHAS ATIVAS */}
-      <section className="mb-6 space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Megaphone className="h-4 w-4" /> {t(lang, "statCampanhas")}
-        </h2>
+      <PortalSectionCard icon={<Megaphone className="h-4 w-4" />} title={t(lang, "statCampanhas")}>
         {campanhasAtivas.length === 0 ? (
           <EmptyState
             compact
@@ -299,7 +273,7 @@ function PortalInicioPage() {
               return (
                 <div
                   key={c.id}
-                  className="group relative rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/20"
+                  className="group relative rounded-xl border border-border bg-background p-4 transition-colors hover:border-foreground/20"
                 >
                   <Link
                     to="/portal/$token/campanhas/$campanhaId"
@@ -324,13 +298,13 @@ function PortalInicioPage() {
             })}
           </div>
         )}
-      </section>
+      </PortalSectionCard>
 
       {/* ÚLTIMOS CONTEÚDOS */}
-      <section className="mb-6 space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <PlayCircle className="h-4 w-4" /> {t(lang, "ultimosConteudos")}
-        </h2>
+      <PortalSectionCard
+        icon={<PlayCircle className="h-4 w-4" />}
+        title={t(lang, "ultimosConteudos")}
+      >
         {contentFeed.length === 0 ? (
           <EmptyState
             compact
@@ -350,7 +324,7 @@ function PortalInicioPage() {
                   to="/portal/$token/campanhas/$campanhaId"
                   params={{ token, campanhaId: item.campanhaId }}
                   search={{ influ: item.inf.id }}
-                  className="group overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-foreground/30"
+                  className="group overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-foreground/30"
                 >
                   <ContentThumb
                     thumbUrl={thumbUrl}
@@ -378,13 +352,14 @@ function PortalInicioPage() {
             })}
           </div>
         )}
-      </section>
+      </PortalSectionCard>
 
       {/* RELATÓRIOS RECENTES */}
-      <section className="mb-6 space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <BarChart3 className="h-4 w-4" /> {t(lang, "navRelatorios")}
-        </h2>
+      <PortalSectionCard
+        id="relatorios-recentes"
+        icon={<BarChart3 className="h-4 w-4" />}
+        title={t(lang, "navRelatorios")}
+      >
         {relatoriosRecentes.length === 0 ? (
           <EmptyState
             compact
@@ -398,8 +373,9 @@ function PortalInicioPage() {
                 key={relatorio.id}
                 to="/portal/$token/campanhas/$campanhaId"
                 params={{ token, campanhaId }}
-                search={{ relatorio: relatorio.id, tab: "relatorios" }}
-                className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-muted/40"
+                search={{ relatorio: relatorio.id }}
+                hash="relatorios"
+                className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 transition-colors hover:bg-muted/40"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-foreground">
@@ -413,17 +389,12 @@ function PortalInicioPage() {
             ))}
           </div>
         )}
-      </section>
+      </PortalSectionCard>
 
-      {/* NOVIDADES — de-enfatizada, abaixo do conteúdo operacional */}
-      <section className="mb-6 space-y-3">
-        <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <CalendarClock className="h-3.5 w-3.5" /> {t(lang, "novidades")}
-        </h2>
-        {novidades.length === 0 ? (
-          <EmptyState compact title={t(lang, "tudoEmDia")} />
-        ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      {/* NOVIDADES — de-enfatizada */}
+      {novidades.length > 0 && (
+        <PortalSectionCard title={t(lang, "novidades")}>
+          <div className="divide-y divide-border">
             {novidades.slice(0, 4).map((item) =>
               item.kind === "influ" ? (
                 <Link
@@ -431,7 +402,7 @@ function PortalInicioPage() {
                   to="/portal/$token/campanhas/$campanhaId"
                   params={{ token, campanhaId: item.campanhaId }}
                   search={{ influ: item.inf.id }}
-                  className="flex min-h-11 items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
+                  className="flex min-h-11 items-center gap-2.5 py-2.5 text-left transition-colors hover:bg-muted/40"
                 >
                   <Avatar className="h-7 w-7 shrink-0">
                     {item.inf.foto && <AvatarImage src={item.inf.foto} alt={item.inf.nome} />}
@@ -451,8 +422,9 @@ function PortalInicioPage() {
                   key={`relatorio:${item.relatorio.id}`}
                   to="/portal/$token/campanhas/$campanhaId"
                   params={{ token, campanhaId: item.campanhaId }}
-                  search={{ relatorio: item.relatorio.id, tab: "relatorios" }}
-                  className="flex min-h-11 items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
+                  search={{ relatorio: item.relatorio.id }}
+                  hash="relatorios"
+                  className="flex min-h-11 items-center gap-2.5 py-2.5 text-left transition-colors hover:bg-muted/40"
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <BarChart3 className="h-3.5 w-3.5" />
@@ -469,21 +441,18 @@ function PortalInicioPage() {
               ),
             )}
           </div>
-        )}
-      </section>
+        </PortalSectionCard>
+      )}
 
       {data.artigos.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Newspaper className="h-4 w-4" /> {t(lang, "artigos")}
-          </h2>
+        <PortalSectionCard icon={<Newspaper className="h-4 w-4" />} title={t(lang, "artigos")}>
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {data.artigos.slice(0, 4).map((a) => (
               <button
                 key={a.id}
                 type="button"
                 onClick={() => setReadingArticleId(a.id)}
-                className="flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card p-2 text-left transition-colors hover:bg-muted/40"
+                className="flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-background p-2 text-left transition-colors hover:bg-muted/40"
               >
                 {a.cover ? (
                   <img
@@ -510,15 +479,15 @@ function PortalInicioPage() {
               </button>
             ))}
           </div>
-        </section>
+        </PortalSectionCard>
       )}
     </PageContainer>
   );
 }
 
 /** Thumbnail de "Últimos conteúdos" com fallback real: se a imagem falhar
- * ao carregar (arquivo removido/link quebrado — Seção 22), troca pro ícone
- * genérico em vez de deixar um quadrado cinza vazio. */
+ * ao carregar (arquivo removido/link quebrado), troca pro ícone genérico
+ * em vez de deixar um quadrado cinza vazio. */
 function ContentThumb({
   thumbUrl,
   tipo,

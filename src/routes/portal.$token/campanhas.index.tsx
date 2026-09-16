@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Megaphone } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { usePortalData } from "@/components/portal/portal-context";
 import { t } from "@/lib/portal-i18n";
 
@@ -20,22 +21,26 @@ function PortalCampanhasIndexPage() {
 
   if (data.campanhas.length === 0) {
     return (
-      <EmptyState icon={<Megaphone className="h-5 w-5" />} title={t(lang, "navNoCampanhas")} />
+      <PageContainer>
+        <EmptyState icon={<Megaphone className="h-5 w-5" />} title={t(lang, "navNoCampanhas")} />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="divide-y divide-border rounded-xl border border-border bg-background">
-      {data.campanhas.map((c) => (
-        <Link
-          key={c.id}
-          to="/portal/$token/campanhas/$campanhaId"
-          params={{ token, campanhaId: c.id }}
-          className="flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
-        >
-          {c.nome}
-        </Link>
-      ))}
-    </div>
+    <PageContainer>
+      <div className="divide-y divide-border rounded-xl border border-border bg-card">
+        {data.campanhas.map((c) => (
+          <Link
+            key={c.id}
+            to="/portal/$token/campanhas/$campanhaId"
+            params={{ token, campanhaId: c.id }}
+            className="flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
+          >
+            {c.nome}
+          </Link>
+        ))}
+      </div>
+    </PageContainer>
   );
 }

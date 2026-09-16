@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MessageSquareText } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { PageContainer } from "@/components/shared/PageContainer";
 import { PortalDemandButton } from "@/components/PortalDemandButton";
 import { usePortalData } from "@/components/portal/portal-context";
 import { t } from "@/lib/portal-i18n";
@@ -25,24 +26,26 @@ function PortalSolicitacoesPage() {
 
   if (data.campanhas.length === 0) {
     return (
-      <EmptyState
-        icon={<MessageSquareText className="h-5 w-5" />}
-        title={t(lang, "navNoCampanhas")}
-      />
+      <PageContainer>
+        <EmptyState
+          icon={<MessageSquareText className="h-5 w-5" />}
+          title={t(lang, "navNoCampanhas")}
+        />
+      </PageContainer>
     );
   }
 
   return (
-    <div className="space-y-2.5">
+    <PageContainer className="space-y-2.5">
       {data.campanhas.map((c) => (
         <div
           key={c.id}
-          className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
         >
           <p className="truncate text-sm font-medium text-foreground">{c.nome}</p>
           <PortalDemandButton token={token} campanhaId={c.id} lang={lang} />
         </div>
       ))}
-    </div>
+    </PageContainer>
   );
 }
