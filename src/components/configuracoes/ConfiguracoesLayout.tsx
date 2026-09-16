@@ -13,6 +13,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { SURFACE } from "@/lib/design-tokens";
 import { APP_VERSION } from "@/lib/app-version";
+import { ReleaseHistoryDialog } from "@/components/ReleaseHistoryDialog";
 import { SettingsNav, type ConfigNavGroup } from "./SettingsNav";
 import type { ConfigTab } from "@/lib/section-nav";
 
@@ -38,6 +39,7 @@ export function ConfiguracoesLayout({
 }) {
   const isMobile = useIsMobile();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   return (
     <PageContainer className="max-w-[1160px]">
@@ -98,7 +100,14 @@ export function ConfiguracoesLayout({
         </div>
       )}
 
-      <p className="pt-8 text-center text-xs text-muted-foreground">Versão {APP_VERSION}</p>
+      <button
+        type="button"
+        onClick={() => setShowHistory(true)}
+        className="w-full pt-8 text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      >
+        Versão {APP_VERSION}
+      </button>
+      <ReleaseHistoryDialog open={showHistory} onOpenChange={setShowHistory} />
     </PageContainer>
   );
 }

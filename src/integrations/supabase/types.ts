@@ -1072,6 +1072,35 @@ export type Database = {
           },
         ]
       }
+      hypito_conversation_state: {
+        Row: {
+          state: Json
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          state?: Json
+          updated_at?: string
+          user_id: string
+          workspace_id?: string
+        }
+        Update: {
+          state?: Json
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hypito_conversation_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hypito_daily_briefing_runs: {
         Row: {
           error: string | null
@@ -1154,27 +1183,6 @@ export type Database = {
           },
         ]
       }
-      hypito_conversation_state: {
-        Row: {
-          user_id: string;
-          workspace_id: string;
-          state: Json;
-          updated_at: string;
-        };
-        Insert: {
-          user_id: string;
-          workspace_id?: string;
-          state?: Json;
-          updated_at?: string;
-        };
-        Update: {
-          user_id?: string;
-          workspace_id?: string;
-          state?: Json;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       hypito_pending_actions: {
         Row: {
           created_at: string
@@ -1716,6 +1724,48 @@ export type Database = {
           xp_overdue_dias_teto?: number
           xp_task_early_bonus?: number
           xp_task_on_time?: number
+        }
+        Relationships: []
+      }
+      platform_releases: {
+        Row: {
+          changes: Json
+          created_at: string
+          environment: string
+          id: string
+          minimum_supported_version: string | null
+          released_at: string
+          released_by: string | null
+          requires_reload: boolean
+          summary: string | null
+          title: string
+          version: string
+        }
+        Insert: {
+          changes?: Json
+          created_at?: string
+          environment?: string
+          id?: string
+          minimum_supported_version?: string | null
+          released_at?: string
+          released_by?: string | null
+          requires_reload?: boolean
+          summary?: string | null
+          title: string
+          version: string
+        }
+        Update: {
+          changes?: Json
+          created_at?: string
+          environment?: string
+          id?: string
+          minimum_supported_version?: string | null
+          released_at?: string
+          released_by?: string | null
+          requires_reload?: boolean
+          summary?: string | null
+          title?: string
+          version?: string
         }
         Relationships: []
       }
