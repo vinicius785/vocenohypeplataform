@@ -62,7 +62,7 @@ export function CampanhaCard({
         aria-label={`Abrir campanha ${c.nome} — ${cliente.empresa}, ${CAMPANHA_STATUS_LABEL[status]}, ${influCount} influenciador(es)`}
       />
 
-      <div className="relative flex items-start justify-between gap-2">
+      <div className="relative flex items-start justify-between gap-2 pointer-events-none">
         <div className="flex min-w-0 items-center gap-3">
           <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="md" />
           <div className="min-w-0">
@@ -76,7 +76,7 @@ export function CampanhaCard({
             <button
               type="button"
               aria-label={`Mais ações para ${c.nome}`}
-              className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100 sm:h-8 sm:w-8"
+              className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-secondary opacity-60 pointer-events-auto transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand group-hover:opacity-100 sm:h-8 sm:w-8"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -97,7 +97,7 @@ export function CampanhaCard({
         </DropdownMenu>
       </div>
 
-      <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="relative mt-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
         <Badge variant={STATUS_BADGE_VARIANT[status]}>{CAMPANHA_STATUS_LABEL[status]}</Badge>
         {isRecorrente && (
           <Badge variant="brand" className="gap-1">
@@ -106,7 +106,7 @@ export function CampanhaCard({
         )}
       </div>
 
-      <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-xs text-text-secondary">
+      <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/60 pt-3 text-xs text-text-secondary pointer-events-none">
         <span className="inline-flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5" />
           {prazoLabel}
