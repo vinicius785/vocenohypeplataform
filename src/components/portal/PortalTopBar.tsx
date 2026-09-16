@@ -1,58 +1,79 @@
 import { useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Bell } from "lucide-react";
+import { Link, useParams, useRouterState } from "@tanstack/react-router";
+import { Bell, Menu, PanelLeft } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { initialsOf, type ApprovalItem } from "./portal-widgets";
 import { PORTAL_LANGS, type PortalLang } from "@/lib/portal-i18n";
+import type { ClienteLinkData } from "@/lib/portal-types";
 import type { Workspace } from "@/lib/workspace-store";
 
-const NAV_ITEMS = [
-  { to: "/portal/$token/inicio", label: "Início", match: "/inicio" },
-  { to: "/portal/$token/campanhas", label: "Campanhas", match: "/campanhas" },
-  { to: "/portal/$token/solicitacoes", label: "Solicitações", match: "/solicitacoes" },
-] as const;
-
 /**
- * Topbar do portal — correção visual/estrutural: identidade estática do
- * cliente (sem seletor — o modelo de acesso hoje é 1 token = 1 cliente,
- * sem noção de usuário/sessão, então nunca há "vários clientes" pra
- * trocar; se isso mudar no futuro, é aqui que entraria um `Popover`
- * pesquisável, não antes), nav central (Início/Campanhas/Solicitações,
- * estado ativo `bg-brand-subtle text-brand` — mesma classe usada pelo
- * item ativo da sidebar interna, `AppShell.tsx`), e um sino de
- * notificações à direita com as pendências REAIS já computadas em toda a
- * plataforma (nunca uma notificação inventada — mesmo critério de sempre,
- * `collectPendingApprovals`). Sem "conta do usuário": esse modelo
- * anônimo não tem conta alguma pra mostrar.
+ * Topbar fina do portal — correção estrutural: volta a ser só uma barra
+ * de apoio (igual à topbar interna, `AppShell.tsx`'s `<header
+ * className="flex h-16 items-center ...">`), sem navegação horizontal
+ * (isso volta a viver na sidebar). Mantém: toggle de sidebar (recolher
+ * no desktop / abrir drawer no mobile), título da página atual, sino de
+ * pendências reais, idioma. Sem ícone de conta — não existe conta de
+ * usuário nesse modelo anônimo (mesma decisão do rodapé da sidebar).
  */
 export function PortalTopBar({
   ws,
-  clienteNome,
-  clienteFoto,
   lang,
   onLangChange,
   token,
+  data,
   pendingItems,
+  collapsed,
+  onToggleCollapsed,
+  onOpenMobileSidebar,
 }: {
   ws: Workspace;
-  clienteNome?: string;
-  clienteFoto?: string;
   lang: PortalLang;
   onLangChange: (l: PortalLang) => void;
-  /** Só definido quando há dados carregados — habilita nav + sino. */
   token?: string;
+  data?: ClienteLinkData;
   pendingItems?: ApprovalItem[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onOpenMobileSidebar?: () => void;
 }) {
   const [langOpen, setLangOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const params = useParams({ strict: false });
   const current = PORTAL_LANGS.find((l) => l.code === lang) ?? PORTAL_LANGS[0];
+
+  const campanhaId = (params as { campanhaId?: string }).campanhaId;
+  const pageTitle = campanhaId
+    ? (data?.campanhas.find((c) => c.id === campanhaId)?.nome ?? "Campanha")
+    : pathname.endsWith("/campanhas")
+      ? "Campanhas"
+      : "Início";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background px-4 sm:px-6">
-      <div className="flex min-w-0 items-center gap-2.5">
+      {token ? (
+        <>
+          <IconButton
+            label={collapsed ? "Expandir menu" : "Recolher menu"}
+            tone="neutral"
+            onClick={onToggleCollapsed}
+            className="hidden md:inline-flex"
+          >
+            <PanelLeft className="h-4.5 w-4.5" />
+          </IconButton>
+          <IconButton
+            label="Abrir menu"
+            tone="neutral"
+            onClick={onOpenMobileSidebar}
+            className="md:hidden"
+          >
+            <Menu className="h-4.5 w-4.5" />
+          </IconButton>
+        </>
+      ) : (
         <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-foreground text-background">
           {ws.logo ? (
             <img src={ws.logo} alt="" className="h-full w-full object-cover" />
@@ -60,44 +81,9 @@ export function PortalTopBar({
             <span className="text-[11px] font-bold">{ws.nome.charAt(0).toUpperCase()}</span>
           )}
         </div>
-        <span className="hidden text-sm font-semibold text-foreground sm:inline">{ws.nome}</span>
-
-        {clienteNome && (
-          <div className="ml-1 flex min-w-0 items-center gap-1.5 border-l border-border pl-2.5 sm:ml-2 sm:pl-3">
-            <Avatar className="h-6 w-6 shrink-0">
-              {clienteFoto && <AvatarImage src={clienteFoto} alt={clienteNome} />}
-              <AvatarFallback className="text-[10px] font-semibold">
-                {clienteNome.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="min-w-0 truncate text-sm font-medium text-foreground">
-              {clienteNome}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {token && (
-        <nav className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname.includes(item.match);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                params={{ token }}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-brand-subtle text-brand"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
       )}
+
+      <p className="min-w-0 truncate text-sm font-semibold text-foreground">{pageTitle}</p>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {token && (

@@ -18,7 +18,6 @@ import { HomeHeaderShell } from "@/components/shared/HomeHeaderShell";
 import { PortalSectionCard } from "@/components/portal/PortalSectionCard";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge } from "@/components/ui/badge";
-import { PortalDemandButton } from "@/components/PortalDemandButton";
 import { usePortalData } from "@/components/portal/portal-context";
 import {
   InfluencerGalleryCard,
@@ -260,22 +259,19 @@ function PortalCampanhaPage() {
               : undefined
         }
         rightSlot={
-          <div className="flex items-center gap-2">
-            {activeCampanha.isRecorrente && (
-              <select
-                value={portalMonth}
-                onChange={(e) => setPortalMonth(e.target.value)}
-                className="h-9 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
-              >
-                {monthOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            )}
-            <PortalDemandButton token={token} campanhaId={activeCampanha.id} lang={lang} />
-          </div>
+          activeCampanha.isRecorrente ? (
+            <select
+              value={portalMonth}
+              onChange={(e) => setPortalMonth(e.target.value)}
+              className="h-9 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
+            >
+              {monthOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : undefined
         }
         indicators={[
           ...(activeCampanha.planejado > 0
