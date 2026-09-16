@@ -398,7 +398,7 @@ function PortalInicioPage() {
                 key={relatorio.id}
                 to="/portal/$token/campanhas/$campanhaId"
                 params={{ token, campanhaId }}
-                search={{ relatorio: relatorio.id }}
+                search={{ relatorio: relatorio.id, tab: "relatorios" }}
                 className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-muted/40"
               >
                 <div className="min-w-0">
@@ -451,7 +451,7 @@ function PortalInicioPage() {
                   key={`relatorio:${item.relatorio.id}`}
                   to="/portal/$token/campanhas/$campanhaId"
                   params={{ token, campanhaId: item.campanhaId }}
-                  search={{ relatorio: item.relatorio.id }}
+                  search={{ relatorio: item.relatorio.id, tab: "relatorios" }}
                   className="flex min-h-11 items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors hover:bg-muted/40"
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">

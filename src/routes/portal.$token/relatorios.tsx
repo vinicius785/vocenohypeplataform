@@ -36,7 +36,7 @@ function PortalRelatoriosPage() {
             key={relatorio.id}
             to="/portal/$token/campanhas/$campanhaId"
             params={{ token, campanhaId }}
-            search={{ relatorio: relatorio.id }}
+            search={{ relatorio: relatorio.id, tab: "relatorios" }}
             className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 transition-colors hover:bg-muted/40"
           >
             <div className="min-w-0">
