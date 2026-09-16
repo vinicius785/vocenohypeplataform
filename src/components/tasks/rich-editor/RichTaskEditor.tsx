@@ -14,7 +14,7 @@ import { DashDivider } from "./dashDividerExtension";
 import { SlashCommand } from "./slashCommandExtension";
 import { createMentionExtension } from "./mentionExtension";
 import { sanitizePastedHtml } from "./pasteSanitize";
-import { BubbleToolbar } from "./BubbleToolbar";
+import { EditorToolbar } from "./EditorToolbar";
 import "./richEditor.css";
 
 export function RichTaskEditor({
@@ -150,9 +150,11 @@ export function RichTaskEditor({
   }, [taskKey, content, editor]);
 
   return (
-    <>
-      {editor && <BubbleToolbar editor={editor} />}
-      <EditorContent editor={editor} />
-    </>
+    <div className="flex max-h-[420px] min-h-[160px] flex-col overflow-y-auto rounded-lg border border-border bg-card">
+      {editor && <EditorToolbar editor={editor} />}
+      <div className="min-h-0 flex-1 px-3 py-2">
+        <EditorContent editor={editor} />
+      </div>
+    </div>
   );
 }
