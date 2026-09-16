@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
-import { ChevronDown, FileBarChart, LayoutGrid, Megaphone, MessageSquareText } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  FileBarChart,
+  LayoutGrid,
+  Megaphone,
+  MessageSquareText,
+} from "lucide-react";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import { t, type PortalLang } from "@/lib/portal-i18n";
 import type { PublicCampanha } from "@/lib/portal-types";
@@ -103,6 +110,13 @@ export function PortalSidebar({
         active={!activeCampanhaId}
         icon={<LayoutGrid className="h-3.5 w-3.5" />}
         label={t(lang, "navInicio")}
+      />
+      <NavLink
+        to="/portal/$token/aprovacoes"
+        params={{ token }}
+        active={pathname.endsWith("/aprovacoes")}
+        icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+        label="Aprovações"
         badge={totalAguardando}
       />
 

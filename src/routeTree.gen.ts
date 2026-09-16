@@ -24,6 +24,7 @@ import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token/ind
 import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$token/solicitacoes'
 import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
 import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
+import { Route as PortalTokenAprovacoesRouteImport } from './routes/portal.$token/aprovacoes'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -115,6 +116,11 @@ const PortalTokenInicioRoute = PortalTokenInicioRouteImport.update({
   path: '/inicio',
   getParentRoute: () => PortalTokenRouteRoute,
 } as any)
+const PortalTokenAprovacoesRoute = PortalTokenAprovacoesRouteImport.update({
+  id: '/aprovacoes',
+  path: '/aprovacoes',
+  getParentRoute: () => PortalTokenRouteRoute,
+} as any)
 const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   id: '/email/descadastro/$token',
   path: '/email/descadastro/$token',
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
@@ -228,6 +235,7 @@ export interface FileRoutesByTo {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
@@ -315,6 +325,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
@@ -344,6 +355,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
@@ -477,6 +489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalTokenInicioRouteImport
       parentRoute: typeof PortalTokenRouteRoute
     }
+    '/portal/$token/aprovacoes': {
+      id: '/portal/$token/aprovacoes'
+      path: '/aprovacoes'
+      fullPath: '/portal/$token/aprovacoes'
+      preLoaderRoute: typeof PortalTokenAprovacoesRouteImport
+      parentRoute: typeof PortalTokenRouteRoute
+    }
     '/email/descadastro/$token': {
       id: '/email/descadastro/$token'
       path: '/email/descadastro/$token'
@@ -602,6 +621,7 @@ const PortalTokenCampanhasCampanhaIdRouteWithChildren =
   )
 
 interface PortalTokenRouteRouteChildren {
+  PortalTokenAprovacoesRoute: typeof PortalTokenAprovacoesRoute
   PortalTokenInicioRoute: typeof PortalTokenInicioRoute
   PortalTokenRelatoriosRoute: typeof PortalTokenRelatoriosRoute
   PortalTokenSolicitacoesRoute: typeof PortalTokenSolicitacoesRoute
@@ -611,6 +631,7 @@ interface PortalTokenRouteRouteChildren {
 }
 
 const PortalTokenRouteRouteChildren: PortalTokenRouteRouteChildren = {
+  PortalTokenAprovacoesRoute: PortalTokenAprovacoesRoute,
   PortalTokenInicioRoute: PortalTokenInicioRoute,
   PortalTokenRelatoriosRoute: PortalTokenRelatoriosRoute,
   PortalTokenSolicitacoesRoute: PortalTokenSolicitacoesRoute,
