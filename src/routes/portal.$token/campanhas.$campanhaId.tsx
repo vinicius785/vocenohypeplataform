@@ -81,6 +81,7 @@ function PortalCampanhaPage() {
     void navigate({ search: (prev) => ({ ...prev, tab: k }), replace: true });
 
   const [influTab, setInfluTab] = useState<"todos" | "reprovados">("todos");
+  const [influQuery, setInfluQuery] = useState("");
   const [portalMonth, setPortalMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -197,6 +198,7 @@ function PortalCampanhaPage() {
         <InfluencerDetail
           inf={viewing}
           lang={lang}
+          campanhaNome={activeCampanha.nome}
           mes={
             activeCampanha.isRecorrente
               ? (viewing.cicloMes ?? viewing.criadoEm ?? "").slice(0, 7)
@@ -334,6 +336,12 @@ function PortalCampanhaPage() {
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Users className="h-4 w-4" /> {t(lang, "influenciadoresHeader")}
             </h2>
+            <input
+              value={influQuery}
+              onChange={(e) => setInfluQuery(e.target.value)}
+              placeholder="Buscar por nome..."
+              className="h-9 w-full max-w-[220px] rounded-md border border-border bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-brand"
+            />
             {reprovados.length > 0 && (
               <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-0.5">
                 <button
@@ -364,26 +372,40 @@ function PortalCampanhaPage() {
               </div>
             )}
           </div>
-          {(influTab === "reprovados" ? reprovados : ativos).length === 0 ? (
-            <EmptyState
-              compact
-              icon={<Users className="h-5 w-5" />}
-              title={
-                influTab === "reprovados" ? t(lang, "semReprovados") : t(lang, "semInfluenciadores")
-              }
-            />
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {(influTab === "reprovados" ? reprovados : ativos).map((inf) => (
-                <InfluencerGalleryCard
-                  key={inf.id}
-                  inf={inf}
-                  lang={lang}
-                  onOpen={() => setViewingId(inf.id)}
+          {(() => {
+            const base = influTab === "reprovados" ? reprovados : ativos;
+            const query = influQuery.trim().toLowerCase();
+            const filtered = query
+              ? base.filter((inf) => inf.nome.toLowerCase().includes(query))
+              : base;
+            if (filtered.length === 0) {
+              return (
+                <EmptyState
+                  compact
+                  icon={<Users className="h-5 w-5" />}
+                  title={
+                    query
+                      ? `Nenhum influenciador encontrado para "${influQuery}"`
+                      : influTab === "reprovados"
+                        ? t(lang, "semReprovados")
+                        : t(lang, "semInfluenciadores")
+                  }
                 />
-              ))}
-            </div>
-          )}
+              );
+            }
+            return (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {filtered.map((inf) => (
+                  <InfluencerGalleryCard
+                    key={inf.id}
+                    inf={inf}
+                    lang={lang}
+                    onOpen={() => setViewingId(inf.id)}
+                  />
+                ))}
+              </div>
+            );
+          })()}
         </TabsContent>
 
         <TabsContent value="aprovacoes" className="space-y-2">

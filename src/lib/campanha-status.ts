@@ -69,7 +69,11 @@ export const INFLU_STATUS_LABEL_CLIENTE: Record<InfluStatus, string> = {
   EM_CURADORIA: "Em análise",
   ENVIADO_AO_CLIENTE: "Aguardando sua aprovação",
   APROVADO: "Aprovado",
-  RECUSADO: "Recusado",
+  // Troca de palavra só (Etapa 5 do redesenho do Portal do Cliente) —
+  // continua um estado terminal (não há transição de volta pra
+  // pendente), "Não aprovado" só evita o tom mais duro de "Recusado"
+  // sem sugerir que virou algo reversível como "ajustes solicitados".
+  RECUSADO: "Não aprovado",
 };
 
 // Cores corrigidas (rodada corretiva forte): "Inscrito" é neutro (chegou,

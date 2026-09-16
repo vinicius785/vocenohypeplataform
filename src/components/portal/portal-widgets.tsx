@@ -40,11 +40,20 @@ import { ENTREGA_STAGE_TONE, type EntregaStage } from "@/lib/campanha-status";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BackButton } from "@/components/BackButton";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { submitRelatorioNps } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { t, type PortalLang } from "@/lib/portal-i18n";
 import { mesLabel } from "@/lib/relatorio-mensal";
+import { SURFACE } from "@/lib/design-tokens";
 import type { PublicEntrega, PublicInfluencer, PublicRelatorioMensal } from "@/lib/portal-types";
 
 /**
@@ -729,6 +738,17 @@ export function InfluencerGalleryCard({
           {inf.nicho}
         </Badge>
       )}
+      {/* Rede principal — primeira cadastrada (sem inventar critério de
+       * "maior audiência": `seguidores` é texto livre, sem parser numérico
+       * confiável no projeto pra comparar entre redes). */}
+      {inf.redes[0] && (
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+          <PlatformIcon plataforma={inf.redes[0].plataforma} className="h-3 w-3" />
+          {inf.redes[0].seguidores
+            ? formatSeguidores(inf.redes[0].seguidores)
+            : inf.redes[0].handle}
+        </span>
+      )}
       {inf.entregas.length > 0 && (
         <p className="truncate text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
       )}
@@ -738,11 +758,19 @@ export function InfluencerGalleryCard({
 }
 
 /** Painel de detalhe — substitui a lista dentro da mesma área principal
- * (com botão Voltar), em vez de abrir um modal por cima da página. */
+ * (breadcrumb no lugar do antigo botão "Voltar" grande, Etapa 5). Notas
+ * internas do influenciador (`comments`/`activity`/`checklist` do `Influ`
+ * interno) NUNCA chegam aqui — `toPublicInfluencer` (cliente-link.functions.ts)
+ * já não projeta esses campos, então este componente nem tem acesso a
+ * eles; briefing/observações abaixo são as duas únicas categorias de nota
+ * hoje com suporte real pro cliente (uma 3ª categoria, "comentários da
+ * agência visíveis ao cliente", foi adiada por falta de suporte de
+ * backend — ver plano da Etapa 5). */
 export function InfluencerDetail({
   inf,
   lang,
   mes,
+  campanhaNome,
   onBack,
   onRespondInflu,
   onRespondEntrega,
@@ -756,6 +784,9 @@ export function InfluencerDetail({
    * recorrente, pra deixar claro de qual ciclo ele é (a mesma campanha
    * acumula vários meses ao longo do tempo). */
   mes?: string;
+  /** Nome da campanha, pro segundo nível da breadcrumb — o primeiro nível
+   * (link real de volta) é responsabilidade do `onBack`. */
+  campanhaNome: string;
   onBack: () => void;
   onRespondInflu: (status: "aprovado" | "reprovado", motivo?: string) => Promise<void>;
   onRespondEntrega: (
@@ -879,18 +910,41 @@ export function InfluencerDetail({
 
   return (
     <div>
-      <BackButton onClick={onBack} label={t(lang, "back")} className="mb-4" />
+      {/* Breadcrumb no lugar do antigo botão "Voltar" grande (Etapa 5) —
+       * os 2 primeiros níveis voltam pra campanha (mesmo `onBack` de
+       * sempre, só que acionado por um link de texto em vez de um botão
+       * grande), o último é a página atual (não clicável). */}
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <button type="button" onClick={onBack} className="hover:text-foreground">
+                {campanhaNome}
+              </button>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <button type="button" onClick={onBack} className="hover:text-foreground">
+                {t(lang, "influenciadoresHeader")}
+              </button>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage className="truncate">{inf.nome}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
 
       {/* HERO — foto/nome em destaque, com aprovar/reprovar direto no cabeçalho
           quando pendente, mesmo efeito de elevação sutil usado nos cards da
-          plataforma interna (hover -translate-y + shadow). */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
-        <div
-          className="h-16 sm:h-20"
-          style={{
-            background: "linear-gradient(135deg, var(--chart-1), var(--chart-2), var(--chart-3))",
-          }}
-        />
+          plataforma interna (hover -translate-y + shadow). Fundo neutro
+          (`SURFACE.raised`) no lugar do antigo gradiente decorativo sem
+          função (Etapa 5). */}
+      <div className={`overflow-hidden rounded-2xl ${SURFACE.raised} shadow-sm`}>
+        <div className="h-16 bg-muted/40 sm:h-20" />
         <div className="px-5 pb-5">
           <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-end sm:text-left">
             <Avatar className="-mt-10 h-20 w-20 shrink-0 ring-4 ring-background sm:h-24 sm:w-24">
@@ -1265,11 +1319,11 @@ export function InfluencerDetail({
                         )}
 
                         {e.historico && e.historico.length > 0 && (
-                          <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-                            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                              {t(lang, "entregaHistorico")}
-                            </p>
-                            <div className="space-y-1">
+                          <Collapsible className="mt-3 border-t border-border pt-3">
+                            <CollapsibleTrigger className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                              {t(lang, "entregaHistorico")} ({e.historico.length})
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-1.5 space-y-1">
                               {e.historico.map((h, idx) => (
                                 <div
                                   key={idx}
@@ -1283,8 +1337,8 @@ export function InfluencerDetail({
                                   </span>
                                 </div>
                               ))}
-                            </div>
-                          </div>
+                            </CollapsibleContent>
+                          </Collapsible>
                         )}
                       </div>
                     </div>
