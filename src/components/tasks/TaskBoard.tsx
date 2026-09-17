@@ -50,6 +50,8 @@ import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory"
 import { pushTaskModal } from "@/lib/task-modal-stack";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
 import { TaskTagsPopover } from "@/components/tasks/TaskTagsPopover";
+import { ListRow } from "@/components/shared/ListRow";
+import type { SemanticTone } from "@/lib/design-tokens";
 import { formatIsoDate } from "@/lib/utils";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
@@ -2521,65 +2523,26 @@ export function TaskBoard({
  * prazo quando houver, e um "•••" só visível no hover pra remover. Se a
  * tarefa referenciada não existir mais no diretório (raro — ex. dado
  * ainda propagando), cai num rótulo mínimo em vez de sumir a linha. */
-function DependencyRow({
-  entry,
-  fallbackId,
-  onOpen,
-  onRemove,
-}: {
-  entry?: TaskDirectoryEntry;
-  fallbackId: string;
-  onOpen: () => void;
-  onRemove: () => void;
-}) {
-  const done = entry?.status === "Concluído";
-  return (
-    <div className="group flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-      >
-        {done ? (
-          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        ) : (
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
-          />
-        )}
-        <span
-          className={`min-w-0 truncate text-xs ${done ? "text-muted-foreground line-through" : "text-foreground"}`}
-        >
-          {entry?.label ?? fallbackId}
-        </span>
-        {entry?.project && (
-          <span className="shrink-0 text-[10px] text-muted-foreground">{entry.project}</span>
-        )}
-        {entry?.dueDate && !done && (
-          <span className="shrink-0 text-[10px] text-muted-foreground">
-            {formatIsoDate(entry.dueDate)}
-          </span>
-        )}
-        <ChevronRight className="ml-auto h-3 w-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />
-      </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Mais opções"
-            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100"
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onRemove} className="text-destructive focus:text-destructive">
-            Remover dependência
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
+/** Mapeamento pontual `TaskStatus`→`SemanticTone`, só pro `status` badge
+ * de `ListRow` nas linhas de Dependências — não é o mapa de cor real do
+ * status (que continua sendo `TASK_STATUS_TONE`/`TASK_STATUS_DOT`), só a
+ * aproximação mais próxima dentre os 6 tons genéricos do design system. */
+function toneForTaskStatus(status: string): SemanticTone {
+  switch (status) {
+    case "Concluído":
+    case "Aprovado":
+      return "success";
+    case "Em andamento":
+      return "info";
+    case "Em aprovação":
+    case "Em ajustes":
+    case "Bloqueada":
+      return "warning";
+    case "Arquivado":
+      return "neutral";
+    default:
+      return "neutral";
+  }
 }
 
 /* ============================================================
@@ -2741,12 +2704,6 @@ export function TaskDialog({
   // no desktop os dois já ficam lado a lado (grid), então esse estado só
   // importa quando `isMobileDialog`.
   const [mobileDetailTab, setMobileDetailTab] = useState<"detalhes" | "atividade">("detalhes");
-  // "Mais propriedades" (Tempo/Fase/Etiquetas) — fechado por padrão, mas
-  // nunca esconde informação já preenchida: abre sozinho se qualquer uma
-  // dessas 3 já tiver valor real (etiquetas ou fase definidas; tempo
-  // depende de `timeEntries`, calculado só depois do `initial` carregar,
-  // então é conferido separadamente no `useEffect` de reset abaixo).
-  const [moreFieldsOpen, setMoreFieldsOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
@@ -2899,9 +2856,6 @@ export function TaskDialog({
     setPendingBlockAction(null);
     setBlockActionBusy(false);
     lastAtomicStatusRef.current = null;
-    setMoreFieldsOpen(
-      !!(initial?.tags?.length || initial?.roadmapPhaseId || initial?.timeEntries?.length),
-    );
     setMobileDetailTab("detalhes");
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
@@ -3654,7 +3608,10 @@ export function TaskDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent mobileFullScreen className="max-w-6xl gap-0 overflow-hidden p-0">
+        <DialogContent
+          mobileFullScreen
+          className="w-[min(1240px,calc(100vw-48px))] max-w-[1240px] gap-0 overflow-hidden p-0"
+        >
           <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
           <DialogDescription className="sr-only">
             Formulário de tarefa no estilo ClickUp
@@ -3797,7 +3754,7 @@ export function TaskDialog({
             </div>
           )}
 
-          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]">
+          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
             <div
               className={`min-h-0 overflow-y-auto ${
                 isMobileDialog && initial && mobileDetailTab !== "detalhes" ? "hidden md:block" : ""
@@ -3864,225 +3821,196 @@ export function TaskDialog({
                 />
               )}
 
-              <div className="grid grid-cols-1 border-y border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
-                <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
-                  <select
-                    value={status}
-                    onChange={(e) => {
-                      const next = e.target.value as TaskStatus;
-                      // Uma tarefa que ainda depende de outra não pode ser
-                      // colocada "Em andamento" — a dependência pendente
-                      // precisa ser resolvida primeiro. Diferente de
-                      // concluir (que só avisa e deixa seguir), aqui a
-                      // troca é bloqueada de verdade.
-                      if (next === "Em andamento" && dependsOnPending.length > 0) {
-                        toast.error("Esta tarefa depende de outra ainda não concluída.");
-                        depsSectionRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        });
-                        return;
-                      }
-                      // "Bloqueada" nunca muda o status na hora — abre o
-                      // questionário na Activity (mesmo fluxo do menu
-                      // "Bloquear tarefa"); o `<select>` visualmente volta
-                      // pro valor atual até a confirmação.
-                      if (next === "Bloqueada") {
-                        openBlockComposer();
-                        return;
-                      }
-                      setStatus(next);
-                    }}
-                    className={`h-6 cursor-pointer rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[status]}`}
-                  >
-                    {TASK_STATUSES.map((s) => (
-                      <option key={s} value={s} className="bg-background text-foreground">
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
-                  <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex min-h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40"
-                      >
-                        {assignees.length === 0 ? (
-                          <span className="text-muted-foreground">— Selecionar responsável —</span>
-                        ) : (
-                          (() => {
-                            // Sem `primaryAssignee` explícito, o primeiro
-                            // assignee vira um fallback visual só de exibição
-                            // — nunca usado por scoring/ledger (ver
-                            // `getTaskPrimaryAssignee`).
-                            const primaryName = primaryAssignee ?? assignees[0];
-                            const m = members.find((mm) => mm.name === primaryName);
-                            const othersCount = assignees.length - 1;
-                            return (
-                              <>
-                                <Avatar
-                                  member={
-                                    m ?? {
-                                      name: primaryName,
-                                      initials: initialsOf(primaryName) || "?",
-                                      color: colorFor(primaryName),
-                                    }
-                                  }
-                                  size={20}
-                                />
-                                <span className="min-w-0 flex-1 truncate">{primaryName}</span>
-                                {othersCount > 0 && (
-                                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                    +{othersCount}
-                                  </span>
-                                )}
-                              </>
-                            );
-                          })()
-                        )}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="max-h-64 w-72 overflow-auto p-1">
-                      {members.length === 0 ? (
-                        <div className="px-2 py-2 text-xs text-muted-foreground">
-                          Nenhum membro cadastrado.
-                        </div>
-                      ) : (
-                        <>
-                          <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Responsável e colaboradores
-                          </p>
-                          {members.map((m) => {
-                            const checked = assignees.includes(m.name);
-                            const isPrimary = primaryAssignee
-                              ? primaryAssignee === m.name
-                              : checked && assignees[0] === m.name;
-                            return (
-                              <div
-                                key={m.name}
-                                className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
-                                  checked ? "bg-muted/60" : ""
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => toggleAssignee(m.name)}
-                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                                >
-                                  <Avatar member={m} size={20} />
-                                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                                </button>
-                                {checked && (
-                                  <button
-                                    type="button"
-                                    title={
-                                      isPrimary
-                                        ? "Responsável principal"
-                                        : "Tornar responsável principal"
-                                    }
-                                    onClick={() => promoteToPrimary(m.name)}
-                                    className={`shrink-0 rounded p-1 hover:bg-background ${
-                                      isPrimary
-                                        ? "text-amber-500"
-                                        : "text-muted-foreground/50 hover:text-amber-500"
-                                    }`}
-                                  >
-                                    <Star
-                                      className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
-                                    />
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                </Field>
-
-                <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
-                  >
-                    {TASK_PRIORITIES.map((p) => (
-                      <option key={p} value={p} className="text-foreground">
-                        {p}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
-                  <div className="flex w-full flex-wrap items-center gap-2">
-                    <DateField
-                      variant="inline"
-                      value={startDate || undefined}
-                      onChange={(v) => setStartDate(v ?? "")}
-                      max={dueDate || undefined}
-                      rangeStart={startDate || undefined}
-                      rangeEnd={dueDate || undefined}
-                      ariaLabel="Início"
-                      placeholder="Início"
-                    />
-                    <span className="text-xs text-muted-foreground">→</span>
-                    <DateField
-                      variant="inline"
-                      value={dueDate || undefined}
-                      onChange={handleDueDateChange}
-                      min={startDate || undefined}
-                      rangeStart={startDate || undefined}
-                      rangeEnd={dueDate || undefined}
-                      ariaLabel="Entrega"
-                      placeholder="Entrega"
-                      recurrence={recurrence}
-                      onRecurrenceChange={setRecurrence}
-                    />
-                    {initial && (dueDate || initial.performanceDueDate) && (
-                      <DeadlineHealthBadge task={initial} />
-                    )}
-                  </div>
-                </Field>
-              </div>
-
-              <div className="border-b border-border bg-muted/10 px-6 sm:px-8">
-                <button
-                  type="button"
-                  aria-expanded={moreFieldsOpen}
-                  onClick={() => setMoreFieldsOpen((v) => !v)}
-                  className="flex w-full items-center gap-1.5 py-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 transition-transform ${moreFieldsOpen ? "rotate-180" : ""}`}
-                  />
-                  Mais propriedades
-                </button>
-              </div>
-
-              {moreFieldsOpen && (
-                <div className="grid grid-cols-1 border-b border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
-                  <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
-                    {initial && timeTrackingOrigin ? (
-                      <TimeTrackingPanel
-                        taskId={timeTrackingTaskId!}
-                        taskOrigin={timeTrackingOrigin}
-                        members={members}
-                      />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        {initial ? "—" : "Disponível após criar a tarefa"}
-                      </span>
-                    )}
+              <div className="mx-6 my-4 rounded-xl border border-border/60 bg-card px-3 py-3 sm:mx-8">
+                <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Detalhes
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2">
+                  <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
+                    <select
+                      value={status}
+                      onChange={(e) => {
+                        const next = e.target.value as TaskStatus;
+                        // Uma tarefa que ainda depende de outra não pode ser
+                        // colocada "Em andamento" — a dependência pendente
+                        // precisa ser resolvida primeiro. Diferente de
+                        // concluir (que só avisa e deixa seguir), aqui a
+                        // troca é bloqueada de verdade.
+                        if (next === "Em andamento" && dependsOnPending.length > 0) {
+                          toast.error("Esta tarefa depende de outra ainda não concluída.");
+                          depsSectionRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                          return;
+                        }
+                        // "Bloqueada" nunca muda o status na hora — abre o
+                        // questionário na Activity (mesmo fluxo do menu
+                        // "Bloquear tarefa"); o `<select>` visualmente volta
+                        // pro valor atual até a confirmação.
+                        if (next === "Bloqueada") {
+                          openBlockComposer();
+                          return;
+                        }
+                        setStatus(next);
+                      }}
+                      className={`h-6 cursor-pointer rounded px-1.5 text-[10px] font-semibold uppercase tracking-wide outline-none ${TASK_STATUS_TONE[status]}`}
+                    >
+                      {TASK_STATUSES.map((s) => (
+                        <option key={s} value={s} className="bg-background text-foreground">
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
 
-                  <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
-                    <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
+                  <Field label="Responsável" icon={<User className="h-3.5 w-3.5" />}>
+                    <Popover open={assigneePickerOpen} onOpenChange={setAssigneePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex min-h-7 w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm outline-none data-[state=open]:ring-1 data-[state=open]:ring-ring"
+                        >
+                          {assignees.length === 0 ? (
+                            <span className="text-muted-foreground">
+                              — Selecionar responsável —
+                            </span>
+                          ) : (
+                            (() => {
+                              // Sem `primaryAssignee` explícito, o primeiro
+                              // assignee vira um fallback visual só de exibição
+                              // — nunca usado por scoring/ledger (ver
+                              // `getTaskPrimaryAssignee`).
+                              const primaryName = primaryAssignee ?? assignees[0];
+                              const m = members.find((mm) => mm.name === primaryName);
+                              const othersCount = assignees.length - 1;
+                              return (
+                                <>
+                                  <Avatar
+                                    member={
+                                      m ?? {
+                                        name: primaryName,
+                                        initials: initialsOf(primaryName) || "?",
+                                        color: colorFor(primaryName),
+                                      }
+                                    }
+                                    size={20}
+                                  />
+                                  <span className="min-w-0 flex-1 truncate">{primaryName}</span>
+                                  {othersCount > 0 && (
+                                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                      +{othersCount}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="max-h-64 w-72 overflow-auto p-1">
+                        {members.length === 0 ? (
+                          <div className="px-2 py-2 text-xs text-muted-foreground">
+                            Nenhum membro cadastrado.
+                          </div>
+                        ) : (
+                          <>
+                            <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              Responsável e colaboradores
+                            </p>
+                            {members.map((m) => {
+                              const checked = assignees.includes(m.name);
+                              const isPrimary = primaryAssignee
+                                ? primaryAssignee === m.name
+                                : checked && assignees[0] === m.name;
+                              return (
+                                <div
+                                  key={m.name}
+                                  className={`flex w-full items-center gap-1 rounded px-1.5 py-1.5 text-sm hover:bg-muted ${
+                                    checked ? "bg-muted/60" : ""
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleAssignee(m.name)}
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                  >
+                                    <Avatar member={m} size={20} />
+                                    <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                                    {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                                  </button>
+                                  {checked && (
+                                    <button
+                                      type="button"
+                                      title={
+                                        isPrimary
+                                          ? "Responsável principal"
+                                          : "Tornar responsável principal"
+                                      }
+                                      onClick={() => promoteToPrimary(m.name)}
+                                      className={`shrink-0 rounded p-1 hover:bg-background ${
+                                        isPrimary
+                                          ? "text-amber-500"
+                                          : "text-muted-foreground/50 hover:text-amber-500"
+                                      }`}
+                                    >
+                                      <Star
+                                        className={`h-3.5 w-3.5 ${isPrimary ? "fill-amber-500" : ""}`}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </Field>
+
+                  <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                      className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
+                    >
+                      {TASK_PRIORITIES.map((p) => (
+                        <option key={p} value={p} className="text-foreground">
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
+                    <div className="flex w-full flex-wrap items-center gap-2">
+                      <DateField
+                        variant="inline"
+                        value={startDate || undefined}
+                        onChange={(v) => setStartDate(v ?? "")}
+                        max={dueDate || undefined}
+                        rangeStart={startDate || undefined}
+                        rangeEnd={dueDate || undefined}
+                        ariaLabel="Início"
+                        placeholder="Início"
+                      />
+                      <span className="text-xs text-muted-foreground">→</span>
+                      <DateField
+                        variant="inline"
+                        value={dueDate || undefined}
+                        onChange={handleDueDateChange}
+                        min={startDate || undefined}
+                        rangeStart={startDate || undefined}
+                        rangeEnd={dueDate || undefined}
+                        ariaLabel="Entrega"
+                        placeholder="Entrega"
+                        recurrence={recurrence}
+                        onRecurrenceChange={setRecurrence}
+                      />
+                      {initial && (dueDate || initial.performanceDueDate) && (
+                        <DeadlineHealthBadge task={initial} />
+                      )}
+                    </div>
                   </Field>
 
                   {fases && (
@@ -4101,10 +4029,32 @@ export function TaskDialog({
                       </select>
                     </Field>
                   )}
-                </div>
-              )}
 
-              <div className="px-8 py-4">
+                  <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
+                    {initial && timeTrackingOrigin ? (
+                      <TimeTrackingPanel
+                        taskId={timeTrackingTaskId!}
+                        taskOrigin={timeTrackingOrigin}
+                        members={members}
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        {initial ? "—" : "Disponível após criar a tarefa"}
+                      </span>
+                    )}
+                  </Field>
+
+                  <Field
+                    label="Etiquetas"
+                    icon={<Tag className="h-3.5 w-3.5" />}
+                    className="sm:col-span-2"
+                  >
+                    <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
+                  </Field>
+                </div>
+              </div>
+
+              <div className="px-8 pb-4 pt-6">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Descrição
@@ -4133,11 +4083,279 @@ export function TaskDialog({
               </div>
 
               {initial && (
-                <div className="space-y-4 border-t border-border px-8 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Relações
-                  </p>
+                <div className="space-y-2 border-t border-border px-8 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-foreground">Subtarefas</span>
+                    {subtasks.length > 0 && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {doneCount}/{subtasks.length}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowSubtaskInput((v) => !v)}
+                      className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar
+                    </button>
+                  </div>
 
+                  {subtasks.length === 0 && !showSubtaskInput && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSubtaskInput(true)}
+                      className="flex items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      + Adicionar subtarefa
+                    </button>
+                  )}
+
+                  {(showSubtaskInput || subtasks.length > 0) && (
+                    <div className="space-y-1">
+                      {sortedSubtasks.map((s) => {
+                        const done = s.status === "Concluído";
+                        const subtaskAssignees = getTaskAssignees(s);
+                        return (
+                          <div
+                            key={s.id}
+                            className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+                          >
+                            {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
+                            não um item de checklist — status muda direto aqui, sem passar pela
+                            subtarefa. A cor do círculo é o status (mesma paleta de sempre,
+                            TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
+                            visualmente reduzido a um círculo (texto transparente). */}
+                            <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                              <select
+                                value={s.status}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const next = e.target.value as TaskStatus;
+                                  // `withStatusChange` já para o timer da
+                                  // subtarefa se ele estava rodando (e inicia se
+                                  // o novo status for "Em andamento") — sem
+                                  // passar por ela aqui, um timer preso rodando
+                                  // nunca parava só porque o status mudou.
+                                  const updated = withStatusChange(s, next);
+                                  setSubtasks((prev) =>
+                                    prev.map((st) => (st.id === s.id ? updated : st)),
+                                  );
+                                  setActivity((a) =>
+                                    pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                                  );
+                                  // Cronômetro de `time_entries` da subtarefa —
+                                  // só "Concluído" para sozinho, silenciosamente.
+                                  if (next === "Concluído" && timeTrackingOrigin) {
+                                    void stopIfRunningOnTask(
+                                      s.id.replace(/^mkt:/, ""),
+                                      timeTrackingOrigin,
+                                    );
+                                  }
+                                  // Sem isso, concluir/reabrir uma subtarefa por
+                                  // aqui (o caminho mais usado, direto na linha)
+                                  // nunca gerava o evento de XP/"concluídas
+                                  // hoje" — só concluir a tarefa-mãe (drag no
+                                  // board ou Salvar no diálogo) ou abrir a
+                                  // subtarefa em seu próprio diálogo passavam
+                                  // por `recordTaskLedgerEventsOnStatusChange`.
+                                  // Isso fazia o Score subcontar completions de
+                                  // verdade (ex.: 10 concluídas no dia, só 3
+                                  // contadas).
+                                  if (updated !== s) {
+                                    recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                      scope,
+                                      members,
+                                      performanceSettings,
+                                    });
+                                  }
+                                }}
+                                title={s.status}
+                                aria-label={`Status: ${s.status}`}
+                                className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
+                              >
+                                {TASK_STATUSES.map((st) => (
+                                  <option
+                                    key={st}
+                                    value={st}
+                                    className="bg-background text-foreground"
+                                  >
+                                    {st}
+                                  </option>
+                                ))}
+                              </select>
+                              {done && (
+                                <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
+                              )}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => setEditSubtask(s)}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                            >
+                              <span
+                                className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
+                              >
+                                {s.title}
+                              </span>
+                              {!isDescriptionEmpty(s.description) && (
+                                <span
+                                  title="Tem descrição"
+                                  className="shrink-0 text-muted-foreground"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                </span>
+                              )}
+                              {subtaskAssignees.length > 0 && (
+                                <span className="inline-flex shrink-0 items-center -space-x-1.5">
+                                  {subtaskAssignees.map((a) => (
+                                    <Avatar
+                                      key={a}
+                                      member={
+                                        members.find((m) => m.name === a) ?? {
+                                          name: a,
+                                          initials: initialsOf(a) || "?",
+                                          color: colorFor(a),
+                                        }
+                                      }
+                                      size={16}
+                                    />
+                                  ))}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Prioridade — mesmo truque do status: select funcional por baixo,
+                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
+                            <span className="relative inline-flex shrink-0 items-center">
+                              <Flag
+                                className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
+                              />
+                              <select
+                                value={s.priority}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const next = e.target.value as TaskPriority;
+                                  setSubtasks((prev) =>
+                                    prev.map((st) =>
+                                      st.id === s.id ? { ...st, priority: next } : st,
+                                    ),
+                                  );
+                                }}
+                                className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
+                              >
+                                {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
+                                  (p) => (
+                                    <option
+                                      key={p}
+                                      value={p}
+                                      className="bg-background text-foreground"
+                                    >
+                                      {p}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            </span>
+
+                            {s.dueDate && (
+                              <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {fmtDate(s.dueDate)}
+                              </span>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => removeSubtask(s.id)}
+                              className="opacity-0 transition group-hover:opacity-100"
+                            >
+                              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {showSubtaskInput && (
+                        <div className="rounded-md border border-border bg-background p-2">
+                          <input
+                            autoFocus
+                            value={newSubtaskTitle}
+                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addSubtask();
+                              }
+                            }}
+                            placeholder="Nome da subtarefa"
+                            className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <DateField
+                              variant="input"
+                              value={newSubtaskDate || undefined}
+                              onChange={(v) => setNewSubtaskDate(v ?? "")}
+                              placeholder="Data"
+                              ariaLabel="Data da subtarefa"
+                              className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                            />
+                            <CompactAssigneePicker
+                              selected={newSubtaskAssignees}
+                              members={members}
+                              onToggle={toggleNewSubtaskAssignee}
+                            />
+                            <select
+                              value={newSubtaskPriority}
+                              onChange={(e) =>
+                                setNewSubtaskPriority(e.target.value as TaskPriority)
+                              }
+                              className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
+                            >
+                              {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
+                                (p) => (
+                                  <option
+                                    key={p}
+                                    value={p}
+                                    className="bg-background text-foreground"
+                                  >
+                                    {p}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                            <div className="ml-auto flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowSubtaskInput(false);
+                                  setNewSubtaskTitle("");
+                                  setNewSubtaskDate("");
+                                  setNewSubtaskAssignees([]);
+                                }}
+                                className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={addSubtask}
+                                disabled={!newSubtaskTitle.trim()}
+                                className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+                              >
+                                Adicionar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {initial && (
+                <div className="space-y-2 px-8 py-4">
                   <div ref={depsSectionRef} className="space-y-2">
                     <div className="flex items-center gap-1.5">
                       <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -4165,14 +4383,37 @@ export function TaskDialog({
                               const entry = directoryByRawId.get(id);
                               if (!dep) return null;
                               return (
-                                <DependencyRow
+                                <ListRow
                                   key={dep.id}
-                                  entry={entry}
-                                  fallbackId={id}
-                                  onOpen={() => pushTaskModal(id)}
-                                  onRemove={() =>
-                                    void handleRemoveDependency(dep, entry?.label ?? id)
+                                  icon={
+                                    entry?.status === "Concluído" ? (
+                                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    ) : (
+                                      <span
+                                        className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
+                                      />
+                                    )
                                   }
+                                  title={entry?.label ?? id}
+                                  description={entry?.assignees.join(", ") || undefined}
+                                  meta={entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined}
+                                  status={
+                                    entry
+                                      ? {
+                                          label: entry.status,
+                                          tone: toneForTaskStatus(entry.status),
+                                        }
+                                      : undefined
+                                  }
+                                  onClick={() => pushTaskModal(id)}
+                                  menuItems={[
+                                    {
+                                      label: "Remover dependência",
+                                      onClick: () =>
+                                        void handleRemoveDependency(dep, entry?.label ?? id),
+                                      destructive: true,
+                                    },
+                                  ]}
                                 />
                               );
                             })}
@@ -4191,14 +4432,37 @@ export function TaskDialog({
                               const entry = directoryByRawId.get(id);
                               if (!dep) return null;
                               return (
-                                <DependencyRow
+                                <ListRow
                                   key={dep.id}
-                                  entry={entry}
-                                  fallbackId={id}
-                                  onOpen={() => pushTaskModal(id)}
-                                  onRemove={() =>
-                                    void handleRemoveDependency(dep, entry?.label ?? id)
+                                  icon={
+                                    entry?.status === "Concluído" ? (
+                                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    ) : (
+                                      <span
+                                        className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
+                                      />
+                                    )
                                   }
+                                  title={entry?.label ?? id}
+                                  description={entry?.assignees.join(", ") || undefined}
+                                  meta={entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined}
+                                  status={
+                                    entry
+                                      ? {
+                                          label: entry.status,
+                                          tone: toneForTaskStatus(entry.status),
+                                        }
+                                      : undefined
+                                  }
+                                  onClick={() => pushTaskModal(id)}
+                                  menuItems={[
+                                    {
+                                      label: "Remover dependência",
+                                      onClick: () =>
+                                        void handleRemoveDependency(dep, entry?.label ?? id),
+                                      destructive: true,
+                                    },
+                                  ]}
                                 />
                               );
                             })}
@@ -4260,267 +4524,6 @@ export function TaskDialog({
                         </PopoverContent>
                       </Popover>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-foreground">Subtarefas</span>
-                      {subtasks.length > 0 && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {doneCount}/{subtasks.length}
-                        </span>
-                      )}
-                    </div>
-
-                    {(showSubtaskInput || subtasks.length > 0) && (
-                      <div className="space-y-1 pl-5">
-                        {sortedSubtasks.map((s) => {
-                          const done = s.status === "Concluído";
-                          const subtaskAssignees = getTaskAssignees(s);
-                          return (
-                            <div
-                              key={s.id}
-                              className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
-                            >
-                              {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
-                            não um item de checklist — status muda direto aqui, sem passar pela
-                            subtarefa. A cor do círculo é o status (mesma paleta de sempre,
-                            TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
-                            visualmente reduzido a um círculo (texto transparente). */}
-                              <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                                <select
-                                  value={s.status}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const next = e.target.value as TaskStatus;
-                                    // `withStatusChange` já para o timer da
-                                    // subtarefa se ele estava rodando (e inicia se
-                                    // o novo status for "Em andamento") — sem
-                                    // passar por ela aqui, um timer preso rodando
-                                    // nunca parava só porque o status mudou.
-                                    const updated = withStatusChange(s, next);
-                                    setSubtasks((prev) =>
-                                      prev.map((st) => (st.id === s.id ? updated : st)),
-                                    );
-                                    setActivity((a) =>
-                                      pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                                    );
-                                    // Cronômetro de `time_entries` da subtarefa —
-                                    // só "Concluído" para sozinho, silenciosamente.
-                                    if (next === "Concluído" && timeTrackingOrigin) {
-                                      void stopIfRunningOnTask(
-                                        s.id.replace(/^mkt:/, ""),
-                                        timeTrackingOrigin,
-                                      );
-                                    }
-                                    // Sem isso, concluir/reabrir uma subtarefa por
-                                    // aqui (o caminho mais usado, direto na linha)
-                                    // nunca gerava o evento de XP/"concluídas
-                                    // hoje" — só concluir a tarefa-mãe (drag no
-                                    // board ou Salvar no diálogo) ou abrir a
-                                    // subtarefa em seu próprio diálogo passavam
-                                    // por `recordTaskLedgerEventsOnStatusChange`.
-                                    // Isso fazia o Score subcontar completions de
-                                    // verdade (ex.: 10 concluídas no dia, só 3
-                                    // contadas).
-                                    if (updated !== s) {
-                                      recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                        scope,
-                                        members,
-                                        performanceSettings,
-                                      });
-                                    }
-                                  }}
-                                  title={s.status}
-                                  aria-label={`Status: ${s.status}`}
-                                  className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
-                                >
-                                  {TASK_STATUSES.map((st) => (
-                                    <option
-                                      key={st}
-                                      value={st}
-                                      className="bg-background text-foreground"
-                                    >
-                                      {st}
-                                    </option>
-                                  ))}
-                                </select>
-                                {done && (
-                                  <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
-                                )}
-                              </span>
-
-                              <button
-                                type="button"
-                                onClick={() => setEditSubtask(s)}
-                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                              >
-                                <span
-                                  className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
-                                >
-                                  {s.title}
-                                </span>
-                                {!isDescriptionEmpty(s.description) && (
-                                  <span
-                                    title="Tem descrição"
-                                    className="shrink-0 text-muted-foreground"
-                                  >
-                                    <FileText className="h-3 w-3" />
-                                  </span>
-                                )}
-                                {subtaskAssignees.length > 0 && (
-                                  <span className="inline-flex shrink-0 items-center -space-x-1.5">
-                                    {subtaskAssignees.map((a) => (
-                                      <Avatar
-                                        key={a}
-                                        member={
-                                          members.find((m) => m.name === a) ?? {
-                                            name: a,
-                                            initials: initialsOf(a) || "?",
-                                            color: colorFor(a),
-                                          }
-                                        }
-                                        size={16}
-                                      />
-                                    ))}
-                                  </span>
-                                )}
-                              </button>
-
-                              {/* Prioridade — mesmo truque do status: select funcional por baixo,
-                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
-                              <span className="relative inline-flex shrink-0 items-center">
-                                <Flag
-                                  className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
-                                />
-                                <select
-                                  value={s.priority}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const next = e.target.value as TaskPriority;
-                                    setSubtasks((prev) =>
-                                      prev.map((st) =>
-                                        st.id === s.id ? { ...st, priority: next } : st,
-                                      ),
-                                    );
-                                  }}
-                                  className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
-                                >
-                                  {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
-                                    (p) => (
-                                      <option
-                                        key={p}
-                                        value={p}
-                                        className="bg-background text-foreground"
-                                      >
-                                        {p}
-                                      </option>
-                                    ),
-                                  )}
-                                </select>
-                              </span>
-
-                              {s.dueDate && (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                                  <Calendar className="h-3 w-3" />
-                                  {fmtDate(s.dueDate)}
-                                </span>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => removeSubtask(s.id)}
-                                className="opacity-0 transition group-hover:opacity-100"
-                              >
-                                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {showSubtaskInput && (
-                          <div className="rounded-md border border-border bg-background p-2">
-                            <input
-                              autoFocus
-                              value={newSubtaskTitle}
-                              onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  addSubtask();
-                                }
-                              }}
-                              placeholder="Nome da subtarefa"
-                              className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
-                            />
-                            <div className="flex flex-wrap items-center gap-2">
-                              <DateField
-                                variant="input"
-                                value={newSubtaskDate || undefined}
-                                onChange={(v) => setNewSubtaskDate(v ?? "")}
-                                placeholder="Data"
-                                ariaLabel="Data da subtarefa"
-                                className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
-                              />
-                              <CompactAssigneePicker
-                                selected={newSubtaskAssignees}
-                                members={members}
-                                onToggle={toggleNewSubtaskAssignee}
-                              />
-                              <select
-                                value={newSubtaskPriority}
-                                onChange={(e) =>
-                                  setNewSubtaskPriority(e.target.value as TaskPriority)
-                                }
-                                className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
-                              >
-                                {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
-                                  (p) => (
-                                    <option
-                                      key={p}
-                                      value={p}
-                                      className="bg-background text-foreground"
-                                    >
-                                      {p}
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                              <div className="ml-auto flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setShowSubtaskInput(false);
-                                    setNewSubtaskTitle("");
-                                    setNewSubtaskDate("");
-                                    setNewSubtaskAssignees([]);
-                                  }}
-                                  className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={addSubtask}
-                                  disabled={!newSubtaskTitle.trim()}
-                                  className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
-                                >
-                                  Adicionar
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => setShowSubtaskInput((v) => !v)}
-                      className="flex items-center gap-2 py-1 pl-5 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Adicionar subtarefa
-                    </button>
                   </div>
                 </div>
               )}
@@ -4584,20 +4587,20 @@ export function TaskDialog({
                 )}
 
                 <div
-                  className="rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground"
+                  className="flex min-h-[72px] items-center justify-center rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
                     void addFiles(e.dataTransfer.files);
                   }}
                 >
-                  Arraste arquivos aqui ou{" "}
+                  Arraste arquivos ou{" "}
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="text-primary hover:underline"
+                    className="ml-1 text-primary hover:underline"
                   >
-                    procure nos arquivos
+                    procure no computador
                   </button>
                 </div>
               </div>
@@ -4982,6 +4985,14 @@ function BlockedTaskBanner({
   );
 }
 
+/**
+ * Uma propriedade dentro do bloco "Detalhes" — label pequeno em cima,
+ * valor embaixo (nunca lado a lado numa grade fixa de colunas, que é o
+ * que dava a leitura de "planilha"). Sem borda em repouso — só
+ * `hover:bg-brand-subtle`, a mesma superfície usada em toda a
+ * plataforma pra indicar "isto é clicável", nunca uma borda permanente
+ * imitando um campo de formulário sempre em edição.
+ */
 function Field({
   label,
   icon,
@@ -4995,10 +5006,10 @@ function Field({
 }) {
   return (
     <div
-      className={`group grid min-h-12 grid-cols-[104px_minmax(0,1fr)] items-start gap-3 border-b border-border/60 px-1 py-2.5 transition-colors hover:bg-muted/30 sm:px-2 ${className ?? ""}`}
+      className={`group flex min-h-11 flex-col justify-center gap-1 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-brand-subtle ${className ?? ""}`}
     >
-      <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-foreground/70">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-foreground">

@@ -78,7 +78,7 @@ export function TaskTagsPopover({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1 text-left text-sm shadow-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-7 w-full flex-wrap items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm outline-none data-[state=open]:ring-1 data-[state=open]:ring-ring"
         >
           {value.length === 0 && (
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
@@ -115,7 +115,7 @@ export function TaskTagsPopover({
       <PopoverContent
         align="start"
         collisionPadding={12}
-        className="w-64 overflow-hidden p-0 [overscroll-behavior:contain]"
+        className="w-72 overflow-hidden p-0 [overscroll-behavior:contain]"
       >
         {editingColorFor ? (
           <div className="p-2">

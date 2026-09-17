@@ -7,9 +7,11 @@ import {
   CornerUpRight,
   Lock,
   LockOpen,
+  Send,
   Undo2,
   User as UserIcon,
 } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   Avatar,
   formatWhen,
@@ -304,23 +306,23 @@ export function TaskActivityPanel({
 
   return (
     <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
-      <div className="border-b border-border px-4 py-2.5">
-        <div className="mb-2 flex items-center justify-between">
+      <div className="border-b border-border px-5 py-3">
+        <div className="mb-2.5 flex items-center justify-between">
           <p className="text-sm font-semibold">Atividade</p>
           <span className="text-[10px] text-muted-foreground">
             {activity.length + comments.length}
           </span>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+        <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
           {TAB_DEFS.map((t) => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 tab === t.key
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:bg-muted"
+                  ? "bg-brand-subtle text-brand"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {t.label}
@@ -521,29 +523,30 @@ export function TaskActivityPanel({
             ))}
           </div>
         )}
-        <textarea
-          ref={commentRef}
-          value={commentText}
-          onChange={onCommentChange}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              onPostComment();
-            }
-          }}
-          rows={2}
-          placeholder="Escreva um comentário… use @ para mencionar"
-          className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
-        />
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
+        <div className="relative">
+          <textarea
+            ref={commentRef}
+            value={commentText}
+            onChange={onCommentChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                onPostComment();
+              }
+            }}
+            rows={2}
+            placeholder="Escreva um comentário… use @ para mencionar"
+            className="w-full resize-none rounded-md border border-border bg-background py-1.5 pl-2 pr-9 text-xs outline-none placeholder:text-muted-foreground/70 focus:border-primary"
+          />
+          <IconButton
+            label="Comentar"
+            tone="brand"
             onClick={onPostComment}
             disabled={!commentText.trim()}
-            className="rounded-md bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:opacity-90 disabled:opacity-50"
+            className="absolute bottom-1.5 right-1.5 h-6 w-6"
           >
-            Comentar
-          </button>
+            <Send className="h-3.5 w-3.5" />
+          </IconButton>
         </div>
       </div>
     </div>
