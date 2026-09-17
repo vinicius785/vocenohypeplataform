@@ -216,101 +216,103 @@ export function HypitoFloatingWidget() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-end p-0 sm:inset-auto sm:bottom-4 sm:right-4 sm:p-0">
-      <div className="flex h-full w-full flex-col border border-border bg-background shadow-2xl sm:h-[min(640px,calc(100vh-96px))] sm:w-[400px] sm:rounded-xl">
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <img src={HYPITO_AVATAR_URL} alt="" className="h-8 w-8 rounded-full object-cover" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{HYPITO_NAME}</p>
-            <p className="truncate text-xs text-muted-foreground">{HYPITO_TAGLINE}</p>
+    <TooltipProvider>
+      <div className="fixed inset-0 z-40 flex items-end justify-end p-0 sm:inset-auto sm:bottom-4 sm:right-4 sm:p-0">
+        <div className="flex h-full w-full flex-col border border-border bg-background shadow-2xl sm:h-[min(640px,calc(100vh-96px))] sm:w-[400px] sm:rounded-xl">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <img src={HYPITO_AVATAR_URL} alt="" className="h-8 w-8 rounded-full object-cover" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">{HYPITO_NAME}</p>
+              <p className="truncate text-xs text-muted-foreground">{HYPITO_TAGLINE}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-brand-subtle px-2 py-0.5 text-[10px] font-medium text-brand">
+              {HYPITO_BADGE_LABEL}
+            </span>
+            <button
+              type="button"
+              onClick={minimizeHypitoWidget}
+              aria-label="Minimizar"
+              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={closeHypitoWidget}
+              aria-label="Fechar"
+              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <span className="shrink-0 rounded-full bg-brand-subtle px-2 py-0.5 text-[10px] font-medium text-brand">
-            {HYPITO_BADGE_LABEL}
-          </span>
-          <button
-            type="button"
-            onClick={minimizeHypitoWidget}
-            aria-label="Minimizar"
-            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={closeHypitoWidget}
-            aria-label="Fechar"
-            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-          {messages.length === 0 && (
-            <div className="space-y-3 py-4">
-              <p className="text-center text-sm text-muted-foreground">
-                Pergunte algo ou escolha uma sugestão.
-              </p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void send(s)}
-                    className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
-                  >
-                    {s}
-                  </button>
-                ))}
+          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            {messages.length === 0 && (
+              <div className="space-y-3 py-4">
+                <p className="text-center text-sm text-muted-foreground">
+                  Pergunte algo ou escolha uma sugestão.
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => void send(s)}
+                      className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {messages.map((m) => (
-            <HypitoWidgetMessage key={m.id} message={m} meId={me.id} handlers={handlers} />
-          ))}
-          {sending && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 animate-pulse" /> Pensando...
-            </div>
-          )}
-        </div>
+            )}
+            {messages.map((m) => (
+              <HypitoWidgetMessage key={m.id} message={m} meId={me.id} handlers={handlers} />
+            ))}
+            {sending && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 animate-pulse" /> Pensando...
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-end gap-2 border-t border-border p-3">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send(text);
-              }
-            }}
-            placeholder="Escreva para o Hypito..."
-            className="min-h-9 flex-1 resize-none text-sm"
-            rows={1}
-            disabled={sending}
-          />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button variant="outline" size="icon" disabled className="shrink-0">
-                  <Mic className="h-4 w-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Em breve</TooltipContent>
-          </Tooltip>
-          <Button
-            size="icon"
-            className="shrink-0"
-            disabled={sending || !text.trim()}
-            onClick={() => void send(text)}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          <div className="flex items-end gap-2 border-t border-border p-3">
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send(text);
+                }
+              }}
+              placeholder="Escreva para o Hypito..."
+              className="min-h-9 flex-1 resize-none text-sm"
+              rows={1}
+              disabled={sending}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="outline" size="icon" disabled className="shrink-0">
+                    <Mic className="h-4 w-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Em breve</TooltipContent>
+            </Tooltip>
+            <Button
+              size="icon"
+              className="shrink-0"
+              disabled={sending || !text.trim()}
+              onClick={() => void send(text)}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
