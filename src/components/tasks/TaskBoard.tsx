@@ -49,6 +49,7 @@ import {
 import { useTaskDirectory, type TaskDirectoryEntry } from "@/lib/task-directory";
 import { pushTaskModal } from "@/lib/task-modal-stack";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
+import { TaskTagsPopover } from "@/components/tasks/TaskTagsPopover";
 import { formatIsoDate } from "@/lib/utils";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
@@ -95,15 +96,7 @@ import {
   taskDeadlineHealth,
   type PerformanceSettings,
 } from "@/lib/performance-engine";
-import {
-  loadTaskTags,
-  onTaskTagsChange,
-  createTaskTag,
-  updateTaskTagColor,
-  deleteTaskTag,
-  TASK_TAG_COLORS,
-  type TaskTag,
-} from "@/lib/task-tags-store";
+import { loadTaskTags, onTaskTagsChange, type TaskTag } from "@/lib/task-tags-store";
 import { bucketFor } from "@/lib/task-aggregation";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -1012,27 +1005,6 @@ function CompactAssigneePicker({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/** Fileira de swatches de cor — reaproveitada tanto pra "criar etiqueta
- * nova" quanto pra "editar a cor" de uma já existente (o popover que a
- * envolve decide o resto do layout/título). */
-function TagColorSwatches({ value, onPick }: { value?: string; onPick: (color: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5 p-1">
-      {TASK_TAG_COLORS.map((c) => (
-        <button
-          key={c.value}
-          type="button"
-          title={c.label}
-          onClick={() => onPick(c.value)}
-          className={`h-6 w-6 shrink-0 rounded-full ${c.value.split(" ")[0]} ${
-            value === c.value ? "ring-2 ring-offset-2 ring-offset-popover ring-foreground" : ""
-          }`}
-        />
-      ))}
     </div>
   );
 }
@@ -2251,7 +2223,25 @@ export function TaskBoard({
                       {allItems.length} {allItems.length === 1 ? "tarefa" : "tarefas"}
                     </p>
                   </div>
-                  <div className="flex-1 space-y-2.5 p-3 pt-2.5">
+                  <div className="px-3 pt-2.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setTaskDialog(
+                          groupBy === "fase"
+                            ? {
+                                mode: "new",
+                                defaultRoadmapPhaseId: col.key === SEM_FASE ? undefined : col.key,
+                              }
+                            : { mode: "new", defaultStatus: col.key as TaskStatus },
+                        )
+                      }
+                      className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
+                    </button>
+                  </div>
+                  <div className="flex-1 space-y-2.5 p-3 pt-2">
                     {allItems.length === 0 && (
                       <div className="rounded-[16px] bg-card/40 py-5 text-center text-xs text-text-secondary">
                         Nenhuma tarefa
@@ -2481,22 +2471,6 @@ export function TaskBoard({
                         Mostrar só as recentes
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTaskDialog(
-                          groupBy === "fase"
-                            ? {
-                                mode: "new",
-                                defaultRoadmapPhaseId: col.key === SEM_FASE ? undefined : col.key,
-                              }
-                            : { mode: "new", defaultStatus: col.key as TaskStatus },
-                        )
-                      }
-                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                    >
-                      <Plus className="h-3 w-3" /> Adicionar
-                    </button>
                   </div>
                 </div>
               );
@@ -2762,8 +2736,18 @@ export function TaskDialog({
   const [assignees, setAssignees] = useState<string[]>([]);
   const [primaryAssignee, setPrimaryAssignee] = useState<string | undefined>();
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
+  const isMobileDialog = useIsMobile();
+  // Alterna qual dos 2 blocos (Detalhes / Atividade) aparece no mobile —
+  // no desktop os dois já ficam lado a lado (grid), então esse estado só
+  // importa quando `isMobileDialog`.
+  const [mobileDetailTab, setMobileDetailTab] = useState<"detalhes" | "atividade">("detalhes");
+  // "Mais propriedades" (Tempo/Fase/Etiquetas) — fechado por padrão, mas
+  // nunca esconde informação já preenchida: abre sozinho se qualquer uma
+  // dessas 3 já tiver valor real (etiquetas ou fase definidas; tempo
+  // depende de `timeEntries`, calculado só depois do `initial` carregar,
+  // então é conferido separadamente no `useEffect` de reset abaixo).
+  const [moreFieldsOpen, setMoreFieldsOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [subtasks, setSubtasks] = useState<Task[]>([]);
@@ -2915,6 +2899,10 @@ export function TaskDialog({
     setPendingBlockAction(null);
     setBlockActionBusy(false);
     lastAtomicStatusRef.current = null;
+    setMoreFieldsOpen(
+      !!(initial?.tags?.length || initial?.roadmapPhaseId || initial?.timeEntries?.length),
+    );
+    setMobileDetailTab("detalhes");
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
     setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
@@ -2958,7 +2946,6 @@ export function TaskDialog({
     setNewSubtaskDate("");
     setNewSubtaskAssignees([]);
     setNewSubtaskPriority("Normal");
-    setNewTag("");
     setShowSubtaskInput(false);
     setEditSubtask(
       (initialEditSubtaskId && initial?.subtasks?.find((s) => s.id === initialEditSubtaskId)) ||
@@ -3545,59 +3532,6 @@ export function TaskDialog({
     if (st) setActivity((a) => pushActivity(a, `removeu subtarefa "${st.title}"`));
   };
 
-  const [tagSuggestOpen, setTagSuggestOpen] = useState(false);
-  // Nome da etiqueta cuja cor está sendo editada (afeta todo mundo, via
-  // updateTaskTagColor) — null quando nenhum popover de cor está aberto.
-  const [editingTagColor, setEditingTagColor] = useState<string | null>(null);
-  // Nome digitado sem correspondência no registro — aguardando a escolha
-  // de cor antes de virar uma TaskTag de verdade (createTaskTag).
-  const [creatingTagName, setCreatingTagName] = useState<string | null>(null);
-  const tagFieldRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!tagSuggestOpen && !editingTagColor && !creatingTagName) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!tagFieldRef.current?.contains(e.target as Node)) {
-        setTagSuggestOpen(false);
-        setEditingTagColor(null);
-        setCreatingTagName(null);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [tagSuggestOpen, editingTagColor, creatingTagName]);
-
-  const addTag = (raw?: string) => {
-    const typed = (raw ?? newTag).trim();
-    if (!typed) return;
-    // Reaproveita a etiqueta já existente com a MESMA grafia (comparando
-    // sem diferenciar maiúsculas) em vez de criar uma quase-duplicata só
-    // por causa de "Cliente" vs "cliente".
-    const existing = taskTags.find((t) => t.name.toLowerCase() === typed.toLowerCase());
-    if (existing) {
-      setTagSuggestOpen(false);
-      setNewTag("");
-      if (!tags.includes(existing.name)) setTags((prev) => [...prev, existing.name]);
-      return;
-    }
-    // Nome novo — estilo ClickUp: escolhe a cor antes de criar de fato no
-    // registro compartilhado, em vez de cair numa cor aleatória.
-    setTagSuggestOpen(false);
-    setCreatingTagName(typed);
-  };
-  const confirmCreateTag = (color: string) => {
-    if (!creatingTagName) return;
-    const tag = createTaskTag(creatingTagName, color);
-    setTags((prev) => (prev.includes(tag.name) ? prev : [...prev, tag.name]));
-    setCreatingTagName(null);
-    setNewTag("");
-  };
-  const removeTag = (t: string) => setTags((prev) => prev.filter((x) => x !== t));
-  const tagSuggestions = taskTags.filter(
-    (t) =>
-      !tags.includes(t.name) &&
-      (!newTag.trim() || t.name.toLowerCase().includes(newTag.trim().toLowerCase())),
-  );
-
   const readAsDataUrl = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -3844,8 +3778,31 @@ export function TaskDialog({
             />
           )}
 
-          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[1fr_340px]">
-            <div className="min-h-0 overflow-y-auto">
+          {isMobileDialog && initial && (
+            <div className="flex items-center gap-1.5 border-b border-border bg-muted/30 px-4 py-2">
+              {(["detalhes", "atividade"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setMobileDetailTab(k)}
+                  className={`inline-flex min-h-9 flex-1 items-center justify-center rounded-full px-3.5 text-xs font-medium capitalize ${
+                    mobileDetailTab === k
+                      ? "bg-brand text-brand-foreground"
+                      : "bg-card text-muted-foreground"
+                  }`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]">
+            <div
+              className={`min-h-0 overflow-y-auto ${
+                isMobileDialog && initial && mobileDetailTab !== "detalhes" ? "hidden md:block" : ""
+              }`}
+            >
               <div className="px-8 pb-3 pt-6">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span
@@ -4092,143 +4049,60 @@ export function TaskDialog({
                     )}
                   </div>
                 </Field>
-
-                <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
-                  {initial && timeTrackingOrigin ? (
-                    <TimeTrackingPanel
-                      taskId={timeTrackingTaskId!}
-                      taskOrigin={timeTrackingOrigin}
-                      members={members}
-                    />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">
-                      {initial ? "—" : "Disponível após criar a tarefa"}
-                    </span>
-                  )}
-                </Field>
-
-                <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
-                  <div className="relative w-full" ref={tagFieldRef}>
-                    <div className="flex w-full flex-wrap items-center gap-1.5">
-                      {tags.map((t) => (
-                        <span
-                          key={t}
-                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${colorForTag(t, taskTags)}`}
-                        >
-                          <button
-                            type="button"
-                            title="Editar cor desta etiqueta (reflete pra todo mundo)"
-                            onClick={() => setEditingTagColor(editingTagColor === t ? null : t)}
-                          >
-                            {t}
-                          </button>
-                          <button type="button" onClick={() => removeTag(t)}>
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        value={newTag}
-                        onChange={(e) => setNewTag(e.target.value)}
-                        onFocus={() => setTagSuggestOpen(true)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addTag();
-                          }
-                        }}
-                        placeholder={tags.length ? "" : "Adicionar etiqueta"}
-                        className="min-w-24 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
-                      />
-                    </div>
-
-                    {editingTagColor && (
-                      <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
-                        <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
-                          Cor de "{editingTagColor}" — reflete em todas as tarefas
-                        </p>
-                        <TagColorSwatches
-                          value={taskTags.find((t) => t.name === editingTagColor)?.color}
-                          onPick={(color) => {
-                            const tag = taskTags.find((t) => t.name === editingTagColor);
-                            if (tag) updateTaskTagColor(tag.id, color);
-                            setEditingTagColor(null);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const tag = taskTags.find((t) => t.name === editingTagColor);
-                            if (tag) deleteTaskTag(tag.id);
-                            removeTag(editingTagColor);
-                            setEditingTagColor(null);
-                          }}
-                          className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-destructive hover:bg-destructive/10"
-                        >
-                          Excluir etiqueta do registro
-                        </button>
-                      </div>
-                    )}
-
-                    {creatingTagName && (
-                      <div className="absolute z-20 mt-1 w-56 rounded-md border border-border bg-popover p-2 shadow">
-                        <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
-                          Escolha uma cor para "{creatingTagName}"
-                        </p>
-                        <TagColorSwatches onPick={confirmCreateTag} />
-                      </div>
-                    )}
-
-                    {tagSuggestOpen && !editingTagColor && !creatingTagName && (
-                      <div className="absolute z-10 mt-1 max-h-48 w-full max-w-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
-                        {tagSuggestions.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => addTag(t.name)}
-                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                          >
-                            <span
-                              className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${t.color}`}
-                            >
-                              {t.name}
-                            </span>
-                          </button>
-                        ))}
-                        {newTag.trim() &&
-                          !taskTags.some(
-                            (t) => t.name.toLowerCase() === newTag.trim().toLowerCase(),
-                          ) && (
-                            <button
-                              type="button"
-                              onClick={() => addTag()}
-                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-primary hover:bg-muted"
-                            >
-                              + Criar etiqueta "{newTag.trim()}"
-                            </button>
-                          )}
-                      </div>
-                    )}
-                  </div>
-                </Field>
-
-                {fases && (
-                  <Field label="Fase" icon={<MilestoneIcon className="h-3.5 w-3.5" />}>
-                    <select
-                      value={roadmapPhaseId ?? ""}
-                      onChange={(e) => setRoadmapPhaseId(e.target.value || undefined)}
-                      className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-foreground outline-none"
-                    >
-                      <option value="">Sem fase</option>
-                      {fases.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.nome} · {fmtDate(f.dataInicio)}–{fmtDate(f.dataFim)}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
               </div>
+
+              <div className="border-b border-border bg-muted/10 px-6 sm:px-8">
+                <button
+                  type="button"
+                  aria-expanded={moreFieldsOpen}
+                  onClick={() => setMoreFieldsOpen((v) => !v)}
+                  className="flex w-full items-center gap-1.5 py-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${moreFieldsOpen ? "rotate-180" : ""}`}
+                  />
+                  Mais propriedades
+                </button>
+              </div>
+
+              {moreFieldsOpen && (
+                <div className="grid grid-cols-1 border-b border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
+                  <Field label="Tempo" icon={<Clock className="h-3.5 w-3.5" />}>
+                    {initial && timeTrackingOrigin ? (
+                      <TimeTrackingPanel
+                        taskId={timeTrackingTaskId!}
+                        taskOrigin={timeTrackingOrigin}
+                        members={members}
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        {initial ? "—" : "Disponível após criar a tarefa"}
+                      </span>
+                    )}
+                  </Field>
+
+                  <Field label="Etiquetas" icon={<Tag className="h-3.5 w-3.5" />}>
+                    <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
+                  </Field>
+
+                  {fases && (
+                    <Field label="Fase" icon={<MilestoneIcon className="h-3.5 w-3.5" />}>
+                      <select
+                        value={roadmapPhaseId ?? ""}
+                        onChange={(e) => setRoadmapPhaseId(e.target.value || undefined)}
+                        className="w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium text-foreground outline-none"
+                      >
+                        <option value="">Sem fase</option>
+                        {fases.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.nome} · {fmtDate(f.dataInicio)}–{fmtDate(f.dataFim)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+                </div>
+              )}
 
               <div className="px-8 py-4">
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -4743,7 +4617,12 @@ export function TaskDialog({
                 sem isso o painel de Activity ficava do tamanho do próprio
                 conteúdo (sem scroll interno nenhum, cortado pelo
                 `overflow-hidden` do grid em vez de rolar). */}
-            <div ref={historicoSectionRef} className="flex min-h-0">
+            <div
+              ref={historicoSectionRef}
+              className={`flex min-h-0 ${
+                isMobileDialog && initial && mobileDetailTab !== "atividade" ? "hidden md:flex" : ""
+              }`}
+            >
               <TaskActivityPanel
                 task={{
                   status,

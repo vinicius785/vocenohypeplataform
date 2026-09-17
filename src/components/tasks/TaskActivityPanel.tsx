@@ -306,7 +306,7 @@ export function TaskActivityPanel({
     <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
       <div className="border-b border-border px-4 py-2.5">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold">Activity</p>
+          <p className="text-sm font-semibold">Atividade</p>
           <span className="text-[10px] text-muted-foreground">
             {activity.length + comments.length}
           </span>
@@ -336,7 +336,7 @@ export function TaskActivityPanel({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div className="flex-1 overflow-y-auto px-5 py-3 [overscroll-behavior:contain]">
         <div className="space-y-3">
           {feed.length === 0 && (
             <p className="py-6 text-center text-xs text-muted-foreground">Nada por aqui ainda.</p>
