@@ -52,7 +52,8 @@ import { TaskPicker } from "@/components/tasks/TaskPicker";
 import { TaskTagsPopover } from "@/components/tasks/TaskTagsPopover";
 import { ListRow } from "@/components/shared/ListRow";
 import type { SemanticTone } from "@/lib/design-tokens";
-import { formatIsoDate } from "@/lib/utils";
+import { formatIsoDate, formatDateToIso, parseIsoDateLocal } from "@/lib/utils";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { toRichDoc, isDescriptionEmpty, type RichDoc } from "@/lib/rich-text";
 import type { MentionOption } from "@/lib/mention-kinds";
 import { RichTaskEditor } from "@/components/tasks/rich-editor/RichTaskEditor";
@@ -152,9 +153,19 @@ import {
   TASK_STATUSES,
   TASK_STATUS_TONE,
   TASK_STATUS_DOT,
+  TASK_STATUS_CATEGORY,
 } from "@/lib/task-status";
 export type { TaskStatus };
 export { TASK_STATUSES, TASK_STATUS_TONE, TASK_STATUS_DOT };
+import {
+  resolvePausesDeadline,
+  computeEligibleBlockDurationMs,
+  computeEffectivePerformanceDueDate,
+  pausedSentinelDueDate,
+} from "@/lib/task-blocks-rules";
+import { SubtaskStatusPopover } from "@/components/tasks/SubtaskStatusPopover";
+import { SubtaskAssigneePopover } from "@/components/tasks/SubtaskAssigneePopover";
+import { SubtaskPriorityPopover } from "@/components/tasks/SubtaskPriorityPopover";
 import type { TaskBlockedState, TaskBlockCategory } from "@/lib/projetos";
 export type { TaskBlockedState, TaskBlockCategory };
 
@@ -940,77 +951,6 @@ export function Avatar({ member, size = 20 }: { member: Member; size?: number })
   );
 }
 
-/** Seletor compacto de vários responsáveis — usado no quick-add de
- * subtarefa (linha estreita, um `<select>` só permitia escolher UM
- * responsável ali, diferente da tarefa de nível raiz que já suporta
- * vários). Mesma ideia do picker de "Responsáveis" do diálogo principal,
- * só que como botão+dropdown compacto pra caber numa linha apertada. */
-function CompactAssigneePicker({
-  selected,
-  members,
-  onToggle,
-}: {
-  selected: string[];
-  members: Member[];
-  onToggle: (name: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
-
-  const label =
-    selected.length === 0
-      ? "Responsável"
-      : selected.length === 1
-        ? selected[0]
-        : `${selected.length} responsáveis`;
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded border border-border bg-background px-2 py-1 text-xs outline-none hover:bg-muted/40"
-      >
-        <User className="h-3 w-3 text-muted-foreground" />
-        {label}
-      </button>
-      {open && (
-        <div className="absolute z-10 mt-1 max-h-48 w-44 overflow-auto rounded-md border border-border bg-popover p-1 shadow">
-          {members.length === 0 ? (
-            <div className="px-2 py-2 text-xs text-muted-foreground">Nenhum membro cadastrado.</div>
-          ) : (
-            members.map((m) => {
-              const checked = selected.includes(m.name);
-              return (
-                <button
-                  key={m.name}
-                  type="button"
-                  onClick={() => onToggle(m.name)}
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted ${
-                    checked ? "bg-muted font-medium text-foreground" : ""
-                  }`}
-                >
-                  <Avatar member={m} size={18} />
-                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                  {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function renderMentions(text: string, members: Member[]) {
   const parts = text.split(/(@[\wÀ-ÿ]+(?:\s[\wÀ-ÿ]+)?)/g);
   return parts.map((p, i) => {
@@ -1069,12 +1009,23 @@ export type TaskBoardScope =
  * fonte de verdade (`taskDeadlineHealth`, mesmo `deadlineCutoffHour`),
  * sem o Popover, só o rótulo compacto pro card. Nunca discorda do
  * diálogo porque chama exatamente a mesma função com os mesmos
- * parâmetros. */
+ * parâmetros.
+ *
+ * Cor: só "atrasada"/"vence_hoje"/"concluida_com_atraso" ganham o pill
+ * colorido de `health.tone` (vermelho/âmbar — sinais reais de atenção).
+ * Prazo futuro/concluído-no-prazo/sem-prazo usam texto neutro simples,
+ * NUNCA o verde de `TASK_DEADLINE_HEALTH_TONE` (essa constante é
+ * compartilhada com o badge do modal de edição — sobrescrever aqui, não
+ * lá, pra não mudar o modal). Verde fica reservado só pra fase/
+ * confirmações pontuais, nunca prazo. */
 function CardDeadlineBadge({ task }: { task: Task }) {
   const { settings: performanceSettings } = usePerformanceSettings();
   const health = taskDeadlineHealth(task, undefined, performanceSettings.deadlineCutoffHour);
   const isOverdue = health.health === "atrasada";
   const isDueToday = health.health === "vence_hoje";
+  const ref = task.performanceDueDate ?? task.dueDate;
+  const tomorrowIso = formatDateToIso(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const isTomorrow = !isOverdue && !isDueToday && ref === tomorrowIso;
   const Icon = isOverdue ? AlertTriangle : Calendar;
 
   let text: string;
@@ -1082,6 +1033,8 @@ function CardDeadlineBadge({ task }: { task: Task }) {
     text = `${health.delayDays} ${health.delayDays === 1 ? "dia" : "dias"} atrasada`;
   } else if (isDueToday) {
     text = "Hoje";
+  } else if (isTomorrow) {
+    text = "Amanhã";
   } else if (task.status === "Concluído") {
     text = health.label;
   } else if (task.dueDate) {
@@ -1090,10 +1043,21 @@ function CardDeadlineBadge({ task }: { task: Task }) {
     text = health.label;
   }
 
+  // Sinal real de atenção — mantém o pill colorido (único indicador,
+  // nunca duplicado com outro ícone/badge de atraso).
+  if (isOverdue || isDueToday || health.health === "concluida_com_atraso") {
+    return (
+      <span
+        className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${health.tone}`}
+      >
+        <Icon className="h-3 w-3 shrink-0" />
+        {text}
+      </span>
+    );
+  }
+  // Prazo futuro/no prazo/sem prazo — texto neutro, sem pill nem verde.
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${health.tone}`}
-    >
+    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
       <Icon className="h-3 w-3 shrink-0" />
       {text}
     </span>
@@ -1103,13 +1067,18 @@ function CardDeadlineBadge({ task }: { task: Task }) {
 /** Pilha de avatares sobrepostos — sem nomes escritos no card (poluía
  * visualmente); os nomes completos ficam num único Tooltip pra pilha
  * inteira, em vez de um `title` nativo por avatar (que só mostraria um
- * nome de cada vez). */
+ * nome de cada vez). Limita a 2 avatares visíveis + "+N" (mesmo padrão
+ * de overflow já usado em `CardTags`) — acima disso a pilha ficava
+ * comprida demais na linha operacional do card. */
 function AssigneeStack({ names, members }: { names: string[]; members: Member[] }) {
+  const MAX_VISIBLE = 2;
+  const visible = names.slice(0, MAX_VISIBLE);
+  const overflow = names.slice(MAX_VISIBLE);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex items-center -space-x-1.5">
-          {names.map((a) => (
+          {visible.map((a) => (
             <Avatar
               key={a}
               member={
@@ -1122,6 +1091,11 @@ function AssigneeStack({ names, members }: { names: string[]; members: Member[] 
               size={18}
             />
           ))}
+          {overflow.length > 0 && (
+            <span className="z-10 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-card">
+              +{overflow.length}
+            </span>
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent>{names.join(", ")}</TooltipContent>
@@ -1129,9 +1103,32 @@ function AssigneeStack({ names, members }: { names: string[]; members: Member[] 
   );
 }
 
+/** `AVATAR_COLORS`/`TASK_TAG_COLORS` guardam a mesma paleta de 8 cores
+ * sólidas (`"bg-X-500 text-white"`) — pensada pra chip de etiqueta
+ * grande, saturada demais pro selo discreto do card (fase e etiquetas
+ * do Kanban). Traduz pro mesmo padrão suave já usado em
+ * `TASK_STATUS_TONE`/`TASK_DEADLINE_HEALTH_TONE`
+ * (`bg-X-500/10 text-X-700 dark:text-X-400`) — só usado nesses dois
+ * lugares, nunca no seletor de etiquetas/fase em si (que continuam com
+ * a cor sólida original). */
+const SOFT_SOLID_COLOR: Record<string, string> = {
+  "bg-rose-500 text-white": "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+  "bg-sky-500 text-white": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+  "bg-emerald-500 text-white": "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  "bg-amber-500 text-white": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  "bg-violet-500 text-white": "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+  "bg-teal-500 text-white": "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  "bg-fuchsia-500 text-white": "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-400",
+  "bg-orange-500 text-white": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+};
+function softColor(solid: string): string {
+  return SOFT_SOLID_COLOR[solid] ?? "bg-muted text-muted-foreground";
+}
+
 /** Etiquetas do card — no máximo 2 pills, o resto vira um badge neutro
  * "+N" com Tooltip listando as demais (evita o card crescer sem limite
- * quando há muitas etiquetas). */
+ * quando há muitas etiquetas). Cor suave (`softColor`) em vez do chip
+ * sólido do seletor — reduz a saturação sem perder a cor cadastrada. */
 function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
   const shown = tags.slice(0, 2);
   const overflow = tags.slice(2);
@@ -1140,7 +1137,8 @@ function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
       {shown.map((tag) => (
         <span
           key={tag}
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorForTag(tag, taskTags)}`}
+          title={tag}
+          className={`max-w-[110px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(colorForTag(tag, taskTags))}`}
         >
           {tag}
         </span>
@@ -2262,9 +2260,10 @@ export function TaskBoard({
                             openSubtaskId: t.__parentTask ? t.id : undefined,
                           })
                         }
-                        className={`group relative cursor-pointer rounded-[18px] bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50" : ""}`}
+                        className={`group relative cursor-pointer rounded-[18px] bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
                       >
-                        {/* Nível 1 — título (maior peso visual do card) */}
+                        {/* Nível 1 — título (maior peso visual do card, no
+                        máximo 2 linhas — nada compete com ele aqui). */}
                         <div className="flex items-start gap-2">
                           {t.__parentTask && (
                             <span
@@ -2274,7 +2273,7 @@ export function TaskBoard({
                               Sub
                             </span>
                           )}
-                          <span className="flex-1 font-semibold leading-snug text-foreground">
+                          <span className="line-clamp-2 flex-1 font-semibold leading-snug text-foreground">
                             {t.title}
                           </span>
                           <CardQuickActions
@@ -2307,7 +2306,9 @@ export function TaskBoard({
                           />
                         </div>
 
-                        {/* Nível 2 — indicadores rápidos: descrição preenchida, subtarefas */}
+                        {/* Nível 2 — indicador de descrição + progresso de
+                        subtarefas ("2/4", nunca só a contagem total —
+                        comunica progresso, não só existência). */}
                         {(!isDescriptionEmpty(t.description) || (t.subtasks?.length ?? 0) > 0) && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                             {!isDescriptionEmpty(t.description) && (
@@ -2315,58 +2316,122 @@ export function TaskBoard({
                                 <FileText className="h-3 w-3" />
                               </span>
                             )}
-                            {(t.subtasks?.length ?? 0) > 0 && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedCards((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(t.id)) next.delete(t.id);
-                                    else next.add(t.id);
-                                    return next;
-                                  });
-                                }}
-                                className="inline-flex items-center gap-1 hover:text-foreground"
-                              >
-                                {expandedCards.has(t.id) ? (
-                                  <ChevronDown className="h-3 w-3" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3" />
-                                )}
-                                {t.subtasks!.length}{" "}
-                                {t.subtasks!.length === 1 ? "subtarefa" : "subtarefas"}
-                              </button>
-                            )}
+                            {(t.subtasks?.length ?? 0) > 0 &&
+                              (() => {
+                                const total = t.subtasks!.length;
+                                const done = t.subtasks!.filter(
+                                  (s) => s.status === "Concluído",
+                                ).length;
+                                const allDone = done === total;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedCards((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(t.id)) next.delete(t.id);
+                                        else next.add(t.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className={`inline-flex items-center gap-1 hover:text-foreground ${allDone ? "text-emerald-600 dark:text-emerald-400" : ""}`}
+                                  >
+                                    {allDone ? (
+                                      <Check className="h-3 w-3" />
+                                    ) : expandedCards.has(t.id) ? (
+                                      <ChevronDown className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3" />
+                                    )}
+                                    {done}/{total} subtarefas
+                                  </button>
+                                );
+                              })()}
                           </div>
                         )}
 
-                        {/* Nível 3 — responsáveis + prazo + prioridade, numa única linha */}
+                        {/* Nível 3 — responsáveis + prazo + prioridade, numa
+                        única linha. Tarefa bloqueada nunca mostra o prazo
+                        como atraso aqui — só o prazo original em tom
+                        neutro (o indicador de bloqueio é uma linha própria
+                        logo abaixo). */}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                           {getTaskAssignees(t).length > 0 && (
                             <AssigneeStack names={getTaskAssignees(t)} members={members} />
                           )}
-                          {(t.dueDate || t.performanceDueDate) && <CardDeadlineBadge task={t} />}
-                          <span
-                            className={`inline-flex items-center gap-1 text-[11px] font-medium ${PRIORITY_TONE[t.priority]}`}
-                          >
-                            <Flag className="h-3 w-3" /> {t.priority}
-                          </span>
-                          {fases &&
-                            t.roadmapPhaseId &&
-                            (() => {
-                              const f = fases.find((x) => x.id === t.roadmapPhaseId);
-                              return f ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${f.cor}`}
-                                  title={f.nome}
-                                >
-                                  <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
-                                  <span className="max-w-[100px] truncate">{f.nome}</span>
+                          {t.status === "Bloqueada"
+                            ? t.dueDate && (
+                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                                  <Calendar className="h-3 w-3 shrink-0" />
+                                  Prazo: {fmtDateCompact(t.dueDate)}
                                 </span>
-                              ) : null;
-                            })()}
+                              )
+                            : (t.dueDate || t.performanceDueDate) && <CardDeadlineBadge task={t} />}
+                          {t.priority !== "Normal" && (
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-medium ${PRIORITY_TONE[t.priority]}`}
+                            >
+                              <Flag className="h-3 w-3" /> {t.priority}
+                            </span>
+                          )}
                         </div>
+
+                        {/* Bloqueio — linha própria, âmbar (nunca vermelho:
+                        bloqueio não é erro). Some sozinho quando a tarefa
+                        sai do status "Bloqueada" (fonte de verdade real é
+                        `task_blocks`, isto é só o cache denormalizado). */}
+                        {t.status === "Bloqueada" && t.blockedState && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="mt-2 flex items-center gap-1 truncate rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                <Lock className="h-3 w-3 shrink-0" />
+                                <span className="truncate">
+                                  Bloqueada
+                                  {t.blockedState.reason ? ` · ${t.blockedState.reason}` : ""}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-64">
+                              <p>{t.blockedState.reason}</p>
+                              {t.blockedState.responsibleForUnblockingName && (
+                                <p className="text-muted-foreground">
+                                  Aguardando: {t.blockedState.responsibleForUnblockingName}
+                                </p>
+                              )}
+                              <p className="text-muted-foreground">
+                                Bloqueada em {fmtDateCompact(t.blockedState.blockedAt.slice(0, 10))}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        {/* Fase — linha própria, nunca dividindo espaço com
+                        prazo/prioridade (essa mistura era o que fazia a
+                        fase "brigar" com o resto). Cor suave (`softColor`),
+                        nome completo quando couber, trunca + Tooltip
+                        quando não couber. */}
+                        {fases &&
+                          t.roadmapPhaseId &&
+                          (() => {
+                            const f = fases.find((x) => x.id === t.roadmapPhaseId);
+                            if (!f) return null;
+                            return (
+                              <div className="mt-2">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(f.cor)}`}
+                                    >
+                                      <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
+                                      <span className="truncate">{f.nome}</span>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{f.nome}</TooltipContent>
+                                </Tooltip>
+                              </div>
+                            );
+                          })()}
 
                         {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
                         {((t.tags?.length ?? 0) > 0 ||
@@ -2675,8 +2740,13 @@ export function TaskDialog({
   // mutuamente (`openBlockComposer`/`openResolveComposer` recusam abrir
   // se o outro já estiver aberto).
   const [blockedState, setBlockedState] = useState<TaskBlockedState | null>(null);
+  // `subtaskId` presente = o questionário é sobre uma SUBTAREFA, não a
+  // tarefa principal — mesmo componente (`BlockedPendingForm`/
+  // `ResolveBlockForm`), `onConfirm` roteia pra `confirmSubtaskBlock`/
+  // `confirmSubtaskResolve` em vez de `confirmBlock`/`confirmResolve`
+  // (subtarefa não é uma linha em `task_blocks`, ver plano).
   const [pendingBlockAction, setPendingBlockAction] = useState<
-    { mode: "block" } | { mode: "resolve" } | null
+    { mode: "block"; subtaskId?: string } | { mode: "resolve"; subtaskId?: string } | null
   >(null);
   const [blockActionBusy, setBlockActionBusy] = useState(false);
   // Corrige `status`/`blockedState` já persistidos atomicamente pela RPC
@@ -2726,6 +2796,7 @@ export function TaskDialog({
     [subtasks],
   );
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const newSubtaskTitleRef = useRef<HTMLInputElement>(null);
   const [newSubtaskDate, setNewSubtaskDate] = useState("");
   const [newSubtaskAssignees, setNewSubtaskAssignees] = useState<string[]>([]);
   const toggleNewSubtaskAssignee = (name: string) =>
@@ -2806,6 +2877,7 @@ export function TaskDialog({
   const [depPopover, setDepPopover] = useState<null | "menu" | "depends" | "blocks">(null);
   const [depsOpen, setDepsOpen] = useState(false);
   const [subtasksOpen, setSubtasksOpen] = useState(false);
+  const [showArchivedSubtasks, setShowArchivedSubtasks] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   // `dependsOn`/`blocks` só resolvem depois que `allDeps` (store realtime)
   // carrega — abrir a faixa de Dependências sozinha na primeira vez que
@@ -2825,6 +2897,26 @@ export function TaskDialog({
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [pendingSaveCloseAfter, setPendingSaveCloseAfter] = useState(false);
+
+  // Sugestão de concluir a tarefa-mãe quando todas as subtarefas ATIVAS
+  // (categoria ≠ archived) viram "done" — nunca conclui sozinho, e não
+  // insiste de novo na mesma sessão depois de "Agora não" (guardado por
+  // `id` da tarefa-mãe, resetado só quando a lista de subtarefas volta a
+  // ter alguma pendente e fica tudo concluído de novo).
+  const [showAllSubtasksDoneConfirm, setShowAllSubtasksDoneConfirm] = useState(false);
+  const dismissedAllDoneRef = useRef(false);
+  useEffect(() => {
+    const active = subtasks.filter((s) => TASK_STATUS_CATEGORY[s.status] !== "archived");
+    const allDone =
+      active.length > 0 && active.every((s) => TASK_STATUS_CATEGORY[s.status] === "done");
+    if (!allDone) {
+      dismissedAllDoneRef.current = false;
+      return;
+    }
+    if (dismissedAllDoneRef.current) return;
+    if (status === "Concluído" || status === "Arquivado") return;
+    setShowAllSubtasksDoneConfirm(true);
+  }, [subtasks, status]);
 
   const handlePickDependency = async (mode: "depends" | "blocks", picked: TaskDirectoryEntry) => {
     if (!depTaskId) return;
@@ -3039,6 +3131,118 @@ export function TaskDialog({
   const cancelBlockAction = () => {
     blockComposerHasData.current = false;
     setPendingBlockAction(null);
+  };
+
+  /** Mesma entrada única de `openBlockComposer`, mas pra uma subtarefa —
+   * ver decisão no plano (`pendingBlockAction.subtaskId`). */
+  const openSubtaskBlockComposer = (subtaskId: string) => {
+    if (pendingDeadlineChange) {
+      toast.error("Finalize ou cancele a alteração de prazo em andamento.");
+      return;
+    }
+    if (pendingBlockAction) return;
+    setPendingBlockAction({ mode: "block", subtaskId });
+  };
+
+  const openSubtaskResolveComposer = (subtaskId: string) => {
+    if (pendingDeadlineChange) {
+      toast.error("Finalize ou cancele a alteração de prazo em andamento.");
+      return;
+    }
+    if (pendingBlockAction) return;
+    setPendingBlockAction({ mode: "resolve", subtaskId });
+  };
+
+  /** Bloqueio de subtarefa NÃO passa pela RPC `apply_task_block`
+   * (subtarefa não é linha em `task_blocks`/tabela de origem — ver
+   * Contexto do plano) — usa as mesmas funções PURAS de regra
+   * (`resolvePausesDeadline`) e grava tudo local, no próprio objeto da
+   * subtarefa, persistido junto do resto no próximo "Salvar" da
+   * tarefa-mãe, igual a qualquer outro campo de subtarefa hoje. */
+  const confirmSubtaskBlock = async (subtaskId: string, fields: BlockFormFields) => {
+    const target = subtasks.find((s) => s.id === subtaskId);
+    if (!target) return;
+    setBlockActionBusy(true);
+    try {
+      const me = getCurrentAuthor();
+      const nowISO = new Date().toISOString();
+      const pausesDeadline = resolvePausesDeadline(fields.category, false);
+      if (fields.category === "dependencia_tarefa" && fields.relatedTaskEntry && depTaskId) {
+        await handlePickDependency("depends", fields.relatedTaskEntry);
+      }
+      const newBlockedState: TaskBlockedState = {
+        blockId: crypto.randomUUID(),
+        category: fields.category,
+        reason: fields.reason,
+        blockedAt: nowISO,
+        blockedByUserId: "",
+        blockedByName: me.name,
+        responsibleForUnblockingUserId: fields.responsibleForUnblockingUserId,
+        responsibleForUnblockingName: fields.responsibleForUnblockingName,
+        relatedTaskId: fields.relatedTaskId,
+        relatedTaskTitle: fields.relatedTaskTitle,
+        relatedEntityType: fields.relatedEntityType,
+        relatedEntityId: fields.relatedEntityId,
+        requiredAction: fields.requiredAction,
+        expectedResolutionAt: fields.expectedResolutionAt,
+        pausesDeadline,
+      };
+      const updated: Task = {
+        ...target,
+        status: "Bloqueada",
+        blockedState: newBlockedState,
+        performanceDueDate: pausesDeadline ? pausedSentinelDueDate() : target.performanceDueDate,
+      };
+      setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? updated : s)));
+      setActivity((a) => pushActivity(a, `bloqueou a subtarefa "${target.title}"`, "blocked"));
+      blockComposerHasData.current = false;
+      setPendingBlockAction(null);
+      toast.success("Subtarefa bloqueada.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível bloquear a subtarefa.");
+    } finally {
+      setBlockActionBusy(false);
+    }
+  };
+
+  const confirmSubtaskResolve = async (subtaskId: string, fields: ResolveFormFields) => {
+    const target = subtasks.find((s) => s.id === subtaskId);
+    if (!target?.blockedState) return;
+    setBlockActionBusy(true);
+    try {
+      const nowISO = new Date().toISOString();
+      const eligibleMs = computeEligibleBlockDurationMs(
+        [
+          {
+            pausesDeadline: target.blockedState.pausesDeadline,
+            blockedAt: target.blockedState.blockedAt,
+            unblockedAt: nowISO,
+          },
+        ],
+        nowISO,
+      );
+      const baseRef = target.originalDueDate ?? target.dueDate;
+      const newPerformanceDueDate = computeEffectivePerformanceDueDate(baseRef, eligibleMs);
+      const updated: Task = {
+        ...target,
+        status: fields.newStatus,
+        blockedState: null,
+        performanceDueDate: newPerformanceDueDate ?? target.performanceDueDate,
+      };
+      setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? updated : s)));
+      setActivity((a) =>
+        pushActivity(a, `resolveu o bloqueio da subtarefa "${target.title}"`, "unblocked"),
+      );
+      blockComposerHasData.current = false;
+      setPendingBlockAction(null);
+      toast.success("Bloqueio da subtarefa resolvido.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Não foi possível resolver o bloqueio da subtarefa.",
+      );
+    } finally {
+      setBlockActionBusy(false);
+    }
   };
 
   const confirmBlock = async (fields: BlockFormFields) => {
@@ -3493,7 +3697,11 @@ export function TaskDialog({
     setNewSubtaskDate("");
     setNewSubtaskAssignees([]);
     setNewSubtaskPriority("Normal");
-    setShowSubtaskInput(false);
+    // Mantém a linha de criação aberta pra criação contínua (estilo
+    // ClickUp) — responsável/prioridade/prazo já resetaram acima, então
+    // a próxima subtarefa nunca herda os valores da anterior sem
+    // confirmação nova.
+    setTimeout(() => newSubtaskTitleRef.current?.focus(), 0);
   };
   // Toggle manual do timer de uma subtarefa, a partir do seu próprio
   // diálogo aninhado — sem isso, o campo "Timer" ali só mostrava "—",
@@ -4109,274 +4317,409 @@ export function TaskDialog({
                 </div>
               </div>
 
-              {initial && (
-                <div className="space-y-2 px-8 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSubtasksOpen((v) => !v)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-brand"
-                    >
-                      <ChevronRight
-                        className={`h-3 w-3 text-muted-foreground transition-transform ${subtasksOpen ? "rotate-90" : ""}`}
-                      />
-                      Subtarefas · {subtasks.length}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSubtasksOpen(true);
-                        setShowSubtaskInput(true);
-                      }}
-                      className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Adicionar
-                    </button>
-                  </div>
-
-                  {subtasksOpen && (showSubtaskInput || subtasks.length > 0) && (
-                    <div className="space-y-1 pl-4">
-                      {sortedSubtasks.map((s) => {
-                        const done = s.status === "Concluído";
-                        const subtaskAssignees = getTaskAssignees(s);
-                        return (
-                          <div
-                            key={s.id}
-                            className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
-                          >
-                            {/* Subtarefa é uma tarefa completa (status/prioridade/responsável/data),
-                            não um item de checklist — status muda direto aqui, sem passar pela
-                            subtarefa. A cor do círculo é o status (mesma paleta de sempre,
-                            TASK_STATUS_DOT); o <select> continua funcional por baixo, só fica
-                            visualmente reduzido a um círculo (texto transparente). */}
-                            <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
-                              <select
-                                value={s.status}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const next = e.target.value as TaskStatus;
-                                  // `withStatusChange` já para o timer da
-                                  // subtarefa se ele estava rodando (e inicia se
-                                  // o novo status for "Em andamento") — sem
-                                  // passar por ela aqui, um timer preso rodando
-                                  // nunca parava só porque o status mudou.
-                                  const updated = withStatusChange(s, next);
-                                  setSubtasks((prev) =>
-                                    prev.map((st) => (st.id === s.id ? updated : st)),
-                                  );
-                                  setActivity((a) =>
-                                    pushActivity(a, `mudou status de "${s.title}" para ${next}`),
-                                  );
-                                  // Cronômetro de `time_entries` da subtarefa —
-                                  // só "Concluído" para sozinho, silenciosamente.
-                                  if (next === "Concluído" && timeTrackingOrigin) {
-                                    void stopIfRunningOnTask(
-                                      s.id.replace(/^mkt:/, ""),
-                                      timeTrackingOrigin,
-                                    );
-                                  }
-                                  // Sem isso, concluir/reabrir uma subtarefa por
-                                  // aqui (o caminho mais usado, direto na linha)
-                                  // nunca gerava o evento de XP/"concluídas
-                                  // hoje" — só concluir a tarefa-mãe (drag no
-                                  // board ou Salvar no diálogo) ou abrir a
-                                  // subtarefa em seu próprio diálogo passavam
-                                  // por `recordTaskLedgerEventsOnStatusChange`.
-                                  // Isso fazia o Score subcontar completions de
-                                  // verdade (ex.: 10 concluídas no dia, só 3
-                                  // contadas).
-                                  if (updated !== s) {
-                                    recordTaskLedgerEventsOnStatusChange(s, updated, {
-                                      scope,
-                                      members,
-                                      performanceSettings,
-                                    });
-                                  }
-                                }}
-                                title={s.status}
-                                aria-label={`Status: ${s.status}`}
-                                className={`absolute inset-0 h-4 w-4 cursor-pointer appearance-none rounded-full text-transparent outline-none ${TASK_STATUS_DOT[s.status]}`}
-                              >
-                                {TASK_STATUSES.map((st) => (
-                                  <option
-                                    key={st}
-                                    value={st}
-                                    className="bg-background text-foreground"
-                                  >
-                                    {st}
-                                  </option>
-                                ))}
-                              </select>
-                              {done && (
-                                <Check className="pointer-events-none h-2.5 w-2.5 text-background" />
-                              )}
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={() => setEditSubtask(s)}
-                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                            >
-                              <span
-                                className={`flex-1 truncate text-sm ${done ? "text-muted-foreground line-through" : ""}`}
-                              >
-                                {s.title}
-                              </span>
-                              {!isDescriptionEmpty(s.description) && (
-                                <span
-                                  title="Tem descrição"
-                                  className="shrink-0 text-muted-foreground"
-                                >
-                                  <FileText className="h-3 w-3" />
-                                </span>
-                              )}
-                              {subtaskAssignees.length > 0 && (
-                                <span className="inline-flex shrink-0 items-center -space-x-1.5">
-                                  {subtaskAssignees.map((a) => (
-                                    <Avatar
-                                      key={a}
-                                      member={
-                                        members.find((m) => m.name === a) ?? {
-                                          name: a,
-                                          initials: initialsOf(a) || "?",
-                                          color: colorFor(a),
-                                        }
-                                      }
-                                      size={16}
-                                    />
-                                  ))}
-                                </span>
-                              )}
-                            </button>
-
-                            {/* Prioridade — mesmo truque do status: select funcional por baixo,
-                            visual de bandeira+texto (mesma cor de sempre, PRIORITY_TONE). */}
-                            <span className="relative inline-flex shrink-0 items-center">
-                              <Flag
-                                className={`pointer-events-none absolute left-1 h-3 w-3 ${PRIORITY_TONE[s.priority]}`}
-                              />
-                              <select
-                                value={s.priority}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const next = e.target.value as TaskPriority;
-                                  setSubtasks((prev) =>
-                                    prev.map((st) =>
-                                      st.id === s.id ? { ...st, priority: next } : st,
-                                    ),
-                                  );
-                                }}
-                                className={`cursor-pointer appearance-none rounded bg-transparent py-0.5 pl-5 pr-1 text-[11px] font-medium outline-none ${PRIORITY_TONE[s.priority]}`}
-                              >
-                                {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
-                                  (p) => (
-                                    <option
-                                      key={p}
-                                      value={p}
-                                      className="bg-background text-foreground"
-                                    >
-                                      {p}
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                            </span>
-
-                            {s.dueDate && (
-                              <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                                <Calendar className="h-3 w-3" />
-                                {fmtDate(s.dueDate)}
-                              </span>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() => removeSubtask(s.id)}
-                              className="opacity-0 transition group-hover:opacity-100"
-                            >
-                              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                      {showSubtaskInput && (
-                        <div className="rounded-md border border-border bg-background p-2">
-                          <input
-                            autoFocus
-                            value={newSubtaskTitle}
-                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                addSubtask();
-                              }
-                            }}
-                            placeholder="Nome da subtarefa"
-                            className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+              {initial &&
+                (() => {
+                  const activeSubtasks = subtasks.filter(
+                    (s) => TASK_STATUS_CATEGORY[s.status] !== "archived",
+                  );
+                  const doneSubtasks = activeSubtasks.filter(
+                    (s) => TASK_STATUS_CATEGORY[s.status] === "done",
+                  );
+                  const archivedCount = subtasks.length - activeSubtasks.length;
+                  const progressPct =
+                    activeSubtasks.length > 0
+                      ? Math.round((doneSubtasks.length / activeSubtasks.length) * 100)
+                      : 0;
+                  const visibleSubtasks = sortedSubtasks.filter(
+                    (s) => showArchivedSubtasks || TASK_STATUS_CATEGORY[s.status] !== "archived",
+                  );
+                  return (
+                    <div className="space-y-2 px-8 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSubtasksOpen((v) => !v)}
+                          className="flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-brand"
+                        >
+                          <ChevronRight
+                            className={`h-3 w-3 text-muted-foreground transition-transform ${subtasksOpen ? "rotate-90" : ""}`}
                           />
-                          <div className="flex flex-wrap items-center gap-2">
-                            <DateField
-                              variant="input"
-                              value={newSubtaskDate || undefined}
-                              onChange={(v) => setNewSubtaskDate(v ?? "")}
-                              placeholder="Data"
-                              ariaLabel="Data da subtarefa"
-                              className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                          Subtarefas {doneSubtasks.length}/{activeSubtasks.length} concluídas
+                        </button>
+                        {activeSubtasks.length > 0 && (
+                          <div className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-brand transition-all"
+                              style={{ width: `${progressPct}%` }}
                             />
-                            <CompactAssigneePicker
-                              selected={newSubtaskAssignees}
-                              members={members}
-                              onToggle={toggleNewSubtaskAssignee}
-                            />
-                            <select
-                              value={newSubtaskPriority}
-                              onChange={(e) =>
-                                setNewSubtaskPriority(e.target.value as TaskPriority)
-                              }
-                              className={`rounded px-2 py-1 text-xs font-medium outline-none ${PRIORITY_TONE[newSubtaskPriority]}`}
-                            >
-                              {(["Urgente", "Alta", "Normal", "Baixa"] as TaskPriority[]).map(
-                                (p) => (
-                                  <option
-                                    key={p}
-                                    value={p}
-                                    className="bg-background text-foreground"
-                                  >
-                                    {p}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            <div className="ml-auto flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShowSubtaskInput(false);
-                                  setNewSubtaskTitle("");
-                                  setNewSubtaskDate("");
-                                  setNewSubtaskAssignees([]);
-                                }}
-                                className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={addSubtask}
-                                disabled={!newSubtaskTitle.trim()}
-                                className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
-                              >
-                                Adicionar
-                              </button>
-                            </div>
                           </div>
+                        )}
+                        {archivedCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowArchivedSubtasks((v) => !v)}
+                            className="text-[11px] text-muted-foreground hover:text-foreground"
+                          >
+                            {showArchivedSubtasks
+                              ? "Ocultar arquivadas"
+                              : `Ver ${archivedCount} arquivada${archivedCount === 1 ? "" : "s"}`}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubtasksOpen(true);
+                            setShowSubtaskInput(true);
+                          }}
+                          className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Adicionar
+                        </button>
+                      </div>
+
+                      {subtasksOpen && (showSubtaskInput || visibleSubtasks.length > 0) && (
+                        <div className="space-y-0.5 pl-4">
+                          {visibleSubtasks.map((s) => {
+                            const done = s.status === "Concluído";
+                            const archived = TASK_STATUS_CATEGORY[s.status] === "archived";
+                            const subtaskAssignees = getTaskAssignees(s);
+                            const applyStatusChange = (next: TaskStatus) => {
+                              // `withStatusChange` já para o timer da subtarefa se
+                              // ele estava rodando (e inicia se o novo status for
+                              // "Em andamento") — sem passar por ela aqui, um
+                              // timer preso rodando nunca parava só porque o
+                              // status mudou.
+                              const updated = withStatusChange(s, next);
+                              setSubtasks((prev) =>
+                                prev.map((st) => (st.id === s.id ? updated : st)),
+                              );
+                              setActivity((a) =>
+                                pushActivity(a, `mudou status de "${s.title}" para ${next}`),
+                              );
+                              if (next === "Concluído" && timeTrackingOrigin) {
+                                void stopIfRunningOnTask(
+                                  s.id.replace(/^mkt:/, ""),
+                                  timeTrackingOrigin,
+                                );
+                              }
+                              // Sem isso, concluir/reabrir uma subtarefa por aqui
+                              // (o caminho mais usado, direto na linha) nunca
+                              // gerava o evento de XP/"concluídas hoje" — só
+                              // concluir a tarefa-mãe ou abrir a subtarefa em seu
+                              // próprio diálogo passavam por
+                              // `recordTaskLedgerEventsOnStatusChange`. Isso fazia
+                              // o Score subcontar completions de verdade.
+                              if (updated !== s) {
+                                recordTaskLedgerEventsOnStatusChange(s, updated, {
+                                  scope,
+                                  members,
+                                  performanceSettings,
+                                });
+                              }
+                            };
+                            return (
+                              <div
+                                key={s.id}
+                                className={`group grid min-h-10 grid-cols-[20px_minmax(0,1fr)_auto_auto_auto_20px] items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/60 ${
+                                  archived ? "opacity-60" : ""
+                                }`}
+                              >
+                                <SubtaskStatusPopover
+                                  value={s.status}
+                                  onChange={applyStatusChange}
+                                  onSelectBlocked={() => openSubtaskBlockComposer(s.id)}
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => setEditSubtask(s)}
+                                  className="flex min-w-0 items-center gap-2 text-left"
+                                >
+                                  <span
+                                    className={`truncate text-sm ${done ? "text-muted-foreground" : "text-foreground"}`}
+                                  >
+                                    {s.title}
+                                  </span>
+                                  {!isDescriptionEmpty(s.description) && (
+                                    <span
+                                      title="Tem descrição"
+                                      className="shrink-0 text-muted-foreground"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                    </span>
+                                  )}
+                                </button>
+
+                                <SubtaskAssigneePopover
+                                  selected={subtaskAssignees}
+                                  members={members}
+                                  onToggle={(name) => {
+                                    const prevAssignees = getTaskAssignees(s);
+                                    const nextAssignees = prevAssignees.includes(name)
+                                      ? prevAssignees.filter((a) => a !== name)
+                                      : [...prevAssignees, name];
+                                    setSubtasks((prev) =>
+                                      prev.map((st) =>
+                                        st.id === s.id
+                                          ? { ...st, assignees: nextAssignees, assignee: undefined }
+                                          : st,
+                                      ),
+                                    );
+                                    setActivity((a) =>
+                                      pushActivity(
+                                        a,
+                                        `alterou responsável de "${s.title}" para ${nextAssignees.join(", ") || "ninguém"}`,
+                                      ),
+                                    );
+                                  }}
+                                />
+
+                                <SubtaskPriorityPopover
+                                  value={s.priority}
+                                  onChange={(next) => {
+                                    setSubtasks((prev) =>
+                                      prev.map((st) =>
+                                        st.id === s.id ? { ...st, priority: next } : st,
+                                      ),
+                                    );
+                                    setActivity((a) =>
+                                      pushActivity(
+                                        a,
+                                        `alterou prioridade de "${s.title}" para ${next}`,
+                                      ),
+                                    );
+                                  }}
+                                />
+
+                                <div className="flex min-w-0 shrink-0 items-center justify-end">
+                                  {s.status === "Bloqueada" && s.blockedState ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => openSubtaskResolveComposer(s.id)}
+                                          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+                                        >
+                                          <Lock className="h-3 w-3 shrink-0" />
+                                          Bloqueada
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-64">
+                                        <p>{s.blockedState.reason}</p>
+                                        {s.blockedState.responsibleForUnblockingName && (
+                                          <p className="text-muted-foreground">
+                                            Aguardando:{" "}
+                                            {s.blockedState.responsibleForUnblockingName}
+                                          </p>
+                                        )}
+                                        <p className="text-muted-foreground">
+                                          Bloqueada em{" "}
+                                          {fmtDateCompact(s.blockedState.blockedAt.slice(0, 10))}
+                                          {" · SLA "}
+                                          {s.blockedState.pausesDeadline ? "pausado" : "ativo"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    (s.dueDate || s.performanceDueDate) && (
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="rounded px-1 py-0.5 hover:bg-muted/60"
+                                          >
+                                            <CardDeadlineBadge task={s} />
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                          align="start"
+                                          collisionPadding={12}
+                                          className="w-auto p-0"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <CalendarPicker
+                                            mode="single"
+                                            selected={
+                                              s.dueDate ? parseIsoDateLocal(s.dueDate) : undefined
+                                            }
+                                            onSelect={(d) => {
+                                              setSubtasks((prev) =>
+                                                prev.map((st) =>
+                                                  st.id === s.id
+                                                    ? {
+                                                        ...st,
+                                                        dueDate: d ? formatDateToIso(d) : undefined,
+                                                      }
+                                                    : st,
+                                                ),
+                                              );
+                                              setActivity((a) =>
+                                                pushActivity(a, `alterou o prazo de "${s.title}"`),
+                                              );
+                                            }}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    )
+                                  )}
+                                  {!s.status.startsWith("Bloqueada") &&
+                                    !s.dueDate &&
+                                    !s.performanceDueDate && (
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="rounded px-1 py-0.5 text-[11px] text-muted-foreground opacity-0 hover:bg-muted/60 group-hover:opacity-100"
+                                          >
+                                            + Prazo
+                                          </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                          align="start"
+                                          collisionPadding={12}
+                                          className="w-auto p-0"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <CalendarPicker
+                                            mode="single"
+                                            selected={undefined}
+                                            onSelect={(d) => {
+                                              setSubtasks((prev) =>
+                                                prev.map((st) =>
+                                                  st.id === s.id
+                                                    ? {
+                                                        ...st,
+                                                        dueDate: d ? formatDateToIso(d) : undefined,
+                                                      }
+                                                    : st,
+                                                ),
+                                              );
+                                              setActivity((a) =>
+                                                pushActivity(a, `definiu prazo de "${s.title}"`),
+                                              );
+                                            }}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                    )}
+                                </div>
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => e.stopPropagation()}
+                                      aria-label="Mais ações da subtarefa"
+                                      className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                                    >
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setEditSubtask(s)}>
+                                      <ExternalLink className="h-3.5 w-3.5" /> Abrir detalhes
+                                    </DropdownMenuItem>
+                                    {!archived && (
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setSubtasks((prev) =>
+                                            prev.map((st) =>
+                                              st.id === s.id ? { ...st, status: "Arquivado" } : st,
+                                            ),
+                                          );
+                                          setActivity((a) =>
+                                            pushActivity(a, `arquivou a subtarefa "${s.title}"`),
+                                          );
+                                        }}
+                                      >
+                                        <Archive className="h-3.5 w-3.5" /> Arquivar
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem
+                                      onClick={() => removeSubtask(s.id)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" /> Excluir
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            );
+                          })}
+                          {showSubtaskInput && (
+                            <div className="rounded-md border border-border bg-background p-2">
+                              <input
+                                ref={newSubtaskTitleRef}
+                                autoFocus
+                                value={newSubtaskTitle}
+                                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addSubtask();
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    setShowSubtaskInput(false);
+                                    setNewSubtaskTitle("");
+                                    setNewSubtaskDate("");
+                                    setNewSubtaskAssignees([]);
+                                  }
+                                }}
+                                placeholder="Nome da subtarefa"
+                                className="mb-2 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground/70"
+                              />
+                              <div className="flex flex-wrap items-center gap-2">
+                                <DateField
+                                  variant="input"
+                                  value={newSubtaskDate || undefined}
+                                  onChange={(v) => setNewSubtaskDate(v ?? "")}
+                                  placeholder="Data"
+                                  ariaLabel="Data da subtarefa"
+                                  className="h-auto w-auto rounded border px-2 py-1 text-xs shadow-none"
+                                />
+                                <SubtaskAssigneePopover
+                                  selected={newSubtaskAssignees}
+                                  members={members}
+                                  onToggle={toggleNewSubtaskAssignee}
+                                />
+                                <SubtaskPriorityPopover
+                                  value={newSubtaskPriority}
+                                  onChange={setNewSubtaskPriority}
+                                />
+                                <div className="ml-auto flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowSubtaskInput(false);
+                                      setNewSubtaskTitle("");
+                                      setNewSubtaskDate("");
+                                      setNewSubtaskAssignees([]);
+                                    }}
+                                    className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={addSubtask}
+                                    disabled={!newSubtaskTitle.trim()}
+                                    className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+                                  >
+                                    Adicionar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
+                  );
+                })()}
 
               {initial && (
                 <div className="space-y-2 px-8 py-2.5">
@@ -4698,11 +5041,24 @@ export function TaskDialog({
                     setPendingDeadlineChange(null);
                   }}
                   onCancelDeadlineChange={discardPendingDeadlineChange}
-                  blockedState={blockedState}
+                  blockedState={
+                    pendingBlockAction?.subtaskId
+                      ? (subtasks.find((s) => s.id === pendingBlockAction.subtaskId)
+                          ?.blockedState ?? null)
+                      : blockedState
+                  }
                   pendingBlockAction={pendingBlockAction}
                   blockActionBusy={blockActionBusy}
-                  onConfirmBlock={confirmBlock}
-                  onConfirmResolve={confirmResolve}
+                  onConfirmBlock={(fields) =>
+                    pendingBlockAction?.subtaskId
+                      ? confirmSubtaskBlock(pendingBlockAction.subtaskId, fields)
+                      : confirmBlock(fields)
+                  }
+                  onConfirmResolve={(fields) =>
+                    pendingBlockAction?.subtaskId
+                      ? confirmSubtaskResolve(pendingBlockAction.subtaskId, fields)
+                      : confirmResolve(fields)
+                  }
                   onCancelBlockAction={cancelBlockAction}
                   onBlockComposerDirtyChange={(dirty) => {
                     blockComposerHasData.current = dirty;
@@ -4802,6 +5158,40 @@ export function TaskDialog({
               }}
             >
               Concluir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={showAllSubtasksDoneConfirm}
+        onOpenChange={(o) => {
+          if (!o) {
+            dismissedAllDoneRef.current = true;
+            setShowAllSubtasksDoneConfirm(false);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Todas as subtarefas foram concluídas</AlertDialogTitle>
+            <AlertDialogDescription>Deseja concluir a tarefa principal?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                dismissedAllDoneRef.current = true;
+                setShowAllSubtasksDoneConfirm(false);
+              }}
+            >
+              Agora não
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowAllSubtasksDoneConfirm(false);
+                setStatus("Concluído");
+              }}
+            >
+              Concluir tarefa
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

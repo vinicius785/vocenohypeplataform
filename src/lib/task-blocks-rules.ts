@@ -144,4 +144,16 @@ export function computeEffectivePerformanceDueDate(
   return formatDateToIso(d);
 }
 
+/** Mesma sentinela usada em `task-blocks.functions.ts` (server, tarefa
+ * principal) — replicada aqui (função pura, sem I/O) pro bloqueio de
+ * SUBTAREFA poder aplicar a mesma regra de "congelar o relógio de
+ * atraso" direto no cliente, já que ele não passa pela RPC/server
+ * function (subtarefa não é linha em `task_blocks`, ver
+ * `task-blocks-rules.ts`'s consumidor em `TaskBoard.tsx`). */
+export function pausedSentinelDueDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3650);
+  return formatDateToIso(d);
+}
+
 export { DEADLINE_CUTOFF_HOUR };
