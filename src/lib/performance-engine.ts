@@ -1,5 +1,5 @@
 import { parseIsoDateLocal, formatDateToIso } from "@/lib/utils";
-import { OPEN_STATUSES, type DateRange } from "@/lib/score";
+import type { DateRange } from "@/lib/score";
 
 export type { DateRange };
 

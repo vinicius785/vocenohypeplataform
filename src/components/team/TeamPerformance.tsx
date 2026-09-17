@@ -23,7 +23,7 @@ export function TeamPerformance({
   scoreByMemberId,
   scorePeriod,
   onScorePeriodChange,
-  performanceSettings,
+  performanceSettings: _performanceSettings,
   tasksByMember,
   onOpenTask,
   meId,

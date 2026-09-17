@@ -88,7 +88,8 @@ export function VoiceRecorderBar({
         tickRef.current = setInterval(() => {
           const now = Date.now();
           const paused = pausedAtRef.current > 0;
-          const elapsed = (paused ? pausedAtRef.current : now) - startedAtRef.current - pausedAccumRef.current;
+          const elapsed =
+            (paused ? pausedAtRef.current : now) - startedAtRef.current - pausedAccumRef.current;
           setElapsedMs(elapsed);
           if (!paused && elapsed >= MAX_RECORDING_MS) {
             void finalizeAndSend();
@@ -245,7 +246,9 @@ export function VoiceRecorderBar({
         </span>
       )}
       {state === "paused" && (
-        <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">Pausado</span>
+        <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground">
+          Pausado
+        </span>
       )}
       {"pause" in (recorderRef.current ?? {}) && (
         <button

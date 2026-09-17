@@ -28,7 +28,7 @@ async function findProjetoByToken(
 // formato usado em `Cliente.publicToken`/`Campaign.signupToken`.
 const TokenInput = z.object({ token: z.string().min(20).max(64) });
 
-const BugReportPublic = z.object({
+const _BugReportPublic = z.object({
   id: z.string(),
   reporterName: z.string(),
   description: z.string(),
@@ -43,7 +43,7 @@ const BugReportPublic = z.object({
 /** Público, sem auth — lista os relatos do HypeApp pra quem tem o link. */
 export const getPublicBugReports = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => TokenInput.parse(raw))
-  .handler(async ({ data }): Promise<z.infer<typeof BugReportPublic>[]> => {
+  .handler(async ({ data }): Promise<z.infer<typeof _BugReportPublic>[]> => {
     const found = await findProjetoByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

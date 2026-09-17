@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
-import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { fmtDate } from "@/components/influenciadores/InfluencerBoard";
 import { campanhaStatus, CAMPANHA_STATUS_LABEL, type CampanhaRow } from "./campanha-ui";
 

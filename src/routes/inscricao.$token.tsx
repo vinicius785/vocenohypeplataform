@@ -151,7 +151,7 @@ function InscricaoPage() {
     );
   }
 
-  const { campanha, clienteNome, page } = data;
+  const { clienteNome, page } = data;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

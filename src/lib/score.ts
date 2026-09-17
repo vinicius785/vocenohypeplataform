@@ -3,7 +3,7 @@ import { getTaskAssignees, ACTIVITY_STATUS_COMPLETED_ACTION } from "./projetos";
 import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
-import { parseIsoDateLocal, formatDateToIso } from "./utils";
+import { parseIsoDateLocal } from "./utils";
 import { startOfWeekIsoBrasilia } from "./timezone";
 
 /**

@@ -106,10 +106,6 @@ export function proximoPromptNaoPreenchido(
   return null;
 }
 
-function respostaFor(respostas: AeoResposta[], rodadaId: string, promptId: string, ia: AeoIa) {
-  return respostas.find((r) => r.rodadaId === rodadaId && r.promptId === promptId && r.ia === ia);
-}
-
 export type KpiComparativo = { valor: number; deltaPP: number | null };
 
 /** % de respostas RESPONDIDAS (não do total esperado) em que a VNH foi

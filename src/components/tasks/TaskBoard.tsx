@@ -10,8 +10,6 @@ import {
   Tag,
   User,
   Paperclip,
-  Play,
-  Pause,
   Plus,
   Trash2,
   X,
@@ -2640,7 +2638,7 @@ export function TaskDialog({
   onSave,
   onAutosave,
   onDelete,
-  onToggleTimer,
+  onToggleTimer: _onToggleTimer,
   initialEditSubtaskId,
 }: {
   open: boolean;
@@ -3699,21 +3697,6 @@ export function TaskDialog({
       return;
     }
     doSave(closeAfter);
-  };
-
-  const toggleTimer = () => {
-    if (!initial || !onToggleTimer) return;
-    const updated = onToggleTimer(initial.id);
-    if (!updated) return;
-    setTimerRunning(!!updated.timerRunning);
-    setTimerStartedAt(updated.timerStartedAt);
-    setTimeEntries(updated.timeEntries ?? []);
-    if ((updated.comments?.length ?? 0) > comments.length) {
-      setComments((c) => [...c, updated.comments![updated.comments!.length - 1]]);
-    }
-    if ((updated.activity?.length ?? 0) > activity.length) {
-      setActivity((a) => [...a, updated.activity![updated.activity!.length - 1]]);
-    }
   };
 
   const addSubtask = () => {

@@ -6,6 +6,7 @@ import { todayIsoInBrasilia } from "@/lib/timezone";
 import {
   pagamentoCashValue,
   normalizePagamento,
+  normalizeInflus,
   type Entrega,
   type PagamentoEntrega,
 } from "@/components/influenciadores/InfluencerBoard";
@@ -530,6 +531,16 @@ async function loadInflusFromServer(): Promise<void> {
     for (const row of data ?? []) {
       const list = next[row.campanha_id] ?? (next[row.campanha_id] = []);
       list.push(row.data as InfluPersisted);
+    }
+    // `normalizeInflus` migra pagamento antigo (por entrega/`valores`
+    // avulsos, de antes da unificação num `pagamento` único) pro campo
+    // novo — sem isso, um pagamento aceito antes dessa unificação nunca
+    // aparecia aqui: o Financeiro só olha `inf.pagamento.aprovacao`,
+    // igual à tela de Influenciadores já faz há tempo. Migração só em
+    // memória (não regrava no banco) — mesmo comportamento de
+    // `CampanhasSection.tsx`, nenhum dado é perdido nem sobrescrito.
+    for (const campanhaId of Object.keys(next)) {
+      next[campanhaId] = normalizeInflus(next[campanhaId]) as unknown as InfluPersisted[];
     }
     influsCache = next;
   } catch (e) {

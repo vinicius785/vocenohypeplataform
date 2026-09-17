@@ -1,4 +1,4 @@
-import { X, TrendingUp, TrendingDown, FileText, Download, Pencil, Check } from "lucide-react";
+import { X, FileText, Download, Pencil, Check } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   type Entry,

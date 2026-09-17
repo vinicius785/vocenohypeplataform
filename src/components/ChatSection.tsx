@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useLayoutEffect, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Hash,
@@ -41,7 +41,6 @@ import {
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   isHypitoAuthorId,
   HYPITO_AUTHOR_ID,

@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { TYPOGRAPHY } from "@/lib/design-tokens";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { MetricCard } from "@/components/shared/MetricCard";
 
 const NAV_ITEMS = [
   { id: "inicio", label: "Início", icon: LayoutGrid },

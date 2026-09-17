@@ -33,30 +33,6 @@ async function findCampanhaBySignupToken(
 // qualquer coisa menor antes de bater no banco.
 const TokenInput = z.object({ token: z.string().min(20).max(64) });
 
-/** Mesma lista usada em cliente-link.functions.ts — sem isso, qualquer
- * `contentType` informado no data-URL era aceito (ex: `text/html`,
- * `image/svg+xml`, que podem embutir script). */
-const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "text/plain",
-  "text/csv",
-]);
-function assertAllowedUploadContentType(contentType: string) {
-  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
-    throw new Error("Tipo de arquivo não suportado.");
-  }
-}
-
 /** Mídia kit aceita só o que o pedido especifica — mais restrito que
  * `ALLOWED_UPLOAD_CONTENT_TYPES` (que também aceita doc/xls/ppt/csv pra
  * outros fluxos de anexo). */

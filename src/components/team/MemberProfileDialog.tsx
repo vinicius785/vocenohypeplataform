@@ -83,14 +83,6 @@ function formatBirthday(value: string): string {
   return isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
 }
 
-function fmtPct(v: number | null): string {
-  return v == null ? "—" : `${Math.round(v)}%`;
-}
-
-function fmtDays(v: number | null): string {
-  return v == null ? "—" : `${v.toFixed(1)}d`;
-}
-
 /** "20% · 6 de 30 tarefas" — taxa SEMPRE acompanhada do "N de M" (item 5
  * do pedido: nunca mostrar só a taxa, nem só o número absoluto). */
 function fmtTaxaComN(rate: number | null, n: number, total: number): string {

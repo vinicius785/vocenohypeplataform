@@ -245,7 +245,6 @@ export function FocusModeScreen({
   const isPaused = session?.status === "pausado";
   const isCompleted = session?.status === "concluido";
   const isEnded = session?.status === "encerrado";
-  const isFinished = isCompleted || isEnded;
   const displayTask = session?.task ?? pendingTask;
   const canResume = isPaused && remainingMs > 0;
 

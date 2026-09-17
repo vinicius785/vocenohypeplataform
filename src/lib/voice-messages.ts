@@ -69,7 +69,9 @@ export function messagePreviewLabel(m: Pick<ChatMessage, "text" | "attachments">
   const first = m.attachments?.[0];
   if (!first) return "";
   if (isVoiceAttachment(first)) {
-    return first.durationMs ? `🎙 Mensagem de voz · ${formatVoiceTime(first.durationMs)}` : "🎙 Mensagem de voz";
+    return first.durationMs
+      ? `🎙 Mensagem de voz · ${formatVoiceTime(first.durationMs)}`
+      : "🎙 Mensagem de voz";
   }
   return `📎 ${first.name}`;
 }

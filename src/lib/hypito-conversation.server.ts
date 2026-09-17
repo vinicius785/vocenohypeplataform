@@ -829,7 +829,7 @@ async function dispatchFreshIntent(
   myName: string,
   state: HypitoConversationState,
   intent: Intent,
-  rawText: string,
+  _rawText: string,
 ): Promise<ConversationReply> {
   switch (intent.type) {
     case "greeting":

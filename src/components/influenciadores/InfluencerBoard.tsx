@@ -16,39 +16,30 @@ import {
   AlertTriangle,
   ArrowLeft,
   AtSign,
-  BarChart3,
   Camera,
-  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Circle,
   CircleDot,
   Coins,
   Columns3,
   Download,
   ExternalLink,
   Facebook,
-  FileSignature,
   FileText,
   FileVideo,
   Film,
   Instagram,
-  Landmark,
   Linkedin,
   LayoutList,
   Loader2,
-  Mail,
   MessageSquare,
   MoreVertical,
-  Package,
   Paperclip,
   Pencil,
-  Phone,
   Plus,
   Search,
-  Share2,
   Trash2,
   Twitter,
   Upload,
@@ -58,15 +49,12 @@ import {
   Youtube,
   X,
   Music2,
-  Link as LinkIcon,
   Eye,
   Image as ImageIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { DateField } from "@/components/ui/date-field";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import {

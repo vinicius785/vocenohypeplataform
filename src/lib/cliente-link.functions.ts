@@ -119,7 +119,7 @@ const EntregaPublic = z.object({
 
 const StatusHistoryEntry = z.object({ status: z.string(), at: z.string() });
 
-const InfluencerPublic = z.object({
+const _InfluencerPublic = z.object({
   id: z.string(),
   nome: z.string(),
   nicho: z.string().optional(),
@@ -230,7 +230,7 @@ function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic
   };
 }
 
-function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
+function toPublicInfluencer(influ: Influ): z.infer<typeof _InfluencerPublic> {
   const status = normalizedInfluStatus(influ);
   return {
     id: influ.id,
@@ -258,7 +258,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof InfluencerPublic> {
   };
 }
 
-const ArticlePublic = z.object({
+const _ArticlePublic = z.object({
   id: z.string(),
   title: z.string(),
   cover: z.string().optional(),
@@ -272,11 +272,11 @@ const ArticlePublic = z.object({
 /** Busca, entre todos os projetos, os artigos do blog marcados pra
  * aparecer no portal deste cliente (`portalClienteIds`) e já publicados —
  * rascunho/revisão/arquivado nunca aparecem no link público. */
-async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof ArticlePublic>[]> {
+async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof _ArticlePublic>[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("projetos").select("data");
   if (error) throw new Error(error.message);
-  const artigos: z.infer<typeof ArticlePublic>[] = [];
+  const artigos: z.infer<typeof _ArticlePublic>[] = [];
   for (const row of (rows ?? []) as { data: Project }[]) {
     for (const post of (row.data.blog ?? []) as BlogPost[]) {
       if (post.status !== "publicado") continue;
@@ -341,7 +341,7 @@ async function assertArtigoDoCliente(clienteId: string, postId: string) {
   }
 }
 
-const ArtigoEngagementPublic = z.object({
+const _ArtigoEngagementPublic = z.object({
   likeCount: z.number(),
   likedByMe: z.boolean(),
   comments: z.array(
@@ -360,7 +360,7 @@ const ArtigoEngagementPublic = z.object({
  * não inflar o payload da lista de artigos). */
 export const loadArtigoEngagement = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => TokenInput.extend({ postId: z.string().min(1) }).parse(raw))
-  .handler(async ({ data }): Promise<z.infer<typeof ArtigoEngagementPublic>> => {
+  .handler(async ({ data }): Promise<z.infer<typeof _ArtigoEngagementPublic>> => {
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
     await assertArtigoDoCliente(found.clienteId, data.postId);
@@ -445,7 +445,7 @@ export const addArtigoComentario = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const CronogramaItemPublic = z.object({
+const _CronogramaItemPublic = z.object({
   id: z.string(),
   date: z.string(),
   title: z.string(),
@@ -484,7 +484,7 @@ export const getClienteLinkData = createServerFn({ method: "GET" })
           .eq("campanha_id", c.id);
         if (cronogramaError) throw new Error(cronogramaError.message);
         const cronograma = (
-          (cronogramaRows ?? []) as { data: z.infer<typeof CronogramaItemPublic> }[]
+          (cronogramaRows ?? []) as { data: z.infer<typeof _CronogramaItemPublic> }[]
         )
           .map((r) => r.data)
           .sort((a, b) => a.date.localeCompare(b.date));

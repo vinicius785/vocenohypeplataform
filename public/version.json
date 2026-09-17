@@ -1,6 +1,7 @@
 {
-  "version": "1.279.0",
+  "version": "1.279.1",
   "notes": [
+    "1.279.1: Auditoria técnica e limpeza de código — corrige o lint do projeto (estava travando ao analisar arquivos de build), remove componentes/dependências não usados e pequenos bugs de formatação. Sem mudança visível para o usuário.",
     "1.279.0: Atualiza o Chat — mensagens longas agora podem ser recolhidas, links de Google Drive/YouTube/páginas da plataforma ganham prévia, imagens abrem numa visualização ampliada com zoom, PDFs enviados no chat têm um card próprio com visualização e download (sem mais risco de link quebrado), a lista de conversas ganhou grupos recolhíveis, o campo de mensagem ganhou emoji e comandos de barra (/tarefa, /lembrete, /hypito, /reuniao), o menu da mensagem ganhou \"Copiar link\", e o card de tarefa mencionada mostra projeto/campanha, bloqueio e progresso de subtarefas, com ações para alterar status e comentar direto do Chat.",
     "1.278.0: Refaz o armazenamento e a apresentação das inscrições de influenciadores — o mídia kit enviado na Página de Inscrição agora fica guardado de verdade no Storage (nunca mais um link que expira e quebra), perfis sociais são normalizados na exibição (sem mais \"@https://...\"), inscrições duplicadas da mesma pessoa na mesma campanha viram uma candidatura só, e o perfil do influenciador ganha uma seção \"Dados da inscrição\" (respostas organizadas por tipo, resumo com orçamento/disponibilidade/redes) e \"Mídia kit e arquivos\" com visualização e download de PDFs/imagens.",
     "1.277.1: Corrige erro ao abrir o painel flutuante do Hypito e ao usar \"Criar tarefa\" a partir de uma mensagem do Chat — faltava um provedor de tooltip envolvendo o painel aberto.",

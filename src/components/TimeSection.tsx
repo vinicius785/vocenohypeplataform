@@ -92,7 +92,6 @@ import {
 } from "@/lib/team.functions";
 import { getStatus, subscribeChat, STATUS_LABEL, STATUS_COLOR } from "@/lib/chat-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
@@ -111,13 +110,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useStorageSync } from "@/lib/use-storage-sync";
 import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
-
-function formatBirthday(value: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? value : d.toLocaleDateString("pt-BR");
-}
 
 // Photos are always shown in the Time tab (not gated by timeView) — a profile
 // picture isn't sensitive the way birthday/salary/email are.

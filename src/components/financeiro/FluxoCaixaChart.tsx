@@ -70,7 +70,7 @@ function granularityFor(days: number): "day" | "week" {
   return days <= 45 ? "day" : "week";
 }
 
-function formatBucketLabel(bucket: string, granularity: "day" | "week"): string {
+function formatBucketLabel(bucket: string, _granularity: "day" | "week"): string {
   const d = new Date(`${bucket}T00:00:00`);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }

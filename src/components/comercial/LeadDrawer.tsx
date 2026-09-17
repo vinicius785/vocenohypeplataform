@@ -24,7 +24,6 @@ import { SimuladorPropostaForm } from "@/components/comercial/SimuladorPropostaD
 import { formatBRL, type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
   deriveOpportunityNextStep,
-  daysSinceLastStageChange,
   legacyStage,
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_LABEL,

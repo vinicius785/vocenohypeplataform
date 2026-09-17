@@ -43,7 +43,7 @@ function fmtDateTime(iso: string | null): string {
 /** Próxima sexta-feira 17h em America/Sao_Paulo, só pra exibição — não é
  * usado por nenhuma lógica de agendamento de verdade (isso é o
  * `schedule` do Vercel Cron, ver `vercel.json`). */
-function nextFridayLabel(weekday: number, hour: number): string {
+function nextFridayLabel(weekday: number, _hour: number): string {
   const now = new Date();
   const tz = "America/Sao_Paulo";
   for (let i = 0; i < 14; i++) {

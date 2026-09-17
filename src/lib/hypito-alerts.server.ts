@@ -18,12 +18,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  fetchAllTasks,
-  fetchMeetings,
-  fetchTeamDirectory,
-  isMeetingParticipant,
-} from "@/lib/hypito-data.server";
+import { fetchAllTasks, fetchMeetings, fetchTeamDirectory } from "@/lib/hypito-data.server";
 import { HYPITO_AUTHOR_ID, HYPITO_NAME, HYPITO_AVATAR_URL } from "@/lib/hypito";
 import type { LinkedRef } from "@/lib/hypito-insights";
 import {

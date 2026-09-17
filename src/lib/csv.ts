@@ -3,7 +3,10 @@
  * de linhas de uma tabela do ClickUp normalmente cola como TSV), e quebras
  * de linha dentro de campos entre aspas. */
 export function parseCsv(text: string): string[][] {
-  const clean = text.replace(/^﻿/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const clean = text
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
   const firstLine = clean.slice(0, clean.indexOf("\n") === -1 ? undefined : clean.indexOf("\n"));
   const counts = {
     "\t": (firstLine.match(/\t/g) ?? []).length,
@@ -54,7 +57,7 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((f) => f.trim() !== ""));
 }
 
-const DATE_RE = /(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/;
+const DATE_RE = /(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?/;
 
 /** Converte "10/08", "10/08/2026", "10-8-26" etc pra ISO yyyy-mm-dd. Sem
  * ano, assume o ano corrente (ou o próximo, se a data já passou bastante —

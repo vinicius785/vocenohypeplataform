@@ -39,10 +39,6 @@ export function RelatoriosTab({
     () => all.filter((e) => e.kind === "receita" && e.status !== "cancelado"),
     [all],
   );
-  const aPagarAberto = useMemo(
-    () => all.filter((e) => e.kind === "despesa" && e.status !== "cancelado"),
-    [all],
-  );
   const bucketsReceber = useMemo(() => groupByDueBucket(aReceberAberto), [aReceberAberto]);
   const totalAberto = Object.values(bucketsReceber).reduce((s, b) => s + b.total, 0);
   const inadimplenciaPct =

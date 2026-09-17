@@ -52,7 +52,10 @@ function useLegacyAudioMeta(
         const max = Math.max(...out, 0.0001);
         void ctx.close();
         if (!cancelled) {
-          setMeta({ durationMs: Math.round(audioBuf.duration * 1000), peaks: out.map((v) => v / max) });
+          setMeta({
+            durationMs: Math.round(audioBuf.duration * 1000),
+            peaks: out.map((v) => v / max),
+          });
         }
       } catch {
         if (!cancelled) setMeta(null);
@@ -87,12 +90,20 @@ export function VoiceMessagePlayer({
   const healedRef = useRef(false);
 
   const hasMeta = attachment.durationMs != null && !!attachment.peaks;
-  const legacyMeta = useLegacyAudioMeta(attachment.url, hasMeta || !!attachment.uploading || !!attachment.uploadError);
+  const legacyMeta = useLegacyAudioMeta(
+    attachment.url,
+    hasMeta || !!attachment.uploading || !!attachment.uploadError,
+  );
 
   useEffect(() => {
     if (!legacyMeta || healedRef.current || !attachment.path) return;
     healedRef.current = true;
-    void updateMessageAttachmentMeta(message.id, attachment.path, legacyMeta.durationMs, legacyMeta.peaks);
+    void updateMessageAttachmentMeta(
+      message.id,
+      attachment.path,
+      legacyMeta.durationMs,
+      legacyMeta.peaks,
+    );
   }, [legacyMeta, message.id, attachment.path]);
 
   const durationMs = attachment.durationMs ?? legacyMeta?.durationMs ?? 0;
@@ -183,7 +194,8 @@ export function VoiceMessagePlayer({
     setCurrent(clamped * durationMs);
   };
 
-  const ratioFromEvent = (e: { clientX: number }, rect: DOMRect) => (e.clientX - rect.left) / rect.width;
+  const ratioFromEvent = (e: { clientX: number }, rect: DOMRect) =>
+    (e.clientX - rect.left) / rect.width;
 
   const progress = durationMs > 0 ? current / durationMs : 0;
 
@@ -193,7 +205,10 @@ export function VoiceMessagePlayer({
     setRatePopoverOpen(false);
   };
 
-  const timeLabel = playing || current > 0 ? `${formatVoiceTime(current)} / ${formatVoiceTime(durationMs)}` : formatVoiceTime(durationMs);
+  const timeLabel =
+    playing || current > 0
+      ? `${formatVoiceTime(current)} / ${formatVoiceTime(durationMs)}`
+      : formatVoiceTime(durationMs);
 
   return (
     <div

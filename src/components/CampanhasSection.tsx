@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -42,7 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
-import { useClientes, clientesStore, type Cliente } from "@/lib/clientes-store";
+import { useClientes, clientesStore } from "@/lib/clientes-store";
 import {
   VincularCampanhaDialog,
   type Campaign,
@@ -77,7 +75,6 @@ import {
   normalizeInflus,
   totalAceito,
   type Influ,
-  type InfluStatus,
   type BankInfo,
   type Entrega,
 } from "@/components/influenciadores/InfluencerBoard";
@@ -87,7 +84,6 @@ import {
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
 } from "@/lib/campanha-status";
-import { withRetry, friendlyNetworkError } from "@/lib/net-retry";
 import { useConfirm } from "@/hooks/use-confirm";
 import { formatIsoDate } from "@/lib/utils";
 import {
