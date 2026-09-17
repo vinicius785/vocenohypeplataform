@@ -40,6 +40,8 @@ import {
   resolveProject,
   resolvePersonByName,
   summarizeScope,
+  listAssigneeCandidates,
+  listScopeCandidates,
   type TaskSummary,
   type MeetingSummary,
   type ScopeSummaryResult,
@@ -386,6 +388,127 @@ function emptyDraft(kind: "create_task" | "create_reminder"): HypitoDraft {
     dueAtIso: null,
     priority: "Normal",
     askedAssigneeAndDate: false,
+    scopeAsked: false,
+    assigneeAsked: false,
+    dueDateAsked: false,
+    dueDateConfirmed: false,
+    sourceMessage: null,
+  };
+}
+
+/** Card de seletor de projeto/campanha (pedido, seção 1) — recentes vêm
+ * dos últimos escopos usados pelo próprio requester em pedidos anteriores
+ * ao Hypito (`hypito_action_log`), nunca inventados. */
+async function scopePickerMessage(
+  db: DB,
+  access: UserAccess,
+  requesterId: string,
+): Promise<ConversationReply> {
+  const [{ projects, campaigns }, { data: recentLog }] = await Promise.all([
+    listScopeCandidates(db, access),
+    db
+      .from("hypito_action_log")
+      .select("detail")
+      .eq("user_id", requesterId)
+      .eq("kind", "create_task")
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+  const recentIds = new Set<string>();
+  const recent: { ref: HypitoEntityRef; clientName?: string }[] = [];
+  for (const row of recentLog ?? []) {
+    const d = row.detail as { scopeId?: string } | null;
+    if (!d?.scopeId || recentIds.has(d.scopeId)) continue;
+    const match =
+      projects.find((p) => p.id === d.scopeId) ?? campaigns.find((c) => c.id === d.scopeId) ?? null;
+    if (!match) continue;
+    const isProject = projects.some((p) => p.id === d.scopeId);
+    recentIds.add(d.scopeId);
+    recent.push({
+      ref: { type: isProject ? "project" : "campaign", id: match.id, name: match.name },
+      clientName: "clientName" in match ? match.clientName : undefined,
+    });
+    if (recent.length >= 3) break;
+  }
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "scope_picker",
+      title: "Projeto ou campanha",
+      textFallback: "Qual projeto ou campanha?",
+      state: "default",
+      timestamp: nowIso(),
+      actions: [],
+      data: {
+        recent,
+        projects: projects.map((p) => ({ ref: { type: "project", id: p.id, name: p.name } })),
+        campaigns: campaigns.map((c) => ({
+          ref: { type: "campaign", id: c.id, name: c.name },
+          clientName: c.clientName,
+        })),
+      },
+    },
+  };
+}
+
+/** Card de seletor de responsável (pedido, seção 1) — sempre inclui o
+ * próprio solicitante como uma opção explícita (nunca um default
+ * silencioso, pedido: "não definir automaticamente sem confirmação"). */
+async function assigneePickerMessage(
+  db: DB,
+  access: UserAccess,
+  requesterId: string,
+  requesterName: string,
+  scope: HypitoEntityRef | null,
+): Promise<ConversationReply> {
+  const candidates = await listAssigneeCandidates(db, access, requesterId, requesterName);
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "assignee_picker",
+      title: "Responsável",
+      textFallback: "Quem será o responsável?",
+      state: "default",
+      timestamp: nowIso(),
+      actions: [],
+      data: {
+        scope,
+        options: candidates.map((c) => ({
+          ref: { type: "user", id: c.id, name: c.name },
+          role: c.role,
+          availability: c.availability,
+        })),
+      },
+    },
+  };
+}
+
+function fmtLongDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+/** Card de prazo (pedido, seção 1) — se o texto original já trazia uma
+ * pista de data, mostra a interpretação pra confirmação explícita antes
+ * de aceitar ("Entendi 'próxima sexta' como 25/09/2026. Está correto?");
+ * sem pista nenhuma, abre direto no calendário. */
+function datePickerMessage(
+  interpretedIso: string | null,
+  interpretedLabel: string | null,
+): ConversationReply {
+  const textFallback = interpretedIso
+    ? `Entendi como ${fmtLongDate(interpretedIso)}. Está correto?`
+    : "Qual o prazo?";
+  return {
+    payload: {
+      version: HYPITO_MESSAGE_VERSION,
+      kind: "date_picker",
+      title: "Prazo",
+      textFallback,
+      state: "default",
+      timestamp: nowIso(),
+      actions: [],
+      data: { interpretedIso, interpretedLabel },
+    },
   };
 }
 
@@ -560,35 +683,53 @@ async function advanceTaskDraft(
     }
   }
 
-  if (!draft.assigneeId && !draft.dueAtIso && !draft.askedAssigneeAndDate && !skip) {
-    draft.askedAssigneeAndDate = true;
-    await saveContext(db, requesterId, stateWithDraft(draft, "assignee_and_date"));
-    return textMessage("Para quem e para quando?");
+  void skip; // campos abaixo agora são obrigatórios (pedido, seção 1) — não há mais "pular"
+
+  // Projeto/campanha, responsável e prazo são todos obrigatórios (pedido,
+  // seção 1) — cada um vira um picker próprio, perguntado UM de cada vez
+  // (pedido, seção "conduzir uma pergunta de cada vez"), nunca combinados
+  // numa única pergunta de texto como no fluxo antigo.
+  if (!draft.scopeId) {
+    if (draft.scopeAsked) {
+      // Já perguntamos e ainda não veio resposta estruturada (ex.: texto
+      // livre ambíguo que não bateu com nada) — repergunta com o mesmo
+      // seletor em vez de travar a conversa.
+    }
+    draft.scopeAsked = true;
+    await saveContext(db, requesterId, stateWithDraft(draft, "scope"));
+    return scopePickerMessage(db, access, requesterId);
   }
 
-  // Ninguém foi resolvido e a pergunta já foi feita (ou pulada) — em vez
-  // de deixar "não definido" silenciosamente, sugere o próprio
-  // solicitante como responsável (comportamento já usado pra tarefas
-  // pessoais na plataforma) e deixa isso EXPLÍCITO no card final, nunca
-  // escondido (pedido, seção 9).
-  let assigneeIsRequester = false;
   if (!draft.assigneeId) {
-    draft.assigneeId = requesterId;
-    draft.assigneeName = requesterName;
-    assigneeIsRequester = true;
+    draft.assigneeAsked = true;
+    const scopeEntity = scopeRef(draft.scope!, draft.scopeId, draft.scopeName ?? "");
+    await saveContext(db, requesterId, stateWithDraft(draft, "assignee"));
+    return assigneePickerMessage(db, access, requesterId, requesterName, scopeEntity);
   }
-  draft.assigneeIsRequester = assigneeIsRequester;
+
+  if (draft.dueAtIso && !draft.dueDateConfirmed) {
+    await saveContext(db, requesterId, stateWithDraft(draft, "date_confirm"));
+    return datePickerMessage(draft.dueAtIso, fmtLongDate(draft.dueAtIso));
+  }
+  if (!draft.dueAtIso) {
+    draft.dueDateAsked = true;
+    await saveContext(db, requesterId, stateWithDraft(draft, "date"));
+    return datePickerMessage(null, null);
+  }
+
+  draft.assigneeIsRequester = draft.assigneeId === requesterId;
 
   const actionDraft: ActionTaskDraft = {
     title: draft.title,
     assigneeName: draft.assigneeName,
     assigneeId: draft.assigneeId,
-    assigneeIsRequester,
+    assigneeIsRequester: draft.assigneeIsRequester,
     scope: draft.scope,
     scopeId: draft.scopeId,
     scopeName: draft.scopeName,
     dueAtIso: draft.dueAtIso,
     priority: draft.priority,
+    sourceMessage: draft.sourceMessage ?? null,
   };
   const pendingActionId = await createPendingAction(db, requesterId, "create_task", actionDraft);
   await clearContext(db, requesterId);
@@ -676,7 +817,7 @@ function emptyStateBase(): HypitoConversationState {
 }
 function stateWithDraft(
   draft: HypitoDraft,
-  awaitingField: "title" | "assignee_and_date",
+  awaitingField: NonNullable<HypitoConversationState["awaitingField"]>,
 ): HypitoConversationState {
   return { ...emptyStateBase(), draft, awaitingField };
 }
@@ -954,6 +1095,117 @@ async function continueDraft(
     );
   }
   return advanceTaskDraft(db, requesterId, requesterName, access, draft, rawText);
+}
+
+/** Clique estruturado num dos pickers do rascunho de tarefa (responsável/
+ * escopo/prazo) — nunca reprocessa o valor como texto livre (evita tratar
+ * um clique certo como uma resposta ambígua). Usado por
+ * `hypito-chat.functions.ts` quando o frontend chama
+ * `onPickAssignee`/`onPickScope`/`onPickDate`. */
+export type PickedFieldValue =
+  | { field: "scope"; type: "project" | "campaign"; id: string; name: string }
+  | { field: "assignee"; id: string; name: string }
+  | { field: "date"; iso: string }
+  | { field: "date_confirm"; confirmed: boolean };
+
+export async function continuePickedField(
+  db: DB,
+  requesterId: string,
+  value: PickedFieldValue,
+): Promise<ConversationReply> {
+  try {
+    const access = await loadUserAccess(db, requesterId);
+    const people = await fetchTeamDirectory(db);
+    const me = people.find((p) => p.id === requesterId);
+    const myName = me?.name ?? "";
+    const state = await loadContext(db, requesterId);
+    const draft = state.draft ?? emptyDraft("create_task");
+
+    if (value.field === "scope") {
+      draft.scope = value.type === "project" ? "projeto" : "campanha";
+      draft.scopeId = value.id;
+      draft.scopeName = value.name;
+    } else if (value.field === "assignee") {
+      draft.assigneeId = value.id;
+      draft.assigneeName = value.name;
+    } else if (value.field === "date") {
+      draft.dueAtIso = value.iso;
+      draft.dueDateConfirmed = true;
+    } else if (value.field === "date_confirm") {
+      if (value.confirmed) {
+        draft.dueDateConfirmed = true;
+      } else {
+        draft.dueAtIso = null;
+        draft.dueDateConfirmed = false;
+      }
+    }
+    return await advanceTaskDraft(db, requesterId, myName, access, draft, "");
+  } catch (err) {
+    const message =
+      err instanceof HypitoError
+        ? err.message
+        : toSafeReply("continuePickedField", err, { requesterId });
+    return textMessage(message);
+  }
+}
+
+/** Semeia um rascunho de tarefa a partir de uma mensagem do chat (pedido,
+ * seção 5: menu "Criar tarefa" e `@Hypito` num canal vinculado) — usa o
+ * texto da mensagem como sugestão de título, menções `user` já presentes
+ * como candidatos a responsável, e o escopo vinculado ao canal (quando
+ * houver) como sugestão — mas SEMPRE passa pelos mesmos pickers/prévia de
+ * confirmação, nunca pula a etapa de confirmação por vir de uma mensagem. */
+export async function seedTaskDraftFromMessage(
+  db: DB,
+  requesterId: string,
+  message: {
+    id: string;
+    convoId: string;
+    channelName: string;
+    authorName: string;
+    text: string;
+    createdAtIso: string;
+    mentionedUserIds?: string[];
+  },
+  scopeHint?: { type: "project" | "campaign"; id: string; name: string } | null,
+): Promise<ConversationReply> {
+  try {
+    const access = await loadUserAccess(db, requesterId);
+    const people = await fetchTeamDirectory(db);
+    const me = people.find((p) => p.id === requesterId);
+    const myName = me?.name ?? "";
+
+    const draft = emptyDraft("create_task");
+    draft.title = extractTitle(message.text) ?? message.text.slice(0, 120).trim() ?? null;
+    draft.sourceMessage = {
+      messageId: message.id,
+      convoId: message.convoId,
+      channelName: message.channelName,
+      authorName: message.authorName,
+      excerpt: message.text.slice(0, 240),
+      createdAtIso: message.createdAtIso,
+    };
+    if (message.mentionedUserIds && message.mentionedUserIds.length > 0) {
+      const mentioned = people.find((p) => p.id === message.mentionedUserIds![0]);
+      if (mentioned) {
+        draft.assigneeId = mentioned.id;
+        draft.assigneeName = mentioned.name;
+      }
+    }
+    if (scopeHint) {
+      draft.scope = scopeHint.type === "project" ? "projeto" : "campanha";
+      draft.scopeId = scopeHint.id;
+      draft.scopeName = scopeHint.name;
+    }
+    await clearContext(db, requesterId);
+    return await advanceTaskDraft(db, requesterId, myName, access, draft, "");
+  } catch (err) {
+    const errMessage =
+      err instanceof HypitoError
+        ? err.message
+        : toSafeReply("seedTaskDraftFromMessage", err, { requesterId });
+    return textMessage(errMessage);
+  }
 }
 
 /** Ponto único de entrada — usado por `hypito-chat.functions.ts`

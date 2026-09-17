@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   MessageSquare,
   ArrowLeft,
+  ListChecks,
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import { Badge } from "@/components/ui/badge";
@@ -37,12 +38,18 @@ import {
   HYPITO_AVATAR_URL,
   HYPITO_TAGLINE,
   HYPITO_BADGE_LABEL,
+  HYPITO_OPEN_ACTION_KEY,
 } from "@/lib/hypito";
 import {
   sendHypitoMessage,
+  sendHypitoChannelMessage,
   confirmHypitoAction,
   cancelHypitoAction,
+  pickHypitoField,
+  completeHypitoTaskFromAlert,
+  seedHypitoTaskFromMessage,
 } from "@/lib/hypito-chat.functions";
+import { openHypitoWidget } from "@/lib/hypito-widget-store";
 import {
   parseHypitoMessage,
   type HypitoEntityRef,
@@ -245,6 +252,24 @@ export function ChatSection() {
   const activeId = useActiveConvo();
 
   const activeChannel = channels.find((c) => c.id === activeId);
+  /** `@Hypito` só aparece no seletor de menção dentro de canais já
+   * vinculados a um projeto/campanha (`linkedScope`, decisão do produto
+   * pro upgrade do Hypito, seção 5) — nunca na DM (que já fala com o
+   * Hypito o tempo todo, sem precisar de @menção) nem em canal sem
+   * vínculo (evita ambiguidade sobre em qual projeto/campanha a tarefa
+   * cairia). */
+  const mentionMembers = useMemo(() => {
+    if (!activeChannel?.linkedScope) return members;
+    return [
+      ...members,
+      {
+        id: HYPITO_AUTHOR_ID,
+        name: HYPITO_NAME,
+        photo: HYPITO_AVATAR_URL,
+        role: HYPITO_TAGLINE,
+      },
+    ];
+  }, [members, activeChannel?.linkedScope]);
   const activeCampaign = campaignChannels.find((c) => c.id === activeId);
   const activeProject = projectChannels.find((c) => c.id === activeId);
   const isDm = activeId.startsWith("dm:");
@@ -456,6 +481,19 @@ export function ChatSection() {
       void sendHypitoMessage({ data: { text: trimmed } }).catch((err: unknown) => {
         console.warn("[hypito] falha ao processar mensagem", err);
       });
+    } else if (
+      !isDm &&
+      activeChannel?.linkedScope &&
+      trimmed &&
+      mentions.some((m) => m.kind === "user" && m.id === HYPITO_AUTHOR_ID)
+    ) {
+      // `@Hypito` dentro de um canal vinculado (pedido do upgrade do
+      // Hypito, seção 5) — resposta publicada no PRÓPRIO canal, não na DM.
+      void sendHypitoChannelMessage({ data: { convoId: activeId, text: trimmed } }).catch(
+        (err: unknown) => {
+          console.warn("[hypito] falha ao processar mensagem no canal", err);
+        },
+      );
     }
     setReplyingTo(null);
   };
@@ -522,6 +560,75 @@ export function ChatSection() {
       await cancelHypitoAction({ data: { pendingActionId, reason: "edit" } });
     },
     onSelectChoice: (name) => sendMessage(name, [], []),
+    onPickScope: (ref) => {
+      void pickHypitoField({
+        data: {
+          field: "scope",
+          scopeType: ref.type === "project" ? "project" : "campaign",
+          id: ref.id,
+          name: ref.name,
+        },
+      });
+    },
+    onPickAssignee: (ref) => {
+      void pickHypitoField({ data: { field: "assignee", id: ref.id, name: ref.name } });
+    },
+    onPickDate: (isoDate) => {
+      void pickHypitoField({ data: { field: "date", iso: isoDate } });
+    },
+    onConfirmInterpretedDate: (confirmed) => {
+      void pickHypitoField({ data: { field: "date_confirm", confirmed } });
+    },
+    onOpenSourceMessage: (ref) => {
+      // Mesma navegação de canal/DM que o resto do Chat já usa — abre a
+      // conversa de origem; a mensagem específica fica visível na lista
+      // recente (sem um mecanismo de "scroll até o id" hoje no Chat).
+      setActiveConvo(ref.convoId);
+    },
+    onCompleteTaskFromAlert: async (ref) => {
+      const scope = (ref.meta?.scope as "projeto" | "campanha" | "marketing" | null) ?? null;
+      const scopeId = (ref.meta?.scopeId as string | null) ?? null;
+      await completeHypitoTaskFromAlert({ data: { taskId: ref.id, scope, scopeId } });
+    },
+    onReplanTaskFromAlert: (ref) => {
+      // Replanejar não tem um "abrir questionário" isolado — ele começa
+      // quando o campo Prazo muda pra uma data crítica (ver
+      // `handleDueDateChange`, `TaskBoard.tsx`); abrir a tarefa já deixa
+      // a pessoa a um clique disso, sem duplicar essa lógica aqui.
+      onOpenHypitoEntity(ref);
+    },
+    onBlockTaskFromAlert: (ref) => {
+      sessionStorage.setItem(HYPITO_OPEN_ACTION_KEY, ref.id);
+      onOpenHypitoEntity(ref);
+    },
+  };
+
+  /** "Criar tarefa" no menu de uma mensagem (pedido do upgrade do Hypito,
+   * seção 5) — funciona em qualquer canal/DM, não só na conversa do
+   * Hypito. Abre o painel flutuante e semeia o rascunho a partir do texto
+   * da mensagem + menções de usuário já presentes nela; o escopo do canal
+   * só é sugerido quando o próprio canal já está vinculado a um projeto/
+   * campanha (`activeChannel.linkedScope`) — nunca inventado. */
+  const onCreateTaskFromMessage = (m: ChatMessage) => {
+    const mentionedUserIds = (m.mentions ?? [])
+      .filter((mn) => mn.kind === "user")
+      .map((mn) => mn.id);
+    const channelName = activeChannel?.name ?? (isDm ? "Conversa direta" : "Chat");
+    openHypitoWidget();
+    void seedHypitoTaskFromMessage({
+      data: {
+        messageId: m.id,
+        convoId: m.convoId,
+        channelName,
+        authorName: m.authorName,
+        text: m.text,
+        createdAtIso: new Date(m.createdAt).toISOString(),
+        mentionedUserIds,
+        scopeType: activeChannel?.linkedScope?.type,
+        scopeId: activeChannel?.linkedScope?.id,
+        scopeName: activeChannel?.linkedScope?.name,
+      },
+    });
   };
 
   const updateMessage = (id: string, text: string, mentions: ChatMention[]) => {
@@ -810,7 +917,7 @@ export function ChatSection() {
                 onReply={setReplyingTo}
                 onReact={(id, emoji) => void toggleReaction(id, emoji)}
                 allowUserMentions={!isDm}
-                members={members}
+                members={mentionMembers}
                 tasks={tasks}
                 projects={projects}
                 campaigns={campaigns}
@@ -821,6 +928,7 @@ export function ChatSection() {
                 onOpenTask={openTask}
                 onOpenMention={openMention}
                 hypitoHandlers={hypitoHandlers}
+                onCreateTask={onCreateTaskFromMessage}
               />
             )}
 
@@ -830,7 +938,7 @@ export function ChatSection() {
                 convoId={activeId}
                 onSend={sendMessage}
                 allowUserMentions={!isDm}
-                members={members}
+                members={mentionMembers}
                 tasks={tasks}
                 projects={projects}
                 campaigns={campaigns}
@@ -1498,6 +1606,7 @@ function MessageList({
   onOpenTask,
   onOpenMention,
   hypitoHandlers,
+  onCreateTask,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -1519,6 +1628,7 @@ function MessageList({
   onOpenTask: (taskId: string) => void;
   onOpenMention: (m: ChatMention) => void;
   hypitoHandlers?: HypitoCardHandlers;
+  onCreateTask?: (m: ChatMessage) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Posição de rolagem por conversa (o próprio `scrollRef` é reaproveitado
@@ -2059,6 +2169,16 @@ function MessageList({
                       >
                         <Reply className="h-3 w-3" />
                       </button>
+                      {onCreateTask && (
+                        <button
+                          onClick={() => onCreateTask(m)}
+                          aria-label="Criar tarefa"
+                          title="Criar tarefa"
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <ListChecks className="h-3 w-3" />
+                        </button>
+                      )}
                       {mine && (
                         <>
                           <button

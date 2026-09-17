@@ -39,7 +39,33 @@ export type HypitoDraft = {
   scopeName: string | null;
   dueAtIso: string | null;
   priority: "Urgente" | "Alta" | "Normal" | "Baixa";
+  /** @deprecated campo do fluxo antigo (pergunta única "para quem e para
+   * quando") — mantido só pra não quebrar leitura de rascunhos já
+   * persistidos; o fluxo novo usa `scopeAsked`/`assigneeAsked`/
+   * `dueDateAsked`/`dueDateConfirmed` (pedido: seletores em vez de texto,
+   * um campo de cada vez). */
   askedAssigneeAndDate: boolean;
+  /** Título/responsável/escopo/prazo são todos obrigatórios (pedido, seção
+   * 1) — cada `*Asked` marca que o picker daquele campo já foi mostrado
+   * (evita reperguntar em loop); `dueDateConfirmed` marca que a data
+   * INTERPRETADA de linguagem natural já foi confirmada explicitamente
+   * pelo usuário (pedido: "sempre mostrar a data interpretada antes da
+   * confirmação"). */
+  scopeAsked: boolean;
+  assigneeAsked: boolean;
+  dueDateAsked: boolean;
+  dueDateConfirmed: boolean;
+  /** Mensagem de chat que originou este rascunho (pedido, seção 5) — só
+   * presente quando veio de "Criar tarefa" no menu de uma mensagem ou de
+   * `@Hypito` num canal vinculado; nunca inventado. */
+  sourceMessage?: {
+    messageId: string;
+    convoId: string;
+    channelName: string;
+    authorName: string;
+    excerpt: string;
+    createdAtIso: string;
+  } | null;
 };
 
 export type PendingClarificationCandidate = { id: string; name: string; score: number };
@@ -62,7 +88,14 @@ export type HypitoConversationState = {
   lastEntity: LastEntity | null;
   pendingClarification: PendingClarification | null;
   draft: HypitoDraft | null;
-  awaitingField: "title" | "assignee_and_date" | null;
+  awaitingField:
+    | "title"
+    | "assignee_and_date"
+    | "scope"
+    | "assignee"
+    | "date"
+    | "date_confirm"
+    | null;
   updatedAt: string;
 };
 

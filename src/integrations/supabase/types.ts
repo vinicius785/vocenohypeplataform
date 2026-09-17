@@ -324,6 +324,7 @@ export type Database = {
           created_at: string
           id: string
           is_private: boolean
+          linked_scope: Json | null
           name: string
           photo: string | null
           slug: string | null
@@ -335,6 +336,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_private?: boolean
+          linked_scope?: Json | null
           name: string
           photo?: string | null
           slug?: string | null
@@ -346,6 +348,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_private?: boolean
+          linked_scope?: Json | null
           name?: string
           photo?: string | null
           slug?: string | null

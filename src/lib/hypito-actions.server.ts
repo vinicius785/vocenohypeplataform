@@ -40,6 +40,17 @@ export type TaskDraft = {
   scopeName: string | null;
   dueAtIso: string | null;
   priority: "Urgente" | "Alta" | "Normal" | "Baixa";
+  /** Presente só quando a tarefa nasceu de uma mensagem do chat (pedido,
+   * seção 5) — gravado dentro do JSON da tarefa (`createdFrom`), nunca
+   * inventado quando a origem foi uma conversa digitada direto. */
+  sourceMessage?: {
+    messageId: string;
+    convoId: string;
+    channelName: string;
+    authorName: string;
+    excerpt: string;
+    createdAtIso: string;
+  } | null;
 };
 
 export type ReminderDraft = {
@@ -136,6 +147,7 @@ export type ConfirmResult =
       assigneeIsRequester: boolean;
       dueAtIso: string | null;
       priority: "Urgente" | "Alta" | "Normal" | "Baixa";
+      sourceMessage?: TaskDraft["sourceMessage"];
     }
   | { ok: false; error: string };
 
@@ -212,6 +224,7 @@ export async function confirmPendingAction(
         createdAt: new Date().toISOString(),
         createdVia: "hypito",
         requestedBy: requesterId,
+        createdFrom: draft.sourceMessage ?? undefined,
       };
       let insertError: { message: string } | null = null;
       if (draft.scope === "projeto" && draft.scopeId) {
@@ -248,6 +261,7 @@ export async function confirmPendingAction(
         assigneeIsRequester: draft.assigneeIsRequester ?? false,
         dueAtIso: draft.dueAtIso,
         priority: draft.priority,
+        sourceMessage: draft.sourceMessage ?? undefined,
       };
       await db
         .from("hypito_pending_actions")
@@ -319,6 +333,53 @@ export async function confirmPendingAction(
     await db.from("hypito_pending_actions").update({ status: "expired" }).eq("id", pendingActionId);
     return { ok: false, error: message };
   }
+}
+
+/** "Concluir" no alerta de tarefas atrasadas (pedido, seção 2) — o clique
+ * no botão nomeado já É a confirmação explícita exigida (não abre um
+ * segundo questionário pra uma ação de um único campo, já claramente
+ * rotulada). Revalida permissão E localiza a linha real antes de gravar —
+ * nunca confia no `scope`/`scopeId` informado sem checar que a tarefa
+ * realmente está lá. Não escreve no `activity[]` visual da tarefa (isso
+ * exigiria replicar o formato de `Activity` de `TaskBoard.tsx`, um
+ * componente client-side grande demais pra importar aqui) — fica só
+ * registrado em `hypito_action_log`, mesma auditoria de toda ação do
+ * Hypito (limitação documentada, não um descuido). */
+export async function completeTaskFromAlert(
+  db: DB,
+  access: UserAccess,
+  requesterId: string,
+  task: { id: string; scope: "projeto" | "campanha" | "marketing" | null; scopeId?: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  assertCan(access, task.scope === "campanha" ? "campanhas" : "projetos");
+  const table =
+    task.scope === "projeto"
+      ? "projeto_tarefas"
+      : task.scope === "campanha"
+        ? "campanha_tarefas"
+        : "marketing_standalone_tasks";
+  const { data: row, error: fetchError } = await db
+    .from(table)
+    .select("id, data")
+    .eq("id", task.id)
+    .maybeSingle();
+  if (fetchError || !row) return { ok: false, error: new HypitoError("entity_not_found").message };
+  const data = { ...(row.data as Record<string, unknown>) };
+  data.status = "Concluído";
+  data.completedAt = new Date().toISOString();
+  const { error: updateError } = await db
+    .from(table)
+    .update({ data: data as unknown as never })
+    .eq("id", task.id);
+  if (updateError) return { ok: false, error: new HypitoError("persistence_unavailable").message };
+  await db.from("hypito_action_log").insert({
+    user_id: requesterId,
+    kind: "complete_task_from_alert",
+    target_kind: task.scope ?? "marketing",
+    target_id: task.id,
+    detail: { viaHypito: true } as unknown as never,
+  });
+  return { ok: true };
 }
 
 export async function cancelPendingAction(

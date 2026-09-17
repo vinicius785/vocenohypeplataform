@@ -19,6 +19,13 @@ export type ChatChannel = {
   photo?: string;
   allowedMemberIds?: string[];
   sortOrder?: number;
+  /** Vínculo opcional com um projeto/campanha (upgrade do Hypito, seção
+   * 5) — habilita `@Hypito` DENTRO do canal, sem inventar um vínculo:
+   * `@Hypito` só funciona em canais com este campo preenchido. Nunca
+   * confundir com o `scope` de uma TAREFA (`Task.scope`/`scopeId`) — é o
+   * canal inteiro que fica ligado a um projeto/campanha, não uma
+   * mensagem específica. */
+  linkedScope?: { type: "project" | "campaign"; id: string; name: string } | null;
 };
 
 export type MemberStatus = "online" | "away" | "offline";
@@ -179,6 +186,7 @@ type ChannelRow = {
   allowed_member_ids: string[] | null;
   sort_order: number;
   created_at: string;
+  linked_scope?: { type: "project" | "campaign"; id: string; name: string } | null;
 };
 type MessageRow = {
   id: string;
@@ -210,6 +218,7 @@ function mapChannel(r: ChannelRow): ChatChannel {
     photo: r.photo ?? undefined,
     allowedMemberIds: r.allowed_member_ids ?? [],
     sortOrder: r.sort_order,
+    linkedScope: r.linked_scope ?? null,
   };
 }
 function mapMessage(r: MessageRow): ChatMessage {
@@ -239,7 +248,7 @@ function mapMessage(r: MessageRow): ChatMessage {
 async function reloadChannels() {
   const { data } = await supabase
     .from("chat_channels")
-    .select("id,name,is_private,photo,allowed_member_ids,sort_order,created_at")
+    .select("id,name,is_private,photo,allowed_member_ids,sort_order,created_at,linked_scope")
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   channelsCache = (data ?? []).map((r) => mapChannel(r as ChannelRow));
@@ -447,7 +456,7 @@ export async function createChannel(input: {
       allowed_member_ids: input.allowedMemberIds ?? [],
       sort_order: maxSort + 1,
     })
-    .select("id,name,is_private,photo,allowed_member_ids,sort_order,created_at")
+    .select("id,name,is_private,photo,allowed_member_ids,sort_order,created_at,linked_scope")
     .single();
   if (error || !data) return null;
   const mapped = mapChannel(data as ChannelRow);
@@ -460,7 +469,13 @@ export async function createChannel(input: {
 
 export async function updateChannel(
   id: string,
-  patch: { name?: string; private?: boolean; photo?: string; allowedMemberIds?: string[] },
+  patch: {
+    name?: string;
+    private?: boolean;
+    photo?: string;
+    allowedMemberIds?: string[];
+    linkedScope?: { type: "project" | "campaign"; id: string; name: string } | null;
+  },
 ) {
   const uuid = id.startsWith("c:") ? id.slice(2) : id;
   const payload: {
@@ -468,11 +483,13 @@ export async function updateChannel(
     is_private?: boolean;
     photo?: string | null;
     allowed_member_ids?: string[];
+    linked_scope?: { type: "project" | "campaign"; id: string; name: string } | null;
   } = {};
   if (patch.name !== undefined) payload.name = patch.name;
   if (patch.private !== undefined) payload.is_private = patch.private;
   if (patch.photo !== undefined) payload.photo = patch.photo ?? null;
   if (patch.allowedMemberIds !== undefined) payload.allowed_member_ids = patch.allowedMemberIds;
+  if (patch.linkedScope !== undefined) payload.linked_scope = patch.linkedScope;
   await supabase.from("chat_channels").update(payload).eq("id", uuid);
   channelsCache = channelsCache.map((c) =>
     c.id === id
@@ -482,6 +499,7 @@ export async function updateChannel(
           private: patch.private ?? c.private,
           photo: patch.photo ?? c.photo,
           allowedMemberIds: patch.allowedMemberIds ?? c.allowedMemberIds,
+          linkedScope: patch.linkedScope !== undefined ? patch.linkedScope : c.linkedScope,
         }
       : c,
   );

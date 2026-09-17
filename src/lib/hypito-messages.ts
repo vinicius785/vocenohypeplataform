@@ -52,7 +52,21 @@ export type HypitoActionId =
   | "confirm_task_creation"
   | "edit_task_draft"
   | "cancel_pending_action"
-  | "retry_query";
+  | "retry_query"
+  | "pick_assignee"
+  | "pick_scope"
+  | "pick_date"
+  | "confirm_interpreted_date"
+  | "open_calendar"
+  | "include_source_attachments"
+  | "skip_source_attachments"
+  | "complete_task_from_alert"
+  | "replan_task_from_alert"
+  | "block_task_from_alert"
+  | "open_weekly_full_report"
+  | "open_my_open_tasks"
+  | "open_blocked_overview"
+  | "open_next_week_agenda";
 
 export type HypitoActionVariant = "primary" | "secondary" | "destructive" | "link";
 
@@ -100,6 +114,19 @@ type HypitoMessageBase = {
   actions: HypitoAction[];
 };
 
+/** Referência à mensagem de chat que originou uma tarefa (pedido, seção 5:
+ * "salvar link pra mensagem original, canal, autor, trecho e data") — só
+ * presente quando a tarefa nasceu de "Criar tarefa"/`@Hypito` num canal,
+ * nunca inventado. */
+export type SourceMessageRef = {
+  messageId: string;
+  convoId: string;
+  channelName: string;
+  authorName: string;
+  excerpt: string;
+  createdAtIso: string;
+};
+
 export type TaskDraftData = {
   title: string;
   assignee: HypitoEntityRef | null;
@@ -111,6 +138,7 @@ export type TaskDraftData = {
   dueAtIso: string | null;
   priority: HypitoPriority;
   description: string | null;
+  sourceMessage?: SourceMessageRef;
 };
 
 export type TaskCreatedData = {
@@ -120,6 +148,7 @@ export type TaskCreatedData = {
   scope: HypitoEntityRef | null;
   dueAtIso: string | null;
   priority: HypitoPriority;
+  sourceMessage?: SourceMessageRef;
 };
 
 export type TaskListItem = {
@@ -177,6 +206,38 @@ export type EntityChoiceData = {
   options: EntityChoiceOption[];
 };
 
+/** Seletor rico de responsável (pedido, seção 1: "avatar, nome, cargo ou
+ * equipe, indicador de disponibilidade") — só lista quem `hypito-tools
+ * .server.ts` já confirmou ter acesso ao `scope`, nunca uma lista genérica. */
+export type AssigneeOption = {
+  ref: HypitoEntityRef; // type: "user"
+  role: string | null;
+  availability: "online" | "away" | "offline" | null;
+};
+
+export type AssigneePickerData = {
+  scope: HypitoEntityRef | null;
+  options: AssigneeOption[];
+};
+
+/** Seletor de projeto/campanha com busca, recentes e seções (pedido,
+ * seção 1) — `clientName` só aparece quando aplicável, nunca inventado. */
+export type ScopeOption = { ref: HypitoEntityRef; clientName?: string };
+
+export type ScopePickerData = {
+  recent: ScopeOption[];
+  projects: ScopeOption[];
+  campaigns: ScopeOption[];
+};
+
+/** Prazo por calendário + linguagem natural (pedido, seção 1) —
+ * `interpretedIso`/`interpretedLabel` só existem quando o texto original já
+ * trazia uma pista de data; sem pista, o card abre direto no calendário. */
+export type DatePickerData = {
+  interpretedIso: string | null;
+  interpretedLabel: string | null;
+};
+
 export type FriendlyErrorData = {
   message: string;
   whatWasNotChanged?: string;
@@ -188,6 +249,21 @@ export type SuccessData = {
   entity: HypitoEntityRef | null;
 };
 
+/** Alerta de tarefas atrasadas acionável (pedido, seção 2) — cada item leva
+ * as 4 ações (Abrir/Concluir/Replanejar/Bloquear) já fechadas em
+ * `HypitoAction`, nunca uma URL solta. */
+export type OverdueAlertItem = {
+  task: HypitoEntityRef;
+  scope: HypitoEntityRef | null;
+  daysLate: number;
+  priority: HypitoPriority;
+};
+
+export type OverdueAlertData = {
+  items: OverdueAlertItem[];
+  totalCount: number;
+};
+
 export type HypitoMessage =
   | (HypitoMessageBase & { kind: "text" })
   | (HypitoMessageBase & { kind: "task_draft"; pendingActionId: string; data: TaskDraftData })
@@ -197,6 +273,10 @@ export type HypitoMessage =
   | (HypitoMessageBase & { kind: "project_summary"; data: ScopeSummaryData })
   | (HypitoMessageBase & { kind: "agenda_summary"; data: AgendaSummaryData })
   | (HypitoMessageBase & { kind: "entity_choice"; data: EntityChoiceData })
+  | (HypitoMessageBase & { kind: "assignee_picker"; data: AssigneePickerData })
+  | (HypitoMessageBase & { kind: "scope_picker"; data: ScopePickerData })
+  | (HypitoMessageBase & { kind: "date_picker"; data: DatePickerData })
+  | (HypitoMessageBase & { kind: "overdue_alert"; data: OverdueAlertData })
   | (HypitoMessageBase & { kind: "friendly_error"; data: FriendlyErrorData })
   | (HypitoMessageBase & { kind: "success"; data: SuccessData });
 

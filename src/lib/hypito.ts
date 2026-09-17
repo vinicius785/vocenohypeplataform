@@ -52,6 +52,13 @@ export function isHypitoAuthorId(authorId: string | null | undefined): boolean {
   return authorId === HYPITO_AUTHOR_ID;
 }
 
+/** `sessionStorage` key usada por "Replanejar"/"Bloquear" no alerta de
+ * tarefas atrasadas (`ChatSection.tsx`) pra pedir ao modal de tarefa
+ * (`TaskBoard.tsx`) que pré-arme o questionário certo assim que abrir —
+ * mesmo padrão já usado por `OPEN_CAMPANHA_TASK_KEY` pra "abrir esta
+ * tarefa específica" entre uma navegação e a outra. */
+export const HYPITO_OPEN_ACTION_KEY = "hypito:open-task-action";
+
 /** Chave de idempotência do relatório semanal — uma execução "real" (não
  * prévia) por workspace e por semana. Formato pedido:
  * `weekly-report:{workspaceId}:{weekStart}`. */

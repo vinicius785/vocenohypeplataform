@@ -26,6 +26,12 @@ import {
 } from "@/lib/hypito-data.server";
 import { HYPITO_AUTHOR_ID, HYPITO_NAME, HYPITO_AVATAR_URL } from "@/lib/hypito";
 import type { LinkedRef } from "@/lib/hypito-insights";
+import {
+  HYPITO_MESSAGE_VERSION,
+  type HypitoMessage,
+  type HypitoEntityRef,
+  type OverdueAlertItem,
+} from "@/lib/hypito-messages";
 
 type DB = SupabaseClient<Database>;
 
@@ -45,6 +51,14 @@ export type DetectedAlert = {
   dueDateIso?: string;
   responsibleName?: string;
   link: LinkedRef;
+  /** Só presente em `tarefa_atrasada` — necessário pro card acionável
+   * (pedido, seção 2: botões Abrir/Concluir/Replanejar/Bloquear), nunca
+   * inventado pros demais tipos de alerta. */
+  taskId?: string;
+  scope?: "projeto" | "campanha" | "marketing";
+  scopeId?: string;
+  scopeName?: string;
+  priority?: string;
 };
 
 const COOLDOWN_DAYS: Record<AlertType, number> = {
@@ -81,6 +95,10 @@ async function detectAlerts(db: DB): Promise<DetectedAlert[]> {
           dueDateIso: t.dueDate.toISOString().slice(0, 10),
           responsibleName: assigneeName,
           link: t.link,
+          taskId: t.id,
+          scope: t.scope,
+          scopeId: t.scopeId,
+          priority: t.priority,
         });
       }
     }
@@ -237,14 +255,53 @@ export async function runPreventiveAlerts(): Promise<AlertRunResult> {
       lines.push(`• ${parts.join(" — ")} → ${a.link.href}`);
     }
     const convoId = "dm:" + [userId, HYPITO_AUTHOR_ID].sort().join("|");
+    const overdueOnly = alerts.filter((a) => a.type === "tarefa_atrasada" && a.taskId);
+    const hypitoPayload = buildOverdueAlertPayload(overdueOnly, new Date(now));
     await db.from("chat_messages").insert({
       convo_id: convoId,
       author_id: HYPITO_AUTHOR_ID,
       author_name: HYPITO_NAME,
       author_photo: HYPITO_AVATAR_URL,
       text: lines.join("\n"),
+      hypito_payload: (hypitoPayload as unknown as never) ?? null,
     });
     result.push({ userId, alertsSent: alerts.length });
   }
   return result;
+}
+
+/** Card acionável do alerta de atraso (pedido, seção 2: botões Abrir/
+ * Concluir/Replanejar/Bloquear por tarefa) — só construído quando há pelo
+ * menos um `tarefa_atrasada` real nesta entrega; os demais tipos de
+ * alerta (reunião, influenciador, prioridade sem prazo) continuam só em
+ * texto, já que os botões pedidos são especificamente de tarefa. */
+function buildOverdueAlertPayload(overdue: DetectedAlert[], now: Date): HypitoMessage | null {
+  if (overdue.length === 0) return null;
+  const items: OverdueAlertItem[] = overdue.slice(0, 5).map((a) => {
+    const task: HypitoEntityRef = {
+      type: "task",
+      id: a.taskId!,
+      name: a.title,
+      meta: { scope: a.scope ?? null, scopeId: a.scopeId ?? null },
+    };
+    const daysLate = a.dueDateIso
+      ? Math.max(1, Math.floor((now.getTime() - new Date(a.dueDateIso).getTime()) / 86_400_000))
+      : 0;
+    return {
+      task,
+      scope: null,
+      daysLate,
+      priority: (a.priority as OverdueAlertItem["priority"]) ?? "Normal",
+    };
+  });
+  return {
+    version: HYPITO_MESSAGE_VERSION,
+    kind: "overdue_alert",
+    title: "Tarefas atrasadas",
+    textFallback: `Você tem ${overdue.length} tarefa${overdue.length === 1 ? "" : "s"} atrasada${overdue.length === 1 ? "" : "s"}.`,
+    state: "default",
+    timestamp: now.toISOString(),
+    actions: [],
+    data: { items, totalCount: overdue.length },
+  };
 }

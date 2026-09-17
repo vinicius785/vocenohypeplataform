@@ -332,6 +332,100 @@ export async function summarizeScope(
   };
 }
 
+export type AssigneeCandidate = {
+  id: string;
+  name: string;
+  role: string | null;
+  availability: "online" | "away" | "offline" | null;
+};
+
+const AVAILABILITY_STALE_MS = 90_000; // mesmo limiar de `chat-store.ts`
+
+/** Candidatos a responsável pro seletor rico do Hypito (pedido, seção 1:
+ * "avatar, nome, cargo, disponibilidade"). A plataforma não tem hoje
+ * conceito de "membro do projeto/campanha" (confirmado — só permissão por
+ * MÓDULO, sem lista de acesso por registro) nem um campo de cargo/equipe
+ * em `profiles` — por isso `role` fica sempre `null` (nunca inventado) e
+ * a lista é todo o time com o módulo liberado, não uma lista restrita ao
+ * escopo (limitação documentada, não um bug). Disponibilidade vem de
+ * `chat_status`, a mesma tabela/limiar que `chat-store.ts` usa no
+ * cliente — reaproveitada aqui do lado do servidor. */
+export async function listAssigneeCandidates(
+  db: DB,
+  access: UserAccess,
+  requesterId: string,
+  requesterName: string,
+): Promise<AssigneeCandidate[]> {
+  assertCan(access, "projetos");
+  const [people, { data: statusRows }] = await Promise.all([
+    fetchTeamDirectory(db),
+    db.from("chat_status").select("user_id,status,updated_at"),
+  ]);
+  const now = Date.now();
+  const statusByUser = new Map((statusRows ?? []).map((r) => [r.user_id, r]));
+  const availabilityFor = (id: string): AssigneeCandidate["availability"] => {
+    const row = statusByUser.get(id);
+    if (!row) return null;
+    const stale = now - new Date(row.updated_at).getTime() > AVAILABILITY_STALE_MS;
+    if (stale) return "offline";
+    return (row.status as "online" | "away" | "offline") ?? null;
+  };
+  const self: AssigneeCandidate = {
+    id: requesterId,
+    name: requesterName,
+    role: null,
+    availability: availabilityFor(requesterId),
+  };
+  const others = people
+    .filter((p) => p.id !== requesterId)
+    .map((p) => ({ id: p.id, name: p.name, role: null, availability: availabilityFor(p.id) }));
+  return [self, ...others].slice(0, 20);
+}
+
+export type ScopeCandidate = { id: string; name: string; clientName?: string };
+export type ScopeCandidatesResult = { projects: ScopeCandidate[]; campaigns: ScopeCandidate[] };
+
+/** Candidatos a projeto/campanha pro seletor rico (pedido, seção 1: busca,
+ * seções "Projetos"/"Campanhas", nome do cliente quando aplicável) —
+ * mesma fonte de dados de `fetchAllProjects`/`fetchAllCampaigns`, só que
+ * preservando o nome do cliente dono da campanha. */
+export async function listScopeCandidates(
+  db: DB,
+  access: UserAccess,
+): Promise<ScopeCandidatesResult> {
+  const [projects, campaignsRes] = await Promise.all([
+    (async () => {
+      try {
+        return await fetchAllProjects(db);
+      } catch {
+        return [];
+      }
+    })(),
+    (async () => {
+      try {
+        assertCan(access, "campanhas");
+        const { data, error } = await db.from("clientes").select("id, data");
+        if (error) throw new Error(error.message);
+        const out: ScopeCandidate[] = [];
+        for (const row of data ?? []) {
+          const clientData = row.data as { nome?: string; campanhas?: RawCampanha[] } | null;
+          const clientName = clientData?.nome;
+          for (const c of clientData?.campanhas ?? []) {
+            if (c.id) out.push({ id: c.id, name: c.nome ?? "(sem nome)", clientName });
+          }
+        }
+        return out;
+      } catch {
+        return [];
+      }
+    })(),
+  ]);
+  return {
+    projects: projects.map((p) => ({ id: p.id, name: p.name })).slice(0, 20),
+    campaigns: campaignsRes.slice(0, 20),
+  };
+}
+
 /** Tarefas de uma campanha/projeto (não de uma pessoa) — usada na
  * continuação de contexto ("Quais tarefas estão atrasadas?" logo depois
  * de resolver uma campanha, pedido seção 7, segundo exemplo). */

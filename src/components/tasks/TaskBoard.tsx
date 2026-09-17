@@ -38,6 +38,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { TomatoIcon } from "@/components/focus/TomatoIcon";
 import { toast } from "sonner";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
+import { HYPITO_OPEN_ACTION_KEY } from "@/lib/hypito";
 import {
   useTaskDependencies,
   dependenciesOf,
@@ -564,6 +565,18 @@ export type Task = {
    * existe mais, tratado como "sem fase" na leitura). Ver comentário
    * equivalente em `projetos.ts`'s `Task.roadmapPhaseId`. */
   roadmapPhaseId?: string;
+  /** Presente só quando a tarefa nasceu do menu "Criar tarefa" de uma
+   * mensagem do chat ou de `@Hypito` (pedido do upgrade do Hypito, seção
+   * 5) — gravado direto por `hypito-actions.server.ts`, nunca por
+   * `save()` do modal. */
+  createdFrom?: {
+    messageId: string;
+    convoId: string;
+    channelName: string;
+    authorName: string;
+    excerpt: string;
+    createdAtIso: string;
+  };
 };
 
 /** `assignees` (novo, múltiplos) tem prioridade; cai para `assignee` (legado, único) quando ausente. */
@@ -3127,6 +3140,30 @@ export function TaskDialog({
     if (pendingBlockAction) return;
     setPendingBlockAction({ mode: "resolve" });
   };
+
+  // "Bloquear" no alerta de tarefas atrasadas do Hypito (`ChatSection.tsx`)
+  // grava o id da tarefa em `sessionStorage` antes de navegar — ao montar
+  // com essa mesma tarefa já aberta, pré-arma o MESMO questionário que o
+  // botão "Bloquear tarefa" do menu já abre, satisfazendo literalmente o
+  // pedido ("abrir o questionário... no campo de comentários da tarefa")
+  // sem duplicar nenhuma lógica de bloqueio.
+  useEffect(() => {
+    if (!initial) return;
+    let flagged: string | null = null;
+    try {
+      flagged = sessionStorage.getItem(HYPITO_OPEN_ACTION_KEY);
+    } catch {
+      return;
+    }
+    if (flagged !== initial.id) return;
+    try {
+      sessionStorage.removeItem(HYPITO_OPEN_ACTION_KEY);
+    } catch {
+      /* não crítico */
+    }
+    openBlockComposer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.id]);
 
   const cancelBlockAction = () => {
     blockComposerHasData.current = false;

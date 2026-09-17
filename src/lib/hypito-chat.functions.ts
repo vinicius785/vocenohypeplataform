@@ -93,6 +93,7 @@ function buildSuccessMessage(result: ConfirmResult & { ok: true }): HypitoMessag
       : "Sem projeto/campanha",
     `Prioridade: ${result.priority}`,
   ];
+  if (result.sourceMessage) lines.push("Criada a partir de uma conversa no Chat.");
   return {
     version: HYPITO_MESSAGE_VERSION,
     kind: "task_created",
@@ -108,6 +109,7 @@ function buildSuccessMessage(result: ConfirmResult & { ok: true }): HypitoMessag
       scope,
       dueAtIso: result.dueAtIso,
       priority: result.priority,
+      sourceMessage: result.sourceMessage ?? undefined,
     },
   };
 }
@@ -248,6 +250,184 @@ export const confirmHypitoAction = createServerFn({ method: "POST" })
       : buildFailedConfirmMessage(result.error);
     await updateCardByPendingAction(supabaseAdmin, convoId, data.pendingActionId, payload);
     return result;
+  });
+
+const ChannelMessageInput = z.object({ convoId: z.string(), text: z.string().min(1) });
+
+/** `@Hypito` dentro de um canal vinculado a projeto/campanha (pedido do
+ * upgrade do Hypito, seção 5) — mesmo motor de `sendHypitoMessage`, só
+ * que a resposta é publicada no PRÓPRIO canal (`data.convoId`), não na
+ * DM. O motor (`handleUserMessage`) é agnóstico de onde a resposta será
+ * publicada — só o destino do insert muda aqui. */
+export const sendHypitoChannelMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof ChannelMessageInput>) => ChannelMessageInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+    const { count } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("convo_id", data.convoId)
+      .eq("author_id", context.userId)
+      .gte("created_at", since);
+    if ((count ?? 0) > RATE_LIMIT_MAX) {
+      return {
+        ok: false as const,
+        error: "Muitas mensagens em pouco tempo — aguarde um instante.",
+      };
+    }
+    const { handleUserMessage } = await import("@/lib/hypito-conversation.server");
+    const { payload } = await handleUserMessage(supabaseAdmin, context.userId, data.text);
+    const { error } = await supabaseAdmin.from("chat_messages").insert({
+      convo_id: data.convoId,
+      author_id: HYPITO_AUTHOR_ID,
+      author_name: HYPITO_NAME,
+      author_photo: HYPITO_AVATAR_URL,
+      text: payload.textFallback,
+      hypito_payload: payload as unknown as never,
+    });
+    if (error) {
+      logHypitoError("sendHypitoChannelMessage:insert", error, { userId: context.userId });
+      return { ok: false as const, error: new HypitoError("persistence_unavailable").message };
+    }
+    return { ok: true as const };
+  });
+
+const PickFieldInput = z.object({
+  field: z.enum(["scope", "assignee", "date", "date_confirm"]),
+  scopeType: z.enum(["project", "campaign"]).optional(),
+  id: z.string().optional(),
+  name: z.string().optional(),
+  iso: z.string().optional(),
+  confirmed: z.boolean().optional(),
+});
+
+/** Resposta a um clique num dos pickers do rascunho (responsável/escopo/
+ * prazo) — nunca reprocessa o clique como texto livre
+ * (`continuePickedField`, `hypito-conversation.server.ts`). Sempre
+ * publica a próxima pergunta/prévia como uma mensagem nova do Hypito, no
+ * mesmo padrão de `sendHypitoMessage`. */
+export const pickHypitoField = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof PickFieldInput>) => PickFieldInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { continuePickedField } = await import("@/lib/hypito-conversation.server");
+    const value =
+      data.field === "scope"
+        ? ({
+            field: "scope" as const,
+            type: data.scopeType!,
+            id: data.id!,
+            name: data.name!,
+          } as const)
+        : data.field === "assignee"
+          ? ({ field: "assignee" as const, id: data.id!, name: data.name! } as const)
+          : data.field === "date"
+            ? ({ field: "date" as const, iso: data.iso! } as const)
+            : ({ field: "date_confirm" as const, confirmed: Boolean(data.confirmed) } as const);
+    const { payload } = await continuePickedField(supabaseAdmin, context.userId, value);
+    const convoId = dmId(context.userId, HYPITO_AUTHOR_ID);
+    const { error } = await supabaseAdmin.from("chat_messages").insert({
+      convo_id: convoId,
+      author_id: HYPITO_AUTHOR_ID,
+      author_name: HYPITO_NAME,
+      author_photo: HYPITO_AVATAR_URL,
+      text: payload.textFallback,
+      hypito_payload: payload as unknown as never,
+    });
+    if (error) {
+      logHypitoError("pickHypitoField:insert", error, { userId: context.userId });
+      return { ok: false as const, error: new HypitoError("persistence_unavailable").message };
+    }
+    return {
+      ok: true as const,
+      pendingActionId: payload.kind === "task_draft" ? payload.pendingActionId : null,
+    };
+  });
+
+const SeedFromMessageInput = z.object({
+  messageId: z.string(),
+  convoId: z.string(),
+  channelName: z.string(),
+  authorName: z.string(),
+  text: z.string(),
+  createdAtIso: z.string(),
+  mentionedUserIds: z.array(z.string()).optional(),
+  scopeType: z.enum(["project", "campaign"]).optional(),
+  scopeId: z.string().optional(),
+  scopeName: z.string().optional(),
+});
+
+/** "Criar tarefa" no menu de uma mensagem, ou `@Hypito` num canal
+ * vinculado (pedido, seção 5) — semeia o rascunho a partir da mensagem
+ * (`seedTaskDraftFromMessage`) e publica a primeira pergunta/prévia
+ * exatamente como qualquer outra resposta do Hypito. */
+export const seedHypitoTaskFromMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof SeedFromMessageInput>) =>
+    SeedFromMessageInput.parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { seedTaskDraftFromMessage } = await import("@/lib/hypito-conversation.server");
+    const scopeHint =
+      data.scopeType && data.scopeId && data.scopeName
+        ? { type: data.scopeType, id: data.scopeId, name: data.scopeName }
+        : null;
+    const { payload } = await seedTaskDraftFromMessage(
+      supabaseAdmin,
+      context.userId,
+      {
+        id: data.messageId,
+        convoId: data.convoId,
+        channelName: data.channelName,
+        authorName: data.authorName,
+        text: data.text,
+        createdAtIso: data.createdAtIso,
+        mentionedUserIds: data.mentionedUserIds,
+      },
+      scopeHint,
+    );
+    const convoId = dmId(context.userId, HYPITO_AUTHOR_ID);
+    const { error } = await supabaseAdmin.from("chat_messages").insert({
+      convo_id: convoId,
+      author_id: HYPITO_AUTHOR_ID,
+      author_name: HYPITO_NAME,
+      author_photo: HYPITO_AVATAR_URL,
+      text: payload.textFallback,
+      hypito_payload: payload as unknown as never,
+    });
+    if (error) {
+      logHypitoError("seedHypitoTaskFromMessage:insert", error, { userId: context.userId });
+      return { ok: false as const, error: new HypitoError("persistence_unavailable").message };
+    }
+    return { ok: true as const };
+  });
+
+const CompleteFromAlertInput = z.object({
+  taskId: z.string(),
+  scope: z.enum(["projeto", "campanha", "marketing"]).nullable(),
+  scopeId: z.string().nullable().optional(),
+});
+
+/** "Concluir" no card de alerta de tarefas atrasadas (pedido, seção 2). */
+export const completeHypitoTaskFromAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof CompleteFromAlertInput>) =>
+    CompleteFromAlertInput.parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { completeTaskFromAlert } = await import("@/lib/hypito-actions.server");
+    const { loadUserAccess } = await import("@/lib/hypito-permissions.server");
+    const access = await loadUserAccess(supabaseAdmin, context.userId);
+    return completeTaskFromAlert(supabaseAdmin, access, context.userId, {
+      id: data.taskId,
+      scope: data.scope,
+      scopeId: data.scopeId,
+    });
   });
 
 const CancelInput = z.object({

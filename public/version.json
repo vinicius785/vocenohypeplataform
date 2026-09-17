@@ -1,6 +1,7 @@
 {
-  "version": "1.276.5",
+  "version": "1.277.0",
   "notes": [
+    "1.277.0: Upgrade do Hypito — painel flutuante global (botão no canto inferior direito, disponível em qualquer tela, com a mesma conversa de sempre), seletores ricos ao criar uma tarefa pelo chat (responsável com avatar/disponibilidade, projeto/campanha com busca e seções, calendário com confirmação de data), botão \"Criar tarefa\" no menu de qualquer mensagem do Chat (com vínculo pra mensagem original), \"@Hypito\" dentro de canais vinculados a um projeto/campanha, e alerta de tarefas atrasadas agora com botões de ação (Abrir, Concluir, Replanejar, Bloquear) direto na mensagem.",
     "1.276.5: Reorganiza os cards de tarefa do Kanban (progresso de subtarefas, responsável/prazo/prioridade, indicador de tarefa bloqueada e fase em selo discreto, cada informação na sua própria linha) e refaz a lista de subtarefas dentro do modal de tarefa: agora em formato de tabela compacta, com seletor de status agrupado, edição de responsável/prioridade/prazo direto na linha (sem abrir outro modal), barra de progresso que ignora subtarefas arquivadas, bloqueio de subtarefa reaproveitando o mesmo questionário das tarefas principais, e aviso pra concluir a tarefa principal quando todas as subtarefas terminam.",
     "1.276.0: O Hypito agora responde com cards visuais (tarefa criada, resumo de campanha/projeto, agenda agrupada por dia, listas de tarefas, confirmação e escolha entre opções) em vez de texto cru, com botões reais e links diretos pros itens certos — sem mais rota interna aparecendo na conversa. Corrigido também o cálculo de \"próxima semana\" (antes podia incluir dias da semana seguinte à pedida) e a associação de campanha ao criar uma tarefa mencionando o nome dela junto com um prazo. O Hypito continua em desenvolvimento: a conversa ainda é baseada em regras (sem IA generativa), então frases fora do padrão esperado podem não ser entendidas, e o tom da resposta pode soar menos natural do que uma conversa humana — se algo não funcionar como esperado, tente reformular de um jeito mais direto.",
     "1.275.0: Lança a primeira fase do Hypito, o assistente operacional da Você no Hype — conversa direta fixada no Chat (consulta tarefas, agenda, projetos e campanhas em linguagem natural, com permissões aplicadas no backend), criação assistida de tarefas e lembretes sempre com confirmação explícita antes de gravar qualquer coisa, resumo diário pessoal, relatório semanal automático no canal Geral com insights individuais reais (sem ranking, sem comparação entre pessoas), alertas operacionais preventivos com deduplicação e cooldown, e identidade visual do Hypito no aviso de reunião 5 minutos antes. Nesta primeira versão o Hypito é 100% determinístico (sem IA) e avisa que está em beta na própria conversa.",
@@ -413,6 +414,34 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.277.0",
+      "summary": "Hypito ganha painel flutuante global, seletores ricos e criação de tarefa direto do Chat.",
+      "modules": [
+        {
+          "name": "HYPITO",
+          "tagline": "Assistente operacional da Você no Hype — em desenvolvimento",
+          "items": [
+            {
+              "title": "Painel flutuante em qualquer tela",
+              "description": "Um botão do Hypito fica sempre disponível no canto inferior direito, em qualquer tela da plataforma — abre um painel compacto com a MESMA conversa de sempre, sem perder contexto ao navegar."
+            },
+            {
+              "title": "Seletores ricos ao criar tarefa",
+              "description": "Escolher responsável agora mostra avatar, cargo e disponibilidade; escolher projeto/campanha tem busca e seções (Recentes/Projetos/Campanhas); e o prazo pode ser escolhido num calendário ou confirmado quando o Hypito entende uma data por linguagem natural."
+            },
+            {
+              "title": "Criar tarefa a partir de uma mensagem do Chat",
+              "description": "Qualquer mensagem do Chat agora tem a opção \"Criar tarefa\" no menu — a tarefa criada guarda o vínculo com a mensagem original. Em canais já vinculados a um projeto ou campanha, também dá pra chamar \"@Hypito\" direto na conversa."
+            },
+            {
+              "title": "Alerta de tarefas atrasadas com ações",
+              "description": "O aviso de tarefas atrasadas ganhou botões diretos: Abrir, Concluir, Replanejar ou Bloquear, sem precisar procurar a tarefa manualmente."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.276.5",
       "summary": "Cards do Kanban reorganizados e subtarefas ganham lista em formato de tabela, com edição inline e bloqueio.",
