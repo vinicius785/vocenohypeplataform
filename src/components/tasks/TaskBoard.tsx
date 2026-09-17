@@ -2700,10 +2700,20 @@ export function TaskDialog({
   const [primaryAssignee, setPrimaryAssignee] = useState<string | undefined>();
   const [assigneePickerOpen, setAssigneePickerOpen] = useState(false);
   const isMobileDialog = useIsMobile();
-  // Alterna qual dos 2 blocos (Detalhes / Atividade) aparece no mobile —
-  // no desktop os dois já ficam lado a lado (grid), então esse estado só
-  // importa quando `isMobileDialog`.
-  const [mobileDetailTab, setMobileDetailTab] = useState<"detalhes" | "atividade">("detalhes");
+  // Activity deixou de ser uma coluna permanente — só existe/renderiza
+  // quando `activityOpen`, aberta pelo botão "Atividade · N" no
+  // cabeçalho ou sozinha quando um questionário de bloqueio/
+  // replanejamento começa (ver `useEffect` logo abaixo de
+  // `pendingBlockAction`/`pendingDeadlineChange`). No mobile, controla
+  // qual das duas telas (Detalhes ou Atividade) aparece — nunca as duas
+  // ao mesmo tempo comprimidas.
+  const [activityOpen, setActivityOpen] = useState(false);
+  // Ninguém deve preencher um questionário de bloqueio/replanejamento
+  // sem ver onde ele está — abre a Activity sozinha assim que um dos
+  // dois começa (nunca fecha sozinha; fechar é sempre ação do usuário).
+  useEffect(() => {
+    if (pendingDeadlineChange || pendingBlockAction) setActivityOpen(true);
+  }, [pendingDeadlineChange, pendingBlockAction]);
   const [tags, setTags] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
@@ -2794,6 +2804,22 @@ export function TaskDialog({
     (id) => directoryByRawId.get(id)?.status !== "Concluído",
   );
   const [depPopover, setDepPopover] = useState<null | "menu" | "depends" | "blocks">(null);
+  const [depsOpen, setDepsOpen] = useState(false);
+  const [subtasksOpen, setSubtasksOpen] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  // `dependsOn`/`blocks` só resolvem depois que `allDeps` (store realtime)
+  // carrega — abrir a faixa de Dependências sozinha na primeira vez que
+  // isso acontecer (por tarefa) evita nascer sempre fechada mesmo quando
+  // já existe dependência real.
+  const depsAutoOpenedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !initial?.id) return;
+    if (depsAutoOpenedFor.current === initial.id) return;
+    if (dependsOn.length + blocks.length > 0) {
+      setDepsOpen(true);
+      depsAutoOpenedFor.current = initial.id;
+    }
+  }, [open, initial?.id, dependsOn.length, blocks.length]);
   const depsSectionRef = useRef<HTMLDivElement>(null);
   const historicoSectionRef = useRef<HTMLDivElement>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -2856,7 +2882,10 @@ export function TaskDialog({
     setPendingBlockAction(null);
     setBlockActionBusy(false);
     lastAtomicStatusRef.current = null;
-    setMobileDetailTab("detalhes");
+    setActivityOpen(false);
+    setSubtasksOpen(!!initial?.subtasks?.length);
+    setDepsOpen(false); // reaberto pelo `useEffect` de `dependsOn`/`blocks`, quando resolverem
+    setAttachmentsOpen(!!initial?.attachments?.length);
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
     setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
@@ -3572,7 +3601,6 @@ export function TaskDialog({
     setCommentText("");
   };
 
-  const doneCount = subtasks.filter((s) => s.status === "Concluído").length;
   const toggleAssignee = (name: string) => {
     setAssignees((prev) =>
       prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name],
@@ -3610,7 +3638,11 @@ export function TaskDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           mobileFullScreen
-          className="w-[min(1240px,calc(100vw-48px))] max-w-[1240px] gap-0 overflow-hidden p-0"
+          className={`gap-0 overflow-hidden p-0 ${
+            activityOpen
+              ? "w-[min(1280px,calc(100vw-48px))] max-w-[1280px]"
+              : "w-[min(960px,calc(100vw-48px))] max-w-[960px]"
+          }`}
         >
           <DialogTitle className="sr-only">{initial ? "Editar tarefa" : "Nova tarefa"}</DialogTitle>
           <DialogDescription className="sr-only">
@@ -3638,86 +3670,99 @@ export function TaskDialog({
                 Duplicar dependem de saber o scope atual (`scope`), então
                 ficam fora se ele não vier informado (chamador não sabe onde
                 a tarefa vive). */}
-            {initial && !parentTitle && (
-              <div className="ml-auto flex items-center">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Mais ações da tarefa"
-                      className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {initial && (
-                      <DropdownMenuItem onClick={() => goToFocus(initial.id)}>
-                        <TomatoIcon className="h-3.5 w-3.5" /> Iniciar foco
-                      </DropdownMenuItem>
-                    )}
-                    {scope && (
-                      <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
-                        <FolderInput className="h-3.5 w-3.5" /> Mover para...
-                      </DropdownMenuItem>
-                    )}
-                    {scope && (
-                      <DropdownMenuItem
-                        onClick={() => {
-                          duplicateTask(initial, scope);
-                          toast.success("Tarefa duplicada.");
-                        }}
+            {initial && (
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActivityOpen((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    activityOpen
+                      ? "bg-brand-subtle text-brand"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  Atividade · {activity.length + comments.length}
+                </button>
+                {!parentTitle && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Mais ações da tarefa"
+                        className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
-                        <Copy className="h-3.5 w-3.5" /> Duplicar
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() =>
-                        depsSectionRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        })
-                      }
-                    >
-                      <Link2 className="h-3.5 w-3.5" /> Relacionamentos
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        historicoSectionRef.current?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        })
-                      }
-                    >
-                      <History className="h-3.5 w-3.5" /> Histórico
-                    </DropdownMenuItem>
-                    {status === "Bloqueada" ? (
-                      <DropdownMenuItem onClick={openResolveComposer}>
-                        <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
-                      </DropdownMenuItem>
-                    ) : (
-                      status !== "Concluído" &&
-                      status !== "Arquivado" && (
-                        <DropdownMenuItem onClick={openBlockComposer}>
-                          <Lock className="h-3.5 w-3.5" /> Bloquear tarefa
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {initial && (
+                        <DropdownMenuItem onClick={() => goToFocus(initial.id)}>
+                          <TomatoIcon className="h-3.5 w-3.5" /> Iniciar foco
                         </DropdownMenuItem>
-                      )
-                    )}
-                    {status !== "Arquivado" && (
-                      <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
-                        <Archive className="h-3.5 w-3.5" /> Arquivar
-                      </DropdownMenuItem>
-                    )}
-                    {onDelete && (
+                      )}
+                      {scope && (
+                        <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
+                          <FolderInput className="h-3.5 w-3.5" /> Mover para...
+                        </DropdownMenuItem>
+                      )}
+                      {scope && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            duplicateTask(initial, scope);
+                            toast.success("Tarefa duplicada.");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" /> Duplicar
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
-                        onClick={onDelete}
-                        className="text-destructive focus:text-destructive"
+                        onClick={() =>
+                          depsSectionRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          })
+                        }
                       >
-                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                        <Link2 className="h-3.5 w-3.5" /> Relacionamentos
                       </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          historicoSectionRef.current?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          })
+                        }
+                      >
+                        <History className="h-3.5 w-3.5" /> Histórico
+                      </DropdownMenuItem>
+                      {status === "Bloqueada" ? (
+                        <DropdownMenuItem onClick={openResolveComposer}>
+                          <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
+                        </DropdownMenuItem>
+                      ) : (
+                        status !== "Concluído" &&
+                        status !== "Arquivado" && (
+                          <DropdownMenuItem onClick={openBlockComposer}>
+                            <Lock className="h-3.5 w-3.5" /> Bloquear tarefa
+                          </DropdownMenuItem>
+                        )
+                      )}
+                      {status !== "Arquivado" && (
+                        <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
+                          <Archive className="h-3.5 w-3.5" /> Arquivar
+                        </DropdownMenuItem>
+                      )}
+                      {onDelete && (
+                        <DropdownMenuItem
+                          onClick={onDelete}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             )}
           </div>
@@ -3735,29 +3780,14 @@ export function TaskDialog({
             />
           )}
 
-          {isMobileDialog && initial && (
-            <div className="flex items-center gap-1.5 border-b border-border bg-muted/30 px-4 py-2">
-              {(["detalhes", "atividade"] as const).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setMobileDetailTab(k)}
-                  className={`inline-flex min-h-9 flex-1 items-center justify-center rounded-full px-3.5 text-xs font-medium capitalize ${
-                    mobileDetailTab === k
-                      ? "bg-brand text-brand-foreground"
-                      : "bg-card text-muted-foreground"
-                  }`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid max-h-[80vh] grid-cols-1 overflow-hidden md:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
+          <div
+            className={`grid max-h-[80vh] grid-cols-1 overflow-hidden ${
+              activityOpen ? "md:grid-cols-[minmax(0,1fr)_360px]" : ""
+            }`}
+          >
             <div
               className={`min-h-0 overflow-y-auto ${
-                isMobileDialog && initial && mobileDetailTab !== "detalhes" ? "hidden md:block" : ""
+                isMobileDialog && activityOpen && initial ? "hidden md:block" : ""
               }`}
             >
               <div className="px-8 pb-3 pt-6">
@@ -3821,11 +3851,8 @@ export function TaskDialog({
                 />
               )}
 
-              <div className="mx-6 my-4 rounded-xl border border-border/60 bg-card px-3 py-3 sm:mx-8">
-                <p className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Detalhes
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2">
+              <div className="px-6 py-2 sm:px-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3">
                   <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
                     <select
                       value={status}
@@ -3968,20 +3995,6 @@ export function TaskDialog({
                     </Popover>
                   </Field>
 
-                  <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
-                    <select
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                      className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
-                    >
-                      {TASK_PRIORITIES.map((p) => (
-                        <option key={p} value={p} className="text-foreground">
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-
                   <Field label="Prazo" icon={<Calendar className="h-3.5 w-3.5" />}>
                     <div className="flex w-full flex-wrap items-center gap-2">
                       <DateField
@@ -4011,6 +4024,20 @@ export function TaskDialog({
                         <DeadlineHealthBadge task={initial} />
                       )}
                     </div>
+                  </Field>
+
+                  <Field label="Prioridade" icon={<Flag className="h-3.5 w-3.5" />}>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                      className={`w-full cursor-pointer border-0 bg-transparent p-0 text-sm font-medium outline-none ${PRIORITY_TONE[priority]}`}
+                    >
+                      {TASK_PRIORITIES.map((p) => (
+                        <option key={p} value={p} className="text-foreground">
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </Field>
 
                   {fases && (
@@ -4047,7 +4074,7 @@ export function TaskDialog({
                   <Field
                     label="Etiquetas"
                     icon={<Tag className="h-3.5 w-3.5" />}
-                    className="sm:col-span-2"
+                    className="sm:col-span-3"
                   >
                     <TaskTagsPopover value={tags} onChange={setTags} taskTags={taskTags} />
                   </Field>
@@ -4083,17 +4110,24 @@ export function TaskDialog({
               </div>
 
               {initial && (
-                <div className="space-y-2 border-t border-border px-8 py-4">
+                <div className="space-y-2 px-8 py-2.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-foreground">Subtarefas</span>
-                    {subtasks.length > 0 && (
-                      <span className="text-[11px] text-muted-foreground">
-                        {doneCount}/{subtasks.length}
-                      </span>
-                    )}
                     <button
                       type="button"
-                      onClick={() => setShowSubtaskInput((v) => !v)}
+                      onClick={() => setSubtasksOpen((v) => !v)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-brand"
+                    >
+                      <ChevronRight
+                        className={`h-3 w-3 text-muted-foreground transition-transform ${subtasksOpen ? "rotate-90" : ""}`}
+                      />
+                      Subtarefas · {subtasks.length}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubtasksOpen(true);
+                        setShowSubtaskInput(true);
+                      }}
                       className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                     >
                       <Plus className="h-3.5 w-3.5" />
@@ -4101,18 +4135,8 @@ export function TaskDialog({
                     </button>
                   </div>
 
-                  {subtasks.length === 0 && !showSubtaskInput && (
-                    <button
-                      type="button"
-                      onClick={() => setShowSubtaskInput(true)}
-                      className="flex items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      + Adicionar subtarefa
-                    </button>
-                  )}
-
-                  {(showSubtaskInput || subtasks.length > 0) && (
-                    <div className="space-y-1">
+                  {subtasksOpen && (showSubtaskInput || subtasks.length > 0) && (
+                    <div className="space-y-1 pl-4">
                       {sortedSubtasks.map((s) => {
                         const done = s.status === "Concluído";
                         const subtaskAssignees = getTaskAssignees(s);
@@ -4355,123 +4379,19 @@ export function TaskDialog({
               )}
 
               {initial && (
-                <div className="space-y-2 px-8 py-4">
+                <div className="space-y-2 px-8 py-2.5">
                   <div ref={depsSectionRef} className="space-y-2">
                     <div className="flex items-center gap-1.5">
-                      <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs font-medium text-foreground">Dependências</span>
-                      {dependsOn.length + blocks.length > 0 && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {dependsOn.length + blocks.length}
-                        </span>
-                      )}
-                    </div>
-
-                    {dependsOn.length === 0 && blocks.length === 0 ? (
-                      <p className="pl-5 text-xs text-muted-foreground">Nenhuma dependência</p>
-                    ) : (
-                      <div className="space-y-2 pl-5">
-                        {dependsOn.length > 0 && (
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Depende de
-                            </p>
-                            {dependsOn.map((id) => {
-                              const dep = allDeps.find(
-                                (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
-                              );
-                              const entry = directoryByRawId.get(id);
-                              if (!dep) return null;
-                              return (
-                                <ListRow
-                                  key={dep.id}
-                                  icon={
-                                    entry?.status === "Concluído" ? (
-                                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                    ) : (
-                                      <span
-                                        className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
-                                      />
-                                    )
-                                  }
-                                  title={entry?.label ?? id}
-                                  description={entry?.assignees.join(", ") || undefined}
-                                  meta={entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined}
-                                  status={
-                                    entry
-                                      ? {
-                                          label: entry.status,
-                                          tone: toneForTaskStatus(entry.status),
-                                        }
-                                      : undefined
-                                  }
-                                  onClick={() => pushTaskModal(id)}
-                                  menuItems={[
-                                    {
-                                      label: "Remover dependência",
-                                      onClick: () =>
-                                        void handleRemoveDependency(dep, entry?.label ?? id),
-                                      destructive: true,
-                                    },
-                                  ]}
-                                />
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {blocks.length > 0 && (
-                          <div className="space-y-1">
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                              Bloqueia
-                            </p>
-                            {blocks.map((id) => {
-                              const dep = allDeps.find(
-                                (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
-                              );
-                              const entry = directoryByRawId.get(id);
-                              if (!dep) return null;
-                              return (
-                                <ListRow
-                                  key={dep.id}
-                                  icon={
-                                    entry?.status === "Concluído" ? (
-                                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                    ) : (
-                                      <span
-                                        className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
-                                      />
-                                    )
-                                  }
-                                  title={entry?.label ?? id}
-                                  description={entry?.assignees.join(", ") || undefined}
-                                  meta={entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined}
-                                  status={
-                                    entry
-                                      ? {
-                                          label: entry.status,
-                                          tone: toneForTaskStatus(entry.status),
-                                        }
-                                      : undefined
-                                  }
-                                  onClick={() => pushTaskModal(id)}
-                                  menuItems={[
-                                    {
-                                      label: "Remover dependência",
-                                      onClick: () =>
-                                        void handleRemoveDependency(dep, entry?.label ?? id),
-                                      destructive: true,
-                                    },
-                                  ]}
-                                />
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="pl-5">
+                      <button
+                        type="button"
+                        onClick={() => setDepsOpen((v) => !v)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-brand"
+                      >
+                        <ChevronRight
+                          className={`h-3 w-3 text-muted-foreground transition-transform ${depsOpen ? "rotate-90" : ""}`}
+                        />
+                        Dependências · {dependsOn.length + blocks.length}
+                      </button>
                       <Popover
                         open={depPopover !== null}
                         onOpenChange={(o) => !o && setDepPopover(null)}
@@ -4479,16 +4399,19 @@ export function TaskDialog({
                         <PopoverTrigger asChild>
                           <button
                             type="button"
-                            onClick={() => setDepPopover("menu")}
-                            className="flex items-center gap-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              setDepsOpen(true);
+                              setDepPopover("menu");
+                            }}
+                            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                           >
                             <Plus className="h-3.5 w-3.5" />
-                            Adicionar dependência
+                            Adicionar
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
                           side="bottom"
-                          align="start"
+                          align="end"
                           sideOffset={6}
                           collisionPadding={16}
                           className={
@@ -4524,18 +4447,144 @@ export function TaskDialog({
                         </PopoverContent>
                       </Popover>
                     </div>
+
+                    {depsOpen &&
+                      (dependsOn.length === 0 && blocks.length === 0 ? (
+                        <p className="pl-5 text-xs text-muted-foreground">Nenhuma dependência</p>
+                      ) : (
+                        dependsOn.length + blocks.length > 0 && (
+                          <div className="space-y-2 pl-5">
+                            {dependsOn.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Depende de
+                                </p>
+                                {dependsOn.map((id) => {
+                                  const dep = allDeps.find(
+                                    (d) => d.blockedTaskId === depTaskId && d.blockingTaskId === id,
+                                  );
+                                  const entry = directoryByRawId.get(id);
+                                  if (!dep) return null;
+                                  return (
+                                    <ListRow
+                                      key={dep.id}
+                                      icon={
+                                        entry?.status === "Concluído" ? (
+                                          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        ) : (
+                                          <span
+                                            className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
+                                          />
+                                        )
+                                      }
+                                      title={entry?.label ?? id}
+                                      description={entry?.assignees.join(", ") || undefined}
+                                      meta={
+                                        entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
+                                      }
+                                      status={
+                                        entry
+                                          ? {
+                                              label: entry.status,
+                                              tone: toneForTaskStatus(entry.status),
+                                            }
+                                          : undefined
+                                      }
+                                      onClick={() => pushTaskModal(id)}
+                                      menuItems={[
+                                        {
+                                          label: "Remover dependência",
+                                          onClick: () =>
+                                            void handleRemoveDependency(dep, entry?.label ?? id),
+                                          destructive: true,
+                                        },
+                                      ]}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {blocks.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  Bloqueia
+                                </p>
+                                {blocks.map((id) => {
+                                  const dep = allDeps.find(
+                                    (d) => d.blockingTaskId === depTaskId && d.blockedTaskId === id,
+                                  );
+                                  const entry = directoryByRawId.get(id);
+                                  if (!dep) return null;
+                                  return (
+                                    <ListRow
+                                      key={dep.id}
+                                      icon={
+                                        entry?.status === "Concluído" ? (
+                                          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                        ) : (
+                                          <span
+                                            className={`h-2 w-2 rounded-full ${TASK_STATUS_DOT[(entry?.status as TaskStatus) ?? "Aberto"]}`}
+                                          />
+                                        )
+                                      }
+                                      title={entry?.label ?? id}
+                                      description={entry?.assignees.join(", ") || undefined}
+                                      meta={
+                                        entry?.dueDate ? formatIsoDate(entry.dueDate) : undefined
+                                      }
+                                      status={
+                                        entry
+                                          ? {
+                                              label: entry.status,
+                                              tone: toneForTaskStatus(entry.status),
+                                            }
+                                          : undefined
+                                      }
+                                      onClick={() => pushTaskModal(id)}
+                                      menuItems={[
+                                        {
+                                          label: "Remover dependência",
+                                          onClick: () =>
+                                            void handleRemoveDependency(dep, entry?.label ?? id),
+                                          destructive: true,
+                                        },
+                                      ]}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      ))}
                   </div>
                 </div>
               )}
 
-              <div className="space-y-2 border-t border-border px-8 py-4">
+              <div className="space-y-2 px-8 py-2.5">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Anexos
-                  </p>
-                  {attachments.length > 0 && (
-                    <span className="text-[11px] text-muted-foreground">{attachments.length}</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAttachmentsOpen((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-brand"
+                  >
+                    <ChevronRight
+                      className={`h-3 w-3 text-muted-foreground transition-transform ${attachmentsOpen ? "rotate-90" : ""}`}
+                    />
+                    Anexos · {attachments.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachmentsOpen(true);
+                      fileRef.current?.click();
+                    }}
+                    className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Adicionar
+                  </button>
                 </div>
                 <input
                   ref={fileRef}
@@ -4548,68 +4597,72 @@ export function TaskDialog({
                   }}
                 />
 
-                {attachments.length > 0 && (
-                  <div className="space-y-1">
-                    {attachments.map((a) => (
-                      <div
-                        key={a.id}
-                        className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setPreviewAttachment(a)}
-                          className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
-                        >
-                          <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="flex-1 truncate">{a.name}</span>
-                        </button>
-                        {a.url && (
-                          <a
-                            href={a.url}
-                            download={a.name}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`Baixar ${a.name}`}
-                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                {attachmentsOpen && (
+                  <>
+                    {attachments.length > 0 && (
+                      <div className="space-y-1 pl-4">
+                        {attachments.map((a) => (
+                          <div
+                            key={a.id}
+                            className="group flex items-center gap-2 rounded border border-border bg-background px-2 py-1 text-xs"
                           >
-                            <Download className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => removeAttachment(a.id)}
-                          className="shrink-0 opacity-0 transition group-hover:opacity-100"
-                        >
-                          <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachment(a)}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+                            >
+                              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate">{a.name}</span>
+                            </button>
+                            {a.url && (
+                              <a
+                                href={a.url}
+                                download={a.name}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Baixar ${a.name}`}
+                                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(a.id)}
+                              className="shrink-0 opacity-0 transition group-hover:opacity-100"
+                            >
+                              <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                <div
-                  className="flex min-h-[72px] items-center justify-center rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    void addFiles(e.dataTransfer.files);
-                  }}
-                >
-                  Arraste arquivos ou{" "}
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="ml-1 text-primary hover:underline"
-                  >
-                    procure no computador
-                  </button>
-                </div>
+                    <div
+                      className="ml-4 flex min-h-[72px] items-center justify-center rounded-md border border-dashed border-border px-4 py-3 text-center text-xs text-muted-foreground"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        void addFiles(e.dataTransfer.files);
+                      }}
+                    >
+                      Arraste arquivos ou{" "}
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="ml-1 text-primary hover:underline"
+                      >
+                        procure no computador
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Este wrapper existe só pra guardar `historicoSectionRef`
-                (atalho "Histórico" do menu "⋯") — mas virou o item direto
-                do grid no lugar do próprio `TaskActivityPanel`, então
-                precisa repassar a altura da linha do grid pra ele:
+            {/* Activity só existe no DOM quando `activityOpen` — deixou de
+                ser uma coluna permanente do grid. Este wrapper guarda
+                `historicoSectionRef` (atalho "Histórico" do menu "⋯") e
+                repassa a altura da linha do grid pro `TaskActivityPanel`:
                 `min-h-0` deixa o wrapper aceitar a altura esticada pelo
                 grid (sem isso, cresce pro conteúdo e estoura a linha
                 inteira, quebrando o scroll da coluna da esquerda também);
@@ -4620,49 +4673,46 @@ export function TaskDialog({
                 sem isso o painel de Activity ficava do tamanho do próprio
                 conteúdo (sem scroll interno nenhum, cortado pelo
                 `overflow-hidden` do grid em vez de rolar). */}
-            <div
-              ref={historicoSectionRef}
-              className={`flex min-h-0 ${
-                isMobileDialog && initial && mobileDetailTab !== "atividade" ? "hidden md:flex" : ""
-              }`}
-            >
-              <TaskActivityPanel
-                task={{
-                  status,
-                  dueDate: dueDate || undefined,
-                  originalDueDate,
-                  performanceDueDate,
-                  deadlineHistory,
-                  completedAt: initial?.completedAt,
-                }}
-                activity={activity}
-                comments={comments}
-                members={members}
-                commentText={commentText}
-                onCommentTextChange={setCommentText}
-                onPostComment={postComment}
-                deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
-                pendingDeadlineChange={pendingDeadlineChange}
-                onConfirmDeadlineChange={(motivo, observacao) => {
-                  if (!pendingDeadlineChange) return;
-                  commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
-                  setPendingDeadlineChange(null);
-                }}
-                onCancelDeadlineChange={discardPendingDeadlineChange}
-                blockedState={blockedState}
-                pendingBlockAction={pendingBlockAction}
-                blockActionBusy={blockActionBusy}
-                onConfirmBlock={confirmBlock}
-                onConfirmResolve={confirmResolve}
-                onCancelBlockAction={cancelBlockAction}
-                onBlockComposerDirtyChange={(dirty) => {
-                  blockComposerHasData.current = dirty;
-                }}
-                excludeTaskId={depTaskId}
-                currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
-                currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
-              />
-            </div>
+            {activityOpen && initial && (
+              <div ref={historicoSectionRef} className="flex min-h-0">
+                <TaskActivityPanel
+                  task={{
+                    status,
+                    dueDate: dueDate || undefined,
+                    originalDueDate,
+                    performanceDueDate,
+                    deadlineHistory,
+                    completedAt: initial?.completedAt,
+                  }}
+                  activity={activity}
+                  comments={comments}
+                  members={members}
+                  commentText={commentText}
+                  onCommentTextChange={setCommentText}
+                  onPostComment={postComment}
+                  deadlineCutoffHour={performanceSettings.deadlineCutoffHour}
+                  pendingDeadlineChange={pendingDeadlineChange}
+                  onConfirmDeadlineChange={(motivo, observacao) => {
+                    if (!pendingDeadlineChange) return;
+                    commitDeadlineChange(pendingDeadlineChange.to, { motivo, observacao });
+                    setPendingDeadlineChange(null);
+                  }}
+                  onCancelDeadlineChange={discardPendingDeadlineChange}
+                  blockedState={blockedState}
+                  pendingBlockAction={pendingBlockAction}
+                  blockActionBusy={blockActionBusy}
+                  onConfirmBlock={confirmBlock}
+                  onConfirmResolve={confirmResolve}
+                  onCancelBlockAction={cancelBlockAction}
+                  onBlockComposerDirtyChange={(dirty) => {
+                    blockComposerHasData.current = dirty;
+                  }}
+                  excludeTaskId={depTaskId}
+                  currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
+                  currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
