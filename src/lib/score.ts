@@ -38,6 +38,7 @@ export const OPEN_STATUSES = new Set([
   "Em aprovação",
   "Em ajustes",
   "Aprovado",
+  "Bloqueada",
 ]);
 
 export type DateRange = { from?: string; to?: string };

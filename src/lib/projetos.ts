@@ -104,6 +104,7 @@ export type KanbanStatus =
   | "Em aprovação"
   | "Em ajustes"
   | "Aprovado"
+  | "Bloqueada"
   | "Concluído"
   | "Arquivado";
 
@@ -118,6 +119,7 @@ export function normalizeKanbanStatus(value: unknown): KanbanStatus {
     "Em aprovação",
     "Em ajustes",
     "Aprovado",
+    "Bloqueada",
     "Concluído",
     "Arquivado",
   ];
@@ -143,7 +145,46 @@ export type ActivityKind =
   | "assignee"
   | "status"
   | "dependency"
+  | "blocked"
+  | "unblocked"
   | "minor";
+
+/** Categorias fixas do questionário de bloqueio — a lista é fechada de
+ * propósito (Seção 3 do pedido de bloqueio): nenhuma categoria livre. */
+export type TaskBlockCategory =
+  | "dependencia_tarefa"
+  | "aguardando_time"
+  | "aguardando_cliente"
+  | "aguardando_fornecedor"
+  | "aguardando_aprovacao"
+  | "problema_tecnico"
+  | "falta_informacao"
+  | "outro";
+
+/** Cache denormalizado do bloqueio ativo, gravado na própria tarefa só
+ * pra renderizar badge/filtro do Kanban sem precisar de join na tabela
+ * `task_blocks` (fonte de verdade real — ver `src/lib/task-blocks.functions.ts`).
+ * `null`/ausente = tarefa não está bloqueada. Nunca editado direto pelo
+ * cliente — só as RPCs `apply_task_block`/`resolve_task_block` escrevem
+ * aqui. */
+export type TaskBlockedState = {
+  blockId: string;
+  category: TaskBlockCategory;
+  reason: string;
+  blockedAt: string;
+  blockedByUserId: string;
+  blockedByName: string;
+  affectedAssigneeId?: string;
+  responsibleForUnblockingUserId?: string;
+  responsibleForUnblockingName?: string;
+  relatedTaskId?: string;
+  relatedTaskTitle?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  requiredAction?: string;
+  expectedResolutionAt?: string;
+  pausesDeadline: boolean;
+};
 
 export type TaskActivity = {
   id: string;
@@ -153,6 +194,8 @@ export type TaskActivity = {
   action: string;
   createdAt: string;
   kind?: ActivityKind;
+  /** Ver comentário equivalente em `TaskBoard.tsx`'s `Activity.meta`. */
+  meta?: Record<string, string | number | boolean | null>;
 };
 export type TaskTimeEntry = { seconds: number; author: string; endedAt: string };
 
@@ -227,6 +270,10 @@ export type Task = {
   originalDueDate?: string;
   performanceDueDate?: string;
   deadlineHistory?: DeadlineChangeEntry[];
+  /** Bloqueio ativo, se houver — ver `TaskBlockedState`. Histórico
+   * completo (inclusive resolvidos) vive só na tabela `task_blocks`,
+   * nunca aqui. */
+  blockedState?: TaskBlockedState | null;
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.recurrence`. */
   recurrence?: TaskRecurrence;
   /** Ver comentário equivalente em `TaskBoard.tsx`'s `Task.roadmapPhaseId`. */

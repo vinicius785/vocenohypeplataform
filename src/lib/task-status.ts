@@ -12,6 +12,7 @@ export type TaskStatus =
   | "Em aprovação"
   | "Em ajustes"
   | "Aprovado"
+  | "Bloqueada"
   | "Concluído"
   | "Arquivado";
 
@@ -21,16 +22,22 @@ export const TASK_STATUSES: TaskStatus[] = [
   "Em aprovação",
   "Em ajustes",
   "Aprovado",
+  "Bloqueada",
   "Concluído",
   "Arquivado",
 ];
 
+/** "Bloqueada" nunca é vermelho — bloqueio não é erro/cancelamento, é um
+ * estado operacional de espera. Tom âmbar diferente de "Em aprovação"
+ * (que também é âmbar) pra não colidir visualmente: aqui usamos
+ * amber-600, mais escuro/saturado. */
 export const TASK_STATUS_TONE: Record<TaskStatus, string> = {
   Aberto: "bg-muted text-muted-foreground",
   "Em andamento": "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   "Em aprovação": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   "Em ajustes": "bg-orange-500/10 text-orange-700 dark:text-orange-400",
   Aprovado: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  Bloqueada: "bg-amber-600/15 text-amber-800 dark:text-amber-300",
   Concluído: "bg-foreground text-background",
   Arquivado: "bg-muted/60 text-muted-foreground line-through",
 };
@@ -41,6 +48,7 @@ export const TASK_STATUS_DOT: Record<TaskStatus, string> = {
   "Em aprovação": "bg-amber-500",
   "Em ajustes": "bg-orange-500",
   Aprovado: "bg-emerald-500",
+  Bloqueada: "bg-amber-600",
   Concluído: "bg-foreground",
   Arquivado: "bg-muted-foreground/30",
 };

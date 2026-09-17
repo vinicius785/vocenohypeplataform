@@ -5,6 +5,8 @@ import {
   ChevronUp,
   CircleDashed,
   CornerUpRight,
+  Lock,
+  LockOpen,
   Undo2,
   User as UserIcon,
 } from "lucide-react";
@@ -21,9 +23,23 @@ import {
   type DeadlineChangeEntry,
   type DeadlineChangeMotivo,
   type Member,
+  type TaskBlockedState,
+  type TaskBlockCategory,
+  type BlockFormFields,
+  type ResolveFormFields,
+  type TaskStatus,
+  TASK_STATUSES,
 } from "@/components/tasks/TaskBoard";
 import { ACTIVITY_STATUS_COMPLETED_ACTION } from "@/lib/projetos";
 import { taskDeadlineHealth, type TaskDeadlineHealthLike } from "@/lib/performance-engine";
+import {
+  TASK_BLOCK_CATEGORIES,
+  TASK_BLOCK_CATEGORY_LABEL,
+  decidesPausesDeadlineByCategory,
+  isValidBlockReason,
+} from "@/lib/task-blocks-rules";
+import { TaskPicker } from "@/components/tasks/TaskPicker";
+import type { TaskDirectoryEntry } from "@/lib/task-directory";
 
 /** Janela de agrupamento pra eventos secundários consecutivos do mesmo
  * autor (item 12 do pedido) — puramente de apresentação, nada é
@@ -36,6 +52,8 @@ const IMPORTANT_KINDS = new Set<ActivityKind>([
   "deadline",
   "primary_assignee",
   "status",
+  "blocked",
+  "unblocked",
 ]);
 
 /** Rede de segurança só-pra-exibição pra entradas antigas sem `kind`
@@ -67,6 +85,10 @@ function iconForKind(kind: ActivityKind) {
       return <UserIcon className="h-3.5 w-3.5 shrink-0 text-foreground/70" />;
     case "status":
       return <CircleDashed className="h-3.5 w-3.5 shrink-0 text-foreground/70" />;
+    case "blocked":
+      return <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />;
+    case "unblocked":
+      return <LockOpen className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />;
     default:
       return null;
   }
@@ -141,6 +163,16 @@ export function TaskActivityPanel({
   pendingDeadlineChange,
   onConfirmDeadlineChange,
   onCancelDeadlineChange,
+  blockedState,
+  pendingBlockAction,
+  blockActionBusy,
+  onConfirmBlock,
+  onConfirmResolve,
+  onCancelBlockAction,
+  onBlockComposerDirtyChange,
+  excludeTaskId,
+  currentProjectId,
+  currentCampanhaId,
 }: {
   /** Só os campos que este painel precisa (saúde do prazo +
    * cross-referência de `deadlineHistory`) — não o `Task` inteiro, pra
@@ -160,8 +192,29 @@ export function TaskActivityPanel({
   pendingDeadlineChange?: { from: string; to: string } | null;
   onConfirmDeadlineChange?: (motivo: DeadlineChangeMotivo, observacao: string) => void;
   onCancelDeadlineChange?: () => void;
+  /** Bloqueio ativo (cache denormalizado) e questionário de bloquear/
+   * resolver pendente — mesmo princípio do trio acima
+   * (`pendingDeadlineChange`), card inline dentro do feed. */
+  blockedState?: TaskBlockedState | null;
+  pendingBlockAction?: { mode: "block" } | { mode: "resolve" } | null;
+  blockActionBusy?: boolean;
+  onConfirmBlock?: (fields: BlockFormFields) => void;
+  onConfirmResolve?: (fields: ResolveFormFields) => void;
+  onCancelBlockAction?: () => void;
+  onBlockComposerDirtyChange?: (dirty: boolean) => void;
+  excludeTaskId?: string;
+  currentProjectId?: string;
+  currentCampanhaId?: string;
 }) {
   const [tab, setTab] = useState<ActivityTab>("tudo");
+
+  // Abrir o questionário de bloqueio/resolução leva o foco pra
+  // "Comentários" automaticamente (mesma área usada pelo replanejamento)
+  // — o painel em si já está sempre visível (não há um estado de
+  // "fechado" pra reabrir nesta UI).
+  useEffect(() => {
+    if (pendingBlockAction) setTab("comentarios");
+  }, [pendingBlockAction]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
@@ -353,6 +406,46 @@ export function TaskActivityPanel({
                           )}
                       </div>
                     )}
+                    {kind === "blocked" && f.item.meta && (
+                      <div className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        <p>
+                          Categoria:{" "}
+                          {TASK_BLOCK_CATEGORY_LABEL[f.item.meta.category as TaskBlockCategory] ??
+                            String(f.item.meta.category)}
+                        </p>
+                        <p className="italic">"{String(f.item.meta.reason ?? "")}"</p>
+                        {typeof f.item.meta.responsibleForUnblockingName === "string" && (
+                          <p>Dependência: {f.item.meta.responsibleForUnblockingName}</p>
+                        )}
+                        {typeof f.item.meta.requiredAction === "string" &&
+                          f.item.meta.requiredAction && (
+                            <p>Ação necessária: {f.item.meta.requiredAction}</p>
+                          )}
+                        {typeof f.item.meta.expectedResolutionAt === "string" &&
+                          f.item.meta.expectedResolutionAt && (
+                            <p>
+                              Previsão:{" "}
+                              {fmtDate(String(f.item.meta.expectedResolutionAt).slice(0, 10))}
+                            </p>
+                          )}
+                        <p className="font-medium">
+                          Prazo: {f.item.meta.pausesDeadline ? "pausado" : "continua correndo"}
+                        </p>
+                      </div>
+                    )}
+                    {kind === "unblocked" && f.item.meta && (
+                      <div className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        <p>Resolução: {String(f.item.meta.resolutionNote ?? "")}</p>
+                        <p>Novo status: {String(f.item.meta.newStatus ?? "")}</p>
+                        {typeof f.item.meta.performanceDueDate === "string" &&
+                          f.item.meta.performanceDueDate && (
+                            <p>
+                              Novo prazo efetivo:{" "}
+                              {fmtDate(String(f.item.meta.performanceDueDate).slice(0, 10))}
+                            </p>
+                          )}
+                      </div>
+                    )}
                     <div className="mt-0.5 text-[10px] text-muted-foreground/70">
                       {f.item.author} · {formatWhen(f.item.createdAt)}
                     </div>
@@ -386,6 +479,29 @@ export function TaskActivityPanel({
               onCancel={onCancelDeadlineChange}
             />
           )}
+          {pendingBlockAction?.mode === "block" && onConfirmBlock && onCancelBlockAction && (
+            <BlockedPendingForm
+              busy={!!blockActionBusy}
+              onConfirm={onConfirmBlock}
+              onCancel={onCancelBlockAction}
+              onDirtyChange={onBlockComposerDirtyChange}
+              excludeTaskId={excludeTaskId}
+              currentProjectId={currentProjectId}
+              currentCampanhaId={currentCampanhaId}
+              members={members}
+            />
+          )}
+          {pendingBlockAction?.mode === "resolve" &&
+            blockedState &&
+            onConfirmResolve &&
+            onCancelBlockAction && (
+              <ResolveBlockForm
+                busy={!!blockActionBusy}
+                onConfirm={onConfirmResolve}
+                onCancel={onCancelBlockAction}
+                onDirtyChange={onBlockComposerDirtyChange}
+              />
+            )}
         </div>
       </div>
 
@@ -555,6 +671,380 @@ function DeadlinePendingForm({
           className="rounded-md bg-foreground px-2.5 py-1 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
         >
           Confirmar alteração
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Questionário de bloqueio — mesmo padrão estrutural/comportamental de
+ * `DeadlinePendingForm` (card inline na Activity, cabeçalho, campos,
+ * rodapé Cancelar/Confirmar, loading), clonado em vez de duplicado
+ * livremente: mesma classe de card, mesmo `<select>`/`<textarea>`, mesmo
+ * layout de rodapé. A decisão de pausar o prazo NUNCA é escolhida aqui —
+ * o "Resumo do impacto" abaixo é só uma prévia (`decidesPausesDeadlineByCategory`,
+ * mesma regra usada no backend); quem decide de verdade é `blockTask`
+ * no servidor.
+ */
+function BlockedPendingForm({
+  busy,
+  onConfirm,
+  onCancel,
+  onDirtyChange,
+  excludeTaskId,
+  currentProjectId,
+  currentCampanhaId,
+  members,
+}: {
+  busy: boolean;
+  onConfirm: (fields: BlockFormFields) => void;
+  onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  excludeTaskId?: string;
+  currentProjectId?: string;
+  currentCampanhaId?: string;
+  members: Member[];
+}) {
+  const [category, setCategory] = useState<TaskBlockCategory>("aguardando_time");
+  const [reason, setReason] = useState("");
+  const [relatedTaskEntry, setRelatedTaskEntry] = useState<TaskDirectoryEntry | null>(null);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [memberId, setMemberId] = useState("");
+  const [requiredAction, setRequiredAction] = useState("");
+  const [relatedEntityType, setRelatedEntityType] = useState("");
+  const [expectedResolutionAt, setExpectedResolutionAt] = useState("");
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    selectRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const dirty =
+      reason.trim().length > 0 ||
+      !!relatedTaskEntry ||
+      !!memberId ||
+      requiredAction.trim().length > 0 ||
+      relatedEntityType.trim().length > 0;
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reason, relatedTaskEntry, memberId, requiredAction, relatedEntityType]);
+
+  const reasonValid = isValidBlockReason(reason);
+  const needsRelatedTask = category === "dependencia_tarefa";
+  const needsMember = category === "aguardando_time";
+  const needsEntity = category === "aguardando_cliente" || category === "aguardando_fornecedor";
+  const fieldsValid =
+    reasonValid &&
+    (!needsRelatedTask || !!relatedTaskEntry) &&
+    (!needsMember || !!memberId) &&
+    (!needsEntity || relatedEntityType.trim().length > 0);
+
+  const pausesPreview = decidesPausesDeadlineByCategory(category);
+  const selectedMember = members.find((m) => m.id === memberId);
+
+  const confirm = () => {
+    if (!fieldsValid) return;
+    onConfirm({
+      category,
+      reason: reason.trim(),
+      responsibleForUnblockingUserId: needsMember ? memberId : undefined,
+      responsibleForUnblockingName: needsMember ? selectedMember?.name : undefined,
+      relatedTaskId: needsRelatedTask ? relatedTaskEntry?.rawId : undefined,
+      relatedTaskTitle: needsRelatedTask ? relatedTaskEntry?.label : undefined,
+      relatedTaskEntry: needsRelatedTask ? (relatedTaskEntry ?? undefined) : undefined,
+      relatedEntityType: needsEntity ? relatedEntityType.trim() : undefined,
+      requiredAction: requiredAction.trim() || undefined,
+      expectedResolutionAt: expectedResolutionAt
+        ? new Date(expectedResolutionAt).toISOString()
+        : undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-2.5 rounded-lg border border-amber-500/30 bg-background p-3">
+      <div>
+        <p className="text-xs font-semibold text-foreground">Bloquear tarefa</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          Informe o que está impedindo o avanço da tarefa. Essas informações serão registradas no
+          histórico e podem alterar a contagem do prazo.
+        </p>
+      </div>
+
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">Categoria</span>
+        <select
+          ref={selectRef}
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value as TaskBlockCategory);
+            setRelatedTaskEntry(null);
+            setMemberId("");
+            setRelatedEntityType("");
+          }}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        >
+          {TASK_BLOCK_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {TASK_BLOCK_CATEGORY_LABEL[c]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">Motivo</span>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Explique o que está impedindo esta tarefa de avançar."
+          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        />
+        {!reasonValid && reason.length > 0 && (
+          <span className="text-[10.5px] text-destructive">
+            Descreva com mais detalhe (mínimo 10 caracteres).
+          </span>
+        )}
+      </label>
+
+      {needsRelatedTask && (
+        <div className="space-y-1">
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Qual tarefa precisa ser concluída primeiro?
+          </span>
+          {relatedTaskEntry && !showTaskPicker ? (
+            <button
+              type="button"
+              onClick={() => setShowTaskPicker(true)}
+              className="flex w-full items-center justify-between rounded-md border border-input bg-muted/40 px-2 py-1.5 text-left text-xs hover:bg-muted"
+            >
+              <span className="truncate">{relatedTaskEntry.label}</span>
+              <span className="shrink-0 text-[10.5px] text-muted-foreground">Trocar</span>
+            </button>
+          ) : (
+            <div className="rounded-md border border-input">
+              <TaskPicker
+                excludeTaskId={excludeTaskId ?? ""}
+                currentProjectId={currentProjectId}
+                currentCampanhaId={currentCampanhaId}
+                onSelect={(t) => {
+                  setRelatedTaskEntry(t);
+                  setShowTaskPicker(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {needsMember && (
+        <>
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Quem do time?</span>
+            <select
+              value={memberId}
+              onChange={(e) => setMemberId(e.target.value)}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            >
+              <option value="">— Selecionar —</option>
+              {members
+                .filter((m) => m.id)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              O que essa pessoa precisa fazer?
+            </span>
+            <textarea
+              value={requiredAction}
+              onChange={(e) => setRequiredAction(e.target.value)}
+              rows={2}
+              placeholder="Ex.: enviar o briefing aprovado"
+              className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
+          </label>
+        </>
+      )}
+
+      {needsEntity && (
+        <label className="block space-y-1">
+          <span className="text-[11px] font-medium text-muted-foreground">
+            {category === "aguardando_cliente"
+              ? "Campanha, conteúdo ou aprovação relacionada"
+              : "Fornecedor/parceiro e o que precisa ser entregue"}
+          </span>
+          <input
+            value={relatedEntityType}
+            onChange={(e) => setRelatedEntityType(e.target.value)}
+            placeholder="Descreva livremente"
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+        </label>
+      )}
+
+      {(category === "problema_tecnico" || category === "aguardando_aprovacao") && (
+        <label className="block space-y-1">
+          <span className="text-[11px] font-medium text-muted-foreground">Detalhes</span>
+          <textarea
+            value={requiredAction}
+            onChange={(e) => setRequiredAction(e.target.value)}
+            rows={2}
+            placeholder={
+              category === "problema_tecnico"
+                ? "Área/serviço afetado, ticket relacionado se existir"
+                : "O que está aguardando aprovação e de quem"
+            }
+            className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+        </label>
+      )}
+
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">
+          Previsão de resolução (opcional)
+        </span>
+        <input
+          type="datetime-local"
+          value={expectedResolutionAt}
+          onChange={(e) => setExpectedResolutionAt(e.target.value)}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        />
+        {!expectedResolutionAt && (
+          <span className="text-[10.5px] text-muted-foreground">
+            Sem previsão, este bloqueio será sinalizado para acompanhamento.
+          </span>
+        )}
+      </label>
+
+      <div className="rounded-md bg-muted/50 px-2.5 py-2 text-[11px] text-muted-foreground">
+        {pausesPreview
+          ? "Seu prazo será pausado a partir de agora. Atrasos anteriores permanecem contabilizados."
+          : "Este motivo não pausa automaticamente o prazo."}
+        {needsMember && selectedMember && (
+          <>
+            {" "}
+            {selectedMember.name} receberá uma pendência
+            {expectedResolutionAt
+              ? ` até ${new Date(expectedResolutionAt).toLocaleDateString("pt-BR")}`
+              : ""}
+            .
+          </>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={!fieldsValid || busy}
+          className="rounded-md bg-amber-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          {busy ? "Bloqueando..." : "Confirmar bloqueio"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Questionário de resolução — mesma família visual/comportamental dos
+ * dois acima. `newStatus` sempre um dos `TASK_STATUSES` reais (nunca
+ * "Bloqueada" de novo, senão a resolução não resolveria nada).
+ */
+function ResolveBlockForm({
+  busy,
+  onConfirm,
+  onCancel,
+  onDirtyChange,
+}: {
+  busy: boolean;
+  onConfirm: (fields: ResolveFormFields) => void;
+  onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [newStatus, setNewStatus] = useState<TaskStatus>("Em andamento");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resolvableStatuses = TASK_STATUSES.filter((s) => s !== "Bloqueada");
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    onDirtyChange?.(resolutionNote.trim().length > 0);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolutionNote]);
+
+  const valid = resolutionNote.trim().length >= 5;
+
+  return (
+    <div className="space-y-2.5 rounded-lg border border-emerald-500/30 bg-background p-3">
+      <div>
+        <p className="text-xs font-semibold text-foreground">Resolver bloqueio</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          Descreva como o impedimento foi resolvido e o novo status da tarefa. O prazo retoma a
+          contagem a partir de agora.
+        </p>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">Nota de resolução</span>
+        <textarea
+          ref={textareaRef}
+          value={resolutionNote}
+          onChange={(e) => setResolutionNote(e.target.value)}
+          rows={2}
+          placeholder="Ex.: briefing enviado pelo cliente"
+          className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-[11px] font-medium text-muted-foreground">Novo status</span>
+        <select
+          value={newStatus}
+          onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+        >
+          {resolvableStatuses.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex justify-end gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={() => valid && onConfirm({ resolutionNote: resolutionNote.trim(), newStatus })}
+          disabled={!valid || busy}
+          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy ? "Resolvendo..." : "Resolver e retomar tarefa"}
         </button>
       </div>
     </div>

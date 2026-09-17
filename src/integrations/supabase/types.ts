@@ -2111,6 +2111,84 @@ export type Database = {
         }
         Relationships: []
       }
+      task_blocks: {
+        Row: {
+          affected_assignee_id: string | null
+          blocked_at: string
+          blocked_by_user_id: string
+          category: string
+          created_at: string
+          expected_resolution_at: string | null
+          id: string
+          pause_approved_by_user_id: string | null
+          pause_override_reason: string | null
+          pauses_deadline: boolean
+          reason: string
+          related_entity_id: string | null
+          related_entity_type: string | null
+          related_task_id: string | null
+          required_action: string | null
+          resolution_note: string | null
+          responsible_for_unblocking_user_id: string | null
+          status: string
+          task_id: string
+          task_scope: string
+          unblocked_at: string | null
+          unblocked_by_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          affected_assignee_id?: string | null
+          blocked_at?: string
+          blocked_by_user_id: string
+          category: string
+          created_at?: string
+          expected_resolution_at?: string | null
+          id?: string
+          pause_approved_by_user_id?: string | null
+          pause_override_reason?: string | null
+          pauses_deadline?: boolean
+          reason: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          related_task_id?: string | null
+          required_action?: string | null
+          resolution_note?: string | null
+          responsible_for_unblocking_user_id?: string | null
+          status?: string
+          task_id: string
+          task_scope: string
+          unblocked_at?: string | null
+          unblocked_by_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          affected_assignee_id?: string | null
+          blocked_at?: string
+          blocked_by_user_id?: string
+          category?: string
+          created_at?: string
+          expected_resolution_at?: string | null
+          id?: string
+          pause_approved_by_user_id?: string | null
+          pause_override_reason?: string | null
+          pauses_deadline?: boolean
+          reason?: string
+          related_entity_id?: string | null
+          related_entity_type?: string | null
+          related_task_id?: string | null
+          required_action?: string | null
+          resolution_note?: string | null
+          responsible_for_unblocking_user_id?: string | null
+          status?: string
+          task_id?: string
+          task_scope?: string
+          unblocked_at?: string | null
+          unblocked_by_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       task_dependencies: {
         Row: {
           blocked_task_id: string
@@ -2372,6 +2450,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_task_block: {
+        Args: {
+          p_activity_entry: Json
+          p_affected_assignee_id: string
+          p_blocked_state: Json
+          p_category: string
+          p_expected_resolution_at: string
+          p_pause_approved_by_user_id: string
+          p_pause_override_reason: string
+          p_pauses_deadline: boolean
+          p_performance_due_date: string
+          p_reason: string
+          p_related_entity_id: string
+          p_related_entity_type: string
+          p_related_task_id: string
+          p_required_action: string
+          p_responsible_for_unblocking_user_id: string
+          p_task_id: string
+          p_task_scope: string
+        }
+        Returns: string
+      }
       has_permission: {
         Args: { _permission: string; _user_id: string }
         Returns: boolean
@@ -2394,6 +2494,17 @@ export type Database = {
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       publish_scheduled_blog_posts: { Args: never; Returns: undefined }
+      resolve_task_block: {
+        Args: {
+          p_activity_entry: Json
+          p_block_id: string
+          p_new_status: string
+          p_next_blocked_state: Json
+          p_performance_due_date: string
+          p_resolution_note: string
+        }
+        Returns: undefined
+      }
       toggle_message_reaction: {
         Args: { p_emoji: string; p_message_id: string }
         Returns: Json

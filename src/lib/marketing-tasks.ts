@@ -23,6 +23,7 @@ export type MktColumn =
   | "Em aprovação"
   | "Em ajustes"
   | "Aprovado"
+  | "Bloqueada"
   | "Concluído"
   | "Arquivado";
 

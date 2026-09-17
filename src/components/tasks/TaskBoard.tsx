@@ -32,6 +32,7 @@ import {
   Archive,
   History,
   FolderInput,
+  Lock,
 } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { TomatoIcon } from "@/components/focus/TomatoIcon";
@@ -159,6 +160,30 @@ import {
 } from "@/lib/task-status";
 export type { TaskStatus };
 export { TASK_STATUSES, TASK_STATUS_TONE, TASK_STATUS_DOT };
+import type { TaskBlockedState, TaskBlockCategory } from "@/lib/projetos";
+export type { TaskBlockedState, TaskBlockCategory };
+
+/** Dados coletados pelo questionário de bloqueio (`BlockedPendingForm`,
+ * em `TaskActivityPanel.tsx`) — `TaskDialog` só repassa pra `blockTask`,
+ * nunca decide `pausesDeadline` (isso é sempre o backend). */
+export type BlockFormFields = {
+  category: TaskBlockCategory;
+  reason: string;
+  responsibleForUnblockingUserId?: string;
+  responsibleForUnblockingName?: string;
+  relatedTaskId?: string;
+  relatedTaskTitle?: string;
+  relatedTaskEntry?: TaskDirectoryEntry;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  requiredAction?: string;
+  expectedResolutionAt?: string;
+};
+
+export type ResolveFormFields = {
+  resolutionNote: string;
+  newStatus: TaskStatus;
+};
 import type { ProjetoFase } from "@/lib/roadmap-engine";
 
 // `TASK_STATUSES` concorda no masculino ("Concluído", coluna do Kanban),
@@ -172,6 +197,7 @@ const TASK_STATUS_FEMININE: Record<TaskStatus, { singular: string; plural: strin
   "Em aprovação": { singular: "em aprovação", plural: "em aprovação" },
   "Em ajustes": { singular: "em ajustes", plural: "em ajustes" },
   Aprovado: { singular: "aprovada", plural: "aprovadas" },
+  Bloqueada: { singular: "bloqueada", plural: "bloqueadas" },
   Concluído: { singular: "concluída", plural: "concluídas" },
   Arquivado: { singular: "arquivada", plural: "arquivadas" },
 };
@@ -374,6 +400,8 @@ export type ActivityKind =
   | "assignee"
   | "status"
   | "dependency"
+  | "blocked"
+  | "unblocked"
   | "minor";
 
 export type Activity = {
@@ -384,6 +412,14 @@ export type Activity = {
   action: string;
   createdAt: string;
   kind?: ActivityKind;
+  /** Só usado por `kind: "blocked"|"unblocked"` — snapshot imutável dos
+   * detalhes do bloqueio/resolução (categoria, motivo, dependência,
+   * previsão, prazo pausado etc.), pra o card na Activity continuar
+   * mostrando o contexto completo mesmo depois de resolvido (a fonte de
+   * verdade em si continua sendo a tabela `task_blocks`, isto é só uma
+   * cópia read-only pra exibição). Formato livre de propósito (chaves
+   * variam por kind) — nunca usado por scoring/regra, só apresentação. */
+  meta?: Record<string, string | number | boolean | null>;
 };
 export type Attachment = {
   id: string;
@@ -503,6 +539,13 @@ export type Task = {
    * `effectivePerformanceDueDate` em `src/lib/performance-engine.ts`). */
   performanceDueDate?: string;
   deadlineHistory?: DeadlineChangeEntry[];
+  /** Bloqueio ativo, se houver — ver `TaskBlockedState` em `projetos.ts`
+   * (tipo compartilhado, não replicado aqui pra evitar 2 shapes
+   * divergentes desse campo específico, já que ele só é escrito pelas
+   * RPCs `apply_task_block`/`resolve_task_block`, nunca por `save()`).
+   * Histórico completo (inclusive bloqueios já resolvidos) vive só na
+   * tabela `task_blocks`. */
+  blockedState?: TaskBlockedState | null;
   /** Quando definida, a tarefa nunca fica "concluída" de vez — ao entrar
    * em "Concluído" ela volta sozinha pra "Aberto" com um novo prazo (ver
    * `applyRecurrenceIfCompleted`), sem duplicar registro, igual ao
@@ -2688,6 +2731,28 @@ export function TaskDialog({
     from: string;
     to: string;
   } | null>(null);
+  // Bloqueio ativo (cache denormalizado da tarefa — fonte de verdade real
+  // é a tabela `task_blocks`) e o questionário de bloquear/resolver
+  // pendente na Activity — mesmo princípio de `pendingDeadlineChange`
+  // (1 único slot, nunca uma pilha). Os dois "pendentes" se excluem
+  // mutuamente (`openBlockComposer`/`openResolveComposer` recusam abrir
+  // se o outro já estiver aberto).
+  const [blockedState, setBlockedState] = useState<TaskBlockedState | null>(null);
+  const [pendingBlockAction, setPendingBlockAction] = useState<
+    { mode: "block" } | { mode: "resolve" } | null
+  >(null);
+  const [blockActionBusy, setBlockActionBusy] = useState(false);
+  // Corrige `status`/`blockedState` já persistidos atomicamente pela RPC
+  // de bloqueio/resolução — `save()` compara `initial.status !== status`
+  // pra decidir se roda `withStatusChange` (que geraria um SEGUNDO evento
+  // "mudou status para X" duplicando o card de bloqueio/desbloqueio já
+  // criado pela RPC). Guarda aqui o último status já confirmado
+  // atomicamente pra `save()` pular esse caminho quando for o caso.
+  const lastAtomicStatusRef = useRef<TaskStatus | null>(null);
+  /** Atualizado pelo próprio formulário (`onDirtyChange`) — evita
+   * re-render do diálogo inteiro a cada tecla digitada só pra saber "tem
+   * dado ou não" (só é lido no momento de fechar, em `attemptSave`). */
+  const blockComposerHasData = useRef(false);
   const [estimate, setEstimate] = useState<string>("");
   const [recurrence, setRecurrence] = useState<TaskRecurrence | undefined>(undefined);
   const [roadmapPhaseId, setRoadmapPhaseId] = useState<string | undefined>(undefined);
@@ -2846,6 +2911,10 @@ export function TaskDialog({
     setPerformanceDueDate(initial?.performanceDueDate);
     setDeadlineHistory(initial?.deadlineHistory ?? []);
     setPendingDeadlineChange(null);
+    setBlockedState(initial?.blockedState ?? null);
+    setPendingBlockAction(null);
+    setBlockActionBusy(false);
+    lastAtomicStatusRef.current = null;
     setEstimate(initial?.estimate ?? "");
     setRecurrence(initial?.recurrence);
     setRoadmapPhaseId(initial?.roadmapPhaseId ?? defaultRoadmapPhaseId);
@@ -2966,6 +3035,143 @@ export function TaskDialog({
     });
   };
 
+  /** Ponto único de entrada — seletor de status ("Bloqueada") e menu de
+   * ações ("Bloquear tarefa") chamam exatamente esta função, nunca um
+   * fluxo separado. Abre o questionário na Activity (aba Comentários) em
+   * vez de mudar o status na hora — o status só muda quando a RPC
+   * atômica confirmar. */
+  const openBlockComposer = () => {
+    if (!initial) {
+      toast.error("Salve a tarefa antes de bloqueá-la.");
+      return;
+    }
+    if (status === "Concluído" || status === "Arquivado") {
+      toast.error(`Não é possível bloquear uma tarefa ${status.toLowerCase()}.`);
+      return;
+    }
+    if (pendingDeadlineChange) {
+      toast.error("Finalize ou cancele a alteração de prazo em andamento.");
+      return;
+    }
+    if (pendingBlockAction) return;
+    setPendingBlockAction({ mode: "block" });
+  };
+
+  const openResolveComposer = () => {
+    if (pendingDeadlineChange) {
+      toast.error("Finalize ou cancele a alteração de prazo em andamento.");
+      return;
+    }
+    if (pendingBlockAction) return;
+    setPendingBlockAction({ mode: "resolve" });
+  };
+
+  const cancelBlockAction = () => {
+    blockComposerHasData.current = false;
+    setPendingBlockAction(null);
+  };
+
+  const confirmBlock = async (fields: BlockFormFields) => {
+    if (!initial) return;
+    const origin = taskOriginFromScope(scope);
+    if (!origin) {
+      toast.error("Não foi possível identificar onde esta tarefa vive.");
+      return;
+    }
+    const affectedAssigneeId = primaryAssignee
+      ? resolvePersonId(primaryAssignee, members)
+      : assignees[0]
+        ? resolvePersonId(assignees[0], members)
+        : null;
+    setBlockActionBusy(true);
+    try {
+      const { blockTask } = await import("@/lib/task-blocks.functions");
+      const res = await blockTask({
+        data: {
+          taskId: initial.id,
+          taskScope: origin,
+          category: fields.category,
+          reason: fields.reason,
+          affectedAssigneeId: affectedAssigneeId ?? undefined,
+          affectedAssigneeName: primaryAssignee ?? assignees[0],
+          responsibleForUnblockingUserId: fields.responsibleForUnblockingUserId,
+          responsibleForUnblockingName: fields.responsibleForUnblockingName,
+          relatedTaskId: fields.relatedTaskId,
+          relatedTaskTitle: fields.relatedTaskTitle,
+          relatedEntityType: fields.relatedEntityType,
+          relatedEntityId: fields.relatedEntityId,
+          requiredAction: fields.requiredAction,
+          expectedResolutionAt: fields.expectedResolutionAt,
+          currentPerformanceDueDate: performanceDueDate,
+        },
+      });
+      // Categoria "dependência de outra tarefa" também cria a relação real
+      // em `task_dependencies` (mesma infra já usada em "Relacionamentos"
+      // — ciclo/duplicidade já validados por `createDependency`), em vez
+      // de duplicar esse conceito dentro de `task_blocks`.
+      if (fields.category === "dependencia_tarefa" && fields.relatedTaskEntry && depTaskId) {
+        await handlePickDependency("depends", fields.relatedTaskEntry);
+      }
+      setStatus("Bloqueada");
+      lastAtomicStatusRef.current = "Bloqueada";
+      setBlockedState(res.blockedState);
+      if (res.performanceDueDate) setPerformanceDueDate(res.performanceDueDate);
+      setActivity((a) => [...a, res.activity as Activity]);
+      blockComposerHasData.current = false;
+      setPendingBlockAction(null);
+      toast.success("Tarefa bloqueada.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível bloquear a tarefa.");
+    } finally {
+      setBlockActionBusy(false);
+    }
+  };
+
+  const confirmResolve = async (fields: ResolveFormFields) => {
+    if (!initial || !blockedState) return;
+    const origin = taskOriginFromScope(scope);
+    if (!origin) return;
+    setBlockActionBusy(true);
+    try {
+      const { resolveTaskBlock } = await import("@/lib/task-blocks.functions");
+      const res = await resolveTaskBlock({
+        data: {
+          blockId: blockedState.blockId,
+          taskId: initial.id,
+          taskScope: origin,
+          resolutionNote: fields.resolutionNote,
+          newStatus: fields.newStatus,
+          originalDueDate,
+          deadlineHistory: deadlineHistory.map((e) => ({
+            to: e.to,
+            isCritical: e.isCritical,
+            exemptFromResponsibility: e.exemptFromResponsibility,
+            adminOverride: e.adminOverride ? { exempted: e.adminOverride.exempted } : undefined,
+          })),
+          stillActiveOtherBlocks: [],
+          thisBlockPausesDeadline: blockedState.pausesDeadline,
+          thisBlockBlockedAt: blockedState.blockedAt,
+        },
+      });
+      setStatus(res.newStatus as TaskStatus);
+      lastAtomicStatusRef.current = res.newStatus as TaskStatus;
+      setBlockedState(res.blockedState);
+      if (res.performanceDueDate) setPerformanceDueDate(res.performanceDueDate);
+      setActivity((a) => [...a, res.activity as Activity]);
+      blockComposerHasData.current = false;
+      setPendingBlockAction(null);
+      toast.success(
+        res.stillBlocked
+          ? "Bloqueio resolvido — outro impedimento continua ativo."
+          : "Bloqueio resolvido — tarefa retomada.",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível resolver o bloqueio.");
+    } finally {
+      setBlockActionBusy(false);
+    }
+  };
+
   /** Único ponto de entrada pro campo "Entrega" — decide se a mudança
    * salva direto (silenciosa) ou fica pendente aguardando o formulário
    * inline do Activity (crítica: vence hoje/atrasada E sendo adiada). */
@@ -3026,7 +3232,13 @@ export function TaskDialog({
       if (initial.title !== title.trim())
         act = pushActivity(act, `renomeou para "${title.trim()}"`);
       let statusChangedTask: Task | null = null;
-      if (initial.status !== status) {
+      // `lastAtomicStatusRef` cobre o caso do status já ter sido
+      // persistido atomicamente por `confirmBlock`/`confirmResolve`
+      // (RPC dedicada, ver `task-blocks.functions.ts`) — rodar
+      // `withStatusChange` de novo aqui duplicaria o evento "mudou
+      // status para X" ao lado do card de bloqueio/desbloqueio que a
+      // RPC já criou.
+      if (initial.status !== status && lastAtomicStatusRef.current !== status) {
         const withTimer = withStatusChange(
           { ...initial, activity: act, comments: cmts, timerRunning, timerStartedAt, timeEntries },
           status,
@@ -3225,6 +3437,7 @@ export function TaskDialog({
       originalDueDate: finalOriginalDueDate,
       performanceDueDate: finalPerformanceDueDate,
       deadlineHistory: finalDeadlineHistory.length ? finalDeadlineHistory : undefined,
+      blockedState,
       recurrence,
       roadmapPhaseId,
     });
@@ -3247,6 +3460,20 @@ export function TaskDialog({
   };
 
   const attemptSave = (closeAfter: boolean) => {
+    // Questionário de bloqueio/resolução aberto com dados digitados —
+    // avisa antes de fechar (exigência explícita do pedido de bloqueio,
+    // diferente do formulário de replanejamento que descarta em
+    // silêncio). Só pergunta se já há motivo/nota digitados; formulário
+    // vazio fecha direto, sem fricção.
+    if (
+      pendingBlockAction &&
+      blockComposerHasData.current &&
+      !window.confirm(
+        "Você tem um questionário de bloqueio não confirmado. Fechar mesmo assim vai descartá-lo.",
+      )
+    ) {
+      return;
+    }
     if (!canSave) {
       if (closeAfter) onOpenChange(false);
       return;
@@ -3573,6 +3800,18 @@ export function TaskDialog({
                     >
                       <History className="h-3.5 w-3.5" /> Histórico
                     </DropdownMenuItem>
+                    {status === "Bloqueada" ? (
+                      <DropdownMenuItem onClick={openResolveComposer}>
+                        <Lock className="h-3.5 w-3.5" /> Resolver bloqueio
+                      </DropdownMenuItem>
+                    ) : (
+                      status !== "Concluído" &&
+                      status !== "Arquivado" && (
+                        <DropdownMenuItem onClick={openBlockComposer}>
+                          <Lock className="h-3.5 w-3.5" /> Bloquear tarefa
+                        </DropdownMenuItem>
+                      )
+                    )}
                     {status !== "Arquivado" && (
                       <DropdownMenuItem onClick={() => setStatus("Arquivado")}>
                         <Archive className="h-3.5 w-3.5" /> Arquivar
@@ -3626,7 +3865,8 @@ export function TaskDialog({
                       }
                       className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
                     >
-                      <Link2 className="h-3 w-3" /> Bloqueada por {dependsOnPending.length}
+                      <Link2 className="h-3 w-3" /> Aguardando {dependsOnPending.length} dependência
+                      {dependsOnPending.length === 1 ? "" : "s"}
                     </button>
                   )}
                   {parentTitle && (
@@ -3654,6 +3894,19 @@ export function TaskDialog({
                 />
               </div>
 
+              {status === "Bloqueada" && blockedState && (
+                <BlockedTaskBanner
+                  blockedState={blockedState}
+                  onResolve={openResolveComposer}
+                  onViewActivity={() =>
+                    historicoSectionRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "center",
+                    })
+                  }
+                />
+              )}
+
               <div className="grid grid-cols-1 border-y border-border bg-muted/10 px-6 py-3 sm:grid-cols-2 sm:gap-x-6 sm:px-8">
                 <Field label="Status" icon={<CircleDashed className="h-3.5 w-3.5" />}>
                   <select
@@ -3671,6 +3924,14 @@ export function TaskDialog({
                           behavior: "smooth",
                           block: "center",
                         });
+                        return;
+                      }
+                      // "Bloqueada" nunca muda o status na hora — abre o
+                      // questionário na Activity (mesmo fluxo do menu
+                      // "Bloquear tarefa"); o `<select>` visualmente volta
+                      // pro valor atual até a confirmação.
+                      if (next === "Bloqueada") {
+                        openBlockComposer();
                         return;
                       }
                       setStatus(next);
@@ -4506,6 +4767,18 @@ export function TaskDialog({
                   setPendingDeadlineChange(null);
                 }}
                 onCancelDeadlineChange={discardPendingDeadlineChange}
+                blockedState={blockedState}
+                pendingBlockAction={pendingBlockAction}
+                blockActionBusy={blockActionBusy}
+                onConfirmBlock={confirmBlock}
+                onConfirmResolve={confirmResolve}
+                onCancelBlockAction={cancelBlockAction}
+                onBlockComposerDirtyChange={(dirty) => {
+                  blockComposerHasData.current = dirty;
+                }}
+                excludeTaskId={depTaskId}
+                currentProjectId={scope?.kind === "projeto" ? scope.id : undefined}
+                currentCampanhaId={scope?.kind === "campanha" ? scope.id : undefined}
               />
             </div>
           </div>
@@ -4766,6 +5039,67 @@ function DeadlineHealthBadge({ task }: { task: Task }) {
         </p>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Banner de topo pra tarefa bloqueada — linguagem sempre neutra
+ * ("Dependência de Lucas — aguardando envio do briefing"), nunca
+ * atribuindo culpa ("bloqueada por culpa de..."). `Ver na Activity` rola
+ * até o card permanente do evento (mesmo `historicoSectionRef` já usado
+ * pelo item "Histórico" do menu de ações). */
+function BlockedTaskBanner({
+  blockedState,
+  onResolve,
+  onViewActivity,
+}: {
+  blockedState: TaskBlockedState;
+  onResolve: () => void;
+  onViewActivity: () => void;
+}) {
+  const who =
+    blockedState.responsibleForUnblockingName ||
+    (blockedState.category === "aguardando_cliente"
+      ? "o cliente"
+      : blockedState.category === "aguardando_fornecedor"
+        ? "o fornecedor/parceiro"
+        : null);
+  return (
+    <div className="mx-6 mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs sm:mx-8">
+      <div className="flex items-start gap-2">
+        <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="font-semibold text-amber-800 dark:text-amber-300">
+            Esta tarefa está bloqueada
+          </p>
+          <p className="text-amber-800/90 dark:text-amber-300/90">
+            {who ? `Dependência de ${who}` : "Impedimento registrado"} — {blockedState.reason}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Desde {fmtDate(blockedState.blockedAt.slice(0, 10))}
+            {blockedState.expectedResolutionAt &&
+              ` · Previsão: ${fmtDate(blockedState.expectedResolutionAt.slice(0, 10))}`}
+            {" · "}
+            {blockedState.pausesDeadline ? "Prazo pausado" : "Prazo continua correndo"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onViewActivity}
+            className="rounded-md px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-500/15 dark:text-amber-300"
+          >
+            Ver na Activity
+          </button>
+          <button
+            type="button"
+            onClick={onResolve}
+            className="rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-700"
+          >
+            Resolver bloqueio
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
