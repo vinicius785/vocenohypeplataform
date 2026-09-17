@@ -305,7 +305,7 @@ export function TaskActivityPanel({
   const health = taskDeadlineHealth(task, undefined, deadlineCutoffHour);
 
   return (
-    <div className="flex min-h-0 flex-col border-l border-border bg-muted/20">
+    <div className="flex min-h-0 w-full min-w-0 flex-col border-l border-border bg-background">
       <div className="border-b border-border px-5 py-3">
         <div className="mb-2.5 flex items-center justify-between">
           <p className="text-sm font-semibold">Atividade</p>

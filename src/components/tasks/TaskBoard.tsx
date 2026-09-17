@@ -4674,7 +4674,7 @@ export function TaskDialog({
                 conteúdo (sem scroll interno nenhum, cortado pelo
                 `overflow-hidden` do grid em vez de rolar). */}
             {activityOpen && initial && (
-              <div ref={historicoSectionRef} className="flex min-h-0">
+              <div ref={historicoSectionRef} className="flex min-h-0 w-full min-w-0">
                 <TaskActivityPanel
                   task={{
                     status,
