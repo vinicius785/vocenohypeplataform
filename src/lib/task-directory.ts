@@ -40,7 +40,28 @@ export type TaskDirectoryEntry = {
    * precise gravar uma referência real a essa tarefa (ex.: dependências)
    * deve usar `rawId`, nunca `id`. */
   rawId: string;
+  /** Presente só quando a tarefa está bloqueada — mesmo indicador âmbar+
+   * cadeado já usado no card do Kanban (pedido do upgrade do Chat, seção
+   * 10). */
+  blockedReason?: string;
+  /** Progresso de subtarefas (categoria "done", mesma regra de
+   * `TASK_STATUS_CATEGORY` já usada no Kanban) — `undefined` quando a
+   * tarefa não tem nenhuma subtarefa, pra nunca mostrar "0/0". */
+  subtasksDone?: number;
+  subtasksTotal?: number;
 };
+
+function subtaskProgress(
+  subtasks: { status: string }[] | undefined,
+): { subtasksDone: number; subtasksTotal: number } | Record<string, never> {
+  if (!subtasks || subtasks.length === 0) return {};
+  const active = subtasks.filter((s) => s.status !== "Arquivado");
+  if (active.length === 0) return {};
+  const subtasksDone = active.filter(
+    (s) => s.status === "Concluído" || s.status === "Aprovado",
+  ).length;
+  return { subtasksDone, subtasksTotal: active.length };
+}
 
 export function useTaskDirectory(): TaskDirectoryEntry[] {
   const clientes = useClientes();
@@ -72,6 +93,8 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           priority: t.priority,
           dueDate: t.dueDate,
           assignees: getTaskAssignees(t),
+          blockedReason: t.blockedState?.reason,
+          ...subtaskProgress(t.subtasks),
         },
         // Subtarefas entram no diretório com a própria identidade — sem
         // isso, @mencionar/abrir uma subtarefa (Chat, dependências) não
@@ -103,6 +126,8 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
           priority: t.priority,
           dueDate: t.dueDate,
           assignees: getTaskAssignees(t),
+          blockedReason: t.blockedState?.reason,
+          ...subtaskProgress(t.subtasks),
         });
         for (const s of t.subtasks ?? []) {
           campanhaTasks.push({
@@ -131,6 +156,7 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
             status: s.status,
             dueDate: s.dueDate,
             assignees: getTaskAssignees(s),
+            ...subtaskProgress(s.subtasks),
           },
           ...(s.subtasks ?? []).map((sub) => ({
             id: sub.id,
@@ -147,6 +173,43 @@ export function useTaskDirectory(): TaskDirectoryEntry[] {
       : [];
     return [...projectTasks, ...campanhaTasks, ...standaloneTasks];
   }, [campanhaNameMap]);
+}
+
+/** "Alterar status" no card de tarefa mencionada no Chat (pedido do
+ * upgrade do Chat, seção 10) — reaproveita as MESMAS funções de
+ * persistência já usadas pelo board (`saveProjetoTarefas`/
+ * `saveCampanhaTarefas`/`updateStandalone`), nunca inventa uma escrita
+ * paralela. Escopo deliberadamente limitado a tarefas de PRIMEIRO NÍVEL
+ * (não subtarefas) — subtarefas já têm um seletor de status rico dentro
+ * do próprio modal da tarefa; duplicar essa lógica aqui só pra alterar
+ * status a partir do Chat não paga o risco de mexer no array errado.
+ * Não faz nada (retorna `false`) se a tarefa não for encontrada como
+ * item de primeiro nível — quem chama decide como avisar o usuário. */
+export function updateTaskDirectoryStatus(entry: TaskDirectoryEntry, newStatus: string): boolean {
+  if (entry.campanhaId) {
+    const all = getAllCampanhaTarefas();
+    const list = all.get(entry.campanhaId);
+    if (!list) return false;
+    const idx = list.findIndex((t) => t.id === entry.rawId);
+    if (idx < 0) return false;
+    const next = list.map((t, i) => (i === idx ? { ...t, status: newStatus as TaskStatus } : t));
+    saveCampanhaTarefas(entry.campanhaId, next as unknown as Task[]);
+    return true;
+  }
+  if (entry.id.startsWith("mkt:")) {
+    updateStandalone(entry.rawId, { status: newStatus as MktStandalone["status"] });
+    return true;
+  }
+  const projs = loadProjetos();
+  const proj = projs.find((p) => p.id === entry.projectId);
+  if (!proj) return false;
+  const idx = (proj.tasks ?? []).findIndex((t) => t.id === entry.rawId);
+  if (idx < 0) return false;
+  const next = (proj.tasks ?? []).map((t, i) =>
+    i === idx ? { ...t, status: newStatus as TaskStatus } : t,
+  );
+  saveProjetoTarefas(entry.projectId, next as unknown as Task[]);
+  return true;
 }
 
 /** Converte uma `MktStandalone` (tarefa avulsa do Marketing) pro shape de

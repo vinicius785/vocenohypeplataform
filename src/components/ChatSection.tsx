@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useMemo, useRef, useState, useLayoutEffect, type ReactNode } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Hash,
@@ -27,6 +27,17 @@ import {
   MessageSquare,
   ArrowLeft,
   ListChecks,
+  ExternalLink,
+  FolderOpen,
+  Youtube,
+  Link2,
+  ZoomIn,
+  ZoomOut,
+  Loader2,
+  AlertTriangle,
+  Eye,
+  Copy,
+  ChevronUp,
 } from "lucide-react";
 import { startCall, useCallState, MAX_GROUP_PARTICIPANTS } from "@/lib/call-controller";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +60,7 @@ import {
   completeHypitoTaskFromAlert,
   seedHypitoTaskFromMessage,
 } from "@/lib/hypito-chat.functions";
-import { openHypitoWidget } from "@/lib/hypito-widget-store";
+import { openHypitoWidget, minimizeHypitoWidget } from "@/lib/hypito-widget-store";
 import {
   parseHypitoMessage,
   type HypitoEntityRef,
@@ -121,8 +132,16 @@ import {
   type MentionOption,
 } from "@/lib/mention-kinds";
 import { linkifyText } from "@/lib/linkify";
+import { extractUrls, recognizeLinkPreview, type LinkPreview } from "@/lib/link-preview";
+import {
+  isChatSidebarGroupCollapsed,
+  toggleChatSidebarGroup,
+  type ChatSidebarGroup,
+} from "@/lib/chat-sidebar-prefs";
 import { useConfirm } from "@/hooks/use-confirm";
 import { CreateChannelModal } from "@/components/CreateChannelModal";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -236,6 +255,11 @@ function useVisualViewportHeight(
 
 export function ChatSection() {
   const [, force] = useState(0);
+  // Seed do composer pro "Comentar" do card de tarefa (pedido do upgrade
+  // do Chat, seção 10) — pré-insere uma @menção real da tarefa (casada
+  // por `extractUsedMentions` no envio, mesmo mecanismo de sempre) e foca
+  // o campo, sem abrir nada novo.
+  const [composerSeed, setComposerSeed] = useState<string | null>(null);
   useEffect(() => subscribeChat(() => force((n) => n + 1)), []);
   const callState = useCallState();
   const isMobile = useIsMobile();
@@ -292,6 +316,15 @@ export function ChatSection() {
     return members.find((m) => m.id === otherId) ?? { id: otherId, name: otherId };
   }, [activeId, isDm, members, me.id]);
   const isHypitoDm = isDm && isHypitoAuthorId(activeDmPartner?.id);
+
+  // Ponte painel flutuante ↔ Chat completo (pedido do upgrade do Chat,
+  // seção 18) — nunca mostra os dois Hypitos abertos ao mesmo tempo: ao
+  // entrar na conversa do Hypito aqui no Chat completo, minimiza o
+  // painel flutuante sozinho (o caminho inverso, "Abrir no Chat" dentro
+  // do próprio painel, já faz `minimizeHypitoWidget()` explicitamente).
+  useEffect(() => {
+    if (isHypitoDm) minimizeHypitoWidget();
+  }, [isHypitoDm]);
 
   const convoMessages = useMemo(
     () => messages.filter((m) => m.convoId === activeId).sort((a, b) => a.createdAt - b.createdAt),
@@ -929,6 +962,7 @@ export function ChatSection() {
                 onOpenMention={openMention}
                 hypitoHandlers={hypitoHandlers}
                 onCreateTask={onCreateTaskFromMessage}
+                onCommentTask={(task) => setComposerSeed(`@${task.label} `)}
               />
             )}
 
@@ -946,6 +980,8 @@ export function ChatSection() {
                 mentionContext={mentionContext}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
+                seed={composerSeed}
+                onSeedConsumed={() => setComposerSeed(null)}
                 placeholder={
                   activeChannel
                     ? `Mensagem em #${activeChannel.name}`
@@ -1237,6 +1273,39 @@ function HypitoEmptyState({ onPick }: { onPick: (text: string) => void }) {
   );
 }
 
+/** Cabeçalho de grupo recolhível (pedido, seção 2) — estado persistido em
+ * `localStorage` (`chat-sidebar-prefs.ts`), nunca sincronizado entre
+ * dispositivos. Só controla visibilidade das linhas; busca/ordenação
+ * continuam intocadas (o grupo recolhido ainda participa da busca —
+ * expandir de novo mostra o resultado filtrado normalmente). */
+function SidebarGroupSection({
+  group,
+  label,
+  children,
+  count,
+}: {
+  group: ChatSidebarGroup;
+  label: string;
+  children: ReactNode;
+  count: number;
+}) {
+  const [collapsed, setCollapsed] = useState(() => isChatSidebarGroupCollapsed(group));
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setCollapsed(toggleChatSidebarGroup(group))}
+        className="flex w-full items-center gap-1 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+      >
+        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {label}
+        {collapsed && <span className="normal-case tracking-normal">({count})</span>}
+      </button>
+      {!collapsed && children}
+    </div>
+  );
+}
+
 function ChatConversationList({
   channels,
   campaignChannels,
@@ -1389,10 +1458,7 @@ function ChatConversationList({
               </div>
             )}
             {diretas.length > 0 && (
-              <div className="mb-2">
-                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Diretas
-                </p>
+              <SidebarGroupSection group="diretas" label="Diretas" count={diretas.length}>
                 {diretas.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1402,13 +1468,10 @@ function ChatConversationList({
                     onSelect={() => onSelectConvo(item.id)}
                   />
                 ))}
-              </div>
+              </SidebarGroupSection>
             )}
             {canais.length > 0 && (
-              <div className="mb-2">
-                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Canais
-                </p>
+              <SidebarGroupSection group="canais" label="Canais" count={canais.length}>
                 {canais.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1423,13 +1486,10 @@ function ChatConversationList({
                     onDelete={(e) => deleteChannelRow(item.id, e)}
                   />
                 ))}
-              </div>
+              </SidebarGroupSection>
             )}
             {campanhas.length > 0 && (
-              <div className="mb-2">
-                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Campanhas
-                </p>
+              <SidebarGroupSection group="campanhas" label="Campanhas" count={campanhas.length}>
                 {campanhas.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1439,13 +1499,10 @@ function ChatConversationList({
                     onSelect={() => onSelectConvo(item.id)}
                   />
                 ))}
-              </div>
+              </SidebarGroupSection>
             )}
             {projetos.length > 0 && (
-              <div>
-                <p className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Projetos
-                </p>
+              <SidebarGroupSection group="projetos" label="Projetos" count={projetos.length}>
                 {projetos.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1455,7 +1512,7 @@ function ChatConversationList({
                     onSelect={() => onSelectConvo(item.id)}
                   />
                 ))}
-              </div>
+              </SidebarGroupSection>
             )}
           </>
         )}
@@ -1494,33 +1551,127 @@ const CHAT_TASK_PRIORITY_TONE: Record<string, string> = {
   Baixa: "text-muted-foreground",
 };
 
-function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: string) => void }) {
+const CHAT_TASK_STATUS_OPTIONS = [
+  "Aberto",
+  "Em andamento",
+  "Em aprovação",
+  "Em ajustes",
+  "Aprovado",
+  "Concluído",
+] as const;
+
+/** Card de tarefa mencionada (pedido do upgrade do Chat, seção 10) —
+ * enriquecido com projeto/campanha, indicador de bloqueio e progresso de
+ * subtarefas (`task-directory.ts`'s `updateTaskDirectoryStatus`, mesma
+ * persistência já usada pelo board). "Alterar status" só aparece pra
+ * tarefas de primeiro nível (subtarefas já têm seletor rico no próprio
+ * modal — ver comentário em `updateTaskDirectoryStatus`). Nunca mostra a
+ * descrição da tarefa aqui — só o card, texto da mensagem fica separado
+ * (mensagem já renderiza à parte, acima). */
+function TaskMentionCard({
+  task,
+  onOpen,
+  onComment,
+}: {
+  task: ChatTaskInfo;
+  onOpen: (id: string) => void;
+  onComment?: (task: ChatTaskInfo) => void;
+}) {
+  const [status, setStatus] = useState(task.status);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const subtaskPct =
+    task.subtasksTotal && task.subtasksTotal > 0
+      ? Math.round(((task.subtasksDone ?? 0) / task.subtasksTotal) * 100)
+      : null;
+
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(task.id)}
-      className="flex w-full max-w-[420px] flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left text-xs hover:border-foreground/30 hover:bg-muted/50"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate font-medium text-foreground">{task.label}</span>
-        <span
-          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-            CHAT_TASK_STATUS_TONE[task.status] ?? "bg-muted text-muted-foreground"
-          }`}
-        >
-          {task.status}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
-        {task.assignees.length > 0 && <span>{task.assignees.join(", ")}</span>}
-        {task.dueDate && <span>Prazo: {formatIsoDate(task.dueDate)}</span>}
-        {task.priority && (
-          <span className={CHAT_TASK_PRIORITY_TONE[task.priority] ?? undefined}>
-            {task.priority}
+    <div className="flex w-full max-w-[420px] flex-col gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs">
+      <button
+        type="button"
+        onClick={() => onOpen(task.id)}
+        className="flex flex-col gap-1 text-left hover:opacity-80"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate font-medium text-foreground">{task.label}</span>
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              CHAT_TASK_STATUS_TONE[status] ?? "bg-muted text-muted-foreground"
+            }`}
+          >
+            {status}
           </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          {task.project && <span>{task.project}</span>}
+          {task.assignees.length > 0 && <span>{task.assignees.join(", ")}</span>}
+          {task.dueDate && <span>Prazo: {formatIsoDate(task.dueDate)}</span>}
+          {task.priority && (
+            <span className={CHAT_TASK_PRIORITY_TONE[task.priority] ?? undefined}>
+              {task.priority}
+            </span>
+          )}
+        </div>
+        {task.blockedReason && (
+          <div className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+            <Lock className="h-3 w-3" /> Bloqueada · {task.blockedReason}
+          </div>
+        )}
+        {subtaskPct !== null && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-1 flex-1 rounded-full bg-muted">
+              <div className="h-1 rounded-full bg-brand" style={{ width: `${subtaskPct}%` }} />
+            </div>
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              {task.subtasksDone}/{task.subtasksTotal} subtarefas
+            </span>
+          </div>
+        )}
+      </button>
+      <div className="flex items-center gap-1 border-t border-border/60 pt-1.5">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setStatusOpen((v) => !v)}
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Alterar status
+          </button>
+          {statusOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setStatusOpen(false)} />
+              <div className="absolute bottom-full left-0 z-40 mb-1 w-40 rounded-md border border-border bg-background p-1 shadow-lg">
+                {CHAT_TASK_STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => {
+                      const previous = status;
+                      setStatus(s);
+                      setStatusOpen(false);
+                      void import("@/lib/task-directory").then(({ updateTaskDirectoryStatus }) => {
+                        if (!updateTaskDirectoryStatus(task, s)) setStatus(previous);
+                      });
+                    }}
+                    className="flex w-full items-center rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        {onComment && (
+          <button
+            type="button"
+            onClick={() => onComment(task)}
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            Comentar
+          </button>
         )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -1530,6 +1681,120 @@ function TaskMentionCard({ task, onOpen }: { task: ChatTaskInfo; onOpen: (id: st
  * aparecem à parte, como blocos abaixo do texto (ver `taskMentionsOf`).
  * Cada badge é clicável (`onOpenMention`) — antes só a tarefa tinha uma
  * forma de abrir (o card separado), a menção inline em si nunca abria nada. */
+/** Ícone por tipo de preview reconhecido — nunca genérico demais pra não
+ * dar a entender que sabemos mais do link do que sabemos de verdade
+ * (reconhecimento por padrão de URL, nunca metadados reais). */
+function linkPreviewIcon(kind: LinkPreview["kind"]) {
+  const cls = "h-4 w-4 shrink-0 text-muted-foreground";
+  if (kind === "drive") return <FolderOpen className={cls} />;
+  if (kind === "youtube") return <Youtube className={cls} />;
+  return <Link2 className={cls} />;
+}
+
+/** Card de preview por padrão de URL reconhecido (pedido, seção 8) —
+ * aparece ABAIXO do texto da mensagem, o link inline continua clicável
+ * como sempre (`linkifyText`). Nunca inventa título/descrição reais —
+ * só o tipo já é honesto o bastante sem buscar metadados de terceiros. */
+function LinkPreviewCard({ preview }: { preview: LinkPreview }) {
+  return (
+    <a
+      href={preview.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="flex max-w-[360px] items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left hover:bg-muted/50"
+    >
+      {linkPreviewIcon(preview.kind)}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-foreground">{preview.title}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{preview.domain}</p>
+      </div>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+    </a>
+  );
+}
+
+/** Colapsa mensagens longas (pedido, seção 6) — nunca corta parágrafo/
+ * link/menção no meio: só limita a ALTURA visível com um gradiente,
+ * conteúdo continua inteiro no DOM, "Ver mensagem completa" só remove o
+ * limite. Heurística simples (tamanho do texto/nº de linhas) em vez de
+ * medir o DOM — sem custo de layout extra por mensagem. */
+const LONG_MESSAGE_CHARS = 600;
+const LONG_MESSAGE_LINES = 8;
+
+function isLongMessage(text: string): boolean {
+  if (text.length > LONG_MESSAGE_CHARS) return true;
+  const lines = text.split("\n").length;
+  return lines > LONG_MESSAGE_LINES;
+}
+
+function MessageBody({
+  text,
+  mentions,
+  onOpenMention,
+  editedAt,
+}: {
+  text: string;
+  mentions: ChatMention[] | undefined;
+  onOpenMention: (m: ChatMention) => void;
+  editedAt?: number;
+}) {
+  const long = useMemo(() => isLongMessage(text), [text]);
+  const [expanded, setExpanded] = useState(false);
+  const previews = useMemo(
+    () =>
+      extractUrls(text)
+        .map(recognizeLinkPreview)
+        .filter((p): p is LinkPreview => p !== null),
+    [text],
+  );
+  const collapsed = long && !expanded;
+  return (
+    <>
+      <div className="relative">
+        <p
+          className={`whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground md:leading-normal ${
+            collapsed ? "max-h-40 overflow-hidden" : ""
+          }`}
+        >
+          {renderText(text, mentions, onOpenMention)}
+          {editedAt && <span className="ml-1 text-[10px] text-muted-foreground">(editado)</span>}
+        </p>
+        {collapsed && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-background/95 to-transparent md:from-muted/70" />
+        )}
+      </div>
+      {long && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-foreground underline underline-offset-2 hover:no-underline"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-3 w-3" /> Recolher
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3" /> Ver mensagem completa
+            </>
+          )}
+        </button>
+      )}
+      {previews.length > 0 && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          {previews.map((p) => (
+            <LinkPreviewCard key={p.url} preview={p} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function renderText(
   text: string,
   mentions: ChatMention[] | undefined,
@@ -1607,6 +1872,7 @@ function MessageList({
   onOpenMention,
   hypitoHandlers,
   onCreateTask,
+  onCommentTask,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -1629,6 +1895,7 @@ function MessageList({
   onOpenMention: (m: ChatMention) => void;
   hypitoHandlers?: HypitoCardHandlers;
   onCreateTask?: (m: ChatMessage) => void;
+  onCommentTask?: (task: ChatTaskInfo) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Posição de rolagem por conversa (o próprio `scrollRef` é reaproveitado
@@ -2059,20 +2326,23 @@ function MessageList({
                                 mine ? "md:bg-brand-subtle" : "md:bg-muted/70"
                               }`}
                             >
-                              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground md:leading-normal">
-                                {renderText(m.text, m.mentions, onOpenMention)}
-                                {m.editedAt && (
-                                  <span className="ml-1 text-[10px] text-muted-foreground">
-                                    (editado)
-                                  </span>
-                                )}
-                              </p>
+                              <MessageBody
+                                text={m.text}
+                                mentions={m.mentions}
+                                onOpenMention={onOpenMention}
+                                editedAt={m.editedAt}
+                              />
                             </div>
                           )
                         )}
                         {onOpenTask &&
                           taskMentionsOf(m.mentions, taskInfoById).map((task) => (
-                            <TaskMentionCard key={task.id} task={task} onOpen={onOpenTask} />
+                            <TaskMentionCard
+                              key={task.id}
+                              task={task}
+                              onOpen={onOpenTask}
+                              onComment={onCommentTask}
+                            />
                           ))}
                         {m.attachments && m.attachments.length > 0 && (
                           <AttachmentList message={m} attachments={m.attachments} />
@@ -2179,24 +2449,40 @@ function MessageList({
                           <ListChecks className="h-3 w-3" />
                         </button>
                       )}
-                      {mine && (
-                        <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <button
-                            onClick={() => setEditingId(m.id)}
-                            aria-label="Editar"
+                            aria-label="Mais opções"
                             className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                           >
-                            <Pencil className="h-3 w-3" />
+                            <MoreHorizontal className="h-3 w-3" />
                           </button>
-                          <button
-                            onClick={() => onDelete(m.id)}
-                            aria-label="Excluir"
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const url = new URL(window.location.href);
+                              url.searchParams.set("msg", m.id);
+                              void navigator.clipboard.writeText(url.toString());
+                            }}
                           >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </>
-                      )}
+                            <Copy className="h-3.5 w-3.5" /> Copiar link
+                          </DropdownMenuItem>
+                          {mine && (
+                            <>
+                              <DropdownMenuItem onClick={() => setEditingId(m.id)}>
+                                <Pencil className="h-3.5 w-3.5" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onDelete(m.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Excluir
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   )}
                 </div>
@@ -2762,6 +3048,214 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Busca uma URL fresca sob demanda em vez de confiar na `url` cacheada
+ * (que pode ter expirado — mesmo padrão corrigido pro mídia kit de
+ * influenciadores). Usada tanto pelo lightbox quanto pelo card de PDF. */
+async function fetchFreshAttachmentUrl(
+  a: ChatAttachment,
+  download: boolean,
+): Promise<string | null> {
+  if (!a.path) return download ? a.url : a.url; // anexo antigo sem `path` — só a URL cacheada mesmo
+  const { getChatAttachmentUrl } = await import("@/lib/chat-attachments.functions");
+  const res = await getChatAttachmentUrl({ data: { path: a.path, name: a.name, download } });
+  return res.ok ? res.url : null;
+}
+
+/** Lightbox de imagem (pedido, seção 9) — zoom simples, baixar, navegação
+ * entre imagens da mesma mensagem. Busca uma URL fresca ao abrir em vez
+ * de reaproveitar a `url` cacheada da mensagem. */
+function ImageLightbox({
+  images,
+  startIndex,
+  onClose,
+}: {
+  images: ChatAttachment[];
+  startIndex: number;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(startIndex);
+  const [zoom, setZoom] = useState(1);
+  const [state, setState] = useState<{ loading: boolean; url?: string; error?: boolean }>({
+    loading: true,
+  });
+  const current = images[index];
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ loading: true });
+    setZoom(1);
+    void fetchFreshAttachmentUrl(current, false).then((url) => {
+      if (cancelled) return;
+      if (!url) setState({ loading: false, error: true });
+      else setState({ loading: false, url });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.path, current.url]);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="h-[90vh] w-[min(1100px,calc(100vw-32px))] max-w-none overflow-hidden p-0">
+        <DialogTitle className="sr-only">{current.name}</DialogTitle>
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {current.name}
+            </p>
+            {images.length > 1 && (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {index + 1} / {images.length}
+              </span>
+            )}
+            <div className="flex shrink-0 items-center gap-1">
+              <IconButton
+                label="Diminuir zoom"
+                onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+              >
+                <ZoomOut className="h-4 w-4" />
+              </IconButton>
+              <IconButton
+                label="Aumentar zoom"
+                onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
+              >
+                <ZoomIn className="h-4 w-4" />
+              </IconButton>
+              <IconButton
+                label="Baixar"
+                onClick={() =>
+                  void fetchFreshAttachmentUrl(current, true).then(
+                    (u) => u && window.open(u, "_blank", "noopener,noreferrer"),
+                  )
+                }
+              >
+                <Download className="h-4 w-4" />
+              </IconButton>
+            </div>
+          </div>
+          <div className="relative flex flex-1 items-center justify-center overflow-auto bg-muted/30">
+            {images.length > 1 && index > 0 && (
+              <button
+                type="button"
+                onClick={() => setIndex((i) => i - 1)}
+                className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background/80 p-2 shadow hover:bg-background"
+                aria-label="Anterior"
+              >
+                <ChevronRight className="h-4 w-4 rotate-180" />
+              </button>
+            )}
+            {state.loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+            {!state.loading && state.error && (
+              <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                <AlertTriangle className="h-5 w-5" />
+                Não foi possível carregar a imagem.
+              </div>
+            )}
+            {!state.loading && !state.error && state.url && (
+              <img
+                src={state.url}
+                alt={current.name}
+                style={{ transform: `scale(${zoom})` }}
+                className="max-h-full max-w-full object-contain transition-transform"
+              />
+            )}
+            {images.length > 1 && index < images.length - 1 && (
+              <button
+                type="button"
+                onClick={() => setIndex((i) => i + 1)}
+                className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-background/80 p-2 shadow hover:bg-background"
+                aria-label="Próxima"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Card de PDF (pedido, seção 9) — Visualizar sempre busca uma URL
+ * fresca (nunca a `url` cacheada), abre num `<iframe>` (paginação/zoom
+ * nativos do navegador, sem biblioteca nova). */
+function PdfAttachmentCard({ attachment }: { attachment: ChatAttachment }) {
+  const [preview, setPreview] = useState<{
+    loading: boolean;
+    url?: string;
+    error?: boolean;
+  } | null>(null);
+  const openPreview = () => {
+    setPreview({ loading: true });
+    void fetchFreshAttachmentUrl(attachment, false).then((url) => {
+      setPreview(url ? { loading: false, url } : { loading: false, error: true });
+    });
+  };
+  const download = () => {
+    void fetchFreshAttachmentUrl(attachment, true).then(
+      (u) => u && window.open(u, "_blank", "noopener,noreferrer"),
+    );
+  };
+  return (
+    <>
+      <div className="flex max-w-sm items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs">
+        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-foreground">{attachment.name}</p>
+          <p className="text-[10px] text-muted-foreground">PDF · {formatBytes(attachment.size)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={openPreview}
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Visualizar"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={download}
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Baixar"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {preview && (
+        <Dialog open onOpenChange={(o) => !o && setPreview(null)}>
+          <DialogContent className="h-[85vh] w-[min(900px,calc(100vw-48px))] max-w-none">
+            <DialogTitle>{attachment.name}</DialogTitle>
+            <div className="mt-2 h-[70vh] w-full overflow-hidden rounded-md border border-border bg-muted">
+              {preview.loading && (
+                <div className="flex h-full items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!preview.loading && preview.error && (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Arquivo indisponível.</p>
+                  <button
+                    type="button"
+                    onClick={download}
+                    className="text-sm font-medium text-foreground underline underline-offset-2"
+                  >
+                    Baixar arquivo
+                  </button>
+                </div>
+              )}
+              {!preview.loading && !preview.error && preview.url && (
+                <iframe src={preview.url} title={attachment.name} className="h-full w-full" />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 function AttachmentList({
   message,
   attachments,
@@ -2769,25 +3263,38 @@ function AttachmentList({
   message: ChatMessage;
   attachments: ChatAttachment[];
 }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const images = attachments.filter((a) => a.type.startsWith("image/"));
+  const others = attachments.filter((a) => !a.type.startsWith("image/"));
+
   return (
     <div className="mt-1.5 flex flex-col gap-1.5">
-      {attachments.map((a) => {
-        const isImage = a.type.startsWith("image/");
-        if (isImage) {
-          return (
-            <a
+      {images.length > 0 && (
+        <div
+          className={`grid max-w-sm gap-1 ${images.length === 1 ? "grid-cols-1" : images.length <= 4 ? "grid-cols-2" : "grid-cols-3"}`}
+        >
+          {images.map((a, i) => (
+            <button
               key={a.path || a.url}
-              href={a.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block max-w-xs overflow-hidden rounded-md border border-border"
+              type="button"
+              onClick={() => setLightboxIndex(i)}
+              className="block overflow-hidden rounded-md border border-border"
             >
-              <img src={a.url} alt={a.name} className="max-h-64 w-auto object-cover" />
-            </a>
-          );
-        }
+              <img
+                src={a.url}
+                alt={a.name}
+                className={`w-full object-cover ${images.length === 1 ? "max-h-64" : "h-28"}`}
+              />
+            </button>
+          ))}
+        </div>
+      )}
+      {others.map((a) => {
         if (a.type.startsWith("audio/")) {
           return <VoiceMessagePlayer key={a.path || a.url} message={message} attachment={a} />;
+        }
+        if (a.type === "application/pdf") {
+          return <PdfAttachmentCard key={a.path || a.url} attachment={a} />;
         }
         return (
           <a
@@ -2805,9 +3312,28 @@ function AttachmentList({
           </a>
         );
       })}
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </div>
   );
 }
+
+/** Comandos de barra (pedido, seção 17) — nunca envia o texto literal
+ * "/tarefa" pro Hypito interpretar: cada comando transforma o texto
+ * digitado numa frase natural que o motor determinístico já entende
+ * (`hypito-nlu.ts`), reaproveitando 100% o parser existente em vez de
+ * inventar um caminho de criação paralelo. */
+const SLASH_COMMANDS: { cmd: string; label: string; hint: string }[] = [
+  { cmd: "/tarefa", label: "/tarefa", hint: "Criar uma tarefa" },
+  { cmd: "/reuniao", label: "/reunião", hint: "Ver a agenda de reuniões" },
+  { cmd: "/lembrete", label: "/lembrete", hint: "Criar um lembrete" },
+  { cmd: "/hypito", label: "/hypito", hint: "Falar com o Hypito" },
+];
 
 function Composer({
   convoId,
@@ -2822,6 +3348,8 @@ function Composer({
   mentionContext,
   replyingTo,
   onCancelReply,
+  seed,
+  onSeedConsumed,
 }: {
   convoId: string;
   onSend: (text: string, mentions: ChatMention[], attachments: ChatAttachment[]) => void;
@@ -2835,12 +3363,52 @@ function Composer({
   mentionContext: MentionContext;
   replyingTo: ChatMessage | null;
   onCancelReply: () => void;
+  seed?: string | null;
+  onSeedConsumed?: () => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(seed ?? "");
+  useEffect(() => {
+    if (seed) {
+      setValue((v) => v + seed);
+      onSeedConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
   const [pending, setPending] = useState<ChatAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  /** `true` quando conseguiu tratar como comando — quem chama nunca
+   * envia o texto original como mensagem normal nesse caso. */
+  const runSlashCommand = (text: string): boolean => {
+    const match = /^\/(\w+)\s*(.*)$/s.exec(text);
+    if (!match) return false;
+    const [, cmd, rest] = match;
+    const arg = rest.trim();
+    if (cmd === "tarefa") {
+      openHypitoWidget();
+      void sendHypitoMessage({ data: { text: arg ? `Criar tarefa: ${arg}` : "Criar uma tarefa" } });
+      return true;
+    }
+    if (cmd === "lembrete") {
+      openHypitoWidget();
+      void sendHypitoMessage({ data: { text: arg ? `Me lembra ${arg}` : "Criar um lembrete" } });
+      return true;
+    }
+    if (cmd === "hypito") {
+      openHypitoWidget();
+      if (arg) void sendHypitoMessage({ data: { text: arg } });
+      return true;
+    }
+    if (cmd === "reuniao" || cmd === "reunião") {
+      navigate({ to: "/time", search: { section: "reunioes" satisfies SectionKey } });
+      return true;
+    }
+    return false;
+  };
   const options = useMentions(
     members,
     tasks,
@@ -2853,10 +3421,19 @@ function Composer({
 
   const submit = () => {
     if (!value.trim() && pending.length === 0) return;
+    if (runSlashCommand(value.trim())) {
+      setValue("");
+      return;
+    }
     onSend(value, extractUsedMentions(value, options), pending);
     setValue("");
     setPending([]);
   };
+
+  const slashMatch = /^\/(\w*)$/.exec(value);
+  const slashSuggestions = slashMatch
+    ? SLASH_COMMANDS.filter((c) => c.cmd.slice(1).startsWith(slashMatch[1].toLowerCase()))
+    : [];
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -2953,6 +3530,37 @@ function Composer({
             >
               <Paperclip className="h-4 w-4" />
             </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setEmojiOpen((v) => !v)}
+                disabled={uploading}
+                aria-label="Inserir emoji"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+              >
+                <Smile className="h-4 w-4" />
+              </button>
+              {emojiOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setEmojiOpen(false)} />
+                  <div className="absolute bottom-full left-0 z-40 mb-1 flex max-w-56 flex-wrap gap-0.5 rounded-md border border-border bg-background p-1.5 shadow-lg">
+                    {REACTION_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          setValue((v) => v + emoji);
+                          setEmojiOpen(false);
+                        }}
+                        className="rounded p-1 text-base hover:bg-muted"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setVoiceMode(true)}
@@ -2962,17 +3570,41 @@ function Composer({
             >
               <Mic className="h-4 w-4" />
             </button>
-            <MentionTextarea
-              value={value}
-              onChange={(v) => {
-                setValue(v);
-                if (v.trim()) broadcastTyping(convoId);
-              }}
-              options={options}
-              autoFocus
-              onEnterSubmit={submit}
-              placeholder={placeholder}
-            />
+            <div className="relative min-w-0 flex-1">
+              {slashSuggestions.length > 0 && (
+                <div className="absolute bottom-full left-0 z-40 mb-1 w-56 rounded-md border border-border bg-background p-1 shadow-lg">
+                  {slashSuggestions.map((c) => (
+                    <button
+                      key={c.cmd}
+                      type="button"
+                      onClick={() => {
+                        if (c.cmd === "/hypito" || c.cmd === "/reuniao") {
+                          runSlashCommand(c.cmd.slice(1));
+                          setValue("");
+                        } else {
+                          setValue(c.cmd + " ");
+                        }
+                      }}
+                      className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                    >
+                      <span className="font-medium text-foreground">{c.label}</span>
+                      <span className="text-muted-foreground">{c.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <MentionTextarea
+                value={value}
+                onChange={(v) => {
+                  setValue(v);
+                  if (v.trim()) broadcastTyping(convoId);
+                }}
+                options={options}
+                autoFocus
+                onEnterSubmit={submit}
+                placeholder={placeholder}
+              />
+            </div>
             <button
               onClick={submit}
               disabled={(!value.trim() && pending.length === 0) || uploading}

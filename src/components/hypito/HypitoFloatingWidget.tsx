@@ -12,7 +12,7 @@
  * visual, nunca um cliente/motor paralelo.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Mic, Minus, X, Sparkles } from "lucide-react";
+import { Send, Mic, Minus, X, Sparkles, ExternalLink } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,7 @@ import {
   subscribeChat,
   getUnreadCount,
   markRead,
+  setActive as setActiveConvo,
   type ChatMessage,
 } from "@/lib/chat-store";
 import {
@@ -228,6 +229,27 @@ export function HypitoFloatingWidget() {
             <span className="shrink-0 rounded-full bg-brand-subtle px-2 py-0.5 text-[10px] font-medium text-brand">
               {HYPITO_BADGE_LABEL}
             </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Mesma conversa, só muda a "casca" visual — nunca
+                    // duplica histórico (pedido do upgrade do Chat,
+                    // seção 18). Minimiza o próprio painel pra nunca
+                    // mostrar 2 Hypitos abertos ao mesmo tempo.
+                    navigate({ to: "/time", search: { section: "chat" satisfies SectionKey } });
+                    setActiveConvo(convoId);
+                    minimizeHypitoWidget();
+                  }}
+                  aria-label="Abrir no Chat"
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Abrir no Chat</TooltipContent>
+            </Tooltip>
             <button
               type="button"
               onClick={minimizeHypitoWidget}

@@ -1,6 +1,7 @@
 {
-  "version": "1.278.0",
+  "version": "1.279.0",
   "notes": [
+    "1.279.0: Atualiza o Chat — mensagens longas agora podem ser recolhidas, links de Google Drive/YouTube/páginas da plataforma ganham prévia, imagens abrem numa visualização ampliada com zoom, PDFs enviados no chat têm um card próprio com visualização e download (sem mais risco de link quebrado), a lista de conversas ganhou grupos recolhíveis, o campo de mensagem ganhou emoji e comandos de barra (/tarefa, /lembrete, /hypito, /reuniao), o menu da mensagem ganhou \"Copiar link\", e o card de tarefa mencionada mostra projeto/campanha, bloqueio e progresso de subtarefas, com ações para alterar status e comentar direto do Chat.",
     "1.278.0: Refaz o armazenamento e a apresentação das inscrições de influenciadores — o mídia kit enviado na Página de Inscrição agora fica guardado de verdade no Storage (nunca mais um link que expira e quebra), perfis sociais são normalizados na exibição (sem mais \"@https://...\"), inscrições duplicadas da mesma pessoa na mesma campanha viram uma candidatura só, e o perfil do influenciador ganha uma seção \"Dados da inscrição\" (respostas organizadas por tipo, resumo com orçamento/disponibilidade/redes) e \"Mídia kit e arquivos\" com visualização e download de PDFs/imagens.",
     "1.277.1: Corrige erro ao abrir o painel flutuante do Hypito e ao usar \"Criar tarefa\" a partir de uma mensagem do Chat — faltava um provedor de tooltip envolvendo o painel aberto.",
     "1.277.0: Upgrade do Hypito — painel flutuante global (botão no canto inferior direito, disponível em qualquer tela, com a mesma conversa de sempre), seletores ricos ao criar uma tarefa pelo chat (responsável com avatar/disponibilidade, projeto/campanha com busca e seções, calendário com confirmação de data), botão \"Criar tarefa\" no menu de qualquer mensagem do Chat (com vínculo pra mensagem original), \"@Hypito\" dentro de canais vinculados a um projeto/campanha, e alerta de tarefas atrasadas agora com botões de ação (Abrir, Concluir, Replanejar, Bloquear) direto na mensagem.",
@@ -416,6 +417,38 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.279.0",
+      "summary": "Chat com mensagens mais organizadas, prévia de links/imagens/PDFs e integração mais profunda com o Hypito.",
+      "modules": [
+        {
+          "name": "CHAT",
+          "tagline": "Conversas, canais e Hypito",
+          "items": [
+            {
+              "title": "Mensagens longas e links organizados",
+              "description": "Mensagens extensas agora podem ser recolhidas (\"Ver mensagem completa\"), e links do Google Drive, YouTube ou de páginas da própria plataforma ganham um card de prévia em vez de aparecer como texto cru."
+            },
+            {
+              "title": "Imagens e PDFs funcionais",
+              "description": "Imagens abrem numa visualização ampliada com zoom e navegação entre várias fotos da mesma mensagem. PDFs enviados no chat ganham um card com Visualizar e Baixar, sempre com um link novo — nunca mais um arquivo que \"quebra\" depois de um tempo."
+            },
+            {
+              "title": "Lista de conversas com grupos recolhíveis",
+              "description": "Diretas, Canais, Campanhas e Projetos agora podem ser recolhidos — a preferência fica salva no navegador."
+            },
+            {
+              "title": "Comandos de barra e emoji no campo de mensagem",
+              "description": "Digitar \"/tarefa\", \"/lembrete\", \"/hypito\" ou \"/reuniao\" no campo de mensagem já aciona o Hypito ou leva direto pra agenda. O campo também ganhou um seletor de emoji."
+            },
+            {
+              "title": "Card de tarefa mencionada mais completo",
+              "description": "Ao mencionar uma tarefa no chat, o card agora mostra o projeto ou campanha, se está bloqueada e o progresso das subtarefas — com botões para alterar o status ou comentar sem sair da conversa."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.278.0",
       "summary": "Inscrições de influenciadores reorganizadas: mídia kit funcional, redes normalizadas e sem duplicidade.",
