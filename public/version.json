@@ -1,6 +1,7 @@
 {
-  "version": "1.277.1",
+  "version": "1.278.0",
   "notes": [
+    "1.278.0: Refaz o armazenamento e a apresentação das inscrições de influenciadores — o mídia kit enviado na Página de Inscrição agora fica guardado de verdade no Storage (nunca mais um link que expira e quebra), perfis sociais são normalizados na exibição (sem mais \"@https://...\"), inscrições duplicadas da mesma pessoa na mesma campanha viram uma candidatura só, e o perfil do influenciador ganha uma seção \"Dados da inscrição\" (respostas organizadas por tipo, resumo com orçamento/disponibilidade/redes) e \"Mídia kit e arquivos\" com visualização e download de PDFs/imagens.",
     "1.277.1: Corrige erro ao abrir o painel flutuante do Hypito e ao usar \"Criar tarefa\" a partir de uma mensagem do Chat — faltava um provedor de tooltip envolvendo o painel aberto.",
     "1.277.0: Upgrade do Hypito — painel flutuante global (botão no canto inferior direito, disponível em qualquer tela, com a mesma conversa de sempre), seletores ricos ao criar uma tarefa pelo chat (responsável com avatar/disponibilidade, projeto/campanha com busca e seções, calendário com confirmação de data), botão \"Criar tarefa\" no menu de qualquer mensagem do Chat (com vínculo pra mensagem original), \"@Hypito\" dentro de canais vinculados a um projeto/campanha, e alerta de tarefas atrasadas agora com botões de ação (Abrir, Concluir, Replanejar, Bloquear) direto na mensagem.",
     "1.276.5: Reorganiza os cards de tarefa do Kanban (progresso de subtarefas, responsável/prazo/prioridade, indicador de tarefa bloqueada e fase em selo discreto, cada informação na sua própria linha) e refaz a lista de subtarefas dentro do modal de tarefa: agora em formato de tabela compacta, com seletor de status agrupado, edição de responsável/prioridade/prazo direto na linha (sem abrir outro modal), barra de progresso que ignora subtarefas arquivadas, bloqueio de subtarefa reaproveitando o mesmo questionário das tarefas principais, e aviso pra concluir a tarefa principal quando todas as subtarefas terminam.",
@@ -415,6 +416,38 @@
     "O link público de aprovação/visualização de influenciadores agora abre um perfil completo ao clicar no influenciador, com redes sociais, métricas por rede (com gráficos) e métricas das entregas já publicadas."
   ],
   "releases": [
+    {
+      "version": "1.278.0",
+      "summary": "Inscrições de influenciadores reorganizadas: mídia kit funcional, redes normalizadas e sem duplicidade.",
+      "modules": [
+        {
+          "name": "INFLUENCIADORES",
+          "tagline": "Página de Inscrição e perfil do influenciador",
+          "items": [
+            {
+              "title": "Mídia kit sem mais links quebrados",
+              "description": "O arquivo enviado na inscrição agora é guardado com uma chave permanente no Storage, com verificação do tipo real do arquivo — a visualização e o download geram um link novo a cada vez, então nunca mais expira e quebra."
+            },
+            {
+              "title": "Uma inscrição, um candidato",
+              "description": "Duas inscrições da mesma pessoa pra mesma campanha (por e-mail, telefone ou rede social) agora viram uma candidatura só, com as redes novas adicionadas ao registro existente em vez de criar um card duplicado no Kanban."
+            },
+            {
+              "title": "Redes sociais sem links crus",
+              "description": "Perfis salvos como URL completa (inclusive inscrições antigas) agora aparecem como \"@usuário\" limpo, com ícone da rede, no card do Kanban e no perfil."
+            },
+            {
+              "title": "Nova seção \"Dados da inscrição\"",
+              "description": "Respostas personalizadas aparecem formatadas por tipo (moeda, data, sim/não, chips de seleção, links clicáveis), com um resumo no topo (orçamento, disponibilidade, redes principais) e um botão \"Ver inscrição original\" com o que foi enviado, sem depender mais de Observações internas."
+            },
+            {
+              "title": "Nova seção \"Mídia kit e arquivos\"",
+              "description": "Cada arquivo aparece num card com nome, tamanho e data de envio, com botões Visualizar (abre PDF/imagem numa prévia) e Baixar."
+            }
+          ]
+        }
+      ]
+    },
     {
       "version": "1.277.0",
       "summary": "Hypito ganha painel flutuante global, seletores ricos e criação de tarefa direto do Chat.",

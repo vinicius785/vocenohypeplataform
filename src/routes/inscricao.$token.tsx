@@ -182,7 +182,12 @@ function InscricaoPage() {
           anexo,
           respostas: page.customQuestions
             .filter((q) => respostas[q.id] !== undefined && respostas[q.id] !== "")
-            .map((q) => ({ questionId: q.id, label: q.label, value: respostas[q.id] })),
+            .map((q) => ({
+              questionId: q.id,
+              label: q.label,
+              value: respostas[q.id],
+              fieldType: q.type,
+            })),
         },
       });
       setDone(true);

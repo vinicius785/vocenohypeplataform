@@ -114,6 +114,23 @@ export function resolveProfileUrl(rede: {
   }
 }
 
+/** Sanitiza um handle pra EXIBIÇÃO — nunca deixa um valor tipo
+ * `@https://www.instagram.com/allanvaz__/` chegar na tela. Cobre registros
+ * salvos antes de `normalizeSocialInput` existir (ou de qualquer origem
+ * que não passou por ela): se o valor já parece uma URL, refaz a mesma
+ * extração de handle; senão, só limpa `@`/espaços. Idempotente — aplicar
+ * num handle já limpo não muda nada. */
+export function sanitizeHandleForDisplay(plataforma: string, handle: string): string {
+  const trimmed = handle.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed) || trimmed.includes(".com/")) {
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const { handle: extracted } = normalizeSocialInput(plataforma, withProtocol);
+    if (extracted) return extracted;
+  }
+  return trimmed.replace(/^@+/, "");
+}
+
 type RedeLike = { id: string; plataforma: string; handle: string; isPrimary?: boolean };
 
 /** Compara de forma normalizada (case-insensitive, sem "@") pra bloquear

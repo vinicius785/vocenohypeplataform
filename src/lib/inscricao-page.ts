@@ -34,19 +34,23 @@ export type CustomQuestionType =
   | "texto_curto"
   | "texto_longo"
   | "numero"
+  | "moeda"
   | "sim_nao"
   | "selecao_unica"
   | "selecao_multipla"
-  | "data";
+  | "data"
+  | "link";
 
 export const CUSTOM_QUESTION_TYPE_LABEL: Record<CustomQuestionType, string> = {
   texto_curto: "Texto curto",
   texto_longo: "Texto longo",
   numero: "Número",
+  moeda: "Moeda (R$)",
   sim_nao: "Sim/Não",
   selecao_unica: "Seleção única",
   selecao_multipla: "Múltipla seleção",
   data: "Data",
+  link: "Link",
 };
 
 export type CustomQuestion = {

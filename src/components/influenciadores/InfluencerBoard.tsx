@@ -57,6 +57,10 @@ import {
   XCircle,
   Youtube,
   X,
+  Music2,
+  Link as LinkIcon,
+  Eye,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -92,7 +96,9 @@ import {
   groupByPlatform,
   ensurePrimary,
   resolveProfileUrl,
+  sanitizeHandleForDisplay,
 } from "@/lib/social-profiles";
+import type { CustomQuestionType } from "@/lib/inscricao-page";
 
 /* ============================================================
  * Shared Influenciadores model + UI.
@@ -699,6 +705,29 @@ export const NICHOS = [
 
 export type ChecklistItem = { id: string; text: string; done: boolean };
 
+/** Anexo com armazenamento permanente de verdade — refaz o "PDF quebrado"
+ * da Página de Inscrição (antes: só uma URL assinada de 1 ano, jogada
+ * como texto dentro de `observacoes`, sem nenhuma chave permanente de
+ * Storage pra regenerar depois que expira). `storagePath` é a chave real;
+ * a URL de visualização/download é sempre gerada sob demanda
+ * (`getInfluAttachmentUrl`), nunca persistida aqui. */
+export type InfluAttachment = {
+  id: string;
+  name: string;
+  mimeType: string;
+  extension: string;
+  sizeBytes: number;
+  storagePath: string;
+  bucket: "entrega-anexos";
+  checksum: string;
+  source: "inscricao_page";
+  uploadedAt: string;
+  /** `true` só depois de uma checagem confirmar que o arquivo sumiu do
+   * Storage — nunca assumido, sempre verificado (pedido: "não fingir que
+   * está disponível"). */
+  unavailable?: boolean;
+};
+
 export type Influ = {
   id: string;
   foto?: string;
@@ -756,8 +785,33 @@ export type Influ = {
   /** Respostas das perguntas personalizadas da Página de Inscrição, no
    * momento da inscrição — snapshot (sobrevive a mudanças futuras nas
    * perguntas da campanha). O time vê isso sem precisar abrir a página
-   * pública. */
-  inscricaoRespostas?: { questionId: string; label: string; value: string | string[] }[];
+   * pública. `fieldType`/`submittedAt` ausentes = resposta salva antes
+   * desta rodada (renderiza como texto simples, sem quebrar). */
+  inscricaoRespostas?: {
+    questionId: string;
+    label: string;
+    value: string | string[];
+    fieldType?: CustomQuestionType;
+    submittedAt?: string;
+  }[];
+  /** Mensagem livre do candidato, enviada junto da inscrição — SEPARADA
+   * de `observacoes` (que a partir desta rodada é só texto escrito
+   * manualmente pelo time; antes, a mensagem e o link do mídia kit eram
+   * concatenados ali, misturando dado enviado com anotação interna). */
+  inscricaoMensagem?: string;
+  /** Mídia kit e outros arquivos enviados na própria inscrição — nunca
+   * mais só um link de texto dentro de `observacoes`. */
+  midiaKit?: InfluAttachment[];
+  /** Metadados de quando/como a inscrição chegou — nunca editado depois. */
+  inscricaoMeta?: { submittedAt: string; origin: "inscricao_page"; formVersion: string };
+  /** Cópia somente-leitura do payload validado exatamente como chegou —
+   * "Ver inscrição original" (pedido: alterações posteriores no perfil
+   * nunca alteram este snapshot). */
+  inscricaoSnapshot?: Record<string, unknown>;
+  /** Candidaturas com dados conflitantes (ex.: e-mail bate mas telefone
+   * diferente) nunca são fundidas automaticamente — ficam sinalizadas
+   * aqui pra revisão manual do time. */
+  duplicateReviewFlags?: { reason: string; detectedAt: string }[];
   /** Mês de referência (`"YYYY-MM"`) pra campanhas recorrentes — setado
    * pelo servidor no momento da inscrição, a partir do "Mês de
    * referência" configurado na Página de Inscrição (nunca vem direto do
@@ -2225,15 +2279,31 @@ function InfluCard({
           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
             {influ.nicho && <span className="truncate">{influ.nicho}</span>}
             {influ.nicho && has("redes") && <span>·</span>}
-            {has("redes") && (
-              <span className="truncate">
-                {influ.redes
-                  .map((r) => r.handle || r.plataforma)
-                  .filter(Boolean)
-                  .join(" · ") || "Sem rede cadastrada"}
-              </span>
-            )}
+            {has("redes") &&
+              (() => {
+                const resolved = ensurePrimary(influ.redes);
+                const principal = resolved.find((r) => r.isPrimary) ?? resolved[0];
+                const extra = resolved.length - 1;
+                if (!principal) return <span>Sem rede cadastrada</span>;
+                const label = sanitizeHandleForDisplay(principal.plataforma, principal.handle);
+                return (
+                  <span className="inline-flex items-center gap-1 truncate">
+                    {platformIcon(principal.plataforma)}@{label || principal.plataforma}
+                    {extra > 0 && (
+                      <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                        +{extra} rede{extra === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                );
+              })()}
           </div>
+          {(() => {
+            const budget = firstCurrencyResposta(influ.inscricaoRespostas);
+            return budget ? (
+              <p className="mt-0.5 text-xs font-medium text-foreground">{formatBRL(budget)}</p>
+            ) : null;
+          })()}
         </div>
 
         <DropdownMenu>
@@ -2791,6 +2861,58 @@ function PagamentoInfluSection({
   );
 }
 
+type InscricaoResposta = NonNullable<Influ["inscricaoRespostas"]>[number];
+
+function formatBRL(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
+/** Interpreta um valor de resposta "moeda" — aceita tanto `"3300"` quanto
+ * `"3.300,00"` (formato brasileiro digitado no formulário público). */
+function parseCurrencyValue(raw: string): number | null {
+  const cleaned = raw.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return null;
+  const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Primeira resposta do tipo "moeda" — usada tanto no resumo do drawer
+ * quanto no card do Kanban, pra "orçamento" nunca precisar de um campo
+ * dedicado novo em `Influ` (o valor já vem de uma pergunta customizada). */
+function firstCurrencyResposta(respostas?: InscricaoResposta[]): number | null {
+  if (!respostas) return null;
+  for (const r of respostas) {
+    if (r.fieldType !== "moeda") continue;
+    if (typeof r.value !== "string") continue;
+    const n = parseCurrencyValue(r.value);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+/** Ícone por rede — usado tanto no editor quanto nos cards de resumo/
+ * Kanban, pra nunca depender só do nome da plataforma em texto. */
+function platformIcon(plataforma: string) {
+  const cls = "h-3.5 w-3.5 shrink-0 text-muted-foreground";
+  switch (plataforma) {
+    case "Instagram":
+      return <Instagram className={cls} />;
+    case "TikTok":
+      return <Music2 className={cls} />;
+    case "YouTube":
+      return <Youtube className={cls} />;
+    case "X":
+      return <Twitter className={cls} />;
+    case "LinkedIn":
+      return <Linkedin className={cls} />;
+    case "Facebook":
+      return <Facebook className={cls} />;
+    default:
+      return <AtSign className={cls} />;
+  }
+}
+
 /** Editor de redes sociais — mesmos toggles de plataforma + handle usados
  * na criação, reaproveitados aqui pra edição imediata de um influenciador
  * já existente. */
@@ -2864,6 +2986,7 @@ function RedesEditor({ redes, onChange }: { redes: Rede[]; onChange: (next: Rede
                   {resolved.map((r) => (
                     <div key={r.id} className="space-y-1">
                       <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
+                        {platformIcon(plataforma)}
                         {def?.usesHandle && (
                           <span className="text-sm text-muted-foreground">@</span>
                         )}
@@ -4061,6 +4184,395 @@ function CollapsibleSection({
   );
 }
 
+/** Renderiza UMA resposta conforme o `fieldType` (pedido: "não usar o
+ * mesmo componente para todos os tipos") — nunca mostra campo vazio,
+ * nunca concatena pergunta+resposta no mesmo parágrafo, nunca mostra
+ * JSON/array cru. Respostas antigas sem `fieldType` caem no fallback de
+ * texto simples (compatibilidade, sem quebrar nada já salvo). */
+function AnswerField({ r }: { r: InscricaoResposta }) {
+  const isEmpty =
+    r.value === undefined ||
+    r.value === null ||
+    r.value === "" ||
+    (Array.isArray(r.value) && r.value.length === 0);
+  if (isEmpty) return null;
+
+  const longForm = r.fieldType === "texto_longo";
+  const wrapperClass = longForm ? "col-span-full space-y-1" : "space-y-1";
+
+  let body: ReactNode;
+  switch (r.fieldType) {
+    case "moeda": {
+      const n = typeof r.value === "string" ? parseCurrencyValue(r.value) : null;
+      body = (
+        <p className="text-sm font-medium text-foreground">{n !== null ? formatBRL(n) : r.value}</p>
+      );
+      break;
+    }
+    case "data": {
+      const d = typeof r.value === "string" ? new Date(r.value) : null;
+      const valid = d && !Number.isNaN(d.getTime());
+      body = (
+        <p className="text-sm text-foreground">
+          {valid ? d!.toLocaleDateString("pt-BR") : String(r.value)}
+        </p>
+      );
+      break;
+    }
+    case "sim_nao":
+      body = (
+        <p className="text-sm text-foreground">
+          {r.value === "true" || r.value === "sim" || r.value === "Sim" ? "Sim" : "Não"}
+        </p>
+      );
+      break;
+    case "selecao_unica":
+      body = (
+        <span className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+          {Array.isArray(r.value) ? r.value[0] : r.value}
+        </span>
+      );
+      break;
+    case "selecao_multipla":
+      body = (
+        <div className="flex flex-wrap gap-1.5">
+          {(Array.isArray(r.value) ? r.value : [r.value]).map((v) => (
+            <span
+              key={v}
+              className="inline-flex rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground"
+            >
+              {v}
+            </span>
+          ))}
+        </div>
+      );
+      break;
+    case "link": {
+      const href = Array.isArray(r.value) ? r.value[0] : r.value;
+      let domain = href;
+      try {
+        domain = new URL(/^https?:\/\//i.test(href) ? href : `https://${href}`).hostname;
+      } catch {
+        /* mantém o texto original se não for uma URL válida */
+      }
+      body = (
+        <a
+          href={/^https?:\/\//i.test(href) ? href : `https://${href}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-foreground underline underline-offset-2"
+        >
+          {domain}
+        </a>
+      );
+      break;
+    }
+    case "numero":
+      body = (
+        <p className="text-sm text-foreground">
+          {Array.isArray(r.value) ? r.value.join(", ") : r.value}
+        </p>
+      );
+      break;
+    case "texto_longo":
+      body = (
+        <p className="whitespace-pre-line text-sm text-foreground">
+          {Array.isArray(r.value) ? r.value.join("\n") : r.value}
+        </p>
+      );
+      break;
+    default:
+      body = (
+        <p className="text-sm text-foreground">
+          {Array.isArray(r.value) ? r.value.join(", ") : r.value}
+        </p>
+      );
+  }
+
+  return (
+    <div className={wrapperClass}>
+      <dt className="text-xs font-medium text-muted-foreground">{r.label}</dt>
+      <dd>{body}</dd>
+    </div>
+  );
+}
+
+/** Resumo compacto no topo da candidatura (pedido, seção 6) — só mostra
+ * os campos que existem de verdade, nunca inventa/preenche placeholder. */
+function InscricaoResumo({ influ }: { influ: Influ }) {
+  const budget = firstCurrencyResposta(influ.inscricaoRespostas);
+  const disponibilidade = influ.inscricaoRespostas?.find((r) =>
+    /disponibilidade/i.test(r.label),
+  )?.value;
+  const cidade = influ.inscricaoRespostas?.find((r) =>
+    /cidade|região|regiao/i.test(r.label),
+  )?.value;
+  const principais = ensurePrimary(influ.redes).slice(0, 2);
+  const items: { label: string; value: ReactNode }[] = [];
+  if (budget !== null) items.push({ label: "Orçamento", value: formatBRL(budget) });
+  if (disponibilidade)
+    items.push({
+      label: "Disponibilidade",
+      value: Array.isArray(disponibilidade) ? disponibilidade.join(", ") : disponibilidade,
+    });
+  if (cidade)
+    items.push({
+      label: "Cidade/região",
+      value: Array.isArray(cidade) ? cidade.join(", ") : cidade,
+    });
+  if (principais.length > 0)
+    items.push({
+      label: "Redes",
+      value: (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          {principais.map((r) => (
+            <span key={r.id} className="inline-flex items-center gap-1">
+              {platformIcon(r.plataforma)}@{sanitizeHandleForDisplay(r.plataforma, r.handle)}
+            </span>
+          ))}
+        </span>
+      ),
+    });
+  items.push({
+    label: "Mídia kit",
+    value: influ.midiaKit && influ.midiaKit.length > 0 ? "Sim" : "Não enviado",
+  });
+
+  if (items.length === 0) return null;
+  return (
+    <div className="grid grid-cols-2 gap-4 rounded-lg border border-border/60 bg-muted/20 p-3 sm:grid-cols-3">
+      {items.map((it) => (
+        <div key={it.label} className="space-y-0.5">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {it.label}
+          </p>
+          <div className="text-sm text-foreground">{it.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Seção "Dados da inscrição" (pedido, seção 3) — só existe quando a
+ * candidatura veio da Página de Inscrição pública. Nunca mistura com
+ * "Observações internas": tudo aqui é o que o influenciador enviou, não
+ * o que o time escreveu depois. */
+function InscricaoDadosSection({ influ }: { influ: Influ }) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const respostas = influ.inscricaoRespostas ?? [];
+  return (
+    <CollapsibleSection
+      title="Dados da inscrição"
+      defaultOpen
+      summary="Informações enviadas por este influenciador ao se candidatar."
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {influ.inscricaoMeta?.submittedAt && (
+            <span>
+              Enviado em{" "}
+              {new Date(influ.inscricaoMeta.submittedAt).toLocaleString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+          <span>· Origem: Página de Inscrição</span>
+          {influ.inscricaoSnapshot && (
+            <button
+              type="button"
+              onClick={() => setShowOriginal(true)}
+              className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+            >
+              Ver inscrição original
+            </button>
+          )}
+        </div>
+
+        <InscricaoResumo influ={influ} />
+
+        {respostas.length > 0 && (
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {respostas.map((r) => (
+              <AnswerField key={r.questionId} r={r} />
+            ))}
+          </dl>
+        )}
+        {respostas.length === 0 && (
+          <EmptyHint text="Nenhuma resposta personalizada nesta inscrição." />
+        )}
+
+        {influ.inscricaoMensagem && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground">Mensagem do candidato</p>
+            <p className="whitespace-pre-line text-sm text-foreground">{influ.inscricaoMensagem}</p>
+          </div>
+        )}
+
+        {influ.duplicateReviewFlags && influ.duplicateReviewFlags.length > 0 && (
+          <div className="flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div>
+              {influ.duplicateReviewFlags.map((f, i) => (
+                <p key={i}>{f.reason}</p>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showOriginal && (
+        <Dialog open={showOriginal} onOpenChange={setShowOriginal}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+            <DialogTitle>Inscrição original</DialogTitle>
+            <DialogDescription>
+              Exatamente como foi enviado
+              {influ.inscricaoMeta?.submittedAt &&
+                `, em ${new Date(influ.inscricaoMeta.submittedAt).toLocaleString("pt-BR")}`}
+              . Alterações feitas depois no perfil não mudam este registro.
+            </DialogDescription>
+            <pre className="mt-2 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs text-foreground">
+              {JSON.stringify(influ.inscricaoSnapshot, null, 2)}
+            </pre>
+          </DialogContent>
+        </Dialog>
+      )}
+    </CollapsibleSection>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileIconFor(extension: string) {
+  const cls = "h-5 w-5 text-muted-foreground";
+  if (extension === "pdf") return <FileText className={cls} />;
+  if (["jpg", "jpeg", "png", "webp"].includes(extension)) return <ImageIcon className={cls} />;
+  return <Paperclip className={cls} />;
+}
+
+/** Card de arquivo do mídia kit (pedido, seção 8) — Visualizar/Baixar
+ * sempre pedem uma URL nova sob demanda (`getInfluAttachmentUrl`), nunca
+ * confiam numa URL salva antes (essa é a causa raiz do "PDF quebrado"). */
+function MidiaKitCard({
+  campanhaInfluId,
+  attachment,
+}: {
+  campanhaInfluId: string;
+  attachment: InfluAttachment;
+}) {
+  const [preview, setPreview] = useState<{
+    loading: boolean;
+    url?: string;
+    mimeType?: string;
+    error?: boolean;
+  } | null>(null);
+
+  const openPreview = async () => {
+    setPreview({ loading: true });
+    try {
+      const { getInfluAttachmentUrl } = await import("@/lib/inscricao-campanha.functions");
+      const res = await getInfluAttachmentUrl({
+        data: { campanhaInfluId, attachmentId: attachment.id },
+      });
+      if (!res.ok) {
+        setPreview({ loading: false, error: true });
+        return;
+      }
+      setPreview({ loading: false, url: res.url, mimeType: res.mimeType });
+    } catch {
+      setPreview({ loading: false, error: true });
+    }
+  };
+
+  const download = async () => {
+    const { getInfluAttachmentUrl } = await import("@/lib/inscricao-campanha.functions");
+    const res = await getInfluAttachmentUrl({
+      data: { campanhaInfluId, attachmentId: attachment.id, download: true },
+    });
+    if (!res.ok) return;
+    window.open(res.url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
+        {fileIconFor(attachment.extension)}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{attachment.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {attachment.extension.toUpperCase()} · {formatFileSize(attachment.sizeBytes)} · Enviado
+            na inscrição
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openPreview}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+        >
+          <Eye className="h-3.5 w-3.5" /> Visualizar
+        </button>
+        <button
+          type="button"
+          onClick={() => void download()}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+        >
+          <Download className="h-3.5 w-3.5" /> Baixar
+        </button>
+      </div>
+
+      {preview && (
+        <Dialog open onOpenChange={(o) => !o && setPreview(null)}>
+          <DialogContent className="max-h-[85vh] w-[min(900px,calc(100vw-48px))] max-w-none">
+            <DialogTitle>{attachment.name}</DialogTitle>
+            <DialogDescription>
+              {attachment.extension.toUpperCase()} · {formatFileSize(attachment.sizeBytes)}
+            </DialogDescription>
+            <div className="mt-2 h-[70vh] w-full overflow-hidden rounded-md border border-border bg-muted">
+              {preview.loading && (
+                <div className="flex h-full items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!preview.loading && preview.error && (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Arquivo indisponível.</p>
+                  <button
+                    type="button"
+                    onClick={() => void download()}
+                    className="text-sm font-medium text-foreground underline underline-offset-2"
+                  >
+                    Baixar arquivo
+                  </button>
+                </div>
+              )}
+              {!preview.loading &&
+                !preview.error &&
+                preview.url &&
+                (preview.mimeType === "application/pdf" ? (
+                  <iframe src={preview.url} title={attachment.name} className="h-full w-full" />
+                ) : (
+                  <img
+                    src={preview.url}
+                    alt={attachment.name}
+                    className="h-full w-full object-contain"
+                  />
+                ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 /** Lista operacional de entregas — linhas com divisor, não cards; menu de
  * ações em vez de ícone de lixeira exposto, com confirmação. */
 function EntregasOperationalList({
@@ -4432,6 +4944,22 @@ function WorkspaceDetailBody({
           </CollapsibleSection>
         )}
 
+        {influ.submittedVia === "inscricao_page" && <InscricaoDadosSection influ={influ} />}
+
+        {influ.midiaKit && influ.midiaKit.length > 0 && (
+          <CollapsibleSection
+            title="Mídia kit e arquivos"
+            defaultOpen
+            summary={`${influ.midiaKit.length} arquivo${influ.midiaKit.length === 1 ? "" : "s"}`}
+          >
+            <div className="space-y-2">
+              {influ.midiaKit.map((a) => (
+                <MidiaKitCard key={a.id} campanhaInfluId={influ.id} attachment={a} />
+              ))}
+            </div>
+          </CollapsibleSection>
+        )}
+
         <CollapsibleSection
           title="Briefing e observações"
           summary={`${influ.briefingPersonalizado ? "Briefing personalizado" : "Sem briefing"}${
@@ -4493,25 +5021,6 @@ function WorkspaceDetailBody({
               />
             </div>
           </div>
-
-          {influ.inscricaoRespostas && influ.inscricaoRespostas.length > 0 && (
-            <div className="mt-5 border-t border-border/60 pt-4">
-              <FieldLabel
-                title="Respostas da inscrição"
-                hint="Perguntas personalizadas da Página de Inscrição, respondidas no momento em que este influenciador se candidatou."
-              />
-              <dl className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {influ.inscricaoRespostas.map((r) => (
-                  <div key={r.questionId} className="space-y-0.5">
-                    <dt className="text-xs font-medium text-muted-foreground">{r.label}</dt>
-                    <dd className="text-sm text-foreground">
-                      {Array.isArray(r.value) ? r.value.join(", ") || "—" : r.value || "—"}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
         </CollapsibleSection>
 
         {temFinanceiro && (

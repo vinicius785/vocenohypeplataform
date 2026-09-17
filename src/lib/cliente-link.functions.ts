@@ -549,7 +549,7 @@ async function saveInfluRow(campanhaId: string, influencerId: string, next: Infl
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin
     .from("campanha_influenciadores")
-    .update({ data: next, updated_at: new Date().toISOString() })
+    .update({ data: next as unknown as never, updated_at: new Date().toISOString() })
     .eq("id", influencerId)
     .eq("campanha_id", campanhaId);
   if (error) throw new Error(error.message);
