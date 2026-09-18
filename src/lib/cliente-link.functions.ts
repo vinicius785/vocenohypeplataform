@@ -49,6 +49,32 @@ async function findClienteByToken(
   return null;
 }
 
+/**
+ * Session-based counterpart of `findClienteByToken`, used by the new
+ * `/portal-app/**` (Phase 2b) — resolves the `clientes` row by its real
+ * `organization_id` column instead of the legacy `publicToken`. Exported so
+ * `portal-auth.functions.ts` can reuse every bit of business logic below
+ * (`assertCampanhaInCliente`, `loadInfluRow`, `saveInfluRow`,
+ * `buildClienteLinkData`, etc) without a second parallel implementation.
+ * Does NOT itself check that the caller may access `organizationId` — that
+ * is the session guard's job (`requireClientAccess` /
+ * `resolvePortalOrganization`), same separation of concerns as the token
+ * path (a valid token IS the authorization there).
+ */
+export async function findClienteByOrganizationId(
+  organizationId: string,
+): Promise<{ clienteId: string; cliente: Cliente } | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: row, error } = await supabaseAdmin
+    .from("clientes")
+    .select("id, data")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) return null;
+  return { clienteId: row.id, cliente: row.data as Cliente };
+}
+
 const RedePublic = z.object({
   id: z.string().optional(),
   plataforma: z.string(),
@@ -366,7 +392,9 @@ const _ArticlePublic = z.object({
 /** Busca, entre todos os projetos, os artigos do blog marcados pra
  * aparecer no portal deste cliente (`portalClienteIds`) e já publicados —
  * rascunho/revisão/arquivado nunca aparecem no link público. */
-async function findArtigosDoCliente(clienteId: string): Promise<z.infer<typeof _ArticlePublic>[]> {
+export async function findArtigosDoCliente(
+  clienteId: string,
+): Promise<z.infer<typeof _ArticlePublic>[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("projetos").select("data");
   if (error) throw new Error(error.message);
@@ -417,7 +445,7 @@ const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
   "text/plain",
   "text/csv",
 ]);
-function assertAllowedUploadContentType(contentType: string) {
+export function assertAllowedUploadContentType(contentType: string) {
   if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(contentType)) {
     throw new Error("Tipo de arquivo não suportado.");
   }
@@ -547,87 +575,103 @@ const _CronogramaItemPublic = z.object({
   recurring: z.boolean().optional(),
 });
 
+/**
+ * Núcleo compartilhado por trás de `getClienteLinkData` (token) e
+ * `getPortalDataForSession` (sessão, `portal-auth.functions.ts`) — extraído
+ * byte-a-byte do corpo original do handler de `getClienteLinkData` (só o
+ * parâmetro de entrada mudou de `{ token }` pra `{ clienteId, cliente }` já
+ * resolvidos por quem chama), pra que as duas rotas produzam exatamente o
+ * mesmo formato de resposta a partir da mesma lógica. Nada dentro desta
+ * função decide autorização — isso já aconteceu antes (token válido, ou
+ * sessão + organização confirmada) em quem chamou.
+ */
+export async function buildClienteLinkData(clienteId: string, cliente: Cliente) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const campanhas = cliente.campanhas ?? [];
+
+  const campanhasComInflus = await Promise.all(
+    campanhas.map(async (c) => {
+      const { data: rows, error } = await supabaseAdmin
+        .from("campanha_influenciadores")
+        .select("data")
+        .eq("campanha_id", c.id);
+      if (error) throw new Error(error.message);
+      // Só mostra pro cliente influenciadores que o time já enviou pra
+      // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
+      // planejamento interno, ainda não decidido/comunicado.
+      const influencers = ((rows ?? []) as { data: Influ }[])
+        .filter((r) => VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)))
+        .map((r) => toPublicInfluencer(r.data));
+      const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
+
+      const { data: cronogramaRows, error: cronogramaError } = await supabaseAdmin
+        .from("campanha_cronograma")
+        .select("data")
+        .eq("campanha_id", c.id);
+      if (cronogramaError) throw new Error(cronogramaError.message);
+      const cronograma = (
+        (cronogramaRows ?? []) as { data: z.infer<typeof _CronogramaItemPublic> }[]
+      )
+        .map((r) => r.data)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // Relatórios mensais (PDF) — o bucket é privado, então a URL
+      // assinada precisa ser gerada aqui (service-role), nunca no
+      // navegador do cliente (sem sessão nenhuma no portal público).
+      const relatorios = await Promise.all(
+        (c.relatoriosMensais ?? []).map(async (r) => {
+          const { data: signed } = await supabaseAdmin.storage
+            .from("relatorios-mensais")
+            .createSignedUrl(r.storagePath, 60 * 60);
+          return {
+            id: r.id,
+            mes: r.mes,
+            nome: r.nome,
+            uploadedAt: r.uploadedAt,
+            nps: r.nps,
+            url: signed?.signedUrl ?? null,
+          };
+        }),
+      );
+
+      return {
+        id: c.id,
+        nome: c.nome,
+        prazo: c.prazo,
+        dataInicio: c.dataInicio,
+        planejado,
+        influencers,
+        cronograma,
+        relatorios,
+        isRecorrente: c.pagClienteTipo === "Recorrente",
+        recorrenteInicio: c.pagClienteRecorrenteInicio,
+      };
+    }),
+  );
+
+  const artigos = await findArtigosDoCliente(clienteId);
+
+  return {
+    clienteNome: cliente.empresa,
+    clienteFoto: cliente.photo,
+    campanhas: campanhasComInflus,
+    artigos,
+  };
+}
+
 /** Público — sem auth. Usado pela página `/portal/$token`. Retorna TODAS
- * as campanhas do cliente, cada uma já com seus influenciadores. */
+ * as campanhas do cliente, cada uma já com seus influenciadores. Thin
+ * wrapper: resolve o `cliente` pelo token e delega pro núcleo compartilhado
+ * `buildClienteLinkData` — comportamento idêntico ao anterior à extração. */
 export const getClienteLinkData = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => TokenInput.parse(raw))
   .handler(async ({ data }) => {
     const found = await findClienteByToken(data.token);
     if (!found) throw new Error("Link não encontrado.");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const campanhas = found.cliente.campanhas ?? [];
-
-    const campanhasComInflus = await Promise.all(
-      campanhas.map(async (c) => {
-        const { data: rows, error } = await supabaseAdmin
-          .from("campanha_influenciadores")
-          .select("data")
-          .eq("campanha_id", c.id);
-        if (error) throw new Error(error.message);
-        // Só mostra pro cliente influenciadores que o time já enviou pra
-        // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
-        // planejamento interno, ainda não decidido/comunicado.
-        const influencers = ((rows ?? []) as { data: Influ }[])
-          .filter((r) => VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)))
-          .map((r) => toPublicInfluencer(r.data));
-        const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
-
-        const { data: cronogramaRows, error: cronogramaError } = await supabaseAdmin
-          .from("campanha_cronograma")
-          .select("data")
-          .eq("campanha_id", c.id);
-        if (cronogramaError) throw new Error(cronogramaError.message);
-        const cronograma = (
-          (cronogramaRows ?? []) as { data: z.infer<typeof _CronogramaItemPublic> }[]
-        )
-          .map((r) => r.data)
-          .sort((a, b) => a.date.localeCompare(b.date));
-
-        // Relatórios mensais (PDF) — o bucket é privado, então a URL
-        // assinada precisa ser gerada aqui (service-role), nunca no
-        // navegador do cliente (sem sessão nenhuma no portal público).
-        const relatorios = await Promise.all(
-          (c.relatoriosMensais ?? []).map(async (r) => {
-            const { data: signed } = await supabaseAdmin.storage
-              .from("relatorios-mensais")
-              .createSignedUrl(r.storagePath, 60 * 60);
-            return {
-              id: r.id,
-              mes: r.mes,
-              nome: r.nome,
-              uploadedAt: r.uploadedAt,
-              nps: r.nps,
-              url: signed?.signedUrl ?? null,
-            };
-          }),
-        );
-
-        return {
-          id: c.id,
-          nome: c.nome,
-          prazo: c.prazo,
-          dataInicio: c.dataInicio,
-          planejado,
-          influencers,
-          cronograma,
-          relatorios,
-          isRecorrente: c.pagClienteTipo === "Recorrente",
-          recorrenteInicio: c.pagClienteRecorrenteInicio,
-        };
-      }),
-    );
-
-    const artigos = await findArtigosDoCliente(found.clienteId);
-
-    return {
-      clienteNome: found.cliente.empresa,
-      clienteFoto: found.cliente.photo,
-      campanhas: campanhasComInflus,
-      artigos,
-    };
+    return buildClienteLinkData(found.clienteId, found.cliente);
   });
 
-async function loadInfluRow(campanhaId: string, influencerId: string): Promise<Influ> {
+export async function loadInfluRow(campanhaId: string, influencerId: string): Promise<Influ> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: row, error } = await supabaseAdmin
     .from("campanha_influenciadores")
@@ -639,7 +683,11 @@ async function loadInfluRow(campanhaId: string, influencerId: string): Promise<I
   return row.data as Influ;
 }
 
-async function saveInfluRow(campanhaId: string, influencerId: string, next: Influ): Promise<void> {
+export async function saveInfluRow(
+  campanhaId: string,
+  influencerId: string,
+  next: Influ,
+): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { error } = await supabaseAdmin
     .from("campanha_influenciadores")
@@ -649,11 +697,23 @@ async function saveInfluRow(campanhaId: string, influencerId: string, next: Infl
   if (error) throw new Error(error.message);
 }
 
+/** Confirma que `campanhaId` pertence de fato ao `cliente` informado — núcleo
+ * puro (sem token) compartilhado por `assertCampanhaDoCliente` (token) e
+ * pela checagem org-based da sessão (`portal-auth.functions.ts`). */
+export function assertCampanhaInCliente(cliente: Cliente, campanhaId: string): void {
+  if (!cliente.campanhas?.some((c) => c.id === campanhaId)) {
+    throw new Error("Campanha não encontrada.");
+  }
+}
+
 /** Confirma que `campanhaId` pertence de fato ao cliente dono do token —
  * evita que alguém adulterar uma campanha de outro cliente adivinhando o id. */
 async function assertCampanhaDoCliente(token: string, campanhaId: string): Promise<void> {
   const found = await findClienteByToken(token);
   if (!found) throw new Error("Link não encontrado.");
+  // Mantém a mensagem original ("...neste link") em vez de delegar pra
+  // `assertCampanhaInCliente` (mensagem genérica usada pela sessão) —
+  // comportamento do fluxo por token intacto, ver nota da extração acima.
   if (!found.cliente.campanhas?.some((c) => c.id === campanhaId)) {
     throw new Error("Campanha não encontrada neste link.");
   }
@@ -758,7 +818,7 @@ const RespondEntregaInput = z
  * configurado, etc). Não existe hoje um "responsável" por entrega/
  * influenciador guardado no dado, então o alvo é sempre os admins (mesmo
  * fallback usado no aviso de senha esquecida). */
-async function notifyTeamEntregaResponse(
+export async function notifyTeamEntregaResponse(
   clienteNome: string,
   entrega: Entrega,
   status: "aprovado" | "reprovado",

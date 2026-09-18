@@ -16,6 +16,7 @@ import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalAppInicioRouteImport } from './routes/portal-app/inicio'
+import { Route as PortalAppCampanhasRouteImport } from './routes/portal-app/campanhas'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
@@ -30,6 +31,7 @@ import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$to
 import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
 import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
 import { Route as PortalTokenAprovacoesRouteImport } from './routes/portal.$token/aprovacoes'
+import { Route as PortalAppCampanhasCampanhaIdRouteImport } from './routes/portal-app/campanhas.$campanhaId'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
 import { Route as ApiWebhooksResendRouteImport } from './routes/api/webhooks/resend'
 import { Route as ApiPublicLeadsRouteImport } from './routes/api/public/leads'
@@ -76,6 +78,11 @@ const IndexRoute = IndexRouteImport.update({
 const PortalAppInicioRoute = PortalAppInicioRouteImport.update({
   id: '/inicio',
   path: '/inicio',
+  getParentRoute: () => PortalAppRouteRoute,
+} as any)
+const PortalAppCampanhasRoute = PortalAppCampanhasRouteImport.update({
+  id: '/campanhas',
+  path: '/campanhas',
   getParentRoute: () => PortalAppRouteRoute,
 } as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
@@ -152,6 +159,12 @@ const PortalTokenAprovacoesRoute = PortalTokenAprovacoesRouteImport.update({
   path: '/aprovacoes',
   getParentRoute: () => PortalTokenRouteRoute,
 } as any)
+const PortalAppCampanhasCampanhaIdRoute =
+  PortalAppCampanhasCampanhaIdRouteImport.update({
+    id: '/$campanhaId',
+    path: '/$campanhaId',
+    getParentRoute: () => PortalAppCampanhasRoute,
+  } as any)
 const EmailDescadastroTokenRoute = EmailDescadastroTokenRouteImport.update({
   id: '/email/descadastro/$token',
   path: '/email/descadastro/$token',
@@ -239,6 +252,7 @@ export interface FileRoutesByFullPath {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
@@ -249,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
@@ -273,6 +288,7 @@ export interface FileRoutesByTo {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
@@ -283,6 +299,7 @@ export interface FileRoutesByTo {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
@@ -310,6 +327,7 @@ export interface FileRoutesById {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
@@ -320,6 +338,7 @@ export interface FileRoutesById {
   '/api/public/leads': typeof ApiPublicLeadsRoute
   '/api/webhooks/resend': typeof ApiWebhooksResendRoute
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
+  '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
@@ -347,6 +366,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/projeto/$id'
     | '/api/cron/email-flows'
@@ -357,6 +377,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal-app/campanhas/$campanhaId'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
@@ -381,6 +402,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/projeto/$id'
     | '/api/cron/email-flows'
@@ -391,6 +413,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal-app/campanhas/$campanhaId'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
@@ -417,6 +440,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
@@ -427,6 +451,7 @@ export interface FileRouteTypes {
     | '/api/public/leads'
     | '/api/webhooks/resend'
     | '/email/descadastro/$token'
+    | '/portal-app/campanhas/$campanhaId'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
@@ -508,6 +533,13 @@ declare module '@tanstack/react-router' {
       path: '/inicio'
       fullPath: '/portal-app/inicio'
       preLoaderRoute: typeof PortalAppInicioRouteImport
+      parentRoute: typeof PortalAppRouteRoute
+    }
+    '/portal-app/campanhas': {
+      id: '/portal-app/campanhas'
+      path: '/campanhas'
+      fullPath: '/portal-app/campanhas'
+      preLoaderRoute: typeof PortalAppCampanhasRouteImport
       parentRoute: typeof PortalAppRouteRoute
     }
     '/inscricao/$token': {
@@ -607,6 +639,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/$token/aprovacoes'
       preLoaderRoute: typeof PortalTokenAprovacoesRouteImport
       parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal-app/campanhas/$campanhaId': {
+      id: '/portal-app/campanhas/$campanhaId'
+      path: '/$campanhaId'
+      fullPath: '/portal-app/campanhas/$campanhaId'
+      preLoaderRoute: typeof PortalAppCampanhasCampanhaIdRouteImport
+      parentRoute: typeof PortalAppCampanhasRoute
     }
     '/email/descadastro/$token': {
       id: '/email/descadastro/$token'
@@ -724,11 +763,24 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface PortalAppCampanhasRouteChildren {
+  PortalAppCampanhasCampanhaIdRoute: typeof PortalAppCampanhasCampanhaIdRoute
+}
+
+const PortalAppCampanhasRouteChildren: PortalAppCampanhasRouteChildren = {
+  PortalAppCampanhasCampanhaIdRoute: PortalAppCampanhasCampanhaIdRoute,
+}
+
+const PortalAppCampanhasRouteWithChildren =
+  PortalAppCampanhasRoute._addFileChildren(PortalAppCampanhasRouteChildren)
+
 interface PortalAppRouteRouteChildren {
+  PortalAppCampanhasRoute: typeof PortalAppCampanhasRouteWithChildren
   PortalAppInicioRoute: typeof PortalAppInicioRoute
 }
 
 const PortalAppRouteRouteChildren: PortalAppRouteRouteChildren = {
+  PortalAppCampanhasRoute: PortalAppCampanhasRouteWithChildren,
   PortalAppInicioRoute: PortalAppInicioRoute,
 }
 

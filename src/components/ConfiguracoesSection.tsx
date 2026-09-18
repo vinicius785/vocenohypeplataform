@@ -420,6 +420,8 @@ export function SidebarProfile() {
   const [perfil, setPerfil] = useState<Perfil>(() => loadPerfil());
   const [status, setStatus] = useState<UserStatus>(() => loadStatus());
   const [open, setOpen] = useState(false);
+  const [multiEnv, setMultiEnv] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const sync = () => {
@@ -433,6 +435,26 @@ export function SidebarProfile() {
       window.removeEventListener("storage", sync);
       window.removeEventListener("focus", sync);
       clearInterval(t);
+    };
+  }, []);
+
+  // "Trocar ambiente" só aparece pra quem `resolveUserEnvironment()`
+  // classificaria como `type: "multiple"` — o caso comum (um único
+  // ambiente) nunca precisa desse botão. Ver CLAUDE.md, Fase 2b, item 4.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { resolveUserEnvironment } = await import("@/lib/user-environment.server");
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) return;
+      const env = await resolveUserEnvironment(supabase, sessionData.session.user.id).catch(
+        () => null,
+      );
+      if (!cancelled && env) setMultiEnv(env.type === "multiple");
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -492,6 +514,31 @@ export function SidebarProfile() {
             </p>
           </div>
         </button>
+        {multiEnv && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/selecionar-ambiente" })}
+            title="Trocar ambiente"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Trocar ambiente"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="17 1 21 5 17 9" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <polyline points="7 23 3 19 7 15" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSignOut}

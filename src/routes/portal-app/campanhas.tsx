@@ -3,27 +3,26 @@ import { Megaphone } from "lucide-react";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 
 /**
- * Portal-app "Início" (Phase 2b) — agora backed pela sessão real (via
- * `PortalSessionDataProvider`, montado na rota-pai `portal-app/route.tsx`)
- * em vez da versão mínima da Fase 1. Lista as campanhas do cliente, cada
- * uma linkando pra `/portal-app/campanhas/$campanhaId`.
+ * `/portal-app/campanhas` — lista de campanhas do cliente autenticado.
+ * Mirrors `routes/portal.$token/campanhas.index.tsx`, mas usa
+ * `usePortalSessionData()` (sessão) em vez de `usePortalData()` (token) e
+ * `/portal-app/campanhas/$campanhaId` em vez de `/portal/$token/campanhas/
+ * $campanhaId`. Deliberadamente uma versão mais enxuta que a original (sem
+ * o selo de "encerrada"/ordenação por status) — porte 1:1 do visual
+ * completo fica pra Fase 3, ver relatório final.
  */
-export const Route = createFileRoute("/portal-app/inicio")({
+export const Route = createFileRoute("/portal-app/campanhas")({
   ssr: false,
-  component: PortalAppInicio,
-  head: () => ({ meta: [{ title: "Portal do Cliente · Você no Hype" }] }),
+  component: PortalAppCampanhasPage,
+  head: () => ({ meta: [{ title: "Campanhas · Portal do Cliente" }] }),
 });
 
-function PortalAppInicio() {
+function PortalAppCampanhasPage() {
   const { data } = usePortalSessionData();
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold tracking-tight text-foreground">
-        Bem-vindo, {data.clienteNome}
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">Suas campanhas com a Você no Hype.</p>
-
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">Campanhas</h1>
       {data.campanhas.length === 0 ? (
         <p className="mt-8 text-sm text-muted-foreground">Nenhuma campanha encontrada.</p>
       ) : (

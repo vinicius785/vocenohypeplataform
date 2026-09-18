@@ -1,8 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Building2, Loader2, LogOut, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveUserEnvironment, type AvailableEnvironment } from "@/lib/user-environment.server";
+import { setActiveOrganization } from "@/lib/portal-auth.functions";
 
 export const Route = createFileRoute("/selecionar-ambiente")({
   ssr: false,
@@ -15,6 +17,7 @@ export const Route = createFileRoute("/selecionar-ambiente")({
 function SelecionarAmbientePage() {
   const navigate = useNavigate();
   const [environments, setEnvironments] = useState<AvailableEnvironment[] | null>(null);
+  const setActiveOrganizationFn = useServerFn(setActiveOrganization);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +47,17 @@ function SelecionarAmbientePage() {
       .from("organization_members")
       .update({ last_access_at: new Date().toISOString() })
       .eq("organization_id", env.organizationId);
+    if (env.type === "client") {
+      // Persiste qual das (possivelmente várias) organizações de cliente
+      // ativas do usuário é a "atual" — lido pelo guard de `/portal-app/**`
+      // a cada request seguinte. Só é necessário no caso multi-ambiente
+      // (o caso comum, de organização única, nunca passa por aqui).
+      try {
+        await setActiveOrganizationFn({ data: { organizationId: env.organizationId } });
+      } catch (err) {
+        console.error("[selecionar-ambiente] falha ao salvar ambiente ativo", err);
+      }
+    }
     navigate({ to: env.type === "internal" ? "/time" : "/portal-app/inicio" });
   };
 
