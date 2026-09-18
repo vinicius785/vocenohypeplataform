@@ -258,6 +258,23 @@ export function entregaFaseConceitual(stage: EntregaStage): EntregaFaseConceitua
 }
 
 // ============================================================
+// Motivos de não aprovação de perfil (Portal do Cliente)
+// ============================================================
+
+/** Lista fechada de motivos pra "Não aprovar perfil" no portal do cliente —
+ * `"Outro"` exige comentário (`motivoDetalhe`), validado no zod schema de
+ * `respondCampanhaInflu` (`cliente-link.functions.ts`). */
+export const PERFIL_REJEICAO_MOTIVOS = [
+  "Não combina com a marca",
+  "Público incompatível",
+  "Métricas insuficientes",
+  "Já trabalhou recentemente com a marca",
+  "Questões de imagem ou posicionamento",
+  "Outro",
+] as const;
+export type PerfilRejeicaoMotivo = (typeof PERFIL_REJEICAO_MOTIVOS)[number];
+
+// ============================================================
 // Próxima ação — "quem precisa agir?"
 // ============================================================
 
@@ -323,6 +340,44 @@ const INFLU_TRANSITIONS: Record<InfluStatus, InfluStatus[]> = {
 };
 export function canTransitionInflu(from: InfluStatus, to: InfluStatus): boolean {
   return from === to || (INFLU_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/** Estágios que já saíram da fase "roteiro em produção" — usados pra travar
+ * reabertura de aprovação de perfil (ver `canReopenInfluApproval` abaixo). */
+const ENTREGA_STAGES_ALEM_DE_ROTEIRO_PRODUCAO: EntregaStage[] = [
+  "ROTEIRO_APROVACAO",
+  "ROTEIRO_AJUSTES",
+  "PRODUCAO",
+  "CONTEUDO_APROVACAO",
+  "CONTEUDO_AJUSTES",
+  "PUBLICACAO",
+  "PUBLICADA",
+];
+
+/**
+ * Bloqueia "reabrir aprovação" (APROVADO → RECUSADO/ENVIADO_AO_CLIENTE)
+ * quando o influenciador já tem alguma entrega além de ROTEIRO_PRODUCAO —
+ * evita o estado inconsistente "perfil pendente + entrega em produção
+ * avançada" (decisão de produto: ver CLAUDE.md/relatório da reformulação
+ * do Portal do Cliente). Usada tanto pelo board interno (`InfluencerBoard`)
+ * quanto pela ação "Reabrir decisão" do próprio portal do cliente — mesma
+ * trava dos dois lados, pra manter consistência entre quem reabre.
+ */
+export function canReopenInfluApproval(
+  currentStatus: InfluStatus,
+  entregaStages: EntregaStage[],
+): { ok: true } | { ok: false; motivo: string } {
+  if (currentStatus !== "APROVADO") return { ok: true };
+  const bloqueando = entregaStages.some((s) => ENTREGA_STAGES_ALEM_DE_ROTEIRO_PRODUCAO.includes(s));
+  if (bloqueando) {
+    return {
+      ok: false,
+      motivo:
+        "Não é possível reabrir a aprovação do perfil: já existe entrega em andamento além da " +
+        "produção do roteiro. Ajuste as entregas envolvidas antes de reabrir a aprovação.",
+    };
+  }
+  return { ok: true };
 }
 
 const ENTREGA_TRANSITIONS: Record<EntregaStage, EntregaStage[]> = {

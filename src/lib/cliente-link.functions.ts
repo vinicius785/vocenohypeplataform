@@ -1,13 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
-import type { Influ, Entrega } from "@/components/influenciadores/InfluencerBoard";
+import type {
+  Influ,
+  Entrega,
+  InfluActivityEventKind,
+} from "@/components/influenciadores/InfluencerBoard";
 import { legacyAnexoCategoria } from "@/components/influenciadores/InfluencerBoard";
-import { applyInfluApproval, applyEntregaApproval } from "@/lib/campanha-aprovacao";
+import {
+  applyInfluApproval,
+  applyEntregaApproval,
+  reopenInfluApprovalByCliente,
+} from "@/lib/campanha-aprovacao";
 import {
   legacyInfluStatus,
   INFLU_STATUS_LABEL_CLIENTE,
   ENTREGA_STAGE_LABEL_CLIENTE,
+  PERFIL_REJEICAO_MOTIVOS,
 } from "@/lib/campanha-status";
 import type { BlogPost, Project } from "@/lib/projetos";
 import type { Task } from "@/components/tasks/TaskBoard";
@@ -115,9 +124,33 @@ const EntregaPublic = z.object({
       }),
     )
     .optional(),
+  /** Simplificação aceita (parte 3 do redesenho do Portal do Cliente): não
+   * existe um número de versão real por entrega, então "versão mais
+   * recente" vira a data da última atualização de fato registrada nela —
+   * o mais recente entre recebimento do roteiro, recebimento do conteúdo
+   * final e a própria data de postagem. `undefined` quando nada disso
+   * ainda aconteceu (entrega recém-criada). */
+  ultimaAtualizacao: z.string().optional(),
 });
 
 const StatusHistoryEntry = z.object({ status: z.string(), at: z.string() });
+
+/** Projeção pública (segura) de um evento de `activityEvents` — mesma forma
+ * do tipo interno (`InfluActivityEvent`), sem nada de sensível (não há nada
+ * de sensível ali: ator já é sempre "Cliente" ou o nome de alguém do time,
+ * nunca dado de contrato/pagamento). Usado pro histórico unificado do
+ * portal (item 6 do redesenho) — preferido sobre o parser legado baseado em
+ * regex quando presente, ver `statusHistoryFor`/`entregaHistoryFor` abaixo. */
+const ActivityEventPublic = z.object({
+  id: z.string(),
+  kind: z.string(),
+  actorType: z.enum(["cliente", "equipe"]),
+  actorName: z.string(),
+  createdAt: z.string(),
+  entregaId: z.string().optional(),
+  motivoLabel: z.string().optional(),
+  comentario: z.string().optional(),
+});
 
 const _InfluencerPublic = z.object({
   id: z.string(),
@@ -143,6 +176,12 @@ const _InfluencerPublic = z.object({
    * recorrentes — mesmo campo que o kanban interno usa pra separar os
    * influenciadores por mês. */
   cicloMes: z.string().optional(),
+  /** Justificativa do time pra indicar este perfil — mostrada no modo de
+   * revisão sequencial (item 2 do redesenho do Portal do Cliente). */
+  justificativaTime: z.string().optional(),
+  /** Log tipado unificado (item 6) — quando presente, alimenta o histórico
+   * geral e por-entrega no lugar do parser legado baseado em regex. */
+  activityEvents: z.array(ActivityEventPublic).optional(),
 });
 
 /** Extrai as mudanças de status do log interno de atividade (`activity`,
@@ -150,7 +189,25 @@ const _InfluencerPublic = z.object({
  * etapa aconteceu, já que `statusUpdatedAt` só reflete a mudança mais
  * recente. Isso alimenta o histórico "enviado pra aprovação em / aprovado
  * em / etc" mostrado ao cliente. */
+/** Rótulos de nível de campanha pros eventos tipados que representam uma
+ * mudança de status da SELEÇÃO do influenciador — os demais kinds (roteiro/
+ * conteúdo/publicado) aparecem no histórico da própria entrega, não aqui. */
+const INFLU_EVENT_LABEL: Partial<Record<InfluActivityEventKind, string>> = {
+  perfil_enviado: "Perfil enviado para sua aprovação",
+  perfil_aprovado: "Perfil aprovado",
+  perfil_recusado: "Perfil não aprovado",
+  perfil_reaberto: "Decisão reaberta",
+};
+
 function statusHistoryFor(influ: Influ): { status: string; at: string }[] {
+  // Prefere o log tipado (`activityEvents`) quando presente — o parser
+  // legado baseado em regex sobre `activity` (texto livre) só cobre o que
+  // já foi migrado; eventos novos gravam sempre nos dois (ver
+  // `campanha-aprovacao.ts`), então isso não perde histórico antigo.
+  const tipados = (influ.activityEvents ?? [])
+    .filter((e) => INFLU_EVENT_LABEL[e.kind])
+    .map((e) => ({ status: INFLU_EVENT_LABEL[e.kind]!, at: e.createdAt }));
+  if (tipados.length > 0) return tipados.sort((a, b) => a.at.localeCompare(b.at));
   return (influ.activity ?? [])
     .map((a) => {
       const m = /^mudou status para (.+)$/.exec(a.action);
@@ -192,10 +249,26 @@ const ENTREGA_HISTORY_PATTERNS: { test: RegExp; key: EntregaHistoryKey }[] = [
   { test: /^solicitou ajustes em o conteúdo/, key: "histConteudoAjustesSolicitados" },
 ];
 
+const ENTREGA_EVENT_KEY: Partial<Record<InfluActivityEventKind, EntregaHistoryKey>> = {
+  roteiro_enviado: "histRoteiroEnviado",
+  roteiro_aprovado: "histRoteiroAprovado",
+  roteiro_ajustes_solicitados: "histRoteiroAjustesSolicitados",
+  conteudo_enviado: "histConteudoEnviado",
+  conteudo_aprovado: "histConteudoAprovado",
+  conteudo_ajustes_solicitados: "histConteudoAjustesSolicitados",
+  publicado: "histPublicado",
+};
+
 function entregaHistoryFor(
   influ: Influ,
   entregaId: string,
 ): { key: EntregaHistoryKey; at: string }[] {
+  // Mesma preferência de `statusHistoryFor` — só cai pro parser legado
+  // quando não há nenhum evento tipado cobrindo esta entrega.
+  const tipados = (influ.activityEvents ?? [])
+    .filter((e) => e.entregaId === entregaId && ENTREGA_EVENT_KEY[e.kind])
+    .map((e) => ({ key: ENTREGA_EVENT_KEY[e.kind]!, at: e.createdAt }));
+  if (tipados.length > 0) return tipados.sort((a, b) => a.at.localeCompare(b.at));
   return (influ.activity ?? [])
     .filter((a) => a.entregaId === entregaId)
     .map((a) => {
@@ -211,6 +284,12 @@ function entregaHistoryFor(
  * de mostrar num link público — nunca o objeto cru. */
 function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic> {
   const stage = e.stage ?? "ROTEIRO_PRODUCAO";
+  // Regra de EXIBIÇÃO (não altera o `stage` real salvo no banco): antes do
+  // perfil ser aprovado pelo cliente, toda entrega aparece como "Planejada"
+  // pra ele — mesmo que internamente já tenha avançado — pra nunca sugerir
+  // que produção começou antes da aprovação do perfil ("Separação
+  // obrigatória de status" do redesenho do Portal do Cliente).
+  const perfilAprovado = normalizedInfluStatus(influ) === "APROVADO";
   return {
     id: e.id,
     tipo: e.tipo,
@@ -218,7 +297,7 @@ function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic
     quantidade: e.quantidade,
     status: e.status,
     stage,
-    statusCliente: ENTREGA_STAGE_LABEL_CLIENTE[stage],
+    statusCliente: perfilAprovado ? ENTREGA_STAGE_LABEL_CLIENTE[stage] : "Planejada",
     dataPostagem: e.dataPostagem,
     publicadoEm: e.publicadoEm,
     url: e.url,
@@ -227,6 +306,10 @@ function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic
     roteiroReprovacao: e.roteiroReprovacao,
     conteudoReprovacao: e.conteudoReprovacao,
     historico: entregaHistoryFor(influ, e.id),
+    ultimaAtualizacao: [e.dataRecebimentoRoteiro, e.dataRecebimentoConteudo, e.dataPostagem]
+      .filter((d): d is string => !!d)
+      .sort()
+      .at(-1),
   };
 }
 
@@ -255,6 +338,17 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof _InfluencerPublic> {
     criadoEm: influ.createdAt,
     historico: statusHistoryFor(influ),
     cicloMes: influ.cicloMes,
+    justificativaTime: influ.justificativaTime,
+    activityEvents: (influ.activityEvents ?? []).map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      actorType: e.actor.type,
+      actorName: e.actor.name,
+      createdAt: e.createdAt,
+      entregaId: e.entregaId,
+      motivoLabel: e.motivoLabel,
+      comentario: e.comentario,
+    })),
   };
 }
 
@@ -565,13 +659,37 @@ async function assertCampanhaDoCliente(token: string, campanhaId: string): Promi
   }
 }
 
-const RespondInfluInput = z.object({
-  token: z.string().min(1),
-  campanhaId: z.string().min(1),
-  influencerId: z.string().min(1),
-  status: z.enum(["aprovado", "reprovado"]),
-  motivo: z.string().trim().max(2000).optional(),
-});
+const RespondInfluInput = z
+  .object({
+    token: z.string().min(1),
+    campanhaId: z.string().min(1),
+    influencerId: z.string().min(1),
+    status: z.enum(["aprovado", "reprovado"]),
+    // Obrigatório só quando `status === "reprovado"` — lista fechada
+    // ("Fluxo de não aprovação" do redesenho do Portal do Cliente).
+    motivoLabel: z.enum(PERFIL_REJEICAO_MOTIVOS).optional(),
+    // Comentário obrigatório quando `motivoLabel === "Outro"`; opcional nos
+    // demais motivos ("Explique ao time o motivo da decisão.").
+    comentario: z.string().trim().max(2000).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.status !== "reprovado") return;
+    if (!val.motivoLabel) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione um motivo para não aprovar o perfil.",
+        path: ["motivoLabel"],
+      });
+      return;
+    }
+    if (val.motivoLabel === "Outro" && !val.comentario) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Comentário obrigatório quando o motivo é "Outro".',
+        path: ["comentario"],
+      });
+    }
+  });
 
 /** Etapa 1 — público, sem auth. */
 export const respondCampanhaInflu = createServerFn({ method: "POST" })
@@ -579,19 +697,61 @@ export const respondCampanhaInflu = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await assertCampanhaDoCliente(data.token, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
-    const next = applyInfluApproval(influ, data.status, data.motivo?.trim());
+    const motivo =
+      data.status === "reprovado"
+        ? data.motivoLabel === "Outro"
+          ? data.comentario!
+          : data.motivoLabel!
+        : undefined;
+    const next = applyInfluApproval(influ, data.status, motivo, {
+      motivoLabel: data.motivoLabel,
+      comentario: data.status === "reprovado" ? data.comentario : undefined,
+    });
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });
 
-const RespondEntregaInput = z.object({
+const ReopenInfluInput = z.object({
   token: z.string().min(1),
   campanhaId: z.string().min(1),
   influencerId: z.string().min(1),
-  entregaId: z.string().min(1),
-  status: z.enum(["aprovado", "reprovado"]),
-  motivo: z.string().trim().max(2000).optional(),
 });
+
+/** "Reabrir decisão" pelo cliente — nova ação do redesenho do portal. Não há
+ * RBAC dentro do portal do cliente hoje (token único por cliente, sem
+ * usuário individual) — por isso fica disponível pra qualquer sessão de
+ * portal válida, dentro do menu de ações (não em destaque), documentado
+ * como simplificação aceita no relatório final. */
+export const reopenCampanhaInflu = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => ReopenInfluInput.parse(raw))
+  .handler(async ({ data }) => {
+    await assertCampanhaDoCliente(data.token, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const next = reopenInfluApprovalByCliente(influ);
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true };
+  });
+
+const RespondEntregaInput = z
+  .object({
+    token: z.string().min(1),
+    campanhaId: z.string().min(1),
+    influencerId: z.string().min(1),
+    entregaId: z.string().min(1),
+    status: z.enum(["aprovado", "reprovado"]),
+    // Obrigatório quando `status === "reprovado"` ("Ao solicitar ajustes,
+    // exigir comentário" — spec do redesenho do Portal do Cliente).
+    motivo: z.string().trim().max(2000).optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.status === "reprovado" && !val.motivo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Comentário obrigatório ao solicitar ajustes.",
+        path: ["motivo"],
+      });
+    }
+  });
 
 /** Best-effort: avisa os admins por push quando o cliente aprova/reprova
  * uma entrega — nunca trava a resposta se o push falhar (VAPID não

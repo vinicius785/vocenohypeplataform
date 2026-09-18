@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { HYPITO_AVATAR_URL, HYPITO_BADGE_LABEL, HYPITO_NAME, HYPITO_TAGLINE } from "@/lib/hypito";
 import { SURFACE } from "@/lib/design-tokens";
 import type { PortalLang } from "@/lib/portal-i18n";
-import { pendingReason } from "@/components/portal/portal-widgets";
+import { pendingReason, pendingEntregaId } from "@/components/portal/portal-widgets";
 import { mesLabel } from "@/lib/relatorio-mensal";
 import type { ClienteLinkData } from "@/lib/portal-types";
 
 type SummaryLine =
-  | { kind: "influ"; campanhaId: string; influId: string; text: string }
+  | { kind: "influ"; campanhaId: string; influId: string; entregaId?: string; text: string }
   | { kind: "relatorio"; campanhaId: string; relatorioId: string; text: string }
   | { kind: "cronograma"; campanhaId: string; text: string };
 
@@ -42,6 +42,7 @@ export function HypitoPortalSummary({
           kind: "influ",
           campanhaId: c.id,
           influId: inf.id,
+          entregaId: pendingEntregaId(inf) ?? undefined,
           text: `${inf.nome} · ${reason} em ${c.nome}`,
         });
       }
@@ -109,7 +110,10 @@ export function HypitoPortalSummary({
             {visible.map((line, i) => {
               const search =
                 line.kind === "influ"
-                  ? { influ: line.influId }
+                  ? {
+                      influ: line.influId,
+                      ...(line.entregaId ? { entregaId: line.entregaId } : {}),
+                    }
                   : line.kind === "relatorio"
                     ? { relatorio: line.relatorioId }
                     : undefined;

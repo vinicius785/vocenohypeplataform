@@ -28,7 +28,10 @@ import {
   Instagram,
   Linkedin,
   ImageIcon,
+  Loader2,
+  MoreVertical,
   PlayCircle,
+  RotateCcw,
   Sparkles,
   Twitter,
   Upload,
@@ -36,7 +39,15 @@ import {
   XCircle,
   Youtube,
 } from "lucide-react";
-import { ENTREGA_STAGE_TONE, type EntregaStage } from "@/lib/campanha-status";
+import { toast } from "sonner";
+import {
+  ENTREGA_STAGE_TONE,
+  PERFIL_REJEICAO_MOTIVOS,
+  nextActionForEntrega,
+  NEXT_ACTOR_LABEL,
+  type EntregaStage,
+  type PerfilRejeicaoMotivo,
+} from "@/lib/campanha-status";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +60,31 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { submitRelatorioNps } from "@/lib/cliente-link.functions";
 import { formatSeguidores } from "@/lib/format";
 import { t, type PortalLang } from "@/lib/portal-i18n";
@@ -140,6 +176,16 @@ export function pendingReason(inf: PublicInfluencer, lang: PortalLang): string |
   const conteudo = inf.entregas.some((e) => e.stage === "CONTEUDO_APROVACAO");
   if (conteudo) return t(lang, "pendingConteudo");
   return null;
+}
+
+/** ID da entrega que está gerando a pendência de `pendingReason` (quando é
+ * uma entrega, não o perfil) — usado pelo Hypito (item C do redesenho) pra
+ * levar o cliente direto pra ela via `?entregaId=`. */
+export function pendingEntregaId(inf: PublicInfluencer): string | null {
+  return (
+    inf.entregas.find((e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO")
+      ?.id ?? null
+  );
 }
 
 /** Mesma lógica do ícone de aprovação/reprovação sobre a foto usado
@@ -530,6 +576,229 @@ export function ApproveRejectBar({
   );
 }
 
+/** Modal de "Não aprovar perfil" — lista fechada de motivos
+ * (`PERFIL_REJEICAO_MOTIVOS`), comentário obrigatório só quando o motivo é
+ * "Outro" (opcional nos demais, "Explique ao time o motivo da decisão."),
+ * exigido pelo novo schema de `respondCampanhaInflu` (item 2 do redesenho).
+ * Substitui a antiga textarea livre — que não bate mais com o servidor. */
+export function PerfilRejectDialog({
+  open,
+  onOpenChange,
+  lang,
+  busy,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  lang: PortalLang;
+  busy: boolean;
+  onConfirm: (motivoLabel: PerfilRejeicaoMotivo, comentario?: string) => void;
+}) {
+  const [motivoLabel, setMotivoLabel] = useState<PerfilRejeicaoMotivo | "">("");
+  const [comentario, setComentario] = useState("");
+  const precisaComentario = motivoLabel === "Outro";
+
+  useEffect(() => {
+    if (open) {
+      setMotivoLabel("");
+      setComentario("");
+    }
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Não aprovar perfil</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <RadioGroup
+            value={motivoLabel}
+            onValueChange={(v) => setMotivoLabel(v as PerfilRejeicaoMotivo)}
+          >
+            {PERFIL_REJEICAO_MOTIVOS.map((m) => (
+              <label
+                key={m}
+                htmlFor={`motivo-${m}`}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-foreground hover:bg-muted/50"
+              >
+                <RadioGroupItem value={m} id={`motivo-${m}`} />
+                {m}
+              </label>
+            ))}
+          </RadioGroup>
+          <div>
+            <Label htmlFor="motivo-comentario" className="text-xs text-muted-foreground">
+              {precisaComentario
+                ? "Explique o motivo (obrigatório para 'Outro')"
+                : "Explique ao time o motivo da decisão (opcional)"}
+            </Label>
+            <textarea
+              id="motivo-comentario"
+              value={comentario}
+              onChange={(e) => setComentario(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              className="mt-1 h-20 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+            {t(lang, "cancelar")}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy || !motivoLabel || (precisaComentario && !comentario.trim())}
+            onClick={() => motivoLabel && onConfirm(motivoLabel, comentario.trim() || undefined)}
+          >
+            {t(lang, "confirmarReprovacao")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Modal de "Solicitar ajustes" numa entrega (roteiro ou conteúdo final) —
+ * comentário SEMPRE obrigatório (o servidor já recusa `motivo` vazio em
+ * `respondCampanhaEntrega`), sem lista fechada de motivos (diferente de
+ * `PerfilRejectDialog`, que reprova a seleção do perfil como um todo). */
+function EntregaAjustesDialog({
+  open,
+  onOpenChange,
+  lang,
+  busy,
+  escopo,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  lang: PortalLang;
+  busy: boolean;
+  escopo: "roteiro" | "conteudo";
+  onConfirm: (comentario: string) => void;
+}) {
+  const [comentario, setComentario] = useState("");
+
+  useEffect(() => {
+    if (open) setComentario("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {escopo === "roteiro"
+              ? "Solicitar ajustes no roteiro"
+              : "Solicitar ajustes no conteúdo"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="ajustes-comentario" className="text-xs text-muted-foreground">
+            Explique o que precisa ser ajustado (obrigatório)
+          </Label>
+          <textarea
+            id="ajustes-comentario"
+            value={comentario}
+            onChange={(e) => setComentario(e.target.value)}
+            autoFocus
+            rows={4}
+            maxLength={2000}
+            placeholder={t(lang, "motivoPlaceholder")}
+            className="h-24 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+            {t(lang, "cancelar")}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy || !comentario.trim()}
+            onClick={() => onConfirm(comentario.trim())}
+          >
+            Enviar ajustes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Etapas conceituais mostradas no stepper visual de cada card de entrega —
+ * reagrupamento puramente de apresentação (não é `ENTREGA_STAGE_ORDER`,
+ * que tem 6 valores diferentes): "Planejada" cobre o período pré-aprovação
+ * do perfil (mesma regra de `toPublicEntrega`), "Em produção" cobre tanto
+ * `ROTEIRO_PRODUCAO` quanto `PRODUCAO` (a produção do conteúdo final não
+ * ganha um degrau à parte neste stepper simplificado — ver relatório). */
+const ENTREGA_STEPPER_LABELS = [
+  "Planejada",
+  "Em produção",
+  "Roteiro em aprovação",
+  "Conteúdo em aprovação",
+  "Aprovada",
+  "Publicada",
+] as const;
+
+function entregaStepperIndex(stage: EntregaStage, perfilAprovado: boolean): number {
+  if (!perfilAprovado) return 0;
+  switch (stage) {
+    case "ROTEIRO_PRODUCAO":
+    case "PRODUCAO":
+      return 1;
+    case "ROTEIRO_APROVACAO":
+    case "ROTEIRO_AJUSTES":
+      return 2;
+    case "CONTEUDO_APROVACAO":
+    case "CONTEUDO_AJUSTES":
+      return 3;
+    case "PUBLICACAO":
+      return 4;
+    case "PUBLICADA":
+      return 5;
+  }
+}
+
+function EntregaStepper({
+  stage,
+  perfilAprovado,
+}: {
+  stage: EntregaStage;
+  perfilAprovado: boolean;
+}) {
+  const current = entregaStepperIndex(stage, perfilAprovado);
+  return (
+    <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-[10px]">
+      {ENTREGA_STEPPER_LABELS.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={label} className="flex items-center gap-1">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${
+                active
+                  ? "bg-foreground text-background"
+                  : done
+                    ? "bg-muted-foreground/15 text-foreground"
+                    : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {label}
+            </span>
+            {i < ENTREGA_STEPPER_LABELS.length - 1 && (
+              <span className="text-muted-foreground/40">→</span>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** Selo de estágio no fim de cada linha da lista — âmbar+ponto quando
  * precisa de ação do cliente agora, neutro (Badge outline) nos demais. */
 export function StatusBadge({
@@ -543,20 +812,44 @@ export function StatusBadge({
 }) {
   const pending = pendingReason(inf, lang);
   if (pending) {
+    // Perfil ainda não decidido: rótulo explícito ("Perfil aguardando
+    // aprovação"), nunca a frase nua — roteiro/conteúdo pendente (que só
+    // acontece com o perfil já aprovado) mantém o texto específico de
+    // `pendingReason`, que já é claro sobre o que está em jogo.
+    const label = inf.status === "ENVIADO_AO_CLIENTE" ? "Perfil aguardando aprovação" : pending;
     return (
       <Badge
         className={`gap-1.5 border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 ${className}`}
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-        {pending}
+        {label}
       </Badge>
     );
   }
   return (
     <Badge variant="outline" className={`text-muted-foreground ${className}`}>
-      {inf.statusCliente}
+      {profileStatusLabel(inf)}
     </Badge>
   );
+}
+
+/** Rótulo explícito de status do PERFIL (nunca a frase nua "Aguardando sua
+ * aprovação", que não deixa claro que é sobre a seleção do perfil em si —
+ * item 3 do redesenho do Portal do Cliente). */
+export function profileStatusLabel(inf: PublicInfluencer): string {
+  if (inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao) {
+    return "Perfil aguardando aprovação";
+  }
+  if (inf.status === "APROVADO") return "Perfil aprovado";
+  if (inf.status === "RECUSADO" || inf.clienteReprovacao) return "Perfil não aprovado";
+  return inf.statusCliente;
+}
+
+/** Próxima ação esperada, uma linha — de quem é a bola agora (item 3). */
+export function nextActionLabel(inf: PublicInfluencer, lang: PortalLang): string {
+  if (pendingReason(inf, lang)) return "Aguardando sua análise";
+  if (inf.status === "APROVADO" || inf.status === "RECUSADO") return "Nenhuma ação necessária";
+  return "Aguardando o time";
 }
 
 /** Um relatório mensal (PDF) — abre inline sem precisar baixar (o cliente
@@ -704,11 +997,18 @@ export function InfluencerGalleryCard({
   lang: PortalLang;
 }) {
   const approval = influApproval(inf);
+  // Rede principal — primeira cadastrada (sem inventar critério de "maior
+  // audiência": `seguidores` é texto livre, sem parser numérico confiável
+  // no projeto pra comparar entre redes).
+  const redePrincipal = inf.redes[0];
+  const metrics = redePrincipal
+    ? inf.profileMetrics?.porRede?.[redePrincipal.id ?? redePrincipal.plataforma]
+    : undefined;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-4 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
+      className="group flex flex-col items-center gap-1.5 rounded-xl border border-border bg-background p-4 text-center transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md"
     >
       <div className="relative h-16 w-16 shrink-0">
         <Avatar className="h-16 w-16 ring-1 ring-border transition-all group-hover:ring-foreground/30">
@@ -733,26 +1033,36 @@ export function InfluencerGalleryCard({
         )}
       </div>
       <p className="truncate text-sm font-semibold text-foreground">{inf.nome}</p>
-      {inf.nicho && (
-        <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
-          {inf.nicho}
-        </Badge>
-      )}
-      {/* Rede principal — primeira cadastrada (sem inventar critério de
-       * "maior audiência": `seguidores` é texto livre, sem parser numérico
-       * confiável no projeto pra comparar entre redes). */}
-      {inf.redes[0] && (
+      {redePrincipal && (
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <PlatformIcon plataforma={inf.redes[0].plataforma} className="h-3 w-3" />
-          {inf.redes[0].seguidores
-            ? formatSeguidores(inf.redes[0].seguidores)
-            : inf.redes[0].handle}
+          <PlatformIcon plataforma={redePrincipal.plataforma} className="h-3 w-3" />@
+          {redePrincipal.handle.replace(/^@/, "") || "não informado"}
         </span>
       )}
-      {inf.entregas.length > 0 && (
-        <p className="truncate text-xs text-muted-foreground">{entregasSummary(inf.entregas)}</p>
-      )}
-      <StatusBadge inf={inf} lang={lang} className="px-2 py-0 text-[10px]" />
+      {inf.nicho && <p className="truncate text-[11px] text-muted-foreground">{inf.nicho}</p>}
+
+      <div className="mt-1 grid w-full grid-cols-2 gap-x-2 gap-y-1 text-left text-[11px]">
+        <MetricStat
+          label="Seguidores"
+          value={
+            redePrincipal?.seguidores ? formatSeguidores(redePrincipal.seguidores) : "Não informado"
+          }
+        />
+        <MetricStat
+          label="Engajamento"
+          value={metrics?.taxaInteracao ? `${metrics.taxaInteracao}%` : "Não informado"}
+        />
+        <MetricStat
+          label="Visualizações"
+          value={
+            metrics?.visualizacoes ? metrics.visualizacoes.toLocaleString("pt-BR") : "Não informado"
+          }
+        />
+        <MetricStat label="Entregas" value={inf.entregas.length.toString()} />
+      </div>
+
+      <StatusBadge inf={inf} lang={lang} className="mt-1.5 px-2 py-0 text-[10px]" />
+      <p className="text-[10px] text-muted-foreground">{nextActionLabel(inf, lang)}</p>
     </button>
   );
 }
@@ -777,6 +1087,8 @@ export function InfluencerDetail({
   onSaveBriefing,
   onSaveObservacoes,
   onSaveBriefingAnexo,
+  onReopen,
+  focusEntregaId,
 }: {
   inf: PublicInfluencer;
   lang: PortalLang;
@@ -788,7 +1100,11 @@ export function InfluencerDetail({
    * (link real de volta) é responsabilidade do `onBack`. */
   campanhaNome: string;
   onBack: () => void;
-  onRespondInflu: (status: "aprovado" | "reprovado", motivo?: string) => Promise<void>;
+  onRespondInflu: (
+    status: "aprovado" | "reprovado",
+    motivoLabel?: PerfilRejeicaoMotivo,
+    comentario?: string,
+  ) => Promise<void>;
   onRespondEntrega: (
     entregaId: string,
     status: "aprovado" | "reprovado",
@@ -797,22 +1113,42 @@ export function InfluencerDetail({
   onSaveBriefing: (briefingPersonalizado: string) => Promise<void>;
   onSaveObservacoes: (observacoes: string) => Promise<void>;
   onSaveBriefingAnexo: (file: { nome: string; dataUrl: string } | null) => Promise<void>;
+  /** "Reabrir decisão" (item 4 do redesenho) — só existe quando o perfil já
+   * foi decidido (aprovado ou não aprovado); trava real fica no servidor
+   * (`canReopenInfluApproval`), aqui só oferece a ação. */
+  onReopen?: () => Promise<void>;
+  /** Entrega pra rolar até e destacar ao abrir (vem do clique num item do
+   * Hypito, item C do redesenho) — simplificação: só rola/realça, não abre
+   * nenhum modal/ação automaticamente. */
+  focusEntregaId?: string;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [rejectingKey, setRejectingKey] = useState<string | null>(null);
-  const [motivo, setMotivo] = useState("");
+  const [perfilRejectOpen, setPerfilRejectOpen] = useState(false);
+  const [ajustesDialog, setAjustesDialog] = useState<{
+    entregaId: string;
+    escopo: "roteiro" | "conteudo";
+  } | null>(null);
+  const [reopening, setReopening] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(false);
   const [briefingDraft, setBriefingDraft] = useState(inf.briefingPersonalizado ?? "");
   const [briefingSaving, setBriefingSaving] = useState(false);
   const [observacoesDraft, setObservacoesDraft] = useState(inf.observacoes ?? "");
   const [observacoesSaving, setObservacoesSaving] = useState(false);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
   const [anexoUploading, setAnexoUploading] = useState(false);
   const anexoInputRef = useRef<HTMLInputElement>(null);
   useEffect(
     () => setBriefingDraft(inf.briefingPersonalizado ?? ""),
     [inf.id, inf.briefingPersonalizado],
   );
-  useEffect(() => setObservacoesDraft(inf.observacoes ?? ""), [inf.id, inf.observacoes]);
+  // Só re-hidrata ao TROCAR de influenciador — nunca a cada `reload()`
+  // depois do próprio envio, senão o texto que acabamos de limpar (item B
+  // do redesenho: "enviar" limpa o campo) voltaria a aparecer assim que o
+  // `reload()` disparado pelo envio trouxesse de volta o valor recém-salvo.
+  useEffect(() => {
+    setObservacoesDraft(inf.observacoes ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inf.id]);
   const saveBriefing = async () => {
     if (briefingDraft === (inf.briefingPersonalizado ?? "")) return;
     setBriefingSaving(true);
@@ -822,11 +1158,19 @@ export function InfluencerDetail({
       setBriefingSaving(false);
     }
   };
-  const saveObservacoes = async () => {
-    if (observacoesDraft === (inf.observacoes ?? "")) return;
+  /** "Enviar observação" (item B do redesenho) — não é mais auto-save no
+   * blur: só dispara quando o cliente clica no botão, e limpa o campo em
+   * caso de sucesso (o texto enviado já fica guardado em
+   * `inf.observacoes`/histórico do lado do time). */
+  const sendObservacoes = async () => {
+    if (!observacoesDraft.trim() || observacoesSaving) return;
     setObservacoesSaving(true);
     try {
-      await onSaveObservacoes(observacoesDraft);
+      await onSaveObservacoes(observacoesDraft.trim());
+      setObservacoesDraft("");
+      toast.success("Observação enviada.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar a observação.");
     } finally {
       setObservacoesSaving(false);
     }
@@ -846,6 +1190,39 @@ export function InfluencerDetail({
     }
   };
 
+  // Guarda de texto não enviado ao sair (item B do redesenho) — cobre tanto
+  // fechar/recarregar a aba (`beforeunload`) quanto navegar pra outra tela
+  // dentro do próprio portal (`onBack`, interceptado por `handleBack`).
+  const hasUnsavedObservacao = observacoesDraft.trim().length > 0;
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedObservacao) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedObservacao]);
+  // Rola até a entrega focada (vinda de um clique no Hypito) e realça por
+  // alguns segundos — só um efeito visual, sem side-effect nenhum.
+  const [highlightedEntregaId, setHighlightedEntregaId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusEntregaId) return;
+    const el = document.getElementById(`entrega-${focusEntregaId}`);
+    if (!el) return;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+    setHighlightedEntregaId(focusEntregaId);
+    const id = window.setTimeout(() => setHighlightedEntregaId(null), 2500);
+    return () => window.clearTimeout(id);
+  }, [focusEntregaId]);
+  const handleBack = () => {
+    if (hasUnsavedObservacao) {
+      setConfirmLeaveOpen(true);
+      return;
+    }
+    onBack();
+  };
+
   const entregasComMetrics = inf.entregas.filter((e) => hasEntregaMetrics(e.metrics));
   const redesComMetrics = inf.redes.filter((r) =>
     hasRedeMetrics(inf.profileMetrics?.porRede?.[r.id ?? r.plataforma]),
@@ -853,31 +1230,67 @@ export function InfluencerDetail({
   const semNadaAlem = entregasComMetrics.length === 0 && redesComMetrics.length === 0;
   const influPending = inf.status === "ENVIADO_AO_CLIENTE" && !inf.clienteReprovacao;
 
-  const runInflu = async (status: "aprovado" | "reprovado") => {
+  const runInflu = async (
+    status: "aprovado" | "reprovado",
+    motivoLabel?: PerfilRejeicaoMotivo,
+    comentario?: string,
+  ) => {
     setBusyKey("influ");
     try {
-      await onRespondInflu(status, status === "reprovado" ? motivo.trim() : undefined);
-      setRejectingKey(null);
-      setMotivo("");
+      await onRespondInflu(status, motivoLabel, comentario);
+      setPerfilRejectOpen(false);
+      toast.success(status === "aprovado" ? "Perfil aprovado." : "Perfil não aprovado.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar a decisão.");
     } finally {
       setBusyKey(null);
+    }
+  };
+
+  const runReopen = async () => {
+    if (!onReopen) return;
+    setReopening(true);
+    try {
+      await onReopen();
+      toast.success("Decisão reaberta — o perfil voltou a aguardar sua análise.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível reabrir a decisão.");
+    } finally {
+      setReopening(false);
     }
   };
   // `scope` é só pra distinguir, na UI, qual das duas barras (roteiro ou
   // conteúdo) está ocupada — o servidor já deriva sozinho qual ciclo está
   // em jogo a partir do `stage` atual da entrega, nunca confia nisso vindo
   // do cliente.
-  const runEntrega = async (
-    entregaId: string,
-    scope: "roteiro" | "conteudo",
-    status: "aprovado" | "reprovado",
-  ) => {
+  const runEntrega = async (entregaId: string, scope: "roteiro" | "conteudo") => {
     const key = `${scope}:${entregaId}`;
     setBusyKey(key);
     try {
-      await onRespondEntrega(entregaId, status, status === "reprovado" ? motivo.trim() : undefined);
-      setRejectingKey(null);
-      setMotivo("");
+      await onRespondEntrega(entregaId, "aprovado");
+      toast.success("Aprovado com sucesso.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar a decisão.");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  /** Confirmação do modal "Solicitar ajustes" (item A do redesenho) — o
+   * comentário já vem validado como não-vazio pelo próprio botão do modal
+   * (`disabled={!comentario.trim()}`), nunca chama o servidor com motivo
+   * vazio. */
+  const confirmAjustes = async (comentario: string) => {
+    if (!ajustesDialog) return;
+    const { entregaId, escopo } = ajustesDialog;
+    const key = `${escopo}:${entregaId}`;
+    setBusyKey(key);
+    try {
+      await onRespondEntrega(entregaId, "reprovado", comentario);
+      setAjustesDialog(null);
+      toast.success("Ajustes solicitados.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar os ajustes.");
     } finally {
       setBusyKey(null);
     }
@@ -918,7 +1331,7 @@ export function InfluencerDetail({
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <button type="button" onClick={onBack} className="hover:text-foreground">
+              <button type="button" onClick={handleBack} className="hover:text-foreground">
                 {campanhaNome}
               </button>
             </BreadcrumbLink>
@@ -926,7 +1339,7 @@ export function InfluencerDetail({
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <button type="button" onClick={onBack} className="hover:text-foreground">
+              <button type="button" onClick={handleBack} className="hover:text-foreground">
                 {t(lang, "influenciadoresHeader")}
               </button>
             </BreadcrumbLink>
@@ -961,7 +1374,7 @@ export function InfluencerDetail({
                 <StatusBadge inf={inf} lang={lang} />
               </div>
             </div>
-            {influPending && !rejectingKey && (
+            {influPending && (
               <div className="flex shrink-0 gap-2 pb-1">
                 <Button
                   size="sm"
@@ -974,53 +1387,64 @@ export function InfluencerDetail({
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
                   disabled={busyKey === "influ"}
-                  onClick={() => setRejectingKey("influ")}
-                  className="gap-1.5 bg-rose-600 text-white hover:bg-rose-700"
+                  onClick={() => setPerfilRejectOpen(true)}
+                  className="gap-1.5 border-rose-500/40 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
                 >
                   <XCircle className="h-3.5 w-3.5" />
-                  {t(lang, "reprovar")}
+                  Não aprovar perfil
                 </Button>
               </div>
             )}
+            {!influPending && onReopen && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 shrink-0"
+                    aria-label="Mais ações"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem disabled={reopening} onClick={() => void runReopen()}>
+                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                    Reabrir decisão
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
-          {influPending && rejectingKey === "influ" && (
-            <div className="mt-3 space-y-1.5 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3">
-              <textarea
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                placeholder={t(lang, "motivoPlaceholder")}
-                autoFocus
-                className="h-16 w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
-              />
-              <div className="flex justify-end gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2.5 text-xs"
-                  onClick={() => {
-                    setRejectingKey(null);
-                    setMotivo("");
-                  }}
-                >
-                  {t(lang, "cancelar")}
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-7 gap-1 bg-rose-600 px-2.5 text-xs text-white hover:bg-rose-700"
-                  onClick={() => void runInflu("reprovado")}
-                  disabled={busyKey === "influ"}
-                >
-                  {t(lang, "confirmarReprovacao")}
-                </Button>
-              </div>
+          <PerfilRejectDialog
+            open={perfilRejectOpen}
+            onOpenChange={setPerfilRejectOpen}
+            lang={lang}
+            busy={busyKey === "influ"}
+            onConfirm={(motivoLabel, comentario) =>
+              void runInflu("reprovado", motivoLabel, comentario)
+            }
+          />
+
+          {!influPending && inf.clienteReprovacao && (
+            <div className="mt-3 space-y-2">
+              <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} nome={inf.nome} />
+              {inf.justificativaTime && (
+                <p className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Justificativa do time: </span>
+                  {inf.justificativaTime}
+                </p>
+              )}
             </div>
           )}
-          {!influPending && inf.clienteReprovacao && (
-            <div className="mt-3">
-              <ReprovacaoBanner v={inf.clienteReprovacao} lang={lang} nome={inf.nome} />
-            </div>
+          {inf.status === "APROVADO" && inf.justificativaTime && (
+            <p className="mt-3 rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Justificativa do time: </span>
+              {inf.justificativaTime}
+            </p>
           )}
 
           {/* Redes + toggle de métricas */}
@@ -1226,13 +1650,26 @@ export function InfluencerDetail({
                       : "bg-border";
                   const pillTone =
                     ENTREGA_STAGE_TONE[e.stage as EntregaStage] ?? "bg-muted text-muted-foreground";
+                  // "Planejada" (regra de exibição pré-aprovação do perfil, ver
+                  // `toPublicEntrega`) não bate com nenhum rótulo real de
+                  // `ENTREGA_STAGE_LABEL_CLIENTE` — só assim dá pra saber se o
+                  // stepper deve considerar o perfil já aprovado ou não.
+                  const perfilAprovado = e.statusCliente !== "Planejada";
+                  const proximaAcao = perfilAprovado
+                    ? nextActionForEntrega(e.stage as EntregaStage)
+                    : null;
                   return (
                     <div
                       key={e.id}
-                      className="flex overflow-hidden rounded-xl border border-border bg-background shadow-sm"
+                      id={`entrega-${e.id}`}
+                      className={`flex overflow-hidden rounded-xl border bg-background shadow-sm transition-colors ${
+                        highlightedEntregaId === e.id
+                          ? "border-brand ring-2 ring-brand/40"
+                          : "border-border"
+                      }`}
                     >
                       <span className={`w-1 shrink-0 ${barTone}`} />
-                      <div className="min-w-0 flex-1 p-3.5 text-sm">
+                      <div className="min-w-0 flex-1 space-y-3 p-3.5 text-sm">
                         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                             <span className="font-medium text-foreground">
@@ -1240,22 +1677,40 @@ export function InfluencerDetail({
                               {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo}
                             </span>
                           </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {e.dataPostagem && (
-                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                <CalendarDays className="h-3 w-3" /> {fmtDate(e.dataPostagem)}
-                              </span>
-                            )}
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pillTone}`}
-                            >
-                              {e.statusCliente}
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${pillTone}`}
+                          >
+                            {e.statusCliente}
+                          </span>
+                        </div>
+
+                        <EntregaStepper
+                          stage={e.stage as EntregaStage}
+                          perfilAprovado={perfilAprovado}
+                        />
+
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-4">
+                          {e.dataPostagem && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarDays className="h-3 w-3 shrink-0" /> Envio:{" "}
+                              {fmtDate(e.dataPostagem)}
                             </span>
-                          </div>
+                          )}
+                          {e.ultimaAtualizacao && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3 w-3 shrink-0" /> Atualizado:{" "}
+                              {fmtDate(e.ultimaAtualizacao)}
+                            </span>
+                          )}
+                          {proximaAcao && (
+                            <span className="inline-flex items-center gap-1 col-span-2">
+                              Próxima ação: {NEXT_ACTOR_LABEL[proximaAcao]}
+                            </span>
+                          )}
                         </div>
 
                         {roteiroPendente && (
-                          <div className="mt-3 space-y-2 border-t border-border pt-3">
+                          <div className="space-y-2 border-t border-border pt-3">
                             {roteiroAnexos.length > 0 && (
                               <div className="space-y-2">
                                 {roteiroAnexos.map((a) => (
@@ -1263,29 +1718,37 @@ export function InfluencerDetail({
                                 ))}
                               </div>
                             )}
-                            <ApproveRejectBar
-                              busy={busyKey === `roteiro:${e.id}`}
-                              rejecting={rejectingKey === `roteiro:${e.id}`}
-                              motivo={motivo}
-                              lang={lang}
-                              setRejecting={(v) => {
-                                setRejectingKey(v ? `roteiro:${e.id}` : null);
-                                setMotivo("");
-                              }}
-                              setMotivo={setMotivo}
-                              onApprove={() => void runEntrega(e.id, "roteiro", "aprovado")}
-                              onConfirmReject={() => void runEntrega(e.id, "roteiro", "reprovado")}
-                            />
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                className="h-7 gap-1 px-2.5 text-xs"
+                                onClick={() => void runEntrega(e.id, "roteiro")}
+                                disabled={busyKey === `roteiro:${e.id}`}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Aprovar roteiro
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2.5 text-xs"
+                                onClick={() =>
+                                  setAjustesDialog({ entregaId: e.id, escopo: "roteiro" })
+                                }
+                                disabled={busyKey === `roteiro:${e.id}`}
+                              >
+                                <XCircle className="h-3 w-3" />
+                                Solicitar ajustes no roteiro
+                              </Button>
+                            </div>
                           </div>
                         )}
                         {!roteiroPendente && e.roteiroReprovacao && (
-                          <div className="mt-3">
-                            <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} nome={inf.nome} />
-                          </div>
+                          <ReprovacaoBanner v={e.roteiroReprovacao} lang={lang} nome={inf.nome} />
                         )}
 
                         {conteudoPendente && (
-                          <div className="mt-3 space-y-2 border-t border-border pt-3">
+                          <div className="space-y-2 border-t border-border pt-3">
                             {conteudoAnexos.length > 0 && (
                               <div className="space-y-2">
                                 {conteudoAnexos.map((a) => (
@@ -1293,35 +1756,39 @@ export function InfluencerDetail({
                                 ))}
                               </div>
                             )}
-                            <ApproveRejectBar
-                              busy={busyKey === `conteudo:${e.id}`}
-                              rejecting={rejectingKey === `conteudo:${e.id}`}
-                              motivo={motivo}
-                              lang={lang}
-                              setRejecting={(v) => {
-                                setRejectingKey(v ? `conteudo:${e.id}` : null);
-                                setMotivo("");
-                              }}
-                              setMotivo={setMotivo}
-                              onApprove={() => void runEntrega(e.id, "conteudo", "aprovado")}
-                              onConfirmReject={() => void runEntrega(e.id, "conteudo", "reprovado")}
-                            />
+                            <div className="flex gap-1.5">
+                              <Button
+                                size="sm"
+                                className="h-7 gap-1 px-2.5 text-xs"
+                                onClick={() => void runEntrega(e.id, "conteudo")}
+                                disabled={busyKey === `conteudo:${e.id}`}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Aprovar conteúdo
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2.5 text-xs"
+                                onClick={() =>
+                                  setAjustesDialog({ entregaId: e.id, escopo: "conteudo" })
+                                }
+                                disabled={busyKey === `conteudo:${e.id}`}
+                              >
+                                <XCircle className="h-3 w-3" />
+                                Solicitar ajustes no conteúdo
+                              </Button>
+                            </div>
                           </div>
                         )}
                         {!conteudoPendente && e.conteudoReprovacao && (
-                          <div className="mt-3">
-                            <ReprovacaoBanner
-                              v={e.conteudoReprovacao}
-                              lang={lang}
-                              nome={inf.nome}
-                            />
-                          </div>
+                          <ReprovacaoBanner v={e.conteudoReprovacao} lang={lang} nome={inf.nome} />
                         )}
 
                         {e.historico && e.historico.length > 0 && (
-                          <Collapsible className="mt-3 border-t border-border pt-3">
+                          <Collapsible className="border-t border-border pt-3">
                             <CollapsibleTrigger className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground">
-                              {t(lang, "entregaHistorico")} ({e.historico.length})
+                              Ver versões anteriores ({e.historico.length})
                             </CollapsibleTrigger>
                             <CollapsibleContent className="mt-1.5 space-y-1">
                               {e.historico.map((h, idx) => (
@@ -1345,6 +1812,17 @@ export function InfluencerDetail({
                   );
                 })}
               </div>
+              <EntregaAjustesDialog
+                open={!!ajustesDialog}
+                onOpenChange={(v) => !v && setAjustesDialog(null)}
+                lang={lang}
+                busy={
+                  !!ajustesDialog &&
+                  busyKey === `${ajustesDialog.escopo}:${ajustesDialog.entregaId}`
+                }
+                escopo={ajustesDialog?.escopo ?? "roteiro"}
+                onConfirm={(comentario) => void confirmAjustes(comentario)}
+              />
             </section>
           )
         )}
@@ -1460,24 +1938,50 @@ export function InfluencerDetail({
                   {t(lang, "observacoesHeader")}
                 </h3>
               </div>
-              {observacoesSaving && (
-                <span className="text-[10px] font-medium text-muted-foreground">
-                  {t(lang, "saving")}
-                </span>
-              )}
             </div>
-            <div className="flex flex-1 flex-col p-4">
+            <div className="flex flex-1 flex-col gap-2.5 p-4">
               <textarea
                 value={observacoesDraft}
                 onChange={(e) => setObservacoesDraft(e.target.value)}
-                onBlur={() => void saveObservacoes()}
                 placeholder={t(lang, "observacoesPlaceholder")}
                 rows={5}
                 className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring"
               />
+              <Button
+                size="sm"
+                className="w-full gap-1.5"
+                disabled={!observacoesDraft.trim() || observacoesSaving}
+                onClick={() => void sendObservacoes()}
+              >
+                {observacoesSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {observacoesSaving ? "Enviando..." : "Enviar observação"}
+              </Button>
             </div>
           </div>
         </section>
+
+        <AlertDialog open={confirmLeaveOpen} onOpenChange={setConfirmLeaveOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Sair sem enviar a observação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você digitou uma observação que ainda não foi enviada. Se sair agora, o texto será
+                perdido.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continuar editando</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setConfirmLeaveOpen(false);
+                  onBack();
+                }}
+              >
+                Sair sem enviar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {(() => {
           type TimelineItem = { label: string; at: string; tone?: "reprovado" };

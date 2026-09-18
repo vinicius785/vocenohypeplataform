@@ -123,6 +123,44 @@ export type InfluActivity = {
   createdAt: string;
 };
 
+/**
+ * Modelo tipado de histórico (substitui gradualmente o texto-livre de
+ * `InfluActivity` acima, sem apagá-lo — ver comentário em
+ * `src/lib/campanha-aprovacao.ts`). Cada mutação nova grava NOS DOIS
+ * arrays (`activity` continua recebendo a linha de texto, pra nada que já
+ * lê esse campo quebrar); registros antigos simplesmente não têm entrada
+ * aqui (`activityEvents` ausente/vazio pra eles é esperado, documentado —
+ * nunca é preenchido retroativamente).
+ */
+export type InfluActivityEventKind =
+  | "perfil_enviado"
+  | "perfil_aprovado"
+  | "perfil_recusado"
+  | "perfil_reaberto"
+  | "roteiro_enviado"
+  | "roteiro_aprovado"
+  | "roteiro_ajustes_solicitados"
+  | "conteudo_enviado"
+  | "conteudo_aprovado"
+  | "conteudo_ajustes_solicitados"
+  | "publicado"
+  | "observacao_cliente"
+  | "comentario_equipe";
+
+export type InfluActivityEvent = {
+  id: string;
+  kind: InfluActivityEventKind;
+  actor: { type: "cliente" | "equipe"; name: string; initials: string; color: string };
+  createdAt: string;
+  entregaId?: string;
+  motivo?: string;
+  motivoLabel?: string;
+  statusAnterior?: string;
+  statusNovo?: string;
+  versao?: number;
+  comentario?: string;
+};
+
 const AUTHOR_COLORS = [
   "bg-rose-500 text-white",
   "bg-sky-500 text-white",
@@ -516,6 +554,7 @@ import {
   NEXT_ACTOR_LABEL,
   canTransitionInflu,
   canTransitionEntrega,
+  canReopenInfluApproval,
   legacyInfluStatus,
   migrateLegacyEntregaStage,
   isInfluencerEligibleForDeliveries,
@@ -523,6 +562,7 @@ import {
   type EntregaStage,
   type NextActor,
 } from "@/lib/campanha-status";
+import { toast } from "sonner";
 import {
   deriveEntregaNextStep,
   applyEntregaAction,
@@ -732,6 +772,13 @@ export type Influ = {
   bank?: BankInfo;
   comments?: InfluComment[];
   activity?: InfluActivity[];
+  /** Histórico tipado (decisão 1 da reformulação do Portal do Cliente) —
+   * ver comentário acima de `InfluActivityEvent`. */
+  activityEvents?: InfluActivityEvent[];
+  /** Justificativa do time pra indicar este perfil ao cliente — mostrada
+   * no modo de revisão sequencial do portal (opcional; preenchida pelo
+   * time no board interno). */
+  justificativaTime?: string;
   createdAt?: string;
   updatedAt?: string;
   /** Checklist livre do influenciador (texto qualquer, marcar feito) — pode
@@ -1603,7 +1650,18 @@ export function InfluencerBoard({
   // reabrir a aprovação (RECUSADO → ENVIADO_AO_CLIENTE) ou ao reprovar
   // manualmente um já aprovado (APROVADO → RECUSADO), o selo antigo do
   // cliente ficaria preso e o portal continuaria tratando como já decidido.
-  const changeStatus = (influId: string, status: InfluStatus) =>
+  const changeStatus = (influId: string, status: InfluStatus) => {
+    const current = latestInflusRef.current.find((x) => x.id === influId);
+    if (current && current.status === "APROVADO" && status !== "APROVADO") {
+      const reopen = canReopenInfluApproval(
+        current.status,
+        current.entregas.map((e) => e.stage),
+      );
+      if (!reopen.ok) {
+        toast.error(reopen.motivo);
+        return;
+      }
+    }
     applyInflusChange(
       latestInflusRef.current.map((x) =>
         x.id === influId && canTransitionInflu(x.status, status)
@@ -1614,6 +1672,7 @@ export function InfluencerBoard({
           : x,
       ),
     );
+  };
 
   /** Ação universal "Enviar para cliente" (perfil) — só sai de EM_CURADORIA,
    * registra quem/quando no histórico e disponibiliza o perfil no portal. */
@@ -1783,6 +1842,17 @@ export function InfluencerBoard({
   };
 
   const setInfluStatusFromResumo = (influId: string, status: InfluStatus) => {
+    const current = latestInflusRef.current.find((x) => x.id === influId);
+    if (current && current.status === "APROVADO" && status !== "APROVADO") {
+      const reopen = canReopenInfluApproval(
+        current.status,
+        current.entregas.map((e) => e.stage),
+      );
+      if (!reopen.ok) {
+        toast.error(reopen.motivo);
+        return;
+      }
+    }
     const next = latestInflusRef.current.map((x) =>
       x.id === influId
         ? pushActivity(

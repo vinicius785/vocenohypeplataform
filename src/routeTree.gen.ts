@@ -36,6 +36,7 @@ import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-f
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 import { Route as PortalTokenCampanhasIndexRouteImport } from './routes/portal.$token/campanhas.index'
 import { Route as PortalTokenCampanhasCampanhaIdRouteImport } from './routes/portal.$token/campanhas.$campanhaId'
+import { Route as PortalTokenCampanhasCampanhaIdRevisarRouteImport } from './routes/portal.$token/campanhas.$campanhaId.revisar'
 import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './routes/portal.$token/campanhas.$campanhaId.aprovacoes'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -180,6 +181,12 @@ const PortalTokenCampanhasCampanhaIdRoute =
     path: '/campanhas/$campanhaId',
     getParentRoute: () => PortalTokenRouteRoute,
   } as any)
+const PortalTokenCampanhasCampanhaIdRevisarRoute =
+  PortalTokenCampanhasCampanhaIdRevisarRouteImport.update({
+    id: '/revisar',
+    path: '/revisar',
+    getParentRoute: () => PortalTokenCampanhasCampanhaIdRoute,
+  } as any)
 const PortalTokenCampanhasCampanhaIdAprovacoesRoute =
   PortalTokenCampanhasCampanhaIdAprovacoesRouteImport.update({
     id: '/aprovacoes',
@@ -215,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
+  '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -243,6 +251,7 @@ export interface FileRoutesByTo {
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
   '/portal/$token/campanhas': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
+  '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -274,6 +283,7 @@ export interface FileRoutesById {
   '/portal/$token/campanhas/$campanhaId': typeof PortalTokenCampanhasCampanhaIdRouteWithChildren
   '/portal/$token/campanhas/': typeof PortalTokenCampanhasIndexRoute
   '/portal/$token/campanhas/$campanhaId/aprovacoes': typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
+  '/portal/$token/campanhas/$campanhaId/revisar': typeof PortalTokenCampanhasCampanhaIdRevisarRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -305,6 +315,7 @@ export interface FileRouteTypes {
     | '/portal/$token/campanhas/$campanhaId'
     | '/portal/$token/campanhas/'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
+    | '/portal/$token/campanhas/$campanhaId/revisar'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -333,6 +344,7 @@ export interface FileRouteTypes {
     | '/portal/$token/campanhas/$campanhaId'
     | '/portal/$token/campanhas'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
+    | '/portal/$token/campanhas/$campanhaId/revisar'
   id:
     | '__root__'
     | '/'
@@ -363,6 +375,7 @@ export interface FileRouteTypes {
     | '/portal/$token/campanhas/$campanhaId'
     | '/portal/$token/campanhas/'
     | '/portal/$token/campanhas/$campanhaId/aprovacoes'
+    | '/portal/$token/campanhas/$campanhaId/revisar'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -573,6 +586,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalTokenCampanhasCampanhaIdRouteImport
       parentRoute: typeof PortalTokenRouteRoute
     }
+    '/portal/$token/campanhas/$campanhaId/revisar': {
+      id: '/portal/$token/campanhas/$campanhaId/revisar'
+      path: '/revisar'
+      fullPath: '/portal/$token/campanhas/$campanhaId/revisar'
+      preLoaderRoute: typeof PortalTokenCampanhasCampanhaIdRevisarRouteImport
+      parentRoute: typeof PortalTokenCampanhasCampanhaIdRoute
+    }
     '/portal/$token/campanhas/$campanhaId/aprovacoes': {
       id: '/portal/$token/campanhas/$campanhaId/aprovacoes'
       path: '/aprovacoes'
@@ -607,12 +627,15 @@ const AuthenticatedRouteRouteWithChildren =
 
 interface PortalTokenCampanhasCampanhaIdRouteChildren {
   PortalTokenCampanhasCampanhaIdAprovacoesRoute: typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
+  PortalTokenCampanhasCampanhaIdRevisarRoute: typeof PortalTokenCampanhasCampanhaIdRevisarRoute
 }
 
 const PortalTokenCampanhasCampanhaIdRouteChildren: PortalTokenCampanhasCampanhaIdRouteChildren =
   {
     PortalTokenCampanhasCampanhaIdAprovacoesRoute:
       PortalTokenCampanhasCampanhaIdAprovacoesRoute,
+    PortalTokenCampanhasCampanhaIdRevisarRoute:
+      PortalTokenCampanhasCampanhaIdRevisarRoute,
   }
 
 const PortalTokenCampanhasCampanhaIdRouteWithChildren =

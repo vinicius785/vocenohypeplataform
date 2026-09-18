@@ -1,4 +1,10 @@
-import type { Influ, Entrega, ClienteVeredito } from "@/components/influenciadores/InfluencerBoard";
+import type {
+  Influ,
+  Entrega,
+  ClienteVeredito,
+  InfluActivityEvent,
+} from "@/components/influenciadores/InfluencerBoard";
+import { canReopenInfluApproval } from "@/lib/campanha-status";
 
 /**
  * Transições de estado disparadas pelo cliente através do link público da
@@ -21,6 +27,23 @@ function clientActivity(action: string, entregaId?: string) {
   };
 }
 
+/** Grava um evento tipado (decisão 1 — ver comentário em `InfluActivityEvent`
+ * no InfluencerBoard). "Cliente" é sempre o ator, já que o portal não tem
+ * login individual — a empresa do cliente já fica registrada no link/
+ * campanha, não precisa ser repetida em cada evento. */
+function clientActivityEvent(
+  kind: InfluActivityEvent["kind"],
+  fields: Partial<InfluActivityEvent> = {},
+): InfluActivityEvent {
+  return {
+    id: crypto.randomUUID(),
+    kind,
+    actor: { type: "cliente", name: "Cliente", initials: "CL", color: "bg-slate-500 text-white" },
+    createdAt: new Date().toISOString(),
+    ...fields,
+  };
+}
+
 function stamp(motivo?: string): ClienteVeredito | undefined {
   return motivo !== undefined ? { motivo, respondedAt: new Date().toISOString() } : undefined;
 }
@@ -32,8 +55,10 @@ export function applyInfluApproval(
   influ: Influ,
   status: "aprovado" | "reprovado",
   motivo?: string,
+  extra: { motivoLabel?: string; comentario?: string } = {},
 ): Influ {
   const at = new Date().toISOString();
+  const statusAnterior = influ.status;
   if (status === "aprovado") {
     return {
       ...influ,
@@ -41,6 +66,10 @@ export function applyInfluApproval(
       clienteReprovacao: undefined,
       lastClientAction: { kind: "influ", status: "aprovado", at },
       activity: [...(influ.activity ?? []), clientActivity("aprovou a seleção pra campanha")],
+      activityEvents: [
+        ...(influ.activityEvents ?? []),
+        clientActivityEvent("perfil_aprovado", { statusAnterior, statusNovo: "APROVADO" }),
+      ],
       updatedAt: at,
     };
   }
@@ -52,6 +81,41 @@ export function applyInfluApproval(
     activity: [
       ...(influ.activity ?? []),
       clientActivity(`reprovou a seleção pra campanha — ${motivo ?? "sem motivo"}`),
+    ],
+    activityEvents: [
+      ...(influ.activityEvents ?? []),
+      clientActivityEvent("perfil_recusado", {
+        statusAnterior,
+        statusNovo: "RECUSADO",
+        motivo,
+        motivoLabel: extra.motivoLabel,
+        comentario: extra.comentario,
+      }),
+    ],
+    updatedAt: at,
+  };
+}
+
+/** "Reabrir decisão" pelo próprio cliente (nova ação do portal, decisão do
+ * redesenho) — mesma transição usada pelo time (APROVADO → ENVIADO_AO_CLIENTE)
+ * e a MESMA trava de `canReopenInfluApproval` (bloqueia se já há entrega
+ * além de ROTEIRO_PRODUCAO), pra manter consistência entre quem reabre. */
+export function reopenInfluApprovalByCliente(influ: Influ): Influ {
+  const guard = canReopenInfluApproval(
+    influ.status,
+    influ.entregas.map((e) => e.stage),
+  );
+  if (!guard.ok) throw new Error(guard.motivo);
+  const at = new Date().toISOString();
+  const statusAnterior = influ.status;
+  return {
+    ...influ,
+    status: "ENVIADO_AO_CLIENTE",
+    clienteReprovacao: undefined,
+    activity: [...(influ.activity ?? []), clientActivity("reabriu a decisão sobre a seleção")],
+    activityEvents: [
+      ...(influ.activityEvents ?? []),
+      clientActivityEvent("perfil_reaberto", { statusAnterior, statusNovo: "ENVIADO_AO_CLIENTE" }),
     ],
     updatedAt: at,
   };
@@ -80,6 +144,11 @@ export function applyEntregaApproval(
   if (!entrega) throw new Error("Entrega não encontrada.");
   if (entrega.stage !== "ROTEIRO_APROVACAO" && entrega.stage !== "CONTEUDO_APROVACAO") {
     throw new Error("Esta entrega não está aguardando aprovação do cliente no momento.");
+  }
+  // "Ao solicitar ajustes, exigir comentário" — validação de negócio (não só
+  // no zod da server function) pra proteger quem chamar esta função direto.
+  if (status === "reprovado" && !motivo?.trim()) {
+    throw new Error("É necessário um comentário explicando os ajustes solicitados.");
   }
   const isRoteiro = entrega.stage === "ROTEIRO_APROVACAO";
 
@@ -119,6 +188,19 @@ export function applyEntregaApproval(
       at,
     },
     activity: [...(influ.activity ?? []), clientActivity(action, entregaId)],
+    activityEvents: [
+      ...(influ.activityEvents ?? []),
+      clientActivityEvent(
+        status === "aprovado"
+          ? isRoteiro
+            ? "roteiro_aprovado"
+            : "conteudo_aprovado"
+          : isRoteiro
+            ? "roteiro_ajustes_solicitados"
+            : "conteudo_ajustes_solicitados",
+        { entregaId, comentario: motivo },
+      ),
+    ],
     updatedAt: at,
   };
 }

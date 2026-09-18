@@ -1,23 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, PlayCircle, Users } from "lucide-react";
+import { AlertTriangle, CalendarClock, PlayCircle, Sparkles, Users } from "lucide-react";
 import { z } from "zod";
 import {
   respondCampanhaInflu,
   respondCampanhaEntrega,
+  reopenCampanhaInflu,
   updateInfluBriefing,
   updateInfluObservacoes,
   updateInfluBriefingAnexo,
 } from "@/lib/cliente-link.functions";
 import { t } from "@/lib/portal-i18n";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
+import { PERFIL_REJEICAO_MOTIVOS } from "@/lib/campanha-status";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { HomeHeaderShell } from "@/components/shared/HomeHeaderShell";
 import { PortalSectionCard } from "@/components/portal/PortalSectionCard";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { usePortalData } from "@/components/portal/portal-context";
 import {
   InfluencerGalleryCard,
@@ -31,6 +34,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const searchSchema = z.object({
   influ: z.string().optional(),
+  // Foco numa entrega específica ao abrir o detalhe do influenciador —
+  // usado pelo clique do Hypito num item "entrega pendente" (item C do
+  // redesenho do Portal do Cliente).
+  entregaId: z.string().optional(),
   relatorio: z.string().optional(),
   // Mantido só pra compatibilidade com links antigos (?tab=...) da versão
   // com abas — o componente redireciona pra âncora e descarta o param.
@@ -66,11 +73,14 @@ function PortalCampanhaPage() {
   const { token, data, lang, reload } = usePortalData();
   const respondInfluFn = useServerFn(respondCampanhaInflu);
   const respondEntregaFn = useServerFn(respondCampanhaEntrega);
+  const reopenInfluFn = useServerFn(reopenCampanhaInflu);
   const updateBriefingFn = useServerFn(updateInfluBriefing);
   const updateObservacoesFn = useServerFn(updateInfluObservacoes);
   const updateBriefingAnexoFn = useServerFn(updateInfluBriefingAnexo);
 
-  const [influFiltro, setInfluFiltro] = useState<"todos" | "ativos" | "nao_aprovados">("ativos");
+  const [influFiltro, setInfluFiltro] = useState<
+    "todos" | "aguardando" | "aprovados" | "nao_aprovados"
+  >("todos");
   const [portalMonth, setPortalMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -134,18 +144,36 @@ function PortalCampanhaPage() {
   const naoAprovados = monthFilteredInflus.filter(
     (i) => i.status === "RECUSADO" || i.clienteReprovacao,
   );
-  const ativos = monthFilteredInflus.filter((i) => i.status !== "RECUSADO" && !i.clienteReprovacao);
+  const aprovados = monthFilteredInflus.filter((i) => i.status === "APROVADO");
+  // "Aguardando análise" = só a decisão da SELEÇÃO do perfil (não confundir
+  // com `pendentes` abaixo, que também conta roteiro/conteúdo aguardando
+  // aprovação — usado só no indicador do cabeçalho, não neste segmentado).
+  const aguardandoAnalise = monthFilteredInflus.filter(
+    (i) => i.status === "ENVIADO_AO_CLIENTE" && !i.clienteReprovacao,
+  );
   const influenciadoresVisiveis =
     influFiltro === "todos"
       ? monthFilteredInflus
-      : influFiltro === "ativos"
-        ? ativos
-        : naoAprovados;
+      : influFiltro === "aguardando"
+        ? aguardandoAnalise
+        : influFiltro === "aprovados"
+          ? aprovados
+          : naoAprovados;
   const viewing = activeCampanha.influencers.find((i) => i.id === viewingId) ?? null;
 
   const pendentes = monthFilteredInflus
     .map((inf) => ({ inf, reason: pendingReason(inf, lang) }))
     .filter((x): x is { inf: (typeof monthFilteredInflus)[number]; reason: string } => !!x.reason);
+
+  // Progresso da revisão sequencial (item 1 do redesenho) — N = perfis que
+  // já chegaram a ser enviados pro cliente decidir nesta campanha/mês
+  // (aguardando, aprovados ou não aprovados); X = quantos já foram
+  // decididos. INSCRITO/EM_CURADORIA ficam de fora — ainda são
+  // planejamento interno, o cliente nunca chegou a "receber" esses.
+  const enviadosParaDecisao = monthFilteredInflus.filter((i) =>
+    ["ENVIADO_AO_CLIENTE", "APROVADO", "RECUSADO"].includes(i.status),
+  );
+  const decididos = enviadosParaDecisao.length - aguardandoAnalise.length;
 
   const publicadas = monthFilteredInflus.reduce(
     (s, i) => s + i.entregas.filter((e) => e.status === "publicado").length,
@@ -166,15 +194,28 @@ function PortalCampanhaPage() {
     : cronogramaOrdenado.slice(0, 3);
 
   const respondInflu = viewing
-    ? async (respStatus: "aprovado" | "reprovado", motivo?: string) => {
+    ? async (
+        respStatus: "aprovado" | "reprovado",
+        motivoLabel?: (typeof PERFIL_REJEICAO_MOTIVOS)[number],
+        comentario?: string,
+      ) => {
         await respondInfluFn({
           data: {
             token,
             campanhaId: activeCampanha.id,
             influencerId: viewing.id,
             status: respStatus,
-            motivo,
+            motivoLabel,
+            comentario,
           },
+        });
+        reload();
+      }
+    : undefined;
+  const reopenInflu = viewing
+    ? async () => {
+        await reopenInfluFn({
+          data: { token, campanhaId: activeCampanha.id, influencerId: viewing.id },
         });
         reload();
       }
@@ -242,6 +283,8 @@ function PortalCampanhaPage() {
           onSaveBriefing={saveBriefing!}
           onSaveObservacoes={saveObservacoes!}
           onSaveBriefingAnexo={saveBriefingAnexo!}
+          onReopen={reopenInflu}
+          focusEntregaId={search.entregaId}
         />
       </PageContainer>
     );
@@ -299,36 +342,40 @@ function PortalCampanhaPage() {
         ]}
       />
 
-      {pendentes.length > 0 && (
-        <PortalSectionCard
-          id="aguardando-voce"
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          title={t(lang, "aguardandoVoce")}
-        >
-          <div className="space-y-1.5">
-            {pendentes.map(({ inf, reason }) => (
-              <button
-                key={inf.id}
-                type="button"
-                onClick={() => setViewingId(inf.id)}
-                className="flex min-h-11 w-full items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2 text-left transition-colors hover:border-amber-500/50"
-              >
-                <Avatar className="h-8 w-8 shrink-0">
-                  {inf.foto && <AvatarImage src={inf.foto} alt={inf.nome} />}
-                  <AvatarFallback className="text-xs font-semibold">
-                    {initialsOf(inf.nome)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-foreground">{inf.nome}</p>
-                  <p className="truncate text-[11px] text-amber-700 dark:text-amber-400">
-                    {reason}
-                  </p>
-                </div>
-              </button>
-            ))}
+      {aguardandoAnalise.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {aguardandoAnalise.length} perfil{aguardandoAnalise.length > 1 ? "is" : ""} aguarda
+                {aguardandoAnalise.length > 1 ? "m" : ""} sua análise
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Revise os perfis sugeridos pelo time para liberar o início da produção.
+              </p>
+              {decididos > 0 && (
+                <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                  {decididos} de {enviadosParaDecisao.length} perfis analisados
+                </p>
+              )}
+            </div>
           </div>
-        </PortalSectionCard>
+          <Button
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={() =>
+              void navigate({
+                to: "/portal/$token/campanhas/$campanhaId/revisar",
+                params: { token, campanhaId: activeCampanha.id },
+              })
+            }
+          >
+            {decididos > 0 ? "Continuar revisão" : "Revisar perfis"}
+          </Button>
+        </div>
       )}
 
       <PortalSectionCard
@@ -342,9 +389,10 @@ function PortalCampanhaPage() {
             value={influFiltro}
             onChange={setInfluFiltro}
             options={[
-              { value: "todos", label: "Todos" },
-              { value: "ativos", label: "Ativos" },
-              { value: "nao_aprovados", label: "Não aprovados" },
+              { value: "todos", label: `Todos (${monthFilteredInflus.length})` },
+              { value: "aguardando", label: `Aguardando análise (${aguardandoAnalise.length})` },
+              { value: "aprovados", label: `Aprovados (${aprovados.length})` },
+              { value: "nao_aprovados", label: `Não aprovados (${naoAprovados.length})` },
             ]}
           />
         }

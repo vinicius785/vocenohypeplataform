@@ -4,6 +4,7 @@ import { getClienteLinkData } from "@/lib/cliente-link.functions";
 import { usePortalLang, type PortalLang } from "@/lib/portal-i18n";
 import type { Workspace } from "@/lib/workspace-store";
 import type { ClienteLinkData } from "@/lib/portal-types";
+import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Estado compartilhado do Portal do Cliente entre a rota-pai
@@ -77,6 +78,48 @@ export function PortalDataProvider({
     return () => {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Realtime (item C do redesenho do Portal do Cliente) — mesmo idioma de
+  // `initChatSync` em chat-store.ts (canal + `.on("postgres_changes",...)` +
+  // `.subscribe()` + `removeChannel` no cleanup). `campanha_influenciadores`
+  // não tem coluna própria por campanha visível ao token (o filtro seria só
+  // `campanha_id`, e este provider cobre TODAS as campanhas do cliente de
+  // uma vez), então assina sem filtro e recarrega — o polling de 20s acima
+  // já é a rede de segurança de qualquer forma.
+  //
+  // LIMITAÇÃO CONHECIDA (documentada no relatório): o portal do cliente usa
+  // o cliente Supabase anônimo (sem sessão), e não existe hoje nenhuma
+  // policy de RLS liberando `select`/realtime em `campanha_influenciadores`
+  // pro papel `anon` — só `authenticated` (ver
+  // `20260729190000_permission_scoped_rls.sql`). Sem essa policy, o
+  // Realtime do Supabase (que respeita RLS pra decidir o que replicar pra
+  // cada socket) nunca entrega esses eventos pra este canal na prática.
+  // Abrir uma policy de leitura anônima nessa tabela exporia dados de
+  // TODOS os clientes pra qualquer holder de token, então isso não foi
+  // feito aqui — ficou fora do escopo (rever com o time antes de mudar
+  // RLS). O código abaixo fica pronto pra funcionar assim que essa policy
+  // existir (ou vier via um mecanismo de broadcast dedicado), e o polling
+  // continua sendo o caminho que de fato mantém a Início/Hypito atualizados
+  // hoje.
+  useEffect(() => {
+    const channel = supabase
+      .channel("rt-portal-campanha-influenciadores")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "campanha_influenciadores" },
+        (payload) => {
+          const row = payload.new as { campanha_id?: string } | undefined;
+          if (!row?.campanha_id) return;
+          if (!dataRef.current.campanhas.some((c) => c.id === row.campanha_id)) return;
+          reload();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);

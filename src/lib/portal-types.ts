@@ -42,6 +42,9 @@ export type PublicEntrega = {
   /** `key` traduzida via `t()` — ver ENTREGA_HISTORY_PATTERNS em
    * cliente-link.functions.ts. */
   historico?: { key: string; at: string }[];
+  /** Simplificação: sem número de versão real, é a data da última
+   * atualização de fato registrada na entrega (ver `toPublicEntrega`). */
+  ultimaAtualizacao?: string;
 };
 export type PublicInfluencer = {
   id: string;
@@ -61,6 +64,17 @@ export type PublicInfluencer = {
   criadoEm?: string;
   historico?: { status: string; at: string }[];
   cicloMes?: string;
+  justificativaTime?: string;
+  activityEvents?: {
+    id: string;
+    kind: string;
+    actorType: "cliente" | "equipe";
+    actorName: string;
+    createdAt: string;
+    entregaId?: string;
+    motivoLabel?: string;
+    comentario?: string;
+  }[];
 };
 export type PublicCronogramaItem = {
   id: string;
