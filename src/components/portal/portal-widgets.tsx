@@ -1089,6 +1089,7 @@ export function InfluencerDetail({
   onSaveBriefingAnexo,
   onReopen,
   focusEntregaId,
+  readOnly,
 }: {
   inf: PublicInfluencer;
   lang: PortalLang;
@@ -1121,6 +1122,13 @@ export function InfluencerDetail({
    * Hypito, item C do redesenho) — simplificação: só rola/realça, não abre
    * nenhum modal/ação automaticamente. */
   focusEntregaId?: string;
+  /** Portal por token nunca passa isto (permanece `undefined`/falsy, sem
+   * mudança de comportamento) — só o Portal autenticado (`/portal-app/**`)
+   * passa `true` para o papel `client_viewer`, escondendo toda a UI de
+   * mutação (aprovar/reprovar, ajustes, briefing, observação, reabrir). A
+   * trava real continua no servidor (cada `*Session` function já rejeita
+   * `client_viewer`); isto é só pra não mostrar um botão que erraria. */
+  readOnly?: boolean;
 }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [perfilRejectOpen, setPerfilRejectOpen] = useState(false);
@@ -1374,7 +1382,7 @@ export function InfluencerDetail({
                 <StatusBadge inf={inf} lang={lang} />
               </div>
             </div>
-            {influPending && (
+            {!readOnly && influPending && (
               <div className="flex shrink-0 gap-2 pb-1">
                 <Button
                   size="sm"
@@ -1397,7 +1405,7 @@ export function InfluencerDetail({
                 </Button>
               </div>
             )}
-            {!influPending && onReopen && (
+            {!readOnly && !influPending && onReopen && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -1718,29 +1726,31 @@ export function InfluencerDetail({
                                 ))}
                               </div>
                             )}
-                            <div className="flex gap-1.5">
-                              <Button
-                                size="sm"
-                                className="h-7 gap-1 px-2.5 text-xs"
-                                onClick={() => void runEntrega(e.id, "roteiro")}
-                                disabled={busyKey === `roteiro:${e.id}`}
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                Aprovar roteiro
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 gap-1 px-2.5 text-xs"
-                                onClick={() =>
-                                  setAjustesDialog({ entregaId: e.id, escopo: "roteiro" })
-                                }
-                                disabled={busyKey === `roteiro:${e.id}`}
-                              >
-                                <XCircle className="h-3 w-3" />
-                                Solicitar ajustes no roteiro
-                              </Button>
-                            </div>
+                            {!readOnly && (
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  className="h-7 gap-1 px-2.5 text-xs"
+                                  onClick={() => void runEntrega(e.id, "roteiro")}
+                                  disabled={busyKey === `roteiro:${e.id}`}
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Aprovar roteiro
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 gap-1 px-2.5 text-xs"
+                                  onClick={() =>
+                                    setAjustesDialog({ entregaId: e.id, escopo: "roteiro" })
+                                  }
+                                  disabled={busyKey === `roteiro:${e.id}`}
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                  Solicitar ajustes no roteiro
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                         {!roteiroPendente && e.roteiroReprovacao && (
@@ -1756,29 +1766,31 @@ export function InfluencerDetail({
                                 ))}
                               </div>
                             )}
-                            <div className="flex gap-1.5">
-                              <Button
-                                size="sm"
-                                className="h-7 gap-1 px-2.5 text-xs"
-                                onClick={() => void runEntrega(e.id, "conteudo")}
-                                disabled={busyKey === `conteudo:${e.id}`}
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                Aprovar conteúdo
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 gap-1 px-2.5 text-xs"
-                                onClick={() =>
-                                  setAjustesDialog({ entregaId: e.id, escopo: "conteudo" })
-                                }
-                                disabled={busyKey === `conteudo:${e.id}`}
-                              >
-                                <XCircle className="h-3 w-3" />
-                                Solicitar ajustes no conteúdo
-                              </Button>
-                            </div>
+                            {!readOnly && (
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  className="h-7 gap-1 px-2.5 text-xs"
+                                  onClick={() => void runEntrega(e.id, "conteudo")}
+                                  disabled={busyKey === `conteudo:${e.id}`}
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Aprovar conteúdo
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 gap-1 px-2.5 text-xs"
+                                  onClick={() =>
+                                    setAjustesDialog({ entregaId: e.id, escopo: "conteudo" })
+                                  }
+                                  disabled={busyKey === `conteudo:${e.id}`}
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                  Solicitar ajustes no conteúdo
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         )}
                         {!conteudoPendente && e.conteudoReprovacao && (
@@ -1895,15 +1907,17 @@ export function InfluencerDetail({
                 onBlur={() => void saveBriefing()}
                 placeholder={t(lang, "briefingPlaceholder")}
                 rows={5}
-                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring"
+                readOnly={readOnly}
+                disabled={readOnly}
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
               />
               {inf.briefingAnexoUrl ? (
                 <AnexoChip
                   nome={inf.briefingAnexoNome}
                   url={inf.briefingAnexoUrl}
-                  onRemove={() => void onSaveBriefingAnexo(null)}
+                  onRemove={readOnly ? undefined : () => void onSaveBriefingAnexo(null)}
                 />
-              ) : (
+              ) : readOnly ? null : (
                 <>
                   <button
                     type="button"
@@ -1945,17 +1959,21 @@ export function InfluencerDetail({
                 onChange={(e) => setObservacoesDraft(e.target.value)}
                 placeholder={t(lang, "observacoesPlaceholder")}
                 rows={5}
-                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring"
+                readOnly={readOnly}
+                disabled={readOnly}
+                className="w-full flex-1 resize-none rounded-xl border border-border bg-muted/20 px-3 py-2.5 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-ring focus:bg-background focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
               />
-              <Button
-                size="sm"
-                className="w-full gap-1.5"
-                disabled={!observacoesDraft.trim() || observacoesSaving}
-                onClick={() => void sendObservacoes()}
-              >
-                {observacoesSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {observacoesSaving ? "Enviando..." : "Enviar observação"}
-              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  className="w-full gap-1.5"
+                  disabled={!observacoesDraft.trim() || observacoesSaving}
+                  onClick={() => void sendObservacoes()}
+                >
+                  {observacoesSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {observacoesSaving ? "Enviando..." : "Enviar observação"}
+                </Button>
+              )}
             </div>
           </div>
         </section>
