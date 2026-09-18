@@ -193,7 +193,7 @@ export function ConfiguracoesSection() {
       {tab === "workspace" && <GeralSection canConfig={canConfig} />}
       {tab === "integracoes" && <IntegracoesSection />}
       {tab === "precificacao" && <PrecificacaoSection canConfig={canConfig} />}
-      {tab === "time_permissoes" && canSeeTimePermissoes && <TimePermissoesTab />}
+      {tab === "time_permissoes" && canSeeTimePermissoes && <TimePermissoesTab isAdmin={isAdmin} />}
       {tab === "seguranca" && <SegurancaSection canConfig={canConfig} isAdmin={isAdmin} />}
       {tab === "dados_backup" && <DadosBackupSection isAdmin={isAdmin} />}
       {tab === "log_auditoria" && <AuditLogTab isAdmin={isAdmin} />}

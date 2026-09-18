@@ -32,6 +32,7 @@ import {
 import { getVaultKey } from "@/lib/vault.functions";
 import { useVerifyVaultAccessCode } from "@/lib/vault-access";
 import { getVaultTotpStatus, enrollVaultTotp } from "@/lib/vault-totp.functions";
+import { MfaEnrollCard } from "./MfaEnrollCard";
 import { SettingsCard, SettingsSectionHeader } from "./settings-shared";
 
 type Senha = {
@@ -66,6 +67,7 @@ export function SegurancaSection({ canConfig, isAdmin }: { canConfig: boolean; i
         title="Segurança"
         description="Autenticação em dois fatores, cofre de senhas e pedidos de recuperação."
       />
+      <MfaEnrollCard isAdmin={isAdmin} />
       <VaultTotpEnroll />
       <SenhasCard />
       <SenhasEsquecidasCard isAdmin={isAdmin} />

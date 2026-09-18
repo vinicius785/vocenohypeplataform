@@ -4,6 +4,7 @@ import { LogOut, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
 import { getPortalDataForSession } from "@/lib/portal-auth.functions";
+import { shouldRequireMfaChallenge } from "@/lib/mfa.functions";
 import {
   PortalSessionDataProvider,
   type PortalSessionData,
@@ -34,6 +35,15 @@ export const Route = createFileRoute("/portal-app")({
     if (!sessionData.session) {
       throw redirect({ to: "/" });
     }
+
+    // Same additive check as `_authenticated/route.tsx` (see CLAUDE.md,
+    // Fase 3 parte 2): a client with MFA enrolled must not reach the portal
+    // shell on a session that hasn't completed the challenge yet.
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (shouldRequireMfaChallenge(aal?.currentLevel ?? null, aal?.nextLevel ?? null)) {
+      throw redirect({ to: "/" });
+    }
+
     const userId = sessionData.session.user.id;
     const env = await resolveUserEnvironment(supabase, userId);
 

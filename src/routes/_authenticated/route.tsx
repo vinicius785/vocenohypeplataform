@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldExpireUnrememberedSession, markTabSessionActive } from "@/lib/session-scope";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
+import { shouldRequireMfaChallenge } from "@/lib/mfa.functions";
 import { getTeamDirectory } from "@/lib/team.functions";
 import { saveMe, initChatSync, heartbeat } from "@/lib/chat-store";
 import { initWorkspaceSync } from "@/lib/workspace-store";
@@ -42,6 +43,21 @@ export const Route = createFileRoute("/_authenticated")({
       await supabase.auth.signOut();
       throw redirect({ to: "/" });
     }
+
+    // Additive check (2026-09-18, Fase 3 parte 2 — ver CLAUDE.md): sem isto,
+    // um usuário com MFA cadastrado poderia contornar o desafio de
+    // segundo fator do login simplesmente navegando direto pra uma URL
+    // autenticada logo após a senha (a sessão já existe em aal1 nesse
+    // ponto). `/` (index.tsx) já sabe mostrar a etapa de verificação quando
+    // detecta essa mesma condição — redirecionar pra lá em vez de deixar
+    // passar. Não afeta ninguém sem fator MFA cadastrado nem sessões que já
+    // alcançaram aal2 (`shouldRequireMfaChallenge` só é `true` no caso
+    // estreito "tem fator verificado E esta sessão ainda não o satisfez").
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (shouldRequireMfaChallenge(aal?.currentLevel ?? null, aal?.nextLevel ?? null)) {
+      throw redirect({ to: "/" });
+    }
+
     markTabSessionActive();
     const userId = sessionData.session.user.id;
     const { data: profile } = await supabase

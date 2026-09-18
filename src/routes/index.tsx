@@ -17,9 +17,11 @@ import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
 import { checkLoginRateLimit, checkRecoveryRateLimit } from "@/lib/rate-limit.functions";
 import { logLoginSuccess, logLoginFailure } from "@/lib/audit-log.functions";
+import { shouldRequireMfaChallenge, checkMfaVerifyRateLimit } from "@/lib/mfa.functions";
 import Grainient from "@/components/Grainient";
 
 const GENERIC_RATE_LIMIT_MESSAGE = "Muitas tentativas. Tente novamente em alguns minutos.";
+const GENERIC_MFA_ERROR = "Código inválido. Tente novamente.";
 
 export const Route = createFileRoute("/")({
   component: LoginPage,
@@ -41,7 +43,8 @@ function LoginPage() {
   const checkRecoveryRateLimitFn = useServerFn(checkRecoveryRateLimit);
   const logLoginSuccessFn = useServerFn(logLoginSuccess);
   const logLoginFailureFn = useServerFn(logLoginFailure);
-  const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
+  const checkMfaVerifyRateLimitFn = useServerFn(checkMfaVerifyRateLimit);
+  const [view, setView] = useState<"login" | "forgot" | "forgot-sent" | "mfa-challenge">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -53,9 +56,58 @@ function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
+  // Completes login exactly the way the pre-MFA code always did (audit log,
+  // "remember" flag, tab-session marker, resolve environment, redirect) —
+  // extracted so both the no-MFA path (handleSubmit) and the post-challenge
+  // path (submitMfaCode) call the IDENTICAL sequence instead of two
+  // hand-copied versions that could drift.
+  const completeLogin = async () => {
+    logLoginSuccessFn().catch(() => {
+      /* best-effort audit log only — never block login on this */
+    });
+    try {
+      localStorage.setItem(REMEMBER_KEY, remember ? "true" : "false");
+    } catch {
+      /* ignore */
+    }
+    markTabSessionActive();
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      navigate({ to: "/" });
+      return;
+    }
+    const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+    navigate({ to: env.redirectTo });
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) return;
+      // A session persisted from an earlier tab/visit could be one that
+      // completed password auth but never finished an MFA challenge (e.g.
+      // the tab was closed mid-challenge) — never silently let that through
+      // as if the challenge were satisfied. `getAuthenticatorAssuranceLevel`
+      // reflects the CURRENT session's state (Supabase persists aal across
+      // token refresh once achieved), so a session that already reached
+      // aal2 is unaffected and proceeds exactly as before.
+      let aalCurrent: string | null = null;
+      let aalNext: string | null = null;
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        aalCurrent = aal?.currentLevel ?? null;
+        aalNext = aal?.nextLevel ?? null;
+      } catch {
+        // If we can't read AAL, fail open to the existing behavior rather
+        // than stranding the user on a blank check.
+      }
+      if (shouldRequireMfaChallenge(aalCurrent, aalNext)) {
+        setView("mfa-challenge");
+        return;
+      }
       const env = await resolveUserEnvironment(supabase, data.session.user.id);
       navigate({ to: env.redirectTo });
     });
@@ -100,23 +152,80 @@ function LoginPage() {
       });
       return;
     }
-    setLoading(false);
-    logLoginSuccessFn().catch(() => {
-      /* best-effort audit log only — never block login on this */
-    });
+    // Check whether this freshly-authenticated session still needs an MFA
+    // challenge before it counts as "logged in". `nextLevel === 'aal2'`
+    // means the user HAS a verified factor; `currentLevel === 'aal1'` means
+    // this session hasn't satisfied it yet. Anyone without an enrolled
+    // factor gets `currentLevel === nextLevel === 'aal1'` here, so
+    // `shouldRequireMfaChallenge` is false and every line below this block
+    // runs exactly as it did before this feature existed.
+    let aalCurrent: string | null = null;
+    let aalNext: string | null = null;
     try {
-      localStorage.setItem(REMEMBER_KEY, remember ? "true" : "false");
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      aalCurrent = aal?.currentLevel ?? null;
+      aalNext = aal?.nextLevel ?? null;
     } catch {
-      /* ignore */
+      // Fail open to the existing (non-MFA) path — never block a login over
+      // this check failing, same fail-open philosophy as the rate limiter.
     }
-    markTabSessionActive();
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      navigate({ to: "/" });
+
+    if (shouldRequireMfaChallenge(aalCurrent, aalNext)) {
+      setLoading(false);
+      setMfaCode("");
+      setMfaError(null);
+      setView("mfa-challenge");
       return;
     }
-    const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
-    navigate({ to: env.redirectTo });
+
+    setLoading(false);
+    await completeLogin();
+  };
+
+  const submitMfaCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMfaError(null);
+    setMfaBusy(true);
+    try {
+      try {
+        const { allowed } = await checkMfaVerifyRateLimitFn();
+        if (!allowed) {
+          setMfaError(GENERIC_RATE_LIMIT_MESSAGE);
+          setMfaBusy(false);
+          return;
+        }
+      } catch {
+        // Rate limiter unreachable — fail open, same as the login rate
+        // limit check above.
+      }
+
+      const { data: factorsData, error: listErr } = await supabase.auth.mfa.listFactors();
+      if (listErr) throw listErr;
+      const factor = factorsData?.totp?.[0];
+      if (!factor) throw new Error("Fator de autenticação não encontrado.");
+
+      const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({
+        factorId: factor.id,
+      });
+      if (challengeErr) throw challengeErr;
+
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: factor.id,
+        challengeId: challenge.id,
+        code: mfaCode,
+      });
+      if (verifyErr) throw verifyErr;
+
+      // Session is now aal2 (Supabase's own `mfa.verify` already saved the
+      // upgraded session) — proceed EXACTLY like the non-MFA path from here.
+      setMfaBusy(false);
+      await completeLogin();
+    } catch {
+      // Same challenge can be retried — never force restarting from
+      // scratch (re-listing factors, new challenge) on a single wrong code.
+      setMfaError(GENERIC_MFA_ERROR);
+      setMfaBusy(false);
+    }
   };
 
   const handleForgotSubmit = async (e: React.FormEvent) => {
@@ -312,6 +421,43 @@ function LoginPage() {
                 className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
               >
                 {forgotLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar instruções"}
+              </button>
+            </form>
+          </>
+        )}
+
+        {view === "mfa-challenge" && (
+          <>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Verificação em duas etapas
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Digite o código de 6 dígitos do seu app autenticador.
+            </p>
+            <form onSubmit={submitMfaCode} className="mt-7 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Código de verificação
+                </label>
+                <input
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  placeholder="000000"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-center font-mono text-lg tracking-[0.4em] outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              {mfaError && <p className="text-xs text-destructive">{mfaError}</p>}
+
+              <button
+                type="submit"
+                disabled={mfaBusy || mfaCode.length !== 6}
+                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
+              >
+                {mfaBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verificar"}
               </button>
             </form>
           </>

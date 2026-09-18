@@ -16,7 +16,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-async function writeAuditLog(
+// Exported so other server functions that already hold a `supabaseAdmin`
+// client (e.g. `mfa.functions.ts`'s admin-assisted MFA unenroll) can log to
+// `access_audit_log` without reimplementing this NOT-NULL-actor guard — same
+// "no second parallel audit-log writer" reasoning as `assertAdmin` in
+// `team.functions.ts`.
+export async function writeAuditLog(
   supabaseAdmin: SupabaseClient<Database>,
   entry: {
     actorUserId: string | null;
@@ -133,6 +138,37 @@ export const logEnvironmentSwitch = createServerFn({ method: "POST" })
       actorUserId: context.userId,
       organizationId: data.organizationId,
       action: "environment_switch",
+    });
+    return { ok: true };
+  });
+
+/** Self-service MFA enrollment log — called from `MfaEnrollCard.tsx` right
+ * after `supabase.auth.mfa.verify()` succeeds for a brand-new factor. The
+ * caller's own bearer token authenticates this, so `context.userId` is
+ * exactly the user who just enrolled (never a param the client could spoof
+ * to attribute the action to someone else). */
+export const logMfaEnrolled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await writeAuditLog(supabaseAdmin, {
+      actorUserId: context.userId,
+      action: "mfa_enrolled",
+    });
+    return { ok: true };
+  });
+
+/** Self-service MFA unenrollment log (the user disabling their own 2FA from
+ * Configurações). For an admin removing SOMEONE ELSE's factor, see
+ * `mfa.functions.ts`'s `unenrollUserMfaFactor` (`action: 'mfa_unenrolled_by_admin'`,
+ * with `target_user_id` set) instead — that is a distinct, admin-only path. */
+export const logMfaUnenrolled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await writeAuditLog(supabaseAdmin, {
+      actorUserId: context.userId,
+      action: "mfa_unenrolled",
     });
     return { ok: true };
   });
