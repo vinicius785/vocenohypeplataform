@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import {
   Mail,
   Lock,
@@ -12,7 +11,6 @@ import {
   EyeOff,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { requestPasswordReset } from "@/lib/password-reset.functions";
 import { REMEMBER_KEY, markTabSessionActive } from "@/lib/session-scope";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
@@ -45,8 +43,6 @@ function LoginPage() {
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotError, setForgotError] = useState<string | null>(null);
-  const requestResetFn = useServerFn(requestPasswordReset);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -94,17 +90,21 @@ function LoginPage() {
 
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setForgotError(null);
     const trimmed = forgotEmail.trim();
     if (!trimmed) return;
     setForgotLoading(true);
+    // Anti-enumeration: always the same outcome/copy regardless of whether
+    // the email matches a real account or the call errors — never branch
+    // on `error` here (see CLAUDE.md piece B, item 2).
     try {
-      await requestResetFn({ data: { email: trimmed } });
-      setView("forgot-sent");
-    } catch (err) {
-      setForgotError(err instanceof Error ? err.message : "Erro ao enviar o pedido.");
+      await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      });
+    } catch {
+      /* ignored on purpose — same generic message either way */
     } finally {
       setForgotLoading(false);
+      setView("forgot-sent");
     }
   };
 
@@ -209,7 +209,6 @@ function LoginPage() {
                   type="button"
                   onClick={() => {
                     setForgotEmail(email);
-                    setForgotError(null);
                     setView("forgot");
                   }}
                   className="text-xs font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground"
@@ -251,8 +250,7 @@ function LoginPage() {
               Esqueci minha senha
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sem redefinição automática por e-mail aqui — avisamos um administrador do workspace,
-              que reseta sua senha manualmente.
+              Informe seu e-mail e enviaremos um link para redefinir sua senha.
             </p>
             <form onSubmit={handleForgotSubmit} className="mt-7 space-y-4">
               <div>
@@ -272,17 +270,12 @@ function LoginPage() {
                   />
                 </div>
               </div>
-              {forgotError && <p className="text-xs text-destructive">{forgotError}</p>}
               <button
                 type="submit"
                 disabled={forgotLoading}
                 className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full border-2 border-foreground bg-foreground text-sm font-medium text-background transition-colors duration-200 hover:bg-transparent hover:text-foreground disabled:opacity-60"
               >
-                {forgotLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Avisar administrador"
-                )}
+                {forgotLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar instruções"}
               </button>
             </form>
           </>
@@ -297,8 +290,7 @@ function LoginPage() {
               Pedido enviado
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Um administrador do workspace foi avisado e vai entrar em contato pra te ajudar a
-              redefinir a senha.
+              Se existir uma conta vinculada a este e-mail, enviaremos as instruções de recuperação.
             </p>
             <button
               type="button"

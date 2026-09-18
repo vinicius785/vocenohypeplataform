@@ -9,6 +9,47 @@ export type Database = {
   };
   public: {
     Tables: {
+      access_audit_log: {
+        Row: {
+          action: string;
+          actor_user_id: string;
+          created_at: string;
+          id: string;
+          new_value: Json | null;
+          organization_id: string | null;
+          previous_value: Json | null;
+          target_user_id: string | null;
+        };
+        Insert: {
+          action: string;
+          actor_user_id: string;
+          created_at?: string;
+          id?: string;
+          new_value?: Json | null;
+          organization_id?: string | null;
+          previous_value?: Json | null;
+          target_user_id?: string | null;
+        };
+        Update: {
+          action?: string;
+          actor_user_id?: string;
+          created_at?: string;
+          id?: string;
+          new_value?: Json | null;
+          organization_id?: string | null;
+          previous_value?: Json | null;
+          target_user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "access_audit_log_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       aeo_prompts: {
         Row: {
           created_at: string;

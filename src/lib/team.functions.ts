@@ -31,7 +31,11 @@ async function setUserRole(
   if (error) throw new Error(error.message);
 }
 
-async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
+// Exported so other admin-only server functions (e.g.
+// `organization-invites.functions.ts`) reuse the exact same gate instead of
+// reimplementing it — see CLAUDE.md, "no second parallel authorization
+// system".
+export async function assertAdmin(supabase: SupabaseClient<Database>, userId: string) {
   const { data, error } = await supabase.rpc("is_admin", { _user_id: userId });
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Apenas administradores podem gerenciar o time.");

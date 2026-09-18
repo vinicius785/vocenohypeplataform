@@ -1,17 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const RequestInput = z.object({
   email: z.string().trim().min(3).max(200),
 });
 
 /**
- * "Esqueci minha senha" (tela de login, sem sessão) — esta plataforma não
- * tem fluxo de e-mail de recuperação: contas são criadas/resetadas pelo
- * admin (ver `resetMemberPassword` em `team.functions.ts`). Este pedido só
- * registra a solicitação e avisa os admins via push — não valida se o
- * e-mail pertence a uma conta de verdade (evita virar um jeito de
- * descobrir quais e-mails têm cadastro) nem reseta nada sozinho.
+ * OLD flow (Phase 1) — "Esqueci minha senha" that only notified an admin,
+ * who then reset the password manually. Kept intact-but-unused rather than
+ * removed: grepping the repo shows it was only ever called from the login
+ * page's "esqueci minha senha" button (`src/routes/index.tsx`), which now
+ * calls `sendPasswordResetEmail` below instead — but this still writes a
+ * real `password_reset_requests` row and pings admins, so deleting it
+ * outright felt riskier than just leaving it unreferenced from the UI.
  */
 export const requestPasswordReset = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RequestInput.parse(raw))
@@ -44,5 +46,35 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
       console.warn("[password-reset] aviso aos admins falhou", err);
     }
 
+    return { ok: true };
+  });
+
+/**
+ * Self-service recovery (Phase 2a, see CLAUDE.md piece B): the actual email
+ * send happens client-side via the anon client's `resetPasswordForEmail`
+ * (needs the browser's own supabase-js instance to set `redirectTo`
+ * correctly, so it isn't a server function — see `src/routes/index.tsx`).
+ * This one only exists for the step right after `updateUser({password})`
+ * succeeds on `/redefinir-senha`: revoke every OTHER active session for
+ * that user so a stolen/shared device doesn't stay logged in past a
+ * recovery. Reuses the current request's own bearer token (already
+ * validated by `requireSupabaseAuth`) as the "current" session to keep —
+ * `admin.signOut(jwt, 'others')` is the exact API for that, confirmed
+ * against the installed @supabase/supabase-js v2.110 types
+ * (`GoTrueAdminApi.signOut(jwt: string, scope?: SignOutScope)`), no
+ * assumption about a userId-based variant that doesn't exist.
+ */
+export const signOutOtherSessions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const request = getRequest();
+    const authHeader = request?.headers.get("authorization") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (!token) throw new Error("Sessão inválida.");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.signOut(token, "others");
+    if (error) throw new Error(error.message);
     return { ok: true };
   });

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as AcessoPendenteRouteImport } from './routes/acesso-pendente'
 import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -46,6 +47,11 @@ import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './
 const SelecionarAmbienteRoute = SelecionarAmbienteRouteImport.update({
   id: '/selecionar-ambiente',
   path: '/selecionar-ambiente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AcessoPendenteRoute = AcessoPendenteRouteImport.update({
@@ -222,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/portal-app': typeof PortalAppRouteRouteWithChildren
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/design-system': typeof AuthenticatedDesignSystemRoute
@@ -256,6 +263,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/portal-app': typeof PortalAppRouteRouteWithChildren
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/portal-app': typeof PortalAppRouteRouteWithChildren
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/'
     | '/portal-app'
     | '/acesso-pendente'
+    | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
     | '/design-system'
@@ -361,6 +371,7 @@ export interface FileRouteTypes {
     | '/'
     | '/portal-app'
     | '/acesso-pendente'
+    | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/design-system'
     | '/design-system-finance-concept'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/portal-app'
     | '/acesso-pendente'
+    | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
     | '/_authenticated/design-system'
@@ -431,6 +443,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   PortalAppRouteRoute: typeof PortalAppRouteRouteWithChildren
   AcessoPendenteRoute: typeof AcessoPendenteRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
@@ -453,6 +466,13 @@ declare module '@tanstack/react-router' {
       path: '/selecionar-ambiente'
       fullPath: '/selecionar-ambiente'
       preLoaderRoute: typeof SelecionarAmbienteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/acesso-pendente': {
@@ -763,6 +783,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   PortalAppRouteRoute: PortalAppRouteRouteWithChildren,
   AcessoPendenteRoute: AcessoPendenteRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
   SelecionarAmbienteRoute: SelecionarAmbienteRoute,
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
