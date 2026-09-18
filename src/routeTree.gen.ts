@@ -9,8 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
+import { Route as AcessoPendenteRouteImport } from './routes/acesso-pendente'
+import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PortalAppInicioRouteImport } from './routes/portal-app/inicio'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
@@ -39,6 +43,21 @@ import { Route as PortalTokenCampanhasCampanhaIdRouteImport } from './routes/por
 import { Route as PortalTokenCampanhasCampanhaIdRevisarRouteImport } from './routes/portal.$token/campanhas.$campanhaId.revisar'
 import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './routes/portal.$token/campanhas.$campanhaId.aprovacoes'
 
+const SelecionarAmbienteRoute = SelecionarAmbienteRouteImport.update({
+  id: '/selecionar-ambiente',
+  path: '/selecionar-ambiente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcessoPendenteRoute = AcessoPendenteRouteImport.update({
+  id: '/acesso-pendente',
+  path: '/acesso-pendente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalAppRouteRoute = PortalAppRouteRouteImport.update({
+  id: '/portal-app',
+  path: '/portal-app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -47,6 +66,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PortalAppInicioRoute = PortalAppInicioRouteImport.update({
+  id: '/inicio',
+  path: '/inicio',
+  getParentRoute: () => PortalAppRouteRoute,
 } as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   id: '/inscricao/$token',
@@ -196,6 +220,9 @@ const PortalTokenCampanhasCampanhaIdAprovacoesRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-pendente': typeof AcessoPendenteRoute
+  '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -205,6 +232,7 @@ export interface FileRoutesByFullPath {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/inicio': typeof PortalAppInicioRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -226,6 +254,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-pendente': typeof AcessoPendenteRoute
+  '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/foco': typeof AuthenticatedFocoRoute
@@ -234,6 +265,7 @@ export interface FileRoutesByTo {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/inicio': typeof PortalAppInicioRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -257,6 +289,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-pendente': typeof AcessoPendenteRoute
+  '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
   '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -266,6 +301,7 @@ export interface FileRoutesById {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/portal-app/inicio': typeof PortalAppInicioRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -289,6 +325,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/portal-app'
+    | '/acesso-pendente'
+    | '/selecionar-ambiente'
     | '/portal/$token'
     | '/design-system'
     | '/design-system-finance-concept'
@@ -298,6 +337,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/inicio'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -319,6 +359,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/portal-app'
+    | '/acesso-pendente'
+    | '/selecionar-ambiente'
     | '/design-system'
     | '/design-system-finance-concept'
     | '/foco'
@@ -327,6 +370,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/inicio'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -349,6 +393,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/portal-app'
+    | '/acesso-pendente'
+    | '/selecionar-ambiente'
     | '/portal/$token'
     | '/_authenticated/design-system'
     | '/_authenticated/design-system-finance-concept'
@@ -358,6 +405,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/portal-app/inicio'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -381,6 +429,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  PortalAppRouteRoute: typeof PortalAppRouteRouteWithChildren
+  AcessoPendenteRoute: typeof AcessoPendenteRoute
+  SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
@@ -397,6 +448,27 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/selecionar-ambiente': {
+      id: '/selecionar-ambiente'
+      path: '/selecionar-ambiente'
+      fullPath: '/selecionar-ambiente'
+      preLoaderRoute: typeof SelecionarAmbienteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acesso-pendente': {
+      id: '/acesso-pendente'
+      path: '/acesso-pendente'
+      fullPath: '/acesso-pendente'
+      preLoaderRoute: typeof AcessoPendenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal-app': {
+      id: '/portal-app'
+      path: '/portal-app'
+      fullPath: '/portal-app'
+      preLoaderRoute: typeof PortalAppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -410,6 +482,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/portal-app/inicio': {
+      id: '/portal-app/inicio'
+      path: '/inicio'
+      fullPath: '/portal-app/inicio'
+      preLoaderRoute: typeof PortalAppInicioRouteImport
+      parentRoute: typeof PortalAppRouteRoute
     }
     '/inscricao/$token': {
       id: '/inscricao/$token'
@@ -625,6 +704,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface PortalAppRouteRouteChildren {
+  PortalAppInicioRoute: typeof PortalAppInicioRoute
+}
+
+const PortalAppRouteRouteChildren: PortalAppRouteRouteChildren = {
+  PortalAppInicioRoute: PortalAppInicioRoute,
+}
+
+const PortalAppRouteRouteWithChildren = PortalAppRouteRoute._addFileChildren(
+  PortalAppRouteRouteChildren,
+)
+
 interface PortalTokenCampanhasCampanhaIdRouteChildren {
   PortalTokenCampanhasCampanhaIdAprovacoesRoute: typeof PortalTokenCampanhasCampanhaIdAprovacoesRoute
   PortalTokenCampanhasCampanhaIdRevisarRoute: typeof PortalTokenCampanhasCampanhaIdRevisarRoute
@@ -670,6 +761,9 @@ const PortalTokenRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  PortalAppRouteRoute: PortalAppRouteRouteWithChildren,
+  AcessoPendenteRoute: AcessoPendenteRoute,
+  SelecionarAmbienteRoute: SelecionarAmbienteRoute,
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,

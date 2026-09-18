@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldExpireUnrememberedSession, markTabSessionActive } from "@/lib/session-scope";
+import { resolveUserEnvironment } from "@/lib/user-environment.server";
 import { getTeamDirectory } from "@/lib/team.functions";
 import { saveMe, initChatSync, heartbeat } from "@/lib/chat-store";
 import { initWorkspaceSync } from "@/lib/workspace-store";
@@ -55,6 +56,21 @@ export const Route = createFileRoute("/_authenticated")({
     }
     if (profile && !profile.must_change_password && isFirstAccess) {
       throw redirect({ to: "/time" });
+    }
+
+    // Additive check (2026-09, Fase 1 da reformulação de auth): um usuário
+    // autenticado sem NENHUM ambiente interno ativo (ex.: um cliente que
+    // logou pela mesma tela, ou um convite ainda não aceito) não deve ver o
+    // shell interno silenciosamente. `/selecionar-ambiente` e
+    // `/acesso-pendente` são rotas de nível raiz (fora de `_authenticated`),
+    // então não recaem neste mesmo guard — sem risco de loop de redirect.
+    // Pulado na tela de primeiro acesso pelo mesmo motivo do check acima
+    // (ainda não teve chance de ter uma membership de verdade resolvida).
+    if (!isFirstAccess) {
+      const env = await resolveUserEnvironment(supabase, userId);
+      if (env.type !== "internal") {
+        throw redirect({ to: env.redirectTo });
+      }
     }
     // A tela de primeiro acesso não usa nenhum desses dados — sincronizá-los
     // aqui só atrasava (às vezes bastante, com o Realtime ainda reconectando

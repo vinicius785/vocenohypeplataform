@@ -204,6 +204,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      campaign_members: {
+        Row: {
+          campaign_id: string;
+          created_at: string;
+          id: string;
+          role: string | null;
+          user_id: string;
+        };
+        Insert: {
+          campaign_id: string;
+          created_at?: string;
+          id?: string;
+          role?: string | null;
+          user_id: string;
+        };
+        Update: {
+          campaign_id?: string;
+          created_at?: string;
+          id?: string;
+          role?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       campanha_cronograma: {
         Row: {
           campanha_id: string;
@@ -466,6 +490,7 @@ export type Database = {
           created_at: string;
           data: Json;
           id: string;
+          organization_id: string;
           updated_at: string;
           updated_by: string | null;
         };
@@ -473,6 +498,7 @@ export type Database = {
           created_at?: string;
           data?: Json;
           id?: string;
+          organization_id: string;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -480,10 +506,19 @@ export type Database = {
           created_at?: string;
           data?: Json;
           id?: string;
+          organization_id?: string;
           updated_at?: string;
           updated_by?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "clientes_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       email_campaign_activity: {
         Row: {
@@ -1569,6 +1604,89 @@ export type Database = {
         };
         Relationships: [];
       };
+      organization_members: {
+        Row: {
+          accepted_at: string | null;
+          created_at: string;
+          id: string;
+          invited_at: string | null;
+          invited_by: string | null;
+          last_access_at: string | null;
+          organization_id: string;
+          role: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          accepted_at?: string | null;
+          created_at?: string;
+          id?: string;
+          invited_at?: string | null;
+          invited_by?: string | null;
+          last_access_at?: string | null;
+          organization_id: string;
+          role: string;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+          created_at?: string;
+          id?: string;
+          invited_at?: string | null;
+          invited_by?: string | null;
+          last_access_at?: string | null;
+          organization_id?: string;
+          role?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organizations: {
+        Row: {
+          created_at: string;
+          id: string;
+          logo_url: string | null;
+          name: string;
+          slug: string | null;
+          status: string;
+          type: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          logo_url?: string | null;
+          name: string;
+          slug?: string | null;
+          status?: string;
+          type: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          logo_url?: string | null;
+          name?: string;
+          slug?: string | null;
+          status?: string;
+          type?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       outgoing_webhooks: {
         Row: {
           active: boolean;
@@ -2505,6 +2623,10 @@ export type Database = {
       toggle_message_reaction: {
         Args: { p_emoji: string; p_message_id: string };
         Returns: Json;
+      };
+      user_can_access_campanha: {
+        Args: { campanha_id: string; uid: string };
+        Returns: boolean;
       };
     };
     Enums: {

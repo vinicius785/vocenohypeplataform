@@ -1,11 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Mail, Lock, ArrowLeft, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { requestPasswordReset } from "@/lib/password-reset.functions";
 import { REMEMBER_KEY, markTabSessionActive } from "@/lib/session-scope";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
+import { resolveUserEnvironment } from "@/lib/user-environment.server";
 import Grainient from "@/components/Grainient";
 
 export const Route = createFileRoute("/")({
@@ -28,6 +38,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ws, setWs] = useState<Workspace | null>(null);
@@ -38,8 +49,10 @@ function LoginPage() {
   const requestResetFn = useServerFn(requestPasswordReset);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/time" });
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return;
+      const env = await resolveUserEnvironment(supabase, data.session.user.id);
+      navigate({ to: env.redirectTo });
     });
   }, [navigate]);
 
@@ -70,7 +83,13 @@ function LoginPage() {
       /* ignore */
     }
     markTabSessionActive();
-    navigate({ to: "/time" });
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      navigate({ to: "/" });
+      return;
+    }
+    const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+    navigate({ to: env.redirectTo });
   };
 
   const handleForgotSubmit = async (e: React.FormEvent) => {
@@ -158,13 +177,21 @@ function LoginPage() {
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+                    className="h-11 w-full rounded-lg border border-input bg-background pl-10 pr-10 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 

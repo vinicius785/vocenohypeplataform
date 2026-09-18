@@ -13,6 +13,7 @@ import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { ClienteLogo } from "./ClienteLogo";
 import { waLink, mailtoLink } from "./cliente-ui";
+import { PortalAccessSection } from "./PortalAccessSection";
 
 function InfoRow({
   label,
@@ -193,6 +194,8 @@ export function ClienteDetailsSheet({
                   </div>
                 )}
               </div>
+
+              <PortalAccessSection clienteId={cliente.id} />
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border/60 px-6 py-4">
