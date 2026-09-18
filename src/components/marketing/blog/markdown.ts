@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 /** Conversor bem simples de markdown pra HTML — só o suficiente pra
  * pré-visualização (títulos, negrito, itálico, listas, parágrafos). Não é
  * pra ser um parser completo, só dar uma ideia real de como o texto digitado
@@ -8,7 +10,17 @@ export function renderMarkdownLite(md: string): string {
   // antes de procurar esses prefixos faria `>` virar `&gt;` e a citação
   // nunca ser reconhecida.
   const escape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  // Só http(s) — bloqueia `javascript:`/`data:`/outros esquemas que
+  // executariam código ao serem clicados, já que o link vem de texto
+  // digitado (potencialmente por qualquer autor interno) e é renderizado
+  // depois pra clientes externos no Portal.
+  const isSafeUrl = (url: string) => /^https?:\/\//i.test(url.trim());
   const lines = md.split("\n");
   const html: string[] = [];
   let listType: "ul" | "ol" | null = null;
@@ -30,9 +42,10 @@ export function renderMarkdownLite(md: string): string {
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.+?)\*/g, "<em>$1</em>")
       .replace(/`(.+?)`/g, "<code>$1</code>")
-      .replace(
-        /\[(.+?)\]\((.+?)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+      .replace(/\[(.+?)\]\((.+?)\)/g, (match, text: string, url: string) =>
+        isSafeUrl(url)
+          ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`
+          : text,
       );
   for (const raw of lines) {
     const line = raw.trim();
@@ -89,7 +102,31 @@ export function renderMarkdownLite(md: string): string {
   }
   closeList();
   closeQuote();
-  return html.join("\n");
+  // Segunda camada de defesa: mesmo com `escape`/`isSafeUrl` acima, uma
+  // sanitização final via DOMPurify protege contra qualquer bug futuro
+  // nesse conversor artesanal — o conteúdo é escrito por um membro do
+  // time e depois exibido pra clientes externos no Portal, então não pode
+  // depender só da lógica manual de escape ficar sempre correta.
+  return typeof window === "undefined"
+    ? html.join("\n")
+    : DOMPurify.sanitize(html.join("\n"), {
+        ALLOWED_TAGS: [
+          "h1",
+          "h2",
+          "h3",
+          "p",
+          "strong",
+          "em",
+          "code",
+          "a",
+          "ul",
+          "ol",
+          "li",
+          "blockquote",
+        ],
+        ALLOWED_ATTR: ["href", "target", "rel"],
+        ALLOWED_URI_REGEXP: /^https?:\/\//i,
+      });
 }
 
 /** Classes compartilhadas por qualquer lugar que renderize

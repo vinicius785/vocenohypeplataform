@@ -396,6 +396,7 @@ export async function listScopeCandidates(
   const [projects, campaignsRes] = await Promise.all([
     (async () => {
       try {
+        assertCan(access, "projetos");
         return await fetchAllProjects(db);
       } catch {
         return [];
@@ -431,11 +432,13 @@ export async function listScopeCandidates(
  * de resolver uma campanha, pedido seção 7, segundo exemplo). */
 export async function getScopedTasks(
   db: DB,
+  access: UserAccess,
   scope: "projeto" | "campanha",
   scopeId: string,
   filter: "overdue" | "upcoming" | "pending_approval",
   now: Date = new Date(),
 ): Promise<ListResult<TaskSummary>> {
+  assertCan(access, scope === "campanha" ? "campanhas" : "projetos");
   const { tasks } = await fetchAllTasks(db);
   const scoped = tasks.filter((t) => t.scope === scope && t.scopeId === scopeId);
   let filtered: ParsedTask[];

@@ -853,6 +853,7 @@ async function dispatchFreshIntent(
       if (state.lastEntity) {
         const result = await getScopedTasks(
           db,
+          access,
           state.lastEntity.type,
           state.lastEntity.id,
           "overdue",
@@ -877,6 +878,7 @@ async function dispatchFreshIntent(
       if (state.lastEntity) {
         const result = await getScopedTasks(
           db,
+          access,
           state.lastEntity.type,
           state.lastEntity.id,
           "upcoming",
@@ -895,6 +897,7 @@ async function dispatchFreshIntent(
       if (state.lastEntity) {
         const result = await getScopedTasks(
           db,
+          access,
           state.lastEntity.type,
           state.lastEntity.id,
           "pending_approval",
