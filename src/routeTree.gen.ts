@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
+import { Route as CriarSenhaRouteImport } from './routes/criar-senha'
 import { Route as AcessoPendenteRouteImport } from './routes/acesso-pendente'
+import { Route as AcessoBloqueadoRouteImport } from './routes/acesso-bloqueado'
 import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -57,9 +59,19 @@ const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
   path: '/redefinir-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CriarSenhaRoute = CriarSenhaRouteImport.update({
+  id: '/criar-senha',
+  path: '/criar-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AcessoPendenteRoute = AcessoPendenteRouteImport.update({
   id: '/acesso-pendente',
   path: '/acesso-pendente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcessoBloqueadoRoute = AcessoBloqueadoRouteImport.update({
+  id: '/acesso-bloqueado',
+  path: '/acesso-bloqueado',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalAppRouteRoute = PortalAppRouteRouteImport.update({
@@ -247,7 +259,9 @@ const PortalTokenCampanhasCampanhaIdAprovacoesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
@@ -285,7 +299,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/design-system': typeof AuthenticatedDesignSystemRoute
@@ -324,7 +340,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/portal-app': typeof PortalAppRouteRouteWithChildren
+  '/acesso-bloqueado': typeof AcessoBloqueadoRoute
   '/acesso-pendente': typeof AcessoPendenteRoute
+  '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
@@ -364,7 +382,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/portal-app'
+    | '/acesso-bloqueado'
     | '/acesso-pendente'
+    | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
@@ -402,7 +422,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/portal-app'
+    | '/acesso-bloqueado'
     | '/acesso-pendente'
+    | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/design-system'
@@ -440,7 +462,9 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/portal-app'
+    | '/acesso-bloqueado'
     | '/acesso-pendente'
+    | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
@@ -480,7 +504,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   PortalAppRouteRoute: typeof PortalAppRouteRouteWithChildren
+  AcessoBloqueadoRoute: typeof AcessoBloqueadoRoute
   AcessoPendenteRoute: typeof AcessoPendenteRoute
+  CriarSenhaRoute: typeof CriarSenhaRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SelecionarAmbienteRoute: typeof SelecionarAmbienteRoute
   PortalTokenRouteRoute: typeof PortalTokenRouteRouteWithChildren
@@ -513,11 +539,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/criar-senha': {
+      id: '/criar-senha'
+      path: '/criar-senha'
+      fullPath: '/criar-senha'
+      preLoaderRoute: typeof CriarSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/acesso-pendente': {
       id: '/acesso-pendente'
       path: '/acesso-pendente'
       fullPath: '/acesso-pendente'
       preLoaderRoute: typeof AcessoPendenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/acesso-bloqueado': {
+      id: '/acesso-bloqueado'
+      path: '/acesso-bloqueado'
+      fullPath: '/acesso-bloqueado'
+      preLoaderRoute: typeof AcessoBloqueadoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal-app': {
@@ -870,7 +910,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   PortalAppRouteRoute: PortalAppRouteRouteWithChildren,
+  AcessoBloqueadoRoute: AcessoBloqueadoRoute,
   AcessoPendenteRoute: AcessoPendenteRoute,
+  CriarSenhaRoute: CriarSenhaRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SelecionarAmbienteRoute: SelecionarAmbienteRoute,
   PortalTokenRouteRoute: PortalTokenRouteRouteWithChildren,

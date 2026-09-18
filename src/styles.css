@@ -148,7 +148,9 @@
    * opacidade (que quebra contraste: `brand-foreground/70` media 4.03:1,
    * abaixo do 4.5:1 exigido). Ambos sólidos, mesmo valor nos dois temas —
    * a marca não muda entre claro/escuro. */
-  --brand-foreground-secondary: oklch(0.2936 0.066 267.94); /* #1E2A4D — 4.97:1 sobre a marca (texto normal) */
+  --brand-foreground-secondary: oklch(
+    0.2936 0.066 267.94
+  ); /* #1E2A4D — 4.97:1 sobre a marca (texto normal) */
   --brand-border: oklch(0.3958 0.0751 265.53); /* #33456F — 3.34:1 sobre a marca (borda/controle) */
   --success: oklch(0.6959 0.1491 162.48); /* #10B981 */
   --success-soft: oklch(0.6959 0.1491 162.48 / 12%);

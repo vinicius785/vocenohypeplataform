@@ -1,18 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Clock3, LogOut } from "lucide-react";
+import { LogOut, ShieldAlert } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthCardShell } from "@/components/auth/AuthCardShell";
 
-export const Route = createFileRoute("/acesso-pendente")({
+/**
+ * Distinct outcome from `/acesso-pendente` (see resolveUserEnvironment's
+ * `"suspended"` union member, gap #2 in CLAUDE.md's Fase 3/portal work):
+ * this is for a user whose access was explicitly suspended (or whose only
+ * organization is suspended), not one who simply never had access granted.
+ * Same guard shape as `/acesso-pendente` — no auto-retry, no bypass, just
+ * sign-out.
+ */
+export const Route = createFileRoute("/acesso-bloqueado")({
   ssr: false,
-  component: AcessoPendentePage,
+  component: AcessoBloqueadoPage,
   head: () => ({
-    meta: [{ title: "Acesso pendente · Plataforma VNH" }],
+    meta: [{ title: "Acesso bloqueado · Plataforma VNH" }],
   }),
 });
 
-function AcessoPendentePage() {
+function AcessoBloqueadoPage() {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
 
@@ -36,15 +44,15 @@ function AcessoPendentePage() {
   return (
     <AuthCardShell showHeader={false}>
       <div className="py-2 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <Clock3 className="h-6 w-6" />
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <ShieldAlert className="h-6 w-6" />
         </div>
         <h1 className="mt-4 text-lg font-semibold tracking-tight text-foreground">
-          Acesso pendente
+          Acesso bloqueado
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Sua conta ainda não tem nenhum acesso ativo a um workspace ou portal. Fale com um
-          administrador da Você no Hype para liberar seu acesso.
+          Seu acesso a este workspace ou portal foi suspenso. Fale com um administrador da Você no
+          Hype para reativá-lo.
         </p>
         <button
           type="button"

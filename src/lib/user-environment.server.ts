@@ -27,7 +27,8 @@ export type UserEnvironment =
   | { type: "internal"; organizationId: string; redirectTo: string }
   | { type: "client"; organizationId: string; redirectTo: string }
   | { type: "multiple"; environments: AvailableEnvironment[]; redirectTo: string }
-  | { type: "pending"; redirectTo: string };
+  | { type: "pending"; redirectTo: string }
+  | { type: "suspended"; redirectTo: string };
 
 // Internal app home per CLAUDE.md ("time.tsx — the actual application
 // 'home'"). Client portal home is the new minimal authenticated route added
@@ -44,6 +45,7 @@ export const INTERNAL_HOME_ROUTE = "/time";
 export const CLIENT_PORTAL_HOME_ROUTE = "/portal-app/inicio";
 export const ENVIRONMENT_PICKER_ROUTE = "/selecionar-ambiente";
 export const PENDING_ACCESS_ROUTE = "/acesso-pendente";
+export const SUSPENDED_ACCESS_ROUTE = "/acesso-bloqueado";
 
 type MembershipRow = {
   organization_id: string;
@@ -84,6 +86,27 @@ export async function resolveUserEnvironment(db: DB, userId: string): Promise<Us
     }));
 
   if (environments.length === 0) {
+    // Distinguish "genuinely no membership at all" from "membership(s)
+    // exist but are suspended (or in a suspended org)" — see module doc.
+    // A second, unfiltered-by-status query is needed because the ACTIVE
+    // query above already excludes suspended rows/orgs by design.
+    const { data: allRows, error: allErr } = await db
+      .from("organization_members")
+      .select(
+        "organization_id, role, status, last_access_at, organizations!inner(id, name, type, status, logo_url)",
+      )
+      .eq("user_id", userId);
+    if (allErr) throw new Error(allErr.message);
+
+    const hasSuspendedRow = ((allRows ?? []) as unknown as MembershipRow[]).some(
+      (row) =>
+        row.status === "suspended" ||
+        (row.status === "active" && row.organizations?.status === "suspended"),
+    );
+
+    if (hasSuspendedRow) {
+      return { type: "suspended", redirectTo: SUSPENDED_ACCESS_ROUTE };
+    }
     return { type: "pending", redirectTo: PENDING_ACCESS_ROUTE };
   }
 

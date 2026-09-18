@@ -5,6 +5,7 @@ import { Lock, ArrowRight, Loader2, CheckCircle2, Eye, EyeOff, ShieldAlert } fro
 import { supabase } from "@/integrations/supabase/client";
 import { signOutOtherSessions } from "@/lib/password-reset.functions";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
+import { acceptPendingInvites } from "@/lib/accept-invite.functions";
 import Grainient from "@/components/Grainient";
 
 export const Route = createFileRoute("/redefinir-senha")({
@@ -109,6 +110,15 @@ function RedefinirSenhaPage() {
 
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData.session) {
+      // Mesmo caso de borda coberto em index.tsx: um cliente convidado que
+      // recuperou a senha antes de completar o primeiro login também
+      // precisa ter o vínculo `invited` ativado aqui, senão cai em
+      // "acesso pendente" mesmo tendo acabado de provar a posse do e-mail.
+      try {
+        await acceptPendingInvites();
+      } catch {
+        /* segue mesmo assim */
+      }
       const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
       setTimeout(() => navigate({ to: env.redirectTo }), 1200);
     } else {

@@ -5,6 +5,7 @@ import {
   CLIENT_PORTAL_HOME_ROUTE,
   ENVIRONMENT_PICKER_ROUTE,
   PENDING_ACCESS_ROUTE,
+  SUSPENDED_ACCESS_ROUTE,
 } from "@/lib/user-environment.server";
 
 type FakeOrg = {
@@ -188,7 +189,9 @@ describe("resolveUserEnvironment", () => {
     expect(result).toEqual({ type: "pending", redirectTo: PENDING_ACCESS_ROUTE });
   });
 
-  it("ambiente com organização SUSPENSA é excluído mesmo com a membership ativa", async () => {
+  it("ambiente com organização SUSPENSA é excluído das ativas, mas classificado como 'suspended' (não 'pending')", async () => {
+    // Gap #2 fix: an active membership in a suspended org must not look
+    // identical to "no membership at all" — see resolveUserEnvironment doc.
     const db = makeFakeDb([
       {
         user_id: "u1",
@@ -200,10 +203,10 @@ describe("resolveUserEnvironment", () => {
       },
     ]);
     const result = await resolveUserEnvironment(db, "u1");
-    expect(result).toEqual({ type: "pending", redirectTo: PENDING_ACCESS_ROUTE });
+    expect(result).toEqual({ type: "suspended", redirectTo: SUSPENDED_ACCESS_ROUTE });
   });
 
-  it("membership SUSPENSA é excluída mesmo com a organização ativa", async () => {
+  it("membership SUSPENSA (organização ativa) é classificada como 'suspended' (não 'pending')", async () => {
     const db = makeFakeDb([
       {
         user_id: "u1",
@@ -215,7 +218,55 @@ describe("resolveUserEnvironment", () => {
       },
     ]);
     const result = await resolveUserEnvironment(db, "u1");
+    expect(result).toEqual({ type: "suspended", redirectTo: SUSPENDED_ACCESS_ROUTE });
+  });
+
+  it("membership REMOVIDA continua 'pending' (removida não é 'suspensa')", async () => {
+    const db = makeFakeDb([
+      {
+        user_id: "u1",
+        organization_id: clientOrgA.id,
+        role: "client_member",
+        status: "removed",
+        last_access_at: null,
+        org: clientOrgA,
+      },
+    ]);
+    const result = await resolveUserEnvironment(db, "u1");
     expect(result).toEqual({ type: "pending", redirectTo: PENDING_ACCESS_ROUTE });
+  });
+
+  it("zero linhas de organization_members de qualquer tipo -> pending (nunca 'suspended')", async () => {
+    const db = makeFakeDb([]);
+    const result = await resolveUserEnvironment(db, "u1");
+    expect(result).toEqual({ type: "pending", redirectTo: PENDING_ACCESS_ROUTE });
+  });
+
+  it("um ambiente ativo + outra membership suspensa em outra org -> continua 'client' (a ativa vence)", async () => {
+    const db = makeFakeDb([
+      {
+        user_id: "u1",
+        organization_id: clientOrgA.id,
+        role: "client_member",
+        status: "active",
+        last_access_at: null,
+        org: clientOrgA,
+      },
+      {
+        user_id: "u1",
+        organization_id: clientOrgB.id,
+        role: "client_member",
+        status: "suspended",
+        last_access_at: null,
+        org: clientOrgB,
+      },
+    ]);
+    const result = await resolveUserEnvironment(db, "u1");
+    expect(result).toEqual({
+      type: "client",
+      organizationId: clientOrgA.id,
+      redirectTo: CLIENT_PORTAL_HOME_ROUTE,
+    });
   });
 
   it("membership REMOVIDA é excluída mesmo com a organização ativa", async () => {
