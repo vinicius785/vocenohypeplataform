@@ -99,7 +99,8 @@ export type ConfigTab =
   | "seguranca"
   | "dados_backup"
   | "score_operacional"
-  | "hypito";
+  | "hypito"
+  | "log_auditoria";
 
 const CONFIG_TAB_VALUES: ConfigTab[] = [
   "perfil",
@@ -113,6 +114,7 @@ const CONFIG_TAB_VALUES: ConfigTab[] = [
   "dados_backup",
   "score_operacional",
   "hypito",
+  "log_auditoria",
 ];
 
 export function resolveConfigTab(value: string | undefined): ConfigTab {

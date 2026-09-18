@@ -2144,6 +2144,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      rate_limit_events: {
+        Row: {
+          bucket: string;
+          created_at: string;
+          id: string;
+        };
+        Insert: {
+          bucket: string;
+          created_at?: string;
+          id?: string;
+        };
+        Update: {
+          bucket?: string;
+          created_at?: string;
+          id?: string;
+        };
+        Relationships: [];
+      };
       reunioes: {
         Row: {
           created_at: string;
@@ -2647,6 +2665,10 @@ export type Database = {
           p_peaks: Json;
         };
         Returns: Json;
+      };
+      is_active_client_admin_of: {
+        Args: { org_id: string; uid: string };
+        Returns: boolean;
       };
       is_admin: { Args: { _user_id: string }; Returns: boolean };
       publish_scheduled_blog_posts: { Args: never; Returns: undefined };

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Mail,
   Lock,
@@ -14,7 +15,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { REMEMBER_KEY, markTabSessionActive } from "@/lib/session-scope";
 import { fetchWorkspace, type Workspace } from "@/lib/workspace-store";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
+import { checkLoginRateLimit, checkRecoveryRateLimit } from "@/lib/rate-limit.functions";
+import { logLoginSuccess, logLoginFailure } from "@/lib/audit-log.functions";
 import Grainient from "@/components/Grainient";
+
+const GENERIC_RATE_LIMIT_MESSAGE = "Muitas tentativas. Tente novamente em alguns minutos.";
 
 export const Route = createFileRoute("/")({
   component: LoginPage,
@@ -32,6 +37,10 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const checkLoginRateLimitFn = useServerFn(checkLoginRateLimit);
+  const checkRecoveryRateLimitFn = useServerFn(checkRecoveryRateLimit);
+  const logLoginSuccessFn = useServerFn(logLoginSuccess);
+  const logLoginFailureFn = useServerFn(logLoginFailure);
   const [view, setView] = useState<"login" | "forgot" | "forgot-sent">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -62,17 +71,39 @@ function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    const trimmedEmail = email.trim();
+    try {
+      const { allowed } = await checkLoginRateLimitFn({ data: { email: trimmedEmail } });
+      if (!allowed) {
+        setLoading(false);
+        setError(GENERIC_RATE_LIMIT_MESSAGE);
+        return;
+      }
+    } catch {
+      // Rate limiter unreachable — fail open (never block login over an
+      // infra hiccup in an anti-abuse floor), same as the server-side
+      // `checkRateLimit` helper.
+    }
+
     const { error: err } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
     });
-    setLoading(false);
     if (err) {
+      setLoading(false);
       setError(
         err.message === "Invalid login credentials" ? "E-mail ou senha inválidos." : err.message,
       );
+      logLoginFailureFn({ data: { email: trimmedEmail } }).catch(() => {
+        /* best-effort audit log only */
+      });
       return;
     }
+    setLoading(false);
+    logLoginSuccessFn().catch(() => {
+      /* best-effort audit log only — never block login on this */
+    });
     try {
       localStorage.setItem(REMEMBER_KEY, remember ? "true" : "false");
     } catch {
@@ -94,12 +125,17 @@ function LoginPage() {
     if (!trimmed) return;
     setForgotLoading(true);
     // Anti-enumeration: always the same outcome/copy regardless of whether
-    // the email matches a real account or the call errors — never branch
-    // on `error` here (see CLAUDE.md piece B, item 2).
+    // the email matches a real account, the call errors, or the request
+    // was rate-limited — never branch on `error` here (see CLAUDE.md piece
+    // B, item 2, and piece C: revealing "blocked" vs "sent" would itself
+    // leak account existence).
     try {
-      await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
-      });
+      const { allowed } = await checkRecoveryRateLimitFn({ data: { email: trimmed } });
+      if (allowed) {
+        await supabase.auth.resetPasswordForEmail(trimmed, {
+          redirectTo: `${window.location.origin}/redefinir-senha`,
+        });
+      }
     } catch {
       /* ignored on purpose — same generic message either way */
     } finally {

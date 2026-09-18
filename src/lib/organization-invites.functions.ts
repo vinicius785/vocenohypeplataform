@@ -92,6 +92,15 @@ export const inviteClientUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.supabase, context.userId);
 
+    // Piece C (rate limiting, see CLAUDE.md): ~20/hour per admin — generous,
+    // anti-abuse floor only. Fails open (via checkRateLimit's own
+    // try/catch) so a rate-limiter hiccup never blocks a real invite.
+    const { checkRateLimit } = await import("@/lib/rate-limit.server");
+    const allowed = await checkRateLimit(`invite:${context.userId}`, 20, 60 * 60);
+    if (!allowed) {
+      throw new Error("Muitas tentativas. Tente novamente em alguns minutos.");
+    }
+
     const { data: org, error: orgErr } = await context.supabase
       .from("organizations")
       .select("id, type")

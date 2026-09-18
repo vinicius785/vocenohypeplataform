@@ -43,6 +43,8 @@ import {
   updateClientMemberCampaigns,
   updateClientMemberRole,
 } from "@/lib/organization-invites.functions";
+import { deactivateClientToken } from "@/lib/clientes.functions";
+import { clientesStore } from "@/lib/clientes-store";
 
 /**
  * Full "Acessos ao portal" management table (Phase 2a, see CLAUDE.md piece
@@ -100,7 +102,13 @@ function formatDate(value: string | null): string {
   }
 }
 
-export function PortalAccessSection({ clienteId }: { clienteId: string }) {
+export function PortalAccessSection({
+  clienteId,
+  publicToken,
+}: {
+  clienteId: string;
+  publicToken?: string;
+}) {
   const getOrgIdFn = useServerFn(getClienteOrganizationId);
   const listMembersFn = useServerFn(listOrganizationMembers);
   const listCampaignsFn = useServerFn(listOrganizationCampaigns);
@@ -111,6 +119,8 @@ export function PortalAccessSection({ clienteId }: { clienteId: string }) {
   const suspendFn = useServerFn(suspendClientMember);
   const reactivateFn = useServerFn(reactivateClientMember);
   const removeFn = useServerFn(removeClientAccess);
+  const deactivateTokenFn = useServerFn(deactivateClientToken);
+  const [deactivatingToken, setDeactivatingToken] = useState(false);
 
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -261,10 +271,49 @@ export function PortalAccessSection({ clienteId }: { clienteId: string }) {
     );
   };
 
+  const handleDeactivateToken = async () => {
+    if (
+      !window.confirm(
+        "Tem certeza? Isso desativa o link antigo do portal (/portal/...) para este cliente — " +
+          "só faça isso depois de confirmar que ele já está usando o novo login. Essa ação não " +
+          "tem volta automática (seria preciso gerar um link novo depois).",
+      )
+    )
+      return;
+    setDeactivatingToken(true);
+    try {
+      await deactivateTokenFn({ data: { clienteId } });
+      clientesStore.set((prev) =>
+        prev.map((cl) => (cl.id === clienteId ? { ...cl, publicToken: undefined } : cl)),
+      );
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Falha ao desativar o link.");
+    } finally {
+      setDeactivatingToken(false);
+    }
+  };
+
   if (!organizationId) return null;
 
   return (
     <div>
+      {publicToken && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <p className="text-xs text-muted-foreground">
+            Este cliente ainda tem o link antigo do portal (<code>/portal/...</code>) ativo.
+            Desative-o somente depois de confirmar que ele já está usando o novo login.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400"
+            disabled={deactivatingToken}
+            onClick={handleDeactivateToken}
+          >
+            Desativar link antigo
+          </Button>
+        </div>
+      )}
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
           Acessos ao portal

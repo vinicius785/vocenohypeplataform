@@ -15,6 +15,7 @@ import {
   Bug,
   ImageIcon,
   Trash2,
+  ShieldCheck,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -45,6 +46,7 @@ import { SegurancaSection } from "@/components/configuracoes/SegurancaSection";
 import { DadosBackupSection } from "@/components/configuracoes/DadosBackupSection";
 import { ScoreOperacionalSection } from "@/components/configuracoes/ScoreOperacionalSection";
 import { HypitoReportTab } from "@/components/configuracoes/HypitoReportTab";
+import { AuditLogTab } from "@/components/configuracoes/AuditLogTab";
 
 export type { Perfil };
 
@@ -131,6 +133,9 @@ function buildGroups(
         ...(isAdmin
           ? [{ key: "dados_backup" as ConfigTab, label: "Dados e backup", icon: Download }]
           : []),
+        ...(isAdmin
+          ? [{ key: "log_auditoria" as ConfigTab, label: "Log de auditoria", icon: ShieldCheck }]
+          : []),
       ],
     },
     {
@@ -191,6 +196,7 @@ export function ConfiguracoesSection() {
       {tab === "time_permissoes" && canSeeTimePermissoes && <TimePermissoesTab />}
       {tab === "seguranca" && <SegurancaSection canConfig={canConfig} isAdmin={isAdmin} />}
       {tab === "dados_backup" && <DadosBackupSection isAdmin={isAdmin} />}
+      {tab === "log_auditoria" && <AuditLogTab isAdmin={isAdmin} />}
       {tab === "score_operacional" && <ScoreOperacionalSection isAdmin={isAdmin} />}
       {tab === "hypito" && (isAdmin ? <HypitoReportTab /> : null)}
     </ConfiguracoesLayout>
@@ -479,6 +485,14 @@ export function SidebarProfile() {
 
   const handleSignOut = async () => {
     const { supabase } = await import("@/integrations/supabase/client");
+    // Log BEFORE signing out — the audit-log server function needs the
+    // still-valid bearer token to authenticate the call.
+    try {
+      const { logLogout } = await import("@/lib/audit-log.functions");
+      await logLogout();
+    } catch {
+      /* best-effort audit log only — never block logout on this */
+    }
     await supabase.auth.signOut();
     window.location.href = "/";
   };

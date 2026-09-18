@@ -58,6 +58,14 @@ function SelecionarAmbientePage() {
         console.error("[selecionar-ambiente] falha ao salvar ambiente ativo", err);
       }
     }
+    try {
+      const { logEnvironmentSwitch } = await import("@/lib/audit-log.functions");
+      await logEnvironmentSwitch({
+        data: { organizationId: env.type === "internal" ? null : env.organizationId },
+      });
+    } catch {
+      /* best-effort audit log only */
+    }
     navigate({ to: env.type === "internal" ? "/time" : "/portal-app/inicio" });
   };
 

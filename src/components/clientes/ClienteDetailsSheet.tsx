@@ -195,7 +195,7 @@ export function ClienteDetailsSheet({
                 )}
               </div>
 
-              <PortalAccessSection clienteId={cliente.id} />
+              <PortalAccessSection clienteId={cliente.id} publicToken={cliente.publicToken} />
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-border/60 px-6 py-4">
