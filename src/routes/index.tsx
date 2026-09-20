@@ -99,18 +99,23 @@ function LoginPage() {
       navigate({ to: "/" });
       return;
     }
-    // Ativa qualquer vínculo de cliente ainda `invited` ANTES de resolver o
-    // ambiente — autenticar com sucesso pela primeira vez É a aceitação do
-    // convite neste modelo (sem token de convite separado). Sem isto, um
-    // cliente recém-convidado seria mandado direto pra /acesso-pendente
-    // aqui mesmo, sem nunca passar pelo guard do portal onde essa ativação
-    // também roda. Fail-open: nunca bloquear o login por isto.
-    try {
-      await acceptPendingInvites();
-    } catch {
-      /* segue mesmo assim */
+    let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+    // Só paga a ida extra ao servidor pra ativar convite quando realmente
+    // pode haver um vínculo `invited` (env veio "pending") — pra quem já
+    // tem ambiente ativo (o caso comum, time e clientes recorrentes) isso
+    // nunca roda, então o login continua rápido como antes. Autenticar com
+    // sucesso pela primeira vez É a aceitação do convite neste modelo (sem
+    // token de convite separado). Fail-open: nunca bloquear o login por isto.
+    if (env.type === "pending") {
+      try {
+        const { activated } = await acceptPendingInvites();
+        if (activated > 0) {
+          env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+        }
+      } catch {
+        /* segue com o env original (pending) */
+      }
     }
-    const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
     navigate({ to: env.redirectTo });
   };
 

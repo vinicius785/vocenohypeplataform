@@ -64,22 +64,28 @@ export const Route = createFileRoute("/portal-app")({
 
     const userId = sessionData.session.user.id;
 
-    // Ativa qualquer vínculo `invited` deste usuário ANTES de resolver o
-    // ambiente — sem isto, um cliente recém-convidado autentica com sucesso
-    // (a senha temporária É válida) mas `resolveUserEnvironment` nunca o
-    // reconhece como tendo um ambiente de cliente (só conta vínculos
-    // `active`), caindo em "acesso pendente" mesmo tendo acabado de aceitar
-    // o convite. Autenticar com sucesso pela primeira vez É a prova de
-    // aceite nesse modelo (não há um token de convite separado). Fail-open:
-    // nunca bloquear o acesso por uma falha nessa etapa best-effort.
-    try {
-      await acceptPendingInvites();
-    } catch {
-      /* segue mesmo assim — se realmente havia um convite pendente, o pior
-       * caso é o usuário cair em /acesso-pendente e poder tentar de novo. */
-    }
+    let env = await resolveUserEnvironment(supabase, userId);
 
-    const env = await resolveUserEnvironment(supabase, userId);
+    // Só ativa um vínculo `invited` (ida extra ao servidor) quando o
+    // resultado já veio "pending" — pra quem já tem ambiente ativo (o caso
+    // comum) isso nunca roda. Sem isto, um cliente recém-convidado
+    // autentica com sucesso (a senha temporária É válida) mas
+    // `resolveUserEnvironment` nunca o reconhece como tendo um ambiente de
+    // cliente (só conta vínculos `active`), caindo em "acesso pendente"
+    // mesmo tendo acabado de aceitar o convite. Autenticar com sucesso pela
+    // primeira vez É a prova de aceite nesse modelo (não há um token de
+    // convite separado). Fail-open: nunca bloquear o acesso por uma falha
+    // nessa etapa best-effort.
+    if (env.type === "pending") {
+      try {
+        const { activated } = await acceptPendingInvites();
+        if (activated > 0) {
+          env = await resolveUserEnvironment(supabase, userId);
+        }
+      } catch {
+        /* segue com o env original (pending) */
+      }
+    }
 
     // CRITICAL ORDERING (see CLAUDE.md task spec): `env.type` already
     // resolves suspended/pending users to their own redirect BEFORE we ever

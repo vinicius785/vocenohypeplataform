@@ -110,16 +110,23 @@ function RedefinirSenhaPage() {
 
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData.session) {
+      let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
       // Mesmo caso de borda coberto em index.tsx: um cliente convidado que
       // recuperou a senha antes de completar o primeiro login também
-      // precisa ter o vínculo `invited` ativado aqui, senão cai em
-      // "acesso pendente" mesmo tendo acabado de provar a posse do e-mail.
-      try {
-        await acceptPendingInvites();
-      } catch {
-        /* segue mesmo assim */
+      // precisa ter o vínculo `invited` ativado, senão cai em "acesso
+      // pendente" mesmo tendo provado a posse do e-mail — só tenta quando o
+      // resultado já veio "pending", pra não pagar a ida extra ao servidor
+      // no caso comum (conta já ativa).
+      if (env.type === "pending") {
+        try {
+          const { activated } = await acceptPendingInvites();
+          if (activated > 0) {
+            env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+          }
+        } catch {
+          /* segue com o env original (pending) */
+        }
       }
-      const env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
       setTimeout(() => navigate({ to: env.redirectTo }), 1200);
     } else {
       setTimeout(() => navigate({ to: "/" }), 1200);
