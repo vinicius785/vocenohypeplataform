@@ -623,7 +623,7 @@ export function MemberProfileDialog({
                       )}
                       {score.guardrails.length > 0 && (
                         <InfoTip
-                          text={`Score limitado por: ${score.guardrails.map((g) => g.label).join("; ")}.`}
+                          text={`Score reduzido por: ${score.guardrails.map((g) => g.label).join("; ")}.`}
                         />
                       )}
                     </p>

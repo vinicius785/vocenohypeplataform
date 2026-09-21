@@ -1000,66 +1000,112 @@ export function classificacaoDoScore(score: number): string {
  *   classificação definitivos. */
 export type ScoreDataState = "sem_dados" | "provisorio" | "definitivo";
 
-/** Um motivo pelo qual o score final foi limitado abaixo do que a média
+/** Um motivo pelo qual o score final foi reduzido abaixo do que a média
  * ponderada das 3 dimensões sugeriria — "salvaguarda de coerência" no
  * pedido: nenhum resultado bom secundário pode mascarar um problema grave
- * de entrega. `cap` é o teto que ESSE motivo, isoladamente, impõe; o teto
- * efetivo aplicado ao score é o MENOR entre todos os motivos disparados. */
-export type GuardrailReason = { key: string; label: string; cap: number };
+ * de entrega. `penalty` é quantos pontos ESSE motivo, isoladamente,
+ * desconta do score renormalizado — escalado pela gravidade (quantas
+ * tarefas, há quantos dias), NUNCA um teto fixo idêntico pra qualquer
+ * gravidade (ver nota de correção abaixo).
+ *
+ * CORREÇÃO (2026-09-20): até aqui, cada motivo carregava um `cap` — um
+ * teto FIXO (ex.: 49) que sobrescrevia o score inteiro via
+ * `Math.min(scoreRenormalizado, capEfetivo)`. Na prática isso jogava
+ * fora todo o sinal real: uma única tarefa de prioridade alta atrasada
+ * há 6 dias travava o score em exatamente 49, idêntico ao de outra
+ * pessoa com a mesma tarefa mas 21 tarefas atrasadas no total — mesmo
+ * quando a primeira tinha ~100 entregas no prazo naquele mês. Duas
+ * pessoas com desempenhos radicalmente diferentes acabavam com o MESMO
+ * número só por terem disparado a mesma regra, sem relação com a
+ * gravidade real. Substituído por desconto proporcional: penaliza mais
+ * quem acumula mais/há mais tempo, sem apagar um histórico bom por uma
+ * única pendência pontual. */
+export type GuardrailReason = { key: string; label: string; penalty: number };
 
-export const GUARDRAIL_CAP_TAXA_ABAIXO_35 = 49;
-export const GUARDRAIL_CAP_TAXA_ABAIXO_50 = 59;
-export const GUARDRAIL_CAP_PRIORIDADE_ALTA_ATRASO_LONGO = 49;
-export const GUARDRAIL_CAP_ACUMULO_ATRASADAS = 49;
-export const GUARDRAIL_CAP_ENTREGA_ZERO = 49;
-/** A partir de quantas tarefas atualmente atrasadas o teto de acúmulo
- * entra em vigor. */
+/** Quantos pontos cada regra desconta, no pior caso — usado só pra
+ * documentar/testar o teto de cada uma; o desconto real escala entre 0 e
+ * esse valor conforme a gravidade (ver corpo de `computeScoreGuardrails`). */
+export const GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35 = 30;
+export const GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50 = 15;
+export const GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE = 10;
+export const GUARDRAIL_PENALTY_PRIORIDADE_ALTA_POR_DIA_EXTRA = 2;
+export const GUARDRAIL_PENALTY_PRIORIDADE_ALTA_MAX_POR_TAREFA = 25;
+export const GUARDRAIL_PENALTY_ACUMULO_BASE = 10;
+export const GUARDRAIL_PENALTY_ACUMULO_POR_TAREFA_EXTRA = 3;
+export const GUARDRAIL_PENALTY_ACUMULO_MAX = 40;
+export const GUARDRAIL_PENALTY_ENTREGA_ZERO = 15;
+/** Nenhuma combinação de salvaguardas pode descontar mais que isto do
+ * score renormalizado — evita empilhamento absurdo quando várias regras
+ * disparam ao mesmo tempo pra uma pessoa genuinamente com problemas
+ * graves (o objetivo é diferenciar gravidade, não zerar ninguém). */
+export const GUARDRAIL_PENALTY_MAX_TOTAL = 60;
+/** A partir de quantas tarefas atualmente atrasadas a penalidade de
+ * acúmulo entra em vigor. */
 export const GUARDRAIL_ACUMULO_LIMIAR = 5;
 
 /**
  * Salvaguardas de coerência (item explícito do pedido) — função central,
  * única, testável isoladamente: nenhuma tela lê essas regras "espalhadas"
- * pela UI, todas vivem aqui. Cada regra dispara de forma independente
- * (uma tarefa grave pode disparar duas ao mesmo tempo — atraso longo E
- * prioridade alta não são a "mesma" regra, então isso não é dupla
- * contagem); o teto FINAL aplicado é o menor entre os disparados. */
+ * pela UI, todas vivem aqui. Cada regra dispara de forma independente e
+ * desconta pontos proporcionais à gravidade — nunca um teto fixo (ver nota
+ * de correção no tipo `GuardrailReason` acima).
+ */
 export function computeScoreGuardrails(entrega: EntregaResult): GuardrailReason[] {
   const reasons: GuardrailReason[] = [];
   const taxaNoPrazo =
     entrega.tarefasElegiveis > 0 ? entrega.noPrazo / entrega.tarefasElegiveis : null;
 
   if (taxaNoPrazo != null && taxaNoPrazo < 0.35) {
+    // taxa=0 -> desconto máximo (30); taxa perto de 35% -> quase 0.
+    const penalty = Math.round(GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35 * (1 - taxaNoPrazo / 0.35));
     reasons.push({
       key: "taxa_no_prazo_abaixo_35",
       label: "Taxa de entrega no prazo abaixo de 35%",
-      cap: GUARDRAIL_CAP_TAXA_ABAIXO_35,
+      penalty,
     });
   } else if (taxaNoPrazo != null && taxaNoPrazo < 0.5) {
+    const penalty = Math.round(
+      GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50 * (1 - (taxaNoPrazo - 0.35) / 0.15),
+    );
     reasons.push({
       key: "taxa_no_prazo_abaixo_50",
       label: "Taxa de entrega no prazo abaixo de 50%",
-      cap: GUARDRAIL_CAP_TAXA_ABAIXO_50,
+      penalty,
     });
   }
   if (entrega.prioridadeAltaAtrasoLongoCount > 0) {
+    // Desconto escala pela QUANTIDADE de tarefas que dispararam a regra —
+    // uma só pesa o mínimo (`BASE`); cada tarefa extra soma mais, com um
+    // teto por tarefa pra nunca destruir sozinho um score bom por causa de
+    // um único item pontual (o defeito corrigido aqui: antes, 1 tarefa e
+    // 10 tarefas nessa condição travavam no MESMO teto fixo de 49).
+    const penalty = Math.min(
+      GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE * entrega.prioridadeAltaAtrasoLongoCount,
+      GUARDRAIL_PENALTY_PRIORIDADE_ALTA_MAX_POR_TAREFA,
+    );
     reasons.push({
       key: "prioridade_alta_atraso_longo",
-      label: `Tarefa de prioridade alta atrasada há mais de ${ATRASO_LONGO_DIAS} dias`,
-      cap: GUARDRAIL_CAP_PRIORIDADE_ALTA_ATRASO_LONGO,
+      label: `${entrega.prioridadeAltaAtrasoLongoCount} tarefa(s) de prioridade alta atrasada(s) há mais de ${ATRASO_LONGO_DIAS} dias`,
+      penalty,
     });
   }
   if (entrega.atualmenteAtrasadas >= GUARDRAIL_ACUMULO_LIMIAR) {
+    const excedente = entrega.atualmenteAtrasadas - GUARDRAIL_ACUMULO_LIMIAR;
+    const penalty = Math.min(
+      GUARDRAIL_PENALTY_ACUMULO_BASE + excedente * GUARDRAIL_PENALTY_ACUMULO_POR_TAREFA_EXTRA,
+      GUARDRAIL_PENALTY_ACUMULO_MAX,
+    );
     reasons.push({
       key: "acumulo_atrasadas",
       label: `${entrega.atualmenteAtrasadas} tarefas atualmente atrasadas`,
-      cap: GUARDRAIL_CAP_ACUMULO_ATRASADAS,
+      penalty,
     });
   }
   if (entrega.tarefasElegiveis > 0 && entrega.value === 0) {
     reasons.push({
       key: "entrega_zero",
       label: "Zero pontos na dimensão Entrega",
-      cap: GUARDRAIL_CAP_ENTREGA_ZERO,
+      penalty: GUARDRAIL_PENALTY_ENTREGA_ZERO,
     });
   }
   return reasons;
@@ -1147,8 +1193,11 @@ export function combineScoreV2(
   const scoreRenormalizado = clamp((pontosObtidos / pontosPossiveis) * 100, 0, 100);
 
   const guardrails = computeScoreGuardrails(entrega);
-  const capEfetivo = guardrails.length > 0 ? Math.min(...guardrails.map((g) => g.cap)) : 100;
-  const score = clamp(Math.min(Math.round(scoreRenormalizado), capEfetivo), 0, 100);
+  const penalidadeTotal = Math.min(
+    guardrails.reduce((soma, g) => soma + g.penalty, 0),
+    GUARDRAIL_PENALTY_MAX_TOTAL,
+  );
+  const score = clamp(Math.round(scoreRenormalizado) - penalidadeTotal, 0, 100);
 
   const amostra = entrega.tarefasElegiveis;
   const amostraReduzida = amostra < MIN_TASK_SAMPLE;

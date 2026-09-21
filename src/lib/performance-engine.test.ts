@@ -13,6 +13,11 @@ import {
   MIN_TASK_SAMPLE,
   ATRASO_LONGO_DIAS,
   GUARDRAIL_ACUMULO_LIMIAR,
+  GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35,
+  GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50,
+  GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE,
+  GUARDRAIL_PENALTY_ACUMULO_MAX,
+  GUARDRAIL_PENALTY_ENTREGA_ZERO,
   type TaskOutcome,
   type OverdueTaskDetail,
 } from "./performance-engine";
@@ -201,50 +206,108 @@ describe("combineScoreV2 — estados Sem dados / Provisório / Definitivo", () =
   });
 });
 
-describe("computeScoreGuardrails — salvaguardas de coerência centralizadas", () => {
-  it("taxa de entrega no prazo abaixo de 35% => teto 49", () => {
+describe("computeScoreGuardrails — salvaguardas de coerência centralizadas (desconto proporcional)", () => {
+  it("taxa de entrega no prazo abaixo de 35% => desconto (nunca um teto fixo idêntico pra qualquer gravidade)", () => {
     const entrega = computeEntrega([...onTime(1), ...late(2)], overdue(1)); // 1/4 = 25%
     const reasons = computeScoreGuardrails(entrega);
-    expect(reasons.some((r) => r.key === "taxa_no_prazo_abaixo_35" && r.cap === 49)).toBe(true);
+    const reason = reasons.find((r) => r.key === "taxa_no_prazo_abaixo_35");
+    expect(reason).toBeDefined();
+    expect(reason!.penalty).toBeGreaterThan(0);
+    expect(reason!.penalty).toBeLessThanOrEqual(GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35);
   });
 
-  it("taxa entre 35% e 50% => teto 59, mais leve que abaixo de 35%", () => {
+  it("taxa entre 35% e 50% => desconto mais leve que abaixo de 35%", () => {
     const entrega = computeEntrega(onTime(4), overdue(4)); // 4/8 = 50% exato, não entra na regra <50
     const entregaAbaixo = computeEntrega(onTime(4), overdue(5)); // 4/9 ≈ 44%
     expect(computeScoreGuardrails(entrega).some((r) => r.key.startsWith("taxa_no_prazo"))).toBe(
       false,
     );
-    expect(
-      computeScoreGuardrails(entregaAbaixo).some(
-        (r) => r.key === "taxa_no_prazo_abaixo_50" && r.cap === 59,
-      ),
-    ).toBe(true);
+    const reason = computeScoreGuardrails(entregaAbaixo).find(
+      (r) => r.key === "taxa_no_prazo_abaixo_50",
+    );
+    expect(reason).toBeDefined();
+    expect(reason!.penalty).toBeGreaterThan(0);
+    expect(reason!.penalty).toBeLessThanOrEqual(GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50);
   });
 
-  it("tarefa de prioridade alta atrasada há mais de 5 dias => teto 49", () => {
+  it("1 tarefa de prioridade alta atrasada há mais de 5 dias => desconto modesto, NUNCA um teto fixo que apaga um score bom", () => {
     const entrega = computeEntrega(
       onTime(10),
       overdue(1, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
     );
-    expect(
-      computeScoreGuardrails(entrega).some((r) => r.key === "prioridade_alta_atraso_longo"),
-    ).toBe(true);
+    const reason = computeScoreGuardrails(entrega).find(
+      (r) => r.key === "prioridade_alta_atraso_longo",
+    );
+    expect(reason).toBeDefined();
+    // Achado real corrigido: 1 tarefa nessa condição não pode mais travar
+    // o score em 49 pra qualquer pessoa — o desconto é proporcional
+    // (aqui, só 1 tarefa) e pequeno o bastante pra não apagar um mês de
+    // ~100 entregas no prazo.
+    expect(reason!.penalty).toBe(GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE);
   });
 
-  it(`${GUARDRAIL_ACUMULO_LIMIAR} ou mais tarefas atualmente atrasadas => teto 49`, () => {
-    const entrega = computeEntrega(onTime(10), overdue(GUARDRAIL_ACUMULO_LIMIAR));
-    expect(computeScoreGuardrails(entrega).some((r) => r.key === "acumulo_atrasadas")).toBe(true);
+  it("mais tarefas de prioridade alta atrasadas há muito tempo => desconto maior (diferencia gravidade, não trava todo mundo no mesmo número)", () => {
+    const entregaUma = computeEntrega(
+      onTime(10),
+      overdue(1, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
+    );
+    const entregaVarias = computeEntrega(
+      onTime(10),
+      overdue(4, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
+    );
+    const penaltyUma = computeScoreGuardrails(entregaUma).find(
+      (r) => r.key === "prioridade_alta_atraso_longo",
+    )!.penalty;
+    const penaltyVarias = computeScoreGuardrails(entregaVarias).find(
+      (r) => r.key === "prioridade_alta_atraso_longo",
+    )!.penalty;
+    expect(penaltyVarias).toBeGreaterThan(penaltyUma);
   });
 
-  it("zero pontos em Entrega com tarefas elegíveis => teto 49", () => {
+  it(`${GUARDRAIL_ACUMULO_LIMIAR} ou mais tarefas atualmente atrasadas => desconto que cresce com o excedente`, () => {
+    const entregaLimiar = computeEntrega(onTime(10), overdue(GUARDRAIL_ACUMULO_LIMIAR));
+    const entregaMuitas = computeEntrega(onTime(10), overdue(GUARDRAIL_ACUMULO_LIMIAR + 16)); // cenário real: 21 atrasadas
+    const penaltyLimiar = computeScoreGuardrails(entregaLimiar).find(
+      (r) => r.key === "acumulo_atrasadas",
+    )!.penalty;
+    const penaltyMuitas = computeScoreGuardrails(entregaMuitas).find(
+      (r) => r.key === "acumulo_atrasadas",
+    )!.penalty;
+    expect(penaltyLimiar).toBeGreaterThan(0);
+    expect(penaltyMuitas).toBeGreaterThan(penaltyLimiar);
+    expect(penaltyMuitas).toBeLessThanOrEqual(GUARDRAIL_PENALTY_ACUMULO_MAX);
+  });
+
+  it("zero pontos em Entrega com tarefas elegíveis => desconto fixo modesto", () => {
     const entrega = computeEntrega([], overdue(1));
     expect(entrega.value).toBe(0);
-    expect(computeScoreGuardrails(entrega).some((r) => r.key === "entrega_zero")).toBe(true);
+    const reason = computeScoreGuardrails(entrega).find((r) => r.key === "entrega_zero");
+    expect(reason).toBeDefined();
+    expect(reason!.penalty).toBe(GUARDRAIL_PENALTY_ENTREGA_ZERO);
   });
 
   it("nenhuma condição disparada => nenhuma salvaguarda", () => {
     const entrega = computeEntrega(onTime(10), []);
     expect(computeScoreGuardrails(entrega)).toEqual([]);
+  });
+});
+
+describe("combineScoreV2 — correção real: 1 pendência não pode mais apagar um histórico bom", () => {
+  it("~100 entregas no prazo + 1 tarefa de prioridade alta atrasada há 6 dias => score continua alto, não trava em 49 (caso real de produção corrigido em 2026-09-20)", () => {
+    const completions = onTime(97);
+    const overdueDetails = overdue(1, { highPriority: true, daysOverdue: 6 });
+    const entrega = computeEntrega(completions, overdueDetails);
+    const previsibilidade = computePrevisibilidade([], entrega.tarefasElegiveis);
+    const compromissos = computeCompromissos(
+      Array.from({ length: 10 }, () => ({ attended: true })),
+    );
+    const result = combineScoreV2(entrega, previsibilidade, compromissos);
+    // Antes da correção este cenário caía pra exatamente 49 ("Crítico"),
+    // idêntico ao de alguém com desempenho muito pior — a régua real é: um
+    // mês quase perfeito com 1 pendência pontual deve continuar em
+    // "Bom"/"Excelente", só com um desconto visível, não "Crítico".
+    expect(result.score).not.toBeNull();
+    expect(result.score!).toBeGreaterThanOrEqual(75);
   });
 });
 
