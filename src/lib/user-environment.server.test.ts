@@ -116,7 +116,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "active",
         last_access_at: null,
         org: clientOrgA,
@@ -143,7 +143,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_admin",
+        role: "client_standard",
         status: "active",
         last_access_at: "2026-09-01T00:00:00Z",
         org: clientOrgA,
@@ -165,7 +165,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "active",
         last_access_at: null,
         org: clientOrgA,
@@ -196,7 +196,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: suspendedClientOrg.id,
-        role: "client_member",
+        role: "client_standard",
         status: "active",
         last_access_at: null,
         org: suspendedClientOrg,
@@ -211,7 +211,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "suspended",
         last_access_at: null,
         org: clientOrgA,
@@ -226,7 +226,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "removed",
         last_access_at: null,
         org: clientOrgA,
@@ -247,7 +247,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "active",
         last_access_at: null,
         org: clientOrgA,
@@ -255,7 +255,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgB.id,
-        role: "client_member",
+        role: "client_standard",
         status: "suspended",
         last_access_at: null,
         org: clientOrgB,
@@ -274,7 +274,7 @@ describe("resolveUserEnvironment", () => {
       {
         user_id: "u1",
         organization_id: clientOrgA.id,
-        role: "client_member",
+        role: "client_standard",
         status: "removed",
         last_access_at: null,
         org: clientOrgA,

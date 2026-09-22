@@ -83,8 +83,7 @@ export async function requireClientAccess(
   organizationId: string,
 ): Promise<boolean> {
   return requireOrganizationMembership(db, userId, organizationId, [
-    "client_admin",
-    "client_member",
+    "client_standard",
     "client_viewer",
   ]);
 }

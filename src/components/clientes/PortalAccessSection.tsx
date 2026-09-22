@@ -52,7 +52,7 @@ import { clientesStore } from "@/lib/clientes-store";
  * with the full row-action set (reenviar convite, alterar função, alterar
  * campanhas liberadas, suspender, reativar, remover).
  */
-type ClientRole = "client_admin" | "client_member" | "client_viewer";
+type ClientRole = "client_standard" | "client_viewer";
 
 type Member = {
   id: string;
@@ -70,9 +70,8 @@ type Member = {
 type Campaign = { id: string; nome: string };
 
 const ROLE_LABELS: Record<string, string> = {
-  client_admin: "Administrador do cliente",
-  client_member: "Membro",
-  client_viewer: "Visualizador",
+  client_standard: "Acesso padrão",
+  client_viewer: "Somente visualização",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -128,7 +127,7 @@ export function PortalAccessSection({
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<ClientRole>("client_member");
+  const [role, setRole] = useState<ClientRole>("client_standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
@@ -136,7 +135,7 @@ export function PortalAccessSection({
   const [rowError, setRowError] = useState<string | null>(null);
 
   const [roleDialogMember, setRoleDialogMember] = useState<Member | null>(null);
-  const [roleDialogValue, setRoleDialogValue] = useState<ClientRole>("client_member");
+  const [roleDialogValue, setRoleDialogValue] = useState<ClientRole>("client_standard");
   const [campaignsDialogMember, setCampaignsDialogMember] = useState<Member | null>(null);
   const [campaignsDialogSelected, setCampaignsDialogSelected] = useState<Set<string>>(new Set());
 
@@ -184,7 +183,7 @@ export function PortalAccessSection({
       setTempPassword(result.tempPassword);
       setEmail("");
       setFullName("");
-      setRole("client_member");
+      setRole("client_standard");
       await refreshMembers(organizationId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao convidar usuário.");
@@ -215,7 +214,7 @@ export function PortalAccessSection({
 
   const openRoleDialog = (m: Member) => {
     setRoleDialogMember(m);
-    setRoleDialogValue((m.role as ClientRole) ?? "client_member");
+    setRoleDialogValue((m.role as ClientRole) ?? "client_standard");
   };
 
   const confirmRoleChange = async () => {
@@ -357,9 +356,8 @@ export function PortalAccessSection({
             onChange={(e) => setRole(e.target.value as ClientRole)}
             className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
           >
-            <option value="client_admin">Administrador do cliente</option>
-            <option value="client_member">Membro</option>
-            <option value="client_viewer">Visualizador</option>
+            <option value="client_standard">Acesso padrão</option>
+            <option value="client_viewer">Somente visualização</option>
           </select>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <Button type="submit" variant="primary" size="sm" disabled={loading}>
@@ -481,9 +479,8 @@ export function PortalAccessSection({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="client_admin">Administrador do cliente</SelectItem>
-              <SelectItem value="client_member">Membro</SelectItem>
-              <SelectItem value="client_viewer">Visualizador</SelectItem>
+              <SelectItem value="client_standard">Acesso padrão</SelectItem>
+              <SelectItem value="client_viewer">Somente visualização</SelectItem>
             </SelectContent>
           </Select>
           <DialogFooter>

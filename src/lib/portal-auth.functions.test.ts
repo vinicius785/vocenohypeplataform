@@ -35,12 +35,12 @@ describe("resolveActiveClientOrganization", () => {
   });
 
   it("resolves directly when the user has exactly one active client org (no cookie needed)", async () => {
-    const supabase = fakeSupabaseFromRows([{ organization_id: "org-1", role: "client_member" }]);
+    const supabase = fakeSupabaseFromRows([{ organization_id: "org-1", role: "client_standard" }]);
     const result = await resolveActiveClientOrganization({
       supabase,
       userId: "user-1",
     } as never);
-    expect(result).toEqual({ organizationId: "org-1", role: "client_member" });
+    expect(result).toEqual({ organizationId: "org-1", role: "client_standard" });
   });
 
   it("throws when the user has no active client org", async () => {
@@ -62,11 +62,11 @@ describe("resolveActiveClientOrganization", () => {
     const { resolveActiveClientOrganization: resolveWithMock } =
       await import("@/lib/portal-auth.functions");
     const supabase = fakeSupabaseFromRows([
-      { organization_id: "org-1", role: "client_member" },
-      { organization_id: "org-2", role: "client_admin" },
+      { organization_id: "org-1", role: "client_standard" },
+      { organization_id: "org-2", role: "client_viewer" },
     ]);
     const result = await resolveWithMock({ supabase, userId: "user-1" } as never);
-    expect(result).toEqual({ organizationId: "org-2", role: "client_admin" });
+    expect(result).toEqual({ organizationId: "org-2", role: "client_viewer" });
   });
 
   it("rejects an active-org cookie that does not match any of the user's real memberships", async () => {
@@ -77,8 +77,8 @@ describe("resolveActiveClientOrganization", () => {
     const { resolveActiveClientOrganization: resolveWithMock } =
       await import("@/lib/portal-auth.functions");
     const supabase = fakeSupabaseFromRows([
-      { organization_id: "org-1", role: "client_member" },
-      { organization_id: "org-2", role: "client_admin" },
+      { organization_id: "org-1", role: "client_standard" },
+      { organization_id: "org-2", role: "client_viewer" },
     ]);
     await expect(resolveWithMock({ supabase, userId: "user-1" } as never)).rejects.toThrow(
       /selecione um/i,
@@ -91,8 +91,17 @@ describe("assertCanMutate", () => {
     expect(() => assertCanMutate("client_viewer")).toThrow(/somente leitura/i);
   });
 
-  it("allows client_member and client_admin", () => {
-    expect(() => assertCanMutate("client_member")).not.toThrow();
-    expect(() => assertCanMutate("client_admin")).not.toThrow();
+  it("allows client_standard to mutate", () => {
+    expect(() => assertCanMutate("client_standard")).not.toThrow();
+  });
+
+  it("rejects client_viewer specifically, not by accident of an unrecognized role", () => {
+    // Merging client_admin+client_member into client_standard must not
+    // accidentally grant client_viewer anything MORE than it already had —
+    // the check is a viewer-specific blocklist, not an allowlist, so this
+    // guards against that check ever silently becoming an allowlist that
+    // would reject client_standard by mistake.
+    expect(() => assertCanMutate("client_viewer")).toThrow();
+    expect(() => assertCanMutate("client_standard")).not.toThrow();
   });
 });

@@ -23,7 +23,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
-const ClientRoleEnum = z.enum(["client_admin", "client_member", "client_viewer"]);
+/** The only two client-facing roles as of the role-collapse migration
+ * (`20260922184944_collapse_client_roles_to_standard_viewer.sql`):
+ * `client_admin`/`client_member` were merged into `client_standard`,
+ * `client_viewer` unchanged. Exported so the mapping itself is directly
+ * unit-testable (see `organization-invites.functions.test.ts`). */
+export const ClientRoleEnum = z.enum(["client_standard", "client_viewer"]);
 const assertAdmin = assertAdminShared;
 
 /** Writes one row to `access_audit_log` via `supabaseAdmin` (bypasses RLS —
@@ -83,8 +88,152 @@ const InviteInput = z.object({
   organizationId: z.string().uuid(),
   email: z.string().trim().email().max(255),
   fullName: z.string().trim().max(120).optional().default(""),
-  role: ClientRoleEnum.default("client_member"),
+  role: ClientRoleEnum.default("client_standard"),
 });
+
+/**
+ * Core logic behind `inviteClientUser`, extracted for direct unit testing
+ * (same pattern as `updateClientMemberRoleCore` — see its docstring). Covers
+ * the "email already has an account" branch and the internal-membership
+ * defense-in-depth guard, both explicitly required by CLAUDE.md. Assumes the
+ * caller has already run `assertAdmin` and the rate-limit check, and that
+ * `org` (the target organization row) has already been validated as
+ * `type === 'client'`.
+ */
+export async function inviteClientUserCore(
+  supabaseAdmin: SupabaseClient<Database>,
+  actorUserId: string,
+  input: {
+    organizationId: string;
+    email: string;
+    fullName: string;
+    role: "client_standard" | "client_viewer";
+  },
+) {
+  // Defense-in-depth: refuse to hand a client-org role to an email that
+  // already belongs to an ACTIVE internal team membership. "Contato
+  // principal" is a cadastral field only and must never itself grant
+  // portal login, but this guard exists for the separate case of an admin
+  // typing a teammate's own email into the invite form by mistake — see
+  // CLAUDE.md's "strict separation" requirement.
+  {
+    const { data: existingProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("email", input.email)
+      .maybeSingle();
+    if (existingProfile) {
+      const { data: internalOrg } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .eq("slug", "vocenohype")
+        .maybeSingle();
+      if (internalOrg) {
+        const { data: internalMembership } = await supabaseAdmin
+          .from("organization_members")
+          .select("id")
+          .eq("organization_id", internalOrg.id)
+          .eq("user_id", existingProfile.id)
+          .eq("status", "active")
+          .in("role", ["internal_admin", "internal_member"])
+          .maybeSingle();
+        if (internalMembership) {
+          throw new Error(
+            "Este e-mail já pertence a um membro interno do time e não pode receber acesso de cliente.",
+          );
+        }
+      }
+    }
+  }
+
+  // "E-mail já tem conta" branch: don't attempt createUser (which would
+  // fail on a duplicate email) — instead link the EXISTING auth user to
+  // this client org via a new organization_members row. Never creates a
+  // second auth user, never grants access to any other organization; the
+  // existing account's next login routes correctly via
+  // resolveUserEnvironment (multi-org → /selecionar-ambiente).
+  const { data: existingUsersPage, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 200,
+  });
+  if (listErr) throw new Error(listErr.message);
+  const existingAuthUser = existingUsersPage?.users.find(
+    (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
+  );
+
+  if (existingAuthUser) {
+    const { data: existingLink } = await supabaseAdmin
+      .from("organization_members")
+      .select("id, status")
+      .eq("organization_id", input.organizationId)
+      .eq("user_id", existingAuthUser.id)
+      .maybeSingle();
+    if (existingLink) {
+      throw new Error("Este usuário já tem um vínculo com esta organização.");
+    }
+
+    const { error: memberErr } = await supabaseAdmin.from("organization_members").insert({
+      organization_id: input.organizationId,
+      user_id: existingAuthUser.id,
+      role: input.role,
+      status: "invited",
+      invited_by: actorUserId,
+      invited_at: new Date().toISOString(),
+    });
+    if (memberErr) throw new Error(memberErr.message);
+
+    await logAccessAudit(supabaseAdmin, {
+      actorUserId,
+      organizationId: input.organizationId,
+      action: "invite_sent_existing_account",
+      targetUserId: existingAuthUser.id,
+      newValue: { role: input.role, email: input.email },
+    });
+
+    return {
+      id: existingAuthUser.id,
+      email: input.email,
+      tempPassword: null,
+      existingAccount: true,
+    };
+  }
+
+  const tempPassword = generateTempPassword();
+
+  const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+    email: input.email,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: {
+      full_name: input.fullName,
+      must_change_password: true,
+    },
+  });
+  if (createErr || !created?.user) {
+    throw new Error(createErr?.message ?? "Falha ao criar usuário.");
+  }
+
+  const userId = created.user.id;
+  const { error: memberErr } = await supabaseAdmin.from("organization_members").insert({
+    organization_id: input.organizationId,
+    user_id: userId,
+    role: input.role,
+    status: "invited",
+    invited_by: actorUserId,
+    invited_at: new Date().toISOString(),
+  });
+  if (memberErr) throw new Error(memberErr.message);
+
+  await logAccessAudit(supabaseAdmin, {
+    actorUserId,
+    organizationId: input.organizationId,
+    action: "invite_sent",
+    targetUserId: userId,
+    newValue: { role: input.role, email: input.email },
+  });
+
+  return { id: userId, email: input.email, tempPassword, existingAccount: false };
+}
 
 export const inviteClientUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -113,33 +262,7 @@ export const inviteClientUser = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const tempPassword = generateTempPassword();
-
-    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
-        full_name: data.fullName,
-        must_change_password: true,
-      },
-    });
-    if (createErr || !created?.user) {
-      throw new Error(createErr?.message ?? "Falha ao criar usuário.");
-    }
-
-    const userId = created.user.id;
-    const { error: memberErr } = await supabaseAdmin.from("organization_members").insert({
-      organization_id: data.organizationId,
-      user_id: userId,
-      role: data.role,
-      status: "invited",
-      invited_by: context.userId,
-      invited_at: new Date().toISOString(),
-    });
-    if (memberErr) throw new Error(memberErr.message);
-
-    return { id: userId, email: data.email, tempPassword };
+    return inviteClientUserCore(supabaseAdmin, context.userId, data);
   });
 
 /** The `clientes` client-side store only syncs the JSONB `data` column
@@ -277,7 +400,7 @@ const UpdateRoleInput = z.object({
 export async function updateClientMemberRoleCore(
   supabaseAdmin: SupabaseClient<Database>,
   actorUserId: string,
-  input: { organizationMemberId: string; role: "client_admin" | "client_member" | "client_viewer" },
+  input: { organizationMemberId: string; role: "client_standard" | "client_viewer" },
 ) {
   const membership = await loadMembershipWithOrg(supabaseAdmin, input.organizationMemberId);
 
