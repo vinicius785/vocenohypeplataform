@@ -131,6 +131,19 @@ export function sanitizeHandleForDisplay(plataforma: string, handle: string): st
   return trimmed.replace(/^@+/, "");
 }
 
+/** Normalização de e-mail/telefone pra comparação de identidade — usada
+ * pelo dedup do formulário público de inscrição
+ * (`submitInscricaoCampanha`) e pelo dedup do fluxo "Adicionar do banco"
+ * (`InfluencerBoard.tsx`'s `findExistingBankInfluMatch`). Mantida aqui
+ * (não reimplementada em cada lugar) pra os dois fluxos sempre
+ * concordarem sobre o que conta como "mesma pessoa". */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+export function normalizePhoneDigits(phone: string): string {
+  return phone.replace(/\D+/g, "");
+}
+
 type RedeLike = { id: string; plataforma: string; handle: string; isPrimary?: boolean };
 
 /** Compara de forma normalizada (case-insensitive, sem "@") pra bloquear

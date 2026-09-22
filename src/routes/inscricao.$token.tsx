@@ -66,6 +66,13 @@ function InscricaoPage() {
   const { token } = Route.useParams();
   const { data, ws } = Route.useLoaderData();
   const submitFn = useServerFn(submitInscricaoCampanha);
+  // Gerada uma vez por carregamento do formulário — enviada em toda
+  // tentativa de submit (inclusive um retry de rede pro MESMO clique), pra
+  // que o servidor detecte resubmissão exata via a constraint única de
+  // `inscricao_campanha_idempotency` (mitigação de escopo reduzido pro
+  // Fix #2, ver `submitInscricaoCampanha`). Não regenerar a cada
+  // tentativa — regenerar destruiria justamente a proteção que ela dá.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
@@ -167,6 +174,7 @@ function InscricaoPage() {
       await submitFn({
         data: {
           token,
+          idempotencyKey,
           nome,
           telefone,
           email,

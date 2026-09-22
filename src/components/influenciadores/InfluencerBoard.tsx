@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { loadBank, saveBank, type BankInflu } from "@/lib/banco-influs-store";
+import { findExistingBankInfluMatch } from "@/lib/bank-influ-match";
 import { formatDateToIso } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm";
 import { linkifyText } from "@/lib/linkify";
@@ -2225,7 +2226,7 @@ export function InfluencerBoard({
       <BankPickerDialog
         open={bankPickerOpen}
         onOpenChange={setBankPickerOpen}
-        alreadyAdded={influs.map((i) => i.nome.trim().toLowerCase())}
+        currentInflus={influs}
         onAdd={(picked) => {
           const now = new Date().toISOString();
           applyInflusChange([
@@ -6318,12 +6319,12 @@ function EntregaAnexosEditor({
 function BankPickerDialog({
   open,
   onOpenChange,
-  alreadyAdded,
+  currentInflus,
   onAdd,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  alreadyAdded: string[];
+  currentInflus: Influ[];
   onAdd: (picked: BankInflu[]) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -6339,26 +6340,39 @@ function BankPickerDialog({
     }
   }, [open]);
 
+  // Identidade real (e-mail/telefone/rede normalizados — nome só como
+  // sinal adicional), não mais só nome em minúsculas — ver
+  // `findExistingBankInfluMatch` pro porquê (causa confirmada de
+  // duplicatas: nomes de exibição divergentes pra mesma pessoa).
+  const alreadyAddedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const b of bank) {
+      if (findExistingBankInfluMatch(b, currentInflus)) ids.add(b.id);
+    }
+    return ids;
+  }, [bank, currentInflus]);
+
   const nichos = useMemo(() => NICHOS.filter((n) => bank.some((b) => b.nicho === n)), [bank]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return bank.filter((b) => {
-      if (alreadyAdded.includes(b.nome.trim().toLowerCase())) return false;
       if (nicho && b.nicho !== nicho) return false;
       if (!q) return true;
       return (
         b.nome.toLowerCase().includes(q) || b.redes.some((r) => r.handle.toLowerCase().includes(q))
       );
     });
-  }, [bank, query, nicho, alreadyAdded]);
+  }, [bank, query, nicho]);
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    if (alreadyAddedIds.has(id)) return;
     setSelected((s) => {
       const next = new Set(s);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -6404,13 +6418,19 @@ function BankPickerDialog({
             <ul className="space-y-1.5">
               {filtered.map((b) => {
                 const active = selected.has(b.id);
+                const alreadyInCampanha = alreadyAddedIds.has(b.id);
                 return (
                   <li key={b.id}>
                     <button
                       type="button"
+                      disabled={alreadyInCampanha}
                       onClick={() => toggle(b.id)}
                       className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
-                        active ? "border-foreground bg-muted" : "border-border hover:bg-muted/50"
+                        alreadyInCampanha
+                          ? "cursor-not-allowed border-border opacity-50"
+                          : active
+                            ? "border-foreground bg-muted"
+                            : "border-border hover:bg-muted/50"
                       }`}
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
@@ -6427,7 +6447,13 @@ function BankPickerDialog({
                           {b.redes.map((r) => r.handle || r.plataforma).join(" · ") || "—"}
                         </p>
                       </div>
-                      {active && <CheckCircle2 className="h-4 w-4 shrink-0 text-foreground" />}
+                      {alreadyInCampanha ? (
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Já está nesta campanha
+                        </span>
+                      ) : (
+                        active && <CheckCircle2 className="h-4 w-4 shrink-0 text-foreground" />
+                      )}
                     </button>
                   </li>
                 );

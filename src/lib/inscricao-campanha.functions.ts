@@ -5,7 +5,12 @@ import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type { Influ, InfluAttachment } from "@/components/influenciadores/InfluencerBoard";
 import { getEffectiveInscricaoPage } from "@/lib/inscricao-page";
-import { normalizeSocialInput, isDuplicateProfile } from "@/lib/social-profiles";
+import {
+  normalizeSocialInput,
+  isDuplicateProfile,
+  normalizeEmail,
+  normalizePhoneDigits,
+} from "@/lib/social-profiles";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
@@ -64,13 +69,6 @@ function matchesFileSignature(buffer: Buffer, mimeType: string): boolean {
     );
   }
   return false;
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-function normalizePhoneDigits(phone: string): string {
-  return phone.replace(/\D+/g, "");
 }
 
 export const getInscricaoCampanhaData = createServerFn({ method: "GET" })
@@ -136,6 +134,18 @@ const SubmitInscricaoInput = z.object({
     .nullable()
     .optional(),
   respostas: z.array(RespostaInput).default([]),
+  // Chave de idempotência gerada uma vez pelo cliente por carregamento do
+  // formulário (ver `inscricao.$token.tsx`) — opcional pra não quebrar
+  // nenhum client antigo em cache, mas sempre enviada pelo formulário
+  // atual. Fecha o caso de RESUBMISSÃO EXATA (retry de rede, duplo submit
+  // do mesmo clique) via a constraint única em
+  // `inscricao_campanha_idempotency` (migração
+  // `20260922190000_inscricao_campanha_idempotency.sql`) — não fecha a
+  // corrida mais ampla de duas submissões DIFERENTES quase simultâneas
+  // pra mesma pessoa (precisaria de um lock transacional único cobrindo
+  // toda a lógica de match/decisão em SQL — mitigação intencionalmente
+  // menor, ver o comentário da migração).
+  idempotencyKey: z.string().min(1).max(200).optional(),
 });
 
 export const submitInscricaoCampanha = createServerFn({ method: "POST" })
@@ -155,6 +165,51 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       );
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Guarda de idempotência (mitigação de escopo reduzido pro Fix #2 —
+    // ver comentário do campo `idempotencyKey` acima e da migração
+    // `20260922190000_inscricao_campanha_idempotency.sql`): reserva a
+    // chave ANTES de fazer qualquer leitura/gravação em
+    // `campanha_influenciadores`. A constraint única em
+    // `(campanha_id, idempotency_key)` faz a segunda tentativa de reservar
+    // a MESMA chave falhar atomicamente no banco — real serialização pra
+    // esse caso específico (resubmissão exata), diferente de um lock de
+    // sessão via `.rpc()` que não seria confiável aqui (`supabaseAdmin` é
+    // um cliente PostgREST/REST puro, sem conexão persistente — ver
+    // `client.server.ts`). Sem `idempotencyKey` (client antigo em cache),
+    // segue o comportamento anterior sem essa proteção extra.
+    let idempotencyRowId: string | null = null;
+    if (data.idempotencyKey) {
+      const { data: reserved, error: reserveError } = await supabaseAdmin
+        .from("inscricao_campanha_idempotency")
+        .insert({ campanha_id: found.campanha.id, idempotency_key: data.idempotencyKey })
+        .select("id")
+        .single();
+      if (reserveError) {
+        // Código 23505 = unique_violation: já existe uma tentativa em
+        // andamento ou concluída com essa MESMA chave — busca o resultado
+        // já salvo e devolve ele em vez de reprocessar (evita a segunda
+        // inserção/mídia kit duplicado). Se a linha existe mas ainda não
+        // tem `result` (a primeira tentativa ainda está em andamento ou
+        // caiu no meio do caminho), segue processando normalmente — é o
+        // melhor esforço possível sem um lock transacional de verdade.
+        if (reserveError.code === "23505") {
+          const { data: existingRow } = await supabaseAdmin
+            .from("inscricao_campanha_idempotency")
+            .select("result")
+            .eq("campanha_id", found.campanha.id)
+            .eq("idempotency_key", data.idempotencyKey)
+            .maybeSingle();
+          if (existingRow?.result) {
+            return existingRow.result as { ok: true; merged: boolean };
+          }
+        } else {
+          console.warn("[submitInscricaoCampanha] falha ao reservar idempotency key", reserveError);
+        }
+      } else {
+        idempotencyRowId = reserved.id;
+      }
+    }
 
     let midiaKit: InfluAttachment[] | undefined;
     if (data.anexo) {
@@ -297,7 +352,14 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
         .update({ data: updated as unknown as never })
         .eq("id", matched.id);
       if (error) throw new Error(error.message);
-      return { ok: true, merged: true };
+      const result = { ok: true as const, merged: true };
+      if (idempotencyRowId) {
+        await supabaseAdmin
+          .from("inscricao_campanha_idempotency")
+          .update({ result })
+          .eq("id", idempotencyRowId);
+      }
+      return result;
     }
 
     const influ: Influ = {
@@ -339,7 +401,14 @@ export const submitInscricaoCampanha = createServerFn({ method: "POST" })
       data: influ as unknown as never,
     });
     if (error) throw new Error(error.message);
-    return { ok: true, merged: false };
+    const result = { ok: true as const, merged: false };
+    if (idempotencyRowId) {
+      await supabaseAdmin
+        .from("inscricao_campanha_idempotency")
+        .update({ result })
+        .eq("id", idempotencyRowId);
+    }
+    return result;
   });
 
 const AttachmentUrlInput = z.object({

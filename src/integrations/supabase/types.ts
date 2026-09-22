@@ -1510,6 +1510,30 @@ export type Database = {
           },
         ];
       };
+      inscricao_campanha_idempotency: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          result: Json | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          result?: Json | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          result?: Json | null;
+        };
+        Relationships: [];
+      };
       leads: {
         Row: {
           activities: Json;
