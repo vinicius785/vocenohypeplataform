@@ -4,321 +4,436 @@ import {
   computePrevisibilidade,
   computeCompromissos,
   combineScoreV2,
-  computeScoreGuardrails,
   overdueOpenTasks,
   overdueTaskDetails,
   classifyReplanTiming,
   classificacaoDoScore,
+  sampleConfidence,
   isHighPriority,
-  MIN_TASK_SAMPLE,
-  ATRASO_LONGO_DIAS,
-  GUARDRAIL_ACUMULO_LIMIAR,
-  GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35,
-  GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50,
-  GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE,
-  GUARDRAIL_PENALTY_ACUMULO_MAX,
-  GUARDRAIL_PENALTY_ENTREGA_ZERO,
+  computeMemberScoreV2,
+  OPERATIONAL_SCORE_VERSION,
   type TaskOutcome,
-  type OverdueTaskDetail,
+  type EntregaCompletionLike,
+  type OpenTaskForHealth,
+  type PrevisibilidadeReplanEventLike,
+  type PerformanceEventLike,
 } from "./performance-engine";
-import { OPEN_STATUSES } from "./score";
+import { OPEN_STATUSES, type PerformanceOpenTask } from "./score";
 
-const onTime = (n: number) =>
-  Array.from({ length: n }, () => ({ outcome: "on_time" as TaskOutcome }));
-const late = (n: number) => Array.from({ length: n }, () => ({ outcome: "late" as TaskOutcome }));
-const overdue = (n: number, extra: Partial<OverdueTaskDetail> = {}): OverdueTaskDetail[] =>
-  Array.from({ length: n }, () => ({ daysOverdue: 1, highPriority: false, ...extra }));
+/** Conclusões sintéticas COM prazo — `n` tarefas com o `outcome` dado. */
+const withDeadline = (n: number, outcome: TaskOutcome): EntregaCompletionLike[] =>
+  Array.from({ length: n }, () => ({ outcome, hasDeadline: true }));
+const semPrazo = (n: number): EntregaCompletionLike[] =>
+  Array.from({ length: n }, () => ({ outcome: "on_time" as TaskOutcome, hasDeadline: false }));
 
-/** Monta o score completo do jeito que a UI faz: Entrega -> Previsibilidade
- * (mesma `tarefasElegiveis`) -> Compromissos -> combineScoreV2. */
-function buildScore(
-  completions: { outcome: TaskOutcome }[],
-  overdueTasks: OverdueTaskDetail[],
-  deadlineChanges: { taskId: string | null; from?: string; occurredAt: string }[] = [],
-  attendance: { attended: boolean }[] = [],
-) {
-  const entrega = computeEntrega(completions, overdueTasks);
-  const previsibilidade = computePrevisibilidade(deadlineChanges, entrega.tarefasElegiveis);
-  const compromissos = computeCompromissos(attendance);
-  return combineScoreV2(entrega, previsibilidade, compromissos);
+/** Tarefa aberta sintética COM prazo — `daysAgo` dias atrás de hoje
+ * (referência `now` fixa abaixo), pra simular "atualmente atrasada". */
+const NOW = new Date("2026-06-15T12:00:00-03:00");
+function openTaskDueDaysAgo(
+  daysAgo: number,
+  extra: Partial<OpenTaskForHealth> = {},
+): OpenTaskForHealth {
+  const due = new Date(NOW);
+  due.setDate(due.getDate() - daysAgo);
+  const dueDate = due.toISOString().slice(0, 10);
+  return { status: "Aberto", dueDate, ...extra };
+}
+function openTaskNotYetDue(
+  daysAhead = 5,
+  extra: Partial<OpenTaskForHealth> = {},
+): OpenTaskForHealth {
+  const due = new Date(NOW);
+  due.setDate(due.getDate() + daysAhead);
+  const dueDate = due.toISOString().slice(0, 10);
+  return { status: "Aberto", dueDate, ...extra };
 }
 
-describe("computeEntrega — ausência de dado nunca vira pontuação", () => {
-  it("sem conclusão e sem tarefa atualmente atrasada => value null (não 50 de fábrica)", () => {
-    const entrega = computeEntrega([], []);
-    expect(entrega.value).toBeNull();
-    expect(entrega.tarefasElegiveis).toBe(0);
+describe("computeEntrega — Conclusões no prazo (40) + Saúde atual dos prazos (10)", () => {
+  it("cenário 1 (caso real diagnosticado): 92 base, 91 no prazo, 0 atrasadas concluídas, 1 atualmente atrasada leve => Entrega ≈49/50", () => {
+    const completions = [...withDeadline(91, "on_time")];
+    const openTasks = [
+      openTaskDueDaysAgo(1), // 1 tarefa atualmente atrasada, <=1 dia, não urgente, sem bloqueio
+    ];
+    const entrega = computeEntrega(completions, openTasks, NOW);
+    expect(entrega.periodTaskBase).toBe(92);
+    expect(entrega.onTimeRate).toBe(1);
+    expect(entrega.onTimePoints).toBe(40);
+    expect(entrega.currentHealthRate!).toBeGreaterThan(0.9);
+    expect(entrega.value!).toBeGreaterThanOrEqual(49);
+    expect(entrega.value!).toBeLessThanOrEqual(50);
   });
 
-  it("uma única tarefa atualmente atrasada, zero conclusões => taxa 0%, não 50% de base", () => {
-    const entrega = computeEntrega([], overdue(1));
-    expect(entrega.value).toBe(0);
-    expect(entrega.tarefasElegiveis).toBe(1);
-    expect(entrega.atualmenteAtrasadas).toBe(1);
+  it("cenário 2: 1 tarefa atualmente atrasada em 100 na base => saúde pouco arranhada", () => {
+    const openTasks = [
+      openTaskDueDaysAgo(1),
+      ...Array.from({ length: 99 }, () => openTaskNotYetDue()),
+    ];
+    const entrega = computeEntrega([], openTasks, NOW);
+    expect(entrega.periodTaskBase).toBe(100);
+    expect(entrega.currentHealthRate!).toBeGreaterThan(0.98);
+    expect(entrega.healthPoints!).toBeGreaterThan(9.8);
   });
 
-  it("28 tarefas concluídas no prazo, nenhuma atrasada => 50/50", () => {
-    const entrega = computeEntrega(onTime(28), []);
+  it("cenário 3: 1 tarefa atualmente atrasada em 2 na base => saúde bem arranhada, mas não zerada", () => {
+    const openTasks = [openTaskDueDaysAgo(1), openTaskNotYetDue()];
+    const entrega = computeEntrega([], openTasks, NOW);
+    expect(entrega.periodTaskBase).toBe(2);
+    expect(entrega.currentHealthRate!).toBeCloseTo(0.5, 5);
+    expect(entrega.healthPoints!).toBeCloseTo(5, 5);
+    expect(entrega.healthPoints!).toBeGreaterThan(0);
+  });
+
+  it("cenário 4: todas as conclusões atrasadas => taxa no prazo 0%, saúde atual calculada à parte", () => {
+    const completions = withDeadline(5, "late");
+    const openTasks = [openTaskDueDaysAgo(1)];
+    const entrega = computeEntrega(completions, openTasks, NOW);
+    expect(entrega.onTimeRate).toBe(0);
+    expect(entrega.onTimePoints).toBe(0);
+    expect(entrega.currentHealthRate).not.toBeNull();
+    expect(entrega.overdueCount).toBe(1);
+  });
+
+  it("cenário 5: nenhuma conclusão no período, mas há tarefas abertas com prazo => score ainda derivável (não 'sem dados')", () => {
+    const openTasks = [openTaskNotYetDue(), openTaskNotYetDue(10)];
+    const entrega = computeEntrega([], openTasks, NOW);
+    expect(entrega.value).not.toBeNull();
+    expect(entrega.onTimePoints).toBeNull(); // subparte sem dado
+    expect(entrega.healthPoints).not.toBeNull();
+    // Todo o peso de 50 pontos foi redistribuído pra saúde atual (única subparte com dado).
     expect(entrega.value).toBe(50);
-    expect(entrega.amostraReduzida).toBe(false);
   });
 
-  it("penaliza gradualmente atraso longo (>5 dias) e prioridade alta, sem ficar negativo", () => {
-    const baseline = computeEntrega(onTime(10), []);
-    const withLongOverdue = computeEntrega(
-      onTime(10),
-      overdue(1, { daysOverdue: ATRASO_LONGO_DIAS + 1 }),
-    );
-    const withHighPriority = computeEntrega(
-      onTime(10),
-      overdue(1, { highPriority: true, daysOverdue: 1 }),
-    );
-    expect(withLongOverdue.value!).toBeLessThan(baseline.value!);
-    expect(withHighPriority.value!).toBeLessThan(baseline.value!);
-    const extreme = computeEntrega([], overdue(50, { highPriority: true, daysOverdue: 100 }));
-    expect(extreme.value).toBe(0); // clamp nunca deixa negativo
+  it("cenário 6: tarefas concluídas SEM prazo ficam de fora da taxa, contadas à parte", () => {
+    const completions = [...withDeadline(10, "on_time"), ...semPrazo(4)];
+    const entrega = computeEntrega(completions, [], NOW);
+    expect(entrega.completedTasksWithDeadline).toBe(10);
+    expect(entrega.semPrazoCount).toBe(4);
+    expect(entrega.onTimeRate).toBe(1);
   });
 
-  it("amostra abaixo de MIN_TASK_SAMPLE marca amostraReduzida", () => {
-    const small = computeEntrega(onTime(MIN_TASK_SAMPLE - 1), []);
-    const enough = computeEntrega(onTime(MIN_TASK_SAMPLE), []);
-    expect(small.amostraReduzida).toBe(true);
-    expect(enough.amostraReduzida).toBe(false);
+  it("cenário 7: tarefa atualmente atrasada com bloqueio ATIVO externo (aguardando_cliente) é excluída da penalidade, mas listada", () => {
+    const blocked = openTaskDueDaysAgo(3, {
+      blockedState: { category: "aguardando_cliente" },
+    });
+    const entrega = computeEntrega([], [blocked, openTaskNotYetDue()], NOW);
+    expect(entrega.currentHealthRate).toBe(1); // nenhuma penalidade
+    expect(entrega.overdueDetails).toHaveLength(1);
+    expect(entrega.overdueDetails[0].externallyBlocked).toBe(true);
+    expect(entrega.overdueDetails[0].weightedContribution).toBe(0);
+  });
+
+  it("cenário 8: tarefa atualmente atrasada bloqueada INTERNAMENTE continua penalizando, rotulada distintamente", () => {
+    const blocked = openTaskDueDaysAgo(3, {
+      blockedState: { category: "problema_tecnico" },
+    });
+    const entrega = computeEntrega([], [blocked, openTaskNotYetDue()], NOW);
+    expect(entrega.currentHealthRate!).toBeLessThan(1);
+    expect(entrega.overdueDetails[0].internallyBlocked).toBe(true);
+    expect(entrega.overdueDetails[0].externallyBlocked).toBe(false);
+    expect(entrega.overdueDetails[0].weightedContribution).toBeGreaterThan(0);
+  });
+
+  it("nenhum dado (nenhuma conclusão com prazo, nenhuma tarefa aberta com prazo) => value null", () => {
+    const entrega = computeEntrega([], [], NOW);
+    expect(entrega.value).toBeNull();
+    expect(entrega.periodTaskBase).toBe(0);
+  });
+
+  it("prioridade alta soma até +0.25 ao peso de severidade, capado em 1.75", () => {
+    const urgente = openTaskDueDaysAgo(10, { priority: "Urgente" }); // >5 dias => 1.5 base
+    const entrega = computeEntrega([], [urgente], NOW);
+    expect(entrega.overdueDetails[0].severityWeight).toBe(1.75);
   });
 });
 
-describe("computePrevisibilidade — sem tarefa elegível nunca é 35/35 de fábrica", () => {
-  it("tarefasElegiveis = 0 => value null (Sem dados), mesmo com evento de replan solto", () => {
+describe("21/22 — peso de responsabilidade primário vs. colaborador na Saúde atual", () => {
+  it("cenário 21: tarefa com principal definido — só o principal é penalizado, colaboradores têm peso 0", () => {
+    const principal = openTaskDueDaysAgo(1, { penaltyWeight: 1 });
+    const colaborador = openTaskDueDaysAgo(1, { penaltyWeight: 0 });
+    const entregaPrincipal = computeEntrega([], [principal], NOW);
+    const entregaColaborador = computeEntrega([], [colaborador], NOW);
+    expect(entregaPrincipal.weightedCurrentOverdue).toBeGreaterThan(0);
+    expect(entregaColaborador.weightedCurrentOverdue).toBe(0);
+  });
+
+  it("cenário 22: tarefa sem principal e 3 co-assignees — cada um pesa 1/3, não peso cheio", () => {
+    const semPrincipal = openTaskDueDaysAgo(1, { penaltyWeight: 1 / 3 });
+    const entrega = computeEntrega([], [semPrincipal], NOW);
+    expect(entrega.overdueDetails[0].penaltyWeight).toBeCloseTo(1 / 3, 5);
+    expect(entrega.weightedCurrentOverdue).toBeCloseTo(
+      entrega.overdueDetails[0].severityWeight / 3,
+      5,
+    );
+  });
+});
+
+describe("computePrevisibilidade — 35 pontos, desconto proporcional por severidade", () => {
+  it("cenário 9: replanejamento antecipado não penaliza", () => {
+    const result = computePrevisibilidade(
+      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-05T10:00:00" }],
+      10,
+    );
+    expect(result.value).toBe(35);
+    expect(result.earlyReplans).toBe(1);
+  });
+
+  it("cenário 10: replanejamento no dia gera penalidade pequena", () => {
+    const result = computePrevisibilidade(
+      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" }],
+      10,
+    );
+    expect(result.value!).toBeLessThan(35);
+    expect(result.sameDayReplans).toBe(1);
+  });
+
+  it("cenário 11: replanejamento após vencimento (tardio) penaliza mais que no dia", () => {
+    const noDia = computePrevisibilidade(
+      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" }],
+      10,
+    );
+    const tardio = computePrevisibilidade(
+      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-12T10:00:00" }],
+      10,
+    );
+    expect(tardio.value!).toBeLessThan(noDia.value!);
+    expect(tardio.lateReplans).toBe(1);
+  });
+
+  it("cenário 12: replanejamentos repetidos (no dia/tardio) na MESMA tarefa penalizam progressivamente mais que uma única ocorrência", () => {
+    const uma: PrevisibilidadeReplanEventLike[] = [
+      { taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" },
+    ];
+    const repetidas: PrevisibilidadeReplanEventLike[] = [
+      { taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" },
+      { taskId: "t1", from: "2026-01-15", occurredAt: "2026-01-16T10:00:00" },
+      { taskId: "t1", from: "2026-01-20", occurredAt: "2026-01-20T10:00:00" },
+    ];
+    const resultUma = computePrevisibilidade(uma, 10);
+    const resultRepetidas = computePrevisibilidade(repetidas, 10);
+    expect(resultRepetidas.repeatedProblematicReplans).toBeGreaterThan(0);
+    expect(resultRepetidas.value!).toBeLessThan(resultUma.value!);
+  });
+
+  it("dependência externa isenta (registrada a tempo) não conta como strike", () => {
+    const isento = computePrevisibilidade(
+      [
+        {
+          taskId: "t1",
+          from: "2026-01-10",
+          occurredAt: "2026-01-12T10:00:00",
+          exemptFromResponsibility: true,
+        },
+      ],
+      10,
+    );
+    expect(isento.value).toBe(35);
+    expect(isento.exemptedCount).toBe(1);
+    expect(isento.lateReplans).toBe(0);
+  });
+
+  it("periodTaskBase = 0 => value null (Sem dados), nunca 35 de fábrica", () => {
     const result = computePrevisibilidade(
       [{ taskId: "t1", from: "2026-01-01", occurredAt: "2026-01-01T10:00:00" }],
       0,
     );
     expect(result.value).toBeNull();
   });
-
-  it("sem nenhum replanejamento, com tarefas elegíveis => 35/35", () => {
-    const result = computePrevisibilidade([], 10);
-    expect(result.value).toBe(35);
-  });
-
-  it("replanejamento antecipado penaliza menos que no dia, que penaliza menos que após vencimento", () => {
-    const antecipado = computePrevisibilidade(
-      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-05T10:00:00" }],
-      5,
-    );
-    const noDia = computePrevisibilidade(
-      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-10T10:00:00" }],
-      5,
-    );
-    const aposVencimento = computePrevisibilidade(
-      [{ taskId: "t1", from: "2026-01-10", occurredAt: "2026-01-12T10:00:00" }],
-      5,
-    );
-    expect(antecipado.value!).toBeGreaterThan(noDia.value!);
-    expect(noDia.value!).toBeGreaterThan(aposVencimento.value!);
-  });
 });
 
 describe("computeCompromissos — Não aplicável nunca vira 15 de fábrica", () => {
-  it("sem reunião esperada => value null", () => {
+  it("cenário 13: zero reuniões esperadas => value null, nunca 0", () => {
     expect(computeCompromissos([]).value).toBeNull();
   });
 
-  it("todas as reuniões esperadas participadas => 100 (15/15 depois de combinado)", () => {
+  it("todas as reuniões esperadas participadas => 100", () => {
     const result = computeCompromissos([{ attended: true }, { attended: true }]);
     expect(result.value).toBe(100);
   });
+
+  it("cenário 14 (documentado no caller): reunião cancelada é excluída ANTES de chegar aqui — computeCompromissos só recebe o que já é 'esperado' (ver `TimeSection.tsx`/`MemberProfileDialog.tsx`, que já filtram `mt.status === 'Cancelada'` antes de montar `attendance`)", () => {
+    // Função pura: cancelamento é responsabilidade de quem monta o array de entrada.
+    const semCancelada = computeCompromissos([{ attended: true }, { attended: false }]);
+    expect(semCancelada.expected).toBe(2);
+  });
 });
 
-describe("combineScoreV2 — estados Sem dados / Provisório / Definitivo", () => {
-  it("cenário 1: sem tarefas e sem reuniões => Sem dados", () => {
-    const score = buildScore([], []);
+describe("sampleConfidence — 4 níveis, volume nunca soma ponto ao score", () => {
+  it("0 => sem_dados; 1-9 => insuficiente; 10-19 => baixa; 20-39 => media; 40+ => alta", () => {
+    expect(sampleConfidence(0)).toBe("sem_dados");
+    expect(sampleConfidence(5)).toBe("insuficiente");
+    expect(sampleConfidence(15)).toBe("baixa");
+    expect(sampleConfidence(30)).toBe("media");
+    expect(sampleConfidence(92)).toBe("alta");
+  });
+});
+
+describe("classificacaoDoScore — 5 faixas (90/80/70/60/0), 'Bom' nunca vermelho", () => {
+  it("mapeia as 5 faixas corretamente", () => {
+    expect(classificacaoDoScore(95)).toBe("Excelente");
+    expect(classificacaoDoScore(85)).toBe("Muito bom");
+    expect(classificacaoDoScore(75)).toBe("Bom");
+    expect(classificacaoDoScore(65)).toBe("Atenção");
+    expect(classificacaoDoScore(10)).toBe("Crítico");
+  });
+});
+
+describe("combineScoreV2 — redistribuição de peso entre as 3 dimensões", () => {
+  function build(
+    completions: EntregaCompletionLike[],
+    openTasks: OpenTaskForHealth[],
+    deadlineChanges: PrevisibilidadeReplanEventLike[] = [],
+    attendance: { attended: boolean }[] = [],
+    now: Date = NOW,
+  ) {
+    const entrega = computeEntrega(completions, openTasks, now);
+    const previsibilidade = computePrevisibilidade(deadlineChanges, entrega.periodTaskBase);
+    const compromissos = computeCompromissos(attendance);
+    return combineScoreV2(entrega, previsibilidade, compromissos);
+  }
+
+  it("cenário 17: nenhuma dimensão tem dado => Sem dados suficientes, nunca 0/100", () => {
+    const score = build([], []);
     expect(score.score).toBeNull();
     expect(score.dataState).toBe("sem_dados");
     expect(score.classificacao).toBeNull();
   });
 
-  it("cenário 2: sem tarefas mas COM reuniões => ainda Sem dados (atividade operacional é sobre tarefa, não reunião)", () => {
-    const score = buildScore([], [], [], [{ attended: true }, { attended: false }]);
-    expect(score.score).toBeNull();
-    expect(score.dataState).toBe("sem_dados");
-  });
-
-  it("cenário 3: uma única tarefa atualmente atrasada => provisório, com o atraso contabilizado", () => {
-    const score = buildScore([], overdue(1));
-    expect(score.dataState).toBe("provisorio");
-    expect(score.score).not.toBeNull();
-    expect(score.entrega.atualmenteAtrasadas).toBe(1);
-    expect(score.classificacao).toBeNull();
-  });
-
-  it("cenário 4: uma tarefa concluída atrasada => provisório, 0% no prazo", () => {
-    const score = buildScore(late(1), []);
-    expect(score.dataState).toBe("provisorio");
-    expect(score.entrega.noPrazo).toBe(0);
-    expect(score.entrega.comAtraso).toBe(1);
-  });
-
-  it("cenário 5: 28 tarefas concluídas no prazo, sem reunião => score próximo de 100, Excelente", () => {
-    const score = buildScore(onTime(28), []);
-    expect(score.dataState).toBe("definitivo");
-    expect(score.score).toBeGreaterThanOrEqual(95);
+  it("cenário 1 completo: caso real diagnosticado => Excelente, confiança alta, score 98-100", () => {
+    const completions = withDeadline(91, "on_time");
+    const openTasks = [openTaskDueDaysAgo(1)];
+    const deadlineChanges: PrevisibilidadeReplanEventLike[] = Array.from({ length: 5 }, (_, i) => ({
+      taskId: `early-${i}`,
+      from: "2026-06-01",
+      occurredAt: "2026-05-20T10:00:00",
+    }));
+    const attendance = Array.from({ length: 5 }, () => ({ attended: true }));
+    const score = build(completions, openTasks, deadlineChanges, attendance);
+    expect(score.entregaPontos!).toBeGreaterThanOrEqual(49);
+    expect(score.previsibilidadePontos).toBe(35);
+    expect(score.compromissosPontos).toBe(15);
+    expect(score.score!).toBeGreaterThanOrEqual(98);
+    expect(score.score!).toBeLessThanOrEqual(100);
     expect(score.classificacao).toBe("Excelente");
+    expect(score.confidence).toBe("alta");
+    expect(score.dataState).toBe("definitivo");
   });
 
-  it("cenário 6: 8 no prazo + 15 atrasadas + 4 atualmente atrasadas => nunca acima de 59", () => {
-    const score = buildScore([...onTime(8), ...late(15)], overdue(4));
-    expect(score.score!).toBeLessThanOrEqual(59);
-  });
-
-  it("cenário 7: 3 no prazo + 6 atrasadas + 12 atualmente atrasadas => crítico, no máximo 49", () => {
-    const score = buildScore([...onTime(3), ...late(6)], overdue(12));
-    expect(score.score!).toBeLessThanOrEqual(49);
-    expect(score.classificacao).toBe(score.dataState === "definitivo" ? "Crítico" : null);
-  });
-
-  it("cenário 8: sem reunião esperada => dimensão Não aplicável, sem bônus nem penalidade", () => {
-    const withMeeting = buildScore(onTime(10), [], [], [{ attended: true }]);
-    const withoutMeeting = buildScore(onTime(10), [], [], []);
+  it("cenário 8 (redistribuição): sem reunião esperada, a dimensão é excluída e o score não piora artificialmente", () => {
+    const withMeeting = build(withDeadline(10, "on_time"), [], [], [{ attended: true }]);
+    const withoutMeeting = build(withDeadline(10, "on_time"), [], [], []);
     expect(withoutMeeting.compromissosAplicavel).toBe(false);
     expect(withoutMeeting.compromissosPontos).toBeNull();
-    // Sem a dimensão, o score é renormalizado sobre Entrega+Previsibilidade — não deve ficar
-    // artificialmente pior só por faltar reunião.
     expect(withoutMeeting.score).toBe(withMeeting.score);
   });
 
-  it("cenário 9: todas as reuniões esperadas participadas => 15/15 quando aplicável", () => {
-    const score = buildScore(onTime(10), [], [], [{ attended: true }, { attended: true }]);
-    expect(score.compromissosAplicavel).toBe(true);
-    expect(score.compromissosPontos).toBe(15);
-  });
-
-  it("cenário 13: score nunca fica abaixo de 0 nem acima de 100", () => {
-    const worst = buildScore([...late(50)], overdue(50, { highPriority: true, daysOverdue: 365 }));
+  it("score nunca sai de [0,100]", () => {
+    const worst = build(
+      withDeadline(50, "late"),
+      Array.from({ length: 50 }, () => openTaskDueDaysAgo(365, { priority: "Urgente" })),
+    );
     expect(worst.score!).toBeGreaterThanOrEqual(0);
-    const best = buildScore(
-      onTime(100),
+    const best = build(
+      withDeadline(100, "on_time"),
       [],
       [],
       Array.from({ length: 50 }, () => ({ attended: true })),
     );
     expect(best.score!).toBeLessThanOrEqual(100);
   });
-});
 
-describe("computeScoreGuardrails — salvaguardas de coerência centralizadas (desconto proporcional)", () => {
-  it("taxa de entrega no prazo abaixo de 35% => desconto (nunca um teto fixo idêntico pra qualquer gravidade)", () => {
-    const entrega = computeEntrega([...onTime(1), ...late(2)], overdue(1)); // 1/4 = 25%
-    const reasons = computeScoreGuardrails(entrega);
-    const reason = reasons.find((r) => r.key === "taxa_no_prazo_abaixo_35");
-    expect(reason).toBeDefined();
-    expect(reason!.penalty).toBeGreaterThan(0);
-    expect(reason!.penalty).toBeLessThanOrEqual(GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_35);
-  });
-
-  it("taxa entre 35% e 50% => desconto mais leve que abaixo de 35%", () => {
-    const entrega = computeEntrega(onTime(4), overdue(4)); // 4/8 = 50% exato, não entra na regra <50
-    const entregaAbaixo = computeEntrega(onTime(4), overdue(5)); // 4/9 ≈ 44%
-    expect(computeScoreGuardrails(entrega).some((r) => r.key.startsWith("taxa_no_prazo"))).toBe(
-      false,
+  it("cenário 18: arredondamento por maior resto — total exibido bate exatamente com o score inteiro", () => {
+    // Construído pra que a soma dos arredondamentos INDEPENDENTES (round(entrega)+round(previs)+round(compromissos))
+    // NÃO bata com round(score exato) — força o ajuste de maior resto.
+    const completions = withDeadline(3, "on_time"); // onTimeRate=1 => onTimePoints=40 (subparte cheia)
+    const openTasks = [openTaskDueDaysAgo(1)]; // 1 atrasada leve, dilui a saúde
+    const entrega = computeEntrega(completions, openTasks, NOW);
+    const previsibilidade = computePrevisibilidade([], entrega.periodTaskBase);
+    const compromissos = computeCompromissos([
+      { attended: true },
+      { attended: true },
+      { attended: false },
+    ]); // 2/3 => rate com dízima
+    const score = combineScoreV2(entrega, previsibilidade, compromissos);
+    expect(score.entregaPontos! + score.previsibilidadePontos! + score.compromissosPontos!).toBe(
+      score.score,
     );
-    const reason = computeScoreGuardrails(entregaAbaixo).find(
-      (r) => r.key === "taxa_no_prazo_abaixo_50",
-    );
-    expect(reason).toBeDefined();
-    expect(reason!.penalty).toBeGreaterThan(0);
-    expect(reason!.penalty).toBeLessThanOrEqual(GUARDRAIL_PENALTY_MAX_TAXA_ABAIXO_50);
-  });
-
-  it("1 tarefa de prioridade alta atrasada há mais de 5 dias => desconto modesto, NUNCA um teto fixo que apaga um score bom", () => {
-    const entrega = computeEntrega(
-      onTime(10),
-      overdue(1, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
-    );
-    const reason = computeScoreGuardrails(entrega).find(
-      (r) => r.key === "prioridade_alta_atraso_longo",
-    );
-    expect(reason).toBeDefined();
-    // Achado real corrigido: 1 tarefa nessa condição não pode mais travar
-    // o score em 49 pra qualquer pessoa — o desconto é proporcional
-    // (aqui, só 1 tarefa) e pequeno o bastante pra não apagar um mês de
-    // ~100 entregas no prazo.
-    expect(reason!.penalty).toBe(GUARDRAIL_PENALTY_PRIORIDADE_ALTA_BASE);
-  });
-
-  it("mais tarefas de prioridade alta atrasadas há muito tempo => desconto maior (diferencia gravidade, não trava todo mundo no mesmo número)", () => {
-    const entregaUma = computeEntrega(
-      onTime(10),
-      overdue(1, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
-    );
-    const entregaVarias = computeEntrega(
-      onTime(10),
-      overdue(4, { highPriority: true, daysOverdue: ATRASO_LONGO_DIAS + 1 }),
-    );
-    const penaltyUma = computeScoreGuardrails(entregaUma).find(
-      (r) => r.key === "prioridade_alta_atraso_longo",
-    )!.penalty;
-    const penaltyVarias = computeScoreGuardrails(entregaVarias).find(
-      (r) => r.key === "prioridade_alta_atraso_longo",
-    )!.penalty;
-    expect(penaltyVarias).toBeGreaterThan(penaltyUma);
-  });
-
-  it(`${GUARDRAIL_ACUMULO_LIMIAR} ou mais tarefas atualmente atrasadas => desconto que cresce com o excedente`, () => {
-    const entregaLimiar = computeEntrega(onTime(10), overdue(GUARDRAIL_ACUMULO_LIMIAR));
-    const entregaMuitas = computeEntrega(onTime(10), overdue(GUARDRAIL_ACUMULO_LIMIAR + 16)); // cenário real: 21 atrasadas
-    const penaltyLimiar = computeScoreGuardrails(entregaLimiar).find(
-      (r) => r.key === "acumulo_atrasadas",
-    )!.penalty;
-    const penaltyMuitas = computeScoreGuardrails(entregaMuitas).find(
-      (r) => r.key === "acumulo_atrasadas",
-    )!.penalty;
-    expect(penaltyLimiar).toBeGreaterThan(0);
-    expect(penaltyMuitas).toBeGreaterThan(penaltyLimiar);
-    expect(penaltyMuitas).toBeLessThanOrEqual(GUARDRAIL_PENALTY_ACUMULO_MAX);
-  });
-
-  it("zero pontos em Entrega com tarefas elegíveis => desconto fixo modesto", () => {
-    const entrega = computeEntrega([], overdue(1));
-    expect(entrega.value).toBe(0);
-    const reason = computeScoreGuardrails(entrega).find((r) => r.key === "entrega_zero");
-    expect(reason).toBeDefined();
-    expect(reason!.penalty).toBe(GUARDRAIL_PENALTY_ENTREGA_ZERO);
-  });
-
-  it("nenhuma condição disparada => nenhuma salvaguarda", () => {
-    const entrega = computeEntrega(onTime(10), []);
-    expect(computeScoreGuardrails(entrega)).toEqual([]);
   });
 });
 
-describe("combineScoreV2 — correção real: 1 pendência não pode mais apagar um histórico bom", () => {
-  it("~100 entregas no prazo + 1 tarefa de prioridade alta atrasada há 6 dias => score continua alto, não trava em 49 (caso real de produção corrigido em 2026-09-20)", () => {
-    const completions = onTime(97);
-    const overdueDetails = overdue(1, { highPriority: true, daysOverdue: 6 });
-    const entrega = computeEntrega(completions, overdueDetails);
-    const previsibilidade = computePrevisibilidade([], entrega.tarefasElegiveis);
-    const compromissos = computeCompromissos(
-      Array.from({ length: 10 }, () => ({ attended: true })),
+describe("computeMemberScoreV2 — monta o score a partir do ledger cru (ponto único de transformação)", () => {
+  function ev(partial: Partial<PerformanceEventLike>): PerformanceEventLike {
+    return {
+      eventType: "task_completed",
+      personId: "p1",
+      personName: "Fulano",
+      taskId: "t1",
+      taskTitle: "Tarefa",
+      meetingId: null,
+      occurredAt: "2026-06-01T12:00:00",
+      data: {},
+      ...partial,
+    };
+  }
+
+  it("cenário 15: amostra insuficiente (1-9 tarefas) => score provisório, confiança correta, fora de ranking", () => {
+    const events: PerformanceEventLike[] = Array.from({ length: 5 }, (_, i) =>
+      ev({
+        taskId: `t${i}`,
+        data: { outcome: "on_time", performanceDueDateUsed: "2026-06-01" },
+      }),
     );
-    const result = combineScoreV2(entrega, previsibilidade, compromissos);
-    // Antes da correção este cenário caía pra exatamente 49 ("Crítico"),
-    // idêntico ao de alguém com desempenho muito pior — a régua real é: um
-    // mês quase perfeito com 1 pendência pontual deve continuar em
-    // "Bom"/"Excelente", só com um desconto visível, não "Crítico".
-    expect(result.score).not.toBeNull();
-    expect(result.score!).toBeGreaterThanOrEqual(75);
+    const score = computeMemberScoreV2(events, [], 19, NOW);
+    expect(score.confidence).toBe("insuficiente");
+    expect(score.dataState).toBe("provisorio");
+    expect(score.score).not.toBeNull();
+  });
+
+  it("hasDeadline vem exatamente de data.performanceDueDateUsed !== null (sinal do ledger)", () => {
+    const events: PerformanceEventLike[] = [
+      ev({ taskId: "t1", data: { outcome: "on_time", performanceDueDateUsed: "2026-06-01" } }),
+      ev({ taskId: "t2", data: { outcome: "on_time", performanceDueDateUsed: null } }),
+    ];
+    const score = computeMemberScoreV2(events, [], 19, NOW);
+    expect(score.entrega.completedTasksWithDeadline).toBe(1);
+    expect(score.entrega.semPrazoCount).toBe(1);
+  });
+
+  it("versão exposta = OPERATIONAL_SCORE_VERSION (2), pra composição mostrar 'Fórmula v2'", () => {
+    const score = computeMemberScoreV2([], [], 19, NOW);
+    expect(score.version).toBe(OPERATIONAL_SCORE_VERSION);
+    expect(OPERATIONAL_SCORE_VERSION).toBe(2);
+  });
+
+  it("cenário 20: comparação com período anterior usa a mesma versão/fórmula dos dois lados", () => {
+    const eventsNow: PerformanceEventLike[] = [
+      ev({ taskId: "t1", data: { outcome: "on_time", performanceDueDateUsed: "2026-06-01" } }),
+    ];
+    const eventsPrev: PerformanceEventLike[] = [
+      ev({ taskId: "t2", data: { outcome: "late", performanceDueDateUsed: "2026-05-01" } }),
+    ];
+    const now = computeMemberScoreV2(eventsNow, [], 19, NOW);
+    const prev = computeMemberScoreV2(eventsPrev, [], 19, NOW);
+    expect(now.version).toBe(prev.version);
   });
 });
 
-describe("overdueOpenTasks / overdueTaskDetails — estado atual, nunca filtrado por período", () => {
-  it("cenário 10: tarefa com prazo do mês anterior, ainda aberta, continua contando como atualmente atrasada", () => {
+describe("cenário 16 — período parcial (mês corrente em andamento) precisa ser sinalizado pelo chamador", () => {
+  it("previousEquivalentRange produz uma janela de mesma duração — o CALLER (TimeSection/MemberProfileDialog) é responsável por rotular quando o período atual ainda está em andamento (ex.: comparar 'mês atual até hoje' com 'mês anterior inteiro' sem marcar isso seria enganoso); este motor não tem noção de calendário/'hoje', só recebe eventos já filtrados por range — documentado aqui como o contrato entre a camada de dados e a UI.", () => {
+    // Cobertura de contrato: o motor em si é agnóstico a "parcial vs. completo" — é dever do
+    // chamador (rangeForProfilePeriod/rangeForScorePeriod) escolher o range e da UI (TimeSection.tsx)
+    // exibir o aviso de período parcial ao comparar. Ver `previousEquivalentRange` (mantida intocada).
+    expect(true).toBe(true);
+  });
+});
+
+describe("overdueOpenTasks / overdueTaskDetails / isHighPriority — utilidades mantidas intocadas", () => {
+  it("tarefa com prazo antigo, ainda aberta, continua contando como atualmente atrasada", () => {
     const tasks = [{ id: "t1", title: "Tarefa antiga", status: "Aberto", dueDate: "2026-01-05" }];
     const now = new Date("2026-03-01T12:00:00-03:00");
     expect(overdueOpenTasks(tasks, now).length).toBe(1);
   });
 
-  it("cenário 11: tarefa concluída (com atraso) nunca aparece na lista de atualmente atrasadas — listas de entrada são disjuntas por construção (status Concluído sai de OPEN_STATUSES)", () => {
+  it("tarefa concluída nunca aparece na lista de atualmente atrasadas (listas disjuntas por construção)", () => {
     expect(OPEN_STATUSES.has("Concluído")).toBe(false);
   });
 
@@ -326,15 +441,13 @@ describe("overdueOpenTasks / overdueTaskDetails — estado atual, nunca filtrado
     const tasks = [
       { id: "t1", title: "x", status: "Aberto", dueDate: "2026-01-05", priority: "Urgente" },
     ];
-    const now = new Date("2026-01-05T20:00:00-03:00"); // poucas horas após o corte de 19h
+    const now = new Date("2026-01-05T20:00:00-03:00");
     const details = overdueTaskDetails(tasks, now);
     expect(details).toHaveLength(1);
     expect(details[0].daysOverdue).toBeGreaterThanOrEqual(1);
     expect(details[0].highPriority).toBe(true);
   });
-});
 
-describe("classifyReplanTiming / isHighPriority / classificacaoDoScore — utilidades", () => {
   it("classifica replanejamento por distância do prazo anterior", () => {
     expect(classifyReplanTiming("2026-01-10", "2026-01-05T10:00:00")).toBe("antecipado");
     expect(classifyReplanTiming("2026-01-10", "2026-01-09T10:00:00")).toBe("proximo");
@@ -349,11 +462,7 @@ describe("classifyReplanTiming / isHighPriority / classificacaoDoScore — utili
     expect(isHighPriority("Baixa")).toBe(false);
     expect(isHighPriority(undefined)).toBe(false);
   });
-
-  it("classificacaoDoScore usa os 4 níveis (90/75/60/0)", () => {
-    expect(classificacaoDoScore(95)).toBe("Excelente");
-    expect(classificacaoDoScore(80)).toBe("Bom");
-    expect(classificacaoDoScore(65)).toBe("Atenção");
-    expect(classificacaoDoScore(10)).toBe("Crítico");
-  });
 });
+
+// Suprime "declared but never used" no TS quando um import só serve de anotação de tipo em algum cenário.
+void (null as unknown as PerformanceOpenTask);

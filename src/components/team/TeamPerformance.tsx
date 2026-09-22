@@ -65,10 +65,10 @@ export function TeamPerformance({
       <div className="flex flex-wrap items-start justify-between gap-2 px-1">
         <div>
           <h3 className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
-            <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Performance do Time
+            <Gauge className="h-3.5 w-3.5 text-foreground/70" /> Confiabilidade Operacional
           </h3>
           <p className="mt-0.5 text-[11px] text-text-secondary">
-            Score operacional e tarefas em atraso
+            Indicador de entregas, previsibilidade e compromissos no período.
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -89,7 +89,7 @@ export function TeamPerformance({
               </p>
               <ul className="space-y-1.5 text-xs text-text-secondary">
                 <li className="flex items-center justify-between gap-3">
-                  <span>Entrega — conclusão no prazo, penaliza vencidas em aberto</span>
+                  <span>Entregas e prazo — conclusão no prazo + saúde do backlog aberto</span>
                   <span className="shrink-0 font-semibold text-foreground">50 pts</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
@@ -102,10 +102,11 @@ export function TeamPerformance({
                 </li>
               </ul>
               <p className="mt-2 text-[11px] text-text-secondary">
-                Prazos encerram às 19h. Sem tarefa no período, o score não existe ("Sem dados"); com
-                poucas tarefas, é calculado mas fica "Provisório". Um problema grave de entrega
-                sempre limita o score, mesmo com boas notas nas outras dimensões. Veja o
-                detalhamento e a composição completa na ficha individual do membro.
+                Prazos encerram às 19h. Sem nenhuma atividade no período, o score não existe ("Sem
+                dados suficientes"); com poucas tarefas, é calculado mas fica "Provisório", fora de
+                comparações/rankings. Este indicador analisa execução operacional, prazos e
+                compromissos — ele não representa sozinho a performance completa do profissional.
+                Veja o detalhamento e a composição completa na ficha individual do membro.
               </p>
             </PopoverContent>
           </Popover>

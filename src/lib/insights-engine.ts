@@ -83,8 +83,33 @@ export type MemberInsightBundle = {
   onTimeSamplePrevious: number;
   avgDelayDaysCurrent: number | null;
   avgDelayDaysPrevious: number | null;
+  /** Total de replanejamentos (qualquer classificação) no período —
+   * usado só pra exibição/insight informativo, NUNCA sozinho pra disparar
+   * alerta (ver `criticalReplansCurrent`/`Previous` abaixo). */
   replansCurrent: number;
   replansPrevious: number;
+  /** Replanejamentos "críticos" (no dia do vencimento OU depois —
+   * `computeAggregateIndicators`'s `qtdReplanejamentosNoDia`, que apesar
+   * do nome inclui os 2) — CORREÇÃO (2026-09-21): a regra de "aumento de
+   * replanejamentos" comparava só `replansCurrent`/`replansPrevious`
+   * (contagem BRUTA, sem olhar timing), então um mês com 5 replans
+   * antecipados/planejados (sem nenhum tardio) disparava a MESMA copy
+   * alarmante de "Atenção: aumento de replanejamentos" que um mês com 5
+   * replans em cima da hora. Separado aqui pra a regra de risco olhar só
+   * pro que É de fato um sinal ruim (crítico), e uma regra nova,
+   * informativa, cobrir o caso 100% antecipado sem soar como alerta. */
+  criticalReplansCurrent: number;
+  criticalReplansPrevious: number;
+  /** Alterações repetidas (no dia/tardio) na MESMA tarefa no período —
+   * `score.previsibilidade.repeatedProblematicReplans` (`performance-engine.ts`).
+   * Alerta real: "repeated issues on the same task" (item explícito do
+   * pedido), distinto de um replan isolado em tarefas diferentes. */
+  repeatedProblematicReplansCurrent: number;
+  /** `true` quando o período ATUAL ainda está em andamento (ex.: "Este
+   * mês" olhado no dia 12) — os insights de evolução/comparação anexam um
+   * aviso de período parcial em vez de comparar silenciosamente um mês
+   * completo com um mês pela metade. */
+  currentPeriodPartial?: boolean;
 
   // Situação atual de atraso
   overdueCount: number;
@@ -188,17 +213,49 @@ const RULES: Rule[] = [
     };
   },
 
-  // ---- evolução: replanejamentos em alta ----
+  // ---- risco real: aumento de replanejamentos CRÍTICOS (no dia/tardio) ----
+  // Só dispara sobre a fração crítica — um aumento puramente de replans
+  // antecipados nunca cai aqui (ver comentário no tipo `criticalReplansCurrent`).
   (b) => {
     const T = INSIGHT_THRESHOLDS;
-    const increase = b.replansCurrent - b.replansPrevious;
+    const increase = b.criticalReplansCurrent - b.criticalReplansPrevious;
     if (increase < T.replanejamentosVariacaoMin) return null;
+    const parcial = b.currentPeriodPartial ? " (período atual ainda em andamento)" : "";
     return {
-      ruleId: "replanejamentos_alta",
+      ruleId: "replanejamentos_criticos_alta",
       nature: "atencao",
       category: "prazos",
       priority: 75,
-      text: `${b.memberName} teve aumento de replanejamentos no período (${b.replansPrevious} → ${b.replansCurrent}).`,
+      text: `${b.memberName} teve aumento de replanejamentos no dia/após o vencimento no período (${b.criticalReplansPrevious} → ${b.criticalReplansCurrent})${parcial}.`,
+    };
+  },
+
+  // ---- risco real: replanejamentos repetidos na MESMA tarefa ----
+  (b) => {
+    if (b.repeatedProblematicReplansCurrent <= 0) return null;
+    return {
+      ruleId: "replanejamentos_repetidos_mesma_tarefa",
+      nature: "atencao",
+      category: "prazos",
+      priority: 78,
+      text: `${b.memberName} teve alterações de prazo repetidas (no dia/após o vencimento) na mesma tarefa ${b.repeatedProblematicReplansCurrent > 1 ? `${b.repeatedProblematicReplansCurrent} vezes` : "mais de uma vez"} no período.`,
+    };
+  },
+
+  // ---- informativo: replanejamentos existem, mas nenhum crítico ----
+  // Substitui a copy alarmante antiga pra um padrão 100% antecipado: um
+  // aumento de replans totalmente planejados/antecipados nunca deveria
+  // soar como "Atenção" — aqui vira uma nota neutra, categoria
+  // "tendencia" (não "atencao"), só quando há replans reais no período.
+  (b) => {
+    if (b.replansCurrent === 0) return null;
+    if (b.criticalReplansCurrent > 0) return null; // já coberto pela regra de risco acima
+    return {
+      ruleId: "replanejamentos_apenas_antecipados",
+      nature: "tendencia",
+      category: "prazos",
+      priority: 20,
+      text: `Informativo: ${b.memberName} teve ${b.replansCurrent} prazo${b.replansCurrent === 1 ? "" : "s"} ajustado${b.replansCurrent === 1 ? "" : "s"} antecipadamente, sem replanejamentos no dia ou após o vencimento.`,
     };
   },
 
@@ -208,12 +265,15 @@ const RULES: Rule[] = [
     if (b.scoreNow == null || b.scorePrevious == null) return null;
     const delta = b.scoreNow - b.scorePrevious;
     if (delta > -T.scoreVariacaoMin) return null;
+    const parcial = b.currentPeriodPartial
+      ? " — período atual ainda em andamento, comparação pode mudar até o fim do período"
+      : "";
     return {
       ruleId: "score_queda",
       nature: "atencao",
       category: "evolucao",
       priority: 80,
-      text: `Score Operacional de ${b.memberName} caiu ${Math.abs(delta)} pontos ${b.scorePeriodLabel}.`,
+      text: `Score Operacional de ${b.memberName} caiu ${Math.abs(delta)} pontos ${b.scorePeriodLabel}${parcial}.`,
     };
   },
 
@@ -223,12 +283,15 @@ const RULES: Rule[] = [
     if (b.scoreNow == null || b.scorePrevious == null) return null;
     const delta = b.scoreNow - b.scorePrevious;
     if (delta < T.scoreVariacaoMin) return null;
+    const parcial = b.currentPeriodPartial
+      ? " — período atual ainda em andamento, comparação pode mudar até o fim do período"
+      : "";
     return {
       ruleId: "score_evolucao",
       nature: "destaque",
       category: "evolucao",
       priority: 70,
-      text: `Score Operacional de ${b.memberName} subiu ${delta} pontos ${b.scorePeriodLabel}.`,
+      text: `Score Operacional de ${b.memberName} subiu ${delta} pontos ${b.scorePeriodLabel}${parcial}.`,
     };
   },
 

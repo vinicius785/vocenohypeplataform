@@ -30,12 +30,8 @@ import {
   type PerformanceOpenTask,
 } from "@/lib/score";
 import {
-  computeEntrega,
-  computePrevisibilidade,
-  computeCompromissos,
-  combineScoreV2,
+  computeMemberScoreV2,
   computeAggregateIndicators,
-  overdueTaskDetails,
   rangeForScorePeriod,
   groupEventsByPerson,
   dedupAttendanceEvents,
@@ -391,38 +387,11 @@ function DiretorioTab() {
     const map = new Map<string, ScoreOperacionalV2>();
     for (const m of members) {
       const personEvents = eventsByPersonId.get(m.id) ?? [];
-      const completions = personEvents
-        .filter((e) => e.eventType === "task_completed")
-        .map((e) => ({
-          outcome: e.data.outcome as TaskOutcome,
-          taskId: e.taskId,
-        }));
-      const deadlineChanges = personEvents
-        .filter((e) => e.eventType === "task_deadline_changed")
-        .map((e) => ({
-          taskId: e.taskId,
-          from: (e.data.from as string) ?? undefined,
-          occurredAt: e.occurredAt,
-        }));
-      const attendance = dedupAttendanceEvents(
-        personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
-      ).map((e) => ({ attended: !!e.data.attended }));
-
       const openTasks = openTasksByMemberId.get(m.id) ?? [];
-      const overdueDetails = overdueTaskDetails(
-        openTasks,
-        undefined,
-        performanceSettings.deadlineCutoffHour,
+      map.set(
+        m.id,
+        computeMemberScoreV2(personEvents, openTasks, performanceSettings.deadlineCutoffHour),
       );
-
-      const entrega = computeEntrega(completions, overdueDetails);
-      const previsibilidade = computePrevisibilidade(
-        deadlineChanges,
-        entrega.tarefasElegiveis,
-        performanceSettings.deadlineCutoffHour,
-      );
-      const compromissos = computeCompromissos(attendance);
-      map.set(m.id, combineScoreV2(entrega, previsibilidade, compromissos));
     }
     return map;
   }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings]);
@@ -663,32 +632,15 @@ function DiretorioTab() {
       personEvents: PerformanceEventLike[],
       openTasks: PerformanceOpenTask[],
     ) => {
-      const completions = personEvents
-        .filter((e) => e.eventType === "task_completed")
-        .map((e) => ({ outcome: e.data.outcome as TaskOutcome, taskId: e.taskId }));
-      const deadlineChanges = personEvents
-        .filter((e) => e.eventType === "task_deadline_changed")
-        .map((e) => ({
-          taskId: e.taskId,
-          from: (e.data.from as string) ?? undefined,
-          occurredAt: e.occurredAt,
-        }));
       const attendance = dedupAttendanceEvents(
         personEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
       ).map((e) => ({ attended: !!e.data.attended }));
-      const overdueDetails = overdueTaskDetails(
+      const score = computeMemberScoreV2(
+        personEvents,
         openTasks,
-        undefined,
         performanceSettings.deadlineCutoffHour,
       );
-      const entrega = computeEntrega(completions, overdueDetails);
-      const previsibilidade = computePrevisibilidade(
-        deadlineChanges,
-        entrega.tarefasElegiveis,
-        performanceSettings.deadlineCutoffHour,
-      );
-      const compromissos = computeCompromissos(attendance);
-      return { score: combineScoreV2(entrega, previsibilidade, compromissos), attendance };
+      return { score, attendance };
     };
 
     return members.map((m) => {
@@ -796,6 +748,14 @@ function DiretorioTab() {
         avgDelayDaysPrevious: aggPrev30d.tempoMedioAtrasoDias,
         replansCurrent: agg30d.qtdReplanejamentos,
         replansPrevious: aggPrev30d.qtdReplanejamentos,
+        criticalReplansCurrent: agg30d.qtdReplanejamentosNoDia,
+        criticalReplansPrevious: aggPrev30d.qtdReplanejamentosNoDia,
+        repeatedProblematicReplansCurrent:
+          scoreNowResult.score.previsibilidade.repeatedProblematicReplans,
+        // Janela sempre "últimos 30 dias" dos dois lados (rolante, nunca
+        // calendário) — nunca parcial por construção, diferente do
+        // seletor de período da ficha individual (`profilePeriod`).
+        currentPeriodPartial: false,
         overdueCount: overdueTasks.length,
         overdueHighPriorityCount,
         overdueOlderThanThresholdCount,

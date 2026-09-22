@@ -35,20 +35,18 @@ import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask } from "@/lib/task-aggregation";
 import type { Meeting } from "@/lib/reunioes-store";
 import {
-  computeCompromissos,
-  computeEntrega,
-  computePrevisibilidade,
-  combineScoreV2,
+  computeMemberScoreV2,
   classifyReplanTiming,
   REPLAN_TIMING_LABEL,
   overdueOpenTasks,
-  overdueTaskDetails,
   dedupAttendanceEvents,
   rangeForProfilePeriod,
   previousEquivalentRange,
   computeAggregateIndicators,
   PROFILE_PERIOD_OPTIONS,
-  MIN_TASK_SAMPLE,
+  SAMPLE_CONFIDENCE_LABEL,
+  SCORE_CLASSIFICACAO_TONE,
+  OPERATIONAL_SCORE_VERSION,
   type ProfilePeriodMode,
   type PerformanceSettings,
   type TaskOutcome,
@@ -216,7 +214,15 @@ export function MemberProfileDialog({
   initialShowComposition?: boolean;
 }) {
   const tv = member.timeView ?? [];
-  const show = (f: TimeField) => isSelf || tv.includes(f);
+  // BUG CORRIGIDO (2026-09-21): faltava o bypass de admin aqui — a linha da
+  // lista (`MemberPerformanceRow.tsx`'s `showName = canManage || isSelf ||
+  // m.timeView.includes("name")`) já mostrava o nome real pra um Admin,
+  // mas esta ficha usava só `isSelf || tv.includes(f)`, SEM `isAdmin`. Um
+  // Admin via o nome certo na lista e, ao abrir a MESMA pessoa na ficha,
+  // caía no fallback "Membro" — não era timing/carregamento (`member` já
+  // chega pronto via prop, mesma fonte que a lista), era essa condição de
+  // visibilidade divergindo entre os dois componentes pro mesmo viewer.
+  const show = (f: TimeField) => isAdmin || isSelf || tv.includes(f);
   const status = getStatus(member.id);
 
   const [profilePeriod, setProfilePeriod] = useState<ProfilePeriodMode>("mes");
@@ -271,65 +277,26 @@ export function MemberProfileDialog({
     () => overdueOpenTasks(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
     [openTasksForMember, performanceSettings.deadlineCutoffHour],
   );
-  const overdueDetails = useMemo(
-    () => overdueTaskDetails(openTasksForMember, undefined, performanceSettings.deadlineCutoffHour),
-    [openTasksForMember, performanceSettings.deadlineCutoffHour],
-  );
-
-  const entrega = useMemo(
-    () => computeEntrega(completions, overdueDetails),
-    [completions, overdueDetails],
-  );
-  const previsibilidade = useMemo(
-    () =>
-      computePrevisibilidade(
-        deadlineChanges.map((d) => ({ taskId: d.taskId, from: d.from, occurredAt: d.occurredAt })),
-        entrega.tarefasElegiveis,
-        performanceSettings.deadlineCutoffHour,
-      ),
-    [deadlineChanges, entrega.tarefasElegiveis, performanceSettings.deadlineCutoffHour],
-  );
-  const compromissos = useMemo(
-    () => computeCompromissos(attendance.map((a) => ({ attended: a.attended }))),
-    [attendance],
-  );
   const score = useMemo(
-    () => combineScoreV2(entrega, previsibilidade, compromissos),
-    [entrega, previsibilidade, compromissos],
+    () => computeMemberScoreV2(events, openTasksForMember, performanceSettings.deadlineCutoffHour),
+    [events, openTasksForMember, performanceSettings.deadlineCutoffHour],
   );
+  const entrega = score.entrega;
+  const previsibilidade = score.previsibilidade;
+  const compromissos = score.compromissos;
 
   // Comparação com o período imediatamente anterior equivalente (item 12
   // do pedido) — mesmo fetch/extração, só sobre outra janela de tempo.
   const previousRange = useMemo(() => previousEquivalentRange(profileRange), [profileRange]);
   const { events: previousEvents } = usePerformanceEvents(previousRange, member.id);
   const previousScore = useMemo(() => {
-    const prevCompletions = previousEvents
-      .filter((e) => e.eventType === "task_completed")
-      .map((e) => ({ outcome: e.data.outcome as TaskOutcome, taskId: e.taskId }));
-    const prevDeadlineChanges = previousEvents
-      .filter((e) => e.eventType === "task_deadline_changed")
-      .map((e) => ({
-        taskId: e.taskId,
-        from: (e.data.from as string) ?? undefined,
-        occurredAt: e.occurredAt,
-      }));
-    const prevAttendance = dedupAttendanceEvents(
-      previousEvents.filter((e) => e.eventType === "meeting_attendance_recorded"),
-    ).map((e) => ({ attended: !!e.data.attended }));
     // Sem `openTasksForMember` do período anterior, não há como saber
     // quais tarefas estavam ATUALMENTE atrasadas naquele momento passado
     // (reconstruir isso a partir só do estado atual seria inventar dado —
     // limitação documentada, não uma aproximação silenciosa). A tendência
-    // usa só as conclusões do período anterior; `tarefasElegiveis` sai de
-    // dentro do próprio `computeEntrega` (mesma regra do período atual).
-    const prevEntrega = computeEntrega(prevCompletions, []);
-    const prevPrevisibilidade = computePrevisibilidade(
-      prevDeadlineChanges,
-      prevEntrega.tarefasElegiveis,
-      performanceSettings.deadlineCutoffHour,
-    );
-    const prevCompromissos = computeCompromissos(prevAttendance);
-    return combineScoreV2(prevEntrega, prevPrevisibilidade, prevCompromissos);
+    // usa só as conclusões e replanejamentos do período anterior; mesma
+    // fórmula/versão (`OPERATIONAL_SCORE_VERSION`) do período atual.
+    return computeMemberScoreV2(previousEvents, [], performanceSettings.deadlineCutoffHour);
   }, [previousEvents, performanceSettings.deadlineCutoffHour]);
   const trendLabel = useMemo(() => {
     if (score.score == null || previousScore.score == null) return null;
@@ -343,11 +310,7 @@ export function MemberProfileDialog({
   const scoreTone =
     score.score == null
       ? "text-text-secondary"
-      : score.score >= 90
-        ? "text-emerald-600 dark:text-emerald-400"
-        : score.score < 60
-          ? "text-destructive"
-          : "text-foreground";
+      : (SCORE_CLASSIFICACAO_TONE[score.classificacao ?? "Sem avaliação"] ?? "text-foreground");
 
   const [showComposition, setShowComposition] = useState(!!initialShowComposition);
   const upcoming = useMemo(
@@ -507,6 +470,15 @@ export function MemberProfileDialog({
       avgDelayDaysPrevious: aggPrevious.tempoMedioAtrasoDias,
       replansCurrent: aggCurrent.qtdReplanejamentos,
       replansPrevious: aggPrevious.qtdReplanejamentos,
+      criticalReplansCurrent: aggCurrent.qtdReplanejamentosNoDia,
+      criticalReplansPrevious: aggPrevious.qtdReplanejamentosNoDia,
+      repeatedProblematicReplansCurrent: previsibilidade.repeatedProblematicReplans,
+      // "Esta semana"/"Este mês" são sempre um recorte ATÉ HOJE (calendário
+      // em andamento) — comparar contra "período anterior equivalente"
+      // (mesma duração, mas já encerrado) sem avisar isso enganaria quem lê
+      // a comparação. "Mês anterior"/"Últimos 90 dias" já são janelas
+      // fechadas, nunca parciais.
+      currentPeriodPartial: profilePeriod === "mes" || profilePeriod === "semana",
       overdueCount: overdueTasksFull.length,
       overdueHighPriorityCount,
       overdueOlderThanThresholdCount,
@@ -540,6 +512,8 @@ export function MemberProfileDialog({
     previousCompletions,
     score.score,
     previousScore.score,
+    previsibilidade.repeatedProblematicReplans,
+    profilePeriod,
     attendance,
   ]);
 
@@ -612,6 +586,7 @@ export function MemberProfileDialog({
                 <div className="flex items-start justify-between gap-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-text-secondary">
                     <Gauge className="h-3.5 w-3.5" /> Score Operacional
+                    <InfoTip text="Este indicador analisa execução operacional, prazos e compromissos. Ele não representa sozinho a performance completa do profissional." />
                   </p>
                   <div className="text-right">
                     <p
@@ -621,14 +596,11 @@ export function MemberProfileDialog({
                       {score.score != null && (
                         <span className="text-base text-text-secondary">/100</span>
                       )}
-                      {score.guardrails.length > 0 && (
-                        <InfoTip
-                          text={`Score reduzido por: ${score.guardrails.map((g) => g.label).join("; ")}.`}
-                        />
-                      )}
                     </p>
                     {score.dataState === "sem_dados" && (
-                      <p className="text-xs font-medium text-text-secondary">Sem dados</p>
+                      <p className="text-xs font-medium text-text-secondary">
+                        Sem dados suficientes
+                      </p>
                     )}
                     {score.dataState === "provisorio" && (
                       <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
@@ -640,6 +612,11 @@ export function MemberProfileDialog({
                         {score.classificacao}
                       </p>
                     )}
+                    {score.dataState !== "sem_dados" && (
+                      <p className="text-[11px] text-text-secondary">
+                        {SAMPLE_CONFIDENCE_LABEL[score.confidence]}
+                      </p>
+                    )}
                     {trendLabel && score.dataState !== "sem_dados" && (
                       <p className="text-[11px] text-text-secondary">{trendLabel}</p>
                     )}
@@ -647,21 +624,22 @@ export function MemberProfileDialog({
                 </div>
                 {score.dataState === "sem_dados" && (
                   <p className="mt-3 rounded-md bg-muted/40 px-2.5 py-1.5 text-[11px] text-text-secondary">
-                    Nenhuma atividade operacional suficiente no período selecionado — sem tarefa
-                    concluída, atualmente atrasada, ou vencendo neste recorte, não há base pra
+                    Nenhuma atividade operacional no período selecionado — sem tarefa concluída,
+                    tarefa aberta com prazo, ou reunião esperada neste recorte, não há base pra
                     calcular um score.
                   </p>
                 )}
                 {score.dataState === "provisorio" && (
                   <p className="mt-3 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                     Baseado em {score.amostra} tarefa{score.amostra === 1 ? "" : "s"} — amostra
-                    pequena, ainda sem classificação definitiva (mínimo de {MIN_TASK_SAMPLE} no
-                    período).
+                    pequena ({SAMPLE_CONFIDENCE_LABEL[score.confidence].toLowerCase()}), ainda sem
+                    classificação definitiva e fora de comparações/rankings com outras pessoas.
                   </p>
                 )}
                 {score.dataState === "definitivo" && (
                   <p className="mt-3 text-[11px] text-text-secondary">
-                    Baseado em {score.amostra} tarefas no período.
+                    Baseado em {score.amostra} tarefas no período ·{" "}
+                    {SAMPLE_CONFIDENCE_LABEL[score.confidence]}
                   </p>
                 )}
 
@@ -780,23 +758,116 @@ export function MemberProfileDialog({
                   <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4 text-xs">
                     <div>
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-foreground">Entrega</span>
+                        <span className="font-medium text-foreground">
+                          Entregas e prazo — fórmula
+                        </span>
                         <span className="tabular-nums text-text-secondary">
                           {score.entregaPontos == null ? "—" : score.entregaPontos} / 50
                         </span>
                       </div>
                       <div className="mt-1.5 space-y-0.5 text-text-secondary">
-                        <p>
-                          Taxa de conclusão no prazo:{" "}
-                          {entrega.concluidas > 0
-                            ? `${Math.round((entrega.noPrazo / entrega.concluidas) * 100)}%`
-                            : "—"}
+                        <p className="font-medium text-foreground/80">
+                          Conclusões no prazo (até 40 pts)
                         </p>
-                        <p>Tarefas concluídas: {entrega.concluidas}</p>
-                        <p>No prazo: {entrega.noPrazo}</p>
-                        <p>Com atraso: {entrega.comAtraso}</p>
-                        <p>Atualmente vencidas: {entrega.atualmenteAtrasadas}</p>
+                        <p>
+                          onTimeRate = concluídas no prazo ÷ concluídas com prazo definido ={" "}
+                          {entrega.completedOnTime} ÷ {entrega.completedTasksWithDeadline} ={" "}
+                          {entrega.onTimeRate == null
+                            ? "—"
+                            : `${Math.round(entrega.onTimeRate * 100)}%`}
+                        </p>
+                        <p>
+                          Pontos:{" "}
+                          {entrega.onTimePoints == null ? "—" : entrega.onTimePoints.toFixed(1)} /
+                          40
+                        </p>
+                        <p>Concluídas com atraso: {entrega.completedLate}</p>
+                        <p>
+                          Sem prazo definido (ignoradas nesta taxa): {entrega.semPrazoCount} — não
+                          entram nem a favor nem contra por não terem prazo pra comparar.
+                        </p>
+                        <p className="mt-2 font-medium text-foreground/80">
+                          Saúde atual dos prazos (até 10 pts)
+                        </p>
+                        <p>
+                          healthRate = 1 − (atraso ponderado ÷ base do período) = 1 − (
+                          {entrega.weightedCurrentOverdue.toFixed(2)} ÷ {entrega.periodTaskBase}) ={" "}
+                          {entrega.currentHealthRate == null
+                            ? "—"
+                            : `${Math.round(entrega.currentHealthRate * 100)}%`}
+                        </p>
+                        <p>
+                          Pontos:{" "}
+                          {entrega.healthPoints == null ? "—" : entrega.healthPoints.toFixed(1)} /
+                          10 · base do período (concluídas com prazo + abertas com prazo):{" "}
+                          {entrega.periodTaskBase}
+                        </p>
                       </div>
+
+                      {entrega.overdueDetails.filter((d) => d.weightedContribution > 0).length >
+                        0 && (
+                        <div className="mt-2 rounded-md bg-background/60 p-2">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                            Tarefas que causaram desconto na saúde atual
+                          </p>
+                          <ul className="space-y-1 text-text-secondary">
+                            {entrega.overdueDetails
+                              .filter((d) => d.weightedContribution > 0)
+                              .map((d) => {
+                                const found = d.id
+                                  ? tasksForMember.find((t) => t.id === d.id)
+                                  : null;
+                                const label = (
+                                  <>
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {d.title ?? "Tarefa"}
+                                    </span>
+                                    <span className="shrink-0 text-destructive">
+                                      +{d.daysOverdue}d{d.highPriority ? " · alta prioridade" : ""}
+                                      {d.internallyBlocked ? " · bloqueada internamente" : ""} ·
+                                      peso {d.weightedContribution.toFixed(2)}
+                                    </span>
+                                  </>
+                                );
+                                return (
+                                  <li key={d.id} className="flex items-center gap-2">
+                                    {found ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openById(found.id)}
+                                        className="flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/50 hover:underline"
+                                      >
+                                        {label}
+                                      </button>
+                                    ) : (
+                                      <div className="flex w-full items-center gap-2 px-1 py-0.5">
+                                        {label}
+                                      </div>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                          </ul>
+                        </div>
+                      )}
+
+                      {entrega.overdueDetails.filter((d) => d.externallyBlocked).length > 0 && (
+                        <div className="mt-2 rounded-md bg-background/60 p-2">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                            Dependências externas desconsideradas (bloqueio ativo)
+                          </p>
+                          <ul className="space-y-0.5 text-text-secondary">
+                            {entrega.overdueDetails
+                              .filter((d) => d.externallyBlocked)
+                              .map((d) => (
+                                <li key={d.id} className="truncate">
+                                  · {d.title ?? "Tarefa"} — atrasada há {d.daysOverdue}d, mas
+                                  bloqueada aguardando cliente/fornecedor, não penalizada.
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-border pt-3">
@@ -809,6 +880,10 @@ export function MemberProfileDialog({
                       </div>
                       <div className="mt-1.5 space-y-0.5 text-text-secondary">
                         <p>
+                          predictabilityLoss = sameDayRate×5 + lateReplanRate×20 + repeatedRate×10 ={" "}
+                          {previsibilidade.predictabilityLoss.toFixed(1)} pts descontados de 35
+                        </p>
+                        <p>
                           Taxa de replanejamento:{" "}
                           {fmtTaxaComN(
                             previsibilidade.taxaReplanejamento,
@@ -816,44 +891,63 @@ export function MemberProfileDialog({
                             previsibilidade.tarefasElegiveis,
                           )}
                         </p>
-                        <p>Replanejamentos antecipados: {previsibilidade.porTiming.antecipado}</p>
-                        <p>Próximos do prazo: {previsibilidade.porTiming.proximo}</p>
-                        <p>No dia: {previsibilidade.porTiming.no_dia}</p>
-                        <p>Após vencimento: {previsibilidade.porTiming.apos_vencimento}</p>
-                      </div>
-                      {(previsibilidade.porTiming.no_dia > 0 ||
-                        previsibilidade.porTiming.apos_vencimento > 0 ||
-                        (previsibilidade.taxaReplanejamento ?? 0) > 0.15) && (
-                        <div className="mt-2 rounded-md bg-background/60 p-2">
-                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
-                            Principais impactos
+                        <p>
+                          Replanejamentos antecipados (sem penalidade):{" "}
+                          {previsibilidade.earlyReplans}
+                        </p>
+                        <p>No dia (penalidade leve): {previsibilidade.sameDayReplans}</p>
+                        <p>Após vencimento (penalidade maior): {previsibilidade.lateReplans}</p>
+                        <p>
+                          Repetições problemáticas na mesma tarefa:{" "}
+                          {previsibilidade.repeatedProblematicReplans}
+                        </p>
+                        {previsibilidade.exemptedCount > 0 && (
+                          <p>
+                            Isentos por dependência externa registrada a tempo:{" "}
+                            {previsibilidade.exemptedCount}
                           </p>
-                          <ul className="space-y-0.5 text-text-secondary">
-                            {previsibilidade.porTiming.no_dia > 0 && (
-                              <li>
-                                · {previsibilidade.porTiming.no_dia} prazo
-                                {previsibilidade.porTiming.no_dia > 1 ? "s" : ""} alterado
-                                {previsibilidade.porTiming.no_dia > 1 ? "s" : ""} no dia da entrega
-                              </li>
-                            )}
-                            {previsibilidade.porTiming.apos_vencimento > 0 && (
-                              <li>
-                                · {previsibilidade.porTiming.apos_vencimento} prazo
-                                {previsibilidade.porTiming.apos_vencimento > 1 ? "s" : ""} alterado
-                                {previsibilidade.porTiming.apos_vencimento > 1 ? "s" : ""} após
-                                vencimento
-                              </li>
-                            )}
-                            {(previsibilidade.taxaReplanejamento ?? 0) > 0.15 && (
-                              <li>
-                                · taxa de replanejamento de{" "}
-                                {Math.round((previsibilidade.taxaReplanejamento ?? 0) * 100)}%
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
+
+                    {deadlineChanges.length > 0 && (
+                      <div className="border-t border-border pt-2">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+                          Replanejamentos considerados no período
+                        </p>
+                        <ul className="space-y-0.5">
+                          {deadlineChanges.map((d, i) => {
+                            const timing = d.from
+                              ? classifyReplanTiming(
+                                  d.from,
+                                  d.occurredAt,
+                                  performanceSettings.deadlineCutoffHour,
+                                )
+                              : null;
+                            const isSevere = timing === "no_dia" || timing === "apos_vencimento";
+                            const exempted = isSevere && d.exemptFromResponsibility;
+                            return (
+                              <li
+                                key={`${d.taskId}_${i}`}
+                                className="flex items-center justify-between gap-2 px-1 py-0.5"
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {d.taskTitle ?? "Tarefa"}
+                                </span>
+                                <span
+                                  className={`shrink-0 ${isSevere && !exempted ? "text-destructive" : "text-text-secondary"}`}
+                                >
+                                  {timing ? REPLAN_TIMING_LABEL[timing] : "—"}
+                                  {exempted && " · isento (dependência externa)"}
+                                  {d.motivo &&
+                                    ` · ${DEADLINE_CHANGE_MOTIVO_LABEL[d.motivo as DeadlineChangeMotivo] ?? d.motivo}`}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="border-t border-border pt-3">
                       <div className="flex items-center justify-between">
@@ -872,15 +966,62 @@ export function MemberProfileDialog({
                             <p>
                               Perdidas: {Math.max(0, compromissos.expected - compromissos.attended)}
                             </p>
+                            {attendance.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {attendance.slice(0, 8).map((a, i) => {
+                                  const meeting = a.meetingId
+                                    ? meetingsById.get(a.meetingId)
+                                    : null;
+                                  return (
+                                    <li key={a.meetingId ?? i} className="flex items-center gap-2">
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {meeting?.titulo ?? "Reunião"}
+                                      </span>
+                                      <span
+                                        className={
+                                          a.attended ? "text-text-secondary" : "text-destructive"
+                                        }
+                                      >
+                                        {a.attended ? "Participou" : "Perdeu"}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
                           </>
                         ) : (
                           <p>
                             Nenhuma reunião esperada desta pessoa no período — peso redistribuído
-                            entre Entrega e Previsibilidade.
+                            entre Entrega e Previsibilidade (não conta nem a favor nem contra).
                           </p>
                         )}
                       </div>
                     </div>
+
+                    <div className="border-t border-border pt-2 text-text-secondary">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide">
+                        Dados desconsiderados nesta composição
+                      </p>
+                      <ul className="space-y-0.5">
+                        <li>
+                          · {entrega.semPrazoCount} tarefa{entrega.semPrazoCount === 1 ? "" : "s"}{" "}
+                          concluída{entrega.semPrazoCount === 1 ? "" : "s"} sem prazo definido — sem
+                          prazo pra comparar, não entram na taxa de conclusão no prazo.
+                        </li>
+                        <li>
+                          · Ausência não justificada em reunião conta contra a taxa de Compromissos
+                          — este produto ainda não distingue "ausência justificada" de "não
+                          compareceu" no cadastro de reuniões (gap documentado, não uma aproximação
+                          silenciosa).
+                        </li>
+                      </ul>
+                    </div>
+
+                    <p className="border-t border-border pt-2 text-[10px] text-text-secondary/70">
+                      Fórmula v{score.version} · Score Operacional (
+                      {OPERATIONAL_SCORE_VERSION === score.version ? "atual" : "versão anterior"})
+                    </p>
 
                     {completions.length > 0 && (
                       <div className="border-t border-border pt-2">

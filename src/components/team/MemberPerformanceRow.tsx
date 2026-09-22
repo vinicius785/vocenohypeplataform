@@ -3,7 +3,7 @@ import { ShieldCheck, KeyRound, Pencil, X, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { ScoreOperacionalV2 } from "@/lib/performance-engine";
+import { SCORE_CLASSIFICACAO_TONE, type ScoreOperacionalV2 } from "@/lib/performance-engine";
 import type { Member } from "@/components/TimeSection";
 import type { DashTask } from "@/lib/task-aggregation";
 import { avatarAccent, initialsOf, getStatus, PresenceDot, IconAction } from "./member-ui";
@@ -11,17 +11,13 @@ import { avatarAccent, initialsOf, getStatus, PresenceDot, IconAction } from "./
 const OVERDUE_TOOLTIP = "Tarefas atualmente vencidas e ainda não concluídas.";
 const OVERDUE_PREVIEW_LIMIT = 4;
 
-/** Faixas de cor do Score — mesmos limites de `classificacaoDoScore`
- * (`performance-engine.ts`), só que aqui viram TOM em vez de rótulo: cor
- * comunica exceção/gradiente, o texto da classificação (sempre exibido
- * junto, nunca só a cor) é o que carrega o significado de verdade (item
- * 9 do pedido — reduzir dependência de cor). */
-function scoreToneClass(score: number | null): string {
+/** Tom do Score — vem do mapa central `SCORE_CLASSIFICACAO_TONE`
+ * (`performance-engine.ts`), nunca recalculado aqui: cor comunica
+ * exceção/gradiente, o texto da classificação (sempre exibido junto,
+ * nunca só a cor) é o que carrega o significado de verdade. */
+function scoreToneClass(score: number | null, classificacao: string | null): string {
   if (score == null) return "text-text-secondary";
-  if (score >= 90) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 75) return "text-foreground";
-  if (score >= 60) return "text-amber-600 dark:text-amber-400";
-  return "text-destructive";
+  return SCORE_CLASSIFICACAO_TONE[classificacao ?? "Sem avaliação"] ?? "text-text-secondary";
 }
 
 function OverdueTaskRow({
@@ -204,15 +200,17 @@ export function MemberPerformanceRow({
           onClick={() => onOpenProfile({ showComposition: true })}
           className="flex shrink-0 cursor-pointer flex-col items-end rounded-md px-1.5 py-1 text-right hover:bg-muted/60"
         >
-          <span className={`text-base font-semibold tabular-nums ${scoreToneClass(score.score)}`}>
+          <span
+            className={`text-base font-semibold tabular-nums ${scoreToneClass(score.score, score.classificacao)}`}
+          >
             {score.score == null ? "—" : score.score}
           </span>
           {score.dataState === "sem_dados" && (
-            <span className="text-[10px] text-text-secondary">Sem dados</span>
+            <span className="text-[10px] text-text-secondary">Sem dados suficientes</span>
           )}
           {score.dataState === "provisorio" && (
             <span className="text-[10px] text-amber-600 dark:text-amber-400">
-              Provisório · {score.amostra}
+              Provisório · {score.amostra} tarefa{score.amostra === 1 ? "" : "s"}
             </span>
           )}
           {score.classificacao && (

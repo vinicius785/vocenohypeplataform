@@ -1,5 +1,9 @@
-import type { Project, Task } from "./projetos";
-import { getTaskAssignees, ACTIVITY_STATUS_COMPLETED_ACTION } from "./projetos";
+import type { Project, Task, TaskBlockedState } from "./projetos";
+import {
+  getTaskAssignees,
+  getTaskPrimaryAssignee,
+  ACTIVITY_STATUS_COMPLETED_ACTION,
+} from "./projetos";
 import type { Meeting } from "./reunioes-store";
 import type { ChatMember } from "./chat-store";
 import { todayISO } from "./financeiro-entries";
@@ -124,6 +128,23 @@ export type PerformanceOpenTask = {
    * viaja crua (não como boolean) pra quem calcula o Score decidir o que é
    * "alta prioridade" sem duplicar essa regra aqui. */
   priority?: string;
+  /** Fração de responsabilidade desta pessoa por uma penalidade de atraso
+   * nesta tarefa (0 a 1) — CORREÇÃO (2026-09-21): antes, `getTaskAssignees(t)`
+   * fazia todo mundo na lista de responsáveis (principal + colaboradores)
+   * levar a MESMA penalidade cheia por uma tarefa atualmente atrasada,
+   * diferente da regra já existente pra crédito de CONCLUSÃO (`TaskBoard.tsx`'s
+   * `recordTaskLedgerEventsOnStatusChange`, que só credita/debita o
+   * responsável principal quando ele existe). Agora: 1 se esta pessoa é a
+   * principal; 1/nº de responsáveis se a tarefa não tem principal
+   * definido (divide proporcionalmente, como já era a intenção original);
+   * 0 se há principal definido e é OUTRA pessoa (colaborador secundário
+   * não é penalizado pelo atraso de uma tarefa que não é dele por
+   * accountability). */
+  penaltyWeight: number;
+  /** Bloqueio ativo, se houver — repassado cru pro motor decidir isenção
+   * de dependência externa vs. rótulo de bloqueio interno (ver
+   * `performance-engine.ts`'s `computeEntrega`/`OpenTaskForHealth`). */
+  blockedState?: TaskBlockedState | null;
 };
 
 /** Tarefas ATUALMENTE abertas de cada pessoa (status ∈ `OPEN_STATUSES`),
@@ -145,9 +166,16 @@ export function loadOpenTasksByMemberId(
   for (const p of [...projetosAsGroups(projetos), ...campanhaGroups]) {
     for (const t of flatten(p.tasks ?? [])) {
       if (!OPEN_STATUSES.has(t.status)) continue;
-      for (const name of getTaskAssignees(t)) {
+      const assignees = getTaskAssignees(t);
+      const primary = getTaskPrimaryAssignee(t);
+      for (const name of assignees) {
         const member = byName.get(name);
         if (!member) continue;
+        const penaltyWeight = primary
+          ? name === primary
+            ? 1
+            : 0
+          : 1 / Math.max(1, assignees.length);
         const arr = byId.get(member.id) ?? [];
         arr.push({
           id: t.id,
@@ -156,6 +184,8 @@ export function loadOpenTasksByMemberId(
           dueDate: t.dueDate,
           performanceDueDate: t.performanceDueDate,
           priority: t.priority,
+          penaltyWeight,
+          blockedState: t.blockedState,
         });
         byId.set(member.id, arr);
       }
