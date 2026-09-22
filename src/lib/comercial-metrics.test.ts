@@ -28,6 +28,7 @@ function lead(overrides: Partial<Lead> = {}): Lead {
     activities: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    stageEnteredAt: Date.now(),
     ...overrides,
   };
 }
@@ -148,12 +149,12 @@ describe("leadsNeedingActionToday / leadsAtRisk / leadsClosestToClosing", () => 
     const antigo = lead({
       id: "antigo",
       stage: "LEAD_RECEBIDO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 20 * DAY }],
+      stageEnteredAt: Date.now() - 20 * DAY,
     });
     const recente = lead({
       id: "recente",
       stage: "LEAD_RECEBIDO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 1 * DAY }],
+      stageEnteredAt: Date.now() - 1 * DAY,
     });
     const aguardandoCliente = lead({ id: "cliente", stage: "PROPOSTA_ENVIADA" });
     const result = leadsNeedingActionToday([recente, aguardandoCliente, antigo]);
@@ -164,7 +165,7 @@ describe("leadsNeedingActionToday / leadsAtRisk / leadsClosestToClosing", () => 
     const parado = lead({
       id: "parado",
       stage: "CONTATO_FEITO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 10 * DAY }],
+      stageEnteredAt: Date.now() - 10 * DAY,
     });
     const reuniaoVencida = lead({
       id: "reuniao",
@@ -174,7 +175,7 @@ describe("leadsNeedingActionToday / leadsAtRisk / leadsClosestToClosing", () => 
     const ganhoAntigo = lead({
       id: "ganho",
       stage: "GANHO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 90 * DAY }],
+      stageEnteredAt: Date.now() - 90 * DAY,
     });
     const ok = lead({ id: "ok", stage: "LEAD_RECEBIDO" });
     const result = leadsAtRisk([parado, reuniaoVencida, ganhoAntigo, ok]);
@@ -205,7 +206,7 @@ describe("computeComercialPriorities — lista única, sem duplicar oportunidade
     const parada = lead({
       id: "parada",
       stage: "CONTATO_FEITO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 8 * DAY }],
+      stageEnteredAt: Date.now() - 8 * DAY,
     });
     const hoje = lead({
       id: "hoje",
@@ -247,7 +248,7 @@ describe("computeComercialPriorities — lista única, sem duplicar oportunidade
       id: "multi",
       stage: "REUNIAO_AGENDADA",
       nextMeeting: new Date(Date.now() - 10 * DAY).toISOString(),
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 30 * DAY }],
+      stageEnteredAt: Date.now() - 30 * DAY,
     });
     const items = computeComercialPriorities([multiProblema]);
     expect(items).toHaveLength(1);
@@ -268,7 +269,7 @@ describe("computeComercialPriorities — lista única, sem duplicar oportunidade
     const parada = lead({
       id: "parada",
       stage: "CONTATO_FEITO",
-      history: [{ id: "h", type: "stage", text: "x", createdAt: Date.now() - 8 * DAY }],
+      stageEnteredAt: Date.now() - 8 * DAY,
     });
     const items = computeComercialPriorities([parada, vencidaPouco, vencidaMuito]);
     expect(items.map((i) => i.lead.id)).toEqual(["vencida-muito", "vencida-pouco", "parada"]);

@@ -561,6 +561,42 @@ export type Database = {
           },
         ];
       };
+      comercial_saved_views: {
+        Row: {
+          created_at: string;
+          direction: string;
+          filters: Json;
+          id: string;
+          is_default: boolean;
+          name: string;
+          sort: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          direction?: string;
+          filters?: Json;
+          id?: string;
+          is_default?: boolean;
+          name: string;
+          sort?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          direction?: string;
+          filters?: Json;
+          id?: string;
+          is_default?: boolean;
+          name?: string;
+          sort?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       email_campaign_activity: {
         Row: {
           campaign_id: string;
@@ -1541,16 +1577,21 @@ export type Database = {
           contact: string | null;
           created_at: string;
           email: string | null;
+          expected_close_at: string | null;
           extra: Json;
           id: string;
+          last_contact_at: string | null;
           name: string;
+          next_action_at: string | null;
           next_meeting: string | null;
           notes: string | null;
           phone: string | null;
+          probability: number | null;
           responsible: string | null;
           source: string | null;
           source_form: string | null;
           stage: string;
+          stage_entered_at: string;
           tags: Json;
           updated_at: string;
           value: number;
@@ -1561,16 +1602,21 @@ export type Database = {
           contact?: string | null;
           created_at?: string;
           email?: string | null;
+          expected_close_at?: string | null;
           extra?: Json;
           id?: string;
+          last_contact_at?: string | null;
           name: string;
+          next_action_at?: string | null;
           next_meeting?: string | null;
           notes?: string | null;
           phone?: string | null;
+          probability?: number | null;
           responsible?: string | null;
           source?: string | null;
           source_form?: string | null;
           stage?: string;
+          stage_entered_at?: string;
           tags?: Json;
           updated_at?: string;
           value?: number;
@@ -1581,16 +1627,21 @@ export type Database = {
           contact?: string | null;
           created_at?: string;
           email?: string | null;
+          expected_close_at?: string | null;
           extra?: Json;
           id?: string;
+          last_contact_at?: string | null;
           name?: string;
+          next_action_at?: string | null;
           next_meeting?: string | null;
           notes?: string | null;
           phone?: string | null;
+          probability?: number | null;
           responsible?: string | null;
           source?: string | null;
           source_form?: string | null;
           stage?: string;
+          stage_entered_at?: string;
           tags?: Json;
           updated_at?: string;
           value?: number;

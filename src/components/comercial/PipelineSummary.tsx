@@ -7,7 +7,7 @@ import {
 } from "@/lib/comercial-engine";
 import { groupPipelineByStage, type ComercialKpis } from "@/lib/comercial-metrics";
 import type { Lead } from "@/lib/comercial";
-import type { LeadFiltersState } from "./LeadFiltersBar";
+import type { LeadFilters } from "@/lib/comercial-filters";
 
 /** Resumo comercial assimétrico (migração visual — mesma direção do
  * Resumo Financeiro): card protagonista azul (pipeline total + distância
@@ -19,9 +19,9 @@ import type { LeadFiltersState } from "./LeadFiltersBar";
 
 const SECONDARY_SURFACE = "bg-card border border-border/60 dark:border-0 dark:bg-[oklch(0.17_0_0)]";
 
-function isFilterActive(filters: LeadFiltersState, patch: Partial<LeadFiltersState>): boolean {
+function isFilterActive(filters: LeadFilters, patch: Partial<LeadFilters>): boolean {
   return Object.entries(patch).every(([k, v]) => {
-    const cur = filters[k as keyof LeadFiltersState];
+    const cur = filters[k as keyof LeadFilters];
     if (Array.isArray(v))
       return (
         Array.isArray(cur) &&
@@ -40,8 +40,8 @@ export function PipelineSummary({
 }: {
   kpis: ComercialKpis;
   openLeads: Lead[];
-  filters: LeadFiltersState;
-  onFilter: (patch: Partial<LeadFiltersState>) => void;
+  filters: LeadFilters;
+  onFilter: (patch: Partial<LeadFilters>) => void;
 }) {
   const buckets = groupPipelineByStage(openLeads, OPPORTUNITY_KANBAN_ORDER).filter(
     (b) => b.count > 0,
@@ -49,8 +49,8 @@ export function PipelineSummary({
   const maxValue = Math.max(...buckets.map((b) => b.value), 1);
 
   const ganhoAtivo = isFilterActive(filters, { stages: ["GANHO"] });
-  const semAcaoAtivo = isFilterActive(filters, { nextAction: "sem" });
-  const paradasAtivo = isFilterActive(filters, { staleOnly: true });
+  const semAcaoAtivo = isFilterActive(filters, { activity: ["sem_proxima_acao"] });
+  const paradasAtivo = isFilterActive(filters, { activity: ["parado_5d"] });
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
@@ -133,7 +133,7 @@ export function PipelineSummary({
         <div className="grid grid-cols-2 gap-4">
           <button
             type="button"
-            onClick={() => onFilter(semAcaoAtivo ? {} : { nextAction: "sem" })}
+            onClick={() => onFilter(semAcaoAtivo ? {} : { activity: ["sem_proxima_acao"] })}
             className={`rounded-[22px] ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
               semAcaoAtivo ? "ring-2 ring-brand" : ""
             }`}
@@ -153,7 +153,7 @@ export function PipelineSummary({
           </button>
           <button
             type="button"
-            onClick={() => onFilter(paradasAtivo ? {} : { staleOnly: true })}
+            onClick={() => onFilter(paradasAtivo ? {} : { activity: ["parado_5d"] })}
             className={`rounded-[22px] ${SECONDARY_SURFACE} p-4 text-left transition-colors hover:bg-muted/40 ${
               paradasAtivo ? "ring-2 ring-brand" : ""
             }`}

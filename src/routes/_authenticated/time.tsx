@@ -14,6 +14,56 @@ import {
   type ReunioesView,
   type ConfigTab,
 } from "@/lib/section-nav";
+import {
+  LEAD_SORT_FIELDS,
+  parseLeadFiltersSafe,
+  type LeadSortField,
+  type LeadSortDirection,
+  type LeadFilters,
+} from "@/lib/comercial-filters";
+import type { ComercialPeriodMode } from "@/lib/comercial-metrics";
+
+const COMERCIAL_PERIODS: ComercialPeriodMode[] = ["semana", "mes", "trimestre", "ano"];
+
+/** Estado do Pipe Comercial persistido na URL (`cSort`/`cDir`/`cQ`/`cf`/
+ * `cPeriod`/`cView`) — validado aqui, nunca no componente, mesmo padrão já
+ * usado pelas outras sub-abas desta rota (`metasView`/`reunioesView`/…):
+ * qualquer valor inválido/vindo de uma URL compartilhada antiga cai fora
+ * silenciosamente (fallback seguro), nunca quebra a página. */
+function parseComercialSearch(s: Record<string, unknown>): {
+  cSort?: LeadSortField;
+  cDir?: LeadSortDirection;
+  cQ?: string;
+  cf?: LeadFilters;
+  cPeriod?: ComercialPeriodMode;
+  cView?: string;
+} {
+  const out: {
+    cSort?: LeadSortField;
+    cDir?: LeadSortDirection;
+    cQ?: string;
+    cf?: LeadFilters;
+    cPeriod?: ComercialPeriodMode;
+    cView?: string;
+  } = {};
+  if (typeof s.cSort === "string" && (LEAD_SORT_FIELDS as readonly string[]).includes(s.cSort)) {
+    out.cSort = s.cSort as LeadSortField;
+  }
+  if (s.cDir === "asc" || s.cDir === "desc") out.cDir = s.cDir;
+  if (typeof s.cQ === "string" && s.cQ.trim()) out.cQ = s.cQ;
+  if (typeof s.cf === "string" && s.cf.trim()) {
+    try {
+      out.cf = parseLeadFiltersSafe(JSON.parse(s.cf));
+    } catch {
+      /* URL malformada — ignora, cai no padrão sem filtros */
+    }
+  }
+  if (typeof s.cPeriod === "string" && (COMERCIAL_PERIODS as string[]).includes(s.cPeriod)) {
+    out.cPeriod = s.cPeriod as ComercialPeriodMode;
+  }
+  if (typeof s.cView === "string" && s.cView.trim()) out.cView = s.cView;
+  return out;
+}
 
 // Cada seção vira o próprio chunk JS, baixado só quando o usuário navega até
 // ela — antes todas as 12 seções (algumas com milhares de linhas, ex.
@@ -92,12 +142,19 @@ export const Route = createFileRoute("/_authenticated/time")({
     reunioesView?: ReunioesView;
     financeiroTab?: FinanceiroTab;
     configTab?: ConfigTab;
+    cSort?: LeadSortField;
+    cDir?: LeadSortDirection;
+    cQ?: string;
+    cf?: LeadFilters;
+    cPeriod?: ComercialPeriodMode;
+    cView?: string;
   } => {
     const v = s.section;
     return {
       ...(typeof v === "string" && (VALID as string[]).includes(v)
         ? { section: v as SectionKey }
         : {}),
+      ...parseComercialSearch(s),
       // Cada um só entra na URL se já tinha um valor explícito (mesmo
       // padrão de antes) — o fallback pro default de cada seção acontece
       // em `resolve*Tab`/`resolveReunioesView`, não aqui, então um valor

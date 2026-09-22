@@ -1,138 +1,45 @@
-import { useEffect, useState } from "react";
-import { Filter, X, ArrowUpDown } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownUp, Check, Filter, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { Lead } from "@/lib/comercial";
 import {
   OPPORTUNITY_STAGES,
   OPPORTUNITY_STAGE_LABEL,
-  legacyStage,
-  hasValidNextAction,
-  daysSinceLastStageChange,
-  isOpportunityStale,
-  isNextActionOverdue,
   type OpportunityStage,
 } from "@/lib/comercial-engine";
+import {
+  LEAD_SORT_FIELDS,
+  LEAD_SORT_FIELD_LABEL,
+  LEAD_SORT_DIRECTION_LABEL,
+  LEAD_SORT_FIELD_GROUP,
+  LEAD_QUICK_SORTS,
+  LEAD_ACTIVITY_FILTER_LABEL,
+  EMPTY_LEAD_FILTERS,
+  countActiveLeadFilters,
+  type LeadSortField,
+  type LeadSortDirection,
+  type LeadFilters,
+  type LeadActivityFilterKey,
+  type LeadStatusFilter,
+} from "@/lib/comercial-filters";
 import type { TeamMemberLite } from "@/lib/projetos";
 
 /**
- * Filtros/ordenação do pipeline — mesmo padrão visual/estrutural do
- * "Filtrar" de `TaskBoard.tsx` (popover com contador + chips removíveis +
- * "Limpar tudo"), persistido em localStorage (`usePersistedState`, mesma
- * técnica local já usada lá) em vez de sincronizado com a URL — não há
- * nenhum precedente de filtro-de-lista em URL neste repo (só `?section=`
- * de navegação entre módulos).
+ * Filtros + ordenação do Pipe Comercial — reescrito pra virar 2 controles
+ * genuinamente separados (nunca mais "Maior/mais antigo primeiro"
+ * genérico misturando campo e direção). Filtro/ordenação real acontece no
+ * SERVIDOR (`listLeads`, `comercial.functions.ts`) — este arquivo só
+ * monta a UI e o objeto `LeadFilters`/`sort`/`direction`, persistidos na
+ * URL por `ComercialSection.tsx` (nunca em localStorage).
  */
 
-export type LeadNextActionFilter = "todas" | "com" | "sem";
-export type LeadSortKey = "valor" | "proxima_acao" | "tempo_parado";
-export type LeadSortDir = "asc" | "desc";
-
-export type LeadFiltersState = {
-  responsibles: string[];
-  stages: OpportunityStage[];
-  origins: string[];
-  nextAction: LeadNextActionFilter;
-  overdueOnly: boolean;
-  staleOnly: boolean;
-  minValue: string;
-  maxValue: string;
-  sort: LeadSortKey;
-  sortDir: LeadSortDir;
-};
-
-export const DEFAULT_LEAD_FILTERS: LeadFiltersState = {
-  responsibles: [],
-  stages: [],
-  origins: [],
-  nextAction: "todas",
-  overdueOnly: false,
-  staleOnly: false,
-  minValue: "",
-  maxValue: "",
-  sort: "tempo_parado",
-  sortDir: "desc",
-};
-
-function usePersistedState<T>(key: string, initial: T): [T, (v: T | ((prev: T) => T)) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw !== null ? (JSON.parse(raw) as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* ignore */
-    }
-  }, [key, value]);
-  return [value, setValue];
-}
-
-export function useLeadFilters(): [LeadFiltersState, (v: LeadFiltersState) => void] {
-  return usePersistedState("comercial:filters", DEFAULT_LEAD_FILTERS);
-}
-
-/** Pura e testável — nunca duplicada entre o board e qualquer outra tela
- * que precise da mesma lista filtrada. */
-export function applyLeadFilters(leads: Lead[], f: LeadFiltersState): Lead[] {
-  const min = f.minValue.trim() ? Number(f.minValue) : null;
-  const max = f.maxValue.trim() ? Number(f.maxValue) : null;
-  return leads.filter((l) => {
-    if (f.responsibles.length > 0 && !f.responsibles.includes(l.responsible ?? "")) return false;
-    if (f.stages.length > 0 && !f.stages.includes(legacyStage(l.stage))) return false;
-    if (f.origins.length > 0 && !f.origins.includes(l.source ?? "")) return false;
-    if (f.nextAction !== "todas") {
-      const hasAction = hasValidNextAction(l);
-      if (f.nextAction === "com" && !hasAction) return false;
-      if (f.nextAction === "sem" && hasAction) return false;
-    }
-    if (f.overdueOnly && !isNextActionOverdue(l)) return false;
-    if (f.staleOnly && !isOpportunityStale(l)) return false;
-    if (min !== null && (l.value || 0) < min) return false;
-    if (max !== null && (l.value || 0) > max) return false;
-    return true;
-  });
-}
-
-export function sortLeads(leads: Lead[], sort: LeadSortKey, dir: LeadSortDir): Lead[] {
-  const mul = dir === "asc" ? 1 : -1;
-  const sorted = [...leads];
-  sorted.sort((a, b) => {
-    if (sort === "valor") return ((a.value || 0) - (b.value || 0)) * mul;
-    if (sort === "tempo_parado") {
-      return (daysSinceLastStageChange(a) - daysSinceLastStageChange(b)) * mul;
-    }
-    // proxima_acao: reuniões marcadas primeiro (por data), sem prazo por último
-    const am = a.nextMeeting ? new Date(a.nextMeeting).getTime() : Infinity;
-    const bm = b.nextMeeting ? new Date(b.nextMeeting).getTime() : Infinity;
-    return (am - bm) * mul;
-  });
-  return sorted;
-}
-
-export function countActiveFilters(f: LeadFiltersState): number {
-  let n = 0;
-  if (f.responsibles.length) n += 1;
-  if (f.stages.length) n += 1;
-  if (f.origins.length) n += 1;
-  if (f.nextAction !== "todas") n += 1;
-  if (f.overdueOnly) n += 1;
-  if (f.staleOnly) n += 1;
-  if (f.minValue.trim() || f.maxValue.trim()) n += 1;
-  return n;
-}
-
 const SOURCES = ["Indicação", "Instagram", "Google", "LinkedIn", "Site", "Evento", "Outro"];
-const SORT_LABEL: Record<LeadSortKey, string> = {
-  valor: "Valor",
-  proxima_acao: "Próxima ação",
-  tempo_parado: "Tempo parado",
+
+const STATUS_LABEL: Record<LeadStatusFilter, string> = {
+  aberto: "Aberto",
+  ganho: "Ganho",
+  perdido: "Perdido",
 };
 
 function toggleIn<T>(list: T[], value: T): T[] {
@@ -146,290 +53,477 @@ const pillCls = (active: boolean) =>
       : "border-border text-muted-foreground hover:bg-muted"
   }`;
 
-/** Lista de chips removíveis — extraída pra ser compartilhada entre
- * `LeadFiltersControls` (não usa) e `LeadFiltersChips` (usa), única fonte
- * de verdade sobre o que conta como "filtro ativo" pra exibição (a
- * contagem do botão "Filtros" vem de `countActiveFilters`, já existente,
- * sobre o mesmo objeto `filters`). */
-function buildChips(
-  filters: LeadFiltersState,
-  onChange: (f: LeadFiltersState) => void,
-): { id: string; label: string; onRemove: () => void }[] {
-  return [
-    ...filters.responsibles.map((r) => ({
-      id: `resp-${r}`,
-      label: `Responsável: ${r || "(sem responsável)"}`,
-      onRemove: () => onChange({ ...filters, responsibles: toggleIn(filters.responsibles, r) }),
-    })),
-    ...filters.stages.map((s) => ({
-      id: `stage-${s}`,
-      label: OPPORTUNITY_STAGE_LABEL[s],
-      onRemove: () => onChange({ ...filters, stages: toggleIn(filters.stages, s) }),
-    })),
-    ...filters.origins.map((o) => ({
-      id: `origin-${o}`,
-      label: `Origem: ${o}`,
-      onRemove: () => onChange({ ...filters, origins: toggleIn(filters.origins, o) }),
-    })),
-    ...(filters.nextAction !== "todas"
-      ? [
-          {
-            id: "next-action",
-            label: filters.nextAction === "com" ? "Com próxima ação" : "Sem próxima ação",
-            onRemove: () => onChange({ ...filters, nextAction: "todas" as const }),
-          },
-        ]
-      : []),
-    ...(filters.overdueOnly
-      ? [
-          {
-            id: "overdue",
-            label: "Ação vencida",
-            onRemove: () => onChange({ ...filters, overdueOnly: false }),
-          },
-        ]
-      : []),
-    ...(filters.staleOnly
-      ? [
-          {
-            id: "stale",
-            label: "Parado 5+ dias",
-            onRemove: () => onChange({ ...filters, staleOnly: false }),
-          },
-        ]
-      : []),
-    ...(filters.minValue.trim() || filters.maxValue.trim()
-      ? [
-          {
-            id: "value-range",
-            label: `Valor: ${filters.minValue || "0"} – ${filters.maxValue || "∞"}`,
-            onRemove: () => onChange({ ...filters, minValue: "", maxValue: "" }),
-          },
-        ]
-      : []),
-  ];
+/** Rótulo do botão principal de ordenação — sempre "Campo · direção
+ * contextual", nunca texto genérico. */
+export function sortSummaryLabel(sort: LeadSortField, direction: LeadSortDirection): string {
+  return `${LEAD_SORT_FIELD_LABEL[sort]} · ${LEAD_SORT_DIRECTION_LABEL[sort][direction]}`;
 }
 
-/** Controles do painel avançado (Filtrar + Ordenar) — vivem na MESMA
- * toolbar de Período/Busca em `ComercialSection.tsx` (correção: antes
- * ficavam soltos numa segunda linha, abaixo do card "Pipeline total").
- * Os chips ativos NÃO fazem parte deste componente — ver
- * `LeadFiltersChips`, renderizado à parte, logo abaixo da toolbar. */
-export function LeadFiltersControls({
-  filters,
+/** Controle 1: "Ordenar por" + "Direção" — dois passos no mesmo popover,
+ * mas duas escolhas independentes (nunca uma única lista campo+direção
+ * combinados). Atalhos comerciais no topo só preenchem os dois campos
+ * reais, nunca uma segunda lógica de ordenação. */
+export function SortControl({
+  sort,
+  direction,
   onChange,
-  team,
 }: {
-  filters: LeadFiltersState;
-  onChange: (f: LeadFiltersState) => void;
-  team: TeamMemberLite[];
+  sort: LeadSortField;
+  direction: LeadSortDirection;
+  onChange: (sort: LeadSortField, direction: LeadSortDirection) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const activeCount = countActiveFilters(filters);
-  const clearAll = () => onChange(DEFAULT_LEAD_FILTERS);
+  const groups: Record<string, LeadSortField[]> = {};
+  for (const f of LEAD_SORT_FIELDS) {
+    const g = LEAD_SORT_FIELD_GROUP[f];
+    groups[g] = [...(groups[g] ?? []), f];
+  }
 
   return (
-    <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Filter className="h-3.5 w-3.5" />
-            Filtros
-            {activeCount > 0 && (
-              <Badge variant="brand" className="px-1.5 py-0 text-[10px] leading-4">
-                {activeCount}
-              </Badge>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="max-h-[70vh] w-80 space-y-3 overflow-y-auto p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-foreground">Filtrar oportunidades</p>
-            <button
-              type="button"
-              disabled={activeCount === 0}
-              onClick={clearAll}
-              className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
-            >
-              Limpar
-            </button>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Responsável</p>
-            <div className="flex flex-wrap gap-1">
-              {team.map((m) => (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5">
+          <ArrowDownUp className="h-3.5 w-3.5" />
+          {sortSummaryLabel(sort, direction)}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-[75vh] w-72 overflow-y-auto p-0">
+        <div className="border-b border-border p-2">
+          <p className="px-1 pb-1 text-[11px] font-semibold text-foreground">Atalhos</p>
+          <div className="flex flex-col">
+            {LEAD_QUICK_SORTS.map((qs) => {
+              const active = sort === qs.sort && direction === qs.direction;
+              return (
                 <button
-                  key={m.id}
+                  key={qs.key}
+                  type="button"
+                  onClick={() => {
+                    onChange(qs.sort, qs.direction);
+                    setOpen(false);
+                  }}
+                  className={`flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs ${
+                    active
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60"
+                  }`}
+                >
+                  {qs.label}
+                  {active && <Check className="h-3.5 w-3.5" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-2">
+          <p className="px-1 pb-1 text-[11px] font-semibold text-foreground">Ordenar por</p>
+          {Object.entries(groups).map(([group, fields]) => (
+            <div key={group} className="mb-2">
+              <p className="px-1 pb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {group}
+              </p>
+              {fields.map((f) => (
+                <button
+                  key={f}
                   type="button"
                   onClick={() =>
-                    onChange({ ...filters, responsibles: toggleIn(filters.responsibles, m.name) })
+                    onChange(
+                      f,
+                      sort === f
+                        ? direction
+                        : (Object.keys(LEAD_SORT_DIRECTION_LABEL[f])[0] as LeadSortDirection),
+                    )
                   }
-                  className={pillCls(filters.responsibles.includes(m.name))}
+                  className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${
+                    sort === f
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60"
+                  }`}
                 >
-                  {m.name}
+                  {LEAD_SORT_FIELD_LABEL[f]}
                 </button>
               ))}
             </div>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Etapa</p>
-            <div className="flex flex-wrap gap-1">
-              {OPPORTUNITY_STAGES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => onChange({ ...filters, stages: toggleIn(filters.stages, s) })}
-                  className={pillCls(filters.stages.includes(s))}
-                >
-                  {OPPORTUNITY_STAGE_LABEL[s]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Origem</p>
-            <div className="flex flex-wrap gap-1">
-              {SOURCES.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => onChange({ ...filters, origins: toggleIn(filters.origins, o) })}
-                  className={pillCls(filters.origins.includes(o))}
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Próxima ação</p>
-            <div className="flex gap-1">
-              {(["todas", "com", "sem"] as LeadNextActionFilter[]).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onChange({ ...filters, nextAction: v })}
-                  className={pillCls(filters.nextAction === v)}
-                >
-                  {v === "todas" ? "Todas" : v === "com" ? "Com ação" : "Sem ação"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-1">
-            <button
-              type="button"
-              onClick={() => onChange({ ...filters, overdueOnly: !filters.overdueOnly })}
-              className={pillCls(filters.overdueOnly)}
-            >
-              Ação vencida
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange({ ...filters, staleOnly: !filters.staleOnly })}
-              className={pillCls(filters.staleOnly)}
-            >
-              Parado 5+ dias
-            </button>
-          </div>
-
-          <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-              Faixa de valor (R$)
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                inputMode="decimal"
-                value={filters.minValue}
-                onChange={(e) => onChange({ ...filters, minValue: e.target.value })}
-                placeholder="Mín."
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-              />
-              <span className="text-muted-foreground">–</span>
-              <input
-                inputMode="decimal"
-                value={filters.maxValue}
-                onChange={(e) => onChange({ ...filters, maxValue: e.target.value })}
-                placeholder="Máx."
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <ArrowUpDown className="h-3.5 w-3.5" />
-            Ordenar: {SORT_LABEL[filters.sort]}
-            <span aria-label={filters.sortDir === "asc" ? "crescente" : "decrescente"}>
-              {filters.sortDir === "asc" ? "↑" : "↓"}
-            </span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-56 space-y-1 p-2">
-          {(Object.keys(SORT_LABEL) as LeadSortKey[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => onChange({ ...filters, sort: k })}
-              className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${
-                filters.sort === k
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60"
-              }`}
-            >
-              {SORT_LABEL[k]}
-            </button>
           ))}
-          <div className="mt-1 flex gap-1 border-t border-border pt-1">
-            <button
-              type="button"
-              onClick={() => onChange({ ...filters, sortDir: "desc" })}
-              className={pillCls(filters.sortDir === "desc")}
-            >
-              Maior/mais antigo primeiro
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange({ ...filters, sortDir: "asc" })}
-              className={pillCls(filters.sortDir === "asc")}
-            >
-              Inverter
-            </button>
+        </div>
+
+        <div className="border-t border-border p-2">
+          <p className="px-1 pb-1 text-[11px] font-semibold text-foreground">Direção</p>
+          <div className="flex gap-1 px-1">
+            {(["asc", "desc"] as LeadSortDirection[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => onChange(sort, d)}
+                className={pillCls(direction === d)}
+              >
+                {LEAD_SORT_DIRECTION_LABEL[sort][d]}
+              </button>
+            ))}
           </div>
-        </PopoverContent>
-      </Popover>
-    </>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-/** Chips dos filtros ativos — renderizada à parte (correção), logo abaixo
- * da toolbar unificada. Some por completo (nenhum espaço vazio) quando
- * não há filtro ativo. Mesma fonte de verdade que o contador do botão
- * "Filtros" (`countActiveFilters(filters)` em `LeadFiltersControls`) e
- * que os indicadores clicáveis do `PipelineSummary` — todos os três leem/
- * escrevem o mesmo objeto `filters` de `useLeadFilters()`, sem estado
- * duplicado. */
+const ACTIVITY_GROUPS: { title: string; keys: LeadActivityFilterKey[] }[] = [
+  { title: "Próxima ação", keys: ["com_proxima_acao", "sem_proxima_acao", "acao_vencida"] },
+  { title: "Parado no funil", keys: ["parado_3d", "parado_5d", "parado_7d"] },
+  {
+    title: "Contato",
+    keys: [
+      "nunca_contatado",
+      "contatado_hoje",
+      "contatado_7d",
+      "sem_contato_7d",
+      "sem_contato_15d",
+      "sem_contato_30d",
+    ],
+  },
+];
+
+/** Controle 2: "Filtros" — painel largo (2 colunas no desktop), estado
+ * pendente só é confirmado em "Aplicar filtros" (nunca aplica parcial
+ * enquanto o usuário edita, conforme pedido). "Limpar"/"Aplicar" sempre
+ * visíveis (rodapé fixo, conteúdo rola). */
+export function FilterPanel({
+  filters,
+  onApply,
+  team,
+}: {
+  filters: LeadFilters;
+  onApply: (f: LeadFilters) => void;
+  team: TeamMemberLite[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<LeadFilters>(filters);
+  const activeCount = countActiveLeadFilters(filters);
+
+  const openPanel = (v: boolean) => {
+    if (v) setPending(filters);
+    setOpen(v);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={openPanel}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5">
+          <Filter className="h-3.5 w-3.5" />
+          Filtros
+          {activeCount > 0 && (
+            <Badge variant="brand" className="px-1.5 py-0 text-[10px] leading-4">
+              {activeCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="flex max-h-[80vh] w-[92vw] flex-col p-0 sm:w-[560px] lg:w-[640px]"
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Filtrar oportunidades</p>
+          <button
+            type="button"
+            onClick={() => setPending(EMPTY_LEAD_FILTERS)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Limpar
+          </button>
+        </div>
+
+        <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto p-4 sm:grid-cols-2">
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold text-foreground">Pessoas</p>
+              <p className="mb-1 text-[10px] font-medium uppercase text-muted-foreground">
+                Responsável
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {team.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() =>
+                      setPending({
+                        ...pending,
+                        responsibles: toggleIn(pending.responsibles, m.name),
+                      })
+                    }
+                    className={pillCls(pending.responsibles.includes(m.name))}
+                  >
+                    {m.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPending({ ...pending, noResponsible: !pending.noResponsible })}
+                  className={pillCls(pending.noResponsible)}
+                >
+                  Sem responsável
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold text-foreground">Pipeline</p>
+              <p className="mb-1 text-[10px] font-medium uppercase text-muted-foreground">Etapa</p>
+              <div className="flex flex-wrap gap-1">
+                {OPPORTUNITY_STAGES.map((s: OpportunityStage) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPending({ ...pending, stages: toggleIn(pending.stages, s) })}
+                    className={pillCls(pending.stages.includes(s))}
+                  >
+                    {OPPORTUNITY_STAGE_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-1 mt-2 text-[10px] font-medium uppercase text-muted-foreground">
+                Status
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {(["aberto", "ganho", "perdido"] as LeadStatusFilter[]).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPending({ ...pending, status: toggleIn(pending.status, s) })}
+                    className={pillCls(pending.status.includes(s))}
+                  >
+                    {STATUS_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-1 mt-2 text-[10px] font-medium uppercase text-muted-foreground">
+                Origem
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {SOURCES.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() =>
+                      setPending({ ...pending, origins: toggleIn(pending.origins, o) })
+                    }
+                    className={pillCls(pending.origins.includes(o))}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold text-foreground">Valores</p>
+              <div className="flex items-center gap-2">
+                <input
+                  inputMode="decimal"
+                  value={pending.minValue ?? ""}
+                  onChange={(e) =>
+                    setPending({
+                      ...pending,
+                      minValue: e.target.value.trim() ? Number(e.target.value) : undefined,
+                    })
+                  }
+                  placeholder="Valor mín. (R$)"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+                <span className="text-muted-foreground">–</span>
+                <input
+                  inputMode="decimal"
+                  value={pending.maxValue ?? ""}
+                  onChange={(e) =>
+                    setPending({
+                      ...pending,
+                      maxValue: e.target.value.trim() ? Number(e.target.value) : undefined,
+                    })
+                  }
+                  placeholder="Valor máx. (R$)"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  inputMode="numeric"
+                  value={pending.minProbability ?? ""}
+                  onChange={(e) =>
+                    setPending({
+                      ...pending,
+                      minProbability: e.target.value.trim() ? Number(e.target.value) : undefined,
+                    })
+                  }
+                  placeholder="Probabilidade mín. (%)"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+                <span className="text-muted-foreground">–</span>
+                <input
+                  inputMode="numeric"
+                  value={pending.maxProbability ?? ""}
+                  onChange={(e) =>
+                    setPending({
+                      ...pending,
+                      maxProbability: e.target.value.trim() ? Number(e.target.value) : undefined,
+                    })
+                  }
+                  placeholder="Probabilidade máx. (%)"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold text-foreground">Atividade</p>
+              {ACTIVITY_GROUPS.map((g) => (
+                <div key={g.title} className="mb-2">
+                  <p className="mb-1 text-[10px] font-medium uppercase text-muted-foreground">
+                    {g.title}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {g.keys.map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() =>
+                          setPending({ ...pending, activity: toggleIn(pending.activity, k) })
+                        }
+                        className={pillCls(pending.activity.includes(k))}
+                      >
+                        {LEAD_ACTIVITY_FILTER_LABEL[k]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-border px-4 py-3">
+          <span className="text-[11px] text-muted-foreground">
+            {countActiveLeadFilters(pending)} filtro
+            {countActiveLeadFilters(pending) === 1 ? "" : "s"} selecionado
+            {countActiveLeadFilters(pending) === 1 ? "" : "s"}
+          </span>
+          <Button
+            size="sm"
+            onClick={() => {
+              onApply(pending);
+              setOpen(false);
+            }}
+          >
+            Aplicar filtros
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+type Chip = { id: string; label: string; onRemove: () => void };
+
+function buildChips(filters: LeadFilters, onChange: (f: LeadFilters) => void): Chip[] {
+  const chips: Chip[] = [];
+  for (const r of filters.responsibles) {
+    chips.push({
+      id: `resp-${r}`,
+      label: `Responsável: ${r}`,
+      onRemove: () => onChange({ ...filters, responsibles: toggleIn(filters.responsibles, r) }),
+    });
+  }
+  if (filters.noResponsible) {
+    chips.push({
+      id: "no-resp",
+      label: "Sem responsável",
+      onRemove: () => onChange({ ...filters, noResponsible: false }),
+    });
+  }
+  for (const s of filters.stages) {
+    chips.push({
+      id: `stage-${s}`,
+      label: OPPORTUNITY_STAGE_LABEL[s],
+      onRemove: () => onChange({ ...filters, stages: toggleIn(filters.stages, s) }),
+    });
+  }
+  for (const s of filters.status) {
+    chips.push({
+      id: `status-${s}`,
+      label: `Status: ${STATUS_LABEL[s]}`,
+      onRemove: () => onChange({ ...filters, status: toggleIn(filters.status, s) }),
+    });
+  }
+  for (const o of filters.origins) {
+    chips.push({
+      id: `origin-${o}`,
+      label: `Origem: ${o}`,
+      onRemove: () => onChange({ ...filters, origins: toggleIn(filters.origins, o) }),
+    });
+  }
+  for (const t of filters.tags) {
+    chips.push({
+      id: `tag-${t}`,
+      label: `Tag: ${t}`,
+      onRemove: () => onChange({ ...filters, tags: toggleIn(filters.tags, t) }),
+    });
+  }
+  for (const a of filters.activity) {
+    chips.push({
+      id: `activity-${a}`,
+      label: LEAD_ACTIVITY_FILTER_LABEL[a],
+      onRemove: () => onChange({ ...filters, activity: toggleIn(filters.activity, a) }),
+    });
+  }
+  if (filters.minValue !== undefined || filters.maxValue !== undefined) {
+    chips.push({
+      id: "value-range",
+      label: `Valor: ${filters.minValue ?? "0"} – ${filters.maxValue ?? "∞"}`,
+      onRemove: () => onChange({ ...filters, minValue: undefined, maxValue: undefined }),
+    });
+  }
+  if (filters.minProbability !== undefined || filters.maxProbability !== undefined) {
+    chips.push({
+      id: "prob-range",
+      label: `Probabilidade: ${filters.minProbability ?? "0"}–${filters.maxProbability ?? "100"}%`,
+      onRemove: () =>
+        onChange({ ...filters, minProbability: undefined, maxProbability: undefined }),
+    });
+  }
+  return chips;
+}
+
+/** Chips dos filtros ativos — mostra os principais e agrupa o resto em
+ * "+N filtros" pra nunca ocupar várias linhas desnecessárias. Mesma fonte
+ * de verdade (`filters`) do contador do botão "Filtros" e dos indicadores
+ * clicáveis do `PipelineSummary`. */
 export function LeadFiltersChips({
   filters,
   onChange,
+  resultCount,
 }: {
-  filters: LeadFiltersState;
-  onChange: (f: LeadFiltersState) => void;
+  filters: LeadFilters;
+  onChange: (f: LeadFilters) => void;
+  resultCount?: number;
 }) {
   const chips = buildChips(filters, onChange);
-  if (chips.length === 0) return null;
+  const MAX_VISIBLE = 4;
+  const visible = chips.slice(0, MAX_VISIBLE);
+  const overflow = chips.length - visible.length;
+
+  if (chips.length === 0) {
+    return resultCount !== undefined ? (
+      <p className="text-[11px] text-muted-foreground">
+        {resultCount} oportunidade{resultCount === 1 ? "" : "s"} encontrada
+        {resultCount === 1 ? "" : "s"}
+      </p>
+    ) : null;
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {chips.map((chip) => (
+      {visible.map((chip) => (
         <Badge key={chip.id} variant="brand" className="gap-1 py-1 pl-2.5 pr-1.5">
           {chip.label}
           <button
@@ -442,13 +536,24 @@ export function LeadFiltersChips({
           </button>
         </Badge>
       ))}
+      {overflow > 0 && (
+        <Badge variant="secondary" className="py-1">
+          +{overflow} filtro{overflow === 1 ? "" : "s"}
+        </Badge>
+      )}
       <button
         type="button"
-        onClick={() => onChange(DEFAULT_LEAD_FILTERS)}
+        onClick={() => onChange(EMPTY_LEAD_FILTERS)}
         className="text-[11px] font-medium text-text-secondary hover:text-foreground"
       >
         Limpar tudo
       </button>
+      {resultCount !== undefined && (
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          {resultCount} oportunidade{resultCount === 1 ? "" : "s"} encontrada
+          {resultCount === 1 ? "" : "s"}
+        </span>
+      )}
     </div>
   );
 }

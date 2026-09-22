@@ -22,6 +22,7 @@ function baseLead(overrides: Partial<Lead> = {}): Lead {
     activities: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    stageEnteredAt: Date.now(),
     ...overrides,
   };
 }
@@ -204,38 +205,31 @@ describe("applyOpportunityAction", () => {
 describe('daysSinceLastStageChange / isOpportunityStale — definição única de "parado"', () => {
   const DAY = 24 * 60 * 60 * 1000;
 
-  it("usa a última entrada de histórico de etapa, não updatedAt cru", () => {
+  it("usa stageEnteredAt, não updatedAt cru", () => {
     const lead = baseLead({
       updatedAt: Date.now(), // editado agora (ex: só uma nota)...
-      history: [
-        { id: "h1", type: "stage", text: "x", createdAt: Date.now() - 10 * DAY }, // ...mas a etapa não muda há 10 dias
-      ],
+      stageEnteredAt: Date.now() - 10 * DAY, // ...mas a etapa não muda há 10 dias
     });
     expect(daysSinceLastStageChange(lead)).toBeGreaterThanOrEqual(10);
   });
 
-  it("sem histórico de etapa, cai para updatedAt", () => {
-    const lead = baseLead({ updatedAt: Date.now() - 3 * DAY, history: [] });
+  it("objeto parcial sem stageEnteredAt (ex.: rascunho local) cai para updatedAt/history", () => {
+    const lead = { updatedAt: Date.now() - 3 * DAY, history: [] } as unknown as Parameters<
+      typeof daysSinceLastStageChange
+    >[0];
     expect(daysSinceLastStageChange(lead)).toBeGreaterThanOrEqual(3);
   });
 
   it(`isOpportunityStale é true a partir de ${OPPORTUNITY_STALE_DAYS} dias sem mudar de etapa`, () => {
     const parado = baseLead({
       stage: "CONTATO_FEITO",
-      history: [
-        {
-          id: "h1",
-          type: "stage",
-          text: "x",
-          createdAt: Date.now() - OPPORTUNITY_STALE_DAYS * DAY - 1000,
-        },
-      ],
+      stageEnteredAt: Date.now() - OPPORTUNITY_STALE_DAYS * DAY - 1000,
     });
     expect(isOpportunityStale(parado)).toBe(true);
 
     const recente = baseLead({
       stage: "CONTATO_FEITO",
-      history: [{ id: "h1", type: "stage", text: "x", createdAt: Date.now() - 1 * DAY }],
+      stageEnteredAt: Date.now() - 1 * DAY,
     });
     expect(isOpportunityStale(recente)).toBe(false);
   });
@@ -243,7 +237,7 @@ describe('daysSinceLastStageChange / isOpportunityStale — definição única d
   it('nunca é "parado" em etapa terminal (GANHO/PERDIDO), mesmo há muito tempo sem mudar', () => {
     const ganhoAntigo = baseLead({
       stage: "GANHO",
-      history: [{ id: "h1", type: "stage", text: "x", createdAt: Date.now() - 90 * DAY }],
+      stageEnteredAt: Date.now() - 90 * DAY,
     });
     expect(isOpportunityStale(ganhoAntigo)).toBe(false);
   });

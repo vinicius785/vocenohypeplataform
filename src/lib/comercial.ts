@@ -141,6 +141,27 @@ export type Lead = {
    * como aproximação silenciosa. */
   wonAt?: string;
   lostAt?: string;
+  /** Quando a oportunidade entrou na etapa atual (`stage`) — coluna real no
+   * banco, mantida só pelo trigger `leads_set_stage_entered_at` (nunca por
+   * escrita direta da aplicação). Base de "tempo parado" — nunca usar
+   * `updatedAt` pra isso, editar nome/valor/observação não conta como
+   * progresso. Sempre presente (default `now()` na criação). */
+  stageEnteredAt: number;
+  /** Última interação comercial REAL (ligação/e-mail/reunião registrados) —
+   * nunca atualizado por nota/tarefa/comentário interno. `undefined` quando
+   * o lead nunca foi contatado (estado legítimo, não um erro de dado). */
+  lastContactAt?: number;
+  /** Data/hora da próxima ação agendada — hoje espelha `nextMeeting`
+   * (única fonte de data real que existe); ações sugeridas sem prazo (ex.
+   * "Registrar contato") não populam este campo. */
+  nextActionAt?: number;
+  /** Previsão de fechamento (ISO), mesmo formato de `nextMeeting` — campo
+   * novo, sem dado histórico em registros anteriores a esta entrega
+   * (`undefined` nesses casos). */
+  expectedCloseAt?: string;
+  /** Probabilidade de fechamento (0-100) — campo novo, sem dado histórico
+   * em registros anteriores a esta entrega (`undefined` nesses casos). */
+  probability?: number;
 };
 
 const STAGES_KEY = "comercial:stages";

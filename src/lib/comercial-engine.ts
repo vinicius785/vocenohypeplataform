@@ -424,14 +424,25 @@ function formatDateBR(iso: string): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-/** "Tempo na etapa" / "Parado há X dias" — calculado do histórico (a
- * última entrada de mudança de etapa), nunca de um campo manual. */
-export function daysSinceLastStageChange(lead: Pick<Lead, "history" | "updatedAt">): number {
-  const stageEntries = (lead.history ?? []).filter(
-    (h) => h.type === "stage" || h.type === "created",
-  );
-  const lastAt =
-    stageEntries.length > 0 ? Math.max(...stageEntries.map((h) => h.createdAt)) : lead.updatedAt;
+/** "Tempo na etapa" / "Parado há X dias" — calculado a partir de
+ * `stageEnteredAt` (coluna real, mantida só pelo trigger de banco quando a
+ * etapa muda), NUNCA de `updatedAt` — editar nome/valor/observação não é
+ * "progresso" e não pode zerar esta contagem. Aceita `history`/`updatedAt`
+ * como fallback só pra objetos antigos/parciais que ainda não passaram
+ * pelo servidor (ex. um rascunho local antes do primeiro save). */
+export function daysSinceLastStageChange(
+  lead: Pick<Lead, "stageEnteredAt"> & Partial<Pick<Lead, "history" | "updatedAt">>,
+): number {
+  let lastAt = lead.stageEnteredAt;
+  if (lastAt === undefined) {
+    const stageEntries = (lead.history ?? []).filter(
+      (h) => h.type === "stage" || h.type === "created",
+    );
+    lastAt =
+      stageEntries.length > 0
+        ? Math.max(...stageEntries.map((h) => h.createdAt))
+        : (lead.updatedAt ?? Date.now());
+  }
   const diffMs = Date.now() - lastAt;
   return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
 }
@@ -445,7 +456,9 @@ export const OPPORTUNITY_STALE_DAYS = 5;
  * não muda de etapa há `OPPORTUNITY_STALE_DAYS` dias ou mais — nunca por
  * `updatedAt` cru (editar uma observação não é "progresso"). Única fonte
  * de verdade pro conceito de "parado" no módulo Comercial. */
-export function isOpportunityStale(lead: Pick<Lead, "stage" | "history" | "updatedAt">): boolean {
+export function isOpportunityStale(
+  lead: Pick<Lead, "stage" | "stageEnteredAt"> & Partial<Pick<Lead, "history" | "updatedAt">>,
+): boolean {
   const stage = legacyStage(lead.stage);
   if (stage === "GANHO" || stage === "PERDIDO") return false;
   return daysSinceLastStageChange(lead) >= OPPORTUNITY_STALE_DAYS;
