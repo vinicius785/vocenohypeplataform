@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus, Building2, Megaphone, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { VincularCampanhaDialog, type Campaign } from "./VincularCampanhaDialog";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
 import { ClienteCard } from "./clientes/ClienteCard";
 import { ClienteFiltersBar } from "./clientes/ClienteFiltersBar";
 import { ClienteFormSheet } from "./clientes/ClienteFormSheet";
-import { ClienteDetailsSheet } from "./clientes/ClienteDetailsSheet";
 import {
   DEFAULT_CLIENTE_FILTERS,
   filterClientes,
@@ -32,22 +31,24 @@ import {
 export function ClientesSection() {
   const clientes = useClientes();
   const setClientes = clientesStore.set;
+  const navigate = useNavigate();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [campanhaOpen, setCampanhaOpen] = useState(false);
-  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<ClienteFiltersState>(DEFAULT_CLIENTE_FILTERS);
   const { confirm, confirmDialog } = useConfirm();
 
-  const selected = clientes.find((c) => c.id === selectedId) ?? null;
+  const openCliente = (clienteId: string) => {
+    void navigate({ to: "/clientes/$id", params: { id: clienteId } });
+  };
 
   // Deep link vindo de uma @menção de cliente no Chat (mesmo padrão de
   // OPEN_CAMPANHA_TASK_KEY em CampanhasSection) — `clientes` só carrega de
   // forma assíncrona, então tenta de novo sempre que a lista mudar, e só
-  // limpa o sessionStorage quando encontrar o cliente de verdade.
+  // limpa o sessionStorage quando encontrar o cliente de verdade. Agora
+  // navega direto pra `/clientes/$id` em vez de abrir o drawer (rebuild da
+  // página de detalhes — ver `ClienteDetailPage.tsx`).
   useEffect(() => {
     const openFromSession = () => {
       try {
@@ -58,7 +59,7 @@ export function ClientesSection() {
         const match = clientes.find((c) => c.id === parsed.clienteId);
         if (!match) return;
         sessionStorage.removeItem(OPEN_CLIENTE_KEY);
-        setSelectedId(match.id);
+        openCliente(match.id);
       } catch {
         /* ignore */
       }
@@ -66,22 +67,11 @@ export function ClientesSection() {
     openFromSession();
     window.addEventListener(OPEN_CLIENTE_EVENT, openFromSession);
     return () => window.removeEventListener(OPEN_CLIENTE_EVENT, openFromSession);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientes]);
-
-  const copyClientLink = (cliente: Cliente) => {
-    let token = cliente.publicToken;
-    if (!token) {
-      token = crypto.randomUUID().replace(/-/g, "");
-      setClientes((prev) =>
-        prev.map((cl) => (cl.id === cliente.id ? { ...cl, publicToken: token } : cl)),
-      );
-    }
-    void navigator.clipboard.writeText(`${window.location.origin}/portal/${token}`);
-  };
 
   const openEditCliente = (c: Cliente) => {
     setEditingCliente(c);
-    setSelectedId(null);
     setFormOpen(true);
   };
 
@@ -121,22 +111,6 @@ export function ClientesSection() {
     );
     if (!ok) return;
     setClientes((prev) => prev.filter((x) => x.id !== c.id));
-    setSelectedId(null);
-  };
-
-  const saveCampaign = (c: Campaign) => {
-    if (!selected) return;
-    setClientes((prev) =>
-      prev.map((cli) => {
-        if (cli.id !== selected.id) return cli;
-        const list = cli.campanhas ?? [];
-        const exists = list.some((x) => x.id === c.id);
-        return {
-          ...cli,
-          campanhas: exists ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c],
-        };
-      }),
-    );
   };
 
   const responsaveis = useMemo(
@@ -294,7 +268,7 @@ export function ClientesSection() {
               <ClienteCard
                 key={c.id}
                 cliente={c}
-                onOpen={() => setSelectedId(c.id)}
+                onOpen={() => openCliente(c.id)}
                 onEdit={() => openEditCliente(c)}
                 onDelete={() => void requestDeleteCliente(c)}
               />
@@ -313,33 +287,6 @@ export function ClientesSection() {
         onSave={saveCliente}
       />
 
-      <ClienteDetailsSheet
-        cliente={selected}
-        onClose={() => setSelectedId(null)}
-        onEdit={openEditCliente}
-        onDelete={(c) => void requestDeleteCliente(c)}
-        onCopyLink={copyClientLink}
-        onNovaCampanha={() => {
-          setEditingCampaign(null);
-          setCampanhaOpen(true);
-        }}
-        onEditCampanha={(camp) => {
-          setEditingCampaign(camp);
-          setCampanhaOpen(true);
-        }}
-      />
-
-      <VincularCampanhaDialog
-        open={campanhaOpen}
-        onOpenChange={(o) => {
-          setCampanhaOpen(o);
-          if (!o) setEditingCampaign(null);
-        }}
-        clienteNome={selected?.empresa}
-        clienteOrcamentoSugerido={selected?.orcamentoSugerido}
-        initial={editingCampaign}
-        onSave={saveCampaign}
-      />
       {confirmDialog}
     </div>
   );

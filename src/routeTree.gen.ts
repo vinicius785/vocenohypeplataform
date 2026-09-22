@@ -43,6 +43,7 @@ import { Route as ApiCronHypitoDailyBriefingRouteImport } from './routes/api/cro
 import { Route as ApiCronHypitoAlertsRouteImport } from './routes/api/cron/hypito-alerts'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
+import { Route as AuthenticatedClientesIdRouteImport } from './routes/_authenticated/clientes.$id'
 import { Route as PortalTokenCampanhasIndexRouteImport } from './routes/portal.$token/campanhas.index'
 import { Route as PortalTokenCampanhasCampanhaIdRouteImport } from './routes/portal.$token/campanhas.$campanhaId'
 import { Route as PortalAppCampanhasCampanhaIdRevisarRouteImport } from './routes/portal-app/campanhas.$campanhaId.revisar'
@@ -225,6 +226,11 @@ const AuthenticatedProjetoIdRoute = AuthenticatedProjetoIdRouteImport.update({
   path: '/projeto/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedClientesIdRoute = AuthenticatedClientesIdRouteImport.update({
+  id: '/clientes/$id',
+  path: '/clientes/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const PortalTokenCampanhasIndexRoute =
   PortalTokenCampanhasIndexRouteImport.update({
     id: '/campanhas/',
@@ -275,6 +281,7 @@ export interface FileRoutesByFullPath {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
+  '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -314,6 +321,7 @@ export interface FileRoutesByTo {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
+  '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -356,6 +364,7 @@ export interface FileRoutesById {
   '/inscricao/$token': typeof InscricaoTokenRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
+  '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
@@ -398,6 +407,7 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal-app/campanhas'
     | '/portal-app/inicio'
+    | '/clientes/$id'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -437,6 +447,7 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal-app/campanhas'
     | '/portal-app/inicio'
+    | '/clientes/$id'
     | '/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -478,6 +489,7 @@ export interface FileRouteTypes {
     | '/inscricao/$token'
     | '/portal-app/campanhas'
     | '/portal-app/inicio'
+    | '/_authenticated/clientes/$id'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
     | '/api/cron/hypito-alerts'
@@ -763,6 +775,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjetoIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/clientes/$id': {
+      id: '/_authenticated/clientes/$id'
+      path: '/clientes/$id'
+      fullPath: '/clientes/$id'
+      preLoaderRoute: typeof AuthenticatedClientesIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/portal/$token/campanhas/': {
       id: '/portal/$token/campanhas/'
       path: '/campanhas'
@@ -807,6 +826,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFocoRoute: typeof AuthenticatedFocoRoute
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
+  AuthenticatedClientesIdRoute: typeof AuthenticatedClientesIdRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
 }
 
@@ -817,6 +837,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFocoRoute: AuthenticatedFocoRoute,
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
+  AuthenticatedClientesIdRoute: AuthenticatedClientesIdRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,
 }
 

@@ -179,6 +179,12 @@ const ListInput = z.object({
   action: z.string().trim().max(60).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /** Added for the per-client "Histórico" section on `/clientes/$id`
+   * (`ClienteDetailPage.tsx`) — narrows the log to one organization's
+   * events without adding a second read path. Optional and additive: every
+   * existing caller (the global `AuditLogTab.tsx`) keeps working unchanged
+   * by simply omitting it. */
+  organizationId: z.string().uuid().optional(),
 });
 
 /** Admin-only paginated read of `access_audit_log`. Reuses the table's own
@@ -204,6 +210,7 @@ export const listAuditLog = createServerFn({ method: "GET" })
     if (data.action) query = query.eq("action", data.action);
     if (data.from) query = query.gte("created_at", data.from);
     if (data.to) query = query.lte("created_at", data.to);
+    if (data.organizationId) query = query.eq("organization_id", data.organizationId);
 
     const start = data.page * data.pageSize;
     const end = start + data.pageSize - 1;
