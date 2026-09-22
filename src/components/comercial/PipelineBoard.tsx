@@ -28,11 +28,13 @@ export function PipelineBoard({
   onOpenLead,
   onMoveLead,
   onCreateInStage,
+  onRegisterFollowUp,
 }: {
   leads: Lead[];
   onOpenLead: (lead: Lead) => void;
   onMoveLead: (id: string, stage: OpportunityStage) => void;
   onCreateInStage: (stage: OpportunityStage) => void;
+  onRegisterFollowUp: (lead: Lead) => void;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<OpportunityStage | null>(null);
@@ -145,6 +147,7 @@ export function PipelineBoard({
                         onOpen={() => onOpenLead(lead)}
                         onDragStart={() => setDragId(lead.id)}
                         onDragEnd={() => setDragId(null)}
+                        onRegisterFollowUp={() => onRegisterFollowUp(lead)}
                       />
                     ))
                   )}

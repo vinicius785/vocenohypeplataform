@@ -275,7 +275,15 @@ export function applyOpportunityAction(
 
     case "agendar_reuniao":
       return {
-        patch: { stage: "REUNIAO_AGENDADA", nextMeeting: opts.data },
+        patch: {
+          stage: "REUNIAO_AGENDADA",
+          nextMeeting: opts.data,
+          // Sincroniza a "próxima ação" genérica com a reunião agendada —
+          // sem isso, o card mostraria uma próxima ação desatualizada
+          // (ex. de um follow-up anterior) em vez da reunião real.
+          nextActionAt: opts.data ? new Date(opts.data).getTime() : undefined,
+          nextActionDescription: opts.data ? "Reunião agendada" : undefined,
+        },
         historyEntries: [
           {
             text: opts.data
@@ -469,8 +477,10 @@ export function isOpportunityStale(
  * única definição de "ação vencida" no módulo, reaproveitada por
  * `LeadCard`, `LeadFiltersBar` e a lista de Prioridades comerciais (antes
  * cada um tinha sua própria conta de `new Date(nextMeeting) < now`). */
-export function isNextActionOverdue(lead: Pick<Lead, "nextMeeting">): boolean {
-  return !!lead.nextMeeting && new Date(lead.nextMeeting).getTime() < Date.now();
+export function isNextActionOverdue(lead: Pick<Lead, "nextMeeting" | "nextActionAt">): boolean {
+  const at =
+    lead.nextActionAt ?? (lead.nextMeeting ? new Date(lead.nextMeeting).getTime() : undefined);
+  return !!at && at < Date.now();
 }
 
 /** Uma oportunidade tem "próxima ação válida" quando o motor sugere uma
@@ -480,8 +490,34 @@ export function isNextActionOverdue(lead: Pick<Lead, "nextMeeting">): boolean {
  * "próxima ação" só porque a etapa atual (ex. Proposta enviada) não tem
  * botão de ação do motor. Usado pra decidir "Sem próxima ação" de forma
  * central (KPI, card, filtro e lista de prioridades). */
-export function hasValidNextAction(lead: Pick<Lead, "stage" | "nextMeeting">): boolean {
+export function hasValidNextAction(
+  lead: Pick<Lead, "stage" | "nextMeeting" | "nextActionAt">,
+): boolean {
   const step = deriveOpportunityNextStep(lead);
   if (step.action !== null) return true;
-  return !!lead.nextMeeting && new Date(lead.nextMeeting).getTime() >= Date.now();
+  const at =
+    lead.nextActionAt ?? (lead.nextMeeting ? new Date(lead.nextMeeting).getTime() : undefined);
+  return !!at && at >= Date.now();
+}
+
+/** Dias desde o último contato REAL (follow-up registrado) — `null` quando
+ * nunca houve contato (estado legítimo, exibido como "Nunca contatado",
+ * nunca tratado como 0). Independente de `stageEnteredAt`/etapa — dois
+ * conceitos diferentes desde a introdução do follow-up (seção 9 do
+ * pedido): "parado no funil" é uma coisa, "sem contato" é outra. */
+export function daysSinceLastContact(lead: Pick<Lead, "lastContactAt">): number | null {
+  if (!lead.lastContactAt) return null;
+  return Math.max(0, Math.floor((Date.now() - lead.lastContactAt) / (24 * 60 * 60 * 1000)));
+}
+
+/** Limiar de alerta "sem interação" no card — baseado em contato real
+ * (`lastContactAt`), nunca em `updatedAt`/etapa. Salvar um follow-up
+ * sempre remove este alerta (avança `lastContactAt` pra agora). */
+export const NO_CONTACT_ALERT_DAYS = 5;
+
+export function hasNoRecentContact(lead: Pick<Lead, "stage" | "lastContactAt">): boolean {
+  const stage = legacyStage(lead.stage);
+  if (stage === "GANHO" || stage === "PERDIDO") return false;
+  const days = daysSinceLastContact(lead);
+  return days === null || days >= NO_CONTACT_ALERT_DAYS;
 }

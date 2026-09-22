@@ -48,10 +48,10 @@ describe("listLeadsInputSchema — allowlist de campo/direção de ordenação",
     expect(() => listLeadsInputSchema.parse({ sort: "value", direction: "sideways" })).toThrow();
   });
 
-  it("sem input nenhum, usa o padrão documentado (próxima ação, mais próxima primeiro)", () => {
+  it("sem input nenhum, usa o padrão documentado (mais recentes primeiro)", () => {
     const parsed = listLeadsInputSchema.parse({});
-    expect(parsed.sort).toBe("next_action_at");
-    expect(parsed.direction).toBe("asc");
+    expect(parsed.sort).toBe("created_at");
+    expect(parsed.direction).toBe("desc");
   });
 });
 

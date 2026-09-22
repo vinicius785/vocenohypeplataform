@@ -75,29 +75,28 @@ export type LeadQuickSort = {
   direction: LeadSortDirection;
 };
 
-/** Atalhos comerciais — cada um só preenche `sort`/`direction` reais,
- * nunca uma segunda lógica paralela de ordenação. */
+/**
+ * As ÚNICAS 5 opções de ordenação expostas na interface (simplificação
+ * pedida explicitamente — operação pequena, não um CRM enterprise). Cada
+ * uma só preenche `sort`/`direction` reais da mesma allowlist de sempre,
+ * nunca uma segunda lógica paralela. Os demais campos/direções continuam
+ * suportados no backend/URL (nunca removidos), só não aparecem mais aqui.
+ */
 export const LEAD_QUICK_SORTS: LeadQuickSort[] = [
   { key: "mais_recentes", label: "Mais recentes", sort: "created_at", direction: "desc" },
+  { key: "mais_antigos", label: "Mais antigos", sort: "created_at", direction: "asc" },
   {
     key: "sem_contato",
     label: "Sem contato há mais tempo",
     sort: "last_contact_at",
     direction: "asc",
   },
-  { key: "parados", label: "Parados há mais tempo", sort: "stage_entered_at", direction: "asc" },
-  { key: "acao_urgente", label: "Ação mais urgente", sort: "next_action_at", direction: "asc" },
+  { key: "proxima_acao", label: "Próxima ação", sort: "next_action_at", direction: "asc" },
   { key: "maior_valor", label: "Maior valor", sort: "value", direction: "desc" },
-  {
-    key: "atualizados",
-    label: "Atualizados recentemente",
-    sort: "updated_at",
-    direction: "desc",
-  },
 ];
 
-export const DEFAULT_LEAD_SORT: LeadSortField = "next_action_at";
-export const DEFAULT_LEAD_DIRECTION: LeadSortDirection = "asc";
+export const DEFAULT_LEAD_SORT: LeadSortField = "created_at";
+export const DEFAULT_LEAD_DIRECTION: LeadSortDirection = "desc";
 
 export type LeadDateRangeField =
   | "created_at"

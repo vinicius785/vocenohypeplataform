@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Plus, Search, X, BookmarkPlus, Bookmark, Trash2 } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
+import { toast } from "sonner";
 import { type Lead, type PropostaSnapshot } from "@/lib/comercial";
 import {
   listLeads,
@@ -10,10 +11,8 @@ import {
   updateLeadStage,
   deleteLead as deleteLeadFn,
   runOpportunityAction,
-  listSavedViews,
-  upsertSavedView,
-  deleteSavedView,
 } from "@/lib/comercial.functions";
+import { registerFollowUp } from "@/lib/commercial-interactions.functions";
 import { type OpportunityActionKind, type OpportunityStage } from "@/lib/comercial-engine";
 import {
   rangeForComercialPeriod,
@@ -35,17 +34,11 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { PipelineSummary } from "./comercial/PipelineSummary";
-import { SortControl, FilterPanel, LeadFiltersChips } from "./comercial/LeadFiltersBar";
+import { SortSelect, FilterPanel, LeadFiltersSummary } from "./comercial/LeadFiltersBar";
 import { PipelineBoard } from "./comercial/PipelineBoard";
 import { LeadDrawer, type OpportunityActionInput } from "./comercial/LeadDrawer";
+import { FollowUpDialog, type FollowUpInput } from "./comercial/FollowUpDialog";
 
 /** Debounce simples — evita 1 request por tecla na busca. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -73,6 +66,7 @@ export function ComercialSection() {
   const [showDrawer, setShowDrawer] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
   const [createInStage, setCreateInStage] = useState<OpportunityStage | undefined>(undefined);
+  const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
 
   const search = useSearch({ from: "/_authenticated/time" });
   const navigate = useNavigate();
@@ -127,9 +121,7 @@ export function ComercialSection() {
   const stageFn = useServerFn(updateLeadStage);
   const deleteFn = useServerFn(deleteLeadFn);
   const runActionFn = useServerFn(runOpportunityAction);
-  const listViewsFn = useServerFn(listSavedViews);
-  const upsertViewFn = useServerFn(upsertSavedView);
-  const deleteViewFn = useServerFn(deleteSavedView);
+  const registerFollowUpFn = useServerFn(registerFollowUp);
 
   const listParams = useMemo(
     () => ({ sort, direction, search: debouncedSearch.trim() || undefined, filters }),
@@ -148,14 +140,7 @@ export function ComercialSection() {
     placeholderData: (prev) => prev,
   });
 
-  const { data: savedViews = [] } = useQuery({
-    queryKey: ["comercial-saved-views"],
-    queryFn: () => listViewsFn(),
-  });
-
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["leads"] });
-  const invalidateViews = () =>
-    queryClient.invalidateQueries({ queryKey: ["comercial-saved-views"] });
 
   useEffect(() => {
     const channel = supabase
@@ -214,16 +199,13 @@ export function ComercialSection() {
     }) => runActionFn({ data: input as never }),
     onSuccess: invalidate,
   });
-  const saveViewMutation = useMutation({
-    mutationFn: (v: { name: string; isDefault?: boolean }) =>
-      upsertViewFn({
-        data: { name: v.name, filters, sort, direction, isDefault: v.isDefault } as never,
-      }),
-    onSuccess: invalidateViews,
-  });
-  const deleteViewMutation = useMutation({
-    mutationFn: (id: string) => deleteViewFn({ data: { id } }),
-    onSuccess: invalidateViews,
+  const followUpMutation = useMutation({
+    mutationFn: (input: FollowUpInput & { opportunityId: string }) =>
+      registerFollowUpFn({ data: input as never }),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Follow-up registrado");
+    },
   });
 
   const range = useMemo(() => rangeForComercialPeriod(period), [period]);
@@ -265,15 +247,6 @@ export function ComercialSection() {
     [leads],
   );
 
-  const applySavedView = (v: (typeof savedViews)[number]) => {
-    patchSearch({
-      cSort: v.sort as LeadSortField,
-      cDir: v.direction as LeadSortDirection,
-      cf: (v.filters ?? EMPTY_LEAD_FILTERS) as LeadFilters,
-      cView: v.id,
-    });
-  };
-
   return (
     <div className="-m-4 min-h-full bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
       <PageContainer variant="wide" className="space-y-6">
@@ -291,9 +264,9 @@ export function ComercialSection() {
           </Button>
         </div>
 
-        {/* Toolbar: Período · Busca · Filtros · Ordenação · Visualizações
-         * salvas — 5 controles genuinamente separados (pedido explícito),
-         * nunca ordenação/direção combinadas num só menu. */}
+        {/* Toolbar simplificada: Período · Busca · Filtros · Ordenar —
+         * "Novo lead" fica só no cabeçalho, "Visualizações" foi removido
+         * (correção pedida — a operação é pequena, não precisa disso). */}
         <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">
           <select
             value={period}
@@ -326,63 +299,15 @@ export function ComercialSection() {
             )}
           </div>
           <FilterPanel filters={filters} onApply={(f) => patchSearch({ cf: f })} team={team} />
-          <SortControl
+          <SortSelect
             sort={sort}
             direction={direction}
             onChange={(s, d) => patchSearch({ cSort: s, cDir: d })}
           />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <Bookmark className="h-3.5 w-3.5" />
-                Visualizações
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              {savedViews.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  Nenhuma visualização salva ainda.
-                </p>
-              )}
-              {savedViews.map((v) => (
-                <DropdownMenuItem
-                  key={v.id}
-                  className="flex items-center justify-between gap-2"
-                  onSelect={() => applySavedView(v)}
-                >
-                  <span className="truncate">
-                    {v.name}
-                    {v.is_default ? " · padrão" : ""}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteViewMutation.mutate(v.id);
-                    }}
-                    aria-label={`Excluir visualização ${v.name}`}
-                    className="text-muted-foreground hover:text-danger"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  const name = window.prompt("Nome da visualização:");
-                  if (name?.trim()) saveViewMutation.mutate({ name: name.trim() });
-                }}
-              >
-                <BookmarkPlus className="mr-2 h-3.5 w-3.5" />
-                Salvar visualização atual
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
-        <LeadFiltersChips
+        <LeadFiltersSummary
           filters={filters}
-          onChange={(f) => patchSearch({ cf: f })}
+          onClear={() => patchSearch({ cf: EMPTY_LEAD_FILTERS })}
           resultCount={leads.length}
         />
 
@@ -429,9 +354,23 @@ export function ComercialSection() {
                 onOpenLead={openLead}
                 onMoveLead={moveTo}
                 onCreateInStage={openNewLead}
+                onRegisterFollowUp={setFollowUpLead}
               />
             )}
           </div>
+        )}
+
+        {followUpLead && (
+          <FollowUpDialog
+            lead={followUpLead}
+            open={!!followUpLead}
+            onOpenChange={(v) => {
+              if (!v) setFollowUpLead(null);
+            }}
+            onSubmit={async (input) => {
+              await followUpMutation.mutateAsync({ ...input, opportunityId: followUpLead.id });
+            }}
+          />
         )}
 
         {showDrawer && (
@@ -448,6 +387,7 @@ export function ComercialSection() {
             onRunAction={(input: OpportunityActionInput) => actionMutation.mutateAsync(input)}
             onAutosave={(lead) => upsertMutation.mutateAsync(lead)}
             onDelete={editing ? handleDeleteFromDrawer : undefined}
+            onRegisterFollowUp={editing ? () => setFollowUpLead(editing) : undefined}
           />
         )}
         {confirmDialog}

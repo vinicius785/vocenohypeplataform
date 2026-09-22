@@ -597,6 +597,59 @@ export type Database = {
         };
         Relationships: [];
       };
+      commercial_interactions: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          created_by_name: string;
+          id: string;
+          interaction_type: string;
+          next_action_at: string | null;
+          next_action_description: string | null;
+          occurred_at: string;
+          opportunity_id: string;
+          outcome: string | null;
+          summary: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          created_by_name: string;
+          id?: string;
+          interaction_type: string;
+          next_action_at?: string | null;
+          next_action_description?: string | null;
+          occurred_at: string;
+          opportunity_id: string;
+          outcome?: string | null;
+          summary: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          created_by_name?: string;
+          id?: string;
+          interaction_type?: string;
+          next_action_at?: string | null;
+          next_action_description?: string | null;
+          occurred_at?: string;
+          opportunity_id?: string;
+          outcome?: string | null;
+          summary?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "commercial_interactions_opportunity_id_fkey";
+            columns: ["opportunity_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       email_campaign_activity: {
         Row: {
           campaign_id: string;
@@ -1583,6 +1636,7 @@ export type Database = {
           last_contact_at: string | null;
           name: string;
           next_action_at: string | null;
+          next_action_description: string | null;
           next_meeting: string | null;
           notes: string | null;
           phone: string | null;
@@ -1608,6 +1662,7 @@ export type Database = {
           last_contact_at?: string | null;
           name: string;
           next_action_at?: string | null;
+          next_action_description?: string | null;
           next_meeting?: string | null;
           notes?: string | null;
           phone?: string | null;
@@ -1633,6 +1688,7 @@ export type Database = {
           last_contact_at?: string | null;
           name?: string;
           next_action_at?: string | null;
+          next_action_description?: string | null;
           next_meeting?: string | null;
           notes?: string | null;
           phone?: string | null;

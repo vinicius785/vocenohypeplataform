@@ -151,10 +151,13 @@ export type Lead = {
    * nunca atualizado por nota/tarefa/comentário interno. `undefined` quando
    * o lead nunca foi contatado (estado legítimo, não um erro de dado). */
   lastContactAt?: number;
-  /** Data/hora da próxima ação agendada — hoje espelha `nextMeeting`
-   * (única fonte de data real que existe); ações sugeridas sem prazo (ex.
-   * "Registrar contato") não populam este campo. */
+  /** Data/hora da próxima ação agendada — vem do follow-up mais recente
+   * (`registerFollowUp`) ou de uma reunião agendada pelo motor; ações
+   * sugeridas sem prazo (ex. "Registrar contato") não populam este campo. */
   nextActionAt?: number;
+  /** Texto livre da próxima ação combinada (ex.: "Enviar apresentação
+   * comercial") — sempre junto de `nextActionAt`, nunca um sem o outro. */
+  nextActionDescription?: string;
   /** Previsão de fechamento (ISO), mesmo formato de `nextMeeting` — campo
    * novo, sem dado histórico em registros anteriores a esta entrega
    * (`undefined` nesses casos). */

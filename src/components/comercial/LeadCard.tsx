@@ -1,48 +1,60 @@
-import { Clock, AlertTriangle, CalendarClock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, MessageCircle, Phone } from "lucide-react";
 import type { Lead } from "@/lib/comercial";
 import { formatBRL } from "@/lib/comercial";
 import {
-  deriveOpportunityNextStep,
-  daysSinceLastStageChange,
-  isOpportunityStale,
+  daysSinceLastContact,
+  hasNoRecentContact,
   isNextActionOverdue,
   legacyStage,
 } from "@/lib/comercial-engine";
+import { normalizePhoneDigits } from "@/lib/social-profiles";
 import { avatarAccent, initialsOf } from "@/components/team/member-ui";
 
 /**
- * Card da oportunidade — redesenhado pra mostrar só o que ajuda a decidir
- * rápido (empresa, contato, valor, responsável, próxima ação, tempo sem
- * interação) com UM tom de risco por card, nunca vários badges disputando
- * atenção. Cargo/setor/origem/observações ficam só no drawer.
+ * Card da oportunidade — SIMPLIFICADO (correção pedida): empresa, contato/
+ * cargo, valor, próxima ação, tempo sem interação e o CTA operacional
+ * principal ("Registrar follow-up"), sem badges/linhas concorrendo entre
+ * si. "Próxima ação" (algo planejado, `nextActionAt`/`nextActionDescription`)
+ * e "sem interação" (contato real, `lastContactAt`) são conceitos
+ * diferentes — nunca misturados na mesma linha.
  */
 
-type CardTone = "neutral" | "blue" | "amber" | "red" | "green";
-
-function cardSignal(lead: Lead): { tone: CardTone; text: string | null } {
-  const stage = legacyStage(lead.stage);
-  if (stage === "GANHO") return { tone: "green", text: null };
-  if (stage === "PERDIDO") return { tone: "neutral", text: null };
-
-  if (isNextActionOverdue(lead)) return { tone: "red", text: "Reunião vencida" };
-
-  if (isOpportunityStale(lead)) {
-    return { tone: "red", text: `Sem interação há ${daysSinceLastStageChange(lead)}d` };
-  }
-
-  if (lead.nextMeeting) {
-    const days = Math.ceil((new Date(lead.nextMeeting).getTime() - Date.now()) / 86_400_000);
-    if (days <= 2) return { tone: "amber", text: `Reunião em ${days === 0 ? "hoje" : `${days}d`}` };
-    return { tone: "blue", text: "Reunião agendada" };
-  }
-
-  const step = deriveOpportunityNextStep(lead);
-  if (step.action === null) return { tone: "neutral", text: null };
-  return { tone: "neutral", text: null };
+function fmtShortDate(ts: number): string {
+  return new Date(ts).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-function fmtMeetingDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+type NextActionDisplay = { tone: "red" | "amber" | "neutral"; text: string } | null;
+
+/** "Vencida há Xd", "Hoje às HH:mm", "Amanhã", ou a data curta — sempre
+ * junto da descrição quando existir. */
+function nextActionDisplay(lead: Lead): NextActionDisplay {
+  if (!lead.nextActionAt) return null;
+  const at = new Date(lead.nextActionAt);
+  const now = new Date();
+  const desc = lead.nextActionDescription ? ` · ${lead.nextActionDescription}` : "";
+
+  if (lead.nextActionAt < now.getTime()) {
+    const days = Math.max(1, Math.ceil((now.getTime() - lead.nextActionAt) / 86_400_000));
+    return { tone: "red", text: `Vencida há ${days}d${desc}` };
+  }
+  if (isSameCalendarDay(at, now)) {
+    const hh = at.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return { tone: "amber", text: `Hoje às ${hh}${desc}` };
+  }
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (isSameCalendarDay(at, tomorrow)) {
+    return { tone: "neutral", text: `Amanhã${desc}` };
+  }
+  return { tone: "neutral", text: `${fmtShortDate(lead.nextActionAt)}${desc}` };
 }
 
 export function LeadCard({
@@ -50,6 +62,7 @@ export function LeadCard({
   onOpen,
   onDragStart,
   onDragEnd,
+  onRegisterFollowUp,
   dragging,
   draggable = true,
 }: {
@@ -57,125 +70,139 @@ export function LeadCard({
   onOpen: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onRegisterFollowUp: () => void;
   dragging: boolean;
   /** Drag nativo (HTML5) não existe em toque — o Kanban desativa isso no
    * mobile e usa o seletor de Etapa dentro do drawer da oportunidade. */
   draggable?: boolean;
 }) {
-  const step = deriveOpportunityNextStep(lead);
-  const signal = cardSignal(lead);
   const stage = legacyStage(lead.stage);
+  const isTerminal = stage === "GANHO" || stage === "PERDIDO";
+  const nextAction = !isTerminal ? nextActionDisplay(lead) : null;
+  const noContact = !isTerminal && hasNoRecentContact(lead);
+  const contactDays = daysSinceLastContact(lead);
+  const rawDigits = lead.phone ? normalizePhoneDigits(lead.phone) : "";
+  // Números brasileiros sem código do país (10-11 dígitos, com DDD) —
+  // wa.me exige o formato internacional completo.
+  const whatsappDigits =
+    rawDigits.length === 10 || rawDigits.length === 11 ? `55${rawDigits}` : rawDigits;
+  const hasWhatsapp = whatsappDigits.length >= 12;
 
   return (
     <div
       draggable={draggable}
       onDragStart={draggable ? onDragStart : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className={`cursor-pointer rounded-[18px] bg-card p-4 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${
+      className={`rounded-[18px] bg-card p-4 text-sm transition-all dark:shadow-none ${
         dragging ? "scale-[0.98] opacity-50 shadow-lg" : "shadow-sm"
       }`}
     >
-      <div className="min-w-0">
-        <p className="truncate text-[15px] font-semibold text-foreground">
-          {lead.company || lead.name}
-        </p>
-        {lead.company && lead.name !== lead.company && (
-          <p className="truncate text-xs text-text-secondary">{lead.name}</p>
-        )}
-        {lead.contact && (
-          <p className="mt-0.5 truncate text-xs text-text-secondary">{lead.contact}</p>
-        )}
-      </div>
+      <div
+        onClick={onOpen}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        className="cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      >
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-semibold text-foreground">
+            {lead.company || lead.name}
+          </p>
+          {(lead.contact || lead.role) && (
+            <p className="mt-0.5 truncate text-xs text-text-secondary">
+              {lead.contact}
+              {lead.contact && lead.role ? " · " : ""}
+              {lead.role}
+            </p>
+          )}
+        </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="whitespace-nowrap text-[15px] font-bold tabular-nums text-foreground">
-          {formatBRL(lead.value || 0)}
-        </span>
-        {lead.responsible ? (
-          <span
-            title={lead.responsible}
-            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${avatarAccent(
-              lead.responsible,
-            )}`}
-          >
-            {initialsOf(lead.responsible, "?")}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="whitespace-nowrap text-[15px] font-bold tabular-nums text-foreground">
+            {formatBRL(lead.value || 0)}
           </span>
+          {lead.responsible ? (
+            <span
+              title={lead.responsible}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${avatarAccent(
+                lead.responsible,
+              )}`}
+            >
+              {initialsOf(lead.responsible, "?")}
+            </span>
+          ) : (
+            <span
+              title="Sem responsável"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-text-secondary"
+            >
+              —
+            </span>
+          )}
+        </div>
+
+        {isTerminal ? (
+          <div className="mt-2 text-[11px] font-medium text-muted-foreground">
+            {stage === "GANHO"
+              ? "Ganho"
+              : lead.lossReason
+                ? `Perdido — ${lead.lossReason}`
+                : "Perdido"}
+          </div>
         ) : (
-          <span
-            title="Sem responsável"
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-text-secondary"
-          >
-            —
-          </span>
+          nextAction && (
+            <div
+              className={`mt-2 flex items-center gap-1 truncate text-[11px] font-medium ${
+                nextAction.tone === "red"
+                  ? "text-danger"
+                  : nextAction.tone === "amber"
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-foreground"
+              }`}
+            >
+              {nextAction.tone === "red" && <AlertTriangle className="h-3 w-3 shrink-0" />}
+              <span className="truncate">{nextAction.text}</span>
+            </div>
+          )
         )}
       </div>
 
-      {stage === "GANHO" ? (
-        <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="h-3 w-3" /> Ganho
-        </div>
-      ) : stage === "PERDIDO" ? (
-        <div className="mt-2 text-[11px] text-muted-foreground">
-          {lead.lossReason ? `Perdido — ${lead.lossReason}` : "Perdido"}
-        </div>
-      ) : (
+      {!isTerminal && (
         <>
-          {step.actionLabel && (
-            <div className="mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-foreground">
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  step.actor === "CLIENTE" ? "bg-sky-500" : "bg-amber-500"
-                }`}
-              />
-              <span className="truncate">{step.actionLabel}</span>
-              {lead.nextMeeting && (
-                <span className="ml-auto shrink-0 text-muted-foreground">
-                  {fmtMeetingDate(lead.nextMeeting)}
-                </span>
-              )}
-            </div>
+          {noContact && (
+            <p className="mt-2 text-[11px] text-text-secondary">
+              {contactDays === null ? "Nunca contatado" : `Sem interação há ${contactDays}d`}
+            </p>
           )}
-          {!step.actionLabel && step.actor === "CLIENTE" && (
-            <div className="mt-2 flex items-center gap-1 truncate text-[11px] text-sky-600 dark:text-sky-400">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
-              Aguardando cliente
-            </div>
-          )}
-
-          {signal.text &&
-            (signal.tone === "red" ? (
-              // Oportunidade parada/vencida — badge explícito em vez de
-              // borda vermelha no card inteiro (o card continua com a
-              // mesma superfície do sistema, só o rótulo carrega o risco).
-              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-danger-soft px-2 py-1 text-[11px] font-medium text-danger">
-                <AlertTriangle className="h-3 w-3" />
-                {signal.text}
-              </div>
-            ) : (
-              <div
-                className={`mt-1.5 flex items-center gap-1 text-[11px] font-medium ${
-                  signal.tone === "amber"
-                    ? "text-amber-600 dark:text-amber-400"
-                    : "text-sky-600 dark:text-sky-400"
-                }`}
+          <div className="mt-2.5 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRegisterFollowUp();
+              }}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-foreground hover:bg-muted/70"
+            >
+              <Phone className="h-3 w-3" />
+              Registrar follow-up
+            </button>
+            {hasWhatsapp && (
+              <a
+                href={`https://wa.me/${whatsappDigits}`}
+                target="_blank"
+                rel="noreferrer"
+                title="Abrir WhatsApp"
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground"
               >
-                {signal.tone === "amber" ? (
-                  <Clock className="h-3 w-3" />
-                ) : (
-                  <CalendarClock className="h-3 w-3" />
-                )}
-                {signal.text}
-              </div>
-            ))}
+                <MessageCircle className="h-4 w-4" />
+              </a>
+            )}
+          </div>
         </>
       )}
     </div>

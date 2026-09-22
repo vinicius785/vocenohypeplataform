@@ -97,6 +97,7 @@ type LeadRow = {
   stage_entered_at: string;
   last_contact_at: string | null;
   next_action_at: string | null;
+  next_action_description: string | null;
   expected_close_at: string | null;
   probability: number | string | null;
 };
@@ -124,6 +125,7 @@ function rowToLead(row: LeadRow): Lead {
     stageEnteredAt: new Date(row.stage_entered_at).getTime(),
     lastContactAt: row.last_contact_at ? new Date(row.last_contact_at).getTime() : undefined,
     nextActionAt: row.next_action_at ? new Date(row.next_action_at).getTime() : undefined,
+    nextActionDescription: row.next_action_description ?? undefined,
     expectedCloseAt: row.expected_close_at ?? undefined,
     probability: row.probability !== null ? Number(row.probability) : undefined,
     role: (extra.role as string) ?? undefined,
@@ -300,7 +302,13 @@ function leadToRow(lead: Lead) {
     notes: lead.notes || null,
     activities: lead.activities ?? [],
     next_meeting: lead.nextMeeting || null,
-    next_action_at: lead.nextMeeting || null,
+    // Passa o valor já resolvido em `lead` (vindo do follow-up mais
+    // recente ou de `agendar_reuniao`, ambos já mesclados em `merged` por
+    // quem chama `leadToRow`) — nunca recalculado aqui a partir só de
+    // `nextMeeting`, senão qualquer ação (ex. "registrar_negociacao")
+    // apagaria a próxima ação definida por um follow-up.
+    next_action_at: lead.nextActionAt ? new Date(lead.nextActionAt).toISOString() : null,
+    next_action_description: lead.nextActionDescription || null,
     expected_close_at: lead.expectedCloseAt || null,
     probability: lead.probability ?? null,
     last_contact_at: nextLastContactAt(

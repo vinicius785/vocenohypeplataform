@@ -10,6 +10,11 @@ import {
   daysSinceLastStageChange,
   isOpportunityStale,
   OPPORTUNITY_STALE_DAYS,
+  daysSinceLastContact,
+  hasNoRecentContact,
+  NO_CONTACT_ALERT_DAYS,
+  isNextActionOverdue,
+  hasValidNextAction,
 } from "./comercial-engine";
 
 function baseLead(overrides: Partial<Lead> = {}): Lead {
@@ -240,5 +245,67 @@ describe('daysSinceLastStageChange / isOpportunityStale — definição única d
       stageEnteredAt: Date.now() - 90 * DAY,
     });
     expect(isOpportunityStale(ganhoAntigo)).toBe(false);
+  });
+});
+
+describe("daysSinceLastContact / hasNoRecentContact — alerta do card (follow-up), independente da etapa", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("nunca contatado retorna null (nunca 0 disfarçado)", () => {
+    const lead = baseLead({ lastContactAt: undefined });
+    expect(daysSinceLastContact(lead)).toBeNull();
+  });
+
+  it("calcula dias corretamente quando há contato registrado", () => {
+    const lead = baseLead({ lastContactAt: Date.now() - 3 * DAY });
+    expect(daysSinceLastContact(lead)).toBeGreaterThanOrEqual(3);
+  });
+
+  it(`hasNoRecentContact é true quando nunca contatado OU ${NO_CONTACT_ALERT_DAYS}+ dias sem contato`, () => {
+    expect(hasNoRecentContact(baseLead({ lastContactAt: undefined }))).toBe(true);
+    expect(
+      hasNoRecentContact(baseLead({ lastContactAt: Date.now() - NO_CONTACT_ALERT_DAYS * DAY - 1 })),
+    ).toBe(true);
+    expect(hasNoRecentContact(baseLead({ lastContactAt: Date.now() - 1 * DAY }))).toBe(false);
+  });
+
+  it("registrar um follow-up agora (lastContactAt = now) remove o alerta imediatamente", () => {
+    const antesDoFollowUp = baseLead({ lastContactAt: Date.now() - 10 * DAY });
+    expect(hasNoRecentContact(antesDoFollowUp)).toBe(true);
+    const depoisDoFollowUp = { ...antesDoFollowUp, lastContactAt: Date.now() };
+    expect(hasNoRecentContact(depoisDoFollowUp)).toBe(false);
+  });
+
+  it('nunca é "sem interação" em etapa terminal (GANHO/PERDIDO)', () => {
+    expect(hasNoRecentContact(baseLead({ stage: "GANHO", lastContactAt: undefined }))).toBe(false);
+    expect(hasNoRecentContact(baseLead({ stage: "PERDIDO", lastContactAt: undefined }))).toBe(
+      false,
+    );
+  });
+});
+
+describe("isNextActionOverdue / hasValidNextAction — agora baseados em nextActionAt (com fallback pra nextMeeting)", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("nextActionAt vencido é detectado mesmo sem nextMeeting", () => {
+    const lead = baseLead({ nextActionAt: Date.now() - DAY, nextMeeting: undefined });
+    expect(isNextActionOverdue(lead)).toBe(true);
+  });
+
+  it("nextActionAt futuro conta como próxima ação válida", () => {
+    const lead = baseLead({
+      stage: "PROPOSTA_ENVIADA",
+      nextActionAt: Date.now() + DAY,
+      nextMeeting: undefined,
+    });
+    expect(hasValidNextAction(lead)).toBe(true);
+  });
+
+  it("continua funcionando por nextMeeting quando nextActionAt não está setado (compatibilidade)", () => {
+    const lead = baseLead({
+      nextActionAt: undefined,
+      nextMeeting: new Date(Date.now() - DAY).toISOString(),
+    });
+    expect(isNextActionOverdue(lead)).toBe(true);
   });
 });

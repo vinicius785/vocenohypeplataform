@@ -8,6 +8,14 @@ import {
   daysSinceLastStageChange,
   type OpportunityStage,
 } from "./comercial-engine";
+import { BRASILIA_TZ } from "./timezone";
+
+/** Dia calendário no fuso de Brasília (`YYYY-MM-DD`) — nunca o UTC cru do
+ * `.toISOString().slice(0,10)` (perto da meia-noite UTC, ~21h em Brasília,
+ * isso classificava "hoje às 23h" como "amanhã" incorretamente). */
+function brasiliaDateKey(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: BRASILIA_TZ });
+}
 
 /**
  * Agregações puras do Comercial (KPIs, agrupamentos, listas de "precisa
@@ -346,9 +354,9 @@ export function computeComercialPriorities(leads: Lead[]): ComercialPriorityItem
     if (lead.nextMeeting) {
       // Compara pelo DIA CALENDÁRIO (não por janelas de 24h) — uma reunião
       // marcada pra dentro de 2h ainda é "hoje", nunca "em 1 dia".
-      const todayIso = new Date(now).toISOString().slice(0, 10);
-      const meetingDay = lead.nextMeeting.slice(0, 10);
-      if (meetingDay === todayIso) {
+      const todayKey = brasiliaDateKey(new Date(now));
+      const meetingKey = brasiliaDateKey(new Date(lead.nextMeeting));
+      if (meetingKey === todayKey) {
         items.push({ lead, reason: "hoje", days: 0 });
       } else {
         const daysUntil = Math.max(
