@@ -23,10 +23,7 @@ import { initCampanhaScopedSync } from "@/lib/campanha-scoped-store";
 import { initProjetoScopedSync } from "@/lib/projeto-scoped-store";
 import { initTaskDependenciesSync } from "@/lib/task-dependencies-store";
 import { initCallController, shutdownCallController } from "@/lib/call-controller";
-import {
-  syncAllMeetingsToGoogle,
-  importGoogleEventsToMeetings,
-} from "@/lib/google-calendar.functions";
+import { runGoogleCalendarSync } from "@/lib/google-calendar.functions";
 import { CallOverlay } from "@/components/CallOverlay";
 import { PreparingEnvironmentScreen } from "@/components/auth/PreparingEnvironmentScreen";
 
@@ -193,25 +190,24 @@ function AuthenticatedLayout() {
     };
   }, [fetchDirectory]);
 
-  // Sincroniza com o Google Agenda da conta compartilhada
-  // (contato@vocenohype.com.br) nos dois sentidos: empurra todas as
-  // reuniões da plataforma pra lá (plataforma sempre vence nesse
-  // sentido), e importa de volta qualquer evento criado DIRETO no
-  // Google (nunca reimporta o que a própria saída acabou de criar, ver
-  // `importGoogleEventsToMeetings`). Ambas as server functions são
-  // baratas quando a conta ainda não foi conectada (só leem a conexão e
-  // retornam); disparam em qualquer sessão logada porque não há
-  // infraestrutura de job/cron aqui.
-  const syncGoogleFn = useServerFn(syncAllMeetingsToGoogle);
-  const importGoogleFn = useServerFn(importGoogleEventsToMeetings);
+  // Sincroniza com o Google Agenda PESSOAL de cada usuário conectado (não
+  // é mais uma conta compartilhada — esse modelo foi removido em 02/09;
+  // ver `google-calendar.functions.ts`), nos dois sentidos: empurra
+  // reuniões da plataforma criadas por quem tem conta conectada, e importa
+  // de volta eventos criados DIRETO no Google. Este polling continua como
+  // REFORÇO (cobre quem está com a aba aberta sem ter acabado de
+  // criar/editar nada), não é mais o único mecanismo — o mecanismo
+  // principal agora é o cron server-side (`api/cron/google-calendar-sync`)
+  // + o disparo imediato ao criar/editar/excluir uma reunião
+  // (`ReunioesSection.tsx`). `runGoogleCalendarSync` já é protegido pela
+  // trava de concorrência (`google_calendar_sync_state`) — chamadas
+  // simultâneas de várias abas/pessoas nunca rodam em paralelo.
+  const syncGoogleFn = useServerFn(runGoogleCalendarSync);
   useEffect(() => {
     let cancelled = false;
     const sync = () => {
       syncGoogleFn().catch((e) => {
         if (!cancelled) console.warn("[google-calendar] sync failed", e);
-      });
-      importGoogleFn().catch((e) => {
-        if (!cancelled) console.warn("[google-calendar] import failed", e);
       });
     };
     sync();
@@ -220,7 +216,7 @@ function AuthenticatedLayout() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [syncGoogleFn, importGoogleFn]);
+  }, [syncGoogleFn]);
 
   return (
     <>

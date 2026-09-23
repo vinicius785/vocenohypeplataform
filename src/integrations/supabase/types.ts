@@ -323,6 +323,108 @@ export type Database = {
         };
         Relationships: [];
       };
+      campanha_entrega_eventos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: Json;
+          entrega_id: string;
+          id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: Json;
+          entrega_id: string;
+          id?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: Json;
+          entrega_id?: string;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_entrega_eventos_entrega_id_fkey";
+            columns: ["entrega_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_entregas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campanha_entrega_versoes: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: Json;
+          entrega_id: string;
+          id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: Json;
+          entrega_id: string;
+          id?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: Json;
+          entrega_id?: string;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_entrega_versoes_entrega_id_fkey";
+            columns: ["entrega_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_entregas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campanha_entregas: {
+        Row: {
+          campanha_id: string;
+          created_at: string;
+          data: Json;
+          id: string;
+          influenciador_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          campanha_id: string;
+          created_at?: string;
+          data?: Json;
+          id: string;
+          influenciador_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          campanha_id?: string;
+          created_at?: string;
+          data?: Json;
+          id?: string;
+          influenciador_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_entregas_influenciador_id_fkey";
+            columns: ["influenciador_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_influenciadores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campanha_influenciadores: {
         Row: {
           campanha_id: string;
@@ -1248,6 +1350,33 @@ export type Database = {
           token_expiry?: string;
           updated_at?: string;
           user_id?: string;
+        };
+        Relationships: [];
+      };
+      google_calendar_sync_state: {
+        Row: {
+          finished_at: string | null;
+          id: boolean;
+          last_error: string | null;
+          last_result: Json | null;
+          running: boolean;
+          started_at: string | null;
+        };
+        Insert: {
+          finished_at?: string | null;
+          id?: boolean;
+          last_error?: string | null;
+          last_result?: Json | null;
+          running?: boolean;
+          started_at?: string | null;
+        };
+        Update: {
+          finished_at?: string | null;
+          id?: boolean;
+          last_error?: string | null;
+          last_result?: Json | null;
+          running?: boolean;
+          started_at?: string | null;
         };
         Relationships: [];
       };

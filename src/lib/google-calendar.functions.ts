@@ -328,60 +328,70 @@ async function syncOneMeeting(
 
 /** Sincroniza cada reunião contra a conta Google PESSOAL de quem a criou
  * (`criadorId`) — reuniões cujo criador não tem conta conectada são
- * puladas silenciosamente. */
+ * puladas silenciosamente.
+ *
+ * Função "crua" (sem `createServerFn`/`requireSupabaseAuth`) pra poder ser
+ * chamada tanto pelo server function abaixo (sessão de usuário logado)
+ * quanto pelo endpoint de cron (`api/cron/google-calendar-sync.ts`, sem
+ * nenhuma sessão — só o segredo do cron). Fase A da reconstrução: antes só
+ * rodava via `setInterval` de 3min NO NAVEGADOR (`_authenticated/route.tsx`)
+ * — sem nenhuma aba aberta, a sincronização simplesmente não acontecia,
+ * nunca, em nenhum sentido. */
+export async function runSyncAllMeetingsToGoogle() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: connections } = await supabaseAdmin
+    .from("google_calendar_connections")
+    .select("user_id, access_token, refresh_token, token_expiry");
+  if (!connections || connections.length === 0) return { synced: 0, connected: false as const };
+
+  const { data: rows, error } = await supabaseAdmin.from("reunioes").select("data");
+  if (error) throw new Error(error.message);
+  const meetings = (rows ?? []).map((r) => r.data as SlimMeeting);
+
+  const allIds = new Set<string>();
+  for (const m of meetings) {
+    m.participanteIds?.forEach((id) => allIds.add(id));
+    if (m.criadorId) allIds.add(m.criadorId);
+  }
+  const emailById = new Map<string, string>();
+  if (allIds.size > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email")
+      .in("id", Array.from(allIds));
+    for (const p of profiles ?? []) emailById.set(p.id, p.email);
+  }
+
+  const meetingsByCreator = new Map<string, SlimMeeting[]>();
+  for (const m of meetings) {
+    if (!m.criadorId) continue;
+    // Reunião importada do Google (nasceu de lá, não na plataforma) —
+    // reenviar pro Google criaria um evento duplicado, já que ela não
+    // carrega o marcador vnhMeetingId no evento original.
+    if (m.origem === "google") continue;
+    const list = meetingsByCreator.get(m.criadorId) ?? [];
+    list.push(m);
+    meetingsByCreator.set(m.criadorId, list);
+  }
+
+  let synced = 0;
+  for (const conn of connections) {
+    const creatorMeetings = meetingsByCreator.get(conn.user_id);
+    if (!creatorMeetings || creatorMeetings.length === 0) continue;
+    const accessToken = await getValidAccessToken(supabaseAdmin, conn);
+    if (!accessToken) continue;
+    for (const m of creatorMeetings) {
+      await syncOneMeeting(supabaseAdmin, accessToken, m, emailById);
+      synced++;
+    }
+  }
+  return { synced, connected: true as const };
+}
+
 export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: connections } = await supabaseAdmin
-      .from("google_calendar_connections")
-      .select("user_id, access_token, refresh_token, token_expiry");
-    if (!connections || connections.length === 0) return { synced: 0, connected: false as const };
-
-    const { data: rows, error } = await supabaseAdmin.from("reunioes").select("data");
-    if (error) throw new Error(error.message);
-    const meetings = (rows ?? []).map((r) => r.data as SlimMeeting);
-
-    const allIds = new Set<string>();
-    for (const m of meetings) {
-      m.participanteIds?.forEach((id) => allIds.add(id));
-      if (m.criadorId) allIds.add(m.criadorId);
-    }
-    const emailById = new Map<string, string>();
-    if (allIds.size > 0) {
-      const { data: profiles } = await supabaseAdmin
-        .from("profiles")
-        .select("id, email")
-        .in("id", Array.from(allIds));
-      for (const p of profiles ?? []) emailById.set(p.id, p.email);
-    }
-
-    const meetingsByCreator = new Map<string, SlimMeeting[]>();
-    for (const m of meetings) {
-      if (!m.criadorId) continue;
-      // Reunião importada do Google (nasceu de lá, não na plataforma) —
-      // reenviar pro Google criaria um evento duplicado, já que ela não
-      // carrega o marcador vnhMeetingId no evento original.
-      if (m.origem === "google") continue;
-      const list = meetingsByCreator.get(m.criadorId) ?? [];
-      list.push(m);
-      meetingsByCreator.set(m.criadorId, list);
-    }
-
-    let synced = 0;
-    for (const conn of connections) {
-      const creatorMeetings = meetingsByCreator.get(conn.user_id);
-      if (!creatorMeetings || creatorMeetings.length === 0) continue;
-      const accessToken = await getValidAccessToken(supabaseAdmin, conn);
-      if (!accessToken) continue;
-      for (const m of creatorMeetings) {
-        await syncOneMeeting(supabaseAdmin, accessToken, m, emailById);
-        synced++;
-      }
-    }
-    return { synced, connected: true as const };
-  });
+  .handler(() => runSyncAllMeetingsToGoogle());
 
 type GoogleEvent = {
   id: string;
@@ -464,206 +474,208 @@ async function listGoogleEvents(accessToken: string): Promise<GoogleEvent[]> {
  * dá um valor DIFERENTE por calendário pro mesmo evento); eventos
  * editados/cancelados no Google atualizam a Reunião já importada em vez de
  * duplicar. */
+export async function runImportGoogleEventsToMeetings() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: connections } = await supabaseAdmin
+    .from("google_calendar_connections")
+    .select("user_id, access_token, refresh_token, token_expiry");
+  if (!connections || connections.length === 0)
+    return { imported: 0, updated: 0, connected: false as const };
+
+  const { data: rows, error } = await supabaseAdmin.from("reunioes").select("id, data");
+  if (error) throw new Error(error.message);
+
+  type ImportRow = SlimMeeting & {
+    googleEventId?: string;
+    origem?: string;
+    status: string;
+    meetLink?: string;
+  };
+
+  const byGoogleEventId = new Map<string, { id: string; data: ImportRow }>();
+  // Segunda rede de segurança, além do marcador `vnhMeetingId`: casa por
+  // criador+data+hora contra reuniões da própria plataforma que ainda não
+  // têm `googleEventId` gravado. Existe porque já vimos o evento criado
+  // por `syncOneMeeting` (que sempre grava o marcador) ser reimportado
+  // como se fosse externo mesmo assim — sem essa rede, isso duplica a
+  // reunião na plataforma além de já duplicar no Google.
+  const byCreatorTime = new Map<string, { id: string; data: ImportRow }>();
+  for (const r of rows ?? []) {
+    const m = r.data as ImportRow;
+    if (m.googleEventId) byGoogleEventId.set(m.googleEventId, { id: r.id, data: m });
+    else if (m.origem !== "google" && m.criadorId) {
+      byCreatorTime.set(`${m.criadorId}|${m.data}|${m.hora}`, { id: r.id, data: m });
+    }
+  }
+
+  const { data: profiles } = await supabaseAdmin.from("profiles").select("id, email");
+  const idByEmail = new Map<string, string>();
+  for (const p of profiles ?? []) if (p.email) idByEmail.set(p.email.toLowerCase(), p.id);
+
+  let imported = 0;
+  let updated = 0;
+  let cancelled_ = 0;
+
+  for (const conn of connections) {
+    const accessToken = await getValidAccessToken(supabaseAdmin, conn);
+    if (!accessToken) continue;
+    const events = await listGoogleEvents(accessToken);
+    // Ids vistos nesse ciclo pra essa conta — usado depois pra detectar
+    // reuniões cujo evento sumiu do Google (excluído por lá, não só
+    // cancelado) e cancelar do lado da plataforma também.
+    const seen = new Set<string>();
+    const listWindowStart = Date.now() - LIST_WINDOW_MS_BEFORE;
+    const listWindowEnd = Date.now() + LIST_WINDOW_MS_AFTER;
+
+    for (const event of events) {
+      // Já é uma reunião da plataforma (foi a própria `syncOneMeeting`
+      // que criou esse evento) — nunca reimportar de volta.
+      if (event.extendedProperties?.private?.vnhMeetingId) continue;
+      // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
+      // sempre tem hora, fora de escopo aqui.
+      if (!event.start?.dateTime || !event.end?.dateTime) continue;
+
+      // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
+      // aqui) — `iCalUID` parecia mais robusto (mesmo evento, ids
+      // diferentes em cada calendário de cada convidado), mas o Google
+      // usa o MESMO `iCalUID` pra TODA ocorrência de uma recorrência.
+      // Usar só `iCalUID` fazia cada ocorrência nova "atualizar" a
+      // mesma linha em vez de criar uma por dia, sobrando só a última
+      // ocorrência da janela. `id` também é o valor que precisamos pra
+      // apagar o evento certo depois (exclusão espelhada), então vira
+      // a única chave — dedupe entre contas conectadas diferentes pro
+      // mesmo evento fica sem cobertura, uma perda aceitável perto do
+      // bug que isso corrige.
+      const dedupeKey = event.id;
+      seen.add(dedupeKey);
+      const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
+      const duracao = Math.max(
+        1,
+        Math.round(
+          (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) /
+            60_000,
+        ),
+      );
+
+      const participanteIds: string[] = [];
+      const convidadosExternos: { nome: string; email: string }[] = [];
+      for (const a of event.attendees ?? []) {
+        if (!a.email || a.self) continue;
+        const uid = idByEmail.get(a.email.toLowerCase());
+        if (uid) participanteIds.push(uid);
+        else convidadosExternos.push({ nome: a.displayName || a.email, email: a.email });
+      }
+
+      const byId = byGoogleEventId.get(dedupeKey);
+      const byTime = byId ? undefined : byCreatorTime.get(`${conn.user_id}|${dataStr}|${hora}`);
+      const existing = byId ?? byTime;
+      const cancelled = event.status === "cancelled";
+
+      if (existing) {
+        // Casou só por criador+data+hora (`byTime`) — esse evento é a
+        // própria reunião da plataforma sincronizada de saída, cujo
+        // marcador não foi reconhecido por algum motivo. Só grava o id
+        // do Google pra nunca mais duplicar; não deixa os campos do
+        // Google (local/notas/participantes) sobrescreverem os da
+        // plataforma, que já são a fonte de verdade aqui.
+        const next = byTime
+          ? { ...existing.data, googleEventId: dedupeKey }
+          : {
+              ...existing.data,
+              titulo: event.summary || existing.data.titulo,
+              data: dataStr,
+              hora,
+              duracao,
+              local: event.location,
+              notas: event.description,
+              participanteIds,
+              convidadosExternos,
+              meetLink: event.hangoutLink,
+              // Backfill pra reuniões importadas antes desse campo
+              // existir — nunca troca um seriesId já gravado.
+              seriesId: existing.data.seriesId ?? event.recurringEventId,
+              status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
+            };
+        if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
+          await supabaseAdmin
+            .from("reunioes")
+            .update({ data: next, updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+          updated++;
+        }
+        continue;
+      }
+
+      if (cancelled) continue; // nunca vimos esse evento — nada a importar
+
+      const meeting = {
+        id: crypto.randomUUID(),
+        seriesId: event.recurringEventId,
+        titulo: event.summary || "Reunião",
+        data: dataStr,
+        hora,
+        duracao,
+        com: "",
+        criadorId: conn.user_id,
+        participanteIds,
+        convidadosExternos,
+        local: event.location ?? "",
+        notas: event.description,
+        meetLink: event.hangoutLink,
+        status: "Confirmada",
+        googleEventId: dedupeKey,
+        origem: "google",
+      };
+      const { error: insertError } = await supabaseAdmin
+        .from("reunioes")
+        .insert({ id: meeting.id, data: meeting });
+      if (insertError) {
+        // 23505 = violação do índice único em googleEventId — outro
+        // ciclo de sync concorrente (rodando em paralelo, ex: 2 abas
+        // abertas) já importou essa mesma ocorrência entre a checagem
+        // e esse INSERT. Não é falha nenhuma, só perdeu a corrida —
+        // nunca loga como erro nem duplica.
+        if (insertError.code !== "23505") {
+          console.warn("[google-calendar] import insert failed", insertError.message);
+        }
+        continue;
+      }
+      // Evita reimportar de novo no mesmo ciclo se o mesmo evento
+      // aparecer no calendário de outro convidado também conectado.
+      byGoogleEventId.set(dedupeKey, { id: meeting.id, data: meeting });
+      imported++;
+    }
+
+    // Reunião cujo evento foi de fato EXCLUÍDO no Google (não só
+    // cancelado — exclusão não aparece como item "cancelled" numa
+    // listagem sem syncToken, só some da lista) — cancela também na
+    // plataforma. Só considera reuniões dentro da mesma janela de tempo
+    // buscada (`listGoogleEvents`), pra não cancelar por engano algo que
+    // nunca poderia aparecer nessa página de resultados.
+    for (const [, row] of byGoogleEventId) {
+      if (row.data.criadorId !== conn.user_id) continue;
+      if (row.data.status === "Cancelada") continue;
+      if (!row.data.googleEventId || seen.has(row.data.googleEventId)) continue;
+      const start = new Date(`${row.data.data}T${row.data.hora}:00-03:00`).getTime();
+      if (start < listWindowStart || start > listWindowEnd) continue;
+      await supabaseAdmin
+        .from("reunioes")
+        .update({
+          data: { ...row.data, status: "Cancelada" },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      cancelled_++;
+    }
+  }
+
+  return { imported, updated, cancelled: cancelled_, connected: true as const };
+}
+
 export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: connections } = await supabaseAdmin
-      .from("google_calendar_connections")
-      .select("user_id, access_token, refresh_token, token_expiry");
-    if (!connections || connections.length === 0)
-      return { imported: 0, updated: 0, connected: false as const };
-
-    const { data: rows, error } = await supabaseAdmin.from("reunioes").select("id, data");
-    if (error) throw new Error(error.message);
-
-    type ImportRow = SlimMeeting & {
-      googleEventId?: string;
-      origem?: string;
-      status: string;
-      meetLink?: string;
-    };
-
-    const byGoogleEventId = new Map<string, { id: string; data: ImportRow }>();
-    // Segunda rede de segurança, além do marcador `vnhMeetingId`: casa por
-    // criador+data+hora contra reuniões da própria plataforma que ainda não
-    // têm `googleEventId` gravado. Existe porque já vimos o evento criado
-    // por `syncOneMeeting` (que sempre grava o marcador) ser reimportado
-    // como se fosse externo mesmo assim — sem essa rede, isso duplica a
-    // reunião na plataforma além de já duplicar no Google.
-    const byCreatorTime = new Map<string, { id: string; data: ImportRow }>();
-    for (const r of rows ?? []) {
-      const m = r.data as ImportRow;
-      if (m.googleEventId) byGoogleEventId.set(m.googleEventId, { id: r.id, data: m });
-      else if (m.origem !== "google" && m.criadorId) {
-        byCreatorTime.set(`${m.criadorId}|${m.data}|${m.hora}`, { id: r.id, data: m });
-      }
-    }
-
-    const { data: profiles } = await supabaseAdmin.from("profiles").select("id, email");
-    const idByEmail = new Map<string, string>();
-    for (const p of profiles ?? []) if (p.email) idByEmail.set(p.email.toLowerCase(), p.id);
-
-    let imported = 0;
-    let updated = 0;
-    let cancelled_ = 0;
-
-    for (const conn of connections) {
-      const accessToken = await getValidAccessToken(supabaseAdmin, conn);
-      if (!accessToken) continue;
-      const events = await listGoogleEvents(accessToken);
-      // Ids vistos nesse ciclo pra essa conta — usado depois pra detectar
-      // reuniões cujo evento sumiu do Google (excluído por lá, não só
-      // cancelado) e cancelar do lado da plataforma também.
-      const seen = new Set<string>();
-      const listWindowStart = Date.now() - LIST_WINDOW_MS_BEFORE;
-      const listWindowEnd = Date.now() + LIST_WINDOW_MS_AFTER;
-
-      for (const event of events) {
-        // Já é uma reunião da plataforma (foi a própria `syncOneMeeting`
-        // que criou esse evento) — nunca reimportar de volta.
-        if (event.extendedProperties?.private?.vnhMeetingId) continue;
-        // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
-        // sempre tem hora, fora de escopo aqui.
-        if (!event.start?.dateTime || !event.end?.dateTime) continue;
-
-        // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
-        // aqui) — `iCalUID` parecia mais robusto (mesmo evento, ids
-        // diferentes em cada calendário de cada convidado), mas o Google
-        // usa o MESMO `iCalUID` pra TODA ocorrência de uma recorrência.
-        // Usar só `iCalUID` fazia cada ocorrência nova "atualizar" a
-        // mesma linha em vez de criar uma por dia, sobrando só a última
-        // ocorrência da janela. `id` também é o valor que precisamos pra
-        // apagar o evento certo depois (exclusão espelhada), então vira
-        // a única chave — dedupe entre contas conectadas diferentes pro
-        // mesmo evento fica sem cobertura, uma perda aceitável perto do
-        // bug que isso corrige.
-        const dedupeKey = event.id;
-        seen.add(dedupeKey);
-        const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
-        const duracao = Math.max(
-          1,
-          Math.round(
-            (new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) /
-              60_000,
-          ),
-        );
-
-        const participanteIds: string[] = [];
-        const convidadosExternos: { nome: string; email: string }[] = [];
-        for (const a of event.attendees ?? []) {
-          if (!a.email || a.self) continue;
-          const uid = idByEmail.get(a.email.toLowerCase());
-          if (uid) participanteIds.push(uid);
-          else convidadosExternos.push({ nome: a.displayName || a.email, email: a.email });
-        }
-
-        const byId = byGoogleEventId.get(dedupeKey);
-        const byTime = byId ? undefined : byCreatorTime.get(`${conn.user_id}|${dataStr}|${hora}`);
-        const existing = byId ?? byTime;
-        const cancelled = event.status === "cancelled";
-
-        if (existing) {
-          // Casou só por criador+data+hora (`byTime`) — esse evento é a
-          // própria reunião da plataforma sincronizada de saída, cujo
-          // marcador não foi reconhecido por algum motivo. Só grava o id
-          // do Google pra nunca mais duplicar; não deixa os campos do
-          // Google (local/notas/participantes) sobrescreverem os da
-          // plataforma, que já são a fonte de verdade aqui.
-          const next = byTime
-            ? { ...existing.data, googleEventId: dedupeKey }
-            : {
-                ...existing.data,
-                titulo: event.summary || existing.data.titulo,
-                data: dataStr,
-                hora,
-                duracao,
-                local: event.location,
-                notas: event.description,
-                participanteIds,
-                convidadosExternos,
-                meetLink: event.hangoutLink,
-                // Backfill pra reuniões importadas antes desse campo
-                // existir — nunca troca um seriesId já gravado.
-                seriesId: existing.data.seriesId ?? event.recurringEventId,
-                status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
-              };
-          if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
-            await supabaseAdmin
-              .from("reunioes")
-              .update({ data: next, updated_at: new Date().toISOString() })
-              .eq("id", existing.id);
-            updated++;
-          }
-          continue;
-        }
-
-        if (cancelled) continue; // nunca vimos esse evento — nada a importar
-
-        const meeting = {
-          id: crypto.randomUUID(),
-          seriesId: event.recurringEventId,
-          titulo: event.summary || "Reunião",
-          data: dataStr,
-          hora,
-          duracao,
-          com: "",
-          criadorId: conn.user_id,
-          participanteIds,
-          convidadosExternos,
-          local: event.location ?? "",
-          notas: event.description,
-          meetLink: event.hangoutLink,
-          status: "Confirmada",
-          googleEventId: dedupeKey,
-          origem: "google",
-        };
-        const { error: insertError } = await supabaseAdmin
-          .from("reunioes")
-          .insert({ id: meeting.id, data: meeting });
-        if (insertError) {
-          // 23505 = violação do índice único em googleEventId — outro
-          // ciclo de sync concorrente (rodando em paralelo, ex: 2 abas
-          // abertas) já importou essa mesma ocorrência entre a checagem
-          // e esse INSERT. Não é falha nenhuma, só perdeu a corrida —
-          // nunca loga como erro nem duplica.
-          if (insertError.code !== "23505") {
-            console.warn("[google-calendar] import insert failed", insertError.message);
-          }
-          continue;
-        }
-        // Evita reimportar de novo no mesmo ciclo se o mesmo evento
-        // aparecer no calendário de outro convidado também conectado.
-        byGoogleEventId.set(dedupeKey, { id: meeting.id, data: meeting });
-        imported++;
-      }
-
-      // Reunião cujo evento foi de fato EXCLUÍDO no Google (não só
-      // cancelado — exclusão não aparece como item "cancelled" numa
-      // listagem sem syncToken, só some da lista) — cancela também na
-      // plataforma. Só considera reuniões dentro da mesma janela de tempo
-      // buscada (`listGoogleEvents`), pra não cancelar por engano algo que
-      // nunca poderia aparecer nessa página de resultados.
-      for (const [, row] of byGoogleEventId) {
-        if (row.data.criadorId !== conn.user_id) continue;
-        if (row.data.status === "Cancelada") continue;
-        if (!row.data.googleEventId || seen.has(row.data.googleEventId)) continue;
-        const start = new Date(`${row.data.data}T${row.data.hora}:00-03:00`).getTime();
-        if (start < listWindowStart || start > listWindowEnd) continue;
-        await supabaseAdmin
-          .from("reunioes")
-          .update({
-            data: { ...row.data, status: "Cancelada" },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", row.id);
-        cancelled_++;
-      }
-    }
-
-    return { imported, updated, cancelled: cancelled_, connected: true as const };
-  });
+  .handler(() => runImportGoogleEventsToMeetings());
 
 /** Exclusão nos dois sentidos: excluir uma reunião na plataforma também
  * apaga o evento correspondente no Google (se o criador tiver conta
@@ -711,3 +723,82 @@ export const deleteGoogleEventsForMeetings = createServerFn({ method: "POST" })
     }
     return { deleted };
   });
+
+/** Trava de concorrência (Fase A) — linha única (`id = true`, mesmo padrão
+ * singleton de `shared_calendar_connection`, já removida). Sem ela, os
+ * múltiplos disparadores que agora existem (cron externo a cada 5-10min,
+ * cron diário da Vercel como rede de segurança, disparo imediato ao
+ * criar/editar/excluir reunião, polling do navegador mantido como reforço)
+ * podiam rodar ao mesmo tempo e duplicar evento no Google — antes só
+ * existia UM disparador (o setInterval do navegador), então isso nunca
+ * tinha sido um problema de verdade. `UPDATE ... WHERE` é atômico no
+ * Postgres: só uma chamada concorrente ganha a corrida (as outras recebem
+ * 0 linhas afetadas), sem precisar de lock explícito nenhum. Trava
+ * considerada "presa" (processo anterior morreu sem liberar) depois de 4
+ * minutos — se autocura sozinha, nunca fica travada pra sempre. */
+const SYNC_LOCK_STALE_AFTER_MS = 4 * 60_000;
+
+async function acquireSyncLock(admin: AdminClient): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - SYNC_LOCK_STALE_AFTER_MS).toISOString();
+  const { data, error } = await admin
+    .from("google_calendar_sync_state")
+    .update({ running: true, started_at: new Date().toISOString(), finished_at: null })
+    .eq("id", true)
+    .or(`running.eq.false,started_at.lt.${staleBefore}`)
+    .select("id");
+  if (error) {
+    console.warn("[google-calendar] acquireSyncLock failed", error.message);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+async function releaseSyncLock(
+  admin: AdminClient,
+  result: { ok: true; result: unknown } | { ok: false; error: string },
+): Promise<void> {
+  await admin
+    .from("google_calendar_sync_state")
+    .update({
+      running: false,
+      finished_at: new Date().toISOString(),
+      last_error: result.ok ? null : result.error,
+      last_result: result.ok ? (result.result as never) : null,
+    })
+    .eq("id", true);
+}
+
+/** Ponto de entrada único pra rodar um ciclo completo de sincronização nos
+ * dois sentidos, protegido pela trava acima — usado pelo cron
+ * (`api/cron/google-calendar-sync.ts`), pelo disparo imediato ao
+ * criar/editar/excluir reunião, e pelo polling do navegador. Nunca roda
+ * duas vezes ao mesmo tempo; se a trava já estiver ocupada, simplesmente
+ * não faz nada nesta chamada (o próximo disparo tenta de novo). */
+export async function runGoogleCalendarSyncCycle(): Promise<{
+  ran: boolean;
+  outbound?: Awaited<ReturnType<typeof runSyncAllMeetingsToGoogle>>;
+  inbound?: Awaited<ReturnType<typeof runImportGoogleEventsToMeetings>>;
+}> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const acquired = await acquireSyncLock(supabaseAdmin);
+  if (!acquired) return { ran: false };
+
+  try {
+    const outbound = await runSyncAllMeetingsToGoogle();
+    const inbound = await runImportGoogleEventsToMeetings();
+    await releaseSyncLock(supabaseAdmin, { ok: true, result: { outbound, inbound } });
+    return { ran: true, outbound, inbound };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await releaseSyncLock(supabaseAdmin, { ok: false, error: message });
+    throw err;
+  }
+}
+
+/** Versão chamável pelo cliente (sessão logada) do ciclo combinado —
+ * substitui as duas chamadas separadas (`syncAllMeetingsToGoogle` +
+ * `importGoogleEventsToMeetings`) que o polling do navegador fazia sem
+ * nenhuma trava entre si. */
+export const runGoogleCalendarSync = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(() => runGoogleCalendarSyncCycle());

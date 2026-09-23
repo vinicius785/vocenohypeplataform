@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus } from "lucide-react";
-import { deleteGoogleEventsForMeetings } from "@/lib/google-calendar.functions";
+import {
+  deleteGoogleEventsForMeetings,
+  runGoogleCalendarSync,
+} from "@/lib/google-calendar.functions";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/PageContainer";
 import {
@@ -61,9 +64,30 @@ export function ReunioesSection() {
   const [summary, setSummary] = useState<Meeting | null>(null);
   const [summaryProposing, setSummaryProposing] = useState(false);
 
+  // Dispara a sincronização com o Google logo após QUALQUER mutação de
+  // reunião (criar, editar, confirmar, recusar, reagendar, cancelar) —
+  // antes disso a saída pra Google só acontecia no próximo tick do
+  // polling de 3min (`_authenticated/route.tsx`), então criar/editar uma
+  // reunião não refletia no Google Agenda na hora. Debounce curto porque
+  // `persist` pode ser chamado várias vezes em sequência rápida (ex.:
+  // aplicar mudança em todas as ocorrências de uma série); a trava de
+  // concorrência (`google_calendar_sync_state`) já protege contra duas
+  // chamadas concorrentes de verdade, o debounce aqui é só pra não disparar
+  // um ciclo inteiro de sync por edição individual dentro da mesma rajada.
+  const syncGoogleFn = useServerFn(runGoogleCalendarSync);
+  const syncDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const triggerGoogleSync = () => {
+    if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
+    syncDebounceRef.current = setTimeout(() => {
+      syncGoogleFn().catch((e) => console.warn("[google-calendar] sync failed", e));
+    }, 1500);
+  };
+  useEffect(() => () => clearTimeout(syncDebounceRef.current), []);
+
   const persist = (next: Meeting[]) => {
     setMeetings(next);
     saveMeetings(next);
+    triggerGoogleSync();
   };
   const deleteGoogleEventsFn = useServerFn(deleteGoogleEventsForMeetings);
   // Excluir na plataforma também apaga o evento correspondente no Google

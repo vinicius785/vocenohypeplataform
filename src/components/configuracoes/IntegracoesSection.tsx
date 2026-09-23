@@ -225,7 +225,7 @@ function GoogleCalendarCard() {
     <IntegrationCard
       icon={<GoogleCalendarIcon className="h-5 w-5" />}
       title="Google Agenda"
-      description="Conecte sua conta pra ver suas reuniões da plataforma direto no Google Agenda (sincronização de mão única, a cada poucos minutos)."
+      description="Conecte sua conta: reuniões que você cria na plataforma aparecem no seu Google Agenda, e eventos criados direto no Google aparecem aqui — nos dois sentidos, em poucos minutos."
       status={
         status.state === "connected"
           ? "connected"
