@@ -4,6 +4,7 @@ import {
   Hash,
   Send,
   Users,
+  Info,
   Lock,
   Phone,
   PhoneMissed,
@@ -110,7 +111,7 @@ import {
 
 import { useClientes } from "@/lib/clientes-store";
 import type { ChatMessage } from "@/lib/chat-store";
-import { messagePreviewLabel } from "@/lib/voice-messages";
+import { messagePreviewLabel, isVoiceAttachment } from "@/lib/voice-messages";
 import { VoiceMessagePlayer } from "@/components/chat/VoiceMessagePlayer";
 import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
 
@@ -343,6 +344,23 @@ export function ChatSection() {
         ? convoMessages.filter((m) => m.text.toLowerCase().includes(searchQuery))
         : convoMessages,
     [convoMessages, searchQuery],
+  );
+
+  // Fase 9 (parcial): painel de "Informações" — participantes e arquivos
+  // compartilhados na conversa aberta. Busca global/filtros por
+  // autor-período-canal e as demais sub-abas do painel completo (mensagens
+  // fixadas, notificações, permissões) ficam de fora desta fase por
+  // exigirem schema/infra que ainda não existe (não há "fixar mensagem"
+  // nem preferência de notificação por conversa hoje).
+  const [showInfo, setShowInfo] = useState(false);
+  useEffect(() => setShowInfo(false), [activeId]);
+  const sharedFiles = useMemo(
+    () =>
+      convoMessages
+        .flatMap((m) => (m.attachments ?? []).map((a) => ({ message: m, attachment: a })))
+        .filter(({ attachment }) => !isVoiceAttachment(attachment))
+        .reverse(),
+    [convoMessages],
   );
 
   const tasks = useTaskDirectory();
@@ -916,6 +934,16 @@ export function ChatSection() {
                 <Phone className="h-4 w-4" />
               </button>
             )}
+            {activeId && !isHypitoDm && (
+              <button
+                onClick={() => setShowInfo(true)}
+                aria-label="Ver informações da conversa"
+                title="Informações"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-foreground hover:bg-muted"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            )}
             {canStartChannelCall && (
               <button
                 onClick={() => {
@@ -1141,6 +1169,18 @@ export function ChatSection() {
         convoId={activeId}
         onOpenMention={openMention}
         onClose={() => setThreadRootId(null)}
+      />
+      <InfoPanel
+        open={showInfo}
+        onClose={() => setShowInfo(false)}
+        participants={
+          activeDmPartner
+            ? [{ id: me.id, name: me.name, photo: me.photo }, activeDmPartner]
+            : activeChannel?.private && activeChannel.allowedMemberIds
+              ? members.filter((m) => activeChannel.allowedMemberIds!.includes(m.id))
+              : members
+        }
+        sharedFiles={sharedFiles}
       />
     </div>
   );
@@ -2831,6 +2871,79 @@ function ThreadPanel({
             >
               Enviar
             </button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** Painel de informações (Fase 9, parcial) — participantes e arquivos
+ * compartilhados na conversa aberta. Ver comentário em `showInfo` (no
+ * componente principal) pro que ficou de fora desta fase. */
+function InfoPanel({
+  open,
+  onClose,
+  participants,
+  sharedFiles,
+}: {
+  open: boolean;
+  onClose: () => void;
+  participants: { id: string; name: string; photo?: string }[];
+  sharedFiles: { message: ChatMessage; attachment: ChatAttachment }[];
+}) {
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-sm"
+      >
+        <SheetHeader className="shrink-0 border-b border-border px-4 py-3">
+          <SheetTitle className="text-sm font-semibold">Informações</SheetTitle>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Participantes · {participants.length}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {participants.map((p) => (
+                <li key={p.id} className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5">
+                  {p.photo ? (
+                    <img src={p.photo} alt="" className="h-7 w-7 rounded-full object-cover" />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                      {p.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="truncate text-sm text-foreground">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-5 border-t border-border/60 pt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Arquivos compartilhados · {sharedFiles.length}
+            </p>
+            {sharedFiles.length === 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">Nenhum arquivo nesta conversa.</p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {sharedFiles.map(({ message, attachment }) => (
+                  <li key={`${message.id}-${attachment.path}`}>
+                    <a
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-xs text-foreground hover:bg-muted/50"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </SheetContent>
