@@ -225,6 +225,18 @@ type SlimMeeting = {
    * Agora `syncOneMeeting` também lê e grava esse campo, tanto na criação
    * quanto em toda atualização seguinte (auto-cura reuniões antigas). */
   meetLink?: string;
+  googleHtmlLink?: string;
+  googleCalendarId?: string;
+  recurringEventId?: string;
+  etag?: string;
+  googleUpdatedAt?: string;
+  syncStatus?: "synced" | "pending" | "error";
+  lastSyncedAt?: string;
+  lastSyncError?: string;
+  /** Quando a última TENTATIVA (com sucesso ou não) rodou — diferente de
+   * `lastSyncedAt`, que só avança em sucesso. Usado só pro backoff de
+   * `shouldSkipSyncDueToBackoff`. */
+  lastSyncAttemptAt?: string;
 };
 
 // `data`/`hora` são horário de Brasília (a plataforma nunca guarda outro
@@ -268,12 +280,33 @@ async function findGoogleEventId(accessToken: string, meetingId: string): Promis
   return keep.id;
 }
 
+// Fase 6, "retentativas seguras": depois de uma falha, espera pelo menos
+// esse tanto antes de tentar de novo a MESMA reunião — sem isso, um erro
+// persistente (ex: token realmente revogado, evento rejeitado pelo Google
+// por dado inválido) faria o disparo imediato de cada edição (debounce de
+// 1.5s em `ReunioesSection.tsx`) bater na API do Google a cada poucos
+// segundos, sem chance de o problema real (reconectar a conta, corrigir o
+// dado) ser resolvido entre uma tentativa e outra. Não impede sync novo pra
+// OUTRAS reuniões da mesma conta — só evita martelar a que já sabemos que
+// está falhando.
+const SYNC_RETRY_BACKOFF_MS = 60_000;
+
+export function shouldSkipSyncDueToBackoff(
+  m: Pick<SlimMeeting, "syncStatus" | "lastSyncAttemptAt">,
+  now: number = Date.now(),
+): boolean {
+  if (m.syncStatus !== "error" || !m.lastSyncAttemptAt) return false;
+  return now - new Date(m.lastSyncAttemptAt).getTime() < SYNC_RETRY_BACKOFF_MS;
+}
+
 async function syncOneMeeting(
   admin: AdminClient,
   accessToken: string,
   m: SlimMeeting,
   emailById: Map<string, string>,
 ): Promise<void> {
+  if (shouldSkipSyncDueToBackoff(m)) return;
+
   // Fonte de verdade é o id já gravado na própria reunião — nunca busca
   // por `privateExtendedProperty` quando já sabemos o id (esse filtro do
   // Google é eventualmente consistente e pode não achar um evento recém
@@ -337,7 +370,26 @@ async function syncOneMeeting(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    console.warn(`[google-calendar] sync failed for meeting ${m.id}`, await res.text());
+    const errBody = await res.text();
+    console.warn(`[google-calendar] sync failed for meeting ${m.id}`, res.status);
+    // Persiste o estado de erro na própria reunião (Fase 2) — antes só ia
+    // pro log do servidor, então a única forma de saber que uma reunião
+    // específica parou de sincronizar era vasculhar logs do Vercel. Corta
+    // a mensagem: nunca deve conter token/secret, mas o corpo bruto do
+    // Google pode ser longo (ex.: HTML de erro) e não precisa ser guardado
+    // inteiro pra ser útil.
+    await admin
+      .from("reunioes")
+      .update({
+        data: {
+          ...m,
+          syncStatus: "error" as const,
+          lastSyncError: `Falha ao sincronizar com o Google (HTTP ${res.status}): ${errBody.slice(0, 300)}`,
+          lastSyncAttemptAt: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", m.id);
     return;
   }
   // A resposta do POST/PATCH já traz o evento completo, incluindo o link
@@ -346,14 +398,30 @@ async function syncOneMeeting(
   // no Google, o join na plataforma nunca funcionava pra reuniões criadas
   // por ela). Roda em toda sincronização, não só na criação, pra também
   // auto-curar reuniões antigas que já sincronizaram sem capturar o link.
-  const synced = (await res.json()) as { id: string; hangoutLink?: string };
-  const next = {
+  const synced = (await res.json()) as {
+    id: string;
+    etag?: string;
+    hangoutLink?: string;
+    htmlLink?: string;
+  };
+  const next: SlimMeeting = {
     ...m,
     ...(existingId ? null : { googleEventId: synced.id }),
     ...(synced.hangoutLink && synced.hangoutLink !== m.meetLink
       ? { meetLink: synced.hangoutLink }
       : null),
+    ...(synced.htmlLink ? { googleHtmlLink: synced.htmlLink } : null),
+    googleCalendarId: "primary",
+    etag: synced.etag,
+    syncStatus: "synced",
+    lastSyncedAt: new Date().toISOString(),
+    lastSyncAttemptAt: new Date().toISOString(),
+    lastSyncError: undefined,
   };
+  // `lastSyncedAt` muda a cada chamada por definição, então esse `diff`
+  // sempre é "true" agora — a comparação continua aqui só documentando a
+  // intenção (evitar campos vazios/redundantes no patch), não pra pular o
+  // write: gravar "quando foi a última vez que isto rodou" é o requisito.
   if (JSON.stringify(next) !== JSON.stringify(m)) {
     await admin
       .from("reunioes")
@@ -431,6 +499,12 @@ export const syncAllMeetingsToGoogle = createServerFn({ method: "POST" })
 
 type GoogleEvent = {
   id: string;
+  etag?: string;
+  /** RFC3339 — quando o Google processou a última mudança neste evento
+   * (não confundir com o horário do compromisso). Comparado junto do
+   * `etag` antes de aceitar uma versão importada como mais nova que uma
+   * edição local ainda não sincronizada. */
+  updated?: string;
   iCalUID?: string;
   status?: string; // "confirmed" | "cancelled" | ...
   summary?: string;
@@ -438,15 +512,81 @@ type GoogleEvent = {
   location?: string;
   start?: { date?: string; dateTime?: string };
   end?: { date?: string; dateTime?: string };
-  attendees?: { email?: string; displayName?: string; self?: boolean }[];
+  attendees?: {
+    email?: string;
+    displayName?: string;
+    self?: boolean;
+    /** RSVP do convidado: "accepted" | "declined" | "tentative" |
+     * "needsAction". Usado só pra refletir resposta em eventos que a
+     * própria plataforma criou (Fase 6) — ver `applyGoogleAttendeeResponses`. */
+    responseStatus?: string;
+  }[];
   extendedProperties?: { private?: Record<string, string> };
   hangoutLink?: string;
+  htmlLink?: string;
   /** Presente só em ocorrências de um evento recorrente — mesmo valor
    * (id do evento mestre da série) em toda ocorrência, então serve
    * direto como `Meeting.seriesId` sem precisar gerar nada: a plataforma
    * já sabe tratar "só esta / todas" sempre que `seriesId` é compartilhado. */
   recurringEventId?: string;
 };
+
+/** `true` quando o evento vindo do Google é byte-a-byte o mesmo que já
+ * está gravado (mesmo `etag`) — pula o UPDATE por completo, tanto por
+ * eficiência quanto pra nunca arriscar sobrescrever um campo editado
+ * localmente entre o momento em que o Google respondeu e agora. Exportada
+ * pra ser testável sem precisar simular todo `runImportGoogleEventsToMeetings`. */
+export function shouldSkipGoogleImportOverwrite(
+  existingEtag: string | undefined,
+  incomingEtag: string | undefined,
+): boolean {
+  return Boolean(existingEtag && incomingEtag && existingEtag === incomingEtag);
+}
+
+/** Fase 6, "respostas dos participantes": reflete o RSVP dos convidados de
+ * um evento criado PELA PLATAFORMA (marcado com `vnhMeetingId`, enviado por
+ * e-mail via `syncOneMeeting`) de volta em `confirmedBy`/`declinedBy` — sem
+ * isso, alguém que respondesse ao convite direto no Gmail/Google Agenda
+ * (em vez de usar os botões Confirmar/Recusar na plataforma) nunca via essa
+ * resposta refletida aqui, e a plataforma continuava marcando a pessoa como
+ * "pendente" pra sempre. Só toca esses dois campos — a plataforma continua
+ * sendo a fonte de verdade pra todo o resto do evento (título, horário,
+ * local etc.), então isso roda mesmo em eventos que a importação normal
+ * pula de propósito (`vnhMeetingId` presente). Retorna `null` quando nada
+ * mudou (nenhum convidado com conta na plataforma respondeu de forma nova),
+ * pra quem chama não gravar um UPDATE à toa. */
+export function applyGoogleAttendeeResponses<
+  M extends { confirmedBy?: string[]; declinedBy?: string[] },
+>(
+  meeting: M,
+  attendees: { email?: string; responseStatus?: string; self?: boolean }[] | undefined,
+  idByEmail: Map<string, string>,
+): M | null {
+  if (!attendees || attendees.length === 0) return null;
+  let confirmedBy = meeting.confirmedBy ?? [];
+  let declinedBy = meeting.declinedBy ?? [];
+  let changed = false;
+  for (const a of attendees) {
+    // `self` é a própria conta Google usada pra enviar o convite (o
+    // organizador/criador na plataforma) — nunca um convidado de verdade.
+    if (!a.email || a.self) continue;
+    const uid = idByEmail.get(a.email.toLowerCase());
+    if (!uid) continue; // convidado externo, sem conta na plataforma — nada a refletir aqui
+    if (a.responseStatus === "accepted" && !confirmedBy.includes(uid)) {
+      confirmedBy = [...confirmedBy, uid];
+      declinedBy = declinedBy.filter((id) => id !== uid);
+      changed = true;
+    } else if (a.responseStatus === "declined" && !declinedBy.includes(uid)) {
+      declinedBy = [...declinedBy, uid];
+      confirmedBy = confirmedBy.filter((id) => id !== uid);
+      changed = true;
+    }
+    // "needsAction"/"tentative" (ou ausente) — nunca regride uma resposta
+    // explícita já registrada só por causa de um estado ambíguo do Google.
+  }
+  if (!changed) return null;
+  return { ...meeting, confirmedBy, declinedBy };
+}
 
 /** Converte um instante absoluto (`Date`/ISO) nos dois campos que `Meeting`
  * guarda em horário de Brasília — via `Intl.DateTimeFormat`, então funciona
@@ -616,9 +756,33 @@ export async function runImportGoogleEventsToMeetings() {
     }
 
     for (const event of events) {
-      // Já é uma reunião da plataforma (foi a própria `syncOneMeeting`
-      // que criou esse evento) — nunca reimportar de volta.
-      if (event.extendedProperties?.private?.vnhMeetingId) continue;
+      // Já é uma reunião da plataforma (foi a própria `syncOneMeeting` que
+      // criou esse evento) — nunca reimportar de volta, mas ainda assim
+      // reflete a resposta RSVP dos convidados (Fase 6): é a única chance
+      // de capturar alguém que respondeu direto no Gmail/Google Agenda em
+      // vez de usar os botões Confirmar/Recusar na plataforma.
+      const ownMeetingId = event.extendedProperties?.private?.vnhMeetingId;
+      if (ownMeetingId) {
+        const { data: ownRow } = await supabaseAdmin
+          .from("reunioes")
+          .select("data")
+          .eq("id", ownMeetingId)
+          .maybeSingle();
+        if (ownRow?.data) {
+          const ownData = ownRow.data as SlimMeeting & {
+            confirmedBy?: string[];
+            declinedBy?: string[];
+          };
+          const patched = applyGoogleAttendeeResponses(ownData, event.attendees, idByEmail);
+          if (patched) {
+            await supabaseAdmin
+              .from("reunioes")
+              .update({ data: patched, updated_at: new Date().toISOString() })
+              .eq("id", ownMeetingId);
+          }
+        }
+        continue;
+      }
       // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
       // sempre tem hora, fora de escopo aqui. Também é o formato de um
       // tombstone de exclusão (`showDeleted`) de um evento que nunca
@@ -661,13 +825,22 @@ export async function runImportGoogleEventsToMeetings() {
       const cancelled = event.status === "cancelled";
 
       if (existing) {
+        // Etag inalterado desde a última importação — o Google não tem
+        // nada de novo pra este evento. Pula o UPDATE por completo: além
+        // de economizar uma escrita à toa a cada ciclo, evita o risco de
+        // sobrescrever um campo editado localmente entre duas leituras
+        // (comparação pedida explicitamente — nunca aceitar uma versão do
+        // Google sem checar se ela é realmente mais nova que a gravada).
+        if (!byTime && shouldSkipGoogleImportOverwrite(existing.data.etag, event.etag)) {
+          continue;
+        }
         // Casou só por criador+data+hora (`byTime`) — esse evento é a
         // própria reunião da plataforma sincronizada de saída, cujo
         // marcador não foi reconhecido por algum motivo. Só grava o id
         // do Google pra nunca mais duplicar; não deixa os campos do
         // Google (local/notas/participantes) sobrescreverem os da
         // plataforma, que já são a fonte de verdade aqui.
-        const next = byTime
+        const next: ImportRow = byTime
           ? { ...existing.data, googleEventId: dedupeKey }
           : {
               ...existing.data,
@@ -680,9 +853,17 @@ export async function runImportGoogleEventsToMeetings() {
               participanteIds,
               convidadosExternos,
               meetLink: event.hangoutLink,
+              googleHtmlLink: event.htmlLink,
               // Backfill pra reuniões importadas antes desse campo
               // existir — nunca troca um seriesId já gravado.
               seriesId: existing.data.seriesId ?? event.recurringEventId,
+              recurringEventId: event.recurringEventId,
+              googleCalendarId: "primary",
+              etag: event.etag,
+              googleUpdatedAt: event.updated,
+              syncStatus: "synced",
+              lastSyncedAt: new Date().toISOString(),
+              lastSyncError: undefined,
               status: cancelled ? "Cancelada" : (existing.data.status ?? "Confirmada"),
             };
         if (JSON.stringify(next) !== JSON.stringify(existing.data)) {
@@ -701,6 +882,7 @@ export async function runImportGoogleEventsToMeetings() {
       const meeting = {
         id: crypto.randomUUID(),
         seriesId: event.recurringEventId,
+        recurringEventId: event.recurringEventId,
         titulo: event.summary || "Reunião",
         data: dataStr,
         hora,
@@ -712,8 +894,14 @@ export async function runImportGoogleEventsToMeetings() {
         local: event.location ?? "",
         notas: event.description,
         meetLink: event.hangoutLink,
+        googleHtmlLink: event.htmlLink,
         status: "Confirmada",
         googleEventId: dedupeKey,
+        googleCalendarId: "primary",
+        etag: event.etag,
+        googleUpdatedAt: event.updated,
+        syncStatus: "synced" as const,
+        lastSyncedAt: new Date().toISOString(),
         origem: "google",
       };
       const { error: insertError } = await supabaseAdmin

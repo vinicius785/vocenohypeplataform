@@ -1707,6 +1707,16 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const [seenReuniaoReagendamento, markReagendamentoSeen] = useDurableSeenIds(
     "notif:seenReuniaoReagendamento",
   );
+  // Fase 7 da reconstrução de Reuniões: dois tipos de notificação que
+  // faltavam no sino — cancelamento (quem foi convidado precisa saber que
+  // não precisa mais comparecer) e falha de sincronização que exige ação
+  // do criador (reconectar o Google), mesmo padrão dos dois acima.
+  const [seenMeetingCancelamentos, markCancelamentosSeen] = useDurableSeenIds(
+    "notif:seenMeetingCancelamentos",
+  );
+  const [seenMeetingSyncErrors, markSyncErrorsSeen] = useDurableSeenIds(
+    "notif:seenMeetingSyncErrors",
+  );
 
   const mentionItems = prefs.mencoes
     ? messages
@@ -1786,16 +1796,44 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   }
 
   // Pending meeting requests where I'm one of the invited participants.
+  // `meetingNeedsMyAction` já exclui ocorrências passadas e importadas do
+  // Google (sem fluxo de convite na plataforma) — sem isso, uma série
+  // recorrente de longa duração virava dezenas/centenas de notificações
+  // de sino idênticas, uma por ocorrência, nunca resolvidas (bug do "629
+  // pendentes" em Solicitações). O dedupe por `seriesId` abaixo garante o
+  // mesmo critério "1 notificação por série" usado em Solicitações.
   const meetings = prefs.reunioes ? loadMeetings() : [];
-  const meetingItems = meetings.filter(
-    (m) => m.status === "Pendente" && m.participanteIds?.includes(me.id) && !seenMeetings.has(m.id),
-  );
+  const pendingMeetingsRaw = meetings
+    .filter((m) => m.participanteIds?.includes(me.id) && meetingNeedsMyAction(m, me.id))
+    .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
+  const seenSeries = new Set<string>();
+  const meetingItems = pendingMeetingsRaw.filter((m) => {
+    const key = m.seriesId ?? m.id;
+    if (seenSeries.has(key)) return false;
+    seenSeries.add(key);
+    return !seenMeetings.has(m.id);
+  });
   const rescheduleItems = meetings.filter(
     (m) =>
       m.rescheduleProposal &&
       m.rescheduleProposal.proposedBy !== me.id &&
       (m.criadorId === me.id || m.participanteIds?.includes(me.id)) &&
       !seenReuniaoReagendamento.has(m.id),
+  );
+  // Cancelamento — só quem foi CONVIDADO precisa saber (quem cancelou é
+  // sempre o criador, já que só ele vê "Editar" no drawer; não faz sentido
+  // notificar a própria pessoa que agiu).
+  const cancelamentoItems = meetings.filter(
+    (m) =>
+      m.status === "Cancelada" &&
+      m.criadorId !== me.id &&
+      m.participanteIds?.includes(me.id) &&
+      !seenMeetingCancelamentos.has(m.id),
+  );
+  // Falha de sincronização — só o CRIADOR pode agir (reconectar a própria
+  // conta Google em Configurações), então só ele recebe.
+  const syncErrorItems = meetings.filter(
+    (m) => m.criadorId === me.id && m.syncStatus === "error" && !seenMeetingSyncErrors.has(m.id),
   );
 
   const total =
@@ -1804,7 +1842,9 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     taskItems.length +
     taskActivityItems.length +
     meetingItems.length +
-    rescheduleItems.length;
+    rescheduleItems.length +
+    cancelamentoItems.length +
+    syncErrorItems.length;
 
   // Mesmo sino, mesmo contador — só reflete no favicon da aba pra dar
   // pra notar uma notificação pendente sem a aba estar em foco.
@@ -1823,9 +1863,12 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
   const dismissTaskActivity = (aid: string) => markTaskActivitySeen([aid]);
   const dismissMeeting = (mid: string) => markMeetingsSeen([mid]);
   const dismissReschedule = (mid: string) => markReagendamentoSeen([mid]);
+  const dismissCancelamento = (mid: string) => markCancelamentosSeen([mid]);
+  const dismissSyncError = (mid: string) => markSyncErrorsSeen([mid]);
   const tarefasCount = taskItems.length + taskActivityItems.length;
   const mensagensCount = chatItems.reduce((s, i) => s + i.count, 0) + mentionItems.length;
-  const reunioesCount = meetingItems.length + rescheduleItems.length;
+  const reunioesCount =
+    meetingItems.length + rescheduleItems.length + cancelamentoItems.length + syncErrorItems.length;
   const outrosCount = outrosItems.length;
 
   const markTab = (t: BellTab) => {
@@ -1838,6 +1881,8 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
     } else if (t === "reunioes") {
       markMeetingsSeen(meetingItems.map((m) => m.id));
       markReagendamentoSeen(rescheduleItems.map((m) => m.id));
+      markCancelamentosSeen(cancelamentoItems.map((m) => m.id));
+      markSyncErrorsSeen(syncErrorItems.map((m) => m.id));
     } else if (t === "outros") {
       dismissOutrosItems(outrosItems.map((x) => x.key));
     }
@@ -2075,13 +2120,16 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
 
       {tab === "reunioes" && (
         <div role="tabpanel" id="bell-tabpanel-reunioes" aria-labelledby="bell-tab-reunioes">
-          {meetingItems.length === 0 && rescheduleItems.length === 0 && (
-            <EmptyState
-              compact
-              icon={<CalendarClock className="h-4 w-4" />}
-              title="Nenhuma notificação de reunião"
-            />
-          )}
+          {meetingItems.length === 0 &&
+            rescheduleItems.length === 0 &&
+            cancelamentoItems.length === 0 &&
+            syncErrorItems.length === 0 && (
+              <EmptyState
+                compact
+                icon={<CalendarClock className="h-4 w-4" />}
+                title="Nenhuma notificação de reunião"
+              />
+            )}
           {meetingItems.map((m) => (
             <BellItem
               key={m.id}
@@ -2116,6 +2164,38 @@ function NotificationsBell({ onSelect }: { onSelect: (key: SectionKey) => void }
                 setOpen(false);
               }}
               onMarkRead={() => dismissReschedule(m.id)}
+            />
+          ))}
+          {cancelamentoItems.map((m) => (
+            <BellItem
+              key={m.id}
+              icon={<X className="h-4 w-4" />}
+              iconTone="danger"
+              title={m.titulo}
+              subtitle="Reunião cancelada"
+              time={fmtMeetingWhen(m)}
+              onClick={() => {
+                dismissCancelamento(m.id);
+                onSelect("reunioes");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissCancelamento(m.id)}
+            />
+          ))}
+          {syncErrorItems.map((m) => (
+            <BellItem
+              key={m.id}
+              icon={<AlertTriangle className="h-4 w-4" />}
+              iconTone="danger"
+              title={m.titulo}
+              subtitle="Falha ao sincronizar com o Google Calendar"
+              time={fmtMeetingWhen(m)}
+              onClick={() => {
+                dismissSyncError(m.id);
+                onSelect("reunioes");
+                setOpen(false);
+              }}
+              onMarkRead={() => dismissSyncError(m.id)}
             />
           ))}
         </div>

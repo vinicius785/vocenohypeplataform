@@ -219,30 +219,23 @@ function TimePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Subitem ativo da sidebar (Etapa 3) — só relevante pras seções com
-  // subnav (`SECTION_SUBNAV`: Financeiro/Reuniões/Metas); as outras
-  // seções (Time incluído, desde que "Horas trabalhadas" virou parte da
-  // "Visão da equipe") passam `undefined` e a sidebar simplesmente não
-  // renderiza subitens.
+  // Subitem ativo da sidebar — só relevante pras seções com subnav
+  // (`SECTION_SUBNAV`: Financeiro/Metas); as outras seções passam
+  // `undefined` e a sidebar simplesmente não renderiza subitens.
+  // "Reuniões" saiu daqui na Fase 3 (voltou a ser `SegmentedControl` +
+  // botão dentro da própria página, gerenciando seu próprio `?view=`
+  // diretamente via `useNavigate`, mesmo padrão de `ComercialSection`).
   const activeSubTab =
     active === "financeiro"
       ? resolveFinanceiroTab(search.financeiroTab)
-      : active === "reunioes"
-        ? resolveReunioesView(search.reunioesView)
-        : active === "metas"
-          ? resolveMetasTab(search.metasView)
-          : undefined;
+      : active === "metas"
+        ? resolveMetasTab(search.metasView)
+        : undefined;
   const onSelectSubTab = (section: SectionKey, subKey: string) => {
     if (section === "financeiro") {
       void navigate({
         to: "/time",
         search: (prev) => ({ ...prev, section, financeiroTab: subKey as FinanceiroTab }),
-        replace: true,
-      });
-    } else if (section === "reunioes") {
-      void navigate({
-        to: "/time",
-        search: (prev) => ({ ...prev, section, reunioesView: subKey as ReunioesView }),
         replace: true,
       });
     } else if (section === "metas") {

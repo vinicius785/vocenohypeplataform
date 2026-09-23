@@ -9,17 +9,31 @@ import {
   LogIn,
   ChevronRight,
   ChevronDown,
+  Copy,
+  Repeat,
+  ExternalLink,
+  MoreHorizontal,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { DateField } from "@/components/ui/date-field";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   type Meeting,
   type RescheduleProposal,
   meetingDisplayStatus,
   meetingEndTime,
   meetingStartTime,
+  meetingSource,
 } from "@/lib/reunioes-store";
+import { toast } from "sonner";
 import { recordPerformanceEvent } from "@/lib/performance-events-store";
 import { xpForMeeting, DEFAULT_PERFORMANCE_SETTINGS, isValidUuid } from "@/lib/performance-engine";
 import { linkifyText } from "@/lib/linkify";
@@ -221,13 +235,25 @@ export function MeetingSummaryDialog({
     meeting.origem === "google" ||
     !!meeting.meetLink ||
     (!!meeting.local && !meeting.meetLink) ||
-    !!meeting.notas;
+    !!meeting.notas ||
+    !!meeting.syncStatus;
+
+  const source = meetingSource(meeting);
+  const copyLink = () => {
+    const link = joinUrl ?? meeting.local;
+    if (!link) return;
+    void navigator.clipboard.writeText(link).then(
+      () => toast.success("Link copiado."),
+      () => toast.error("Não foi possível copiar o link."),
+    );
+  };
 
   return (
     <Sheet open={!!meeting} onOpenChange={(v) => !v && onClose()}>
       <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]">
-        {/* Header — título, data+hora numa linha só, status só quando
-            "Sua resposta" (abaixo) não existir pra representar esse dado. */}
+        {/* Header — título, data+hora numa linha só, e uma faixa de badges
+            (status, origem, recorrência, sincronização) sem depender só de
+            cor pra comunicar cada estado — sempre com ícone + texto. */}
         <div className="flex items-start gap-3 border-b border-border/60 px-6 pb-4 pt-6">
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-brand">
             <Video className="h-4 w-4" />
@@ -240,15 +266,53 @@ export function MeetingSummaryDialog({
             <p className="mt-1 truncate text-sm text-text-secondary">
               {formatBR(meeting.data)} · {meeting.hora}–{endTimeLabel(meeting)}
             </p>
-            {!showsResponseSection && (
-              <span
-                className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
-                {displayStatus}
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {!showsResponseSection && (
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(displayStatus)}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot(displayStatus)}`} />
+                  {displayStatus}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                {source === "google" ? "Google Calendar" : "Plataforma"}
               </span>
-            )}
+              {meeting.seriesId && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                  <Repeat className="h-2.5 w-2.5" /> Recorrente
+                </span>
+              )}
+              {meeting.syncStatus === "error" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
+                  <AlertTriangle className="h-2.5 w-2.5" /> Falha na sincronização
+                </span>
+              )}
+              {meeting.syncStatus === "pending" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                  <RefreshCw className="h-2.5 w-2.5" /> Sincronizando
+                </span>
+              )}
+            </div>
           </div>
+          {meeting.googleHtmlLink && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {meeting.googleHtmlLink && (
+                  <DropdownMenuItem asChild>
+                    <a href={meeting.googleHtmlLink} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" /> Abrir no Google Calendar
+                    </a>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
@@ -266,14 +330,29 @@ export function MeetingSummaryDialog({
             </div>
           )}
 
-          {/* CTA principal */}
-          {joinUrl && (
-            <a href={joinUrl} target="_blank" rel="noreferrer" className="mt-4 block">
-              <Button variant="primary" size="lg" className="w-full">
-                <LogIn className="h-4 w-4" />
-                {isNow ? "Entrar agora" : "Entrar na reunião"}
+          {/* Ações principais — entrar (quando há link) sempre acompanhada
+           * de "Copiar link", nunca só uma ou outra. */}
+          {(joinUrl ?? meeting.local) && (
+            <div className="mt-4 flex gap-2">
+              {joinUrl && (
+                <a href={joinUrl} target="_blank" rel="noreferrer" className="flex-1">
+                  <Button variant="primary" size="lg" className="w-full">
+                    <LogIn className="h-4 w-4" />
+                    {isNow ? "Entrar agora" : "Entrar na reunião"}
+                  </Button>
+                </a>
+              )}
+              <Button
+                variant="outline"
+                size="lg"
+                className={joinUrl ? "shrink-0 px-3" : "w-full"}
+                onClick={copyLink}
+                aria-label="Copiar link"
+              >
+                <Copy className="h-4 w-4" />
+                {!joinUrl && "Copiar link"}
               </Button>
-            </a>
+            </div>
           )}
 
           {/* Participantes — sempre visível, sem card */}
@@ -577,16 +656,24 @@ export function MeetingSummaryDialog({
                 </button>
                 {detailsOpen && (
                   <div className="mt-2.5 space-y-3 text-sm">
-                    {meeting.seriesId && (
+                    {/* Origem e recorrência já aparecem como badges no
+                     * cabeçalho — aqui só o que não cabe lá: registro de
+                     * sincronização. */}
+                    {meeting.syncStatus && (
                       <div>
-                        <p className="text-xs text-text-secondary">Recorrência</p>
-                        <p className="text-foreground">Reunião recorrente</p>
-                      </div>
-                    )}
-                    {meeting.origem === "google" && (
-                      <div>
-                        <p className="text-xs text-text-secondary">Origem</p>
-                        <p className="text-foreground">Importada do Google Calendar</p>
+                        <p className="text-xs text-text-secondary">Sincronização com o Google</p>
+                        <p className="text-foreground">
+                          {meeting.syncStatus === "error"
+                            ? "Falha na última tentativa"
+                            : meeting.syncStatus === "pending"
+                              ? "Sincronizando…"
+                              : "Sincronizada"}
+                          {meeting.lastSyncedAt &&
+                            ` · última vez ${new Date(meeting.lastSyncedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}`}
+                        </p>
+                        {meeting.syncStatus === "error" && meeting.lastSyncError && (
+                          <p className="mt-1 text-xs text-danger">{meeting.lastSyncError}</p>
+                        )}
                       </div>
                     )}
                     {meeting.meetLink && (

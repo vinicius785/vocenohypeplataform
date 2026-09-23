@@ -48,25 +48,25 @@ export const METAS_TABS: { key: MetasTab; label: string }[] = [
 
 /** `"disponibilidade"` foi removido desta união (Etapa 3) — a
  * Disponibilidade migrou pra Configurações. Um valor antigo na URL cai
- * no fallback `"agenda"` (ver `resolveReunioesView`). */
-export type ReunioesView = "agenda" | "calendario" | "solicitacoes";
-
-export const REUNIOES_TABS: { key: ReunioesView; label: string }[] = [
-  { key: "agenda", label: "Agenda" },
-  { key: "calendario", label: "Calendário" },
-  { key: "solicitacoes", label: "Solicitações" },
-];
+ * no fallback `"agenda"` (ver `resolveReunioesView`).
+ *
+ * Fase 3 da reconstrução de Reuniões: voltou a ser um `SegmentedControl` +
+ * botão dentro da própria página (não mais subitens de sidebar — ver
+ * `SECTION_SUBNAV` abaixo), então os valores viraram em inglês pra bater
+ * com o padrão de URL pedido (`?view=agenda|calendar|requests`). Um link
+ * antigo com `reunioesView=calendario`/`solicitacoes` (valor em português)
+ * é mapeado pelo `resolveReunioesView`, não aqui. */
+export type ReunioesView = "agenda" | "calendar" | "requests";
 
 /** Só os módulos com subitens de sidebar nesta etapa. "Time" perdeu o
  * próprio subnav quando a subpágina "Horas trabalhadas" foi incorporada
  * à "Visão da equipe" (única subpágina restante não precisa de um item
- * de navegação pra si mesma). "Reuniões" migrou de um
- * `SegmentedControl`+botão dentro da própria página pra subitens de
- * sidebar (Agenda/Calendário/Solicitações), no mesmo padrão de
- * Financeiro/Metas. */
+ * de navegação pra si mesma). "Reuniões" SAIU daqui na Fase 3 da
+ * reconstrução — voltou a ser um `SegmentedControl` + botão dentro da
+ * própria página (`ReunioesSection.tsx`), não mais 3 subitens de sidebar;
+ * a sidebar agora só tem o item principal "Reuniões". */
 export const SECTION_SUBNAV: Partial<Record<SectionKey, { key: string; label: string }[]>> = {
   financeiro: FINANCEIRO_TABS,
-  reunioes: REUNIOES_TABS,
   metas: METAS_TABS,
 };
 
@@ -79,9 +79,12 @@ export function resolveMetasTab(value: string | undefined): MetasTab {
 }
 
 export function resolveReunioesView(value: string | undefined): ReunioesView {
-  return value === "agenda" || value === "calendario" || value === "solicitacoes"
-    ? value
-    : "agenda";
+  if (value === "agenda" || value === "calendar" || value === "requests") return value;
+  // Compat com links antigos salvos/compartilhados antes da Fase 3 (valor
+  // em português, subnav de sidebar) — nunca quebra, só traduz.
+  if (value === "calendario") return "calendar";
+  if (value === "solicitacoes") return "requests";
+  return "agenda";
 }
 
 /** Chave de cada seção interna de Configurações — mesma lista que já

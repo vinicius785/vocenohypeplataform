@@ -53,13 +53,87 @@ export type Meeting = {
   googleEventId?: string;
   /** "google" = importada do Google Calendar; ausente/undefined =
    * criada na própria plataforma (todas as reuniões existentes antes
-   * deste campo continuam válidas, tratadas como "da plataforma"). */
+   * deste campo continuam válidas, tratadas como "da plataforma"). Use
+   * `meetingSource()` pra ler isso de forma tipada — este campo nunca foi
+   * renomeado pra `source` porque só 3 arquivos o leem diretamente e uma
+   * migração de nome não muda nenhum comportamento, só o risco. */
   origem?: "google";
   /** Link do Google Meet — preenchido só em reuniões importadas do
    * Google Calendar (`event.hangoutLink`), pra aparecer na plataforma
    * mesmo quando a reunião foi criada direto por lá. */
   meetLink?: string;
+  /** `htmlLink` devolvido pelo Google — URL pronta pra abrir o evento na UI
+   * do Google Calendar. Usado pela ação "Abrir no Google Calendar" no
+   * drawer de detalhes (Fase 4); nunca construído manualmente por aqui —
+   * o formato de URL do Google não é uma API pública estável. */
+  googleHtmlLink?: string;
+
+  /* ==========================================================
+   * Metadados de sincronização com o Google Calendar (Fase 2). Todos
+   * opcionais e aditivos — linhas antigas sem esses campos continuam
+   * válidas, só ficam sem o detalhe (equivalente a "nunca sincronizada").
+   * ========================================================== */
+
+  /** Calendário do Google onde este evento vive — hoje sempre `"primary"`
+   * (`EVENTS_URL` em `google-calendar.functions.ts` só usa o calendário
+   * primário de cada conta conectada), mas o campo já existe pra quando
+   * isso deixar de ser verdade. */
+  googleCalendarId?: string;
+  /** `recurringEventId` bruto devolvido pelo Google pra uma ocorrência de
+   * série recorrente. Para reuniões importadas do Google, hoje tem o
+   * MESMO valor de `seriesId` (é o que `seriesId` recebe na importação) —
+   * campos separados por clareza de schema; não é garantido que
+   * continuem sempre iguais se a plataforma passar a reagrupar séries
+   * importadas por outro critério no futuro. */
+  recurringEventId?: string;
+  /** ETag do evento na última leitura/escrita no Google — comparado antes
+   * de sobrescrever numa importação, pra não substituir uma edição local
+   * ainda não sincronizada por uma cópia desatualizada do Google. */
+  etag?: string;
+  /** `updated` do evento no Google (RFC3339) — segunda comparação, junto
+   * do etag, antes de aceitar uma versão vinda de lá como mais nova. */
+  googleUpdatedAt?: string;
+  /** Estado da última tentativa de sincronizar ESTA reunião especificamente
+   * (saída pra Google ou entrada de lá) — `"pending"` só existe entre o
+   * `persist()` e a sincronização debounced rodar; a UI usa isso pra
+   * mostrar "Sincronizando"/"Falha" por reunião, não só um estado global
+   * de conexão. */
+  syncStatus?: "synced" | "pending" | "error";
+  lastSyncedAt?: string;
+  /** Mensagem curta e segura (nunca token/secret) da última falha de sync
+   * desta reunião — populada só quando `syncStatus === "error"`. */
+  lastSyncError?: string;
+  /** Quando a última TENTATIVA (sucesso ou falha) rodou — usado pro
+   * backoff de retentativa em `google-calendar.functions.ts`, nunca
+   * exibido diretamente na UI (que mostra `lastSyncedAt`, só sucessos). */
+  lastSyncAttemptAt?: string;
 };
+
+/** Leitura tipada de `origem` — único ponto que traduz o campo legado pro
+ * conceito de `source` pedido no schema (`"platform" | "google"`). Nenhum
+ * dado é reescrito: linhas antigas sem `origem` já significam "platform"
+ * por definição (ver comentário do campo). */
+export function meetingSource(m: Pick<Meeting, "origem">): "platform" | "google" {
+  return m.origem === "google" ? "google" : "platform";
+}
+
+/** Classifica o resultado de um ciclo de sync pros registros de UMA
+ * gravação específica (Fase 5, formulário de Nova reunião/Editar) — usado
+ * depois de `syncOneMeeting` já ter atualizado `syncStatus` em cada linha:
+ * - `"not-attempted"`: nenhuma das reuniões foi sequer tentada (o criador
+ *   não tem conta Google conectada) — não é erro, não há nada a reportar.
+ * - `"error"`: pelo menos uma falhou.
+ * - `"synced"`: pelo menos uma foi tentada e nenhuma falhou. */
+export function classifyDialogSyncResult(rows: Pick<Meeting, "syncStatus" | "lastSyncError">[]): {
+  outcome: "not-attempted" | "synced" | "error";
+  error?: string;
+} {
+  const attempted = rows.some((m) => m.syncStatus !== undefined);
+  if (!attempted) return { outcome: "not-attempted" };
+  const errorRow = rows.find((m) => m.syncStatus === "error");
+  if (errorRow) return { outcome: "error", error: errorRow.lastSyncError };
+  return { outcome: "synced" };
+}
 
 /** Horário em que a reunião começa (data+hora), como epoch ms. */
 export function meetingStartTime(m: Meeting): number {
@@ -88,11 +162,31 @@ export function meetingDisplayStatus(m: Meeting): MeetingStatus {
  * status agregado da reunião: uma vez que a pessoa confirma ou recusa, a
  * pendência dela sumiu — mesmo que a reunião como um todo ainda esteja
  * "Pendente" esperando outros participantes agirem.
+ *
+ * Duas exclusões corrigem o bug de "629 pendentes" numa série recorrente:
+ * - Ocorrências já passadas nunca voltam a virar ação pendente — sem essa
+ *   checagem, uma série antiga que ninguém nunca confirmou ficava
+ *   acumulando pendência pra sempre, uma por ocorrência.
+ * - Reuniões importadas do Google (`origem === "google"`) não têm um fluxo
+ *   de convite/resposta na plataforma — quem usa a conta Google já
+ *   respondeu (ou vai responder) por lá. Antes disso, séries recorrentes
+ *   de longa duração importadas do Google (ex: uma daily rodando há
+ *   meses) geravam uma "pendência" por ocorrência já sincronizada, nunca
+ *   resolvida, acumulando a cada ciclo de sync sem limite.
  */
 export function meetingNeedsMyAction(m: Meeting, meId: string): boolean {
   if (m.status === "Cancelada") return false;
+  if (m.origem === "google") return false;
+  if (m.data < toISODate(new Date())) return false;
   if (m.confirmedBy?.includes(meId) || m.declinedBy?.includes(meId)) return false;
   return true;
+}
+
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
 }
 
 const store = createTableArrayStore<Meeting>("reunioes");

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Ban, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Ban, Trash2, CalendarDays } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -53,6 +54,12 @@ export function CalendarView({
   const [mode, setMode] = useState<CalMode>("mes");
   const [cursor, setCursor] = useState<Date>(() => new Date());
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+  // Item obrigatório de responsividade: no mobile, a visão "Mês" nunca
+  // espreme 7 colunas nem gera rolagem horizontal — vira uma lista/agenda
+  // vertical do mês (`MonthAgendaMobile`), automaticamente, sem precisar
+  // trocar de aba. "Semana" continua igual (grade horária de 1 dia por
+  // vez já é naturalmente estreita o bastante pro celular).
+  const isMobile = useIsMobile();
 
   const goToday = () => {
     const now = new Date();
@@ -124,17 +131,27 @@ export function CalendarView({
       </div>
 
       {mode === "mes" ? (
-        <MonthGrid
-          cursor={cursor}
-          meetings={meetings}
-          disponibilidades={disponibilidades}
-          team={team}
-          me={me}
-          selectedDate={drawerDate}
-          onSelectDay={setDrawerDate}
-          onOpenMeeting={onOpen}
-          onRemoveBlock={removeBlock}
-        />
+        isMobile ? (
+          <MonthAgendaMobile
+            cursor={cursor}
+            meetings={meetings}
+            me={me}
+            team={team}
+            onOpenMeeting={onOpen}
+          />
+        ) : (
+          <MonthGrid
+            cursor={cursor}
+            meetings={meetings}
+            disponibilidades={disponibilidades}
+            team={team}
+            me={me}
+            selectedDate={drawerDate}
+            onSelectDay={setDrawerDate}
+            onOpenMeeting={onOpen}
+            onRemoveBlock={removeBlock}
+          />
+        )
       ) : (
         <WeekGrid
           cursor={cursor}
@@ -309,6 +326,72 @@ function DayDrawer({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** Substitui a grade mensal no mobile — lista vertical, um bloco por dia
+ * do mês corrente que tem reunião (dias vazios não geram bloco, pra não
+ * virar uma rolagem enorme de "nada aqui" repetido 30 vezes). Reaproveita
+ * `MeetingLine`/`groupByDate`, os mesmos usados pela Agenda, pra nunca
+ * ficar visualmente inconsistente com o resto da página. */
+function MonthAgendaMobile({
+  cursor,
+  meetings,
+  me,
+  team,
+  onOpenMeeting,
+}: {
+  cursor: Date;
+  meetings: Meeting[];
+  me: { id: string; name: string };
+  team: TeamMember[];
+  onOpenMeeting: (m: Meeting) => void;
+}) {
+  const byDate = useMemo(() => groupByDate(meetings), [meetings]);
+  const today = toISODate(new Date());
+  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  const daysWithMeetings = useMemo(() => {
+    const out: { iso: string; items: Meeting[] }[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = toISODate(new Date(cursor.getFullYear(), cursor.getMonth(), day));
+      const items = byDate.get(iso);
+      if (items && items.length > 0) out.push({ iso, items });
+    }
+    return out;
+  }, [byDate, cursor, daysInMonth]);
+
+  if (daysWithMeetings.length === 0) {
+    return (
+      <div className="rounded-[24px] bg-card p-8 text-center dark:shadow-none">
+        <CalendarDays className="mx-auto h-7 w-7 text-text-secondary/50" />
+        <p className="mt-3 text-sm font-medium text-foreground">
+          Nenhuma reunião em {monthLabel(cursor)}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {daysWithMeetings.map(({ iso, items }) => (
+        <div key={iso} className="rounded-2xl bg-card p-4 dark:shadow-none">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            {iso === today ? "Hoje · " : ""}
+            {formatBR(iso)}
+          </p>
+          <ul className="mt-1.5 divide-y divide-border/60">
+            {items.map((m) => (
+              <MeetingLine
+                key={m.id}
+                meeting={m}
+                people={peopleFor(m, team, me)}
+                onOpen={() => onOpenMeeting(m)}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 

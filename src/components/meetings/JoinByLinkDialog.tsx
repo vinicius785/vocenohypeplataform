@@ -44,8 +44,8 @@ export function JoinByLinkDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="comfortable">
-          <LogIn className="h-3.5 w-3.5" /> Entrar com código ou link
+        <Button variant="outline" size="sm">
+          <LogIn className="h-3.5 w-3.5" /> Entrar com link
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">

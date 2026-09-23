@@ -10,6 +10,7 @@ import {
   Plus,
   AlertTriangle,
   Check,
+  Loader2,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -87,6 +88,9 @@ export function MeetingDialog({
   onClose,
   onSave,
   onDelete,
+  syncState = "idle",
+  syncError,
+  onRetrySync,
 }: {
   open: boolean;
   initial?: Meeting;
@@ -106,6 +110,13 @@ export function MeetingDialog({
   onClose: () => void;
   onSave: (meetings: Meeting[], opts?: { applyToSeries?: boolean }) => void;
   onDelete: (id: string) => void;
+  /** Fase 5: depois de salvar, o pai tenta sincronizar com o Google e
+   * reporta o resultado aqui — o formulário nunca fecha sozinho num erro,
+   * só quando o usuário decide (`onClose`/"Concluir"). `"idle"` = ainda
+   * não salvou nada nesta sessão do diálogo (formulário normal). */
+  syncState?: "idle" | "syncing" | "synced" | "error";
+  syncError?: string;
+  onRetrySync?: () => void;
 }) {
   const { confirmChoice, confirmChoiceDialog } = useConfirmChoice<"this" | "all">();
   const [titulo, setTitulo] = useState("");
@@ -708,9 +719,57 @@ export function MeetingDialog({
           </div>
         </div>
 
+        {/* Fase 5: estado de sincronização pós-salvar — nunca fecha o
+         * formulário sozinho num erro, só informa e oferece "Tentar
+         * novamente"; a reunião já está salva na plataforma nesse ponto,
+         * então não há nada "perdido" nem que precise ser reenviado do
+         * zero, só a tentativa de sincronizar com o Google. */}
+        {syncState !== "idle" && (
+          <div
+            className={
+              syncState === "error"
+                ? "flex items-center gap-2 border-t border-border bg-danger-soft px-6 py-2.5 text-sm text-danger"
+                : syncState === "synced"
+                  ? "flex items-center gap-2 border-t border-border bg-success-soft px-6 py-2.5 text-sm text-success-soft-foreground"
+                  : "flex items-center gap-2 border-t border-border bg-muted px-6 py-2.5 text-sm text-text-secondary"
+            }
+          >
+            {syncState === "syncing" && (
+              <>
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                Reunião salva — sincronizando com o Google Calendar…
+              </>
+            )}
+            {syncState === "synced" && (
+              <>
+                <Check className="h-3.5 w-3.5 shrink-0" />
+                Sincronizada com o Google Calendar.
+              </>
+            )}
+            {syncState === "error" && (
+              <>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  Reunião salva, mas a sincronização com o Google falhou
+                  {syncError ? `: ${syncError}` : "."}
+                </span>
+                {onRetrySync && (
+                  <button
+                    type="button"
+                    onClick={onRetrySync}
+                    className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-danger underline-offset-2 hover:underline"
+                  >
+                    Tentar novamente
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-4">
           <div>
-            {initial && (
+            {initial && syncState === "idle" && (
               <button
                 type="button"
                 onClick={() => onDelete(initial.id)}
@@ -721,23 +780,31 @@ export function MeetingDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="comfortable" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              size="comfortable"
-              onClick={() => void submit()}
-              disabled={
-                !titulo.trim() ||
-                !data ||
-                !!timeError ||
-                duracao <= 0 ||
-                (repeat !== "none" && !repeatUntil)
-              }
-            >
-              {initial ? "Salvar alterações" : "Criar reunião"}
-            </Button>
+            {syncState === "idle" ? (
+              <>
+                <Button variant="outline" size="comfortable" onClick={onClose}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  size="comfortable"
+                  onClick={() => void submit()}
+                  disabled={
+                    !titulo.trim() ||
+                    !data ||
+                    !!timeError ||
+                    duracao <= 0 ||
+                    (repeat !== "none" && !repeatUntil)
+                  }
+                >
+                  {initial ? "Salvar alterações" : "Criar reunião"}
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" size="comfortable" onClick={onClose}>
+                Concluir
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>

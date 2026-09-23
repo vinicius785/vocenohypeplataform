@@ -29,20 +29,21 @@ export function SolicitacoesTab({
     .filter((m) => meetingNeedsMyAction(m, me.id))
     .sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora));
 
-  // Uma reunião recorrente (série do próprio app ou importada do Google)
-  // gera 1 pendência por ocorrência — sem agrupar, uma daily de 3 meses
-  // vira dezenas de cards idênticos na lista. Mostra só a próxima
-  // ocorrência pendente de cada série, com a contagem das demais; ação
-  // de Confirmar/Recusar nela já pergunta "Só esta / Todas" (mesmo fluxo
-  // de sempre, `requestConfirmMeeting`/`requestDeleteMeeting` no pai).
+  // Uma série recorrente gera UMA solicitação, não uma por ocorrência —
+  // deduplicada pelo identificador estável da série (`seriesId`, ou o
+  // `recurringEventId` do Google quando a série veio de lá). Mostra só a
+  // próxima ocorrência pendente de cada série; ação de Confirmar/Recusar
+  // nela já pergunta "Só esta / Todas" (mesmo fluxo de sempre,
+  // `requestConfirmMeeting`/`requestDeleteMeeting` no pai). Nunca exibe a
+  // contagem crua de ocorrências futuras como se fossem pendências
+  // separadas — foi isso que causava o badge "629 pendentes".
   const seen = new Set<string>();
-  const pend: (Meeting & { seriesPendingCount?: number })[] = [];
+  const pend: (Meeting & { isRecurring?: boolean })[] = [];
   for (const m of pendRaw) {
     const key = m.seriesId ?? m.id;
     if (seen.has(key)) continue;
     seen.add(key);
-    const count = m.seriesId ? pendRaw.filter((x) => x.seriesId === m.seriesId).length : 1;
-    pend.push(count > 1 ? { ...m, seriesPendingCount: count } : m);
+    pend.push(m.seriesId ? { ...m, isRecurring: true } : m);
   }
 
   const criadorOf = (m: Meeting) =>
@@ -88,10 +89,10 @@ export function SolicitacoesTab({
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-sm font-medium text-foreground">{m.titulo}</span>
-                    {m.seriesPendingCount && (
+                    {m.isRecurring && (
                       <Badge variant="secondary" className="shrink-0 gap-1 font-medium">
                         <Repeat className="h-2.5 w-2.5" />
-                        Recorrente · {m.seriesPendingCount} pendentes
+                        Recorrente
                       </Badge>
                     )}
                   </div>

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus } from "lucide-react";
+import { Plus, Inbox } from "lucide-react";
 import {
   deleteGoogleEventsForMeetings,
   runGoogleCalendarSync,
 } from "@/lib/google-calendar.functions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { PageContainer } from "@/components/shared/PageContainer";
 import {
   type Meeting,
@@ -19,6 +21,7 @@ import {
   loadDisponibilidades,
   saveMyDisponibilidade,
   onDisponibilidadesChange,
+  classifyDialogSyncResult,
 } from "@/lib/reunioes-store";
 import { getMe } from "@/lib/chat-store";
 import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
@@ -34,16 +37,34 @@ import { resolveReunioesView, type ReunioesView } from "@/lib/section-nav";
 
 export { MeetingSummaryDialog } from "./meetings/MeetingSummaryDialog";
 
+const GRID_VIEW_OPTIONS = [
+  { value: "agenda" as const, label: "Agenda" },
+  { value: "calendar" as const, label: "Calendário" },
+];
+
 export function ReunioesSection() {
   const me = getMe();
   const search = useSearch({ from: "/_authenticated/time" });
-  // A subpágina ativa mora na URL e é escolhida pelos subitens de
-  // "Reuniões" na sidebar (mesmo mecanismo de `?financeiroTab=` em
-  // Financeiro, ver `time.tsx`'s `onSelectSubTab`) — sobrevive a um
-  // refresh e permite link direto pra Calendário/Solicitações.
-  // "Disponibilidade" saiu daqui na Etapa 3 (mudou pra Configurações) —
-  // um valor antigo na URL cai no default via `resolveReunioesView`.
+  const navigate = useNavigate();
+  // Fase 3: "Reuniões" deixou de ter subitens de sidebar (Agenda/
+  // Calendário/Solicitações) — a visualização ativa agora é um estado só
+  // desta página, gerenciado direto na URL (mesmo padrão de `?cView=` em
+  // ComercialSection), sem passar pelo mecanismo de subnav de `time.tsx`.
+  // O param continua se chamando `reunioesView` (não `?view=` genérico
+  // como citado no pedido original) porque `view` já é usado por
+  // `bugs.$token.tsx` no schema de busca global do TanStack Router —
+  // reaproveitar o nome colidiria de tipos entre rotas não relacionadas.
+  // Os VALORES viraram inglês (`agenda`/`calendar`/`requests`), sobrevive
+  // a um refresh e permite link direto; um valor antigo/inválido (em
+  // português, de antes da Fase 3) cai no default via `resolveReunioesView`.
   const view: ReunioesView = resolveReunioesView(search.reunioesView);
+  const setView = (next: ReunioesView) => {
+    void navigate({
+      to: "/time",
+      search: (prev) => ({ ...prev, section: "reunioes", reunioesView: next }),
+      replace: true,
+    });
+  };
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   useEffect(() => setTeam(loadTeam()), []);
@@ -60,7 +81,19 @@ export function ReunioesSection() {
     setNewMeetingDate(dateIso ?? toISODate(new Date()));
     setNewMeetingHora(hora);
     setDialog({ mode: "new" });
+    setSyncFeedback(null);
   };
+  // Fase 5: estado de sincronização do formulário depois de salvar — o
+  // diálogo não fecha mais sozinho (nem em sucesso nem em erro), quem
+  // decide é o usuário ("Concluir"/"Tentar novamente"). `ids` são os
+  // registros dessa gravação específica, pra checar só o resultado deles
+  // (não o de qualquer outra reunião que porventura tenha sincronizado
+  // no mesmo ciclo).
+  const [syncFeedback, setSyncFeedback] = useState<{
+    ids: string[];
+    status: "syncing" | "synced" | "error";
+    error?: string;
+  } | null>(null);
   const [summary, setSummary] = useState<Meeting | null>(null);
   const [summaryProposing, setSummaryProposing] = useState(false);
 
@@ -88,6 +121,44 @@ export function ReunioesSection() {
     setMeetings(next);
     saveMeetings(next);
     triggerGoogleSync();
+  };
+
+  // Fase 5: fluxo de sincronização visível especificamente pro formulário
+  // de Nova reunião/Editar — diferente do `triggerGoogleSync` debounced
+  // acima (usado por toda mutação "de fundo", sem UI própria), esta
+  // chamada é imediata e o resultado é mostrado dentro do próprio diálogo.
+  // Depois do ciclo rodar, relê as reuniões do zero e olha só o
+  // `syncStatus` gravado pelo `syncOneMeeting` (Fase 2) nos ids desta
+  // gravação — se nenhum deles foi sequer tentado (`syncStatus` ausente),
+  // é porque o criador não tem o Google conectado: nada a reportar, não é
+  // um erro, então o diálogo fecha normalmente como sempre fechou.
+  const runDialogSync = (ids: string[]) => {
+    setSyncFeedback({ ids, status: "syncing" });
+    // `persist()` grava no Supabase de forma "fire-and-forget" (ver
+    // `table-array-store.ts`) — sem essa pequena espera, o ciclo de sync
+    // no servidor corre risco real de ler a tabela ANTES do INSERT/UPDATE
+    // desta reunião chegar lá, e reportar "nada pra sincronizar" por pura
+    // corrida, não porque a reunião não precisava. Não é uma garantia
+    // (ainda existe uma janela, só menor), mas cobre o caso comum.
+    new Promise((resolve) => setTimeout(resolve, 800))
+      .then(() => syncGoogleFn())
+      .then(() => {
+        const fresh = loadMeetings();
+        const rows = ids
+          .map((id) => fresh.find((m) => m.id === id))
+          .filter((m): m is Meeting => !!m);
+        const result = classifyDialogSyncResult(rows);
+        if (result.outcome === "not-attempted") {
+          setSyncFeedback(null);
+          setDialog(null);
+          return;
+        }
+        setSyncFeedback({ ids, status: result.outcome, error: result.error });
+      })
+      .catch((e) => {
+        console.warn("[google-calendar] sync failed", e);
+        setSyncFeedback({ ids, status: "error" });
+      });
   };
   const deleteGoogleEventsFn = useServerFn(deleteGoogleEventsForMeetings);
   // Excluir na plataforma também apaga o evento correspondente no Google
@@ -230,7 +301,17 @@ export function ReunioesSection() {
   const semanaCount = myMeetings.filter(
     (m) => m.data >= today && m.data <= semanaLimite && m.status !== "Cancelada",
   ).length;
-  const pendentes = myMeetings.filter((m) => meetingNeedsMyAction(m, me.id)).length;
+  // 1 solicitação por série, nunca 1 por ocorrência — mesmo dedupe por
+  // `seriesId` usado em `SolicitacoesTab`, pra esse resumo nunca mostrar um
+  // número maior do que o que a aba de Solicitações realmente lista.
+  const pendentesSeries = new Set<string>();
+  const pendentes = myMeetings.filter((m) => {
+    if (!meetingNeedsMyAction(m, me.id)) return false;
+    const key = m.seriesId ?? m.id;
+    if (pendentesSeries.has(key)) return false;
+    pendentesSeries.add(key);
+    return true;
+  }).length;
 
   const openSummary = (m: Meeting) => {
     setSummaryProposing(false);
@@ -246,11 +327,11 @@ export function ReunioesSection() {
       <PageContainer className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+            <p className="text-[28px] font-bold leading-[1.1] tracking-tight text-foreground md:text-[32px]">
               Reuniões
             </p>
-            <p className="mt-1.5 text-sm text-text-secondary">
-              Sua agenda e reuniões em um só lugar.
+            <p className="mt-1 text-sm text-text-secondary">
+              Organize seus compromissos e acompanhe sua agenda.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -259,6 +340,34 @@ export function ReunioesSection() {
               <Plus className="h-4 w-4" /> Nova reunião
             </Button>
           </div>
+        </div>
+
+        {/* Controles de visualização — pertencem só ao conteúdo desta
+         * página, nunca uma barra de navegação global nova. O
+         * `SegmentedControl` alterna só Agenda/Calendário (o mesmo
+         * conteúdo, duas visualizações); Solicitações é uma página à
+         * parte, por isso vira um botão separado, com badge só quando há
+         * pendência real (mesma contagem deduplicada por série de
+         * `pendentes`, nunca a contagem crua de ocorrências). */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SegmentedControl
+            aria-label="Alternar entre Agenda e Calendário"
+            value={view === "calendar" ? "calendar" : "agenda"}
+            onChange={setView}
+            options={GRID_VIEW_OPTIONS}
+          />
+          <Button
+            variant={view === "requests" ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setView("requests")}
+          >
+            <Inbox className="h-3.5 w-3.5" /> Solicitações
+            {pendentes > 0 && (
+              <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                {pendentes}
+              </Badge>
+            )}
+          </Button>
         </div>
 
         {view === "agenda" && (
@@ -274,7 +383,7 @@ export function ReunioesSection() {
           />
         )}
 
-        {view === "calendario" && (
+        {view === "calendar" && (
           <CalendarView
             meetings={myMeetings}
             me={me}
@@ -286,7 +395,7 @@ export function ReunioesSection() {
           />
         )}
 
-        {view === "solicitacoes" && (
+        {view === "requests" && (
           <SolicitacoesTab
             meetings={myMeetings}
             me={me}
@@ -310,8 +419,14 @@ export function ReunioesSection() {
           me={me}
           disponibilidades={disponibilidades}
           meetings={meetings}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            setSyncFeedback(null);
+          }}
           onDelete={(id) => void requestDeleteMeeting(id)}
+          syncState={syncFeedback?.status ?? "idle"}
+          syncError={syncFeedback?.error}
+          onRetrySync={syncFeedback ? () => runDialogSync(syncFeedback.ids) : undefined}
           onSave={(saved, opts) => {
             if (dialog?.mode === "edit" && saved.length === 1) {
               const m = saved[0];
@@ -344,7 +459,7 @@ export function ReunioesSection() {
             } else {
               persist([...meetings, ...saved]);
             }
-            setDialog(null);
+            runDialogSync(saved.map((s) => s.id));
           }}
         />
 
@@ -356,6 +471,7 @@ export function ReunioesSection() {
           onEdit={(m) => {
             setSummary(null);
             setDialog({ mode: "edit", data: m });
+            setSyncFeedback(null);
           }}
           onChange={(m) => persist(meetings.map((x) => (x.id === m.id ? m : x)))}
           onConfirm={(m) => void requestConfirmMeeting(m)}
