@@ -30,6 +30,7 @@ import {
   ExternalLink,
   FolderOpen,
   Youtube,
+  Video,
   Link2,
   ZoomIn,
   ZoomOut,
@@ -142,6 +143,7 @@ import {
 import { useConfirm } from "@/hooks/use-confirm";
 import { CreateChannelModal } from "@/components/CreateChannelModal";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   DropdownMenu,
@@ -471,6 +473,25 @@ export function ChatSection() {
     for (const m of messages) map.set(m.id, m);
     return map;
   }, [messages]);
+
+  // Fase 5: agrupa respostas por mensagem-raiz (`reply_to_id`) pra alimentar
+  // o resumo "N respostas" e o painel de thread — nunca conta uma resposta
+  // que por sua vez tem suas próprias respostas como raiz duas vezes (uma
+  // thread é sempre plana, 1 nível: ver resolução do `replyToId` no botão
+  // "Responder em thread").
+  const repliesByRoot = useMemo(() => {
+    const map = new Map<string, ChatMessage[]>();
+    for (const m of messages) {
+      if (!m.replyToId) continue;
+      const list = map.get(m.replyToId) ?? [];
+      list.push(m);
+      map.set(m.replyToId, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.createdAt - b.createdAt);
+    return map;
+  }, [messages]);
+  const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  useEffect(() => setThreadRootId(null), [activeId]);
 
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   useEffect(() => setReplyingTo(null), [activeId]);
@@ -964,6 +985,8 @@ export function ChatSection() {
                 hypitoHandlers={hypitoHandlers}
                 onCreateTask={onCreateTaskFromMessage}
                 onCommentTask={(task) => setComposerSeed(`@${task.label} `)}
+                repliesByRoot={repliesByRoot}
+                onOpenThread={setThreadRootId}
               />
             )}
 
@@ -1111,6 +1134,14 @@ export function ChatSection() {
         )}
         {confirmDialog}
       </div>
+      <ThreadPanel
+        root={threadRootId ? (messagesById.get(threadRootId) ?? null) : null}
+        replies={threadRootId ? (repliesByRoot.get(threadRootId) ?? []) : []}
+        meId={me.id}
+        convoId={activeId}
+        onOpenMention={openMention}
+        onClose={() => setThreadRootId(null)}
+      />
     </div>
   );
 }
@@ -1769,6 +1800,7 @@ function linkPreviewIcon(kind: LinkPreview["kind"]) {
   const cls = "h-4 w-4 shrink-0 text-muted-foreground";
   if (kind === "drive") return <FolderOpen className={cls} />;
   if (kind === "youtube") return <Youtube className={cls} />;
+  if (kind === "meet") return <Video className={cls} />;
   return <Link2 className={cls} />;
 }
 
@@ -1954,6 +1986,8 @@ function MessageList({
   hypitoHandlers,
   onCreateTask,
   onCommentTask,
+  repliesByRoot,
+  onOpenThread,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -1977,6 +2011,11 @@ function MessageList({
   hypitoHandlers?: HypitoCardHandlers;
   onCreateTask?: (m: ChatMessage) => void;
   onCommentTask?: (task: ChatTaskInfo) => void;
+  /** Respostas de cada mensagem-raiz (`reply_to_id`), pra mostrar o resumo
+   * "N respostas" embaixo da mensagem original — nunca despejadas soltas
+   * no fluxo principal (Fase 5: painel de thread). */
+  repliesByRoot?: Map<string, ChatMessage[]>;
+  onOpenThread?: (rootId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Posição de rolagem por conversa (o próprio `scrollRef` é reaproveitado
@@ -2475,6 +2514,53 @@ function MessageList({
                         )}
                       </div>
                     )}
+                    {!editing &&
+                      onOpenThread &&
+                      (() => {
+                        const replies = repliesByRoot?.get(m.id);
+                        if (!replies || replies.length === 0) return null;
+                        const lastReply = replies[replies.length - 1];
+                        const repliers = Array.from(
+                          new Map(replies.map((r) => [r.authorId, r])).values(),
+                        ).slice(-3);
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => onOpenThread(m.id)}
+                            className="mt-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            <span className="flex -space-x-1.5">
+                              {repliers.map((r) =>
+                                r.authorPhoto ? (
+                                  <img
+                                    key={r.authorId}
+                                    src={r.authorPhoto}
+                                    alt=""
+                                    className="h-5 w-5 rounded-full border border-background object-cover"
+                                  />
+                                ) : (
+                                  <span
+                                    key={r.authorId}
+                                    className="flex h-5 w-5 items-center justify-center rounded-full border border-background bg-muted text-[9px] font-semibold text-foreground"
+                                  >
+                                    {r.authorName.slice(0, 1).toUpperCase()}
+                                  </span>
+                                ),
+                              )}
+                            </span>
+                            <span className="font-medium text-brand">
+                              {replies.length} {replies.length === 1 ? "resposta" : "respostas"}
+                            </span>
+                            <span>
+                              Última{" "}
+                              {new Date(lastReply.createdAt).toLocaleTimeString("pt-BR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </button>
+                        );
+                      })()}
                     {!editing && mine && isDm && lastOfGroup && (
                       <div className="mt-0.5 flex items-center gap-1">
                         <span className="text-[10px] text-muted-foreground">
@@ -2537,8 +2623,11 @@ function MessageList({
                         )}
                       </div>
                       <button
-                        onClick={() => onReply(m)}
-                        aria-label="Responder"
+                        onClick={() =>
+                          onOpenThread ? onOpenThread(m.replyToId ?? m.id) : onReply(m)
+                        }
+                        aria-label="Responder em thread"
+                        title="Responder em thread"
                         className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
                         <Reply className="h-3 w-3" />
@@ -2611,6 +2700,141 @@ function MessageList({
         </button>
       )}
     </div>
+  );
+}
+
+/** Painel de thread (Fase 5) — abre à direita no desktop (`Sheet` já
+ * usado em outros pontos da plataforma) e ocupa a tela inteira no mobile
+ * (`w-full`, sem `sm:max-w-*`), com botão de voltar embutido no cabeçalho
+ * do próprio `SheetContent`. Mostra a mensagem original fixa no topo e as
+ * respostas abaixo, num compositor PRÓPRIO — nunca mistura com o
+ * compositor do canal principal. Renderização das mensagens é
+ * deliberadamente mais simples que `MessageList` (sem reações/edição
+ * inline aqui) pra caber no tempo desta fase; anexos continuam
+ * aparecendo, já que são comuns em resposta de thread. */
+function ThreadPanel({
+  root,
+  replies,
+  meId,
+  convoId,
+  onOpenMention,
+  onClose,
+}: {
+  root: ChatMessage | null;
+  replies: ChatMessage[];
+  meId: string;
+  convoId: string;
+  onOpenMention: (m: ChatMention) => void;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [replies.length]);
+
+  if (!root) return null;
+
+  const participantIds = Array.from(new Set(replies.map((r) => r.authorId)));
+
+  const submit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      await sendMessageDb({ convoId, text: trimmed, replyToId: root.id });
+      setText("");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const renderMini = (m: ChatMessage, isRoot: boolean) => (
+    <div key={m.id} className={`flex gap-2.5 px-4 py-2 ${isRoot ? "" : "hover:bg-muted/30"}`}>
+      <div className="h-8 w-8 shrink-0">
+        {m.authorPhoto ? (
+          <img src={m.authorPhoto} alt="" className="h-8 w-8 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+            {m.authorName.slice(0, 1).toUpperCase()}
+          </div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span
+            className={`text-xs font-semibold ${m.authorId === meId ? "text-brand" : "text-foreground"}`}
+          >
+            {m.authorName}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        </div>
+        {m.text && (
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+            {renderText(m.text, m.mentions, onOpenMention)}
+          </p>
+        )}
+        {m.attachments && m.attachments.length > 0 && (
+          <div className="mt-1.5">
+            <AttachmentList message={m} attachments={m.attachments} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <Sheet open={!!root} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md"
+      >
+        <SheetHeader className="shrink-0 border-b border-border px-4 py-3">
+          <SheetTitle className="text-sm font-semibold">Thread</SheetTitle>
+          <p className="text-xs text-muted-foreground">
+            {participantIds.length > 0
+              ? `${participantIds.length} participante${participantIds.length > 1 ? "s" : ""} · ${replies.length} ${replies.length === 1 ? "resposta" : "respostas"}`
+              : "Nenhuma resposta ainda"}
+          </p>
+        </SheetHeader>
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          {renderMini(root, true)}
+          <div className="mx-4 my-1 border-t border-border/60" />
+          {replies.map((r) => renderMini(r, false))}
+        </div>
+        <div className="shrink-0 border-t border-border p-3">
+          <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+              placeholder="Responder na thread..."
+              rows={1}
+              className="max-h-32 min-h-8 flex-1 resize-none bg-transparent text-sm outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!text.trim() || sending}
+              className="shrink-0 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Enviar
+            </button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -3470,7 +3694,19 @@ function Composer({
   seed?: string | null;
   onSeedConsumed?: () => void;
 }) {
-  const [value, setValue] = useState(seed ?? "");
+  // Rascunho por conversa (pedido, seção "Comportamento") — `Composer` já
+  // remonta a cada troca de conversa (`key={activeId}` no call site), então
+  // basta ler o rascunho salvo na inicialização do estado; salvar em cada
+  // troca é feito no `useEffect` abaixo, e o envio limpa a chave.
+  const draftKey = `chat:draft:${convoId}`;
+  const [value, setValue] = useState(() => {
+    if (seed) return seed;
+    try {
+      return localStorage.getItem(draftKey) ?? "";
+    } catch {
+      return "";
+    }
+  });
   useEffect(() => {
     if (seed) {
       setValue((v) => v + seed);
@@ -3478,6 +3714,15 @@ function Composer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
+  useEffect(() => {
+    try {
+      if (value.trim()) localStorage.setItem(draftKey, value);
+      else localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
   const [pending, setPending] = useState<ChatAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);

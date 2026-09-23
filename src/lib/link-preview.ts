@@ -16,7 +16,13 @@ export function extractUrls(text: string): string[] {
   return [...new Set(matches)];
 }
 
-export type LinkPreviewKind = "drive" | "youtube" | "internal_task" | "internal_scope" | "internal";
+export type LinkPreviewKind =
+  | "drive"
+  | "youtube"
+  | "meet"
+  | "internal_task"
+  | "internal_scope"
+  | "internal";
 
 export type LinkPreview = {
   kind: LinkPreviewKind;
@@ -44,6 +50,9 @@ export function recognizeLinkPreview(url: string): LinkPreview | null {
   }
   if (host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com") {
     return { kind: "youtube", url, domain: host, title: "YouTube" };
+  }
+  if (host === "meet.google.com") {
+    return { kind: "meet", url, domain: host, title: "Google Meet" };
   }
 
   // Links internos da própria plataforma — só quando o navegador já
