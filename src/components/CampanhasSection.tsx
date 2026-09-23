@@ -64,6 +64,7 @@ import {
 } from "./campanhas/campanha-ui";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
 import { PageContainer } from "@/components/shared/PageContainer";
+import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
 import {
@@ -2195,60 +2196,5 @@ function DocumentosSection({
         </ul>
       )}
     </section>
-  );
-}
-
-const SUMMARY_TONE_CLASS = {
-  warning: "text-warning",
-  success: "text-success",
-  danger: "text-danger",
-} as const;
-
-/** Item da faixa de resumo operacional compacto — um valor por vez, sem
- * virar card grande. Cor semântica só quando `tone` é passada (alerta
- * real: em aprovação/publicadas/gasto acima do orçamento), nunca por
- * decoração. */
-function SummaryStat({
-  label,
-  value,
-  tone,
-  progress,
-}: {
-  label: string;
-  value: string;
-  tone?: keyof typeof SUMMARY_TONE_CLASS;
-  /** Barra de progresso presa a ESTA métrica específica (rodada de
-   * refinamento — a barra azul que ficava solta embaixo de toda a faixa
-   * não tinha rótulo nem métrica associada visível; virou o preenchimento
-   * discreto da própria célula "Gasto", com `aria-label` explicando o
-   * numerador/denominador reais). */
-  progress?: { pct: number; ariaLabel: string; tone?: "danger" | "brand" };
-}) {
-  return (
-    <div className="min-w-[104px] flex-1 border-b border-r border-border/60 px-4 py-3 last:border-r-0 sm:border-b-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">{label}</p>
-      <p
-        className={`mt-1 truncate text-base font-bold tabular-nums ${
-          tone ? SUMMARY_TONE_CLASS[tone] : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      {progress && (
-        <div
-          role="progressbar"
-          aria-label={progress.ariaLabel}
-          aria-valuenow={Math.round(progress.pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted"
-        >
-          <div
-            className={`h-full rounded-full ${progress.tone === "danger" ? "bg-danger" : "bg-brand"}`}
-            style={{ width: `${progress.pct}%` }}
-          />
-        </div>
-      )}
-    </div>
   );
 }

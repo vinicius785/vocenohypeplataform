@@ -32,9 +32,9 @@ import {
   Pencil,
   Trash2,
   Search,
-  Flag,
-  CalendarClock,
-  ListChecks,
+  Pause,
+  Play,
+  Archive,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -44,7 +44,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { SummaryStat } from "@/components/shared/SummaryStat";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { AppShell, type SectionKey } from "@/components/AppShell";
@@ -63,11 +66,14 @@ import {
   onProjetosChange,
   upsertProjeto,
   deleteProjeto,
+  duplicateProjeto,
+  setProjetoStatus,
   loadTeamMembers,
   PROJECT_STATUS_LABEL,
   type FeatureKey,
   type Project,
   type ProjectLayout,
+  type ProjectStatus,
   type Task,
   type DocItem,
   type DocSourceType,
@@ -76,11 +82,13 @@ import {
 } from "@/lib/projetos";
 import {
   computeProjectMetrics,
+  statusMenuActions,
   PROJECT_STATUS_BADGE_VARIANT,
   PROJECT_HEALTH_BADGE_VARIANT,
   PROJECT_HEALTH_LABEL,
 } from "@/components/projetos/projeto-ui";
 import { Badge } from "@/components/ui/badge";
+import { OPEN_STATUSES } from "@/lib/score";
 import { EditorialPanel } from "@/components/marketing/EditorialPanel";
 import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
@@ -100,12 +108,11 @@ import {
   saveProjetoFases,
   onProjetoFasesChange,
 } from "@/lib/projeto-scoped-store";
-import { type ProjetoFase } from "@/lib/roadmap-engine";
+import { faseAtual, faseStatusEfetivo, type ProjetoFase } from "@/lib/roadmap-engine";
 import { formatIsoDate } from "@/lib/utils";
 import { PhaseFormDialog } from "@/components/roadmap/PhaseFormDialog";
 import { LinkTasksPanel } from "@/components/roadmap/LinkTasksPanel";
 import { PhaseTimeline } from "@/components/roadmap/PhaseTimeline";
-import { RoadmapOverviewTab } from "@/components/roadmap/RoadmapOverviewTab";
 
 export const Route = createFileRoute("/_authenticated/projeto/$id")({
   component: ProjetoPage,
@@ -231,6 +238,8 @@ function ProjetoPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
+  const access = useMyAccess();
+  const canEdit = hasPermission(access, "projetos");
 
   const requestDelete = async () => {
     if (!project) return;
@@ -243,6 +252,28 @@ function ProjetoPage() {
     }
     deleteProjeto(project.id);
     navigate({ to: "/time", search: { section: "projetos" } });
+  };
+
+  const handleDuplicateProject = () => {
+    if (!project) return;
+    const copy = duplicateProjeto(project);
+    upsertProjeto(copy);
+    navigate({ to: "/projeto/$id", params: { id: copy.id } });
+  };
+
+  const handleSetProjectStatus = (status: ProjectStatus) => {
+    if (!project) return;
+    setProjetoStatus(project.id, status);
+  };
+
+  const requestArchive = async () => {
+    if (!project) return;
+    if (
+      !(await confirm(`Arquivar "${project.name}"? Ele sai das listas ativas, mas nada é apagado.`))
+    ) {
+      return;
+    }
+    handleSetProjectStatus("arquivado");
   };
 
   if (!project) {
@@ -268,6 +299,40 @@ function ProjetoPage() {
   // explícito pra não duplicar a leitura do store escopado.
   const projectStatus = project.status ?? "ativo";
   const metrics = computeProjectMetrics(project, loadTeamMembers(), fasesForHeader);
+  const { canPause, canReactivate, canArchive } = statusMenuActions(projectStatus);
+
+  // Fase atual / próxima entrega / fases em risco — mesma lógica que
+  // antes vivia na faixa de resumo do Roadmap (RoadmapOverviewTab), agora
+  // só existe aqui: a faixa foi removida do Roadmap pra não repetir a
+  // mesma informação duas vezes na página (item 8 do pedido de
+  // reformulação do cabeçalho).
+  const projectTasks = project.tasks as unknown as BoardTask[];
+  const faseAtualDoProjeto = hasRoadmap ? faseAtual(fasesForHeader, projectTasks) : null;
+  const todasFasesConcluidas = hasRoadmap && fasesForHeader.length > 0 && !faseAtualDoProjeto;
+  const fasesEmRiscoCount = hasRoadmap
+    ? fasesForHeader.filter((f) => {
+        const s = faseStatusEfetivo(f, projectTasks);
+        return s === "em_risco" || s === "atrasada";
+      }).length
+    : 0;
+  const proximaEntregaTask =
+    projectTasks
+      .filter((t) => OPEN_STATUSES.has(t.status) && t.dueDate)
+      .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))[0] ?? null;
+
+  // "Pendências" do resumo — prioriza exceções reais, nunca mostra "0" de
+  // propósito (item 4 do pedido: nada de traço solto/indicador zerado).
+  const atrasadasLabel =
+    metrics.overdueCount > 0
+      ? `${metrics.overdueCount} ${metrics.overdueCount === 1 ? "tarefa atrasada" : "tarefas atrasadas"}`
+      : null;
+  const riscoLabel =
+    fasesEmRiscoCount > 0
+      ? `${fasesEmRiscoCount} ${fasesEmRiscoCount === 1 ? "fase em risco" : "fases em risco"}`
+      : null;
+  const pendenciaValue = atrasadasLabel ?? riscoLabel ?? "Nenhuma pendência crítica";
+  const pendenciaComplemento = atrasadasLabel && riscoLabel ? riscoLabel : undefined;
+  const temPendenciaCritica = !!atrasadasLabel || !!riscoLabel;
 
   // Projeto "HypeApp" ganha a aba de Bugs & Sugestões automaticamente,
   // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
@@ -282,119 +347,171 @@ function ProjetoPage() {
   return (
     <AppShell active="projetos" onSelect={goToSection}>
       <PageContainer className="space-y-6">
-        {/* Cabeçalho azul compacto (~140-170px no desktop) — identidade do
-         * projeto + resumo operacional (fase atual/responsável/próxima
-         * entrega/progresso, derivados do Roadmap quando habilitado, nunca
-         * inventados) + ações. Breadcrumb embutido, substitui o antigo nav
-         * isolado. */}
-        <header className="overflow-hidden rounded-2xl bg-brand">
-          <div className="flex flex-col gap-4 px-5 py-5 md:px-7 md:py-6">
-            <nav
-              aria-label="Navegação"
-              className="flex items-center gap-1.5 text-xs text-brand-foreground-secondary"
-            >
-              <button
-                type="button"
-                onClick={() => goToSection("projetos")}
-                className="rounded hover:text-brand-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-foreground/40"
-              >
-                Projetos
-              </button>
-              <span>/</span>
-              <span className="min-w-0 truncate font-medium text-brand-foreground">
-                {project.name}
-              </span>
-            </nav>
+        {/* Breadcrumb — fora do cabeçalho, mesmo padrão da página de
+         * Campanha (`CampanhaDetail`'s `<nav>`). */}
+        <nav
+          aria-label="Navegação"
+          className="flex items-center gap-1.5 text-xs text-text-secondary"
+        >
+          <button
+            type="button"
+            onClick={() => goToSection("projetos")}
+            className="rounded hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            Projetos
+          </button>
+          <span>/</span>
+          <span className="min-w-0 truncate font-medium text-foreground">{project.name}</span>
+        </nav>
 
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/10 ring-1 ring-brand-foreground/15 md:h-[72px] md:w-[72px]">
-                  {project.cover ? (
-                    <img
-                      src={project.cover}
-                      alt=""
-                      className="h-full w-full object-cover object-center"
-                    />
-                  ) : (
-                    <ImageIcon
-                      className="h-6 w-6 text-brand-foreground-secondary"
-                      strokeWidth={1.5}
-                    />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="truncate text-2xl font-semibold tracking-tight text-brand-foreground">
-                      {project.name}
-                    </h1>
-                    <Badge
-                      variant={PROJECT_STATUS_BADGE_VARIANT[projectStatus]}
-                      className="shrink-0"
-                    >
-                      {PROJECT_STATUS_LABEL[projectStatus]}
-                    </Badge>
-                    {metrics.health && metrics.health !== "saudavel" && (
-                      <Badge
-                        variant={PROJECT_HEALTH_BADGE_VARIANT[metrics.health]}
-                        className="shrink-0"
-                      >
-                        {PROJECT_HEALTH_LABEL[metrics.health]}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-foreground-secondary">
-                    {metrics.principal && (
-                      <span className="inline-flex items-center gap-1">
-                        <Flag className="h-3 w-3" /> {metrics.principal.name}
-                      </span>
-                    )}
-                    {metrics.nextDeliveryIso && (
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarClock className="h-3 w-3" />
-                        Próxima entrega {formatIsoDate(metrics.nextDeliveryIso)}
-                      </span>
-                    )}
-                    {metrics.openCount > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <ListChecks className="h-3 w-3" /> {metrics.openCount}{" "}
-                        {metrics.openCount === 1 ? "tarefa pendente" : "tarefas pendentes"}
-                      </span>
-                    )}
-                  </div>
-                </div>
+        {/* Cabeçalho — card escuro compacto, mesma linguagem visual da
+         * página de Campanha: identidade em cima, resumo operacional
+         * (SummaryStat, componente compartilhado) numa faixa só embaixo do
+         * mesmo card. Nada de banner azul — azul fica só como destaque
+         * (botão, foco, badges de saúde). */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-card dark:shadow-none">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
+                {project.cover ? (
+                  <img
+                    src={project.cover}
+                    alt=""
+                    className="h-full w-full object-cover object-center"
+                  />
+                ) : (
+                  <ImageIcon className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+                )}
               </div>
-
-              <div className="flex shrink-0 items-center gap-2 self-start md:self-center">
-                <button
-                  type="button"
-                  onClick={() => setEditOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-brand-foreground/25 px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-black/10"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Editar
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Mais opções"
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-brand-foreground hover:bg-black/10"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={() => void requestDelete()}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Excluir projeto
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                    {project.name}
+                  </h1>
+                  <Badge variant={PROJECT_STATUS_BADGE_VARIANT[projectStatus]} className="shrink-0">
+                    {PROJECT_STATUS_LABEL[projectStatus]}
+                  </Badge>
+                </div>
+                {project.description && (
+                  <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                    {project.description}
+                  </p>
+                )}
+                {metrics.principal && (
+                  <p className="mt-1 truncate text-xs text-text-secondary">
+                    {metrics.principal.name} · Atualizado {metrics.lastActivityLabel}
+                  </p>
+                )}
               </div>
             </div>
+
+            <div className="flex shrink-0 items-center gap-2 self-start">
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-3.5 w-3.5" /> Editar
+                </Button>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Mais opções"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-text-secondary hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && (
+                    <>
+                      <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+                        <Pencil className="h-3.5 w-3.5" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleDuplicateProject}>
+                        <Copy className="h-3.5 w-3.5" /> Duplicar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {canPause && (
+                        <DropdownMenuItem onSelect={() => handleSetProjectStatus("pausado")}>
+                          <Pause className="h-3.5 w-3.5" /> Pausar
+                        </DropdownMenuItem>
+                      )}
+                      {canReactivate && (
+                        <DropdownMenuItem onSelect={() => handleSetProjectStatus("ativo")}>
+                          <Play className="h-3.5 w-3.5" /> Reativar
+                        </DropdownMenuItem>
+                      )}
+                      {canArchive && (
+                        <DropdownMenuItem onSelect={() => void requestArchive()}>
+                          <Archive className="h-3.5 w-3.5" /> Arquivar
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem
+                    onSelect={() => void requestDelete()}
+                    className="text-destructive focus:text-destructive"
+                    disabled={!canEdit}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Excluir projeto
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </header>
+
+          {/* Resumo operacional — uma faixa só, SummaryStat compartilhado
+           * (mesmo componente do resumo de Campanha). Substitui de vez a
+           * antiga faixa do Roadmap (RoadmapOverviewTab, removida) — nunca
+           * as duas ao mesmo tempo repetindo a mesma informação. */}
+          <div className="flex flex-wrap border-t border-border/60">
+            <SummaryStat
+              label="Progresso"
+              value={metrics.total === 0 ? "Sem tarefas" : `${metrics.progressPct}%`}
+              complement={
+                metrics.total > 0 ? `${metrics.completed} de ${metrics.total} tarefas` : undefined
+              }
+            />
+            <SummaryStat
+              label="Fase atual"
+              value={
+                todasFasesConcluidas
+                  ? "Roadmap concluído"
+                  : (faseAtualDoProjeto?.nome ?? "Nenhuma fase atual")
+              }
+              complement={
+                faseAtualDoProjeto
+                  ? `${formatIsoDate(faseAtualDoProjeto.dataInicio)} — ${formatIsoDate(faseAtualDoProjeto.dataFim)}`
+                  : undefined
+              }
+            />
+            <SummaryStat
+              label="Próxima entrega"
+              value={proximaEntregaTask ? proximaEntregaTask.title : "Sem próxima entrega"}
+              complement={
+                proximaEntregaTask?.dueDate ? formatIsoDate(proximaEntregaTask.dueDate) : undefined
+              }
+            />
+            <SummaryStat
+              label="Pendências"
+              labelExtra={
+                metrics.health &&
+                metrics.health !== "saudavel" && (
+                  <Badge
+                    variant={PROJECT_HEALTH_BADGE_VARIANT[metrics.health]}
+                    className="px-1.5 py-0 text-[9px]"
+                  >
+                    {PROJECT_HEALTH_LABEL[metrics.health]}
+                  </Badge>
+                )
+              }
+              value={pendenciaValue}
+              complement={pendenciaComplemento}
+              tone={temPendenciaCritica ? "danger" : undefined}
+            />
+          </div>
+        </div>
 
         {editOpen && (
           <ProjectWizard
@@ -618,8 +735,6 @@ function RoadmapPanel({
 
   return (
     <div className="space-y-8">
-      <RoadmapOverviewTab fases={fases} tasks={project.tasks as unknown as BoardTask[]} />
-
       <PhaseTimeline
         fases={fases}
         tasks={project.tasks as unknown as BoardTask[]}

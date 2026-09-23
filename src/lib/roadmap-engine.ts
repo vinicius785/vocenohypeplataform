@@ -191,9 +191,9 @@ function diasEntre(isoA: string, isoB: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-/** ID de DOM de cada fase na linha do tempo — usado pra rolar/destacar a
- * fase quando alguém clica num alerta do resumo (item 8 do pedido).
- * Mesma convenção entre `RoadmapOverviewTab.tsx`/`PhaseTimeline.tsx`. */
+/** ID de DOM de cada fase na linha do tempo — usado como âncora pra
+ * rolar/destacar a fase a partir de um link externo (ex.: alerta do
+ * cabeçalho do projeto). Aplicado em cada card de `PhaseTimeline.tsx`. */
 export function faseDomId(faseId: string): string {
   return `roadmap-fase-${faseId}`;
 }
