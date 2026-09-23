@@ -5,85 +5,59 @@ import {
   Search,
   Upload,
   X,
-  Pencil,
-  Trash2,
   ImageIcon,
-  Map,
-  KanbanSquare,
-  Users,
-  FileText,
   Check,
-  CalendarDays,
-  Megaphone,
-  Newspaper,
   LayoutList,
   LayoutPanelTop,
-  Radar,
-  Bug,
-  Mail,
-  MoreVertical,
-  ArrowUpDown,
-  AlertTriangle,
-  ListChecks,
 } from "lucide-react";
 import {
   FEATURES,
   DEFAULT_FEATURES,
   INFLUENCER_FIELDS,
   DEFAULT_INFLUENCER_FIELDS,
+  PROJECT_STATUS_LABEL,
+  DEFAULT_PROJECT_STATUS,
   loadProjetos,
+  loadTeamMembers,
   onProjetosChange,
+  isProjetosLoaded,
   saveProjetos,
   deleteProjeto,
+  duplicateProjeto,
+  setProjetoStatus,
+  touchProjeto,
+  upsertProjeto,
   type FeatureKey,
   type InfluencerFieldKey,
   type Project,
   type ProjectLayout,
+  type ProjectStatus,
 } from "@/lib/projetos";
-import { loadProjetoFases } from "@/lib/projeto-scoped-store";
-import { faseStatusEfetivo } from "@/lib/roadmap-engine";
-import { OPEN_STATUSES } from "@/lib/score";
-import type { Task as BoardTask } from "@/components/tasks/TaskBoard";
+import { hasPermission, useMyAccess } from "@/lib/permissions";
+import { initialsOf } from "@/components/metas/metas-ui-utils";
+import { ProjectCard } from "./projetos/ProjectCard";
+import { ProjetoFiltersBar } from "./projetos/ProjetoFiltersBar";
+import {
+  FEATURE_ICONS,
+  computeProjectMetrics,
+  filterProjects,
+  sortProjects,
+  DEFAULT_PROJECT_FILTERS,
+  type ProjectFiltersState,
+} from "./projetos/projeto-ui";
 import { SectionHeader } from "./SectionHeader";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import { useConfirm } from "@/hooks/use-confirm";
-
-const FEATURE_ICONS: Record<FeatureKey, React.ComponentType<{ className?: string }>> = {
-  roadmap: Map,
-  kanban: KanbanSquare,
-  influenciadores: Users,
-  documentos: FileText,
-  calendario_editorial: CalendarDays,
-  trafego_pago: Megaphone,
-  blog: Newspaper,
-  aeo_monitor: Radar,
-  bugs_sugestoes: Bug,
-  fluxos_email: Mail,
-};
-
-function initialsOf(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
-
-type SortKey = "nome" | "recentes";
 
 export function ProjetosSection() {
   const navigate = useNavigate();
+  const access = useMyAccess();
+  const canEdit = hasPermission(access, "projetos");
   const [items, setItemsState] = useState<Project[]>(() => loadProjetos());
+  const [loaded, setLoaded] = useState(isProjetosLoaded());
   const setItems = (u: Project[] | ((p: Project[]) => Project[])) =>
     setItemsState((prev) => {
       const next = typeof u === "function" ? (u as (p: Project[]) => Project[])(prev) : u;
@@ -93,24 +67,41 @@ export function ProjetosSection() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [query, setQuery] = useState("");
-  const [featureFilter, setFeatureFilter] = useState<FeatureKey | "todas">("todas");
-  const [sort, setSort] = useState<SortKey>("recentes");
+  const [filters, setFilters] = useState<ProjectFiltersState>(DEFAULT_PROJECT_FILTERS);
   const { confirm, confirmDialog } = useConfirm();
 
-  useEffect(() => onProjetosChange(() => setItemsState(loadProjetos())), []);
+  useEffect(
+    () =>
+      onProjetosChange(() => {
+        setItemsState(loadProjetos());
+        setLoaded(isProjetosLoaded());
+      }),
+    [],
+  );
+
+  // `loadTeamMembers()` lê localStorage — barato o bastante pra não
+  // precisar de memo próprio; só o mapa de métricas (que itera todas as
+  // tarefas de todo projeto) é memoizado, e só por `items`.
+  const metricsById = useMemo(() => {
+    const team = loadTeamMembers();
+    const map = new Map<string, ReturnType<typeof computeProjectMetrics>>();
+    for (const p of items) map.set(p.id, computeProjectMetrics(p, team));
+    return map;
+  }, [items]);
+
+  const responsaveis = useMemo(() => {
+    const nomes = new Set<string>();
+    for (const m of metricsById.values()) {
+      if (m.principal) nomes.add(m.principal.name);
+      for (const part of m.participantes) nomes.add(part.name);
+    }
+    return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [metricsById]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let list = items.filter(
-      (p) =>
-        (!q || p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) &&
-        (featureFilter === "todas" || p.features?.includes(featureFilter)),
-    );
-    list = [...list].sort((a, b) =>
-      sort === "nome" ? a.name.localeCompare(b.name, "pt-BR") : b.createdAt - a.createdAt,
-    );
-    return list;
-  }, [items, query, featureFilter, sort]);
+    const byQuery = filterProjects(items, metricsById, query, filters);
+    return sortProjects(byQuery, metricsById, filters.sort);
+  }, [items, metricsById, query, filters]);
 
   const handleSave = (p: Project, isNew: boolean) => {
     setItems((prev) =>
@@ -133,6 +124,32 @@ export function ProjetosSection() {
     deleteProjeto(p.id);
   };
 
+  const handleDuplicate = (p: Project) => {
+    const copy = duplicateProjeto(p);
+    upsertProjeto(copy);
+    setItemsState((prev) => [...prev, copy]);
+    navigate({ to: "/projeto/$id", params: { id: copy.id } });
+  };
+
+  const handleSetStatus = (p: Project, status: ProjectStatus) => {
+    setProjetoStatus(p.id, status);
+    setItemsState((prev) => prev.map((x) => (x.id === p.id ? touchProjeto({ ...x, status }) : x)));
+  };
+
+  const handleArchive = async (p: Project) => {
+    if (!(await confirm(`Arquivar "${p.name}"? Ele sai das listas ativas, mas nada é apagado.`))) {
+      return;
+    }
+    handleSetStatus(p, "arquivado");
+  };
+
+  const hasAnyProject = items.length > 0;
+  const hasActiveFilters = query.trim().length > 0 || filters !== DEFAULT_PROJECT_FILTERS;
+  const clearFilters = () => {
+    setQuery("");
+    setFilters(DEFAULT_PROJECT_FILTERS);
+  };
+
   return (
     <PageContainer className="space-y-6">
       <SectionHeader
@@ -140,70 +157,62 @@ export function ProjetosSection() {
         subtitle={`${items.length} ${items.length === 1 ? "projeto" : "projetos"}`}
         kpis={[]}
         action={
-          <Button
-            variant="primary"
-            size="comfortable"
-            onClick={() => {
-              setEditing(null);
-              setWizardOpen(true);
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Novo projeto
-          </Button>
+          canEdit ? (
+            <Button
+              variant="primary"
+              size="comfortable"
+              onClick={() => {
+                setEditing(null);
+                setWizardOpen(true);
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Novo projeto
+            </Button>
+          ) : undefined
         }
       />
 
-      {/* Barra de controles compacta — busca, filtro por funcionalidade e
-       * ordenação, tudo numa linha só. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nome ou descrição"
-            className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand sm:w-64"
-          />
-        </div>
-        <select
-          value={featureFilter}
-          onChange={(e) => setFeatureFilter(e.target.value as FeatureKey | "todas")}
-          aria-label="Filtrar por funcionalidade"
-          className="h-9 rounded-md border border-border bg-background px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          <option value="todas">Todas as funcionalidades</option>
-          {FEATURES.map((f) => (
-            <option key={f.key} value={f.key}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-          <ArrowUpDown className="h-3.5 w-3.5" />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            aria-label="Ordenar projetos"
-            className="h-9 rounded-md border border-border bg-background px-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            <option value="recentes">Mais recentes</option>
-            <option value="nome">Nome (A–Z)</option>
-          </select>
-        </label>
-      </div>
+      {hasAnyProject && (
+        <ProjetoFiltersBar
+          query={query}
+          onQueryChange={setQuery}
+          filters={filters}
+          onFiltersChange={setFilters}
+          responsaveis={responsaveis}
+        />
+      )}
 
-      {filtered.length === 0 ? (
+      {!loaded ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[290px] animate-pulse rounded-xl border border-border bg-card"
+            >
+              <div className="h-[150px] w-full rounded-t-xl bg-muted" />
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-background p-12 text-center">
           <p className="text-sm text-muted-foreground">
-            {items.length === 0 ? "Nenhum projeto ainda." : "Nenhum resultado para esta busca."}
+            {!hasAnyProject ? "Nenhum projeto ainda." : "Nenhum resultado para estes filtros."}
           </p>
-          {items.length === 0 && (
+          {!hasAnyProject && canEdit && (
             <button
               onClick={() => setWizardOpen(true)}
               className="mt-3 text-xs font-medium text-brand hover:underline"
             >
               Criar o primeiro projeto
+            </button>
+          )}
+          {hasAnyProject && hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="mt-3 text-xs font-medium text-brand hover:underline"
+            >
+              Limpar filtros
             </button>
           )}
         </div>
@@ -213,11 +222,17 @@ export function ProjetosSection() {
             <ProjectCard
               key={p.id}
               project={p}
+              metrics={metricsById.get(p.id)!}
+              canEdit={canEdit}
               onOpen={() => navigate({ to: "/projeto/$id", params: { id: p.id } })}
               onEdit={() => {
                 setEditing(p);
                 setWizardOpen(true);
               }}
+              onDuplicate={() => handleDuplicate(p)}
+              onPause={() => handleSetStatus(p, "pausado")}
+              onReactivate={() => handleSetStatus(p, "ativo")}
+              onArchive={() => void handleArchive(p)}
               onDelete={() => void removeProject(p)}
             />
           ))}
@@ -236,136 +251,6 @@ export function ProjetosSection() {
       )}
       {confirmDialog}
     </PageContainer>
-  );
-}
-
-function ProjectCard({
-  project,
-  onOpen,
-  onEdit,
-  onDelete,
-}: {
-  project: Project;
-  onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const features = project.features ?? [];
-  const visible = features.slice(0, 3);
-  const rest = features.length - visible.length;
-
-  const tasks = project.tasks as unknown as BoardTask[];
-  const pendentes = tasks.filter((t) => OPEN_STATUSES.has(t.status)).length;
-  const emRisco = features.includes("roadmap")
-    ? loadProjetoFases(project.id).some((f) => {
-        const s = faseStatusEfetivo(f, tasks);
-        return s === "em_risco" || s === "atrasada";
-      })
-    : false;
-
-  return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      aria-label={`Abrir projeto ${project.name}`}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none"
-    >
-      <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-muted">
-        {project.cover ? (
-          <img src={project.cover} alt="" className="h-full w-full object-cover object-center" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <span className="text-2xl font-semibold text-muted-foreground/50">
-              {initialsOf(project.name) || <ImageIcon className="h-6 w-6" strokeWidth={1.5} />}
-            </span>
-          </div>
-        )}
-        <div onClick={(e) => e.stopPropagation()} className="absolute right-2 top-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label={`Mais opções de ${project.name}`}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:text-foreground"
-              >
-                <MoreVertical className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={onEdit}>
-                <Pencil className="h-3.5 w-3.5" /> Editar projeto
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={onDelete}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Excluir
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{project.name}</p>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            {project.description || "Sem descrição"}
-          </p>
-        </div>
-
-        {visible.length > 0 && (
-          <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
-            {visible.map((f) => {
-              const meta = FEATURES.find((x) => x.key === f);
-              const Icon = FEATURE_ICONS[f];
-              return (
-                <Badge key={f} variant="secondary" className="gap-1 font-normal">
-                  <Icon className="h-3 w-3" />
-                  {meta?.label ?? f}
-                </Badge>
-              );
-            })}
-            {rest > 0 && (
-              <Badge variant="outline" className="font-normal text-muted-foreground">
-                +{rest}
-              </Badge>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
-          <div className="flex min-w-0 items-center gap-2">
-            {pendentes > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <ListChecks className="h-3 w-3" /> {pendentes}{" "}
-                {pendentes === 1 ? "pendente" : "pendentes"}
-              </span>
-            )}
-            {emRisco && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-1.5 py-0.5 font-medium text-warning-soft-foreground">
-                <AlertTriangle className="h-3 w-3" /> Em risco
-              </span>
-            )}
-          </div>
-          <span className="shrink-0">
-            Criado em{" "}
-            {new Date(project.createdAt).toLocaleDateString("pt-BR", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
-          </span>
-        </div>
-      </div>
-    </article>
   );
 }
 
@@ -396,6 +281,7 @@ export function ProjectWizard({
     initial?.influencerFeatures ?? DEFAULT_INFLUENCER_FIELDS,
   );
   const [layout, setLayout] = useState<ProjectLayout>(initial?.layout ?? "tabs");
+  const [status, setStatus] = useState<ProjectStatus>(initial?.status ?? DEFAULT_PROJECT_STATUS);
   const [featureQuery, setFeatureQuery] = useState("");
   const [error, setError] = useState("");
   const [step, setStep] = useState<WizardStepKey>("identidade");
@@ -442,6 +328,7 @@ export function ProjectWizard({
     features: FeatureKey[];
     infFeatures: InfluencerFieldKey[];
     layout: ProjectLayout;
+    status: ProjectStatus;
   }) => JSON.stringify(v);
   const baselineRef = useRef(
     snapshotKey({
@@ -451,10 +338,11 @@ export function ProjectWizard({
       features: initial?.features ?? DEFAULT_FEATURES,
       infFeatures: initial?.influencerFeatures ?? DEFAULT_INFLUENCER_FIELDS,
       layout: initial?.layout ?? "tabs",
+      status: initial?.status ?? DEFAULT_PROJECT_STATUS,
     }),
   );
   const isDirty = () =>
-    snapshotKey({ name, description, cover, features, infFeatures, layout }) !==
+    snapshotKey({ name, description, cover, features, infFeatures, layout, status }) !==
     baselineRef.current;
 
   const requestClose = async () => {
@@ -533,6 +421,8 @@ export function ProjectWizard({
         features,
         influencerFeatures: features.includes("influenciadores") ? infFeatures : [],
         layout,
+        status,
+        updatedAt: Date.now(),
         createdAt: initial?.createdAt ?? Date.now(),
         milestones: initial?.milestones ?? [],
         tasks: initial?.tasks ?? [],
@@ -720,6 +610,26 @@ export function ProjectWizard({
                       className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-brand"
                     />
                   </div>
+                  {/* Status só aparece ao editar — um projeto novo sempre
+                   * começa "ativo", sem fricção extra na criação. */}
+                  {initial && (
+                    <div>
+                      <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Status
+                      </label>
+                      <select
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                      >
+                        {(Object.keys(PROJECT_STATUS_LABEL) as ProjectStatus[]).map((s) => (
+                          <option key={s} value={s}>
+                            {PROJECT_STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
 

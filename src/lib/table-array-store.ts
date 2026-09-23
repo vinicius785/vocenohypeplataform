@@ -74,6 +74,7 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
 
   return {
     get: () => cache,
+    isLoaded: () => loaded,
     subscribe: (l: () => void) => {
       listeners.add(l);
       return () => listeners.delete(l);

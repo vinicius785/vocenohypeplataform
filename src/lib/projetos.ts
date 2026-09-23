@@ -413,6 +413,23 @@ export type BlogPost = {
 
 export type ProjectLayout = "tabs" | "single";
 
+/** Status ADMINISTRATIVO do projeto — independente da saúde operacional
+ * (que é calculada, nunca armazenada; ver `computeProjectMetrics` em
+ * `@/components/projetos/projeto-ui`). Campo aditivo: projetos gravados
+ * antes dele existir não têm `status` no JSONB — `loadProjetos()` faz o
+ * fallback pra `"ativo"` na leitura, nunca é necessário migrar/reescrever
+ * os registros existentes. */
+export type ProjectStatus = "ativo" | "pausado" | "concluido" | "arquivado";
+
+export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
+  ativo: "Ativo",
+  pausado: "Pausado",
+  concluido: "Concluído",
+  arquivado: "Arquivado",
+};
+
+export const DEFAULT_PROJECT_STATUS: ProjectStatus = "ativo";
+
 export type Project = {
   id: string;
   name: string;
@@ -422,6 +439,17 @@ export type Project = {
   influencerFeatures?: InfluencerFieldKey[];
   layout?: ProjectLayout;
   createdAt: number;
+  /** Ver `ProjectStatus`. Aditivo — ausente em projetos antigos, tratado
+   * como `"ativo"` na leitura (`loadProjetos()`). */
+  status?: ProjectStatus;
+  /** Última vez que o PRÓPRIO projeto (nome/descrição/status/etc., não
+   * suas tarefas) foi salvo — epoch ms. Aditivo, igual `status`; ausente
+   * em registros antigos, cai pro `createdAt` na leitura. Tarefas têm seu
+   * próprio rastro de atividade (`Task.activity`/`completedAt`) — a
+   * "última atividade" exibida na listagem é o mais recente entre este
+   * campo e a atividade das tarefas, calculado em `projeto-ui.ts`, nunca
+   * armazenado aqui. */
+  updatedAt?: number;
   milestones: Milestone[];
   tasks: Task[];
   docs: DocItem[];
@@ -469,6 +497,8 @@ export function loadProjetos(): Project[] {
   cachedTarefasVersion = tarefasVersion;
   cachedMappedProjetos = raw.map((p) => ({
     ...p,
+    status: p.status ?? DEFAULT_PROJECT_STATUS,
+    updatedAt: p.updatedAt ?? p.createdAt,
     milestones: p.milestones ?? [],
     // Tarefas de projeto viviam dentro do JSONB do projeto inteiro
     // (`p.tasks`) — cada edição regravava o array completo junto com o
@@ -496,6 +526,13 @@ export function onProjetosChange(callback: () => void): () => void {
   };
 }
 
+/** `false` só na primeira renderização, antes de `initProjetosSync()`
+ * (aguardado em `_authenticated/route.tsx`'s `beforeLoad`) resolver —
+ * cobre a listagem pra nunca confundir "carregando" com "0 projetos". */
+export function isProjetosLoaded(): boolean {
+  return projetosStore.isLoaded();
+}
+
 export function getProjeto(id: string): Project | undefined {
   return loadProjetos().find((p) => p.id === id);
 }
@@ -510,6 +547,49 @@ export function upsertProjeto(p: Project) {
 
 export function deleteProjeto(id: string) {
   projetosStore.set((prev) => prev.filter((x) => x.id !== id));
+}
+
+/** Grava o projeto marcando `updatedAt` agora — usar em qualquer edição
+ * do PRÓPRIO projeto (wizard, mudança de status) pra "Atualizado há X"
+ * refletir a edição. Mudanças em tarefas não passam por aqui (elas têm
+ * seu próprio rastro de atividade, lido direto em `projeto-ui.ts`). */
+export function touchProjeto(p: Project): Project {
+  return { ...p, updatedAt: Date.now() };
+}
+
+/** Muda só o status administrativo (pausar/reativar/arquivar/concluir),
+ * sem tocar em mais nada do projeto — ação rápida do menu de três
+ * pontos, não passa pelo wizard. */
+export function setProjetoStatus(id: string, status: ProjectStatus) {
+  const current = getProjeto(id);
+  if (!current) return;
+  upsertProjeto(touchProjeto({ ...current, status }));
+}
+
+/** Duplica a CONFIGURAÇÃO do projeto (nome, capa, descrição,
+ * funcionalidades, navegação) num workspace novo e vazio — não copia
+ * tarefas, marcos, arquivos, roadmap nem conteúdo de nenhuma
+ * funcionalidade. Duplicar um projeto inteiro com todo o histórico de
+ * tarefas seria surpreendente (e pesado); replicar só o "molde" é o
+ * comportamento esperado de "duplicar projeto" e evita arrastar dados
+ * que não fazem sentido fora do contexto original (tarefas atribuídas a
+ * um prazo específico, por exemplo). */
+export function duplicateProjeto(p: Project): Project {
+  return {
+    id: crypto.randomUUID(),
+    name: `${p.name} (cópia)`,
+    cover: p.cover,
+    description: p.description,
+    features: [...p.features],
+    influencerFeatures: p.influencerFeatures ? [...p.influencerFeatures] : undefined,
+    layout: p.layout,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    status: DEFAULT_PROJECT_STATUS,
+    milestones: [],
+    tasks: [],
+    docs: [],
+  };
 }
 
 /* Team members shared with TimeSection (key: time:membros) */
