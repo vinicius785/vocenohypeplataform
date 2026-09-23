@@ -459,30 +459,68 @@ function isoToSaoPauloParts(iso: string): { data: string; hora: string } {
 const LIST_WINDOW_MS_BEFORE = 2 * 24 * 60 * 60_000;
 const LIST_WINDOW_MS_AFTER = 120 * 24 * 60 * 60_000;
 
-async function listGoogleEvents(accessToken: string): Promise<GoogleEvent[]> {
-  const timeMin = new Date(Date.now() - LIST_WINDOW_MS_BEFORE).toISOString();
-  const timeMax = new Date(Date.now() + LIST_WINDOW_MS_AFTER).toISOString();
+type ListGoogleEventsResult = {
+  events: GoogleEvent[];
+  /** `null` quando nenhuma página trouxe um token novo (não deveria
+   * acontecer numa listagem bem-sucedida, mas nunca sobrescreve o token
+   * salvo com `null` por engano — só grava quando um valor real chega). */
+  nextSyncToken: string | null;
+  /** `true` só quando o Google respondeu `410 Gone` pro `syncToken`
+   * enviado — o token antigo não serve mais, quem chamou precisa
+   * invalidar e refazer uma sincronização completa (item 6 do pedido). */
+  tokenInvalid: boolean;
+};
+
+/** Fase C: sincronização incremental de verdade. Com `syncToken`, pede só
+ * o que mudou desde a última chamada (criação, edição, cancelamento) em
+ * vez de relistar a janela inteira do zero a cada ciclo. `showDeleted:
+ * true` faz até exclusões de verdade (não só cancelamentos) aparecerem
+ * como um item `status: "cancelled"` — dispensa o diff manual "sumiu da
+ * lista" que existia antes disso. Sem `syncToken` (primeira vez, ou
+ * depois de um 410), cai pra uma listagem completa da janela
+ * configurada, da qual a ÚLTIMA página já traz o primeiro
+ * `nextSyncToken` pra usar dali em diante. */
+async function listGoogleEvents(
+  accessToken: string,
+  syncToken: string | null,
+): Promise<ListGoogleEventsResult> {
   const events: GoogleEvent[] = [];
   let pageToken: string | undefined;
-  for (let page = 0; page < 5; page++) {
+  let nextSyncToken: string | null = null;
+  for (let page = 0; page < 10; page++) {
     const url = new URL(EVENTS_URL);
-    url.searchParams.set("timeMin", timeMin);
-    url.searchParams.set("timeMax", timeMax);
     url.searchParams.set("singleEvents", "true");
-    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("showDeleted", "true");
     url.searchParams.set("maxResults", "250");
+    // syncToken só na primeira página — páginas seguintes usam só
+    // pageToken. O Google rejeita timeMin/timeMax/orderBy junto de
+    // syncToken, então esses só entram quando não há token nenhum.
+    if (syncToken && !pageToken) {
+      url.searchParams.set("syncToken", syncToken);
+    } else if (!syncToken) {
+      url.searchParams.set("timeMin", new Date(Date.now() - LIST_WINDOW_MS_BEFORE).toISOString());
+      url.searchParams.set("timeMax", new Date(Date.now() + LIST_WINDOW_MS_AFTER).toISOString());
+    }
     if (pageToken) url.searchParams.set("pageToken", pageToken);
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (res.status === 410) {
+      return { events: [], nextSyncToken: null, tokenInvalid: true };
+    }
     if (!res.ok) {
       console.warn("[google-calendar] events.list failed", await res.text());
       break;
     }
-    const json = (await res.json()) as { items?: GoogleEvent[]; nextPageToken?: string };
+    const json = (await res.json()) as {
+      items?: GoogleEvent[];
+      nextPageToken?: string;
+      nextSyncToken?: string;
+    };
     events.push(...(json.items ?? []));
+    if (json.nextSyncToken) nextSyncToken = json.nextSyncToken;
     if (!json.nextPageToken) break;
     pageToken = json.nextPageToken;
   }
-  return events;
+  return { events, nextSyncToken, tokenInvalid: false };
 }
 
 /** Caminho inverso de `syncAllMeetingsToGoogle`: eventos criados DIRETO no
@@ -499,7 +537,7 @@ export async function runImportGoogleEventsToMeetings() {
 
   const { data: connections } = await supabaseAdmin
     .from("google_calendar_connections")
-    .select("user_id, access_token, refresh_token, token_expiry");
+    .select("user_id, access_token, refresh_token, token_expiry, sync_token");
   if (!connections || connections.length === 0)
     return { imported: 0, updated: 0, connected: false as const };
 
@@ -540,20 +578,35 @@ export async function runImportGoogleEventsToMeetings() {
   for (const conn of connections) {
     const accessToken = await getValidAccessToken(supabaseAdmin, conn);
     if (!accessToken) continue;
-    const events = await listGoogleEvents(accessToken);
-    // Ids vistos nesse ciclo pra essa conta — usado depois pra detectar
-    // reuniões cujo evento sumiu do Google (excluído por lá, não só
-    // cancelado) e cancelar do lado da plataforma também.
-    const seen = new Set<string>();
-    const listWindowStart = Date.now() - LIST_WINDOW_MS_BEFORE;
-    const listWindowEnd = Date.now() + LIST_WINDOW_MS_AFTER;
+
+    let { events, nextSyncToken, tokenInvalid } = await listGoogleEvents(
+      accessToken,
+      conn.sync_token,
+    );
+    if (tokenInvalid) {
+      // Fase C, item 6 do pedido: 410 Gone — o syncToken antigo não serve
+      // mais (expirou por inatividade, ou o calendário mudou demais). Log
+      // de recuperação, limpa o token salvo e refaz uma sincronização
+      // completa — nunca duplica, porque o dedupe por `googleEventId`
+      // (abaixo) é o mesmo em qualquer modo.
+      console.warn(
+        `[google-calendar] syncToken expirado (410) pra ${conn.user_id} — refazendo sincronização completa`,
+      );
+      await supabaseAdmin
+        .from("google_calendar_connections")
+        .update({ sync_token: null })
+        .eq("user_id", conn.user_id);
+      ({ events, nextSyncToken, tokenInvalid } = await listGoogleEvents(accessToken, null));
+    }
 
     for (const event of events) {
       // Já é uma reunião da plataforma (foi a própria `syncOneMeeting`
       // que criou esse evento) — nunca reimportar de volta.
       if (event.extendedProperties?.private?.vnhMeetingId) continue;
       // Evento de dia inteiro (só `date`, sem `dateTime`) — Reunião
-      // sempre tem hora, fora de escopo aqui.
+      // sempre tem hora, fora de escopo aqui. Também é o formato de um
+      // tombstone de exclusão (`showDeleted`) de um evento que nunca
+      // tinha `dateTime` pra começo — nada a fazer aqui de qualquer jeito.
       if (!event.start?.dateTime || !event.end?.dateTime) continue;
 
       // `id` é único por OCORRÊNCIA dentro da conta (o que precisamos
@@ -568,7 +621,6 @@ export async function runImportGoogleEventsToMeetings() {
       // mesmo evento fica sem cobertura, uma perda aceitável perto do
       // bug que isso corrige.
       const dedupeKey = event.id;
-      seen.add(dedupeKey);
       const { data: dataStr, hora } = isoToSaoPauloParts(event.start.dateTime);
       const duracao = Math.max(
         1,
@@ -622,7 +674,8 @@ export async function runImportGoogleEventsToMeetings() {
             .from("reunioes")
             .update({ data: next, updated_at: new Date().toISOString() })
             .eq("id", existing.id);
-          updated++;
+          if (cancelled && existing.data.status !== "Cancelada") cancelled_++;
+          else updated++;
         }
         continue;
       }
@@ -667,26 +720,18 @@ export async function runImportGoogleEventsToMeetings() {
       imported++;
     }
 
-    // Reunião cujo evento foi de fato EXCLUÍDO no Google (não só
-    // cancelado — exclusão não aparece como item "cancelled" numa
-    // listagem sem syncToken, só some da lista) — cancela também na
-    // plataforma. Só considera reuniões dentro da mesma janela de tempo
-    // buscada (`listGoogleEvents`), pra não cancelar por engano algo que
-    // nunca poderia aparecer nessa página de resultados.
-    for (const [, row] of byGoogleEventId) {
-      if (row.data.criadorId !== conn.user_id) continue;
-      if (row.data.status === "Cancelada") continue;
-      if (!row.data.googleEventId || seen.has(row.data.googleEventId)) continue;
-      const start = new Date(`${row.data.data}T${row.data.hora}:00-03:00`).getTime();
-      if (start < listWindowStart || start > listWindowEnd) continue;
+    // Fase C: com `showDeleted: true` (`listGoogleEvents`), uma exclusão
+    // de verdade no Google já chega aqui como um item comum com
+    // `status: "cancelled"` — tratado pelo `if (existing) {...}` acima
+    // igual a um cancelamento normal. Não precisa mais de um diff manual
+    // "sumiu da lista" separado (o que também dependia da listagem ser
+    // sempre a janela inteira, incompatível com sincronização
+    // incremental por `syncToken`).
+    if (nextSyncToken) {
       await supabaseAdmin
-        .from("reunioes")
-        .update({
-          data: { ...row.data, status: "Cancelada" },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", row.id);
-      cancelled_++;
+        .from("google_calendar_connections")
+        .update({ sync_token: nextSyncToken })
+        .eq("user_id", conn.user_id);
     }
   }
 

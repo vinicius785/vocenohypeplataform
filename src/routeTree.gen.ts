@@ -41,6 +41,7 @@ import { Route as ApiGoogleOauthCallbackRouteImport } from './routes/api/google/
 import { Route as ApiCronHypitoWeeklyReportRouteImport } from './routes/api/cron/hypito-weekly-report'
 import { Route as ApiCronHypitoDailyBriefingRouteImport } from './routes/api/cron/hypito-daily-briefing'
 import { Route as ApiCronHypitoAlertsRouteImport } from './routes/api/cron/hypito-alerts'
+import { Route as ApiCronGoogleCalendarSyncRouteImport } from './routes/api/cron/google-calendar-sync'
 import { Route as ApiCronEmailFlowsRouteImport } from './routes/api/cron/email-flows'
 import { Route as AuthenticatedProjetoIdRouteImport } from './routes/_authenticated/projeto.$id'
 import { Route as AuthenticatedClientesIdRouteImport } from './routes/_authenticated/clientes.$id'
@@ -216,6 +217,12 @@ const ApiCronHypitoAlertsRoute = ApiCronHypitoAlertsRouteImport.update({
   path: '/api/cron/hypito-alerts',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronGoogleCalendarSyncRoute =
+  ApiCronGoogleCalendarSyncRouteImport.update({
+    id: '/api/cron/google-calendar-sync',
+    path: '/api/cron/google-calendar-sync',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronEmailFlowsRoute = ApiCronEmailFlowsRouteImport.update({
   id: '/api/cron/email-flows',
   path: '/api/cron/email-flows',
@@ -284,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
   '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
   '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
@@ -324,6 +332,7 @@ export interface FileRoutesByTo {
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
   '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
   '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
@@ -367,6 +376,7 @@ export interface FileRoutesById {
   '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
   '/api/cron/email-flows': typeof ApiCronEmailFlowsRoute
+  '/api/cron/google-calendar-sync': typeof ApiCronGoogleCalendarSyncRoute
   '/api/cron/hypito-alerts': typeof ApiCronHypitoAlertsRoute
   '/api/cron/hypito-daily-briefing': typeof ApiCronHypitoDailyBriefingRoute
   '/api/cron/hypito-weekly-report': typeof ApiCronHypitoWeeklyReportRoute
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/clientes/$id'
     | '/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/google-calendar-sync'
     | '/api/cron/hypito-alerts'
     | '/api/cron/hypito-daily-briefing'
     | '/api/cron/hypito-weekly-report'
@@ -450,6 +461,7 @@ export interface FileRouteTypes {
     | '/clientes/$id'
     | '/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/google-calendar-sync'
     | '/api/cron/hypito-alerts'
     | '/api/cron/hypito-daily-briefing'
     | '/api/cron/hypito-weekly-report'
@@ -492,6 +504,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clientes/$id'
     | '/_authenticated/projeto/$id'
     | '/api/cron/email-flows'
+    | '/api/cron/google-calendar-sync'
     | '/api/cron/hypito-alerts'
     | '/api/cron/hypito-daily-briefing'
     | '/api/cron/hypito-weekly-report'
@@ -526,6 +539,7 @@ export interface RootRouteChildren {
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
+  ApiCronGoogleCalendarSyncRoute: typeof ApiCronGoogleCalendarSyncRoute
   ApiCronHypitoAlertsRoute: typeof ApiCronHypitoAlertsRoute
   ApiCronHypitoDailyBriefingRoute: typeof ApiCronHypitoDailyBriefingRoute
   ApiCronHypitoWeeklyReportRoute: typeof ApiCronHypitoWeeklyReportRoute
@@ -761,6 +775,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronHypitoAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/google-calendar-sync': {
+      id: '/api/cron/google-calendar-sync'
+      path: '/api/cron/google-calendar-sync'
+      fullPath: '/api/cron/google-calendar-sync'
+      preLoaderRoute: typeof ApiCronGoogleCalendarSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/email-flows': {
       id: '/api/cron/email-flows'
       path: '/api/cron/email-flows'
@@ -941,6 +962,7 @@ const rootRouteChildren: RootRouteChildren = {
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
+  ApiCronGoogleCalendarSyncRoute: ApiCronGoogleCalendarSyncRoute,
   ApiCronHypitoAlertsRoute: ApiCronHypitoAlertsRoute,
   ApiCronHypitoDailyBriefingRoute: ApiCronHypitoDailyBriefingRoute,
   ApiCronHypitoWeeklyReportRoute: ApiCronHypitoWeeklyReportRoute,

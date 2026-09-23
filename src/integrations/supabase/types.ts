@@ -1331,6 +1331,7 @@ export type Database = {
           last_error: string | null;
           last_synced_at: string | null;
           refresh_token: string;
+          sync_token: string | null;
           token_expiry: string;
           token_invalid: boolean;
           updated_at: string;
@@ -1343,6 +1344,7 @@ export type Database = {
           last_error?: string | null;
           last_synced_at?: string | null;
           refresh_token: string;
+          sync_token?: string | null;
           token_expiry: string;
           token_invalid?: boolean;
           updated_at?: string;
@@ -1355,6 +1357,7 @@ export type Database = {
           last_error?: string | null;
           last_synced_at?: string | null;
           refresh_token?: string;
+          sync_token?: string | null;
           token_expiry?: string;
           token_invalid?: boolean;
           updated_at?: string;
