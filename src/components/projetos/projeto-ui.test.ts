@@ -1,14 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type { Project, Task } from "@/lib/projetos";
+import type { ProjetoFase } from "@/lib/roadmap-engine";
 import {
   computeProjectMetrics,
   countActiveProjectFilters,
   DEFAULT_PROJECT_FILTERS,
   filterProjects,
+  isEncerrado,
   sortProjects,
   statusMenuActions,
   type ProjectFiltersState,
 } from "./projeto-ui";
+
+function fase(overrides: Partial<ProjetoFase> = {}): ProjetoFase {
+  return {
+    id: overrides.id ?? crypto.randomUUID(),
+    nome: "Fase",
+    dataInicio: "2026-01-01",
+    dataFim: "2026-12-31",
+    status: "em_andamento",
+    cor: "chart-1",
+    sortOrder: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -255,10 +272,10 @@ describe("filterProjects", () => {
     expect(r.map((p) => p.id)).toEqual(["2"]);
   });
 
-  it("filtro 'em risco' usa a saúde calculada, não o status administrativo", () => {
+  it("filtro de saúde 'em risco' é independente do status administrativo", () => {
     const r = filterProjects(projetos, metricsById, "", {
       ...DEFAULT_PROJECT_FILTERS,
-      status: "em_risco",
+      health: "em_risco",
     });
     expect(r.map((p) => p.id)).toEqual(["3"]);
   });
@@ -318,18 +335,6 @@ describe("sortProjects", () => {
     expect(r[0].id).toBe("c");
   });
 
-  it("prazo mais próximo (sem prazo vai por último)", () => {
-    const comPrazo = project({
-      id: "d",
-      milestones: [{ id: "m", title: "x", date: daysFromToday(1), done: false }],
-    });
-    const semPrazo = project({ id: "e", milestones: [] });
-    const list = [semPrazo, comPrazo];
-    const metricsById = new Map(list.map((p) => [p.id, computeProjectMetrics(p, [])]));
-    const r = sortProjects(list, metricsById, "prazo");
-    expect(r.map((p) => p.id)).toEqual(["d", "e"]);
-  });
-
   it("maior e menor progresso", () => {
     const alto = project({ id: "f", tasks: [task({ status: "Concluído" })] });
     const baixo = project({
@@ -373,5 +378,47 @@ describe("statusMenuActions", () => {
       canReactivate: true,
       canArchive: false,
     });
+  });
+});
+
+describe("isEncerrado", () => {
+  it("concluído e arquivado contam como encerrados; ativo e pausado não", () => {
+    expect(isEncerrado("concluido")).toBe(true);
+    expect(isEncerrado("arquivado")).toBe(true);
+    expect(isEncerrado("ativo")).toBe(false);
+    expect(isEncerrado("pausado")).toBe(false);
+  });
+});
+
+describe("computeProjectMetrics — fase atual e próxima entrega", () => {
+  it("sem fases cadastradas: sem fase atual, mas cai pro prazo dos marcos", () => {
+    const p = project({
+      milestones: [{ id: "m", title: "Entrega", date: "2026-06-10", done: false }],
+    });
+    const m = computeProjectMetrics(p, [], []);
+    expect(m.currentPhaseLabel).toBeNull();
+    expect(m.nextDeliveryIso).toBe("2026-06-10");
+  });
+
+  it("com fases: usa o nome e o fim da fase atual como próxima entrega", () => {
+    const f1 = fase({ nome: "Descoberta", status: "concluida", sortOrder: 0 });
+    const f2 = fase({
+      nome: "Execução",
+      status: "em_andamento",
+      dataFim: "2026-05-01",
+      sortOrder: 1,
+    });
+    const p = project({ features: ["roadmap"], tasks: [] });
+    const m = computeProjectMetrics(p, [], [f1, f2]);
+    expect(m.currentPhaseLabel).toBe("Execução");
+    expect(m.nextDeliveryIso).toBe("2026-05-01");
+  });
+});
+
+describe("filtro de saúde separado do status administrativo", () => {
+  it("por padrão ('todos') não filtra por saúde", () => {
+    const p = project({ status: "ativo" });
+    const metricsById = new Map([[p.id, computeProjectMetrics(p, [])]]);
+    expect(filterProjects([p], metricsById, "", DEFAULT_PROJECT_FILTERS)).toHaveLength(1);
   });
 });

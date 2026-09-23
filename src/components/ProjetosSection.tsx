@@ -9,6 +9,10 @@ import {
   Check,
   LayoutList,
   LayoutPanelTop,
+  ChevronDown,
+  FolderKanban,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import {
   FEATURES,
@@ -42,10 +46,11 @@ import {
   computeProjectMetrics,
   filterProjects,
   sortProjects,
+  isEncerrado,
   DEFAULT_PROJECT_FILTERS,
   type ProjectFiltersState,
 } from "./projetos/projeto-ui";
-import { SectionHeader } from "./SectionHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -98,10 +103,40 @@ export function ProjetosSection() {
     return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [metricsById]);
 
-  const filtered = useMemo(() => {
-    const byQuery = filterProjects(items, metricsById, query, filters);
-    return sortProjects(byQuery, metricsById, filters.sort);
-  }, [items, metricsById, query, filters]);
+  // Mesma estratégia de "Ver campanhas encerradas" do CampanhasSection:
+  // com um status específico escolhido no filtro, tudo aparece junto na
+  // grade principal (o filtro já deixa explícito o que se quer ver);
+  // sem filtro de status, projetos concluídos/arquivados saem da grade
+  // principal e vão pra uma seção recolhida ao final.
+  const statusFilterActive = filters.status !== "todos";
+  const filteredAll = useMemo(
+    () => filterProjects(items, metricsById, query, filters),
+    [items, metricsById, query, filters],
+  );
+  const [showEncerrados, setShowEncerrados] = useState(false);
+  const encerradosAll = useMemo(
+    () =>
+      statusFilterActive
+        ? []
+        : filteredAll.filter((p) => isEncerrado(p.status ?? DEFAULT_PROJECT_STATUS)),
+    [filteredAll, statusFilterActive],
+  );
+  const encerradosCount = encerradosAll.length;
+  const visibleRows = useMemo(
+    () =>
+      sortProjects(
+        statusFilterActive
+          ? filteredAll
+          : filteredAll.filter((p) => !isEncerrado(p.status ?? DEFAULT_PROJECT_STATUS)),
+        metricsById,
+        filters.sort,
+      ),
+    [filteredAll, statusFilterActive, metricsById, filters.sort],
+  );
+  const encerradosRows = useMemo(
+    () => (showEncerrados ? sortProjects(encerradosAll, metricsById, filters.sort) : []),
+    [showEncerrados, encerradosAll, metricsById, filters.sort],
+  );
 
   const handleSave = (p: Project, isNew: boolean) => {
     setItems((prev) =>
@@ -144,20 +179,52 @@ export function ProjetosSection() {
   };
 
   const hasAnyProject = items.length > 0;
+  const hasResults = visibleRows.length > 0;
   const hasActiveFilters = query.trim().length > 0 || filters !== DEFAULT_PROJECT_FILTERS;
   const clearFilters = () => {
     setQuery("");
     setFilters(DEFAULT_PROJECT_FILTERS);
   };
 
+  const ativosCount = items.filter((p) => (p.status ?? DEFAULT_PROJECT_STATUS) === "ativo").length;
+  const totalCount = items.length;
+  const emRiscoCount = Array.from(metricsById.values()).filter(
+    (m) => m.health === "em_risco",
+  ).length;
+  const tarefasAtrasadasCount = Array.from(metricsById.values()).reduce(
+    (s, m) => s + m.overdueCount,
+    0,
+  );
+
+  const cardHandlers = (p: Project) => ({
+    onOpen: () => navigate({ to: "/projeto/$id", params: { id: p.id } }),
+    onEdit: () => {
+      setEditing(p);
+      setWizardOpen(true);
+    },
+    onDuplicate: () => handleDuplicate(p),
+    onPause: () => handleSetStatus(p, "pausado"),
+    onReactivate: () => handleSetStatus(p, "ativo"),
+    onArchive: () => void handleArchive(p),
+    onDelete: () => void removeProject(p),
+  });
+
   return (
-    <PageContainer className="space-y-6">
-      <SectionHeader
-        title="Projetos"
-        subtitle={`${items.length} ${items.length === 1 ? "projeto" : "projetos"}`}
-        kpis={[]}
-        action={
-          canEdit ? (
+    // Canvas fix — mesma correção já usada em Campanhas/Clientes/Financeiro
+    // (--background e --card são idênticos no tema claro, então sem isso
+    // os cards não se distinguiam do fundo).
+    <div className="-m-4 min-h-[calc(100vh-4rem)] bg-muted p-4 dark:bg-transparent md:-m-8 md:p-8">
+      <PageContainer className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[36px] font-bold leading-[1.05] tracking-tight text-foreground md:text-[42px]">
+              Projetos
+            </p>
+            <p className="mt-1.5 text-sm text-text-secondary">
+              Organize tarefas, fases e entregas do time.
+            </p>
+          </div>
+          {canEdit && (
             <Button
               variant="primary"
               size="comfortable"
@@ -166,91 +233,172 @@ export function ProjetosSection() {
                 setWizardOpen(true);
               }}
             >
-              <Plus className="h-3.5 w-3.5" />
-              Novo projeto
+              <Plus className="h-4 w-4" /> Novo projeto
             </Button>
-          ) : undefined
-        }
-      />
+          )}
+        </div>
 
-      {hasAnyProject && (
-        <ProjetoFiltersBar
-          query={query}
-          onQueryChange={setQuery}
-          filters={filters}
-          onFiltersChange={setFilters}
-          responsaveis={responsaveis}
-        />
-      )}
+        {hasAnyProject && (
+          <div className="rounded-[24px] bg-brand p-5 dark:shadow-none md:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+              <div className="shrink-0">
+                <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
+                  Projetos ativos
+                </span>
+                <p className="mt-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[46px] md:text-[52px]">
+                  {ativosCount}
+                </p>
+              </div>
 
-      {!loaded ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[290px] animate-pulse rounded-xl border border-border bg-card"
-            >
-              <div className="h-[150px] w-full rounded-t-xl bg-muted" />
+              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 lg:justify-end">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <FolderKanban className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Total de projetos
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {totalCount}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <AlertTriangle className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Em risco
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {emRiscoCount}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
+                    <Clock className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
+                      Tarefas atrasadas
+                    </p>
+                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
+                      {tarefasAtrasadasCount}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-background p-12 text-center">
-          <p className="text-sm text-muted-foreground">
-            {!hasAnyProject ? "Nenhum projeto ainda." : "Nenhum resultado para estes filtros."}
-          </p>
-          {!hasAnyProject && canEdit && (
-            <button
-              onClick={() => setWizardOpen(true)}
-              className="mt-3 text-xs font-medium text-brand hover:underline"
-            >
-              Criar o primeiro projeto
-            </button>
-          )}
-          {hasAnyProject && hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="mt-3 text-xs font-medium text-brand hover:underline"
-            >
-              Limpar filtros
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((p) => (
-            <ProjectCard
-              key={p.id}
-              project={p}
-              metrics={metricsById.get(p.id)!}
-              canEdit={canEdit}
-              onOpen={() => navigate({ to: "/projeto/$id", params: { id: p.id } })}
-              onEdit={() => {
-                setEditing(p);
-                setWizardOpen(true);
-              }}
-              onDuplicate={() => handleDuplicate(p)}
-              onPause={() => handleSetStatus(p, "pausado")}
-              onReactivate={() => handleSetStatus(p, "ativo")}
-              onArchive={() => void handleArchive(p)}
-              onDelete={() => void removeProject(p)}
-            />
-          ))}
-        </div>
-      )}
+          </div>
+        )}
 
-      {wizardOpen && (
-        <ProjectWizard
-          initial={editing}
-          onClose={() => {
-            setWizardOpen(false);
-            setEditing(null);
-          }}
-          onSave={handleSave}
-        />
-      )}
-      {confirmDialog}
-    </PageContainer>
+        {hasAnyProject && (
+          <ProjetoFiltersBar
+            query={query}
+            onQueryChange={setQuery}
+            filters={filters}
+            onFiltersChange={setFilters}
+            responsaveis={responsaveis}
+          />
+        )}
+
+        {!loaded ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[124px] animate-pulse rounded-[20px] border border-transparent bg-card"
+              />
+            ))}
+          </div>
+        ) : !hasAnyProject ? (
+          <EmptyState
+            icon={<FolderKanban className="h-5 w-5" />}
+            title="Nenhum projeto cadastrado ainda"
+            description="Crie o primeiro projeto para organizar tarefas, fases e entregas do time."
+            primaryAction={
+              canEdit
+                ? {
+                    label: "Novo projeto",
+                    onClick: () => {
+                      setEditing(null);
+                      setWizardOpen(true);
+                    },
+                  }
+                : undefined
+            }
+          />
+        ) : !hasResults ? (
+          <EmptyState
+            icon={<FolderKanban className="h-5 w-5" />}
+            title="Nenhum projeto encontrado"
+            description="Ajuste a busca ou os filtros para ver outros projetos."
+            secondaryAction={
+              hasActiveFilters ? { label: "Limpar filtros", onClick: clearFilters } : undefined
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {visibleRows.map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                metrics={metricsById.get(p.id)!}
+                canEdit={canEdit}
+                {...cardHandlers(p)}
+              />
+            ))}
+          </div>
+        )}
+
+        {encerradosCount > 0 && (
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setShowEncerrados((v) => !v)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-medium text-brand hover:underline"
+            >
+              {showEncerrados
+                ? "Ocultar projetos encerrados"
+                : `Ver projetos encerrados (${encerradosCount})`}
+              <ChevronDown
+                className={`h-3.5 w-3.5 transition-transform ${showEncerrados ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            {showEncerrados && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {encerradosRows.map((p) => (
+                  <ProjectCard
+                    key={p.id}
+                    project={p}
+                    metrics={metricsById.get(p.id)!}
+                    canEdit={canEdit}
+                    neutral
+                    {...cardHandlers(p)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {wizardOpen && (
+          <ProjectWizard
+            initial={editing}
+            onClose={() => {
+              setWizardOpen(false);
+              setEditing(null);
+            }}
+            onSave={handleSave}
+          />
+        )}
+        {confirmDialog}
+      </PageContainer>
+    </div>
   );
 }
 

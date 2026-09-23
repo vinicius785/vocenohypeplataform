@@ -6,8 +6,10 @@ import { FEATURES } from "@/lib/projetos";
 import {
   type ProjectFiltersState,
   type ProjectStatusFilter,
+  type ProjectHealthFilter,
   PROJECT_SORT_LABEL,
   PROJECT_STATUS_FILTER_LABEL,
+  PROJECT_HEALTH_FILTER_LABEL,
   DEFAULT_PROJECT_FILTERS,
   countActiveProjectFilters,
 } from "./projeto-ui";
@@ -16,23 +18,23 @@ const pillCls = (active: boolean) =>
   `rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
     active
       ? "border-foreground bg-foreground text-background"
-      : "border-border text-muted-foreground hover:bg-muted"
+      : "border-border text-text-secondary hover:bg-muted"
   }`;
 
 const STATUS_OPTIONS: ProjectStatusFilter[] = [
   "todos",
   "ativo",
-  "em_risco",
   "pausado",
   "concluido",
   "arquivado",
 ];
+const HEALTH_OPTIONS: ProjectHealthFilter[] = ["todos", "saudavel", "atencao", "em_risco"];
 
 /**
- * Busca + filtros + ordenação da listagem de Projetos, unificados numa
- * barra compacta — mesma estrutura já aprovada em `ClienteFiltersBar`/
- * `CampanhaFiltersBar` (Popover de filtros com badge de contagem, Popover
- * de ordenação, chips removíveis abaixo só quando há filtro ativo).
+ * Busca + filtros + ordenação da listagem de Projetos — mesma estrutura
+ * já aprovada em `CampanhaFiltersBar`/`ClienteFiltersBar` (Popover de
+ * filtros com badge de contagem, Popover de ordenação, chips removíveis
+ * abaixo só quando há filtro ativo).
  */
 export function ProjetoFiltersBar({
   query,
@@ -53,11 +55,11 @@ export function ProjetoFiltersBar({
     <div className="rounded-2xl bg-card p-3 dark:shadow-none">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Buscar por nome ou descrição"
+            placeholder="Buscar por projeto, descrição ou responsável..."
             className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand"
           />
         </div>
@@ -81,14 +83,14 @@ export function ProjetoFiltersBar({
                 type="button"
                 disabled={activeCount === 0}
                 onClick={() => onFiltersChange(DEFAULT_PROJECT_FILTERS)}
-                className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
+                className="text-[11px] text-text-secondary hover:text-foreground disabled:opacity-40"
               >
                 Limpar
               </button>
             </div>
 
             <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Status</p>
+              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Status</p>
               <div className="flex flex-wrap gap-1">
                 {STATUS_OPTIONS.map((v) => (
                   <button
@@ -104,7 +106,23 @@ export function ProjetoFiltersBar({
             </div>
 
             <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Funcionalidade</p>
+              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Saúde</p>
+              <div className="flex flex-wrap gap-1">
+                {HEALTH_OPTIONS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => onFiltersChange({ ...filters, health: v })}
+                    className={pillCls(filters.health === v)}
+                  >
+                    {PROJECT_HEALTH_FILTER_LABEL[v]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Funcionalidade</p>
               <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
                 <button
                   type="button"
@@ -128,7 +146,7 @@ export function ProjetoFiltersBar({
 
             {responsaveis.length > 0 && (
               <div>
-                <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Responsável</p>
+                <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Responsável</p>
                 <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
                   <button
                     type="button"
@@ -169,7 +187,7 @@ export function ProjetoFiltersBar({
                 className={`block w-full rounded-md px-2 py-1.5 text-left text-xs ${
                   filters.sort === k
                     ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60"
+                    : "text-text-secondary hover:bg-muted/60"
                 }`}
               >
                 {PROJECT_SORT_LABEL[k]}
@@ -198,6 +216,15 @@ function ProjetoFilterChips({
             id: "status",
             label: PROJECT_STATUS_FILTER_LABEL[filters.status],
             onRemove: () => onChange({ ...filters, status: "todos" as const }),
+          },
+        ]
+      : []),
+    ...(filters.health !== "todos"
+      ? [
+          {
+            id: "health",
+            label: PROJECT_HEALTH_FILTER_LABEL[filters.health],
+            onRemove: () => onChange({ ...filters, health: "todos" as const }),
           },
         ]
       : []),
@@ -241,7 +268,7 @@ function ProjetoFilterChips({
       <button
         type="button"
         onClick={() => onChange(DEFAULT_PROJECT_FILTERS)}
-        className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        className="text-[11px] font-medium text-text-secondary hover:text-foreground"
       >
         Limpar filtros
       </button>

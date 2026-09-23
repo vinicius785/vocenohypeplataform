@@ -22,6 +22,16 @@ import { getTaskAssignees, loadTeamMembers } from "@/lib/projetos";
 import { OPEN_STATUSES } from "@/lib/score";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import { timeAgo } from "@/components/metas/metas-ui-utils";
+import { loadProjetoFases } from "@/lib/projeto-scoped-store";
+import { faseAtual, type ProjetoFase } from "@/lib/roadmap-engine";
+import type { Task as BoardTask } from "@/components/tasks/TaskBoard";
+
+/** Projeto "encerrado" — concluído ou arquivado. Usado tanto pra recolher
+ * esses projetos numa seção separada (mesmo padrão de "Ver campanhas
+ * encerradas") quanto pra excluí-los da grade principal por padrão. */
+export function isEncerrado(status: ProjectStatus): boolean {
+  return status === "concluido" || status === "arquivado";
+}
 
 /** Ícone por funcionalidade — usado tanto no card quanto no wizard
  * (`ProjetosSection.tsx`), um lugar só pra não divergir. */
@@ -61,11 +71,13 @@ export const PROJECT_HEALTH_BADGE_VARIANT: Record<ProjectHealth, "success" | "wa
     em_risco: "danger",
   };
 
+/** Mesma linguagem de badge de status já usada em `CampanhaCard.tsx`
+ * (success/secondary/outline) — Projetos não inventa uma paleta própria. */
 export const PROJECT_STATUS_BADGE_VARIANT: Record<
   ProjectStatus,
-  "brand" | "secondary" | "outline"
+  "success" | "secondary" | "outline"
 > = {
-  ativo: "brand",
+  ativo: "success",
   pausado: "secondary",
   concluido: "outline",
   arquivado: "outline",
@@ -117,6 +129,24 @@ function projectDeadlineIso(project: Project): string | null {
   const datas = project.milestones.map((m) => m.date).filter(Boolean);
   if (datas.length === 0) return null;
   return [...datas].sort().at(-1) ?? null;
+}
+
+/** Fase atual do roadmap (`faseAtual`, já existente em
+ * `roadmap-engine.ts`) e a data de fim dessa fase, tratada como "próxima
+ * entrega" — mesma fonte de verdade usada dentro do próprio projeto, não
+ * uma segunda leitura inventada aqui. `null`/`null` quando o projeto não
+ * usa Roadmap ou todas as fases já estão concluídas. */
+function deriveCurrentPhase(
+  fases: ProjetoFase[],
+  tasks: Task[],
+): { label: string | null; deliveryIso: string | null } {
+  if (fases.length === 0) return { label: null, deliveryIso: null };
+  // Mesmo cast já usado no antigo `ProjectCard` (`score.ts`/`roadmap-engine.ts`
+  // tipam `Task` a partir de `TaskBoard.tsx`, estruturalmente idêntico ao
+  // `Task` desta store — ver comentário em `roadmap-engine.ts`).
+  const atual = faseAtual(fases, tasks as unknown as BoardTask[]);
+  if (!atual) return { label: null, deliveryIso: null };
+  return { label: atual.nome, deliveryIso: atual.dataFim || null };
 }
 
 function taskLastActivityMs(t: Task): number {
@@ -232,11 +262,18 @@ export type ProjectMetrics = {
   health: ProjectHealth | null;
   principal: ProjectPerson | null;
   participantes: ProjectPerson[];
+  /** Nome da fase atual do roadmap, ou `null` se o projeto não usa
+   * Roadmap/todas as fases já terminaram — exibir "Sem fase atual". */
+  currentPhaseLabel: string | null;
+  /** "Próxima entrega" mostrada no rodapé do card — fim da fase atual
+   * quando existe, senão o prazo derivado dos marcos (`deadlineIso`). */
+  nextDeliveryIso: string | null;
 };
 
 export function computeProjectMetrics(
   project: Project,
   team: TeamMemberLite[] = loadTeamMembers(),
+  fases: ProjetoFase[] = loadProjetoFases(project.id),
 ): ProjectMetrics {
   const tasks = project.tasks ?? [];
   const today = todayIsoInBrasilia();
@@ -249,6 +286,11 @@ export function computeProjectMetrics(
   const deadlineIso = projectDeadlineIso(project);
   const lastActivityMs = projectLastActivityMs(project, tasks);
   const { principal, participantes } = deriveResponsibility(tasks, team);
+  const { label: currentPhaseLabel, deliveryIso: phaseDeliveryIso } = deriveCurrentPhase(
+    fases,
+    tasks,
+  );
+  const nextDeliveryIso = phaseDeliveryIso ?? deadlineIso;
   const status: ProjectStatus = project.status ?? "ativo";
   const health =
     status === "ativo"
@@ -279,6 +321,8 @@ export function computeProjectMetrics(
     health,
     principal,
     participantes,
+    currentPhaseLabel,
+    nextDeliveryIso,
   };
 }
 
@@ -287,21 +331,25 @@ export function computeProjectMetrics(
  * `CampanhaFiltersState`.
  * ============================================================ */
 
-export type ProjectStatusFilter =
-  | "todos"
-  | "ativo"
-  | "em_risco"
-  | "pausado"
-  | "concluido"
-  | "arquivado";
+export type ProjectStatusFilter = "todos" | ProjectStatus;
 
 export const PROJECT_STATUS_FILTER_LABEL: Record<ProjectStatusFilter, string> = {
   todos: "Todos",
-  ativo: "Ativos",
+  ativo: "Ativo",
+  pausado: "Pausado",
+  concluido: "Concluído",
+  arquivado: "Arquivado",
+};
+
+/** Saúde é um filtro à parte do status administrativo — um projeto pode
+ * estar "ativo" e "em risco" ao mesmo tempo, são dimensões diferentes. */
+export type ProjectHealthFilter = "todos" | ProjectHealth;
+
+export const PROJECT_HEALTH_FILTER_LABEL: Record<ProjectHealthFilter, string> = {
+  todos: "Todas",
+  saudavel: "Saudável",
+  atencao: "Atenção",
   em_risco: "Em risco",
-  pausado: "Pausados",
-  concluido: "Concluídos",
-  arquivado: "Arquivados",
 };
 
 export type ProjectSortKey =
@@ -309,7 +357,6 @@ export type ProjectSortKey =
   | "criados"
   | "nome"
   | "atrasadas"
-  | "prazo"
   | "progresso_desc"
   | "progresso_asc";
 
@@ -318,13 +365,13 @@ export const PROJECT_SORT_LABEL: Record<ProjectSortKey, string> = {
   criados: "Criados recentemente",
   nome: "Nome (A–Z)",
   atrasadas: "Mais tarefas atrasadas",
-  prazo: "Prazo mais próximo",
   progresso_desc: "Maior progresso",
   progresso_asc: "Menor progresso",
 };
 
 export type ProjectFiltersState = {
   status: ProjectStatusFilter;
+  health: ProjectHealthFilter;
   responsavel: string | "todos";
   feature: FeatureKey | "todas";
   sort: ProjectSortKey;
@@ -332,6 +379,7 @@ export type ProjectFiltersState = {
 
 export const DEFAULT_PROJECT_FILTERS: ProjectFiltersState = {
   status: "todos",
+  health: "todos",
   responsavel: "todos",
   feature: "todas",
   sort: "atualizados",
@@ -340,6 +388,7 @@ export const DEFAULT_PROJECT_FILTERS: ProjectFiltersState = {
 export function countActiveProjectFilters(f: ProjectFiltersState): number {
   let n = 0;
   if (f.status !== "todos") n += 1;
+  if (f.health !== "todos") n += 1;
   if (f.responsavel !== "todos") n += 1;
   if (f.feature !== "todas") n += 1;
   return n;
@@ -361,11 +410,8 @@ export function filterProjects(
     if (!matchesSearch(p, query)) return false;
     const status: ProjectStatus = p.status ?? "ativo";
     const metrics = metricsById.get(p.id);
-    if (filters.status === "em_risco") {
-      if (metrics?.health !== "em_risco") return false;
-    } else if (filters.status !== "todos" && status !== filters.status) {
-      return false;
-    }
+    if (filters.status !== "todos" && status !== filters.status) return false;
+    if (filters.health !== "todos" && metrics?.health !== filters.health) return false;
     if (filters.feature !== "todas" && !p.features?.includes(filters.feature)) return false;
     if (filters.responsavel !== "todos") {
       const nomes = [
@@ -394,16 +440,6 @@ export function sortProjects(
       break;
     case "atrasadas":
       sorted.sort((a, b) => (metricsOf(b)?.overdueCount ?? 0) - (metricsOf(a)?.overdueCount ?? 0));
-      break;
-    case "prazo":
-      sorted.sort((a, b) => {
-        const da = metricsOf(a)?.deadlineIso;
-        const db = metricsOf(b)?.deadlineIso;
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return da.localeCompare(db);
-      });
       break;
     case "progresso_desc":
       sorted.sort((a, b) => (metricsOf(b)?.progressPct ?? -1) - (metricsOf(a)?.progressPct ?? -1));
