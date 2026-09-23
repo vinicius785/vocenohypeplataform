@@ -100,11 +100,35 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
           // enquanto a aba estava em segundo plano), isso força o refresh
           // ANTES da escrita, em vez de mandar a requisição com um JWT
           // vencido e RLS recusar silenciosamente (0 linhas, sem erro).
+          //
+          // Update (não upsert) quando o item já existia localmente: um
+          // `INSERT ... ON CONFLICT DO UPDATE` valida constraints NOT NULL
+          // da linha proposta ANTES de resolver o conflito — colunas que
+          // este store nunca envia (ex.: `clientes.organization_id`,
+          // adicionada em 2026-09-18 como NOT NULL) fazem toda EDIÇÃO de um
+          // registro já existente falhar com "null value ... violates
+          // not-null constraint", mesmo a linha já tendo um valor válido
+          // ali (bug real, encontrado em produção: nenhuma edição de
+          // cliente/campanha salvava desde aquela migração). Um `UPDATE`
+          // de verdade só toca as colunas listadas, então nunca dispara
+          // essa validação em colunas que não estamos mudando. Itens
+          // realmente novos (sem `prevItem`) continuam via `upsert` — para
+          // tabelas com uma coluna NOT NULL adicional não coberta aqui
+          // (hoje, só `clientes.organization_id`), CRIAR continua exigindo
+          // o fluxo dedicado ainda não construído (ver comentário na
+          // migração `20260918160000`: "dedicated server functions in
+          // phase 2, not raw RLS UPDATE") — não é regressão desta correção.
           void supabase.auth.getSession().then(() =>
-            supabase
-              .from(table)
-              .upsert({ id: item.id, data: item, updated_at: new Date().toISOString() })
-              // `.select("id")` é o único jeito de saber se o upsert pegou
+            (prevItem
+              ? supabase
+                  .from(table)
+                  .update({ data: item, updated_at: new Date().toISOString() })
+                  .eq("id", item.id)
+              : supabase
+                  .from(table)
+                  .upsert({ id: item.id, data: item, updated_at: new Date().toISOString() })
+            )
+              // `.select("id")` é o único jeito de saber se a escrita pegou
               // alguma linha: RLS bloqueando não gera `error` nenhum — o
               // Postgrest responde 200 com 0 linhas afetadas.
               .select("id")
