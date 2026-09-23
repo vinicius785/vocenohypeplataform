@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Lead } from "./comercial";
 import { OPPORTUNITY_KANBAN_ORDER } from "./comercial-engine";
 import {
@@ -197,6 +197,12 @@ describe("leadsNeedingActionToday / leadsAtRisk / leadsClosestToClosing", () => 
 
 describe("computeComercialPriorities — lista única, sem duplicar oportunidade, ordenada por gravidade", () => {
   it("classifica cada motivo de gravidade corretamente", () => {
+    // Horário fixo ao meio-dia de Brasília — nunca perto de uma virada de
+    // dia (nem em UTC nem em Brasília), pra "hoje + 2h" nunca escorregar
+    // pra amanhã por coincidência de horário real do teste rodando perto
+    // da meia-noite (já causou flake nesta suíte antes).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T15:00:00.000Z")); // 12:00 em Brasília
     const vencida = lead({
       id: "vencida",
       stage: "REUNIAO_AGENDADA",
@@ -238,6 +244,7 @@ describe("computeComercialPriorities — lista única, sem duplicar oportunidade
     expect(byId.get("proximos")).toBe("proximos_dias");
     expect(byId.has("ok")).toBe(false);
     expect(byId.has("ganho")).toBe(false);
+    vi.useRealTimers();
   });
 
   it("nunca lista a mesma oportunidade duas vezes, mesmo com vários problemas simultâneos", () => {

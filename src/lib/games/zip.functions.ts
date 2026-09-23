@@ -1,38 +1,31 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import {
-  getDailyPuzzle,
-  validateZipPath,
-  validateZipPartialPath,
-  nextExpectedCell,
-  todayZipKey,
-  type ZipCell,
-  type ZipPuzzle,
-} from "./zip-game";
+import { getDailyZipChallenge, validateZipChallenge, ZIP_CHALLENGE_VERSION } from "./zip/challenge";
+import { applyZipMove, undoZipMove, nextHintCell, ZIP_ENGINE_VERSION } from "./zip/engine";
+import { ZIP_INITIAL_STATE, type Cell, type ZipChallenge, type ZipState } from "./zip/types";
+import { checkSessionCompatibility, computeElapsedSeconds } from "./shared/session";
+import { todayIsoInBrasilia } from "@/lib/timezone";
 
 /**
  * ZIP — sessão diária persistida em `daily_game_sessions`
- * (`game_type='zip'`), única por `user_id + game_type + challenge_date`
- * (constraint do banco). Correção desta rodada: a sessão só é CRIADA na
- * primeira jogada real (`saveZipProgress`/`submitZipCompletion`) — nunca
- * mais no simples GET (`getZipSession`), que antes inseria uma linha só
- * por o modal ter sido aberto. O estado (`not_started`/`in_progress`/
- * `won`) é sempre um campo explícito da resposta, nunca inferido só pela
- * linha existir.
+ * (`game_type='zip'`), única por `user_id + game_type + challenge_date`.
+ * Reconstrução desta rodada: `challenge_version`/`engine_version` são
+ * comparados a CADA leitura (`checkSessionCompatibility`) antes de
+ * restaurar qualquer coisa — uma sessão de uma versão anterior nunca é
+ * renderizada, é tratada como inexistente e uma nova (`not_started`)
+ * é oferecida no lugar. `applyZipMove`/`undoZipMove`/`nextHintCell`
+ * (motor puro) são o ÚNICO caminho de mudança de estado — o servidor
+ * nunca aceita um `path` inteiro arbitrário do cliente sem revalidar
+ * jogada a jogada a partir do estado anterior conhecido.
  */
 
-export type ZipStatus = "not_started" | "in_progress" | "won";
-
 export type ZipSessionPublic = {
-  puzzle: ZipPuzzle;
-  status: ZipStatus;
-  path: ZipCell[];
-  /** Timestamp ISO persistido do início real — fonte de verdade do
-   * cronômetro (nunca um contador local que reseta ao reabrir). */
+  challenge: ZipChallenge;
+  state: ZipState;
   startedAt: string | null;
   completedAt: string | null;
-  elapsedSeconds: number | null;
+  elapsedSeconds: number;
   hintsUsed: number;
 };
 
@@ -41,249 +34,287 @@ function devLog(...args: unknown[]) {
   if (DEV) console.info("[zip]", ...args);
 }
 
-function toPublic(
-  puzzle: ZipPuzzle,
-  row: {
-    state: unknown;
-    started_at: string | null;
-    completed_at: string | null;
-    elapsed_seconds: number | null;
-    hints_used: number;
-  } | null,
-): ZipSessionPublic {
-  if (!row) {
-    return {
-      puzzle,
-      status: "not_started",
-      path: [],
-      startedAt: null,
-      completedAt: null,
-      elapsedSeconds: null,
-      hintsUsed: 0,
-    };
+function todayChallenge(): ZipChallenge {
+  const dateKey = todayIsoInBrasilia();
+  const challenge = getDailyZipChallenge(dateKey);
+  const validation = validateZipChallenge(challenge);
+  if (!validation.valid) {
+    // Nunca deveria acontecer (a geração garante solubilidade por
+    // construção), mas se acontecer nunca abrimos uma partida quebrada —
+    // registra o erro e falha alto a barulho em vez de servir um
+    // tabuleiro inválido.
+    console.error("[zip] desafio do dia reprovado na validação", dateKey, validation.errors);
+    throw new Error("Não foi possível carregar o desafio de hoje.");
   }
-  const path = ((row.state as { path?: ZipCell[] } | null)?.path ?? []) as ZipCell[];
-  const status: ZipStatus = row.completed_at
-    ? "won"
-    : path.length > 0
-      ? "in_progress"
-      : "not_started";
+  return challenge;
+}
+
+type SessionRow = {
+  id: string;
+  state: unknown;
+  started_at: string | null;
+  completed_at: string | null;
+  elapsed_seconds: number | null;
+  resumed_at: string | null;
+  hints_used: number;
+  challenge_id: string;
+  challenge_version: number | null;
+  engine_version: number | null;
+};
+
+function rowToState(row: SessionRow | null): ZipState {
+  if (!row) return ZIP_INITIAL_STATE;
+  const state = row.state as Partial<ZipState> | null;
+  if (!state || !Array.isArray(state.path)) return ZIP_INITIAL_STATE;
   return {
-    puzzle,
-    status,
-    path,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    elapsedSeconds: row.elapsed_seconds,
-    hintsUsed: row.hints_used,
+    path: state.path as Cell[],
+    expectedNumber: typeof state.expectedNumber === "number" ? state.expectedNumber : 1,
+    status: row.completed_at ? "won" : state.path.length > 0 ? "in_progress" : "not_started",
   };
 }
 
-const cellSchema = z.object({ r: z.number().int().min(0), c: z.number().int().min(0) });
-
-/** Só LÊ — nunca cria linha no banco. Abrir e fechar o modal sem jogar
- * nunca gera uma partida "em andamento". */
 export const getZipSession = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const challengeDate = todayZipKey();
-    const puzzle = getDailyPuzzle(challengeDate);
-
-    const { data: existing, error } = await context.supabase
+    const challenge = todayChallenge();
+    const { data: row, error } = await context.supabase
       .from("daily_game_sessions")
-      .select("state, started_at, completed_at, elapsed_seconds, hints_used")
+      .select(
+        "id, state, started_at, completed_at, elapsed_seconds, resumed_at, hints_used, challenge_id, challenge_version, engine_version",
+      )
       .eq("game_type", "zip")
-      .eq("challenge_date", challengeDate)
+      .eq("challenge_date", challenge.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    devLog("getZipSession", { challengeDate, hasRow: !!existing });
-    return toPublic(puzzle, existing ?? null);
-  });
 
-const saveProgressSchema = z.object({ path: z.array(cellSchema) });
-
-/** Grava o caminho em progresso — só aqui (e em `submitZipCompletion`) a
- * linha é criada, na primeira vez que `path.length > 0`. Valida o
- * caminho recebido no servidor (`validateZipPartialPath`) antes de
- * aceitar — nunca confia cegamente no array mandado pelo cliente. */
-export const saveZipProgress = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof saveProgressSchema>) => saveProgressSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const challengeDate = todayZipKey();
-    const puzzle = getDailyPuzzle(challengeDate);
-    if (!validateZipPartialPath(puzzle, data.path)) {
-      devLog("saveZipProgress: caminho parcial inválido rejeitado", data.path);
-      throw new Error("Movimento inválido.");
-    }
-
-    const { data: existing, error: fetchErr } = await context.supabase
-      .from("daily_game_sessions")
-      .select("id, started_at, completed_at")
-      .eq("game_type", "zip")
-      .eq("challenge_date", challengeDate)
-      .maybeSingle();
-    if (fetchErr) throw new Error(fetchErr.message);
-    if (existing?.completed_at) return { ok: true };
-
-    if (!existing) {
-      if (data.path.length === 0) return { ok: true }; // nada a persistir ainda
-      const { error } = await context.supabase.from("daily_game_sessions").insert({
-        user_id: context.userId,
-        game_type: "zip",
-        challenge_date: challengeDate,
-        challenge_id: challengeDate,
-        state: { path: data.path } as never,
-        started_at: new Date().toISOString(),
-      } as never);
-      // 23505 = corrida (outra aba criou entre o SELECT e este INSERT) —
-      // idempotente, só tenta o UPDATE em seguida.
-      if (error && error.code !== "23505") throw new Error(error.message);
-      if (!error) {
-        devLog("saveZipProgress: sessão criada na primeira jogada", { challengeDate });
-        return { ok: true };
+    if (row) {
+      const compat = checkSessionCompatibility(row, {
+        challengeId: challenge.id,
+        challengeVersion: ZIP_CHALLENGE_VERSION,
+        engineVersion: ZIP_ENGINE_VERSION,
+      });
+      if (!compat.compatible) {
+        devLog("sessão incompatível — tratada como inexistente", compat);
+        // Nunca tenta renderizar; nunca deixa o usuário preso em "em
+        // andamento" com um estado que o motor atual não reconhece.
+        return {
+          challenge,
+          state: ZIP_INITIAL_STATE,
+          startedAt: null,
+          completedAt: null,
+          elapsedSeconds: 0,
+          hintsUsed: 0,
+        } satisfies ZipSessionPublic;
       }
     }
 
-    const patch: Record<string, unknown> = { state: { path: data.path } };
-    if (!existing?.started_at && data.path.length > 0) patch.started_at = new Date().toISOString();
+    const state = rowToState(row as SessionRow | null);
+    const elapsedSeconds = computeElapsedSeconds({
+      status: state.status,
+      accumulatedSeconds: row?.elapsed_seconds ?? 0,
+      resumedAt: row?.resumed_at ?? null,
+      now: Date.now(),
+    });
+    devLog("getZipSession", { challengeId: challenge.id, status: state.status, elapsedSeconds });
+    return {
+      challenge,
+      state,
+      startedAt: row?.started_at ?? null,
+      completedAt: row?.completed_at ?? null,
+      elapsedSeconds,
+      hintsUsed: row?.hints_used ?? 0,
+    } satisfies ZipSessionPublic;
+  });
+
+const cellSchema = z.object({ row: z.number().int().min(0), column: z.number().int().min(0) });
+
+async function fetchCompatibleRow(
+  supabase: import("@supabase/supabase-js").SupabaseClient,
+  challengeId: string,
+): Promise<SessionRow | null> {
+  const { data: row, error } = await supabase
+    .from("daily_game_sessions")
+    .select(
+      "id, state, started_at, completed_at, elapsed_seconds, resumed_at, hints_used, challenge_id, challenge_version, engine_version, attempts",
+    )
+    .eq("game_type", "zip")
+    .eq("challenge_date", challengeId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) return null;
+  const compat = checkSessionCompatibility(row as SessionRow, {
+    challengeId,
+    challengeVersion: ZIP_CHALLENGE_VERSION,
+    engineVersion: ZIP_ENGINE_VERSION,
+  });
+  return compat.compatible ? (row as SessionRow) : null;
+}
+
+const moveSchema = z.object({ target: cellSchema });
+
+/**
+ * Um único movimento por chamada — nunca um `path` inteiro mandado pelo
+ * cliente. O servidor sempre revalida a partir do ÚLTIMO ESTADO
+ * CONHECIDO DELE MESMO (nunca do que o cliente afirma ser o estado
+ * atual), então uma chamada fora de ordem/duplicada nunca corrompe o
+ * caminho — na pior hipótese, é rejeitada como movimento inválido contra
+ * o estado real.
+ */
+export const applyZipMoveAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.infer<typeof moveSchema>) => moveSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const challenge = todayChallenge();
+    const existing = await fetchCompatibleRow(context.supabase, challenge.id);
+    const currentState = rowToState(existing);
+    const result = applyZipMove(challenge, currentState, data.target);
+    devLog("applyZipMoveAction", { target: data.target, result });
+    if (!result.ok) {
+      return { ok: false as const, error: result.error, state: currentState };
+    }
+
+    const nowIso = new Date().toISOString();
+    if (!existing) {
+      const { error } = await context.supabase.from("daily_game_sessions").insert({
+        user_id: context.userId,
+        game_type: "zip",
+        challenge_date: challenge.id,
+        challenge_id: challenge.id,
+        challenge_version: ZIP_CHALLENGE_VERSION,
+        engine_version: ZIP_ENGINE_VERSION,
+        state: result.state as never,
+        started_at: nowIso,
+        resumed_at: nowIso,
+        elapsed_seconds: 0,
+        completed_at: result.state.status === "won" ? nowIso : null,
+        attempts: result.state.status === "won" ? 1 : 0,
+      } as never);
+      if (error) throw new Error(error.message);
+    } else {
+      const patch: Record<string, unknown> = {
+        state: result.state,
+        challenge_version: ZIP_CHALLENGE_VERSION,
+        engine_version: ZIP_ENGINE_VERSION,
+      };
+      if (!existing.started_at) patch.started_at = nowIso;
+      if (!existing.resumed_at) patch.resumed_at = nowIso; // retomou de uma pausa
+      if (result.state.status === "won") {
+        const accumulated = computeElapsedSeconds({
+          status: "in_progress",
+          accumulatedSeconds: existing.elapsed_seconds ?? 0,
+          resumedAt: existing.resumed_at ?? nowIso,
+          now: Date.now(),
+        });
+        patch.elapsed_seconds = accumulated;
+        patch.resumed_at = null;
+        patch.completed_at = nowIso;
+      }
+      const { error } = await context.supabase
+        .from("daily_game_sessions")
+        .update(patch as never)
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    }
+
+    if (result.state.status === "won") {
+      const { error: resultErr } = await context.supabase.from("zip_daily_results").insert({
+        user_id: context.userId,
+        date_key: challenge.id,
+        time_ms:
+          computeElapsedSeconds({
+            status: "won",
+            accumulatedSeconds: existing?.elapsed_seconds ?? 0,
+            resumedAt: existing?.resumed_at ?? nowIso,
+            now: Date.now(),
+          }) * 1000,
+        moves: result.state.path.length,
+      } as never);
+      if (resultErr && resultErr.code !== "23505") {
+        console.warn("[zip] falha ao salvar resultado final", resultErr);
+      }
+    }
+
+    return { ok: true as const, state: result.state };
+  });
+
+/** Pausa o cronômetro (chamado ao fechar o modal) — soma o trecho corrente
+ * ao acumulado e limpa `resumed_at`. Idempotente: chamar de novo sem
+ * `resumed_at` setado não faz nada. */
+export const pauseZipTimer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const challenge = todayChallenge();
+    const existing = await fetchCompatibleRow(context.supabase, challenge.id);
+    if (!existing || !existing.resumed_at || existing.completed_at) return { ok: true };
+    const accumulated = computeElapsedSeconds({
+      status: "in_progress",
+      accumulatedSeconds: existing.elapsed_seconds ?? 0,
+      resumedAt: existing.resumed_at,
+      now: Date.now(),
+    });
     const { error } = await context.supabase
       .from("daily_game_sessions")
-      .update(patch as never)
-      .eq("game_type", "zip")
-      .eq("challenge_date", challengeDate)
-      .eq("user_id", context.userId);
+      .update({ elapsed_seconds: accumulated, resumed_at: null } as never)
+      .eq("id", existing.id);
     if (error) throw new Error(error.message);
-    devLog("saveZipProgress", { challengeDate, pathLength: data.path.length });
+    devLog("pauseZipTimer", { accumulated });
     return { ok: true };
   });
 
-/** "Reiniciar" — só permitido enquanto não concluído (o desafio diário
- * nunca é reiniciável depois de vencido). Apaga a linha em vez de
- * zerá-la: o próximo movimento real recria do zero, mesma regra de
- * "sessão só nasce na primeira jogada" usada em todo o resto. */
+/** "Reiniciar" — só permitido enquanto não concluído. Apaga a linha; o
+ * próximo movimento real recria do zero. */
 export const resetZipProgress = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const challengeDate = todayZipKey();
+    const challenge = todayChallenge();
     const { error } = await context.supabase
       .from("daily_game_sessions")
       .delete()
       .eq("game_type", "zip")
-      .eq("challenge_date", challengeDate)
+      .eq("challenge_date", challenge.id)
       .eq("user_id", context.userId)
       .is("completed_at", null);
     if (error) throw new Error(error.message);
-    devLog("resetZipProgress", { challengeDate });
+    devLog("resetZipProgress", { challengeId: challenge.id });
     return { ok: true };
   });
 
-const submitSchema = z.object({
-  path: z.array(cellSchema),
-  elapsedSeconds: z.number().int().min(0),
-});
-
-export const submitZipCompletion = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof submitSchema>) => submitSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const challengeDate = todayZipKey();
-    const puzzle = getDailyPuzzle(challengeDate);
-    const valid = validateZipPath(puzzle, data.path);
-    devLog("submitZipCompletion: validação", {
-      challengeDate,
-      valid,
-      pathLength: data.path.length,
-    });
-    if (!valid) throw new Error("Caminho inválido — a solução não confere.");
-
-    const { data: existing, error: fetchErr } = await context.supabase
-      .from("daily_game_sessions")
-      .select("id, completed_at, attempts")
-      .eq("game_type", "zip")
-      .eq("challenge_date", challengeDate)
-      .maybeSingle();
-    if (fetchErr) throw new Error(fetchErr.message);
-    if (existing?.completed_at) return { ok: true, alreadyCompleted: true };
-
-    const nowIso = new Date().toISOString();
-    if (existing) {
-      const { error } = await context.supabase
-        .from("daily_game_sessions")
-        .update({
-          state: { path: data.path } as never,
-          completed_at: nowIso,
-          elapsed_seconds: data.elapsedSeconds,
-          attempts: (existing.attempts ?? 0) + 1,
-        } as never)
-        .eq("id", existing.id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { error } = await context.supabase.from("daily_game_sessions").insert({
-        user_id: context.userId,
-        game_type: "zip",
-        challenge_date: challengeDate,
-        challenge_id: challengeDate,
-        state: { path: data.path } as never,
-        started_at: nowIso,
-        completed_at: nowIso,
-        elapsed_seconds: data.elapsedSeconds,
-        attempts: 1,
-      } as never);
-      if (error && error.code !== "23505") throw new Error(error.message);
-    }
-
-    // Resultado final (tempo) — reaproveita a tabela antiga, já com RLS e
-    // unique(user_id, date_key). Falha silenciosa em duplicata (corrida),
-    // nunca quebra a conclusão do jogo por causa disso.
-    const { error: resultErr } = await context.supabase.from("zip_daily_results").insert({
-      user_id: context.userId,
-      date_key: challengeDate,
-      time_ms: data.elapsedSeconds * 1000,
-      moves: data.path.length,
-    } as never);
-    if (resultErr && resultErr.code !== "23505") {
-      console.warn("[zip] falha ao salvar resultado final", resultErr);
-    }
-
-    devLog("submitZipCompletion: concluído", {
-      challengeDate,
-      elapsedSeconds: data.elapsedSeconds,
-    });
-    return { ok: true, alreadyCompleted: false };
-  });
-
-const hintSchema = z.object({ path: z.array(cellSchema) });
-
-/** Dica — revela só o próximo movimento esperado, nunca a solução
- * inteira. Incrementa `hints_used` só quando já existe uma sessão real
- * (pedir dica antes do primeiro movimento não conta como jogada e não
- * cria sessão sozinha). */
+/** Dica — revela só o próximo movimento esperado (via o mesmo motor de
+ * jogada, nunca uma segunda lógica de adjacência), incrementa
+ * `hints_used`. */
 export const useZipHint = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: z.infer<typeof hintSchema>) => hintSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const challengeDate = todayZipKey();
-    const puzzle = getDailyPuzzle(challengeDate);
-    if (!validateZipPartialPath(puzzle, data.path)) {
-      throw new Error("Caminho atual inválido.");
-    }
-    const hint = nextExpectedCell(puzzle, data.path);
-    devLog("useZipHint", { challengeDate, hint, pathLength: data.path.length });
-
-    if (data.path.length > 0) {
-      const { data: existing } = await context.supabase
+  .handler(async ({ context }) => {
+    const challenge = todayChallenge();
+    const existing = await fetchCompatibleRow(context.supabase, challenge.id);
+    const state = rowToState(existing);
+    const hint = nextHintCell(challenge, state);
+    devLog("useZipHint", { hint });
+    if (existing) {
+      await context.supabase
         .from("daily_game_sessions")
-        .select("id, hints_used")
-        .eq("game_type", "zip")
-        .eq("challenge_date", challengeDate)
-        .maybeSingle();
-      if (existing) {
-        await context.supabase
-          .from("daily_game_sessions")
-          .update({ hints_used: (existing.hints_used ?? 0) + 1 } as never)
-          .eq("id", existing.id);
-      }
+        .update({ hints_used: (existing.hints_used ?? 0) + 1 } as never)
+        .eq("id", existing.id);
     }
     return { hint };
+  });
+
+/** Desfazer — recalcula o estado a partir do último conhecido pelo
+ * servidor (`undoZipMove`), nunca aceita um `path` alternativo do
+ * cliente. */
+export const undoZipMoveAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const challenge = todayChallenge();
+    const existing = await fetchCompatibleRow(context.supabase, challenge.id);
+    if (!existing) return { state: ZIP_INITIAL_STATE };
+    const currentState = rowToState(existing);
+    const nextState = undoZipMove(challenge, currentState);
+    const { error } = await context.supabase
+      .from("daily_game_sessions")
+      .update({ state: nextState } as never)
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+    devLog("undoZipMoveAction", { nextState });
+    return { state: nextState };
   });

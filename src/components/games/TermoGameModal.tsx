@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Delete, Loader2, Share2 } from "lucide-react";
+import { Delete, HelpCircle, Loader2, Share2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,19 +11,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  getTermoSession,
-  submitTermoGuess,
-  type TermoSessionPublic,
-} from "@/lib/games/termo.functions";
+import { IconButton } from "@/components/ui/icon-button";
+import { getTermoSession, submitTermoGuess } from "@/lib/games/termo.functions";
 import {
   TERMO_WORD_LENGTH,
   TERMO_MAX_ATTEMPTS,
   keyboardLetterStates,
   buildShareText,
   type LetterState,
-} from "@/lib/games/termo-game";
-import { normalizeWord } from "@/lib/games/termo-words";
+} from "@/lib/games/termo/engine";
+import { normalizePortugueseWord } from "@/lib/games/shared/normalize";
 
 const DEV = import.meta.env.DEV;
 function devLog(...args: unknown[]) {
@@ -39,11 +36,12 @@ const STATE_CLASS: Record<LetterState, string> = {
 };
 
 /**
- * Termo — modal do jogo. Correções desta rodada: `status` explícito
- * (`not_started`/`in_progress`/`won`/`lost`) vindo do servidor — nunca
- * mais derivado de `finished`/`won` soltos; abrir o modal sem tentar
- * nunca cria sessão (`getTermoSession` só lê); mensagens de erro
- * exatamente como especificado; modal maior (largura ~520px).
+ * Termo — modal do jogo. Reconstrução desta rodada: dicionário real
+ * (`termo/dictionary.ts`, 1000+ palavras — antes ~116 hand-picked nem
+ * sequer incluíam "TERMO"/"PEITO"), `submitTermoGuess` devolve
+ * `{accepted:false, reason:"not_in_dictionary"}` explícito em vez de
+ * lançar erro genérico, sessão com `engine_version` comparado antes de
+ * restaurar. Ajuda e um resumo mínimo de estatísticas do dia.
  */
 export function TermoGameModal({
   open,
@@ -63,6 +61,7 @@ export function TermoGameModal({
   const [current, setCurrent] = useState("");
   const [error, setError] = useState("");
   const [shared, setShared] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const guesses = data?.guesses ?? [];
   const status = data?.status ?? "not_started";
@@ -70,16 +69,26 @@ export function TermoGameModal({
 
   const submitMutation = useMutation({
     mutationFn: (word: string) => submitFn({ data: { word } }),
-    onSuccess: (result: TermoSessionPublic) => {
-      queryClient.setQueryData(["termo-session"], result);
+    onSuccess: (result) => {
+      if (!result.accepted) {
+        setError("Palavra não encontrada.");
+        devLog("tentativa rejeitada", result.reason);
+        return;
+      }
+      queryClient.setQueryData(["termo-session"], {
+        guesses: result.guesses,
+        attempts: result.attempts,
+        status: result.status,
+        answer: result.answer,
+      });
       setCurrent("");
       setError("");
       devLog("tentativa aceita", result);
     },
     onError: (e) => {
-      const message = e instanceof Error ? e.message : "Não foi possível enviar a tentativa.";
-      setError(message);
-      devLog("tentativa rejeitada", message);
+      setError(
+        e instanceof Error ? e.message : "Não foi possível salvar seu progresso. Tente novamente.",
+      );
     },
   });
 
@@ -87,7 +96,7 @@ export function TermoGameModal({
 
   const handleSubmit = () => {
     if (finished || submitMutation.isPending) return;
-    if (normalizeWord(current).length !== TERMO_WORD_LENGTH) {
+    if (normalizePortugueseWord(current).length !== TERMO_WORD_LENGTH) {
       setError("Digite uma palavra de 5 letras.");
       return;
     }
@@ -113,7 +122,7 @@ export function TermoGameModal({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Enter") handleKey("ENTER");
       else if (e.key === "Backspace") handleKey("BACK");
-      else if (/^[a-zA-ZçÇ]$/.test(e.key)) handleKey(normalizeWord(e.key));
+      else if (/^[a-zA-ZçÇ]$/.test(e.key)) handleKey(normalizePortugueseWord(e.key));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -148,10 +157,38 @@ export function TermoGameModal({
         mobileFullScreen
         className="flex max-h-[92vh] w-[92vw] max-w-[520px] flex-col items-center overflow-y-auto"
       >
-        <DialogHeader className="w-full text-center">
-          <DialogTitle>Termo</DialogTitle>
-          <DialogDescription>Descubra a palavra de 5 letras em até 6 tentativas.</DialogDescription>
+        <DialogHeader className="w-full flex-row items-center justify-between space-y-0 text-center">
+          <div className="text-left">
+            <DialogTitle>Termo</DialogTitle>
+            <DialogDescription>
+              Descubra a palavra de 5 letras em até 6 tentativas.
+            </DialogDescription>
+          </div>
+          <IconButton label="Ajuda" tone="neutral" onClick={() => setShowHelp((v) => !v)}>
+            <HelpCircle className="h-4 w-4" />
+          </IconButton>
         </DialogHeader>
+
+        {showHelp && (
+          <div className="relative mb-2 w-full rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => setShowHelp(false)}
+              aria-label="Fechar ajuda"
+              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+            <p className="mb-1 font-medium text-foreground">Como jogar</p>
+            <ul className="list-disc space-y-1 pl-4">
+              <li>Adivinhe a palavra em até 6 tentativas.</li>
+              <li>Verde: letra certa, posição certa.</li>
+              <li>Amarelo: letra existe, posição errada.</li>
+              <li>Cinza: letra não está na palavra.</li>
+              <li>Uma palavra nova por dia, igual pra todo mundo.</li>
+            </ul>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center py-10">
@@ -159,7 +196,7 @@ export function TermoGameModal({
           </div>
         ) : isError ? (
           <p className="py-10 text-center text-sm text-danger">
-            Não foi possível carregar o desafio de hoje. Tente novamente.
+            Não foi possível carregar o jogo agora.
           </p>
         ) : (
           <>
@@ -205,7 +242,8 @@ export function TermoGameModal({
                   </p>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Volte amanhã para um novo desafio.
+                  {guesses.length} tentativa{guesses.length === 1 ? "" : "s"} · volte amanhã para um
+                  novo desafio.
                 </p>
                 <Button
                   size="sm"

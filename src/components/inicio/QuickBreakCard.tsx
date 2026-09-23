@@ -54,7 +54,7 @@ export function QuickBreakCard() {
     queryFn: () => getTermoSessionFn(),
   });
 
-  const zip = zipLabel(zipData?.status);
+  const zip = zipLabel(zipData?.state.status);
   const termo = termoLabel(termoData?.status);
 
   return (

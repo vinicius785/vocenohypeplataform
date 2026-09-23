@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Undo2, Lightbulb, RotateCcw, ChevronDown } from "lucide-react";
+import { Loader2, Undo2, Lightbulb, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +11,20 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import { useConfirm } from "@/hooks/use-confirm";
-import { isWallBetween, isValidStep, type ZipCell, type ZipPuzzle } from "@/lib/games/zip-game";
+import { cellsEqual, hasWallBetween, type Cell } from "@/lib/games/zip/types";
 import {
   getZipSession,
-  saveZipProgress,
-  submitZipCompletion,
+  applyZipMoveAction,
+  undoZipMoveAction,
   resetZipProgress,
+  pauseZipTimer,
   useZipHint,
   type ZipSessionPublic,
 } from "@/lib/games/zip.functions";
@@ -27,11 +34,10 @@ function devLog(...args: unknown[]) {
   if (DEV) console.info("[zip:ui]", ...args);
 }
 
-const CELL = 52; // px — célula grande o bastante pro toque, tabuleiro maior (pedido explícito).
+const CELL = 52; // px — célula grande o bastante pro toque.
 const GAP = 4;
 const STEP = CELL + GAP;
-const cellKey = (c: ZipCell) => `${c.r},${c.c}`;
-const cellEq = (a: ZipCell, b: ZipCell) => a.r === b.r && a.c === b.c;
+const cellEq = cellsEqual;
 
 function fmtTime(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));
@@ -40,23 +46,30 @@ function fmtTime(totalSeconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function center(cell: ZipCell): { x: number; y: number } {
-  return { x: cell.c * STEP + CELL / 2, y: cell.r * STEP + CELL / 2 };
+function center(cell: Cell): { x: number; y: number } {
+  return { x: cell.column * STEP + CELL / 2, y: cell.row * STEP + CELL / 2 };
 }
 
+const MOVE_ERROR_MESSAGE: Record<string, string> = {
+  must_start_at_one: "Comece pelo número 1.",
+  not_adjacent: "Mova-se só entre células vizinhas.",
+  wall_blocked: "Há uma parede nesse caminho.",
+  already_visited: "Essa célula já foi visitada.",
+  wrong_number: "Esse número está fora de ordem.",
+  outside_grid: "Fora do tabuleiro.",
+  invalid_state: "Não foi possível processar o movimento.",
+};
+
 /**
- * ZIP — modal do jogo. Correções desta rodada (auditoria de bugs, não só
- * visual):
- * - `startedAt`/`status` vêm sempre do servidor (nunca inferidos só pela
- *   linha existir) — o cronômetro usa esse timestamp persistido como
- *   fonte de verdade, nunca só um contador local que zera ao reabrir.
- * - Sessão só é criada na primeira jogada real (`saveZipProgress`) —
- *   abrir e fechar o modal nunca marca "em andamento".
- * - Nenhum destaque de foco aparece antes de qualquer interação (bug
- *   anterior: o anel de foco padrão em (0,0) coincidia visualmente com o
- *   checkpoint numerado que caísse ali).
- * - Caminho e paredes desenhados via SVG (linha real conectando centros
- *   de célula), não só células coloridas soltas.
+ * ZIP — modal do jogo. Reconstrução completa: nenhum evento de
+ * ponteiro/teclado decide sozinho se um movimento é válido — todo
+ * movimento é enviado ao servidor (`applyZipMoveAction`, que usa o
+ * mesmo motor puro `applyZipMove`) e o componente só renderiza o
+ * resultado. O caminho é desenhado como trilha (SVG) com os NÚMEROS
+ * numa camada acima dela (nunca mais escondidos pelo preenchimento), e
+ * o cronômetro vem sempre de `elapsedSeconds` calculado no servidor a
+ * partir de tempo acumulado + retomada (nunca `now - started_at` corrido
+ * desde uma sessão antiga).
  */
 export function ZipGameModal({
   open,
@@ -67,9 +80,10 @@ export function ZipGameModal({
 }) {
   const queryClient = useQueryClient();
   const getSessionFn = useServerFn(getZipSession);
-  const saveProgressFn = useServerFn(saveZipProgress);
-  const submitFn = useServerFn(submitZipCompletion);
+  const moveFn = useServerFn(applyZipMoveAction);
+  const undoFn = useServerFn(undoZipMoveAction);
   const resetFn = useServerFn(resetZipProgress);
+  const pauseFn = useServerFn(pauseZipTimer);
   const hintFn = useServerFn(useZipHint);
   const { confirm, confirmDialog } = useConfirm();
 
@@ -77,58 +91,69 @@ export function ZipGameModal({
     queryKey: ["zip-session"],
     queryFn: () => getSessionFn(),
   });
-  const puzzle: ZipPuzzle | undefined = data?.puzzle;
 
-  const [path, setPath] = useState<ZipCell[]>([]);
-  const [syncedFromServer, setSyncedFromServer] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
-  const [showInstructions, setShowInstructions] = useState(false);
-  const [hintCell, setHintCell] = useState<ZipCell | null>(null);
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [hintCell, setHintCell] = useState<Cell | null>(null);
+  const [pendingMove, setPendingMove] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const activePointerId = useRef<number | null>(null);
   const flashTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionLoadedAt = useRef<number>(Date.now());
 
-  // Sincroniza com o servidor uma única vez por sessão de abertura — nunca
-  // sobrescreve um path que o usuário já está desenhando localmente.
-  useEffect(() => {
-    if (!data || syncedFromServer) return;
-    setPath(data.path);
-    setSyncedFromServer(true);
-    devLog("sessão carregada", { status: data.status, pathLength: data.path.length });
-  }, [data, syncedFromServer]);
+  const challenge = data?.challenge;
+  const status = data?.state.status ?? "not_started";
+  const path = useMemo(() => data?.state.path ?? [], [data?.state.path]);
+  const expectedNumber = data?.state.expectedNumber ?? 1;
 
-  // Cronômetro: `startedAt` persistido é a fonte de verdade. Enquanto em
-  // progresso e o modal aberto, só re-renderiza a cada segundo pra
-  // recalcular `elapsed` a partir do timestamp real — nunca acumula
-  // localmente (sobrevive a fechar/reabrir/atualizar a página sem perder
-  // nem reiniciar o tempo).
+  // Cronômetro: enquanto `in_progress`, o valor exibido é a base vinda do
+  // servidor (`data.elapsedSeconds`, calculada no momento do GET a partir
+  // do acumulado + retomada) + os segundos reais que se passaram DESDE
+  // que essa resposta chegou — nunca um recálculo contra `startedAt` de
+  // uma sessão antiga.
   useEffect(() => {
-    if (!open || !data?.startedAt || data.status !== "in_progress") return;
+    if (!open || status !== "in_progress") return;
     const iv = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(iv);
-  }, [open, data?.startedAt, data?.status]);
+  }, [open, status]);
 
   const elapsed = useMemo(() => {
-    if (data?.status === "won") return data.elapsedSeconds ?? 0;
-    if (!data?.startedAt) return 0;
-    return Math.floor((now - new Date(data.startedAt).getTime()) / 1000);
-  }, [data?.startedAt, data?.status, data?.elapsedSeconds, now]);
+    if (!data) return 0;
+    if (status !== "in_progress") return data.elapsedSeconds;
+    const sinceLoad = Math.floor((now - sessionLoadedAt.current) / 1000);
+    return data.elapsedSeconds + Math.max(0, sinceLoad);
+  }, [data, status, now]);
 
-  const saveMutation = useMutation({
-    mutationFn: (p: ZipCell[]) => saveProgressFn({ data: { path: p } }),
+  useEffect(() => {
+    sessionLoadedAt.current = Date.now();
+    setNow(Date.now());
+  }, [data?.elapsedSeconds]);
+
+  // Pausa o cronômetro no servidor ao fechar o modal (soma o trecho
+  // corrente ao acumulado); retomado automaticamente no próximo
+  // movimento válido (o servidor seta `resumed_at` de novo).
+  useEffect(() => {
+    if (open) return;
+    void pauseFn().catch(() => {
+      /* best-effort — não bloqueia o fechamento por causa disso */
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useEffect(() => {
+    return () => {
+      void pauseFn().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const moveMutation = useMutation({
+    mutationFn: (target: Cell) => moveFn({ data: { target } }),
     onError: () => setSaveError(true),
-    onSuccess: () => setSaveError(false),
   });
-  const submitMutation = useMutation({
-    mutationFn: (input: { path: ZipCell[]; elapsedSeconds: number }) => submitFn({ data: input }),
-  });
+  const undoMutation = useMutation({ mutationFn: () => undoFn() });
   const resetMutation = useMutation({ mutationFn: () => resetFn() });
-  const hintMutation = useMutation({ mutationFn: (p: ZipCell[]) => hintFn({ data: { path: p } }) });
-
-  const visited = useMemo(() => new Set(path.map(cellKey)), [path]);
+  const hintMutation = useMutation({ mutationFn: () => hintFn() });
 
   const flashInvalid = (message: string) => {
     setInvalidMessage(message);
@@ -136,61 +161,55 @@ export function ZipGameModal({
     flashTimeout.current = setTimeout(() => setInvalidMessage(null), 1600);
   };
 
-  const persistPath = (next: ZipCell[]) => {
-    setPath(next);
-    // Otimista: reflete localmente já; se o servidor invalidar mais
-    // adiante, a próxima leitura de `data` corrige (nunca finge sucesso
-    // silenciosamente — `saveError` mostra aviso).
-    void saveMutation.mutateAsync(next).then(() => {
+  const tryMove = async (target: Cell) => {
+    if (!challenge || status === "won" || pendingMove) return;
+    setPendingMove(true);
+    setSaveError(false);
+    try {
+      const result = await moveMutation.mutateAsync(target);
+      if (!result.ok) {
+        flashInvalid(MOVE_ERROR_MESSAGE[result.error] ?? "Movimento inválido.");
+        devLog("movimento rejeitado", result.error);
+        return;
+      }
+      devLog("movimento aceito", target, result.state);
       queryClient.setQueryData(["zip-session"], (prev: ZipSessionPublic | undefined) =>
         prev
           ? {
               ...prev,
-              path: next,
-              status: next.length > 0 ? "in_progress" : "not_started",
-              startedAt: prev.startedAt ?? (next.length > 0 ? new Date().toISOString() : null),
+              state: result.state,
+              startedAt: prev.startedAt ?? new Date().toISOString(),
+              completedAt:
+                result.state.status === "won" ? new Date().toISOString() : prev.completedAt,
             }
           : prev,
       );
-    });
+      if (result.state.status === "won") {
+        toast.success("ZIP concluído!");
+        queryClient.invalidateQueries({ queryKey: ["zip-session"] });
+      }
+    } catch {
+      setSaveError(true);
+      toast.error("Não foi possível salvar seu progresso. Tente novamente.");
+    } finally {
+      setPendingMove(false);
+    }
   };
 
-  const tryExtend = (cell: ZipCell) => {
-    if (!puzzle || data?.status === "won") return;
-    setHasInteracted(true);
-    if (path.length === 0) {
-      if (!cellEq(cell, puzzle.checkpoints[0])) {
-        flashInvalid("Comece pelo número 1.");
-        devLog("tentativa de início inválida", cell);
-        return;
-      }
-      devLog("iniciado no número 1", cell);
-      persistPath([cell]);
-      return;
+  const handleUndo = async () => {
+    if (path.length === 0 || pendingMove) return;
+    setPendingMove(true);
+    try {
+      const result = await undoMutation.mutateAsync();
+      queryClient.setQueryData(["zip-session"], (prev: ZipSessionPublic | undefined) =>
+        prev ? { ...prev, state: result.state } : prev,
+      );
+      setHintCell(null);
+    } catch {
+      toast.error("Não foi possível desfazer. Tente novamente.");
+    } finally {
+      setPendingMove(false);
     }
-    const last = path[path.length - 1];
-    if (!isValidStep(puzzle, last, cell, visited)) {
-      if (isWallBetween(puzzle, last, cell)) flashInvalid("Há uma parede nesse caminho.");
-      devLog("movimento rejeitado (geometria/parede/repetição)", { from: last, to: cell });
-      return;
-    }
-    const cpIdx = puzzle.checkpoints.findIndex((cp) => cellEq(cp, cell));
-    if (cpIdx !== -1) {
-      const nextCpIdx = puzzle.checkpoints.findIndex((cp) => !visited.has(cellKey(cp)));
-      if (cpIdx !== nextCpIdx) {
-        flashInvalid(`Esse é o número ${cpIdx + 1} — o próximo precisa ser o ${nextCpIdx + 1}.`);
-        devLog("número fora de ordem", { tentativa: cpIdx + 1, esperado: nextCpIdx + 1 });
-        return;
-      }
-    }
-    devLog("movimento aceito", cell);
-    persistPath([...path, cell]);
-  };
-
-  const handleUndo = () => {
-    if (path.length === 0) return;
-    persistPath(path.slice(0, -1));
-    setHintCell(null);
   };
 
   const handleRestart = async () => {
@@ -202,7 +221,6 @@ export function ZipGameModal({
     }
     try {
       await resetMutation.mutateAsync();
-      setPath([]);
       setHintCell(null);
       queryClient.invalidateQueries({ queryKey: ["zip-session"] });
       devLog("reiniciado");
@@ -213,7 +231,7 @@ export function ZipGameModal({
 
   const handleHint = async () => {
     try {
-      const { hint } = await hintMutation.mutateAsync(path);
+      const { hint } = await hintMutation.mutateAsync();
       if (!hint) {
         toast.info("Esse caminho criou uma região sem saída — desfaça um trecho.");
         return;
@@ -225,38 +243,21 @@ export function ZipGameModal({
     }
   };
 
-  const cellFromPoint = (x: number, y: number): ZipCell | null => {
+  const cellFromPoint = (x: number, y: number): Cell | null => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
     const attr = el?.closest("[data-zip-cell]")?.getAttribute("data-zip-cell");
     if (!attr) return null;
-    const [r, c] = attr.split(",").map(Number);
-    return { r, c };
+    const [row, column] = attr.split(",").map(Number);
+    return { row, column };
   };
 
-  // Conclusão — checagem local só decide QUANDO chamar o servidor; a
-  // validação de verdade (`submitZipCompletion`) sempre roda no servidor.
-  useEffect(() => {
-    if (!puzzle || data?.status === "won") return;
-    const total = puzzle.size * puzzle.size;
-    if (path.length !== total) return;
-    void submitMutation
-      .mutateAsync({ path, elapsedSeconds: elapsed })
-      .then((result) => {
-        queryClient.invalidateQueries({ queryKey: ["zip-session"] });
-        if (!result.alreadyCompleted) toast.success("ZIP concluído!");
-      })
-      .catch(() => {
-        toast.error("Não foi possível salvar sua conclusão. Tente novamente.");
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, puzzle, data?.status]);
-
-  const [focusCell, setFocusCell] = useState<ZipCell | null>(null);
+  const [focusCell, setFocusCell] = useState<Cell | null>(null);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!puzzle) return;
+    if (!challenge) return;
     if (e.key === "Backspace") {
       e.preventDefault();
-      handleUndo();
+      void handleUndo();
       return;
     }
     if (e.key.toLowerCase() === "r") {
@@ -269,30 +270,39 @@ export function ZipGameModal({
       void handleHint();
       return;
     }
-    const deltas: Record<string, ZipCell> = {
-      ArrowUp: { r: -1, c: 0 },
-      ArrowDown: { r: 1, c: 0 },
-      ArrowLeft: { r: 0, c: -1 },
-      ArrowRight: { r: 0, c: 1 },
+    const deltas: Record<string, Cell> = {
+      ArrowUp: { row: -1, column: 0 },
+      ArrowDown: { row: 1, column: 0 },
+      ArrowLeft: { row: 0, column: -1 },
+      ArrowRight: { row: 0, column: 1 },
     };
-    const current = focusCell ?? puzzle.checkpoints[0];
+    const current = focusCell ?? challenge.numberedCells[0].cell;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
+      setHasInteracted(true);
       setFocusCell(current);
-      tryExtend(current);
+      void tryMove(current);
       return;
     }
     const d = deltas[e.key];
     if (!d) return;
     e.preventDefault();
-    const next = { r: current.r + d.r, c: current.c + d.c };
-    if (next.r < 0 || next.r >= puzzle.size || next.c < 0 || next.c >= puzzle.size) return;
+    setHasInteracted(true);
+    const next = { row: current.row + d.row, column: current.column + d.column };
+    if (
+      next.row < 0 ||
+      next.row >= challenge.rows ||
+      next.column < 0 ||
+      next.column >= challenge.columns
+    ) {
+      return;
+    }
     setFocusCell(next);
   };
 
   if (!open) return null;
 
-  const boardPixelSize = puzzle ? puzzle.size * STEP - GAP : 0;
+  const boardPixelSize = challenge ? challenge.rows * STEP - GAP : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -313,7 +323,7 @@ export function ZipGameModal({
           </span>
         </DialogHeader>
 
-        {isLoading || !puzzle ? (
+        {isLoading || !challenge ? (
           <div className="flex flex-1 items-center justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
@@ -333,14 +343,15 @@ export function ZipGameModal({
                 onPointerDown={(e) => {
                   const cell = cellFromPoint(e.clientX, e.clientY);
                   if (!cell) return;
+                  setHasInteracted(true);
                   activePointerId.current = e.pointerId;
                   boardRef.current?.setPointerCapture(e.pointerId);
-                  tryExtend(cell);
+                  void tryMove(cell);
                 }}
                 onPointerMove={(e) => {
-                  if (activePointerId.current !== e.pointerId) return;
+                  if (activePointerId.current !== e.pointerId || pendingMove) return;
                   const cell = cellFromPoint(e.clientX, e.clientY);
-                  if (cell) tryExtend(cell);
+                  if (cell) void tryMove(cell);
                 }}
                 onPointerUp={(e) => {
                   if (activePointerId.current === e.pointerId) {
@@ -355,72 +366,39 @@ export function ZipGameModal({
                 style={{ width: boardPixelSize + 16, height: boardPixelSize + 16 }}
               >
                 <div className="relative" style={{ width: boardPixelSize, height: boardPixelSize }}>
-                  {Array.from({ length: puzzle.size * puzzle.size }, (_, i) => {
-                    const r = Math.floor(i / puzzle.size);
-                    const c = i % puzzle.size;
-                    const cell = { r, c };
-                    const cpIdx = puzzle.checkpoints.findIndex((cp) => cp.r === r && cp.c === c);
-                    const isVisited = visited.has(cellKey(cell));
-                    const isHint = hintCell ? cellEq(hintCell, cell) : false;
-                    const isNextStart = path.length === 0 && cpIdx === 0;
+                  {/* Camada 1: fundo/grade das células (neutro — nunca
+                   * preenchido sólido de cor de marca, só a trilha (SVG,
+                   * camada 4) indica visita). */}
+                  {Array.from({ length: challenge.rows * challenge.columns }, (_, i) => {
+                    const row = Math.floor(i / challenge.columns);
+                    const column = i % challenge.columns;
                     return (
                       <div
-                        key={cellKey(cell)}
-                        data-zip-cell={`${r},${c}`}
-                        role="gridcell"
-                        aria-label={
-                          cpIdx !== -1
-                            ? `Célula ${r},${c}, número ${cpIdx + 1}`
-                            : `Célula ${r},${c}`
-                        }
-                        className={`absolute flex items-center justify-center rounded-md text-base font-bold transition-colors ${
-                          isVisited
-                            ? "bg-brand text-brand-foreground"
-                            : isNextStart
-                              ? "bg-card text-foreground ring-2 ring-brand/50"
-                              : "bg-card text-muted-foreground"
-                        } ${isHint ? "ring-2 ring-warning" : ""} ${
-                          hasInteracted && focusCell && cellEq(focusCell, cell)
-                            ? "outline outline-2 outline-offset-1 outline-ring"
-                            : ""
-                        }`}
-                        style={{ width: CELL, height: CELL, left: c * STEP, top: r * STEP }}
-                      >
-                        {cpIdx !== -1 ? cpIdx + 1 : ""}
-                      </div>
+                        key={`bg-${row}-${column}`}
+                        className="absolute rounded-md bg-card"
+                        style={{ width: CELL, height: CELL, left: column * STEP, top: row * STEP }}
+                      />
                     );
                   })}
 
-                  {/* Paredes e caminho — desenhados em SVG sobre a grade,
-                   * nunca só células coloridas soltas (o traçado precisa
-                   * conectar visualmente centro a centro). */}
+                  {/* Camada 2 (paredes) + Camada 4 (trilha do caminho) —
+                   * SVG entre o fundo e os números, nunca por cima deles. */}
                   <svg
                     className="pointer-events-none absolute inset-0"
                     width={boardPixelSize}
                     height={boardPixelSize}
                   >
-                    {path.length > 1 && (
-                      <polyline
-                        points={path.map((c) => `${center(c).x},${center(c).y}`).join(" ")}
-                        fill="none"
-                        stroke="#6f95ff"
-                        strokeWidth={10}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    )}
-                    {puzzle.walls.map((w) => {
-                      const [ka, kb] = w.split("|");
-                      const [ar, ac] = ka.split(",").map(Number);
-                      const [br, bc] = kb.split(",").map(Number);
-                      const horizontal = ar === br; // parede entre células lado a lado -> segmento vertical
-                      const x1 = horizontal ? Math.max(ac, bc) * STEP - GAP / 2 : ac * STEP;
+                    {challenge.walls.map((w, i) => {
+                      const horizontal = w.side === "right" || w.side === "left";
+                      const baseCol = w.side === "left" ? w.column - 1 : w.column;
+                      const baseRow = w.side === "top" ? w.row - 1 : w.row;
+                      const x1 = horizontal ? (baseCol + 1) * STEP - GAP / 2 : w.column * STEP;
                       const x2 = horizontal ? x1 : x1 + CELL;
-                      const y1 = horizontal ? ar * STEP : Math.max(ar, br) * STEP - GAP / 2;
+                      const y1 = horizontal ? w.row * STEP : (baseRow + 1) * STEP - GAP / 2;
                       const y2 = horizontal ? y1 + CELL : y1;
                       return (
                         <line
-                          key={w}
+                          key={i}
                           x1={x1}
                           y1={y1}
                           x2={x2}
@@ -432,7 +410,77 @@ export function ZipGameModal({
                         />
                       );
                     })}
+                    {path.length > 1 && (
+                      <polyline
+                        points={path.map((c) => `${center(c).x},${center(c).y}`).join(" ")}
+                        fill="none"
+                        stroke="#6f95ff"
+                        strokeWidth={14}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity={0.85}
+                      />
+                    )}
                   </svg>
+
+                  {/* Camada 5: números — SEMPRE acima da trilha, nunca
+                   * encobertos. Camada 6: indicador da posição atual
+                   * (anel na última célula do caminho). */}
+                  {challenge.numberedCells.map(({ value, cell }) => {
+                    const isVisited = path.some((c) => cellEq(c, cell));
+                    const isHint = hintCell ? cellEq(hintCell, cell) : false;
+                    const isStartHint = path.length === 0 && value === 1;
+                    return (
+                      <div
+                        key={`num-${cell.row}-${cell.column}`}
+                        data-zip-cell={`${cell.row},${cell.column}`}
+                        role="gridcell"
+                        aria-label={`Célula ${cell.row},${cell.column}, número ${value}`}
+                        className={`absolute flex items-center justify-center rounded-md text-lg font-bold transition-colors ${
+                          isVisited ? "text-brand-foreground" : "text-foreground"
+                        } ${isStartHint ? "ring-2 ring-brand/60" : ""} ${
+                          isHint ? "ring-2 ring-warning" : ""
+                        } ${
+                          hasInteracted && focusCell && cellEq(focusCell, cell)
+                            ? "outline outline-2 outline-offset-1 outline-ring"
+                            : ""
+                        }`}
+                        style={{
+                          width: CELL,
+                          height: CELL,
+                          left: cell.column * STEP,
+                          top: cell.row * STEP,
+                        }}
+                      >
+                        {value}
+                      </div>
+                    );
+                  })}
+
+                  {/* Células não-numeradas ainda precisam ser alvo de
+                   * clique/toque (data-zip-cell) e mostrar o anel de
+                   * foco do teclado quando aplicável. */}
+                  {Array.from({ length: challenge.rows * challenge.columns }, (_, i) => {
+                    const row = Math.floor(i / challenge.columns);
+                    const column = i % challenge.columns;
+                    const cell = { row, column };
+                    const isNumbered = challenge.numberedCells.some((n) => cellEq(n.cell, cell));
+                    if (isNumbered) return null;
+                    return (
+                      <div
+                        key={`hit-${row}-${column}`}
+                        data-zip-cell={`${row},${column}`}
+                        role="gridcell"
+                        aria-label={`Célula ${row},${column}`}
+                        className={`absolute rounded-md ${
+                          hasInteracted && focusCell && cellEq(focusCell, cell)
+                            ? "outline outline-2 outline-offset-1 outline-ring"
+                            : ""
+                        }`}
+                        style={{ width: CELL, height: CELL, left: column * STEP, top: row * STEP }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -451,13 +499,13 @@ export function ZipGameModal({
               </p>
             )}
 
-            {data?.status === "won" && (
+            {status === "won" && (
               <div
                 role="status"
                 aria-live="polite"
                 className="mt-1 rounded-xl bg-success-soft p-3 text-center text-sm font-medium text-success"
               >
-                ZIP concluído em {fmtTime(data.elapsedSeconds ?? elapsed)}!
+                ZIP concluído em {fmtTime(data.elapsedSeconds)}!
               </div>
             )}
 
@@ -466,8 +514,8 @@ export function ZipGameModal({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleUndo}
-                  disabled={path.length === 0}
+                  onClick={() => void handleUndo()}
+                  disabled={path.length === 0 || pendingMove}
                 >
                   <Undo2 className="h-3.5 w-3.5" /> Desfazer
                 </Button>
@@ -475,7 +523,7 @@ export function ZipGameModal({
                   variant="outline"
                   size="sm"
                   onClick={() => void handleHint()}
-                  disabled={data?.status === "won"}
+                  disabled={status === "won"}
                 >
                   <Lightbulb className="h-3.5 w-3.5" /> Dica
                 </Button>
@@ -485,23 +533,25 @@ export function ZipGameModal({
               </Button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowInstructions((v) => !v)}
-              className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Como jogar
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform ${showInstructions ? "rotate-180" : ""}`}
-              />
-            </button>
-            {showInstructions && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Comece no número 1 e conecte os números em ordem crescente, andando só entre células
-                vizinhas (nunca na diagonal, nunca atravessando uma parede). O caminho precisa
-                preencher todas as células da grade e terminar no último número.
-              </p>
-            )}
+            <Accordion type="single" collapsible className="mt-2">
+              <AccordionItem value="como-jogar" className="border-none">
+                <AccordionTrigger className="rounded-md px-1 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:no-underline">
+                  Como jogar
+                </AccordionTrigger>
+                <AccordionContent className="px-1 text-xs text-muted-foreground">
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>Comece pelo número 1.</li>
+                    <li>Conecte os números em ordem crescente.</li>
+                    <li>Preencha todas as células.</li>
+                    <li>Não atravesse paredes.</li>
+                    <li>Termine no último número.</li>
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <p className="sr-only" aria-live="polite">
+              {`Próximo número esperado: ${expectedNumber <= challenge.numberedCells.length ? expectedNumber : "concluído"}`}
+            </p>
           </>
         )}
       </DialogContent>
