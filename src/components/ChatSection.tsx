@@ -2237,29 +2237,37 @@ function MessageList({
                 )}
                 <div
                   id={`msg-${m.id}`}
-                  className={`group relative flex gap-2.5 rounded-md px-2 py-0.5 transition-colors duration-500 hover:bg-muted/30 ${grouped ? "mt-0.5 md:mt-1.5" : "mt-3 md:mt-5"} ${highlightedId === m.id ? "bg-sky-500/10" : ""} ${mine ? "md:flex-row-reverse" : ""}`}
+                  className={`message-row group relative grid w-full grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-md px-5 py-1.5 transition-colors duration-500 hover:bg-muted/30 ${grouped ? "mt-0.5" : "mt-3"} ${highlightedId === m.id ? "bg-sky-500/10" : ""}`}
                 >
-                  <div className="w-8 shrink-0">
+                  <div className="w-10 shrink-0">
                     {!grouped &&
                       (m.authorPhoto ? (
                         <img
                           src={m.authorPhoto}
                           alt=""
-                          className="h-8 w-8 rounded-full object-cover"
+                          className="h-10 w-10 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                           {m.authorName.slice(0, 1).toUpperCase()}
                         </div>
                       ))}
                   </div>
-                  <div
-                    className={`flex min-w-0 flex-1 flex-col items-start md:max-w-[68%] ${mine ? "md:items-end" : ""}`}
-                  >
+                  {/* `message-main`: nunca alinha à direita, nunca troca de eixo
+                   * pra mensagem própria — a diferença entre autores é
+                   * comunicada só por avatar/nome/horário/cor do nome/estado de
+                   * envio, nunca pela posição da linha (ver auditoria da Fase
+                   * 1: antes disso, `mine ? "md:flex-row-reverse" : ""` +
+                   * `mine ? "md:items-end" : ""` invertiam mensagens próprias
+                   * pra direita a partir do breakpoint `md`, o padrão de
+                   * mensageiro que este redesign elimina). */}
+                  <div className="message-main flex min-w-0 flex-col items-start">
                     {!grouped && (
-                      <div className="mb-2 flex items-baseline gap-2">
-                        <span className="text-xs font-semibold text-foreground">
-                          {mine ? "Você" : m.authorName}
+                      <div className="mb-1 flex items-baseline gap-2">
+                        <span
+                          className={`text-xs font-semibold ${mine ? "text-brand" : "text-foreground"}`}
+                        >
+                          {m.authorName}
                         </span>
                         {isHypitoAuthorId(m.authorId) && (
                           <Badge
@@ -2315,23 +2323,17 @@ function MessageList({
                         }}
                       />
                     ) : (
-                      <div className="flex w-full flex-col items-start gap-1.5 md:w-fit md:max-w-full">
+                      <div className="message-content flex w-full max-w-[760px] flex-col items-start gap-1.5 break-words [overflow-wrap:anywhere]">
                         {hypitoPayload && hypitoPayload.kind !== "text" ? (
                           <HypitoMessageCard payload={hypitoPayload} handlers={hypitoHandlers!} />
                         ) : (
                           m.text && (
-                            <div
-                              className={`md:max-w-full md:rounded-2xl md:px-3 md:py-2 ${
-                                mine ? "md:bg-brand-subtle" : "md:bg-muted/70"
-                              }`}
-                            >
-                              <MessageBody
-                                text={m.text}
-                                mentions={m.mentions}
-                                onOpenMention={onOpenMention}
-                                editedAt={m.editedAt}
-                              />
-                            </div>
+                            <MessageBody
+                              text={m.text}
+                              mentions={m.mentions}
+                              onOpenMention={onOpenMention}
+                              editedAt={m.editedAt}
+                            />
                           )
                         )}
                         {onOpenTask &&
@@ -2371,7 +2373,7 @@ function MessageList({
                       </div>
                     )}
                     {!editing && mine && isDm && lastOfGroup && (
-                      <div className="mt-0.5 flex items-center gap-1 self-end">
+                      <div className="mt-0.5 flex items-center gap-1">
                         <span className="text-[10px] text-muted-foreground">
                           {new Date(m.createdAt).toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
