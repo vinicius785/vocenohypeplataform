@@ -228,7 +228,14 @@ export const listAuditLog = createServerFn({ method: "GET" })
     }
 
     return {
-      rows: (rows ?? []).map((r) => ({ ...r, actorEmail: actorEmails[r.actor_user_id] ?? null })),
+      rows: (rows ?? []).map((r) => ({
+        ...r,
+        // `actor_user_id` virou nullable depois da correção de FK que
+        // permite excluir membros (SET NULL em vez de bloquear o DELETE)
+        // — um registro de auditoria de um autor já removido do time
+        // simplesmente não tem e-mail pra mostrar.
+        actorEmail: r.actor_user_id ? (actorEmails[r.actor_user_id] ?? null) : null,
+      })),
       total: count ?? 0,
     };
   });

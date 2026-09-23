@@ -12,7 +12,7 @@ export type Database = {
       access_audit_log: {
         Row: {
           action: string;
-          actor_user_id: string;
+          actor_user_id: string | null;
           created_at: string;
           id: string;
           new_value: Json | null;
@@ -22,7 +22,7 @@ export type Database = {
         };
         Insert: {
           action: string;
-          actor_user_id: string;
+          actor_user_id?: string | null;
           created_at?: string;
           id?: string;
           new_value?: Json | null;
@@ -32,7 +32,7 @@ export type Database = {
         };
         Update: {
           action?: string;
-          actor_user_id?: string;
+          actor_user_id?: string | null;
           created_at?: string;
           id?: string;
           new_value?: Json | null;
@@ -702,7 +702,7 @@ export type Database = {
       commercial_interactions: {
         Row: {
           created_at: string;
-          created_by: string;
+          created_by: string | null;
           created_by_name: string;
           id: string;
           interaction_type: string;
@@ -716,7 +716,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
-          created_by: string;
+          created_by?: string | null;
           created_by_name: string;
           id?: string;
           interaction_type: string;
@@ -730,7 +730,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
-          created_by?: string;
+          created_by?: string | null;
           created_by_name?: string;
           id?: string;
           interaction_type?: string;
@@ -2175,7 +2175,7 @@ export type Database = {
       };
       performance_events: {
         Row: {
-          actor_id: string;
+          actor_id: string | null;
           actor_name: string;
           data: Json;
           event_type: string;
@@ -2189,7 +2189,7 @@ export type Database = {
           task_title: string | null;
         };
         Insert: {
-          actor_id: string;
+          actor_id?: string | null;
           actor_name: string;
           data?: Json;
           event_type: string;
@@ -2203,7 +2203,7 @@ export type Database = {
           task_title?: string | null;
         };
         Update: {
-          actor_id?: string;
+          actor_id?: string | null;
           actor_name?: string;
           data?: Json;
           event_type?: string;
@@ -2848,7 +2848,7 @@ export type Database = {
           started_at: string;
           task_id: string;
           task_origin: string;
-          user_id: string;
+          user_id: string | null;
         };
         Insert: {
           created_at?: string;
@@ -2864,7 +2864,7 @@ export type Database = {
           started_at: string;
           task_id: string;
           task_origin: string;
-          user_id: string;
+          user_id?: string | null;
         };
         Update: {
           created_at?: string;
@@ -2880,7 +2880,7 @@ export type Database = {
           started_at?: string;
           task_id?: string;
           task_origin?: string;
-          user_id?: string;
+          user_id?: string | null;
         };
         Relationships: [];
       };
