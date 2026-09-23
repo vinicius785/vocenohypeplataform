@@ -11,7 +11,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getTermoSession, submitTermoGuess } from "@/lib/games/termo.functions";
+import {
+  getTermoSession,
+  submitTermoGuess,
+  type TermoSessionPublic,
+} from "@/lib/games/termo.functions";
 import {
   TERMO_WORD_LENGTH,
   TERMO_MAX_ATTEMPTS,
@@ -20,6 +24,11 @@ import {
   type LetterState,
 } from "@/lib/games/termo-game";
 import { normalizeWord } from "@/lib/games/termo-words";
+
+const DEV = import.meta.env.DEV;
+function devLog(...args: unknown[]) {
+  if (DEV) console.info("[termo:ui]", ...args);
+}
 
 const KEYBOARD_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 
@@ -30,10 +39,11 @@ const STATE_CLASS: Record<LetterState, string> = {
 };
 
 /**
- * Termo — grade 6x5, teclado virtual, suporte a teclado físico. A
- * resposta do dia NUNCA chega ao cliente antes do fim da partida — toda
- * avaliação acontece em `submitTermoGuess` (servidor); este componente só
- * renderiza o resultado que volta de lá.
+ * Termo — modal do jogo. Correções desta rodada: `status` explícito
+ * (`not_started`/`in_progress`/`won`/`lost`) vindo do servidor — nunca
+ * mais derivado de `finished`/`won` soltos; abrir o modal sem tentar
+ * nunca cria sessão (`getTermoSession` só lê); mensagens de erro
+ * exatamente como especificado; modal maior (largura ~520px).
  */
 export function TermoGameModal({
   open,
@@ -46,7 +56,7 @@ export function TermoGameModal({
   const getSessionFn = useServerFn(getTermoSession);
   const submitFn = useServerFn(submitTermoGuess);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["termo-session"],
     queryFn: () => getSessionFn(),
   });
@@ -55,18 +65,21 @@ export function TermoGameModal({
   const [shared, setShared] = useState(false);
 
   const guesses = data?.guesses ?? [];
-  const finished = !!data?.finished;
-  const won = !!data?.won;
+  const status = data?.status ?? "not_started";
+  const finished = status === "won" || status === "lost";
 
   const submitMutation = useMutation({
     mutationFn: (word: string) => submitFn({ data: { word } }),
-    onSuccess: (result) => {
+    onSuccess: (result: TermoSessionPublic) => {
       queryClient.setQueryData(["termo-session"], result);
       setCurrent("");
       setError("");
+      devLog("tentativa aceita", result);
     },
     onError: (e) => {
-      setError(e instanceof Error ? e.message : "Não foi possível enviar a tentativa.");
+      const message = e instanceof Error ? e.message : "Não foi possível enviar a tentativa.";
+      setError(message);
+      devLog("tentativa rejeitada", message);
     },
   });
 
@@ -75,14 +88,14 @@ export function TermoGameModal({
   const handleSubmit = () => {
     if (finished || submitMutation.isPending) return;
     if (normalizeWord(current).length !== TERMO_WORD_LENGTH) {
-      setError("A palavra precisa ter 5 letras.");
+      setError("Digite uma palavra de 5 letras.");
       return;
     }
     submitMutation.mutate(current);
   };
 
   const handleKey = (k: string) => {
-    if (finished) return;
+    if (finished || submitMutation.isPending) return;
     setError("");
     if (k === "ENTER") {
       handleSubmit();
@@ -105,12 +118,12 @@ export function TermoGameModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, current, finished]);
+  }, [open, current, finished, submitMutation.isPending]);
 
   const handleShare = async () => {
     const results = guesses.map((g) => g.result);
     const dayNumber = Math.floor(Date.now() / 86_400_000) % 100000;
-    const text = buildShareText(results, won, dayNumber);
+    const text = buildShareText(results, status === "won", dayNumber);
     try {
       await navigator.clipboard.writeText(text);
       setShared(true);
@@ -124,16 +137,17 @@ export function TermoGameModal({
   if (!open) return null;
 
   const rows = Array.from({ length: TERMO_MAX_ATTEMPTS }, (_, i) => {
-    if (i < guesses.length)
-      return { word: guesses[i].word, result: guesses[i].result, active: false };
-    if (i === guesses.length)
-      return { word: current.padEnd(TERMO_WORD_LENGTH, " "), result: null, active: true };
-    return { word: "     ", result: null, active: false };
+    if (i < guesses.length) return { word: guesses[i].word, result: guesses[i].result };
+    if (i === guesses.length) return { word: current.padEnd(TERMO_WORD_LENGTH, " "), result: null };
+    return { word: "     ", result: null };
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileFullScreen className="flex max-h-[92vh] max-w-md flex-col items-center">
+      <DialogContent
+        mobileFullScreen
+        className="flex max-h-[92vh] w-[92vw] max-w-[520px] flex-col items-center overflow-y-auto"
+      >
         <DialogHeader className="w-full text-center">
           <DialogTitle>Termo</DialogTitle>
           <DialogDescription>Descubra a palavra de 5 letras em até 6 tentativas.</DialogDescription>
@@ -143,18 +157,22 @@ export function TermoGameModal({
           <div className="flex flex-1 items-center justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <p className="py-10 text-center text-sm text-danger">
+            Não foi possível carregar o desafio de hoje. Tente novamente.
+          </p>
         ) : (
           <>
-            <div className="my-3 grid grid-rows-6 gap-1.5">
+            <div className="my-4 grid grid-rows-6 gap-2">
               {rows.map((row, ri) => (
-                <div key={ri} className="grid grid-cols-5 gap-1.5">
+                <div key={ri} className="grid grid-cols-5 gap-2">
                   {Array.from({ length: TERMO_WORD_LENGTH }, (_, ci) => {
                     const letter = row.word[ci]?.trim() ?? "";
                     const state = row.result?.[ci];
                     return (
                       <div
                         key={ci}
-                        className={`flex h-11 w-11 items-center justify-center rounded-md border-2 text-lg font-bold uppercase sm:h-12 sm:w-12 ${
+                        className={`flex h-12 w-12 items-center justify-center rounded-md border-2 text-xl font-bold uppercase sm:h-14 sm:w-14 ${
                           state
                             ? STATE_CLASS[state]
                             : letter
@@ -170,11 +188,13 @@ export function TermoGameModal({
               ))}
             </div>
 
-            {error && <p className="text-xs text-danger">{error}</p>}
+            <div className="mb-2 min-h-[1.25rem] text-center text-xs font-medium text-danger">
+              {error}
+            </div>
 
             {finished && (
-              <div className="mb-3 w-full rounded-xl bg-muted/60 p-3 text-center text-sm">
-                {won ? (
+              <div className="mb-4 w-full rounded-xl bg-muted/60 p-3 text-center text-sm">
+                {status === "won" ? (
                   <p className="font-semibold text-foreground">
                     Você acertou em {guesses.length}/{TERMO_MAX_ATTEMPTS}!
                   </p>
@@ -184,6 +204,9 @@ export function TermoGameModal({
                     <span className="uppercase">{data?.answer}</span>.
                   </p>
                 )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Volte amanhã para um novo desafio.
+                </p>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -196,14 +219,14 @@ export function TermoGameModal({
             )}
 
             {!finished && (
-              <div className="w-full space-y-1.5">
+              <div className="w-full space-y-1.5 pb-2">
                 {KEYBOARD_ROWS.map((row, ri) => (
-                  <div key={ri} className="flex justify-center gap-1">
+                  <div key={ri} className="flex justify-center gap-1.5">
                     {ri === 2 && (
                       <button
                         type="button"
                         onClick={() => handleKey("ENTER")}
-                        className="flex h-11 items-center justify-center rounded-md bg-muted px-2 text-[11px] font-semibold text-foreground hover:bg-muted/70"
+                        className="flex h-12 items-center justify-center rounded-md bg-muted px-2.5 text-xs font-semibold text-foreground hover:bg-muted/70"
                       >
                         Enviar
                       </button>
@@ -213,7 +236,7 @@ export function TermoGameModal({
                         key={letter}
                         type="button"
                         onClick={() => handleKey(letter)}
-                        className={`flex h-11 w-8 items-center justify-center rounded-md text-sm font-semibold uppercase transition-colors sm:w-9 ${
+                        className={`flex h-12 w-9 items-center justify-center rounded-md text-sm font-semibold uppercase transition-colors sm:w-10 ${
                           keyboardStates[letter]
                             ? STATE_CLASS[keyboardStates[letter]]
                             : "bg-muted text-foreground hover:bg-muted/70"
@@ -227,7 +250,7 @@ export function TermoGameModal({
                         type="button"
                         aria-label="Apagar"
                         onClick={() => handleKey("BACK")}
-                        className="flex h-11 items-center justify-center rounded-md bg-muted px-2 text-foreground hover:bg-muted/70"
+                        className="flex h-12 items-center justify-center rounded-md bg-muted px-2.5 text-foreground hover:bg-muted/70"
                       >
                         <Delete className="h-4 w-4" />
                       </button>

@@ -13,79 +13,68 @@ import {
 /**
  * Termo — a resposta do dia NUNCA é enviada ao cliente antes do fim da
  * partida (vitória ou 6ª tentativa esgotada). Toda avaliação de tentativa
- * acontece aqui, no servidor — o cliente só recebe o resultado por letra
- * (`correct`/`present`/`absent`), nunca a palavra certa antecipadamente.
- * Sessão em `daily_game_sessions` (`game_type='termo'`), única por
- * usuário+dia (constraint do banco).
+ * acontece aqui, no servidor. Correção desta rodada: a sessão só é
+ * CRIADA na primeira tentativa real (`submitTermoGuess`) — antes disso
+ * `getTermoSession` só LÊ, nunca insere; abrir o modal sem digitar nada
+ * nunca marca a partida como iniciada.
  */
 
 type StoredGuess = { word: string; result: LetterState[] };
 type TermoState = { guesses: StoredGuess[]; won?: boolean };
 
+export type TermoStatus = "not_started" | "in_progress" | "won" | "lost";
+
 export type TermoSessionPublic = {
   guesses: StoredGuess[];
   attempts: number;
-  finished: boolean;
-  won: boolean;
-  /** Só preenchido quando `finished` — nunca antes. */
+  status: TermoStatus;
+  /** Só preenchido quando `status` é `won`/`lost` — nunca antes. */
   answer?: string;
 };
 
-function toPublic(row: {
-  state: unknown;
-  attempts: number;
-  completed_at: string | null;
-}): TermoSessionPublic {
+const DEV = process.env.NODE_ENV !== "production";
+function devLog(...args: unknown[]) {
+  if (DEV) console.info("[termo]", ...args);
+}
+
+function statusOf(finished: boolean, won: boolean, attempts: number): TermoStatus {
+  if (!finished) return attempts > 0 ? "in_progress" : "not_started";
+  return won ? "won" : "lost";
+}
+
+function toPublic(
+  row: {
+    state: unknown;
+    attempts: number;
+    completed_at: string | null;
+  } | null,
+): TermoSessionPublic {
+  if (!row) return { guesses: [], attempts: 0, status: "not_started" };
   const state = (row.state ?? { guesses: [] }) as TermoState;
   const finished = !!row.completed_at;
+  const won = !!state.won;
   return {
     guesses: state.guesses ?? [],
     attempts: row.attempts,
-    finished,
-    won: !!state.won,
+    status: statusOf(finished, won, row.attempts),
     answer: finished ? todayTermoAnswer(todayTermoKey()) : undefined,
   };
 }
 
+/** Só LÊ — nunca cria linha no banco. */
 export const getTermoSession = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const challengeDate = todayTermoKey();
     const { data: existing, error } = await context.supabase
       .from("daily_game_sessions")
-      .select("*")
+      .select("state, attempts, completed_at")
       .eq("game_type", "termo")
       .eq("challenge_date", challengeDate)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (existing) return toPublic(existing);
-
-    const { data: inserted, error: insertErr } = await context.supabase
-      .from("daily_game_sessions")
-      .insert({
-        user_id: context.userId,
-        game_type: "termo",
-        challenge_date: challengeDate,
-        challenge_id: challengeDate,
-        state: { guesses: [] } as never,
-        started_at: new Date().toISOString(),
-      } as never)
-      .select("*")
-      .single();
-    if (insertErr) {
-      if (insertErr.code === "23505") {
-        const { data: raced, error: racedErr } = await context.supabase
-          .from("daily_game_sessions")
-          .select("*")
-          .eq("game_type", "termo")
-          .eq("challenge_date", challengeDate)
-          .single();
-        if (racedErr) throw new Error(racedErr.message);
-        return toPublic(raced);
-      }
-      throw new Error(insertErr.message);
-    }
-    return toPublic(inserted);
+    devLog("getTermoSession", { challengeDate, hasRow: !!existing });
+    return toPublic(existing ?? null);
   });
 
 const guessSchema = z.object({
@@ -102,7 +91,8 @@ export const submitTermoGuess = createServerFn({ method: "POST" })
     const challengeDate = todayTermoKey();
     const word = normalizeWord(data.word);
     if (!isAcceptedGuess(word)) {
-      throw new Error("Palavra não reconhecida.");
+      devLog("tentativa rejeitada (fora do dicionário)", word);
+      throw new Error("Palavra não encontrada.");
     }
 
     const { data: existing, error: fetchErr } = await context.supabase
@@ -112,10 +102,9 @@ export const submitTermoGuess = createServerFn({ method: "POST" })
       .eq("challenge_date", challengeDate)
       .maybeSingle();
     if (fetchErr) throw new Error(fetchErr.message);
-    if (!existing) throw new Error("Sessão do dia não encontrada — recarregue a página.");
-    if (existing.completed_at) throw new Error("Esta partida já terminou.");
+    if (existing?.completed_at) throw new Error("Esta partida já terminou.");
 
-    const state = (existing.state ?? { guesses: [] }) as TermoState;
+    const state = (existing?.state ?? { guesses: [] }) as TermoState;
     if (state.guesses.length >= TERMO_MAX_ATTEMPTS) {
       throw new Error("Limite de tentativas já atingido.");
     }
@@ -126,19 +115,38 @@ export const submitTermoGuess = createServerFn({ method: "POST" })
     const nextGuesses = [...state.guesses, { word, result }];
     const attempts = nextGuesses.length;
     const finished = won || attempts >= TERMO_MAX_ATTEMPTS;
+    devLog("tentativa avaliada", { word, result, won, attempts, finished });
 
-    const patch: Record<string, unknown> = {
-      state: { guesses: nextGuesses, won } as TermoState,
+    const nowIso = new Date().toISOString();
+    if (!existing) {
+      const { error } = await context.supabase.from("daily_game_sessions").insert({
+        user_id: context.userId,
+        game_type: "termo",
+        challenge_date: challengeDate,
+        challenge_id: challengeDate,
+        state: { guesses: nextGuesses, won } as never,
+        attempts,
+        started_at: nowIso,
+        completed_at: finished ? nowIso : null,
+      } as never);
+      if (error) throw new Error(error.message);
+    } else {
+      const patch: Record<string, unknown> = {
+        state: { guesses: nextGuesses, won } as TermoState,
+        attempts,
+      };
+      if (finished) patch.completed_at = nowIso;
+      const { error } = await context.supabase
+        .from("daily_game_sessions")
+        .update(patch as never)
+        .eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    }
+
+    return {
+      guesses: nextGuesses,
       attempts,
-    };
-    if (finished) patch.completed_at = new Date().toISOString();
-
-    const { data: updated, error } = await context.supabase
-      .from("daily_game_sessions")
-      .update(patch as never)
-      .eq("id", existing.id)
-      .select("*")
-      .single();
-    if (error) throw new Error(error.message);
-    return toPublic(updated);
+      status: statusOf(finished, won, attempts),
+      answer: finished ? answer : undefined,
+    } satisfies TermoSessionPublic;
   });

@@ -9,19 +9,35 @@ import { getTermoSession } from "@/lib/games/termo.functions";
 import { ZipGameModal } from "@/components/games/ZipGameModal";
 import { TermoGameModal } from "@/components/games/TermoGameModal";
 
-type GameStatus = "disponivel" | "em_andamento" | "concluido";
+function zipLabel(status: "not_started" | "in_progress" | "won" | undefined): {
+  text: string;
+  action: string;
+} {
+  if (status === "won") return { text: "Concluído hoje", action: "Ver resultado" };
+  if (status === "in_progress") return { text: "Em andamento", action: "Continuar" };
+  return { text: "Disponível", action: "Jogar" };
+}
 
-function statusLabel(status: GameStatus): { text: string; action: string } {
-  if (status === "concluido") return { text: "Concluído hoje", action: "Ver resultado" };
-  if (status === "em_andamento") return { text: "Em andamento", action: "Continuar" };
+function termoLabel(status: "not_started" | "in_progress" | "won" | "lost" | undefined): {
+  text: string;
+  action: string;
+} {
+  if (status === "won") return { text: "Concluído hoje", action: "Ver resultado" };
+  if (status === "lost") return { text: "Encerrado hoje", action: "Ver resultado" };
+  if (status === "in_progress") return { text: "Em andamento", action: "Continuar" };
   return { text: "Disponível", action: "Jogar" };
 }
 
 /**
  * "Pausa rápida" — card discreto com ZIP e Termo. NUNCA renderiza o jogo
  * completo aqui: só um resumo de status + botão que abre o modal grande
- * (desktop) / tela cheia (mobile). Sem ranking, sem exposição de quem
- * jogou — cada tile reflete só a sessão do próprio usuário.
+ * (desktop) / tela cheia (mobile). O status vem sempre do campo explícito
+ * `status` retornado pelo servidor (`not_started`/`in_progress`/`won`/
+ * `lost`) — nunca inferido pela simples existência de uma linha no banco
+ * ou por heurística de tamanho de array (correção desta rodada: abrir o
+ * modal sozinho nunca fazia isso mudar pra "Em andamento" nem antes,
+ * mas agora a garantia vem do próprio contrato do servidor, não de uma
+ * conta local frágil).
  */
 export function QuickBreakCard() {
   const [openGame, setOpenGame] = useState<"zip" | "termo" | null>(null);
@@ -31,25 +47,15 @@ export function QuickBreakCard() {
     queryKey: ["zip-session"],
     queryFn: () => getZipSessionFn(),
   });
-  const zipStatus: GameStatus = zipData?.session?.completed_at
-    ? "concluido"
-    : (zipData?.session?.state as { path?: unknown[] } | undefined)?.path?.length
-      ? "em_andamento"
-      : "disponivel";
 
   const getTermoSessionFn = useServerFn(getTermoSession);
   const { data: termoData } = useQuery({
     queryKey: ["termo-session"],
     queryFn: () => getTermoSessionFn(),
   });
-  const termoStatus: GameStatus = termoData?.finished
-    ? "concluido"
-    : (termoData?.attempts ?? 0) > 0
-      ? "em_andamento"
-      : "disponivel";
 
-  const zip = statusLabel(zipStatus);
-  const termo = statusLabel(termoStatus);
+  const zip = zipLabel(zipData?.status);
+  const termo = termoLabel(termoData?.status);
 
   return (
     <>

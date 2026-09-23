@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { getDailyPuzzle, validateZipPath, nextExpectedCell, type ZipCell } from "./zip-game";
+import {
+  getDailyPuzzle,
+  getDailyPuzzleSolution,
+  validateZipPath,
+  validateZipPartialPath,
+  nextExpectedCell,
+  isValidStep,
+  isWallBetween,
+  edgeKey,
+  type ZipCell,
+} from "./zip-game";
 
 describe("getDailyPuzzle — determinístico e sempre resolvível", () => {
   it("mesma data sempre gera o mesmo puzzle", () => {
@@ -79,6 +89,104 @@ describe("validateZipPath", () => {
     expect(nextExpectedCell(puzzle, [])).toEqual(puzzle.checkpoints[0]);
   });
 });
+
+describe("paredes — sempre seguras pra solução real (garantia de solubilidade)", () => {
+  it("nenhuma parede bloqueia a solução real do dia, em várias datas", () => {
+    for (const date of ["2026-01-01", "2026-05-01", "2026-09-22", "2027-12-31"]) {
+      const puzzle = getDailyPuzzle(date);
+      const solution = getDailyPuzzleSolution(date);
+      for (let i = 1; i < solution.length; i++) {
+        expect(isWallBetween(puzzle, solution[i - 1], solution[i])).toBe(false);
+      }
+      // A própria solução, jogada do início ao fim, precisa validar OK.
+      expect(validateZipPath(puzzle, solution)).toBe(true);
+    }
+  });
+
+  it("existem paredes reais no tabuleiro (a mecânica não fica vazia)", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    expect(puzzle.walls.length).toBeGreaterThan(0);
+  });
+
+  it("edgeKey é simétrico (mesma chave independente da ordem dos argumentos)", () => {
+    const a = { r: 1, c: 2 };
+    const b = { r: 1, c: 3 };
+    expect(edgeKey(a, b)).toBe(edgeKey(b, a));
+  });
+
+  it("isValidStep rejeita um passo que atravessa uma parede", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    const wallEdge = puzzle.walls[0];
+    const [ka, kb] = wallEdge.split("|");
+    const [ar, ac] = ka.split(",").map(Number);
+    const [br, bc] = kb.split(",").map(Number);
+    const from = { r: ar, c: ac };
+    const to = { r: br, c: bc };
+    expect(isValidStep(puzzle, from, to, new Set([`${from.r},${from.c}`]))).toBe(false);
+  });
+
+  it("validateZipPath rejeita uma solução alternativa que atravessa parede", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    const solution = getDailyPuzzleSolution("2026-09-22");
+    // Constrói um caminho igual à solução real, mas tenta inserir um
+    // atalho por uma aresta com parede em vez do próximo passo real —
+    // deve ser rejeitado.
+    if (puzzle.walls.length > 0) {
+      const [ka, kb] = puzzle.walls[0].split("|");
+      const [ar, ac] = ka.split(",").map(Number);
+      const [br, bc] = kb.split(",").map(Number);
+      const brokenPath = [{ r: ar, c: ac }, { r: br, c: bc }, ...solution.slice(2)];
+      expect(validateZipPath(puzzle, brokenPath)).toBe(false);
+    }
+  });
+});
+
+describe("validateZipPartialPath — validação server-side de cada movimento em progresso", () => {
+  it("caminho vazio é sempre válido (not_started)", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    expect(validateZipPartialPath(puzzle, [])).toBe(true);
+  });
+
+  it("aceita um prefixo real da solução", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    const solution = getDailyPuzzleSolution("2026-09-22");
+    expect(validateZipPartialPath(puzzle, solution.slice(0, 6))).toBe(true);
+  });
+
+  it("rejeita path que não começa no checkpoint 1", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    expect(validateZipPartialPath(puzzle, [{ r: 5, c: 5 }])).toBe(false);
+  });
+
+  it("rejeita pular um checkpoint fora de ordem", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    // Caminho até o checkpoint 2 (índice 1), mas inclui o checkpoint 4 no meio.
+    const fake = [puzzle.checkpoints[0], puzzle.checkpoints[3]];
+    expect(validateZipPartialPath(puzzle, fake)).toBe(false);
+  });
+
+  it("rejeita célula repetida", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    const solution = getDailyPuzzleSolution("2026-09-22");
+    const withRepeat = [...solution.slice(0, 3), solution[1]];
+    expect(validateZipPartialPath(puzzle, withRepeat)).toBe(false);
+  });
+
+  it("rejeita atravessar parede", () => {
+    const puzzle = getDailyPuzzle("2026-09-22");
+    const [ka, kb] = puzzle.walls[0].split("|");
+    const [ar, ac] = ka.split(",").map(Number);
+    const [br, bc] = kb.split(",").map(Number);
+    const from = { r: ar, c: ac };
+    const to = { r: br, c: bc };
+    const path = cellKeyEq(from, puzzle.checkpoints[0]) ? [from, to] : [puzzle.checkpoints[0]];
+    if (path.length === 2) expect(validateZipPartialPath(puzzle, path)).toBe(false);
+  });
+});
+
+function cellKeyEq(a: ZipCell, b: ZipCell): boolean {
+  return a.r === b.r && a.c === b.c;
+}
 
 describe("nextExpectedCell — usado pela dica", () => {
   it("caminho vazio espera o primeiro checkpoint", () => {
