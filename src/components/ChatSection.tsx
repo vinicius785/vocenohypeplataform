@@ -1284,24 +1284,53 @@ function SidebarGroupSection({
   label,
   children,
   count,
+  unread,
+  onAdd,
+  addLabel,
 }: {
   group: ChatSidebarGroup;
   label: string;
   children: ReactNode;
   count: number;
+  /** Quantidade não lida da seção — mostrada como badge só quando > 0,
+   * mesmo com a seção recolhida (pedido: "Quantidade não lida" é um dos
+   * elementos que cada seção pode ter). */
+  unread?: number;
+  /** "Botão de adicionar, quando permitido" — só as seções onde faz
+   * sentido criar um item novo diretamente (hoje só Canais) recebem isso. */
+  onAdd?: () => void;
+  addLabel?: string;
 }) {
   const [collapsed, setCollapsed] = useState(() => isChatSidebarGroupCollapsed(group));
   return (
     <div className="mb-2">
-      <button
-        type="button"
-        onClick={() => setCollapsed(toggleChatSidebarGroup(group))}
-        className="flex w-full items-center gap-1 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-      >
-        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        {label}
-        {collapsed && <span className="normal-case tracking-normal">({count})</span>}
-      </button>
+      <div className="flex items-center gap-1 px-2.5 py-1">
+        <button
+          type="button"
+          onClick={() => setCollapsed(toggleChatSidebarGroup(group))}
+          className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        >
+          {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          <span className="truncate">{label}</span>
+          {collapsed && <span className="normal-case tracking-normal">({count})</span>}
+        </button>
+        {!!unread && unread > 0 && (
+          <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-brand px-1 text-[9px] font-semibold text-brand-foreground">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+        {onAdd && (
+          <button
+            type="button"
+            onClick={onAdd}
+            aria-label={addLabel ?? "Adicionar"}
+            title={addLabel}
+            className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
+      </div>
       {!collapsed && children}
     </div>
   );
@@ -1329,6 +1358,14 @@ function ChatConversationList({
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<ChatChannel | null>(null);
+  // Atalho "Não lidas" (pedido, seção "Atalhos") — filtro que reaproveita a
+  // mesma lista/seções de sempre, só escondendo o que já foi lido. "Itens
+  // salvos" não existe aqui de propósito: não há suporte no banco pra
+  // mensagem salva/marcada (nenhuma tabela pra isso), e o pedido já previa
+  // esse atalho como condicional ("caso exista suporte"). "Menções e
+  // reações" fica pra Fase 9 (Busca), que é onde esse cruzamento entre
+  // conversas já vai existir de qualquer forma.
+  const [onlyUnread, setOnlyUnread] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
 
   const items = useMemo(
@@ -1337,7 +1374,9 @@ function ChatConversationList({
   );
 
   const q = search.trim().toLowerCase();
-  const filtered = q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items;
+  const filtered = items.filter(
+    (i) => (!q || i.name.toLowerCase().includes(q)) && (!onlyUnread || i.unread > 0),
+  );
   const byRecency = (a: ChatListItem, b: ChatListItem) =>
     (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0);
   const byName = (a: ChatListItem, b: ChatListItem) => a.name.localeCompare(b.name, "pt-BR");
@@ -1359,6 +1398,10 @@ function ChatConversationList({
   const campanhas = filtered.filter((i) => i.kind === "campanha").sort(byName);
   const projetos = filtered.filter((i) => i.kind === "projeto").sort(byName);
   const totalUnread = items.reduce((sum, i) => sum + i.unread, 0);
+  const canaisUnread = canais.reduce((sum, i) => sum + i.unread, 0);
+  const diretasUnread = diretas.reduce((sum, i) => sum + i.unread, 0);
+  const campanhasUnread = campanhas.reduce((sum, i) => sum + i.unread, 0);
+  const projetosUnread = projetos.reduce((sum, i) => sum + i.unread, 0);
 
   const handleCreateChannel = async (payload: {
     name: string;
@@ -1416,17 +1459,6 @@ function ChatConversationList({
               : "Tudo em dia"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditing(null);
-            setShowCreate(true);
-          }}
-          aria-label="Novo canal"
-          className="ml-auto rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
       </header>
       <div className="border-b border-border px-3 py-2">
         <div className="relative">
@@ -1438,12 +1470,32 @@ function ChatConversationList({
             className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-base outline-none focus:ring-2 focus:ring-ring md:h-8 md:text-xs"
           />
         </div>
+        {/* Atalho "Não lidas" — o único item da seção "Atalhos" do pedido
+         * que tem dado real por trás hoje sem inventar recurso novo (ver
+         * comentário em `onlyUnread` acima pra "Itens salvos"/"Menções e
+         * reações"). Hypito já é fixo no topo da lista, funcionando como
+         * atalho permanente por si só. */}
+        <button
+          type="button"
+          onClick={() => setOnlyUnread((v) => !v)}
+          aria-pressed={onlyUnread}
+          className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            onlyUnread
+              ? "border-brand/50 bg-brand-subtle text-brand"
+              : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          Não lidas
+          {totalUnread > 0 && (
+            <span className="tabular-nums">{totalUnread > 99 ? "99+" : totalUnread}</span>
+          )}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && (q || onlyUnread) ? (
           <p className="p-8 text-center text-xs text-muted-foreground">
-            Nenhuma conversa encontrada.
+            {onlyUnread ? "Nenhuma conversa não lida." : "Nenhuma conversa encontrada."}
           </p>
         ) : (
           <>
@@ -1459,7 +1511,12 @@ function ChatConversationList({
               </div>
             )}
             {diretas.length > 0 && (
-              <SidebarGroupSection group="diretas" label="Diretas" count={diretas.length}>
+              <SidebarGroupSection
+                group="diretas"
+                label="Diretas"
+                count={diretas.length}
+                unread={diretasUnread}
+              >
                 {diretas.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1471,8 +1528,21 @@ function ChatConversationList({
                 ))}
               </SidebarGroupSection>
             )}
-            {canais.length > 0 && (
-              <SidebarGroupSection group="canais" label="Canais" count={canais.length}>
+            {/* Canais aparece mesmo vazio fora de uma busca — é o único
+             * lugar onde dá pra criar o primeiro canal, agora que o "+"
+             * saiu do cabeçalho global pra virar o botão da própria seção. */}
+            {(canais.length > 0 || (!q && !onlyUnread)) && (
+              <SidebarGroupSection
+                group="canais"
+                label="Canais"
+                count={canais.length}
+                unread={canaisUnread}
+                addLabel="Novo canal"
+                onAdd={() => {
+                  setEditing(null);
+                  setShowCreate(true);
+                }}
+              >
                 {canais.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1490,7 +1560,12 @@ function ChatConversationList({
               </SidebarGroupSection>
             )}
             {campanhas.length > 0 && (
-              <SidebarGroupSection group="campanhas" label="Campanhas" count={campanhas.length}>
+              <SidebarGroupSection
+                group="campanhas"
+                label="Campanhas"
+                count={campanhas.length}
+                unread={campanhasUnread}
+              >
                 {campanhas.map((item) => (
                   <ChatListRow
                     key={item.id}
@@ -1503,7 +1578,12 @@ function ChatConversationList({
               </SidebarGroupSection>
             )}
             {projetos.length > 0 && (
-              <SidebarGroupSection group="projetos" label="Projetos" count={projetos.length}>
+              <SidebarGroupSection
+                group="projetos"
+                label="Projetos"
+                count={projetos.length}
+                unread={projetosUnread}
+              >
                 {projetos.map((item) => (
                   <ChatListRow
                     key={item.id}

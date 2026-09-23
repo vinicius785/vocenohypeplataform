@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-const URL_RE = /(https?:\/\/[^\s<>"')]+)/g;
+export const URL_RE = /(https?:\/\/[^\s<>"')]+)/g;
 
 /** Quebra `text` em pedaços, envolvendo qualquer URL http(s) num link clicável. */
 export function linkifyText(text: string, keyPrefix = "link"): ReactNode[] {

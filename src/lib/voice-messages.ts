@@ -1,4 +1,5 @@
 import type { ChatAttachment, ChatMessage } from "./chat-store";
+import { URL_RE } from "./linkify";
 
 export const VOICE_WAVEFORM_BARS = 40;
 export const MAX_RECORDING_MS = 10 * 60 * 1000;
@@ -64,16 +65,44 @@ export function isVoiceAttachment(a: ChatAttachment): boolean {
  * resposta, banner de "respondendo a" e notificação/toast — nunca mostra
  * nome de arquivo cru pra mensagem de voz, e nunca inventa texto quando não
  * há nada (mensagem só com anexo não-áudio mostra o nome do arquivo). */
-export function messagePreviewLabel(m: Pick<ChatMessage, "text" | "attachments">): string {
-  if (m.text) return m.text;
-  const first = m.attachments?.[0];
-  if (!first) return "";
-  if (isVoiceAttachment(first)) {
-    return first.durationMs
-      ? `🎙 Mensagem de voz · ${formatVoiceTime(first.durationMs)}`
-      : "🎙 Mensagem de voz";
+const MENTION_SHARE_LABEL: Record<string, string> = {
+  task: "compartilhou uma tarefa",
+  project: "compartilhou um projeto",
+  campaign: "compartilhou uma campanha",
+  client: "compartilhou um cliente",
+};
+
+export function messagePreviewLabel(
+  m: Pick<ChatMessage, "text" | "attachments" | "mentions">,
+): string {
+  // Mensagem cujo texto é SÓ um link (o caso comum de colar uma URL sozinha)
+  // nunca deve mostrar a URL crua na navegação — link de OAuth/Drive/Meet
+  // facilmente passa de 100 caracteres, e mesmo truncado pelo `text-overflow:
+  // ellipsis` do item da lista, o pedaço visível não diz nada útil. Resume
+  // como "enviou um link", igual aos outros tipos de anexo abaixo. Mensagem
+  // com texto ALÉM do link (ex: "olha isso: https://...") mantém o texto
+  // normal — só o caso de "é só um link" precisa desse resumo.
+  const trimmed = m.text?.trim();
+  if (trimmed) {
+    const matches = trimmed.match(URL_RE);
+    if (matches?.length === 1 && matches[0] === trimmed) return "🔗 enviou um link";
+    return m.text!;
   }
-  return `📎 ${first.name}`;
+  const first = m.attachments?.[0];
+  if (first) {
+    if (isVoiceAttachment(first)) {
+      return first.durationMs
+        ? `🎙 Mensagem de voz · ${formatVoiceTime(first.durationMs)}`
+        : "🎙 Mensagem de voz";
+    }
+    return `📎 ${first.name}`;
+  }
+  // Sem texto e sem anexo, mas com uma menção de tarefa/projeto/campanha/
+  // cliente — é uma mensagem que só compartilha esse item (ver
+  // `TaskMentionCard` em ChatSection.tsx), não uma mensagem vazia.
+  const firstShareable = m.mentions?.find((mn) => mn.kind in MENTION_SHARE_LABEL);
+  if (firstShareable) return MENTION_SHARE_LABEL[firstShareable.kind];
+  return "";
 }
 
 // ---------- Reprodução única: pausa qualquer outro áudio em andamento ----------
