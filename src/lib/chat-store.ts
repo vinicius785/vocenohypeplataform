@@ -159,6 +159,13 @@ export function setActive(id: string) {
 // ---------- Supabase-backed caches ----------
 let channelsCache: ChatChannel[] = [];
 let messagesCache: ChatMessage[] = [];
+// Fase 2 da reconstrução do Chat — paginação por cursor real (ver
+// `reloadMessages`/`loadOlderMessages`). `oldestLoadedByConvo` é o cursor
+// (epoch ms da mensagem mais antiga já carregada por conversa);
+// `hasMoreByConvo` evita uma última consulta desnecessária depois que uma
+// página veio incompleta (sinal certo de que acabou o histórico).
+let oldestLoadedByConvo: Record<string, number> = {};
+let hasMoreByConvo: Record<string, boolean> = {};
 let lastReadCache: Record<string, number> = {};
 let allReadsCache: Record<string, Record<string, number>> = {};
 /** Marca de ENTREGA por (convo, usuário) — carimbada automaticamente
@@ -254,23 +261,88 @@ async function reloadChannels() {
   channelsCache = (data ?? []).map((r) => mapChannel(r as ChannelRow));
   emit();
 }
+/** Quantas mensagens recentes de CADA conversa o carregamento inicial traz
+ * — ver `get_recent_chat_messages` (Fase 2). Histórico mais antigo que
+ * isso só chega via `loadOlderMessages`, sob demanda (scroll pra cima). */
+const RECENT_MESSAGES_PER_CONVO = 50;
+
 async function reloadMessages() {
-  // Ordenar ASC + limit(5000) pegava as 5000 mensagens mais ANTIGAS de todo
-  // o workspace (a busca não é filtrada por conversa) — assim que o total
-  // passasse de 5000, as mensagens mais RECENTES de qualquer conversa
-  // simplesmente nunca eram carregadas, silenciosamente, e continuavam
-  // faltando em todo recarregamento seguinte (pareciam ter "sumido", mas só
-  // não estavam sendo buscadas). Ordenar DESC busca as 5000 mais recentes
-  // (o corte relevante), reordenando ASC de volta em memória pra exibição.
-  const { data } = await supabase
-    .from("chat_messages")
-    .select(MESSAGE_COLUMNS)
-    .order("created_at", { ascending: false })
-    .limit(5000);
+  // Antes: `order("created_at", {ascending:false}).limit(5000)` sem filtro
+  // de conversa — um recorte GLOBAL do workspace inteiro. Numa equipe
+  // ativa, poucas conversas muito movimentadas (ex: um canal geral cheio)
+  // consomem esse limite sozinhas, e o histórico recente de conversas mais
+  // tranquilas nunca chegava a ser buscado (sumiam silenciosamente, mesmo
+  // tendo poucas mensagens). `get_recent_chat_messages` resolve isso na
+  // origem: devolve as N mensagens mais recentes de CADA conversa,
+  // calculado no Postgres com `row_number() over (partition by convo_id)`
+  // — nunca um corte que privilegia quem manda mais mensagens.
+  const { data } = await supabase.rpc("get_recent_chat_messages", {
+    p_per_conversation: RECENT_MESSAGES_PER_CONVO,
+  });
   messagesCache = (data ?? [])
     .map((r) => mapMessage(r as MessageRow))
     .sort((a, b) => a.createdAt - b.createdAt);
+  oldestLoadedByConvo = {};
+  for (const m of messagesCache) {
+    const cur = oldestLoadedByConvo[m.convoId];
+    if (cur === undefined || m.createdAt < cur) oldestLoadedByConvo[m.convoId] = m.createdAt;
+  }
+  // Conversas com exatamente `RECENT_MESSAGES_PER_CONVO` mensagens carregadas
+  // PODEM ter mais história antiga além disso (não há como saber com certeza
+  // sem outra consulta) — `hasMoreByConvo` começa otimista pra essas e vira
+  // `false` assim que `loadOlderMessages` devolver menos que uma página cheia.
+  const countByConvo = new Map<string, number>();
+  for (const m of messagesCache)
+    countByConvo.set(m.convoId, (countByConvo.get(m.convoId) ?? 0) + 1);
+  hasMoreByConvo = {};
+  for (const [convoId, count] of countByConvo) {
+    hasMoreByConvo[convoId] = count >= RECENT_MESSAGES_PER_CONVO;
+  }
   emit();
+}
+
+/** Busca uma página de mensagens MAIS ANTIGAS que a mais antiga já
+ * carregada de `convoId` (paginação por cursor de verdade, item explícito
+ * do pedido: "carregar mensagens antigas ao subir... não carregar todo o
+ * histórico de uma vez"). Preenche `messagesCache` na frente das já
+ * existentes; quem chama (a UI) é responsável por preservar a posição do
+ * scroll ao inserir — esta função só garante que os dados cheguem
+ * ordenados e sem duplicar mensagens já presentes. Devolve `false` quando
+ * não há mais história antes disso (a UI esconde o botão/gatilho de
+ * "carregar mais"). */
+export async function loadOlderMessages(convoId: string): Promise<boolean> {
+  const cursor = oldestLoadedByConvo[convoId];
+  if (cursor === undefined) return false; // conversa ainda não foi aberta/carregada
+  if (hasMoreByConvo[convoId] === false) return false;
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select(MESSAGE_COLUMNS)
+    .eq("convo_id", convoId)
+    .lt("created_at", new Date(cursor).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(RECENT_MESSAGES_PER_CONVO);
+  if (error) return false;
+  const older = (data ?? []).map((r) => mapMessage(r as MessageRow));
+  hasMoreByConvo = { ...hasMoreByConvo, [convoId]: older.length >= RECENT_MESSAGES_PER_CONVO };
+  if (older.length === 0) return false;
+  oldestLoadedByConvo = {
+    ...oldestLoadedByConvo,
+    [convoId]: Math.min(...older.map((m) => m.createdAt)),
+  };
+  const existingIds = new Set(messagesCache.map((m) => m.id));
+  const toAdd = older.filter((m) => !existingIds.has(m.id));
+  messagesCache = [...toAdd, ...messagesCache].sort((a, b) => a.createdAt - b.createdAt);
+  emit();
+  return hasMoreByConvo[convoId] ?? false;
+}
+
+/** `true` quando ainda pode haver história mais antiga de `convoId` pra
+ * buscar com `loadOlderMessages` — usado pela UI pra decidir se mostra o
+ * gatilho "carregar mais" no topo do histórico. `undefined` (conversa
+ * nunca aberta) é tratado como "sim, pode ter mais" — só sabemos que não
+ * há mais depois de tentar carregar. */
+export function hasMoreOlderMessages(convoId: string): boolean {
+  return hasMoreByConvo[convoId] !== false;
 }
 async function reloadReads(uid: string) {
   const { data } = await supabase

@@ -3068,6 +3068,24 @@ export type Database = {
         };
         Returns: string;
       };
+      get_recent_chat_messages: {
+        Args: { p_per_conversation?: number };
+        Returns: {
+          attachments: Json;
+          author_id: string;
+          author_name: string;
+          author_photo: string;
+          convo_id: string;
+          created_at: string;
+          edited_at: string;
+          hypito_payload: Json;
+          id: string;
+          mentions: Json;
+          reactions: Json;
+          reply_to_id: string;
+          text: string;
+        }[];
+      };
       has_permission: {
         Args: { _permission: string; _user_id: string };
         Returns: boolean;

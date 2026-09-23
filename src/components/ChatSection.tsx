@@ -96,6 +96,8 @@ import {
   createChannel,
   updateChannel,
   deleteChannel as deleteChannelDb,
+  loadOlderMessages,
+  hasMoreOlderMessages,
   REACTION_EMOJIS,
   type ChatMember,
   type ChatMention,
@@ -2009,6 +2011,14 @@ function MessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, convoId]);
 
+  // Paginação por cursor (Fase 2): ao chegar perto do topo do histórico já
+  // carregado, busca a próxima página de mensagens mais antigas. Preserva a
+  // posição de leitura ajustando `scrollTop` pela diferença de altura ANTES
+  // de o React re-renderizar — sem isso, inserir conteúdo acima do que já
+  // está na tela empurra tudo pra baixo e a pessoa perde o lugar onde
+  // estava lendo (item explícito do pedido: "manter posição ao inserir
+  // mensagens antigas").
+  const loadingOlderRef = useRef(false);
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -2016,6 +2026,19 @@ function MessageList({
     isNearBottomRef.current = distanceFromBottom < 120;
     if (isNearBottomRef.current) setShowNewMessagesPill(false);
     scrollPositions.current.set(convoId, el.scrollTop);
+
+    if (el.scrollTop < 200 && !loadingOlderRef.current && hasMoreOlderMessages(convoId)) {
+      loadingOlderRef.current = true;
+      const prevScrollHeight = el.scrollHeight;
+      const prevScrollTop = el.scrollTop;
+      void loadOlderMessages(convoId).finally(() => {
+        requestAnimationFrame(() => {
+          const grown = el.scrollHeight - prevScrollHeight;
+          el.scrollTop = prevScrollTop + grown;
+          loadingOlderRef.current = false;
+        });
+      });
+    }
   };
 
   const scrollToBottom = () => {
