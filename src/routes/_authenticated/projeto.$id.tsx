@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DateField } from "@/components/ui/date-field";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   X,
@@ -35,8 +35,6 @@ import {
   Flag,
   CalendarClock,
   ListChecks,
-  AlertTriangle,
-  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -65,6 +63,8 @@ import {
   onProjetosChange,
   upsertProjeto,
   deleteProjeto,
+  loadTeamMembers,
+  PROJECT_STATUS_LABEL,
   type FeatureKey,
   type Project,
   type ProjectLayout,
@@ -74,6 +74,13 @@ import {
   type DocCategory,
   type SectionItem,
 } from "@/lib/projetos";
+import {
+  computeProjectMetrics,
+  PROJECT_STATUS_BADGE_VARIANT,
+  PROJECT_HEALTH_BADGE_VARIANT,
+  PROJECT_HEALTH_LABEL,
+} from "@/components/projetos/projeto-ui";
+import { Badge } from "@/components/ui/badge";
 import { EditorialPanel } from "@/components/marketing/EditorialPanel";
 import { TrafegoPagoPanel } from "@/components/marketing/TrafegoPagoPanel";
 import { BlogPanel } from "@/components/marketing/BlogPanel";
@@ -93,13 +100,7 @@ import {
   saveProjetoFases,
   onProjetoFasesChange,
 } from "@/lib/projeto-scoped-store";
-import {
-  tarefasSemFase,
-  faseAtual,
-  faseStatusEfetivo,
-  type ProjetoFase,
-} from "@/lib/roadmap-engine";
-import { OPEN_STATUSES } from "@/lib/score";
+import { type ProjetoFase } from "@/lib/roadmap-engine";
 import { formatIsoDate } from "@/lib/utils";
 import { PhaseFormDialog } from "@/components/roadmap/PhaseFormDialog";
 import { LinkTasksPanel } from "@/components/roadmap/LinkTasksPanel";
@@ -261,20 +262,12 @@ function ProjetoPage() {
     );
   }
 
-  const projectTasks = project.tasks as unknown as BoardTask[];
-  const pendentes = projectTasks.filter((t) => OPEN_STATUSES.has(t.status)).length;
-  const faseAtualDoProjeto = hasRoadmap ? faseAtual(fasesForHeader, projectTasks) : null;
-  const todasFasesConcluidas = hasRoadmap && fasesForHeader.length > 0 && !faseAtualDoProjeto;
-  const fasesEmRiscoCount = hasRoadmap
-    ? fasesForHeader.filter((f) => {
-        const s = faseStatusEfetivo(f, projectTasks);
-        return s === "em_risco" || s === "atrasada";
-      }).length
-    : 0;
-  const proximaEntregaTask =
-    projectTasks
-      .filter((t) => OPEN_STATUSES.has(t.status) && t.dueDate)
-      .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))[0] ?? null;
+  // Métricas do cabeçalho — mesma função central já usada na listagem de
+  // Projetos (`computeProjectMetrics`), nunca uma segunda regra local só
+  // pra esta tela. `fasesForHeader` já está carregado acima; passado
+  // explícito pra não duplicar a leitura do store escopado.
+  const projectStatus = project.status ?? "ativo";
+  const metrics = computeProjectMetrics(project, loadTeamMembers(), fasesForHeader);
 
   // Projeto "HypeApp" ganha a aba de Bugs & Sugestões automaticamente,
   // mesmo padrão de nome especial já usado pro projeto "MARKETING" — sem
@@ -330,41 +323,41 @@ function ProjetoPage() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-2xl font-semibold tracking-tight text-brand-foreground">
-                    {project.name}
-                  </h1>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-foreground-secondary">
-                    {project.description && (
-                      <span className="max-w-[280px] truncate">{project.description}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-2xl font-semibold tracking-tight text-brand-foreground">
+                      {project.name}
+                    </h1>
+                    <Badge
+                      variant={PROJECT_STATUS_BADGE_VARIANT[projectStatus]}
+                      className="shrink-0"
+                    >
+                      {PROJECT_STATUS_LABEL[projectStatus]}
+                    </Badge>
+                    {metrics.health && metrics.health !== "saudavel" && (
+                      <Badge
+                        variant={PROJECT_HEALTH_BADGE_VARIANT[metrics.health]}
+                        className="shrink-0"
+                      >
+                        {PROJECT_HEALTH_LABEL[metrics.health]}
+                      </Badge>
                     )}
-                    {faseAtualDoProjeto ? (
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-brand-foreground-secondary">
+                    {metrics.principal && (
                       <span className="inline-flex items-center gap-1">
-                        <Flag className="h-3 w-3" /> {faseAtualDoProjeto.nome}
+                        <Flag className="h-3 w-3" /> {metrics.principal.name}
                       </span>
-                    ) : todasFasesConcluidas ? (
-                      <span className="inline-flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Projeto concluído
-                      </span>
-                    ) : null}
-                    {faseAtualDoProjeto?.responsavelPrincipal && (
-                      <span>{faseAtualDoProjeto.responsavelPrincipal}</span>
                     )}
-                    {proximaEntregaTask?.dueDate && (
+                    {metrics.nextDeliveryIso && (
                       <span className="inline-flex items-center gap-1">
                         <CalendarClock className="h-3 w-3" />
-                        Próxima entrega {formatIsoDate(proximaEntregaTask.dueDate)}
+                        Próxima entrega {formatIsoDate(metrics.nextDeliveryIso)}
                       </span>
                     )}
-                    {pendentes > 0 && (
+                    {metrics.openCount > 0 && (
                       <span className="inline-flex items-center gap-1">
-                        <ListChecks className="h-3 w-3" /> {pendentes}{" "}
-                        {pendentes === 1 ? "tarefa pendente" : "tarefas pendentes"}
-                      </span>
-                    )}
-                    {fasesEmRiscoCount > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 font-medium text-brand-foreground">
-                        <AlertTriangle className="h-3 w-3" /> {fasesEmRiscoCount}{" "}
-                        {fasesEmRiscoCount === 1 ? "fase em risco" : "fases em risco"}
+                        <ListChecks className="h-3 w-3" /> {metrics.openCount}{" "}
+                        {metrics.openCount === 1 ? "tarefa pendente" : "tarefas pendentes"}
                       </span>
                     )}
                   </div>
@@ -502,11 +495,6 @@ function RoadmapPanel({
     saveProjetoFases(project.id, list);
   };
 
-  const semFase = useMemo(
-    () => tarefasSemFase(project.tasks as unknown as BoardTask[], fases),
-    [project.tasks, fases],
-  );
-
   // Dialog de tarefa unificado — edita (fase, "sem fase" ou Kanban) e
   // cria (dentro de uma fase) usando SEMPRE o mesmo SharedTaskDialog.
   const [taskDialog, setTaskDialog] = useState<
@@ -532,15 +520,26 @@ function RoadmapPanel({
   // Fase — criar/editar
   const [faseDialogOpen, setFaseDialogOpen] = useState(false);
   const [editingFase, setEditingFase] = useState<ProjetoFase | undefined>(undefined);
-  const [pendingSemFaseSelection, setPendingSemFaseSelection] = useState<string[] | null>(null);
 
   const nowIso = () => new Date().toISOString();
 
   const saveFase = (partial: Omit<ProjetoFase, "id" | "createdAt" | "updatedAt" | "sortOrder">) => {
+    // Só uma fase de cada vez pode estar marcada manualmente como atual —
+    // marcar esta desmarca qualquer outra, pra não deixar duas "correndo"
+    // ao mesmo tempo (faseAtual() já desempataria por sortOrder mesmo se
+    // duas estivessem marcadas, mas isso confundiria quem está editando).
+    const limparOutrasAtuais = (list: ProjetoFase[], excetoId?: string) =>
+      partial.manualCurrent
+        ? list.map((f) =>
+            f.id !== excetoId && f.manualCurrent ? { ...f, manualCurrent: false } : f,
+          )
+        : list;
+
     if (editingFase) {
-      updateFases(
-        fases.map((f) => (f.id === editingFase.id ? { ...f, ...partial, updatedAt: nowIso() } : f)),
+      const atualizadas = fases.map((f) =>
+        f.id === editingFase.id ? { ...f, ...partial, updatedAt: nowIso() } : f,
       );
+      updateFases(limparOutrasAtuais(atualizadas, editingFase.id));
     } else {
       const novaFase: ProjetoFase = {
         ...partial,
@@ -549,18 +548,29 @@ function RoadmapPanel({
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
-      updateFases([...fases, novaFase]);
-      if (pendingSemFaseSelection) {
-        update({
-          tasks: project.tasks.map((t) =>
-            pendingSemFaseSelection.includes(t.id) ? { ...t, roadmapPhaseId: novaFase.id } : t,
-          ),
-        });
-        setPendingSemFaseSelection(null);
-      }
+      updateFases(limparOutrasAtuais([...fases, novaFase], novaFase.id));
     }
     setFaseDialogOpen(false);
     setEditingFase(undefined);
+  };
+
+  /** Reordenar sem drag-and-drop (item 9 do pedido: se não existir,
+   * implementar uma ação simples) — troca o `sortOrder` com o vizinho
+   * na posição atual, nunca reescreve a lista inteira. */
+  const handleReorderFase = (fase: ProjetoFase, direction: "up" | "down") => {
+    const ordered = [...fases].sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = ordered.findIndex((f) => f.id === fase.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= ordered.length) return;
+    const a = ordered[idx];
+    const b = ordered[swapIdx];
+    updateFases(
+      fases.map((f) => {
+        if (f.id === a.id) return { ...f, sortOrder: b.sortOrder, updatedAt: nowIso() };
+        if (f.id === b.id) return { ...f, sortOrder: a.sortOrder, updatedAt: nowIso() };
+        return f;
+      }),
+    );
   };
 
   const handleDeleteFase = async (fase: ProjetoFase) => {
@@ -606,12 +616,6 @@ function RoadmapPanel({
     });
   };
 
-  const handleCreateFaseFromSelection = (taskIds: string[]) => {
-    setPendingSemFaseSelection(taskIds);
-    setEditingFase(undefined);
-    setFaseDialogOpen(true);
-  };
-
   return (
     <div className="space-y-8">
       <RoadmapOverviewTab fases={fases} tasks={project.tasks as unknown as BoardTask[]} />
@@ -619,7 +623,6 @@ function RoadmapPanel({
       <PhaseTimeline
         fases={fases}
         tasks={project.tasks as unknown as BoardTask[]}
-        semFase={semFase}
         canEdit={canEdit}
         onOpenTask={(t) => setTaskDialog({ mode: "edit", taskId: t.id })}
         onCreateTask={(faseId) => setTaskDialog({ mode: "new", defaultFaseId: faseId })}
@@ -635,7 +638,7 @@ function RoadmapPanel({
           setEditingFase(undefined);
           setFaseDialogOpen(true);
         }}
-        onCreateFaseFromSelection={handleCreateFaseFromSelection}
+        onReorderFase={handleReorderFase}
       />
 
       {taskDialog && (
@@ -670,10 +673,7 @@ function RoadmapPanel({
           open={faseDialogOpen}
           onOpenChange={(o) => {
             setFaseDialogOpen(o);
-            if (!o) {
-              setEditingFase(undefined);
-              setPendingSemFaseSelection(null);
-            }
+            if (!o) setEditingFase(undefined);
           }}
           initial={editingFase}
           onSave={saveFase}

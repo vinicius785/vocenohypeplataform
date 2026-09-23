@@ -17,6 +17,7 @@ const FASE_STATUSES: FaseStatus[] = [
   "em_andamento",
   "em_risco",
   "atrasada",
+  "pausada",
   "concluida",
 ];
 
@@ -58,6 +59,8 @@ export function PhaseFormDialog({
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [responsavelPrincipal, setResponsavelPrincipal] = useState("");
+  const [participantes, setParticipantes] = useState<string[]>([]);
+  const [manualCurrent, setManualCurrent] = useState(false);
   const [cor, setCor] = useState(TASK_TAG_COLORS[0].value);
   const [status, setStatus] = useState<FaseStatus>("nao_iniciada");
   const [error, setError] = useState("");
@@ -70,10 +73,17 @@ export function PhaseFormDialog({
     setDataInicio(initial?.dataInicio ?? "");
     setDataFim(initial?.dataFim ?? "");
     setResponsavelPrincipal(initial?.responsavelPrincipal ?? "");
+    setParticipantes(initial?.participantes ?? []);
+    setManualCurrent(initial?.manualCurrent ?? false);
     setCor(initial?.cor ?? TASK_TAG_COLORS[0].value);
     setStatus(initial?.status ?? "nao_iniciada");
     setError("");
   }, [open, initial]);
+
+  const toggleParticipante = (name: string) =>
+    setParticipantes((prev) =>
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
+    );
 
   const save = () => {
     if (!nome.trim()) {
@@ -99,6 +109,8 @@ export function PhaseFormDialog({
       dataFim,
       status,
       responsavelPrincipal: responsavelPrincipal || undefined,
+      participantes: participantes.length > 0 ? participantes : undefined,
+      manualCurrent: manualCurrent || undefined,
       cor,
     });
   };
@@ -199,10 +211,48 @@ export function PhaseFormDialog({
             </div>
           </div>
 
+          {members.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Participantes
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((m) => {
+                  const checked = participantes.includes(m.name);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleParticipante(m.name)}
+                      aria-pressed={checked}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        checked
+                          ? "border-brand bg-brand-subtle text-brand"
+                          : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {m.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Cor</label>
             <ColorSwatches value={cor} onPick={setCor} />
           </div>
+
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={manualCurrent}
+              onChange={(e) => setManualCurrent(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-border accent-brand"
+            />
+            Marcar esta fase como a fase atual do roadmap
+          </label>
 
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>

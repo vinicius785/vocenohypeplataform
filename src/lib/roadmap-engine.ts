@@ -8,13 +8,20 @@ import { getTaskAssignees } from "./projetos";
 import { OPEN_STATUSES } from "./score";
 import { todayIsoInBrasilia } from "./timezone";
 
-export type FaseStatus = "nao_iniciada" | "em_andamento" | "em_risco" | "atrasada" | "concluida";
+export type FaseStatus =
+  | "nao_iniciada"
+  | "em_andamento"
+  | "em_risco"
+  | "atrasada"
+  | "pausada"
+  | "concluida";
 
 export const FASE_STATUS_LABEL: Record<FaseStatus, string> = {
-  nao_iniciada: "Não iniciada",
+  nao_iniciada: "Planejada",
   em_andamento: "Em andamento",
   em_risco: "Em risco",
   atrasada: "Atrasada",
+  pausada: "Pausada",
   concluida: "Concluída",
 };
 
@@ -26,7 +33,19 @@ export const FASE_STATUS_TONE: Record<FaseStatus, string> = {
   em_andamento: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
   em_risco: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   atrasada: "bg-destructive/10 text-destructive",
+  pausada: "bg-muted text-muted-foreground",
   concluida: "bg-foreground text-background",
+};
+
+/** Cor sólida do ponto na linha do tempo — nunca usada pra pintar o
+ * card inteiro (item 3 do pedido), só o marcador de posição. */
+export const FASE_DOT_CLASS: Record<FaseStatus, string> = {
+  nao_iniciada: "bg-muted-foreground/30",
+  em_andamento: "bg-brand",
+  em_risco: "bg-warning",
+  atrasada: "bg-danger",
+  pausada: "bg-muted-foreground/30",
+  concluida: "bg-success",
 };
 
 /** Uma fase do roadmap de um projeto — vive na tabela `projeto_fases`
@@ -49,6 +68,16 @@ export type ProjetoFase = {
    * cálculo). */
   status: FaseStatus;
   responsavelPrincipal?: string; // nome do membro, mesmo padrão de Task.assignee
+  /** Outros membros envolvidos na fase, além do responsável principal —
+   * aditivo (fases antigas não têm isso, tratado como lista vazia). Só
+   * complementa os responsáveis já derivados das tarefas vinculadas
+   * (`faseResponsaveis`), nunca substitui. */
+  participantes?: string[];
+  /** Marca manual de "esta é a fase atual", prioridade 1 de `faseAtual`.
+   * Aditivo — fases antigas não têm isso. Só uma fase deveria estar
+   * marcada por vez; se mais de uma estiver (edição concorrente), a
+   * primeira em `sortOrder` vence, nunca é um erro. */
+  manualCurrent?: boolean;
   cor: string; // mesmo formato de valor usado em TASK_TAG_COLORS
   sortOrder: number;
   createdAt: string;
@@ -80,22 +109,28 @@ export function tarefasSemFase(tasks: Task[], fases: ProjetoFase[]): Task[] {
  * fonte de verdade que o Kanban/Score Operacional já usam pra "tarefa
  * aberta") em vez de inventar uma segunda regra de status. */
 export function faseTaskCounts(fase: Pick<ProjetoFase, "id">, tasks: Task[]): FaseTaskCounts {
-  const desta = tasksDaFase(fase.id, tasks);
+  // "Arquivado" não é "tarefa válida da fase" (item 7 do pedido) — fica
+  // de fora do `total` também, não só dos outros baldes. Antes só ficava
+  // de fora de `concluidas`/`emAndamento`/`atrasadas`, mas continuava
+  // inflando `total` (o comentário dizia "não conta em nenhum balde",
+  // só não era verdade pra este) — inflava o denominador do progresso
+  // sem motivo (achado real ao escrever os testes desta rodada).
+  const validas = tasksDaFase(fase.id, tasks).filter((t) => t.status !== "Arquivado");
   const today = todayIsoInBrasilia();
   let concluidas = 0;
   let emAndamento = 0;
   let atrasadas = 0;
   const bloqueadas = 0; // sem um status "bloqueada" hoje na plataforma — reservado pro futuro, nunca inventado
-  for (const t of desta) {
+  for (const t of validas) {
     if (t.status === "Concluído") {
       concluidas++;
       continue;
     }
-    if (!OPEN_STATUSES.has(t.status)) continue; // Arquivado: não conta em nenhum balde
+    if (!OPEN_STATUSES.has(t.status)) continue;
     if (t.dueDate && t.dueDate < today) atrasadas++;
     else emAndamento++;
   }
-  return { total: desta.length, concluidas, emAndamento, atrasadas, bloqueadas };
+  return { total: validas.length, concluidas, emAndamento, atrasadas, bloqueadas };
 }
 
 /** `null` quando a fase não tem nenhuma tarefa vinculada — quem
@@ -125,7 +160,7 @@ export function faseResponsaveis(fase: Pick<ProjetoFase, "id">, tasks: Task[]): 
  * nunca é rebaixada por este cálculo. Fases sem tarefa vinculada também
  * nunca ficam "atrasada" automaticamente (nada pra atrasar). */
 export function faseStatusEfetivo(fase: ProjetoFase, tasks: Task[]): FaseStatus {
-  if (fase.status === "concluida") return "concluida";
+  if (fase.status === "concluida" || fase.status === "pausada") return fase.status;
   const { total, concluidas } = faseTaskCounts(fase, tasks);
   const today = todayIsoInBrasilia();
   const prazoVencido = !!fase.dataFim && fase.dataFim < today;
@@ -156,10 +191,70 @@ function diasEntre(isoA: string, isoB: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-/** Fase "atual" pra Visão geral — a primeira, em ordem de `sortOrder`,
- * cujo status efetivo ainda não é "concluida"; `null` se todas
- * estiverem concluídas ou não houver fase. */
+/** ID de DOM de cada fase na linha do tempo — usado pra rolar/destacar a
+ * fase quando alguém clica num alerta do resumo (item 8 do pedido).
+ * Mesma convenção entre `RoadmapOverviewTab.tsx`/`PhaseTimeline.tsx`. */
+export function faseDomId(faseId: string): string {
+  return `roadmap-fase-${faseId}`;
+}
+
+/** Fase "atual" — regra centralizada e previsível (item 6 do pedido),
+ * em ordem de prioridade:
+ *   1. fase marcada manualmente como atual (`manualCurrent`);
+ *   2. fase "em andamento" (status manual) cujo período contém hoje;
+ *   3. primeira fase não concluída/pausada, na ordem do roadmap
+ *      (`sortOrder`) — mesmo fallback de sempre.
+ * Nunca mais de uma fase é retornada como atual; se mais de uma
+ * qualificar num nível, a de menor `sortOrder` vence. `null` quando
+ * nenhuma fase se enquadra (todas concluídas/pausadas, ou nenhuma
+ * fase existe) — quem renderiza deve mostrar um estado neutro
+ * explícito ("Nenhuma fase em andamento"), nunca inventar uma. */
 export function faseAtual(fases: ProjetoFase[], tasks: Task[]): ProjetoFase | null {
   const ordenadas = [...fases].sort((a, b) => a.sortOrder - b.sortOrder);
-  return ordenadas.find((f) => faseStatusEfetivo(f, tasks) !== "concluida") ?? null;
+
+  const marcadaManualmente = ordenadas.find((f) => f.manualCurrent);
+  if (marcadaManualmente) return marcadaManualmente;
+
+  const today = todayIsoInBrasilia();
+  const emAndamentoNoPeriodo = ordenadas.find(
+    (f) => f.status === "em_andamento" && f.dataInicio <= today && today <= f.dataFim,
+  );
+  if (emAndamentoNoPeriodo) return emAndamentoNoPeriodo;
+
+  return (
+    ordenadas.find((f) => {
+      const s = faseStatusEfetivo(f, tasks);
+      return s !== "concluida" && s !== "pausada";
+    }) ?? null
+  );
+}
+
+/** Progresso agregado do Roadmap inteiro — soma de tarefas válidas
+ * vinculadas a QUALQUER fase, dividida pelo total, nunca a média das
+ * porcentagens de cada fase (item 7 do pedido: uma fase de 2 tarefas
+ * 100% concluída não pode pesar igual a uma de 20 tarefas 10%
+ * concluída). Tarefas sem fase nunca entram aqui — ver `tarefasSemFase`.
+ * `null` quando nenhuma tarefa está vinculada a nenhuma fase. */
+export function roadmapProgressoGeral(
+  fases: ProjetoFase[],
+  tasks: Task[],
+): { total: number; concluidas: number; pct: number | null } {
+  let total = 0;
+  let concluidas = 0;
+  for (const fase of fases) {
+    const counts = faseTaskCounts(fase, tasks);
+    total += counts.total;
+    concluidas += counts.concluidas;
+  }
+  return { total, concluidas, pct: total === 0 ? null : Math.round((concluidas / total) * 100) };
+}
+
+/** `true` quando uma fase foi marcada manualmente como "concluida" mas
+ * ainda tem tarefas pendentes vinculadas — inconsistência real que quem
+ * edita a fase deveria resolver, não escondida (item 7, último tópico:
+ * "aviso administrativo"). Nunca força um status diferente sozinho. */
+export function faseConcluidaComPendencias(fase: ProjetoFase, tasks: Task[]): boolean {
+  if (fase.status !== "concluida") return false;
+  const { total, concluidas } = faseTaskCounts(fase, tasks);
+  return total - concluidas > 0;
 }
