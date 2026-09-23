@@ -85,13 +85,25 @@ import { currentHourInBrasilia } from "@/lib/timezone";
 import { ManageCardsMenu } from "@/components/inicio/ManageCardsMenu";
 import { useMyAccess, hasPermission, SECTION_PERMISSION } from "@/lib/permissions";
 import { useFinanceiroEntries, remainingBalance, fmtBRL } from "@/lib/financeiro-entries";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { listLeads } from "@/lib/comercial.functions";
 import { legacyStage } from "@/lib/comercial-engine";
 import { formatBRL as formatLeadBRL } from "@/lib/comercial";
-
-type PersonalItem = { id: string; text: string; done: boolean };
+import {
+  listReminders,
+  createReminder as createReminderServerFn,
+  updateReminder as updateReminderServerFn,
+  completeReminder as completeReminderServerFn,
+  reopenReminder as reopenReminderServerFn,
+  deleteReminder as deleteReminderServerFn,
+  type ReminderPriority,
+} from "@/lib/reminders.functions";
+import { rowToReminder, pendingReminders } from "@/lib/reminders";
+import { RemindersCard } from "@/components/inicio/RemindersCard";
+import { ReminderFormDialog } from "@/components/inicio/ReminderFormDialog";
+import { RemindersFullView } from "@/components/inicio/RemindersFullView";
+import { QuickBreakCard } from "@/components/inicio/QuickBreakCard";
 
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
@@ -183,38 +195,26 @@ function loadPerfil(): { nome?: string; foto?: string } {
   }
 }
 
-// Fonte de verdade é `profiles.personal_list` (por usuário, sincroniza entre
-// dispositivos) — o cache local é só pra pintar a lista instantaneamente no
-// primeiro render, antes da consulta ao Supabase resolver.
-const PERSONAL_CACHE_KEY = "inicio.personal.cache";
-function loadPersonalCache(): PersonalItem[] {
-  try {
-    const raw = localStorage.getItem(PERSONAL_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as PersonalItem[]) : [];
-  } catch {
-    return [];
-  }
-}
-function cachePersonal(items: PersonalItem[]) {
-  try {
-    localStorage.setItem(PERSONAL_CACHE_KEY, JSON.stringify(items));
-  } catch {
-    /* ignore */
-  }
-}
+// Fonte de verdade das preferências de "Personalizar início" passa a ser
+// `profiles.dashboard_prefs` (por usuário, sincroniza entre dispositivos —
+// antes era só `localStorage`, resetava por navegador). O cache local é só
+// pra pintar a preferência instantaneamente no primeiro render, mesmo
+// padrão já usado pelos lembretes (antiga "lista pessoal").
+const DASHBOARD_PREFS_CACHE_KEY = "inicio.dashboardPrefs.cache";
 
 export type CardKey =
   | "stats"
   | "work"
   | "agenda"
   | "comments"
-  | "personal"
+  | "reminders"
+  | "quickBreak"
   | "financeiro"
   | "comercial";
 /** `permission`, quando presente, é checado contra `SECTION_PERMISSION`
- * antes de o card aparecer tanto na lista "Gerenciar cards" quanto no
+ * antes de o card aparecer tanto no menu "Personalizar início" quanto no
  * corpo da página — quem não tem a permissão da seção correspondente
- * nunca vê a opção de ligar o card, nem por engano via localStorage
+ * nunca vê a opção de ligar o card, nem por engano via preferência salva
  * (`visible.financeiro`/`visible.comercial` são sempre revalidados contra
  * o acesso atual no render, nunca só confiados do que foi salvo). */
 const CARD_DEFS: {
@@ -243,26 +243,57 @@ const CARD_DEFS: {
     label: "Comentários atribuídos",
     description: "Menções recentes em comentários",
   },
-  { key: "personal", label: "Lista pessoal", description: "Sua lista de tarefas pessoais" },
+  { key: "reminders", label: "Lembretes", description: "Seus lembretes pessoais e privados" },
+  { key: "quickBreak", label: "Pausa rápida", description: "ZIP e Termo, uma pausa entre tarefas" },
 ];
+const CARD_KEYS = CARD_DEFS.map((c) => c.key);
 const DEFAULT_VISIBLE: Record<CardKey, boolean> = {
   stats: true,
   work: true,
   agenda: true,
   comments: true,
-  personal: true,
+  reminders: true,
+  quickBreak: true,
   financeiro: true,
   comercial: true,
 };
-/** Ids de cards removidos em rodadas anteriores — se sobrar no localStorage
- * de alguém, é só ignorado (nunca lido em nenhum `visible.*`), sem quebrar
- * a leitura do restante das preferências salvas. */
+/** Ids de cards removidos em rodadas anteriores — se sobrar na preferência
+ * salva de alguém, é só ignorado (nunca lido em nenhum `visible.*`), sem
+ * quebrar a leitura do restante das preferências. */
 function sanitizeVisible(raw: Record<string, boolean>): Record<CardKey, boolean> {
   const next = { ...DEFAULT_VISIBLE };
   for (const key of Object.keys(next) as CardKey[]) {
     if (typeof raw[key] === "boolean") next[key] = raw[key];
   }
   return next;
+}
+function sanitizeOrder(raw: unknown): CardKey[] {
+  if (!Array.isArray(raw)) return CARD_KEYS;
+  const valid = raw.filter((k): k is CardKey => CARD_KEYS.includes(k as CardKey));
+  const missing = CARD_KEYS.filter((k) => !valid.includes(k));
+  return [...valid, ...missing];
+}
+type DashboardPrefs = { visible: Record<CardKey, boolean>; order: CardKey[] };
+const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = { visible: DEFAULT_VISIBLE, order: CARD_KEYS };
+function loadDashboardPrefsCache(): DashboardPrefs {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_PREFS_CACHE_KEY);
+    if (!raw) return DEFAULT_DASHBOARD_PREFS;
+    const parsed = JSON.parse(raw) as Partial<DashboardPrefs>;
+    return {
+      visible: sanitizeVisible(parsed.visible ?? {}),
+      order: sanitizeOrder(parsed.order),
+    };
+  } catch {
+    return DEFAULT_DASHBOARD_PREFS;
+  }
+}
+function cacheDashboardPrefs(prefs: DashboardPrefs) {
+  try {
+    localStorage.setItem(DASHBOARD_PREFS_CACHE_KEY, JSON.stringify(prefs));
+  } catch {
+    /* ignore */
+  }
 }
 
 // Preferência "Ambiente climático no cabeçalho" (item 11 do pedido) —
@@ -318,8 +349,6 @@ export function InicioDashboard() {
   const [taskCommentMentions, setTaskCommentMentions] = useState<TaskCommentMention[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingSummary, setMeetingSummary] = useState<Meeting | null>(null);
-  const [personal, setPersonal] = useState<PersonalItem[]>(() => loadPersonalCache());
-  const [newPersonal, setNewPersonal] = useState("");
   const [workExpanded, setWorkExpanded] = useState(false);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
   const workCardRef = useRef<HTMLDivElement>(null);
@@ -327,7 +356,7 @@ export function InicioDashboard() {
   const access = useMyAccess();
   const canFinanceiro = hasPermission(access, SECTION_PERMISSION.financeiro);
   const canComercial = hasPermission(access, SECTION_PERMISSION.comercial);
-  const visibleCardDefs = CARD_DEFS.filter(
+  const unsortedVisibleCardDefs = CARD_DEFS.filter(
     (c) => !c.permission || (c.permission === "financeiro" ? canFinanceiro : canComercial),
   );
   const financeiroEntries = useFinanceiroEntries();
@@ -343,16 +372,13 @@ export function InicioDashboard() {
     return { aReceber, aPagar };
   }, [financeiroEntries, canFinanceiro]);
 
-  const [visible, setVisible] = useState<Record<CardKey, boolean>>(() => {
-    if (typeof window === "undefined") return DEFAULT_VISIBLE;
-    try {
-      const raw = localStorage.getItem("inicio.cards");
-      if (raw) return sanitizeVisible(JSON.parse(raw));
-    } catch {
-      /* ignore */
-    }
-    return DEFAULT_VISIBLE;
-  });
+  const [dashboardPrefs, setDashboardPrefs] = useState<DashboardPrefs>(() =>
+    typeof window === "undefined" ? DEFAULT_DASHBOARD_PREFS : loadDashboardPrefsCache(),
+  );
+  const visible = dashboardPrefs.visible;
+  const visibleCardDefs = [...unsortedVisibleCardDefs].sort(
+    (a, b) => dashboardPrefs.order.indexOf(a.key) - dashboardPrefs.order.indexOf(b.key),
+  );
 
   // Mesma `queryKey` já usada em `ComercialSection.tsx` — compartilha
   // cache/refetch com a tela cheia do Comercial em vez de duplicar a
@@ -370,13 +396,82 @@ export function InicioDashboard() {
     [comercialLeads],
   );
 
+  /** Escreve a preferência (visibilidade/ordem dos cards) em
+   * `profiles.dashboard_prefs` — por usuário (RLS `auth.uid() = id`),
+   * nunca afeta o dashboard de outra pessoa. Mesmo padrão de
+   * `persistReminders`/antiga `persistPersonal`: atualiza local + cache +
+   * grava no banco, sem esperar round-trip pra refletir na tela. */
+  const persistDashboardPrefs = (next: DashboardPrefs) => {
+    setDashboardPrefs(next);
+    cacheDashboardPrefs(next);
+    const userId = getMe().id;
+    if (!userId) return;
+    void supabase
+      .from("profiles")
+      .update({ dashboard_prefs: next } as never)
+      .eq("id", userId)
+      .then(({ error }) => {
+        if (error) console.warn("[inicio.dashboardPrefs] save failed", error);
+      });
+  };
+  const setVisible = (updater: (v: Record<CardKey, boolean>) => Record<CardKey, boolean>) => {
+    persistDashboardPrefs({ ...dashboardPrefs, visible: updater(dashboardPrefs.visible) });
+  };
+  const reorderCards = (fromKey: CardKey, toKey: CardKey) => {
+    const order = [...dashboardPrefs.order];
+    const fromIdx = order.indexOf(fromKey);
+    const toIdx = order.indexOf(toKey);
+    if (fromIdx === -1 || toIdx === -1) return;
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, fromKey);
+    persistDashboardPrefs({ ...dashboardPrefs, order });
+  };
+
+  // Carrega a preferência real do banco (o cache local só serve pro
+  // primeiro paint) e mantém em sincronia entre dispositivos/abas via
+  // canal realtime próprio, filtrado pelo id do usuário — mesmo mecanismo
+  // já usado pelos lembretes.
   useEffect(() => {
-    try {
-      localStorage.setItem("inicio.cards", JSON.stringify(visible));
-    } catch {
-      /* ignore */
-    }
-  }, [visible]);
+    const userId = getMe().id;
+    if (!userId) return;
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("dashboard_prefs")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const raw = (data.dashboard_prefs as Partial<DashboardPrefs> | null) ?? {};
+        const prefs: DashboardPrefs = {
+          visible: sanitizeVisible(raw.visible ?? {}),
+          order: sanitizeOrder(raw.order),
+        };
+        setDashboardPrefs(prefs);
+        cacheDashboardPrefs(prefs);
+      });
+    const channel = supabase
+      .channel(`rt-dashboard-prefs-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+        (payload) => {
+          const raw = ((payload.new as { dashboard_prefs?: Partial<DashboardPrefs> } | null)
+            ?.dashboard_prefs ?? {}) as Partial<DashboardPrefs>;
+          const prefs: DashboardPrefs = {
+            visible: sanitizeVisible(raw.visible ?? {}),
+            order: sanitizeOrder(raw.order),
+          };
+          setDashboardPrefs(prefs);
+          cacheDashboardPrefs(prefs);
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   const [weatherEnabled, setWeatherEnabled] = useState<boolean>(() => loadWeatherEnabledPref());
   useEffect(() => {
@@ -426,43 +521,12 @@ export function InicioDashboard() {
     };
   }, [campanhaNameMap, performanceSettings.deadlineCutoffHour]);
 
-  // Lista pessoal — vive em `profiles.personal_list` (por usuário), não mais
-  // só em localStorage, pra acompanhar quem logou de outro dispositivo/
-  // navegador. Canal realtime próprio (filtrado pelo id do usuário) reflete
-  // uma edição feita em outra aba/dispositivo sem precisar de F5.
-  useEffect(() => {
-    const userId = getMe().id;
-    if (!userId) return;
-    let cancelled = false;
-    void supabase
-      .from("profiles")
-      .select("personal_list")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (cancelled || error || !data) return;
-        const items = (data.personal_list as PersonalItem[] | null) ?? [];
-        setPersonal(items);
-        cachePersonal(items);
-      });
-    const channel = supabase
-      .channel(`rt-personal-list-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
-        (payload) => {
-          const items = ((payload.new as { personal_list?: PersonalItem[] } | null)
-            ?.personal_list ?? []) as PersonalItem[];
-          setPersonal(items);
-          cachePersonal(items);
-        },
-      )
-      .subscribe();
-    return () => {
-      cancelled = true;
-      void supabase.removeChannel(channel);
-    };
-  }, []);
+  // Lembretes (antes "lista pessoal") agora vivem em `personal_reminders`,
+  // buscados via React Query (ver `remindersQuery` mais abaixo, perto de
+  // onde são usados) — nunca mais um efeito manual + canal realtime
+  // próprio aqui; o realtime de troca de dispositivo é coberto pelo
+  // `refetchInterval` da query, suficiente pra um dado pessoal de baixa
+  // frequência de mudança.
 
   // Mantém o resumo aberto em sincronia com atualizações (confirmar,
   // recusar, sugerir horário, etc.) feitas dentro do próprio diálogo.
@@ -663,31 +727,57 @@ export function InicioDashboard() {
     dismissTaskCommentMentions(taskCommentMentionItems.map((m) => m.commentId));
   };
 
-  const persistPersonal = (next: PersonalItem[]) => {
-    setPersonal(next);
-    cachePersonal(next);
-    const userId = getMe().id;
-    if (!userId) return;
-    void supabase
-      .from("profiles")
-      .update({ personal_list: next })
-      .eq("id", userId)
-      .then(({ error }) => {
-        if (error) console.warn("[inicio.personal] save failed", error);
-      });
-  };
-  const addPersonal = () => {
-    const t = newPersonal.trim();
-    if (!t) return;
-    persistPersonal([...personal, { id: `p_${Date.now()}`, text: t, done: false }]);
-    setNewPersonal("");
-  };
-  const togglePersonal = (id: string) => {
-    persistPersonal(personal.map((p) => (p.id === id ? { ...p, done: !p.done } : p)));
-  };
-  const removePersonal = (id: string) => {
-    persistPersonal(personal.filter((p) => p.id !== id));
-  };
+  // Lembretes — React Query + server functions (`reminders.functions.ts`),
+  // RLS garante que só os próprios lembretes de quem está logado aparecem
+  // aqui, nunca precisa filtrar por usuário no cliente.
+  const listRemindersFn = useServerFn(listReminders);
+  const createReminderFn = useServerFn(createReminderServerFn);
+  const updateReminderFn = useServerFn(updateReminderServerFn);
+  const completeReminderFn = useServerFn(completeReminderServerFn);
+  const reopenReminderFn = useServerFn(reopenReminderServerFn);
+  const deleteReminderFn = useServerFn(deleteReminderServerFn);
+  const queryClient = useQueryClient();
+  const { data: reminderRows = [] } = useQuery({
+    queryKey: ["personal-reminders"],
+    queryFn: () => listRemindersFn(),
+    refetchInterval: 30000,
+  });
+  const reminders = useMemo(() => reminderRows.map(rowToReminder), [reminderRows]);
+  const invalidateReminders = () =>
+    queryClient.invalidateQueries({ queryKey: ["personal-reminders"] });
+  const createReminderMutation = useMutation({
+    mutationFn: (input: {
+      title: string;
+      notes?: string;
+      dueAt?: string;
+      priority: ReminderPriority;
+    }) => createReminderFn({ data: input }),
+    onSuccess: invalidateReminders,
+  });
+  const updateReminderMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      title?: string;
+      notes?: string;
+      dueAt?: string | null;
+      priority?: ReminderPriority;
+    }) => updateReminderFn({ data: input }),
+    onSuccess: invalidateReminders,
+  });
+  const completeReminderMutation = useMutation({
+    mutationFn: (id: string) => completeReminderFn({ data: { id } }),
+    onSuccess: invalidateReminders,
+  });
+  const reopenReminderMutation = useMutation({
+    mutationFn: (id: string) => reopenReminderFn({ data: { id } }),
+    onSuccess: invalidateReminders,
+  });
+  const deleteReminderMutation = useMutation({
+    mutationFn: (id: string) => deleteReminderFn({ data: { id } }),
+    onSuccess: invalidateReminders,
+  });
+  const [reminderFormOpen, setReminderFormOpen] = useState(false);
+  const [remindersFullViewOpen, setRemindersFullViewOpen] = useState(false);
 
   const openTask = (t: Pick<DashTask, "id" | "projectId" | "campanhaId" | "parentId">) => {
     // O deep-link (`?taskId=`) já resolve subtarefa (procura dentro de
@@ -801,7 +891,8 @@ export function InicioDashboard() {
                 cardDefs={visibleCardDefs}
                 visible={visible}
                 onToggleCard={(key) => setVisible((v) => ({ ...v, [key]: !v[key] }))}
-                onRestoreDefaults={() => setVisible(DEFAULT_VISIBLE)}
+                onReorder={reorderCards}
+                onRestoreDefaults={() => persistDashboardPrefs(DEFAULT_DASHBOARD_PREFS)}
                 weatherEnabled={weatherEnabled}
                 onToggleWeather={() => setWeatherEnabled((v) => !v)}
               />
@@ -1043,7 +1134,7 @@ export function InicioDashboard() {
 
       <MuralNovidades />
 
-      {(visible.comments || visible.personal) && (
+      {(visible.comments || visible.reminders) && (
         <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
           {visible.comments && (
             <Card className="lg:col-span-2">
@@ -1134,67 +1225,46 @@ export function InicioDashboard() {
             </Card>
           )}
 
-          {visible.personal && (
-            <Card>
-              <CardHeader
-                icon={<Star className="h-4 w-4" />}
-                title="Lista pessoal"
-                action={
-                  <span className="text-[11px] text-muted-foreground">
-                    {personal.filter((p) => !p.done).length}
-                  </span>
-                }
-              />
-              <div className="space-y-1 p-3 md:p-4">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    addPersonal();
-                  }}
-                  className="mb-2 flex items-center gap-1.5"
-                >
-                  <input
-                    value={newPersonal}
-                    onChange={(e) => setNewPersonal(e.target.value)}
-                    placeholder="Adicionar item…"
-                    className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <IconButton type="submit" label="Adicionar" tone="brand">
-                    <Plus className="h-3.5 w-3.5" />
-                  </IconButton>
-                </form>
-                {personal.length === 0 && <EmptyState compact title="Nenhum item." />}
-                {personal.map((p) => (
-                  <div
-                    key={p.id}
-                    className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted/40"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={p.done}
-                      onChange={() => togglePersonal(p.id)}
-                      className="h-3.5 w-3.5 rounded border-border accent-brand"
-                    />
-                    <span
-                      className={`flex-1 truncate ${p.done ? "text-muted-foreground line-through" : "text-foreground"}`}
-                      title={p.text}
-                    >
-                      {p.text}
-                    </span>
-                    <IconButton
-                      label="Remover"
-                      tone="neutral"
-                      onClick={() => removePersonal(p.id)}
-                      className="h-6 w-6 shrink-0 text-muted-foreground/60 opacity-60 transition-opacity hover:text-destructive focus-visible:opacity-100"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </IconButton>
-                  </div>
-                ))}
-              </div>
-            </Card>
+          {visible.reminders && (
+            <RemindersCard
+              reminders={pendingReminders(reminders)}
+              onCreate={() => setReminderFormOpen(true)}
+              onComplete={(id) => completeReminderMutation.mutate(id)}
+              onViewAll={() => setRemindersFullViewOpen(true)}
+            />
           )}
         </div>
+      )}
+
+      {visible.quickBreak && <QuickBreakCard />}
+
+      {reminderFormOpen && (
+        <ReminderFormDialog
+          open={reminderFormOpen}
+          onOpenChange={setReminderFormOpen}
+          onSubmit={async (input) => {
+            await createReminderMutation.mutateAsync(input);
+          }}
+        />
+      )}
+      {remindersFullViewOpen && (
+        <RemindersFullView
+          open={remindersFullViewOpen}
+          onOpenChange={setRemindersFullViewOpen}
+          reminders={reminders}
+          onCreate={() => {
+            setRemindersFullViewOpen(false);
+            setReminderFormOpen(true);
+          }}
+          onComplete={(id) => completeReminderMutation.mutate(id)}
+          onReopen={(id) => reopenReminderMutation.mutate(id)}
+          onUpdate={async (input) => {
+            await updateReminderMutation.mutateAsync(input);
+          }}
+          onDelete={async (id) => {
+            await deleteReminderMutation.mutateAsync(id);
+          }}
+        />
       )}
 
       {/* Financeiro/Comercial — só aparecem pra quem tem a permissão da
@@ -1318,11 +1388,11 @@ export function InicioDashboard() {
 }
 
 /** Superfície de seção da Home — mesmo tratamento em todos os 5 cards
- * (`Meu trabalho`, `Agenda`, `Mural`, `Comentários`, `Lista pessoal`) e
+ * (`Meu trabalho`, `Agenda`, `Mural`, `Comentários`, `Lembretes`) e
  * mesmo raio do cabeçalho climático aprovado (`rounded-2xl`), pra tudo
  * parecer parte de um único produto em vez de caixas isoladas com
  * tratamentos divergentes. */
-const Card = ({
+export const Card = ({
   children,
   className = "",
   ref,
@@ -1340,7 +1410,7 @@ const Card = ({
  * (sem `border-b`), ícone e título com o mesmo peso/tamanho em toda a
  * Home, ação alinhada à direita e livre pra quebrar numa segunda linha
  * em telas estreitas em vez de comprimir. */
-function CardHeader({
+export function CardHeader({
   icon,
   title,
   action,

@@ -650,6 +650,54 @@ export type Database = {
           },
         ];
       };
+      daily_game_sessions: {
+        Row: {
+          attempts: number;
+          challenge_date: string;
+          challenge_id: string;
+          completed_at: string | null;
+          created_at: string;
+          elapsed_seconds: number | null;
+          game_type: string;
+          hints_used: number;
+          id: string;
+          started_at: string | null;
+          state: Json;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          attempts?: number;
+          challenge_date: string;
+          challenge_id: string;
+          completed_at?: string | null;
+          created_at?: string;
+          elapsed_seconds?: number | null;
+          game_type: string;
+          hints_used?: number;
+          id?: string;
+          started_at?: string | null;
+          state?: Json;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          attempts?: number;
+          challenge_date?: string;
+          challenge_id?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          elapsed_seconds?: number | null;
+          game_type?: string;
+          hints_used?: number;
+          id?: string;
+          started_at?: string | null;
+          state?: Json;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       email_campaign_activity: {
         Row: {
           campaign_id: string;
@@ -2014,6 +2062,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      personal_reminders: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          due_at: string | null;
+          id: string;
+          notes: string | null;
+          priority: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          due_at?: string | null;
+          id?: string;
+          notes?: string | null;
+          priority?: string;
+          title: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          due_at?: string | null;
+          id?: string;
+          notes?: string | null;
+          priority?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       platform_releases: {
         Row: {
           changes: Json;
@@ -2090,6 +2174,7 @@ export type Database = {
         Row: {
           birthday: string | null;
           created_at: string;
+          dashboard_prefs: Json;
           email: string;
           full_name: string | null;
           id: string;
@@ -2108,6 +2193,7 @@ export type Database = {
         Insert: {
           birthday?: string | null;
           created_at?: string;
+          dashboard_prefs?: Json;
           email: string;
           full_name?: string | null;
           id: string;
@@ -2126,6 +2212,7 @@ export type Database = {
         Update: {
           birthday?: string | null;
           created_at?: string;
+          dashboard_prefs?: Json;
           email?: string;
           full_name?: string | null;
           id?: string;

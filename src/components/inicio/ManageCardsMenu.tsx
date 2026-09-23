@@ -1,32 +1,31 @@
 /**
- * "Gerenciar cards" da Home — redesenho puramente visual/estrutural:
- * TODA a lógica de visibilidade, persistência (`localStorage`) e
- * integração com o dashboard continua em `InicioDashboard.tsx`, que só
- * passa estado + callbacks pra cá. Este componente decide unicamente
- * COMO apresentar essa lista (Popover no desktop, Sheet de baixo no
- * mobile), nunca O QUE ela guarda.
+ * "Personalizar início" (antes "Gerenciar cards") — TODA a lógica de
+ * visibilidade/ordem/persistência continua em `InicioDashboard.tsx`, que
+ * só passa estado + callbacks pra cá; este componente decide só COMO
+ * apresentar (Popover no desktop, Sheet de baixo no mobile).
  *
- * Corte pelo cabeçalho (o bug relatado): o dropdown antigo era um `<div>`
- * absoluto dentro da própria árvore do `<header overflow-hidden>` — ao
- * abrir perto do topo/borda, o clip do cabeçalho cortava o menu. O
- * `Popover` do design system já usa `PopoverPrimitive.Portal` (Radix),
- * que anexa o conteúdo direto em `document.body`, fora da árvore
- * clipada — some o corte sem precisar de nenhum hack de z-index. Radix
- * também já resolve "abrir abaixo/à direita, inverter se não couber,
- * manter distância da borda" via `avoidCollisions` (default) +
- * `collisionPadding`, então não foi preciso reimplementar posicionamento.
+ * Reaproveitado quase integralmente do antigo "Gerenciar cards" — mesmo
+ * Popover/Sheet, mesmo `ToggleRow`, mesmo retorno de foco ao trigger.
+ * Adicionado nesta rodada: botão do design system (variant="outline"
+ * compacto, ícone+texto no desktop / só ícone+tooltip+aria-label no
+ * mobile — antes era sempre ícone+texto), reordenação por
+ * arrastar-e-soltar (mesmo padrão HTML5 nativo já usado em
+ * `TaskBoard.tsx`/`PipelineBoard.tsx` — não há dnd-kit no projeto) e
+ * "Concluir" ao lado de "Restaurar padrão".
  */
 import { useRef, useState } from "react";
 import {
-  Sparkles,
+  SlidersHorizontal,
   CheckCircle2,
   Calendar,
   Wallet,
   TrendingUp,
   MessageSquare,
-  Star,
+  Bell,
+  Coffee,
   CloudSun,
   RotateCcw,
+  GripVertical,
   X,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -48,18 +47,16 @@ import type { CardKey } from "@/components/InicioDashboard";
 export type ManageCardDef = { key: CardKey; label: string; description: string };
 
 const CARD_ICON: Record<CardKey, React.ReactNode> = {
-  stats: <Sparkles className="h-4 w-4" />,
+  stats: <SlidersHorizontal className="h-4 w-4" />,
   work: <CheckCircle2 className="h-4 w-4" />,
   agenda: <Calendar className="h-4 w-4" />,
   financeiro: <Wallet className="h-4 w-4" />,
   comercial: <TrendingUp className="h-4 w-4" />,
   comments: <MessageSquare className="h-4 w-4" />,
-  personal: <Star className="h-4 w-4" />,
+  reminders: <Bell className="h-4 w-4" />,
+  quickBreak: <Coffee className="h-4 w-4" />,
 };
 
-/** Uma linha "ícone + nome + descrição + Switch" — mesmo layout pro card
- * de verdade e pro toggle de clima (que não é bem um "card" da lista,
- * mas precisa continuar existindo em algum lugar do menu). */
 function ToggleRow({
   icon,
   label,
@@ -67,6 +64,11 @@ function ToggleRow({
   checked,
   onCheckedChange,
   id,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  dragging,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -74,26 +76,45 @@ function ToggleRow({
   checked: boolean;
   onCheckedChange: () => void;
   id: string;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: () => void;
+  dragging?: boolean;
 }) {
   return (
-    <label
-      htmlFor={id}
-      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn(
+        "flex items-center gap-2 px-4 py-3 transition-colors hover:bg-muted/50",
+        dragging && "opacity-50",
+      )}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-foreground">{label}</span>
-        <span className="block truncate text-xs text-muted-foreground">{description}</span>
-      </span>
+      {draggable && (
+        <GripVertical
+          className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing"
+          aria-hidden="true"
+        />
+      )}
+      <label htmlFor={id} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium text-foreground">{label}</span>
+          <span className="block truncate text-xs text-muted-foreground">{description}</span>
+        </span>
+      </label>
       <Switch
         id={id}
         checked={checked}
         onCheckedChange={onCheckedChange}
         className="shrink-0 data-[state=checked]:bg-brand"
       />
-    </label>
+    </div>
   );
 }
 
@@ -101,6 +122,7 @@ export function ManageCardsMenu({
   cardDefs,
   visible,
   onToggleCard,
+  onReorder,
   onRestoreDefaults,
   weatherEnabled,
   onToggleWeather,
@@ -108,17 +130,20 @@ export function ManageCardsMenu({
   cardDefs: ManageCardDef[];
   visible: Record<CardKey, boolean>;
   onToggleCard: (key: CardKey) => void;
+  /** Reordena a lista de cards opcionais — reflete a ordem escolhida na
+   * lista deste menu; ver nota em `InicioDashboard.tsx` sobre o alcance
+   * real da reordenação (dentro de cada agrupamento estrutural fixo,
+   * nunca refazendo o grid inteiro). */
+  onReorder: (fromKey: CardKey, toKey: CardKey) => void;
   onRestoreDefaults: () => void;
   weatherEnabled: boolean;
   onToggleWeather: () => void;
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [dragKey, setDragKey] = useState<CardKey | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Restaura o foco no botão que abriu o menu ao fechar (clicar fora, Esc,
-  // botão de fechar ou escolher uma opção no mobile) — nunca deixa o foco
-  // "perdido" na página depois do menu sumir.
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (!next) triggerRef.current?.focus();
@@ -135,6 +160,14 @@ export function ManageCardsMenu({
           description={c.description}
           checked={visible[c.key]}
           onCheckedChange={() => onToggleCard(c.key)}
+          draggable
+          dragging={dragKey === c.key}
+          onDragStart={() => setDragKey(c.key)}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => {
+            if (dragKey && dragKey !== c.key) onReorder(dragKey, c.key);
+            setDragKey(null);
+          }}
         />
       ))}
       <ToggleRow
@@ -160,21 +193,38 @@ export function ManageCardsMenu({
         <RotateCcw className="h-3.5 w-3.5" />
         Restaurar padrão
       </Button>
+      <Button type="button" variant="secondary" size="sm" onClick={() => handleOpenChange(false)}>
+        Concluir
+      </Button>
     </div>
   );
 
-  const trigger = (
+  const triggerButton = (
     <Button
       ref={triggerRef}
       type="button"
-      variant="outline"
+      variant="secondary"
       size="sm"
       onClick={() => handleOpenChange(true)}
-      className="gap-1.5"
+      aria-label="Personalizar início"
+      className="gap-1.5 rounded-full border border-border/60 bg-muted/50 text-muted-foreground hover:text-foreground"
     >
-      <Sparkles className="h-3.5 w-3.5" />
-      Gerenciar cards
+      <SlidersHorizontal className="h-3.5 w-3.5" />
+      {!isMobile && "Personalizar início"}
     </Button>
+  );
+
+  // No mobile, só o ícone — precisa de tooltip pra quem usa mouse/teclado
+  // acoplado, `aria-label` (já no botão) cobre leitor de tela.
+  const trigger = isMobile ? (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>{triggerButton}</TooltipTrigger>
+        <TooltipContent side="bottom">Personalizar início</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : (
+    triggerButton
   );
 
   if (isMobile) {
@@ -190,8 +240,8 @@ export function ManageCardsMenu({
             )}
           >
             <SheetHeader className="space-y-1 px-4 pb-3 pt-5 text-left">
-              <SheetTitle className="text-base">Personalizar tela inicial</SheetTitle>
-              <SheetDescription>Escolha quais cards aparecem no seu início</SheetDescription>
+              <SheetTitle className="text-base">Personalizar início</SheetTitle>
+              <SheetDescription>Escolha o que deseja visualizar no seu painel.</SheetDescription>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/60">{list}</div>
             {footer}
@@ -210,16 +260,16 @@ export function ManageCardsMenu({
         sideOffset={8}
         collisionPadding={12}
         className={cn(
-          "z-50 flex w-[340px] max-w-[360px] min-w-[320px] flex-col gap-0 overflow-hidden rounded-2xl border-border/60 p-0 shadow-lg",
+          "z-50 flex w-[380px] max-w-[400px] min-w-[340px] flex-col gap-0 overflow-hidden rounded-2xl border-border/60 p-0 shadow-lg",
           SURFACE.raised,
         )}
-        style={{ maxHeight: "min(30rem, calc(100vh - 24px))" }}
+        style={{ maxHeight: "min(32rem, calc(100vh - 24px))" }}
       >
         <div className="flex items-start justify-between gap-2 px-4 pb-3 pt-4">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">Personalizar tela inicial</p>
+            <p className="text-sm font-semibold text-foreground">Personalizar início</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Escolha quais cards aparecem no seu início
+              Escolha o que deseja visualizar no seu painel.
             </p>
           </div>
           <TooltipProvider delayDuration={200}>
