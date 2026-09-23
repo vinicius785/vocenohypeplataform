@@ -26,10 +26,12 @@ import {
   deleteOutgoingWebhook,
 } from "@/lib/integrations.functions";
 import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/outgoing-webhooks";
+import { timeAgo } from "@/components/metas/metas-ui-utils";
 import {
   startGoogleOAuth,
   getGoogleConnectionStatus,
   disconnectGoogleCalendar,
+  runGoogleCalendarSync,
 } from "@/lib/google-calendar.functions";
 import { SettingsSectionHeader } from "./settings-shared";
 
@@ -164,24 +166,46 @@ function GoogleCalendarIcon({ className }: { className?: string }) {
   );
 }
 
+type GoogleCardStatus =
+  | { state: "loading" }
+  | { state: "disconnected" }
+  | {
+      state: "connected" | "attention";
+      email?: string | null;
+      lastSyncedAt?: string | null;
+      lastError?: string | null;
+    };
+
 function GoogleCalendarCard() {
   const startFn = useServerFn(startGoogleOAuth);
   const statusFn = useServerFn(getGoogleConnectionStatus);
   const disconnectFn = useServerFn(disconnectGoogleCalendar);
+  const syncNowFn = useServerFn(runGoogleCalendarSync);
   const { confirm, confirmDialog } = useConfirm();
 
-  const [status, setStatus] = useState<
-    { state: "loading" } | { state: "disconnected" } | { state: "connected"; email?: string | null }
-  >({ state: "loading" });
+  const [status, setStatus] = useState<GoogleCardStatus>({ state: "loading" });
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [callbackNotice, setCallbackNotice] = useState<"connected" | "error" | null>(null);
 
   const refresh = useCallback(() => {
     statusFn()
-      .then((r) =>
-        setStatus(r.connected ? { state: "connected", email: r.email } : { state: "disconnected" }),
-      )
+      .then((r) => {
+        if (!r.connected) {
+          setStatus({ state: "disconnected" });
+          return;
+        }
+        setStatus({
+          // Fase B: refresh_token inválido (revogado/expirado) vira
+          // "Atenção necessária" na hora, em vez de continuar mostrando
+          // "Conectado" indefinidamente sem ninguém saber que quebrou.
+          state: r.needsReconnect ? "attention" : "connected",
+          email: r.email,
+          lastSyncedAt: r.lastSyncedAt,
+          lastError: r.lastError,
+        });
+      })
       .catch(() => setStatus({ state: "disconnected" }));
   }, [statusFn]);
 
@@ -194,6 +218,7 @@ function GoogleCalendarCard() {
       params.delete("google");
       const qs = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+      refresh();
     }
   }, [refresh]);
 
@@ -221,6 +246,18 @@ function GoogleCalendarCard() {
     }
   };
 
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      await syncNowFn();
+    } catch {
+      /* erro real já fica registrado em last_error — refresh() abaixo mostra */
+    } finally {
+      refresh();
+      setSyncing(false);
+    }
+  };
+
   return (
     <IntegrationCard
       icon={<GoogleCalendarIcon className="h-5 w-5" />}
@@ -229,9 +266,11 @@ function GoogleCalendarCard() {
       status={
         status.state === "connected"
           ? "connected"
-          : status.state === "disconnected"
-            ? "disconnected"
-            : undefined
+          : status.state === "attention"
+            ? "attention"
+            : status.state === "disconnected"
+              ? "disconnected"
+              : undefined
       }
     >
       {confirmDialog}
@@ -246,20 +285,61 @@ function GoogleCalendarCard() {
           {connecting ? "Redirecionando..." : "Conectar Google Agenda"}
         </Button>
       )}
-      {status.state === "connected" && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            Conectado{status.email ? ` como ${status.email}` : ""}.
+      {status.state === "attention" && (
+        <div className="space-y-2.5">
+          <p className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
+            {status.lastError ??
+              "O acesso à sua conta Google parece ter sido revogado ou expirado. Reconecte pra voltar a sincronizar."}
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void disconnect()}
-            disabled={disconnecting}
-          >
-            {disconnecting ? "Desconectando..." : "Desconectar"}
-          </Button>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {status.email ? `Conta: ${status.email}` : "Conta conectada anteriormente"}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void disconnect()}
+                disabled={disconnecting}
+              >
+                {disconnecting ? "Desconectando..." : "Desconectar"}
+              </Button>
+              <Button type="button" size="sm" onClick={() => void connect()} disabled={connecting}>
+                {connecting ? "Redirecionando..." : "Reconectar"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {status.state === "connected" && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              Conectado{status.email ? ` como ${status.email}` : ""}
+              {status.lastSyncedAt && <> · Última sincronização: {timeAgo(status.lastSyncedAt)}</>}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void syncNow()}
+              disabled={syncing}
+            >
+              {syncing ? "Sincronizando..." : "Sincronizar agora"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void disconnect()}
+              disabled={disconnecting}
+            >
+              {disconnecting ? "Desconectando..." : "Desconectar"}
+            </Button>
+          </div>
         </div>
       )}
     </IntegrationCard>
@@ -267,10 +347,11 @@ function GoogleCalendarCard() {
 }
 
 const INTEGRATION_STATUS_META: Record<
-  "connected" | "disconnected" | "error",
+  "connected" | "attention" | "disconnected" | "error",
   { dot: string; label: string }
 > = {
   connected: { dot: "bg-emerald-500", label: "Conectado" },
+  attention: { dot: "bg-warning", label: "Atenção necessária" },
   disconnected: { dot: "bg-muted-foreground/40", label: "Não conectado" },
   error: { dot: "bg-destructive", label: "Erro" },
 };
@@ -285,7 +366,7 @@ function IntegrationCard({
   icon: React.ReactNode;
   title: string;
   description: string;
-  status?: "connected" | "disconnected" | "error";
+  status?: "connected" | "attention" | "disconnected" | "error";
   children: React.ReactNode;
 }) {
   const statusMeta = status ? INTEGRATION_STATUS_META[status] : null;

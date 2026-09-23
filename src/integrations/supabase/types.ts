@@ -1328,8 +1328,11 @@ export type Database = {
           access_token: string;
           connected_at: string;
           google_email: string | null;
+          last_error: string | null;
+          last_synced_at: string | null;
           refresh_token: string;
           token_expiry: string;
+          token_invalid: boolean;
           updated_at: string;
           user_id: string;
         };
@@ -1337,8 +1340,11 @@ export type Database = {
           access_token: string;
           connected_at?: string;
           google_email?: string | null;
+          last_error?: string | null;
+          last_synced_at?: string | null;
           refresh_token: string;
           token_expiry: string;
+          token_invalid?: boolean;
           updated_at?: string;
           user_id: string;
         };
@@ -1346,8 +1352,11 @@ export type Database = {
           access_token?: string;
           connected_at?: string;
           google_email?: string | null;
+          last_error?: string | null;
+          last_synced_at?: string | null;
           refresh_token?: string;
           token_expiry?: string;
+          token_invalid?: boolean;
           updated_at?: string;
           user_id?: string;
         };

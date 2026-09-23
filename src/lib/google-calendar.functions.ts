@@ -81,11 +81,18 @@ export const getGoogleConnectionStatus = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data } = await supabaseAdmin
       .from("google_calendar_connections")
-      .select("google_email, connected_at")
+      .select("google_email, connected_at, last_synced_at, last_error, token_invalid")
       .eq("user_id", context.userId)
       .maybeSingle();
     if (!data) return { connected: false as const };
-    return { connected: true as const, email: data.google_email, connectedAt: data.connected_at };
+    return {
+      connected: true as const,
+      email: data.google_email,
+      connectedAt: data.connected_at,
+      lastSyncedAt: data.last_synced_at,
+      needsReconnect: data.token_invalid,
+      lastError: data.last_error,
+    };
   });
 
 export const disconnectGoogleCalendar = createServerFn({ method: "POST" })
@@ -141,10 +148,21 @@ async function getValidAccessToken(
     }),
   });
   if (!res.ok) {
-    console.warn(
-      `[google-calendar] refresh token failed for user ${row.user_id}`,
-      await res.text(),
-    );
+    const body = await res.text();
+    console.warn(`[google-calendar] refresh token failed for user ${row.user_id}`, body);
+    // Fase B: persiste o problema em vez de só logar e seguir em frente
+    // silenciosamente — antes a UI não tinha como saber que o token
+    // morreu (mostrava "Conectado" pra sempre, mesmo com acesso revogado
+    // ou refresh_token expirado). `token_invalid` é o que a tela de
+    // Configurações usa pra oferecer "Reconectar" em vez de fingir que
+    // está tudo bem.
+    await admin
+      .from("google_calendar_connections")
+      .update({
+        token_invalid: true,
+        last_error: `Falha ao renovar o token de acesso (HTTP ${res.status}). É provável que o acesso tenha sido revogado — reconecte sua conta.`,
+      })
+      .eq("user_id", row.user_id);
     return null;
   }
   const json = (await res.json()) as { access_token: string; expires_in: number };
@@ -155,6 +173,8 @@ async function getValidAccessToken(
       access_token: json.access_token,
       token_expiry: tokenExpiry,
       updated_at: new Date().toISOString(),
+      token_invalid: false,
+      last_error: null,
     })
     .eq("user_id", row.user_id);
   return json.access_token;
@@ -786,6 +806,22 @@ export async function runGoogleCalendarSyncCycle(): Promise<{
   try {
     const outbound = await runSyncAllMeetingsToGoogle();
     const inbound = await runImportGoogleEventsToMeetings();
+    // Fase B: marca "quando foi a última vez que isto rodou" pra cada
+    // conexão — a UI usa isso pra mostrar "Última sincronização: há X min"
+    // em vez de nunca informar nada. Não implica mudança nenhuma, só que
+    // o ciclo chegou a checar essa conexão.
+    const { data: allConns } = await supabaseAdmin
+      .from("google_calendar_connections")
+      .select("user_id");
+    if (allConns && allConns.length > 0) {
+      await supabaseAdmin
+        .from("google_calendar_connections")
+        .update({ last_synced_at: new Date().toISOString() })
+        .in(
+          "user_id",
+          allConns.map((c) => c.user_id),
+        );
+    }
     await releaseSyncLock(supabaseAdmin, { ok: true, result: { outbound, inbound } });
     return { ran: true, outbound, inbound };
   } catch (err) {
