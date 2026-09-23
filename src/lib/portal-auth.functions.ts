@@ -30,7 +30,6 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { readActiveOrgCookie } from "@/lib/active-org-cookie.server";
 import {
   findClienteByOrganizationId,
   buildClienteLinkData,
@@ -84,6 +83,7 @@ export async function resolveActiveClientOrganization(ctx: Ctx): Promise<ActiveC
     return { organizationId: rows[0].organization_id, role: rows[0].role };
   }
 
+  const { readActiveOrgCookie } = await import("@/lib/active-org-cookie.server");
   const cookieOrgId = readActiveOrgCookie();
   const match = cookieOrgId ? rows.find((r) => r.organization_id === cookieOrgId) : undefined;
   if (!match) {
