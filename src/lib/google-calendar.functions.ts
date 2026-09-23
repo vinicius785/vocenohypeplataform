@@ -3,6 +3,11 @@ import { getRequest } from "@tanstack/react-start/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  canonicalRedirectUrl,
+  getGoogleOAuthRedirectUri,
+  googleOAuthEnvTag,
+} from "@/lib/google-oauth-config";
 
 /**
  * Integração Google Calendar, por conta PESSOAL de cada usuário (sem conta
@@ -46,16 +51,26 @@ function requireGoogleEnv() {
   return { clientId, clientSecret };
 }
 
-function redirectUriFromRequest(): string {
-  const request = getRequest();
-  const origin = new URL(request.url).origin;
-  return `${origin}/api/google/oauth-callback`;
-}
-
 export const startGoogleOAuth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const request = getRequest();
+    // Se a página que chamou isso está num domínio alternativo (não o
+    // `APP_URL` canônico), manda o navegador pra lá primeiro — assim o
+    // Google só precisa conhecer UM redirect_uri autorizado, nunca todo
+    // domínio que aponta pro mesmo deploy. Preserva caminho e query string
+    // atuais; o usuário simplesmente clica em "Conectar" de novo já no
+    // domínio certo.
+    const redirectHome = canonicalRedirectUrl(request.url);
+    if (redirectHome) {
+      console.log("[google-oauth] start: domínio não-canônico, redirecionando", {
+        env: googleOAuthEnvTag(),
+      });
+      return { url: redirectHome };
+    }
+
     const { clientId } = requireGoogleEnv();
+    const redirectUri = getGoogleOAuthRedirectUri();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const token = crypto.randomUUID();
     const { error } = await supabaseAdmin
@@ -65,13 +80,14 @@ export const startGoogleOAuth = createServerFn({ method: "POST" })
 
     const params = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: redirectUriFromRequest(),
+      redirect_uri: redirectUri,
       response_type: "code",
       access_type: "offline",
       prompt: "consent",
       scope: GOOGLE_SCOPE,
       state: token,
     });
+    console.log("[google-oauth] start", { env: googleOAuthEnvTag(), redirectUri });
     return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` };
   });
 

@@ -20,9 +20,8 @@ bun run build:dev   # build with mode=development
 bun run preview     # preview a production build
 bun run lint         # eslint .
 bun run format       # prettier --write .
+bun run test         # vitest run — unit tests, see vitest.config.ts
 ```
-
-There is no test suite configured in this repo (no vitest/jest, no `*.test.*`/`*.spec.*` files, no `test` script).
 
 ### Environment
 
@@ -31,6 +30,8 @@ Env vars live in `.env` (already present, not committed per `.gitignore` convent
 - `SUPABASE_URL` / `VITE_SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_PROJECT_ID` / `VITE_SUPABASE_PROJECT_ID`
+- `APP_URL` (server-only, no `VITE_` prefix) — canonical origin used to build the Google Calendar OAuth `redirect_uri` (`src/lib/google-oauth-config.ts`), e.g. `https://plataforma.vocenohype.com.br` in production or `http://localhost:8080` in dev. Deliberately never derived from the request's origin/host/referer, since this Vercel project has several production domains pointing at the same deployment — only whichever single value is registered as `APP_URL` may be an "Authorized redirect URI" in the Google Cloud OAuth Client.
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google Cloud OAuth Client used only for the Calendar connection (`src/lib/google-calendar.functions.ts`), unrelated to Supabase Auth's own Google provider (not used anywhere in this app — login is plain `signInWithPassword`).
 
 **Missing locally**: `SUPABASE_SERVICE_ROLE_KEY` (required by `src/integrations/supabase/client.server.ts` for any admin/service-role operation). Without it, any code path that touches `supabaseAdmin` (e.g. `src/routes/api/public/leads.ts`) will throw at request time. Pull it from Lovable Cloud's secret vault if that functionality needs to be exercised locally. (Note: the leads webhook's secret is _not_ an env var — it's stored in the `webhook_settings` table, see Known incomplete work below.)
 
