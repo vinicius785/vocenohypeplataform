@@ -178,6 +178,15 @@ const ActivityEventPublic = z.object({
   comentario: z.string().optional(),
 });
 
+const CommentPublic = z.object({
+  id: z.string(),
+  author: z.string(),
+  initials: z.string(),
+  color: z.string(),
+  text: z.string(),
+  createdAt: z.string(),
+});
+
 const _InfluencerPublic = z.object({
   id: z.string(),
   nome: z.string(),
@@ -208,6 +217,9 @@ const _InfluencerPublic = z.object({
   /** Log tipado unificado (item 6) — quando presente, alimenta o histórico
    * geral e por-entrega no lugar do parser legado baseado em regex. */
   activityEvents: z.array(ActivityEventPublic).optional(),
+  /** Comentários do CLIENTE (canal separado da conversa interna do time,
+   * que nunca é exposta aqui — ver `Influ.comments` vs `Influ.clienteComments`). */
+  clienteComments: z.array(CommentPublic).optional(),
 });
 
 /** Extrai as mudanças de status do log interno de atividade (`activity`,
@@ -375,6 +387,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof _InfluencerPublic> {
       motivoLabel: e.motivoLabel,
       comentario: e.comentario,
     })),
+    clienteComments: influ.clienteComments,
   };
 }
 

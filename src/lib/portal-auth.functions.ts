@@ -310,6 +310,59 @@ export const updateInfluObservacoesSession = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const AddInfluClienteComentarioInput = z.object({
+  campanhaId: z.string().min(1),
+  influencerId: z.string().min(1),
+  text: z.string().trim().min(1).max(2000),
+});
+
+/**
+ * Comentário do cliente sobre a participação de um influenciador NESTA
+ * campanha — canal separado de `Influ.comments` (conversa interna do
+ * time, nunca lida nem escrita por aqui). Append-only: sempre lê a linha
+ * mais recente e ACRESCENTA ao array (nunca substitui um comentário
+ * anterior) — mesmo padrão de `saveInfluRow` já usado por toda mutação
+ * do portal.
+ */
+export const addInfluClienteComentario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => AddInfluClienteComentarioInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { role, cliente } = await resolveClienteForSession(context);
+    assertCanMutate(role);
+    assertCampanhaInCliente(cliente, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const nowIso = new Date().toISOString();
+    const comment = {
+      id: crypto.randomUUID(),
+      author: "Cliente",
+      initials: "CL",
+      color: "bg-slate-500 text-white",
+      text: data.text,
+      createdAt: nowIso,
+    };
+    const next: Influ = {
+      ...influ,
+      clienteComments: [...(influ.clienteComments ?? []), comment],
+      activityEvents: [
+        ...(influ.activityEvents ?? []),
+        {
+          id: crypto.randomUUID(),
+          kind: "comentario_cliente",
+          actor: {
+            type: "cliente",
+            name: "Cliente",
+            initials: "CL",
+            color: "bg-slate-500 text-white",
+          },
+          createdAt: nowIso,
+        },
+      ],
+    };
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true, comment };
+  });
+
 const UpdateInfluBriefingAnexoInput = z.object({
   campanhaId: z.string().min(1),
   influencerId: z.string().min(1),

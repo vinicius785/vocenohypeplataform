@@ -1,0 +1,335 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  Home,
+  Megaphone,
+  CheckSquare,
+  Images,
+  FileBarChart,
+  FolderOpen,
+  Bell,
+  Menu,
+  X,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { usePortalSessionData } from "@/components/portal/portal-session-context";
+import { deriveApprovalItems } from "../lib/derive";
+import { ClientSidebarHeader } from "../components/ClientSidebarHeader";
+import {
+  ClientSidebarProfile,
+  ClientSidebarSettingsLink,
+  CLIENT_ROLE_LABEL,
+} from "../components/ClientSidebarProfile";
+
+/**
+ * Shell da V2 — navegação própria (nunca os menus internos do time), na
+ * MESMA linguagem visual do `AppShell.tsx` (sidebar `w-64`/colapsada
+ * `w-[68px]`, `pill-nav-item`, topbar `h-16`). Rodada de correção
+ * conceitual: o topo da sidebar agora identifica o CLIENTE ativo (nunca
+ * a marca Você no Hype), e a opção "Ajuda" foi removida de toda a
+ * árvore — não existe mais em nenhum lugar desta sidebar (nav, rodapé,
+ * menu da pessoa, topbar, drawer, estado recolhido).
+ *
+ * Estrutura vertical (spec desta rodada): identidade do cliente → nav →
+ * espaço flexível → perfil da pessoa → configurações — só a região
+ * central (`<nav>`) rola se crescer, cabeçalho e rodapé continuam
+ * acessíveis.
+ */
+
+const NAV_ITEMS = [
+  { key: "inicio", label: "Início", icon: Home, href: "/portal-v2/inicio" },
+  { key: "campanhas", label: "Campanhas", icon: Megaphone, href: "/portal-v2/campanhas" },
+  { key: "aprovacoes", label: "Aprovações", icon: CheckSquare, href: "/portal-v2/aprovacoes" },
+  { key: "conteudos", label: "Conteúdos", icon: Images, href: "/portal-v2/conteudos" },
+  { key: "relatorios", label: "Relatórios", icon: FileBarChart, href: "/portal-v2/relatorios" },
+  { key: "arquivos", label: "Arquivos", icon: FolderOpen, href: "/portal-v2/arquivos" },
+  { key: "notificacoes", label: "Notificações", icon: Bell, href: "/portal-v2/notificacoes" },
+] as const;
+
+function NavButton({
+  active,
+  collapsed,
+  icon: Icon,
+  label,
+  badge,
+  onClick,
+}: {
+  active: boolean;
+  collapsed: boolean;
+  icon: typeof Home;
+  label: string;
+  badge?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
+        collapsed ? "justify-center" : ""
+      } ${active ? "bg-brand-subtle font-medium text-brand" : "pill-nav-item text-muted-foreground"}`}
+    >
+      {active && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-brand"
+        />
+      )}
+      <span className="relative shrink-0">
+        <Icon className="h-4 w-4" aria-hidden="true" />
+        {badge !== undefined && badge > 0 && collapsed && (
+          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning" />
+        )}
+      </span>
+      {!collapsed && (
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+          {label}
+          {badge !== undefined && badge > 0 && (
+            <span className="ml-auto shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
+              {badge}
+            </span>
+          )}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function useMultiClientEnv(): boolean {
+  const [multiEnv, setMultiEnv] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) return;
+      const { resolveUserEnvironment } = await import("@/lib/user-environment.server");
+      const env = await resolveUserEnvironment(supabase, sessionData.session.user.id).catch(
+        () => null,
+      );
+      if (!cancelled && env) setMultiEnv(env.type === "multiple");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return multiEnv;
+}
+
+function useAuthIdentity(): { name: string; secondary: string } {
+  const { data } = usePortalSessionData();
+  const { data: authUser } = useQuery({
+    queryKey: ["portal-v2-user"],
+    queryFn: async () => (await supabase.auth.getUser()).data.user,
+    staleTime: 5 * 60 * 1000,
+  });
+  const name = (authUser?.user_metadata?.full_name as string | undefined) || authUser?.email || "";
+  const roleLabel = CLIENT_ROLE_LABEL[data.role] ?? null;
+  const secondary = roleLabel ?? authUser?.email ?? "";
+  return { name, secondary };
+}
+
+function SidebarContent({
+  collapsed,
+  pendingApprovals,
+  currentPath,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  pendingApprovals: number;
+  currentPath: string;
+  onNavigate?: () => void;
+}) {
+  const { data } = usePortalSessionData();
+  const navigate = useNavigate();
+  const multiEnv = useMultiClientEnv();
+  const { name: userName, secondary } = useAuthIdentity();
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <ClientSidebarHeader
+        name={data.clienteNome}
+        logoUrl={data.clienteFoto}
+        collapsed={collapsed}
+        showSwitch={multiEnv}
+        onSwitchClick={() => navigate({ to: "/selecionar-ambiente" })}
+      />
+
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
+        {NAV_ITEMS.map((item) => (
+          <NavButton
+            key={item.key}
+            active={currentPath.startsWith(item.href)}
+            collapsed={collapsed}
+            icon={item.icon}
+            label={item.label}
+            badge={item.key === "aprovacoes" ? pendingApprovals : undefined}
+            onClick={() => {
+              navigate({ to: item.href });
+              onNavigate?.();
+            }}
+          />
+        ))}
+      </nav>
+
+      <div className="shrink-0 border-t border-border p-3">
+        <ClientSidebarProfile name={userName} secondary={secondary} collapsed={collapsed} />
+        <div className="mt-2">
+          <ClientSidebarSettingsLink
+            collapsed={collapsed}
+            onClick={() => {
+              navigate({ to: "/portal-v2/conta" });
+              onNavigate?.();
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const COLLAPSE_KEY = "portal-v2:sidebar-collapsed";
+
+export function PortalV2Shell({ children }: { children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const routerState = useRouterState();
+  const currentPath = routerState.location.pathname;
+  const navigate = useNavigate();
+  const { data } = usePortalSessionData();
+
+  const pendingApprovals = deriveApprovalItems(data).length;
+
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [currentPath]);
+
+  return (
+    <div className="flex min-h-dvh bg-background text-foreground">
+      {/* Desktop sidebar — mesma largura/fundo/borda do AppShell.tsx */}
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-150 md:flex ${
+          collapsed ? "w-[68px]" : "w-64"
+        }`}
+      >
+        <SidebarContent
+          collapsed={collapsed}
+          pendingApprovals={pendingApprovals}
+          currentPath={currentPath}
+        />
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="flex shrink-0 items-center justify-center gap-2 border-t border-border py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        </button>
+      </aside>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <div
+            className="absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col border-r border-border bg-background"
+            style={{
+              paddingTop: "env(safe-area-inset-top, 0px)",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            }}
+          >
+            <div className="flex shrink-0 justify-end p-2">
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <SidebarContent
+              collapsed={false}
+              pendingApprovals={pendingApprovals}
+              currentPath={currentPath}
+              onNavigate={() => setDrawerOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Topbar — mesma altura/borda/padding do AppShell.tsx */}
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 md:px-6">
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <PortalV2Breadcrumb currentPath={currentPath} />
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/portal-v2/notificacoes" })}
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Notificações"
+          >
+            <Bell className="h-4 w-4" />
+          </button>
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+function PortalV2Breadcrumb({ currentPath }: { currentPath: string }) {
+  const active = NAV_ITEMS.find((item) => currentPath.startsWith(item.href));
+  return (
+    <p className="truncate text-sm font-medium text-foreground">{active?.label ?? "Portal"}</p>
+  );
+}

@@ -146,7 +146,8 @@ export type InfluActivityEventKind =
   | "conteudo_ajustes_solicitados"
   | "publicado"
   | "observacao_cliente"
-  | "comentario_equipe";
+  | "comentario_equipe"
+  | "comentario_cliente";
 
 export type InfluActivityEvent = {
   id: string;
@@ -772,6 +773,12 @@ export type Influ = {
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
   bank?: BankInfo;
   comments?: InfluComment[];
+  /** Comentários do CLIENTE no portal, sobre a participação deste
+   * influenciador na campanha — canal separado de `comments` (que é
+   * conversa INTERNA do time, nunca deve ser exposta ao portal). Mesma
+   * forma de `InfluComment`, append-only (nunca sobrescreve um comentário
+   * anterior). */
+  clienteComments?: InfluComment[];
   activity?: InfluActivity[];
   /** Histórico tipado (decisão 1 da reformulação do Portal do Cliente) —
    * ver comentário acima de `InfluActivityEvent`. */

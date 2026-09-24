@@ -24,6 +24,14 @@ export type RedeMetrics = {
   cidades?: DemographicEntry[];
 };
 export type Veredito = { motivo: string; respondedAt: string };
+export type PublicComment = {
+  id: string;
+  author: string;
+  initials: string;
+  color: string;
+  text: string;
+  createdAt: string;
+};
 export type PublicEntrega = {
   id: string;
   tipo: string;
@@ -75,6 +83,7 @@ export type PublicInfluencer = {
     motivoLabel?: string;
     comentario?: string;
   }[];
+  clienteComments?: PublicComment[];
 };
 export type PublicCronogramaItem = {
   id: string;
