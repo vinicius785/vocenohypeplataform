@@ -18,7 +18,7 @@ import { checkLoginRateLimit, checkRecoveryRateLimit } from "@/lib/rate-limit.fu
 import { logLoginSuccess, logLoginFailure } from "@/lib/audit-log.functions";
 import { shouldRequireMfaChallenge, checkMfaVerifyRateLimit } from "@/lib/mfa.functions";
 import { acceptPendingInvites } from "@/lib/accept-invite.functions";
-import { AuthCardShell } from "@/components/auth/AuthCardShell";
+import { LoginScreenShell } from "@/components/auth/LoginScreenShell";
 import { PreparingEnvironmentScreen } from "@/components/auth/PreparingEnvironmentScreen";
 
 const GENERIC_RATE_LIMIT_MESSAGE = "Muitas tentativas. Tente novamente em alguns minutos.";
@@ -38,18 +38,28 @@ export const Route = createFileRoute("/")({
   }),
 });
 
+// Cores fixas (não tokens de tema) — o cartão do login é sempre branco
+// com texto escuro, como uma peça de identidade visual própria, nunca
+// invertendo pro escuro se o SO/app estiver no tema escuro (ver
+// `LoginScreenShell`).
 const inputBase =
-  "h-11 w-full rounded-lg border border-input bg-background/60 text-sm text-foreground outline-none " +
-  "transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/30 " +
-  "focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/40 " +
-  "aria-[invalid=true]:border-destructive aria-[invalid=true]:focus:ring-destructive/30";
+  "h-13 w-full rounded-xl border border-[#e2e0dc] bg-[#faf9f7] text-[15px] text-[#111111] outline-none " +
+  "transition-colors placeholder:text-[#9a978f] hover:border-[#c9c6c0] " +
+  "focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/20 " +
+  "aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:ring-red-400/20";
 
 const primaryButtonBase =
-  "inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--brand)] " +
-  "text-sm font-medium text-[var(--brand-foreground)] transition-all duration-200 " +
-  "hover:bg-[var(--brand-hover)] active:brightness-95 focus-visible:outline-none focus-visible:ring-2 " +
-  "focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 focus-visible:ring-offset-card " +
-  "disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand)] " +
+  "text-[15px] font-semibold text-[var(--brand-foreground)] shadow-[0_8px_24px_-8px_var(--brand)] " +
+  "transition-all duration-200 hover:bg-[var(--brand-hover)] hover:shadow-[0_10px_28px_-8px_var(--brand)] " +
+  "active:scale-[0.99] active:brightness-95 focus-visible:outline-none focus-visible:ring-4 " +
+  "focus-visible:ring-[var(--brand)]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white " +
+  "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none disabled:active:scale-100";
+
+const labelBase = "mb-2 block text-[13px] font-medium text-[#4b4942]";
+const secondaryLinkBase =
+  "text-[13px] font-medium text-[var(--brand)] hover:underline underline-offset-2";
+const iconMuted = "text-[#9a978f]";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -300,22 +310,29 @@ function LoginPage() {
     return <PreparingEnvironmentScreen />;
   }
 
+  const eyebrow =
+    view === "login"
+      ? "Bem-vindo de volta"
+      : view === "forgot" || view === "forgot-sent"
+        ? "Recuperar acesso"
+        : view === "mfa-challenge"
+          ? "Verificação em duas etapas"
+          : undefined;
+
   return (
-    <AuthCardShell>
+    <LoginScreenShell eyebrow={eyebrow}>
       {view === "login" && (
         <>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Bem-vindo</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Acesse sua conta para continuar.</p>
-          <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
+          <p className="text-sm text-[#6b6862]">Acesse sua conta para continuar.</p>
+          <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
             <div>
-              <label
-                htmlFor="login-email"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="login-email" className={labelBase}>
                 E-mail
               </label>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Mail
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="login-email"
                   type="email"
@@ -325,19 +342,18 @@ function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={error ? "true" : "false"}
-                  className={`${inputBase} pl-10 pr-3`}
+                  className={`${inputBase} pl-11 pr-4`}
                 />
               </div>
             </div>
             <div>
-              <label
-                htmlFor="login-password"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="login-password" className={labelBase}>
                 Senha
               </label>
               <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Lock
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -346,26 +362,30 @@ function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={error ? "true" : "false"}
-                  className={`${inputBase} pl-10 pr-10`}
+                  className={`${inputBase} pl-11 pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors hover:text-[#111111] ${iconMuted}`}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-[18px] w-[18px]" />
+                  ) : (
+                    <Eye className="h-[18px] w-[18px]" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#6b6862]">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-input accent-[var(--brand)]"
+                  className="h-3.5 w-3.5 rounded border-[#c9c6c0] accent-[var(--brand)]"
                 />
                 Manter conectado
               </label>
@@ -375,7 +395,7 @@ function LoginPage() {
                   setForgotEmail(email);
                   setView("forgot");
                 }}
-                className="text-xs font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand)]"
+                className={secondaryLinkBase}
               >
                 Esqueci minha senha
               </button>
@@ -386,7 +406,7 @@ function LoginPage() {
                 ref={errorRef}
                 tabIndex={-1}
                 role="alert"
-                className="text-xs text-destructive outline-none"
+                className="text-xs text-red-600 outline-none"
               >
                 {error}
               </p>
@@ -416,26 +436,23 @@ function LoginPage() {
           <button
             type="button"
             onClick={() => setView("login")}
-            className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-[#6b6862] hover:text-[#111111]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </button>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Esqueci minha senha
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-lg font-semibold tracking-tight text-[#111111]">Esqueci minha senha</p>
+          <p className="mt-1 text-sm text-[#6b6862]">
             Informe seu e-mail e enviaremos um link para redefinir sua senha.
           </p>
           <form onSubmit={handleForgotSubmit} noValidate className="mt-6 space-y-4">
             <div>
-              <label
-                htmlFor="forgot-email"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="forgot-email" className={labelBase}>
                 Seu e-mail
               </label>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Mail
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="forgot-email"
                   type="email"
@@ -444,7 +461,7 @@ function LoginPage() {
                   autoFocus
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  className={`${inputBase} pl-10 pr-3`}
+                  className={`${inputBase} pl-11 pr-4`}
                 />
               </div>
             </div>
@@ -461,18 +478,15 @@ function LoginPage() {
 
       {view === "mfa-challenge" && (
         <>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Verificação em duas etapas
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-lg font-semibold tracking-tight text-[#111111]">
+            Digite o código de verificação
+          </p>
+          <p className="mt-1 text-sm text-[#6b6862]">
             Digite o código de 6 dígitos do seu app autenticador.
           </p>
           <form onSubmit={submitMfaCode} noValidate className="mt-6 space-y-4">
             <div>
-              <label
-                htmlFor="mfa-code"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="mfa-code" className={labelBase}>
                 Código de verificação
               </label>
               <input
@@ -493,7 +507,7 @@ function LoginPage() {
                 ref={mfaErrorRef}
                 tabIndex={-1}
                 role="alert"
-                className="text-xs text-destructive outline-none"
+                className="text-xs text-red-600 outline-none"
               >
                 {mfaError}
               </p>
@@ -516,28 +530,22 @@ function LoginPage() {
 
       {view === "forgot-sent" && (
         <div className="py-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-lg font-semibold tracking-tight text-foreground">
-            Pedido enviado
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-4 text-lg font-semibold tracking-tight text-[#111111]">Pedido enviado</p>
+          <p className="mt-1.5 text-sm text-[#6b6862]">
             Se existir uma conta vinculada a este e-mail, enviaremos as instruções de recuperação.
           </p>
           <button
             type="button"
             onClick={() => setView("login")}
-            className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-[#e2e0dc] px-4 py-2 text-xs font-medium text-[#111111] transition-colors hover:bg-[#f1efec]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar para login
           </button>
         </div>
       )}
-
-      <p className="mt-7 text-center text-[11px] leading-relaxed text-muted-foreground/70">
-        Acesso seguro para equipe e clientes.
-      </p>
-    </AuthCardShell>
+    </LoginScreenShell>
   );
 }
