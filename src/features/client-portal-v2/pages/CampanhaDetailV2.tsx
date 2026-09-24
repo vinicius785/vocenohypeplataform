@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
-import { deriveCampaignSummaries, deriveContentItems, deriveRecentActivity } from "../lib/derive";
+import { deriveContentItems, deriveRecentActivity, summarizeCampaign } from "../lib/derive";
 import { cycleKey, resolveActiveCycle } from "../lib/competencia";
 import { ClientCampaignHeader } from "../components/campaigns/ClientCampaignHeader";
 import { CampaignCycleSelector } from "../components/campaigns/CampaignCycleSelector";
@@ -100,8 +100,13 @@ export function CampanhaDetailV2({
     });
   };
 
-  const summaries = useMemo(() => deriveCampaignSummaries(data), [data]);
-  const summary = summaries.find((c) => c.id === campanhaId);
+  // Recorrente: KPIs (progresso, conteúdos, pendências, health) sempre a
+  // partir do mês ATIVO, nunca somando todos os ciclos juntos — trocar de
+  // mês no seletor precisa refletir imediatamente nos cards de resumo.
+  const summary = useMemo(
+    () => (campaignRaw ? summarizeCampaign(campaignRaw, campaign?.influencers ?? []) : undefined),
+    [campaignRaw, campaign],
+  );
 
   const contentItems = useMemo(() => {
     const all = deriveContentItems(data).filter((i) => i.campanhaId === campanhaId);

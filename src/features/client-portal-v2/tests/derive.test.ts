@@ -4,6 +4,7 @@ import {
   deriveCampaignSummaries,
   deriveContentItems,
   deriveRecentActivity,
+  summarizeCampaign,
 } from "../lib/derive";
 import type { ClienteLinkData } from "@/lib/portal-types";
 
@@ -370,6 +371,73 @@ describe("deriveCampaignSummaries", () => {
     expect(summary.contentPlanned).toBe(1);
     expect(summary.contentPublished).toBe(1);
     expect(summary.progressPercent).toBe(100);
+  });
+
+  it("summarizeCampaign: recorrente com influenciadores explícitos calcula os KPIs só desse mês, nunca somando os outros", () => {
+    const campanha = {
+      id: "c1",
+      nome: "PoupaTempo RJ",
+      planejado: 0,
+      isRecorrente: true,
+      cycles: [
+        { id: "cycle-ago", competenceYear: 2026, competenceMonth: 8, status: "active" as const },
+        { id: "cycle-set", competenceYear: 2026, competenceMonth: 9, status: "active" as const },
+      ],
+      influencers: [
+        {
+          id: "i-ago",
+          nome: "Ana",
+          status: "APROVADO" as const,
+          statusCliente: "x",
+          redes: [],
+          campaignCycleId: "cycle-ago",
+          entregas: [
+            {
+              id: "e-ago",
+              tipo: "reel",
+              quantidade: 1,
+              status: "combinado" as const,
+              stage: "PUBLICADA",
+              statusCliente: "Publicado",
+            },
+          ],
+        },
+        {
+          id: "i-set",
+          nome: "Bruno",
+          status: "APROVADO" as const,
+          statusCliente: "x",
+          redes: [],
+          campaignCycleId: "cycle-set",
+          entregas: [
+            {
+              id: "e-set-1",
+              tipo: "reel",
+              quantidade: 1,
+              status: "combinado" as const,
+              stage: "PRODUCAO",
+              statusCliente: "Em produção",
+            },
+            {
+              id: "e-set-2",
+              tipo: "reel",
+              quantidade: 1,
+              status: "combinado" as const,
+              stage: "PUBLICADA",
+              statusCliente: "Publicado",
+            },
+          ],
+        },
+      ],
+      cronograma: [],
+      relatorios: [],
+    };
+    const setembroOnly = campanha.influencers.filter((i) => i.campaignCycleId === "cycle-set");
+    const summary = summarizeCampaign(campanha, setembroOnly);
+    expect(summary.influencersTotal).toBe(1);
+    expect(summary.contentPlanned).toBe(2);
+    expect(summary.contentPublished).toBe(1);
+    expect(summary.progressPercent).toBe(50);
   });
 });
 

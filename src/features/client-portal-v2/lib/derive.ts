@@ -127,52 +127,66 @@ function campaignHealth(pendingCount: number, daysLeft: number | null): Campaign
   return "on_track";
 }
 
+/**
+ * Núcleo do resumo/KPIs de uma campanha — recebe os influenciadores
+ * explicitamente (em vez de sempre `campanha.influencers`) pra que uma
+ * campanha recorrente possa pedir os KPIs de só um mês/ciclo (ver
+ * `CampanhaDetailV2`, que passa o subconjunto já filtrado pela
+ * competência ativa). Sem esse parâmetro, os KPIs de uma campanha
+ * recorrente ficariam sempre somando TODOS os meses juntos, nunca
+ * refletindo o mês selecionado — o que o cliente vê no seletor de
+ * competência precisa bater com o que os cards mostram.
+ */
+export function summarizeCampaign(
+  campanha: PublicCampanha,
+  influencers: PublicCampanha["influencers"] = campanha.influencers,
+  now = Date.now(),
+): CampaignSummary {
+  const influencersTotal = influencers.length;
+  const influencersApproved = influencers.filter((i) => i.status === "APROVADO").length;
+  // Conteúdo só existe pra influenciador aprovado — um recusado nunca
+  // conta nas métricas de entrega da campanha.
+  const entregas = influencers.filter((i) => i.status === "APROVADO").flatMap((i) => i.entregas);
+  const contentPlanned = entregas.length;
+  const contentPublished = entregas.filter((e) => e.stage === "PUBLICADA").length;
+  const pendingCount =
+    influencers.filter((i) => i.status === "ENVIADO_AO_CLIENTE").length +
+    entregas.filter((e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO")
+      .length;
+  const nextMilestone = [...campanha.cronograma]
+    .filter((c) => new Date(c.date).getTime() >= now)
+    .sort((a, b) => a.date.localeCompare(b.date))[0];
+  const daysLeft = daysUntil(campanha.prazo, now);
+  const progressPercent =
+    contentPlanned > 0 ? Math.round((contentPublished / contentPlanned) * 100) : 0;
+
+  let stageLabel = "Planejamento";
+  if (influencersApproved > 0 && contentPublished === 0) stageLabel = "Produção";
+  if (contentPublished > 0 && contentPublished < contentPlanned) stageLabel = "Publicação";
+  if (contentPlanned > 0 && contentPublished === contentPlanned) stageLabel = "Concluída";
+
+  return {
+    id: campanha.id,
+    nome: campanha.nome,
+    prazo: campanha.prazo,
+    dataInicio: campanha.dataInicio,
+    stageLabel,
+    progressPercent,
+    influencersApproved,
+    influencersTotal,
+    contentPublished,
+    contentPlanned,
+    pendingCount,
+    nextMilestoneLabel: nextMilestone?.title,
+    health: campaignHealth(pendingCount, daysLeft),
+  };
+}
+
 export function deriveCampaignSummaries(
   data: ClienteLinkData,
   now = Date.now(),
 ): CampaignSummary[] {
-  return data.campanhas.map((campanha) => {
-    const influencersTotal = campanha.influencers.length;
-    const influencersApproved = campanha.influencers.filter((i) => i.status === "APROVADO").length;
-    // Conteúdo só existe pra influenciador aprovado — um recusado nunca
-    // conta nas métricas de entrega da campanha.
-    const entregas = campanha.influencers
-      .filter((i) => i.status === "APROVADO")
-      .flatMap((i) => i.entregas);
-    const contentPlanned = entregas.length;
-    const contentPublished = entregas.filter((e) => e.stage === "PUBLICADA").length;
-    const pendingCount =
-      campanha.influencers.filter((i) => i.status === "ENVIADO_AO_CLIENTE").length +
-      entregas.filter((e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO")
-        .length;
-    const nextMilestone = [...campanha.cronograma]
-      .filter((c) => new Date(c.date).getTime() >= now)
-      .sort((a, b) => a.date.localeCompare(b.date))[0];
-    const daysLeft = daysUntil(campanha.prazo, now);
-    const progressPercent =
-      contentPlanned > 0 ? Math.round((contentPublished / contentPlanned) * 100) : 0;
-
-    let stageLabel = "Planejamento";
-    if (influencersApproved > 0 && contentPublished === 0) stageLabel = "Produção";
-    if (contentPublished > 0 && contentPublished < contentPlanned) stageLabel = "Publicação";
-    if (contentPlanned > 0 && contentPublished === contentPlanned) stageLabel = "Concluída";
-
-    return {
-      id: campanha.id,
-      nome: campanha.nome,
-      prazo: campanha.prazo,
-      dataInicio: campanha.dataInicio,
-      stageLabel,
-      progressPercent,
-      influencersApproved,
-      influencersTotal,
-      contentPublished,
-      contentPlanned,
-      pendingCount,
-      nextMilestoneLabel: nextMilestone?.title,
-      health: campaignHealth(pendingCount, daysLeft),
-    };
-  });
+  return data.campanhas.map((campanha) => summarizeCampaign(campanha, campanha.influencers, now));
 }
 
 /**
