@@ -315,6 +315,62 @@ describe("deriveCampaignSummaries", () => {
     expect(summary.stageLabel).toBe("Planejamento");
     expect(summary.progressPercent).toBe(0);
   });
+
+  it("nunca conta entregas de influenciador recusado no progresso/planejado", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [
+                {
+                  id: "e1",
+                  tipo: "reel",
+                  quantidade: 1,
+                  status: "combinado",
+                  stage: "PUBLICADA",
+                  statusCliente: "Publicado",
+                },
+              ],
+            },
+            {
+              id: "i2",
+              nome: "B",
+              status: "RECUSADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [
+                {
+                  id: "e2",
+                  tipo: "reel",
+                  quantidade: 3,
+                  status: "combinado",
+                  stage: "PUBLICADA",
+                  statusCliente: "Publicado",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const [summary] = deriveCampaignSummaries(data);
+    expect(summary.contentPlanned).toBe(1);
+    expect(summary.contentPublished).toBe(1);
+    expect(summary.progressPercent).toBe(100);
+  });
 });
 
 describe("deriveRecentActivity", () => {
@@ -595,5 +651,60 @@ describe("deriveContentItems — entregas corretas por influenciador dentro da c
     expect(forAna[0].entrega.id).toBe("e1");
     expect(forBruno).toHaveLength(1);
     expect(forBruno[0].entrega.id).toBe("e2");
+  });
+
+  it("nunca conta entregas de influenciador recusado — conteúdo só existe pra aprovado", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "Ana",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [
+                {
+                  id: "e1",
+                  tipo: "reel",
+                  quantidade: 1,
+                  status: "combinado",
+                  stage: "PUBLICADA",
+                  statusCliente: "Publicado",
+                },
+              ],
+            },
+            {
+              id: "i2",
+              nome: "Bruno",
+              status: "RECUSADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [
+                {
+                  id: "e2",
+                  tipo: "story",
+                  quantidade: 1,
+                  status: "combinado",
+                  stage: "PUBLICADA",
+                  statusCliente: "Publicado",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const items = deriveContentItems(data);
+    expect(items).toHaveLength(1);
+    expect(items[0].influencerId).toBe("i1");
   });
 });

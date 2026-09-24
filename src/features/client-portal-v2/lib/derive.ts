@@ -134,7 +134,11 @@ export function deriveCampaignSummaries(
   return data.campanhas.map((campanha) => {
     const influencersTotal = campanha.influencers.length;
     const influencersApproved = campanha.influencers.filter((i) => i.status === "APROVADO").length;
-    const entregas = campanha.influencers.flatMap((i) => i.entregas);
+    // Conteúdo só existe pra influenciador aprovado — um recusado nunca
+    // conta nas métricas de entrega da campanha.
+    const entregas = campanha.influencers
+      .filter((i) => i.status === "APROVADO")
+      .flatMap((i) => i.entregas);
     const contentPlanned = entregas.length;
     const contentPublished = entregas.filter((e) => e.stage === "PUBLICADA").length;
     const pendingCount =
@@ -232,10 +236,16 @@ export function deriveApprovalItems(data: ClienteLinkData, now = Date.now()): Ap
  * página nunca precisar re-percorrer `ClienteLinkData` pra montar um
  * breadcrumb.
  */
+/** Conteúdos (§ Campanhas > Conteúdos e entregas) só existem pra
+ * influenciadores APROVADOS — um perfil recusado nunca teve entrega
+ * combinada de verdade, então suas entregas (se houver alguma órfã no
+ * dado) nunca devem contar aqui, mesmo que status do influenciador mude
+ * depois. */
 export function deriveContentItems(data: ClienteLinkData): ContentItem[] {
   const items: ContentItem[] = [];
   for (const campanha of data.campanhas) {
     for (const influencer of campanha.influencers) {
+      if (influencer.status !== "APROVADO") continue;
       for (const entrega of influencer.entregas) {
         items.push({
           entrega,

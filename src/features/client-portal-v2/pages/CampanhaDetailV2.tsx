@@ -162,7 +162,11 @@ export function CampanhaDetailV2({
     );
   }
 
-  const allEntregas = campaign.influencers.flatMap((i) => i.entregas);
+  // Conteúdo/resultados só existem pra influenciador aprovado — recusado
+  // nunca conta (ver `deriveContentItems`/`deriveCampaignSummaries`).
+  const allEntregas = campaign.influencers
+    .filter((i) => i.status === "APROVADO")
+    .flatMap((i) => i.entregas);
 
   return (
     <PageContainer className="space-y-8">
