@@ -110,7 +110,7 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
           dueLabel: dueLabelFrom(days),
           priority,
           ctaLabel: "Revisar",
-          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&conteudo=${entrega.id}${queryParam}`,
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&entrega=${entrega.id}${queryParam}`,
         });
       }
     }

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
-import { deriveContentItems } from "../../lib/derive";
 import { ClientInfluencerHeader } from "./ClientInfluencerHeader";
 import { ClientInfluencerStatusActions } from "./ClientInfluencerStatusActions";
 import {
@@ -11,7 +10,6 @@ import {
 import { ClientInfluencerMetrics } from "./ClientInfluencerMetrics";
 import { ClientInfluencerDeliverables } from "./ClientInfluencerDeliverables";
 import { ClientInfluencerBriefing } from "./ClientInfluencerBriefing";
-import { ClientInfluencerContents } from "./ClientInfluencerContents";
 import { ClientInfluencerFiles } from "./ClientInfluencerFiles";
 import { ClientInfluencerComments } from "./ClientInfluencerComments";
 import { ClientInfluencerActivity } from "./ClientInfluencerActivity";
@@ -38,8 +36,8 @@ export function ClientCampaignInfluencerDrawer({
 }: {
   campanhaId: string;
   influencerId: string;
-  /** Deep link `?conteudo=` — abre o viewer deste conteúdo por cima do
-   * drawer assim que ele monta. */
+  /** Deep link `?entrega=`/`?conteudo=` — abre esta entrega já expandida
+   * dentro de "Entregas e conteúdos" assim que o drawer monta. */
   initialContentId?: string;
   /** Deep link `?foco=briefing` — rola o drawer até a seção de briefing. */
   initialFoco?: "briefing";
@@ -48,12 +46,6 @@ export function ClientCampaignInfluencerDrawer({
   const { data } = usePortalSessionData();
   const campaign = data.campanhas.find((c) => c.id === campanhaId);
   const influencer = campaign?.influencers.find((i) => i.id === influencerId);
-
-  const contentItems = influencer
-    ? deriveContentItems(data).filter(
-        (item) => item.campanhaId === campanhaId && item.influencerId === influencerId,
-      )
-    : [];
 
   useEffect(() => {
     if (initialFoco !== "briefing") return;
@@ -86,14 +78,11 @@ export function ClientCampaignInfluencerDrawer({
                 entregas={influencer.entregas}
                 campanhaId={campanhaId}
                 influencerId={influencer.id}
+                initialOpenEntregaId={initialContentId}
               />
               <div id={initialFoco === "briefing" ? "influencer-briefing" : undefined}>
                 <ClientInfluencerBriefing influencer={influencer} />
               </div>
-              <ClientInfluencerContents
-                items={contentItems}
-                initialOpenEntregaId={initialContentId}
-              />
               <ClientInfluencerFiles influencer={influencer} />
               <ClientInfluencerComments
                 comments={influencer.clienteComments ?? []}

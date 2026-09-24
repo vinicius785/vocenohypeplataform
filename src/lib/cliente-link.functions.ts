@@ -116,7 +116,19 @@ const EntregaPublic = z.object({
   publicadoEm: z.string().optional(),
   url: z.string().optional(),
   anexos: z
-    .array(z.object({ id: z.string(), categoria: z.string(), nome: z.string(), url: z.string() }))
+    .array(
+      z.object({
+        id: z.string(),
+        categoria: z.string(),
+        nome: z.string(),
+        url: z.string(),
+        /** Nº de versão dentro da categoria — nunca sobrescreve um anexo
+         * anterior (ver `addAnexoComVersao`, InfluencerBoard.tsx). Ausente
+         * em anexos antigos (pré-versionamento); tratado como v1. */
+        versao: z.number().optional(),
+        criadoEm: z.string().optional(),
+      }),
+    )
     .optional(),
   metrics: z
     .object({

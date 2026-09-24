@@ -47,7 +47,15 @@ export type PublicEntrega = {
   dataPostagem?: string;
   publicadoEm?: string;
   url?: string;
-  anexos?: { id: string; categoria: string; nome: string; url: string }[];
+  anexos?: {
+    id: string;
+    categoria: string;
+    nome: string;
+    url: string;
+    /** Ausente = trata como v1 (anexo anterior ao versionamento). */
+    versao?: number;
+    criadoEm?: string;
+  }[];
   metrics?: PostMetrics;
   roteiroReprovacao?: Veredito;
   conteudoReprovacao?: Veredito;

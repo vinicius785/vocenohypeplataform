@@ -11,8 +11,9 @@ import { CampanhaDetailV2 } from "@/features/client-portal-v2/pages/CampanhaDeta
  *
  * Estado de contexto, tudo via URL (nunca uma página nova):
  * - `influenciador=<id>` — drawer do influenciador aberto.
- * - `conteudo=<id>` — junto de `influenciador`, abre também o viewer
- *   daquele conteúdo por cima do drawer.
+ * - `entrega=<id>` (alias aceito: `conteudo=<id>`, mantido por
+ *   compatibilidade com links já gerados) — junto de `influenciador`,
+ *   abre a entrega já expandida dentro de "Entregas e conteúdos".
  * - `foco=briefing|influenciadores|conteudos` — rola a página/drawer até
  *   a seção correspondente (destino de atividade agrupada/briefing).
  * - `relatorio=<id>` — rola até o relatório correspondente em Relatórios
@@ -27,6 +28,9 @@ import { CampanhaDetailV2 } from "@/features/client-portal-v2/pages/CampanhaDeta
  */
 const campanhaSearchSchema = z.object({
   influenciador: z.string().optional(),
+  entrega: z.string().optional(),
+  /** @deprecated Alias de `entrega` — mantido só pra não quebrar links já
+   * gerados (attention items, atividade) que ainda usam esse nome. */
   conteudo: z.string().optional(),
   foco: z.enum(["briefing", "influenciadores", "conteudos"]).optional(),
   relatorio: z.string().optional(),
@@ -45,7 +49,7 @@ function CampanhaDetailPage() {
     <CampanhaDetailV2
       campanhaId={campanhaId}
       openInfluencerId={search.influenciador}
-      openContentId={search.conteudo}
+      openContentId={search.entrega ?? search.conteudo}
       foco={search.foco}
       openReportId={search.relatorio}
       competencia={search.competencia}
