@@ -211,6 +211,11 @@ const _InfluencerPublic = z.object({
    * recorrentes — mesmo campo que o kanban interno usa pra separar os
    * influenciadores por mês. */
   cicloMes: z.string().optional(),
+  /** Referência real ao ciclo/mês operacional (`campaign_cycles.id`) desta
+   * participação — substitui `cicloMes` como fonte de verdade pra decidir
+   * em qual competência o influenciador aparece. `undefined` = sem ciclo
+   * atribuído ainda (nunca inferir a partir de `criadoEm`). */
+  campaignCycleId: z.string().nullish(),
   /** Justificativa do time pra indicar este perfil — mostrada no modo de
    * revisão sequencial (item 2 do redesenho do Portal do Cliente). */
   justificativaTime: z.string().optional(),
@@ -351,7 +356,9 @@ function toPublicEntrega(e: Entrega, influ: Influ): z.infer<typeof EntregaPublic
   };
 }
 
-function toPublicInfluencer(influ: Influ): z.infer<typeof _InfluencerPublic> {
+function toPublicInfluencer(
+  influ: Influ & { campaignCycleId?: string | null },
+): z.infer<typeof _InfluencerPublic> {
   const status = normalizedInfluStatus(influ);
   return {
     id: influ.id,
@@ -376,6 +383,7 @@ function toPublicInfluencer(influ: Influ): z.infer<typeof _InfluencerPublic> {
     criadoEm: influ.createdAt,
     historico: statusHistoryFor(influ),
     cicloMes: influ.cicloMes,
+    campaignCycleId: influ.campaignCycleId,
     justificativaTime: influ.justificativaTime,
     activityEvents: (influ.activityEvents ?? []).map((e) => ({
       id: e.id,
@@ -588,6 +596,17 @@ const _CronogramaItemPublic = z.object({
   recurring: z.boolean().optional(),
 });
 
+/** Um ciclo/mês operacional real (`campaign_cycles`) de uma campanha
+ * recorrente — nunca inferido, só o que o time já criou explicitamente.
+ * Ausência total de ciclos (array vazio) numa campanha recorrente é um
+ * estado válido: "campanha recorrente sem ciclo ainda". */
+const _CampaignCyclePublic = z.object({
+  id: z.string(),
+  competenceYear: z.number(),
+  competenceMonth: z.number(),
+  status: z.enum(["active", "closed"]),
+});
+
 /**
  * Núcleo compartilhado por trás de `getClienteLinkData` (token) e
  * `getPortalDataForSession` (sessão, `portal-auth.functions.ts`) — extraído
@@ -606,16 +625,33 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
     campanhas.map(async (c) => {
       const { data: rows, error } = await supabaseAdmin
         .from("campanha_influenciadores")
-        .select("data")
+        .select("data, campaign_cycle_id")
         .eq("campanha_id", c.id);
       if (error) throw new Error(error.message);
       // Só mostra pro cliente influenciadores que o time já enviou pra
       // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
       // planejamento interno, ainda não decidido/comunicado.
-      const influencers = ((rows ?? []) as { data: Influ }[])
+      const influencers = ((rows ?? []) as { data: Influ; campaign_cycle_id: string | null }[])
         .filter((r) => VISIBLE_TO_CLIENT.has(normalizedInfluStatus(r.data)))
-        .map((r) => toPublicInfluencer(r.data));
+        .map((r) => toPublicInfluencer({ ...r.data, campaignCycleId: r.campaign_cycle_id }));
       const planejado = c.linhas.reduce((sum, l) => sum + (l.quantidade || 0), 0);
+
+      // Ciclos/meses reais desta campanha (só existem os que o time criou
+      // explicitamente — nunca inferidos). Array vazio numa campanha
+      // recorrente é um estado válido de UI ("sem ciclo ainda").
+      const { data: cycleRows, error: cycleError } = await supabaseAdmin
+        .from("campaign_cycles")
+        .select("id, competence_year, competence_month, status")
+        .eq("campanha_id", c.id)
+        .order("competence_year", { ascending: true })
+        .order("competence_month", { ascending: true });
+      if (cycleError) throw new Error(cycleError.message);
+      const cycles: z.infer<typeof _CampaignCyclePublic>[] = (cycleRows ?? []).map((r) => ({
+        id: r.id,
+        competenceYear: r.competence_year,
+        competenceMonth: r.competence_month,
+        status: r.status as "active" | "closed",
+      }));
 
       const { data: cronogramaRows, error: cronogramaError } = await supabaseAdmin
         .from("campanha_cronograma")
@@ -658,6 +694,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         relatorios,
         isRecorrente: c.pagClienteTipo === "Recorrente",
         recorrenteInicio: c.pagClienteRecorrenteInicio,
+        cycles,
       };
     }),
   );

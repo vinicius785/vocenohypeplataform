@@ -18,9 +18,18 @@ export type ScopedTable =
  * localStorage-backed code, but persistence is per-row instead of one
  * shared_state blob per parent that a stale read could overwrite whole.
  */
+/** Uma coluna real (fora do `data` JSONB) que também deve ser lida/escrita
+ * junto do item — usada só por `campanha_influenciadores.campaign_cycle_id`
+ * hoje (precisa ser uma coluna de verdade, não um campo dentro do JSONB,
+ * pra dar pra indexar/filtrar por ela em SQL — ver `campaign_cycles`). O
+ * valor mora em `item[itemKey]` no objeto JS; `null`/`undefined` vira
+ * `NULL` na coluna. */
+type RealColumn<T> = { name: string; itemKey: keyof T };
+
 export function createScopedArrayStore<T extends { id: string }>(
   table: ScopedTable,
   parentColumn: string,
+  realColumn?: RealColumn<T>,
 ) {
   let cache = new Map<string, T[]>();
   let loaded = false;
@@ -35,14 +44,21 @@ export function createScopedArrayStore<T extends { id: string }>(
   // de um tempo" relatado. `resync()` ignora qualquer id aqui dentro.
   const pendingDeletes = new Set<string>();
 
+  function mergeRealColumn(row: Record<string, unknown>): T {
+    const item = row.data as T;
+    if (!realColumn) return item;
+    return { ...item, [realColumn.itemKey]: row[realColumn.name] ?? undefined };
+  }
+
   async function fetchAll(): Promise<Map<string, T[]> | null> {
-    const { data, error } = await supabase.from(table).select(`data, ${parentColumn}`);
+    const columns = [`data`, parentColumn, ...(realColumn ? [realColumn.name] : [])].join(", ");
+    const { data, error } = await supabase.from(table).select(columns);
     if (error) throw error;
     const next = new Map<string, T[]>();
     for (const row of (data ?? []) as unknown as Record<string, unknown>[]) {
       const parentId = row[parentColumn] as string;
       const arr = next.get(parentId) ?? [];
-      arr.push(row.data as T);
+      arr.push(mergeRealColumn(row));
       next.set(parentId, arr);
     }
     return next;
@@ -107,8 +123,8 @@ export function createScopedArrayStore<T extends { id: string }>(
             arr.filter((x) => x.id !== oldId),
           );
         } else {
-          const item = newRow?.data as T | undefined;
-          if (!item) return;
+          if (!newRow?.data) return;
+          const item = mergeRealColumn(newRow);
           const idx = arr.findIndex((x) => x.id === item.id);
           cache.set(
             parentId,
@@ -172,6 +188,7 @@ export function createScopedArrayStore<T extends { id: string }>(
                 [parentColumn]: parentId,
                 data: item,
                 updated_at: new Date().toISOString(),
+                ...(realColumn ? { [realColumn.name]: item[realColumn.itemKey] ?? null } : {}),
               } as never)
               .select("id")
               .then(({ data, error }) => {

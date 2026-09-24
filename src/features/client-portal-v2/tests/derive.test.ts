@@ -214,6 +214,37 @@ describe("deriveAttentionItems — um item individual por pessoa/conteúdo, nunc
     const items = deriveAttentionItems(data).filter((i) => i.kind === "influencer_review");
     expect(items[0].priority).toBe("high");
   });
+
+  it("campanha recorrente: indica o mês no rótulo e preserva a competência no link (nunca ambíguo)", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "PoupaTempo RJ",
+          planejado: 0,
+          isRecorrente: true,
+          cycles: [{ id: "cycle-set", competenceYear: 2026, competenceMonth: 9, status: "active" }],
+          influencers: [
+            {
+              id: "i1",
+              nome: "Aline Peixoto",
+              status: "ENVIADO_AO_CLIENTE",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              campaignCycleId: "cycle-set",
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+        },
+      ],
+    };
+    const [item] = deriveAttentionItems(data);
+    expect(item.campanhaNome).toBe("PoupaTempo RJ · Setembro de 2026");
+    expect(item.href).toBe("/portal-v2/campanhas/c1?influenciador=i1&competencia=2026-09");
+  });
 });
 
 describe("deriveCampaignSummaries", () => {

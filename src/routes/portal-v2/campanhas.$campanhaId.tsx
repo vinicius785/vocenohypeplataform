@@ -17,6 +17,9 @@ import { CampanhaDetailV2 } from "@/features/client-portal-v2/pages/CampanhaDeta
  *   a seção correspondente (destino de atividade agrupada/briefing).
  * - `relatorio=<id>` — rola até o relatório correspondente em Relatórios
  *   e arquivos.
+ * - `competencia=YYYY-MM` — só campanhas recorrentes: mês/ciclo ativo.
+ *   Combinável com os parâmetros acima; ao trocar de mês, parâmetros que
+ *   não existem mais nesse ciclo são removidos (ver `CampanhaDetailV2`).
  *
  * Abrir empilha uma entrada de histórico (`navigate` sem `replace`),
  * então o botão voltar do navegador já fecha o drawer/limpa o foco
@@ -27,6 +30,7 @@ const campanhaSearchSchema = z.object({
   conteudo: z.string().optional(),
   foco: z.enum(["briefing", "influenciadores", "conteudos"]).optional(),
   relatorio: z.string().optional(),
+  competencia: z.string().optional(),
 });
 
 export const Route = createFileRoute("/portal-v2/campanhas/$campanhaId")({
@@ -44,6 +48,7 @@ function CampanhaDetailPage() {
       openContentId={search.conteudo}
       foco={search.foco}
       openReportId={search.relatorio}
+      competencia={search.competencia}
     />
   );
 }

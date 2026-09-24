@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
@@ -24,11 +25,15 @@ export function ClientCampaignHeader({
   clientLogo,
   clientName,
   lastUpdateLabel,
+  cycleSelector,
 }: {
   campaign: CampaignSummary;
   clientLogo?: string;
   clientName: string;
   lastUpdateLabel?: string;
+  /** Seletor de competência (só campanhas recorrentes) — alinhado à
+   * direita no desktop, cai pra linha própria no mobile. */
+  cycleSelector?: ReactNode;
 }) {
   const navigate = useNavigate();
   const health = HEALTH_BADGE[campaign.health];
@@ -50,7 +55,7 @@ export function ClientCampaignHeader({
         <span className="min-w-0 truncate font-medium text-foreground">{campaign.nome}</span>
       </nav>
 
-      <div className="flex min-w-0 items-start gap-4">
+      <div className="flex min-w-0 flex-wrap items-start gap-4">
         <ClienteLogo photo={clientLogo} empresa={clientName} size="lg" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium uppercase tracking-wide text-text-secondary">
@@ -70,6 +75,7 @@ export function ClientCampaignHeader({
             )}
           </div>
         </div>
+        {cycleSelector && <div className="w-full shrink-0 sm:w-auto">{cycleSelector}</div>}
       </div>
     </div>
   );

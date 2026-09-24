@@ -1,4 +1,4 @@
-import type { ClienteLinkData } from "@/lib/portal-types";
+import type { ClienteLinkData, PublicCampanha } from "@/lib/portal-types";
 import type {
   ActivityEntry,
   AttentionItem,
@@ -7,6 +7,25 @@ import type {
 } from "../types/attention";
 import type { ApprovalItem } from "../types/approvals";
 import type { ContentItem } from "../types/content";
+import { cycleKey, formatCompetenceLabel } from "./competencia";
+
+/** Campanha recorrente: sufixo "· Setembro de 2026" (evita ambiguidade
+ * quando o mesmo influenciador/campanha tem participações em vários
+ * meses) + `&competencia=` no link, pra abrir direto no mês certo — nunca
+ * o mês corrente se a ação pertence a outro. Campanha não-recorrente:
+ * sem sufixo, sem parâmetro (não existe o conceito de mês pra ela). */
+function competenceContext(
+  campanha: PublicCampanha,
+  campaignCycleId: string | null | undefined,
+): { label: string; queryParam: string } {
+  if (!campanha.isRecorrente || !campaignCycleId) return { label: campanha.nome, queryParam: "" };
+  const cycle = (campanha.cycles ?? []).find((c) => c.id === campaignCycleId);
+  if (!cycle) return { label: campanha.nome, queryParam: "" };
+  return {
+    label: `${campanha.nome} · ${formatCompetenceLabel(cycle)}`,
+    queryParam: `&competencia=${cycleKey(cycle)}`,
+  };
+}
 
 /**
  * Toda a "inteligência" da V2 mora aqui, como funções puras sobre o MESMO
@@ -56,18 +75,23 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
       days !== null && days <= 1 ? "high" : days !== null && days <= 3 ? "medium" : "low";
 
     for (const influencer of campanha.influencers) {
+      const { label: campanhaNome, queryParam } = competenceContext(
+        campanha,
+        influencer.campaignCycleId,
+      );
+
       if (influencer.status === "ENVIADO_AO_CLIENTE") {
         items.push({
           id: `influ:${influencer.id}`,
           kind: "influencer_review",
           campanhaId: campanha.id,
-          campanhaNome: campanha.nome,
+          campanhaNome,
           count: 1,
           description: `Perfil de ${influencer.nome} aguarda sua avaliação`,
           dueLabel: dueLabelFrom(days),
           priority,
           ctaLabel: "Avaliar perfil",
-          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}`,
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}${queryParam}`,
         });
       }
 
@@ -80,13 +104,13 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
           id: `entrega:${entrega.id}`,
           kind: "content_review",
           campanhaId: campanha.id,
-          campanhaNome: campanha.nome,
+          campanhaNome,
           count: 1,
           description: `${tipoLabel} de ${influencer.nome} aguarda sua aprovação`,
           dueLabel: dueLabelFrom(days),
           priority,
           ctaLabel: "Revisar",
-          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&conteudo=${entrega.id}`,
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&conteudo=${entrega.id}${queryParam}`,
         });
       }
     }
@@ -273,6 +297,10 @@ type RawActivityEvent = {
   campanhaNome: string;
   influencerId?: string;
   href: string;
+  /** Ciclo/mês desta participação, quando a campanha é recorrente — usado
+   * pra nunca agrupar eventos de meses diferentes (§8) e pra preservar a
+   * competência no link (§20). */
+  campaignCycleId?: string | null;
   /** Só preenchido pra `report_available` — nome do relatório, pro rótulo
    * não cair no fallback genérico do `kind`. */
   label?: string;
@@ -292,15 +320,20 @@ export function deriveRecentActivity(data: ClienteLinkData, limit = 5): Activity
   const raw: RawActivityEvent[] = [];
   for (const campanha of data.campanhas) {
     for (const influencer of campanha.influencers) {
+      const { label: campanhaNome, queryParam } = competenceContext(
+        campanha,
+        influencer.campaignCycleId,
+      );
       for (const event of influencer.activityEvents ?? []) {
         raw.push({
           id: event.id,
           kind: event.kind,
           createdAt: event.createdAt,
           campanhaId: campanha.id,
-          campanhaNome: campanha.nome,
+          campanhaNome,
           influencerId: influencer.id,
-          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}`,
+          campaignCycleId: influencer.campaignCycleId,
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}${queryParam}`,
         });
       }
     }
@@ -328,23 +361,33 @@ export function deriveRecentActivity(data: ClienteLinkData, limit = 5): Activity
     const groupLabel = GROUP_LABEL[event.kind];
     if (groupLabel && !NEVER_GROUP_KINDS.has(event.kind)) {
       const day = event.createdAt.slice(0, 10);
+      // Mesmo tipo + mesma campanha + mesma competência + mesmo dia — nunca
+      // agrupa meses diferentes de uma campanha recorrente (§8/§9).
       const siblings = raw.filter(
         (other) =>
           other.kind === event.kind &&
           other.campanhaId === event.campanhaId &&
+          other.campaignCycleId === event.campaignCycleId &&
           other.createdAt.slice(0, 10) === day,
       );
       if (siblings.length > 1) {
         for (const sibling of siblings) groupedAway.add(sibling.id);
         const isInfluencerEvent = event.kind.startsWith("perfil_");
+        const eventCampanha = data.campanhas.find((c) => c.id === event.campanhaId);
+        const cycleParam = event.campaignCycleId
+          ? eventCampanha?.cycles?.find((c) => c.id === event.campaignCycleId)
+          : undefined;
+        const focoParam = `foco=${isInfluencerEvent ? "influenciadores" : "conteudos"}`;
         entries.push({
-          id: `group:${event.kind}:${event.campanhaId}:${day}`,
+          id: `group:${event.kind}:${event.campanhaId}:${event.campaignCycleId ?? "none"}:${day}`,
           kind: "profile_approved",
           at: siblings[0].createdAt,
           label: groupLabel(siblings.length),
           campanhaId: event.campanhaId,
           campanhaNome: event.campanhaNome,
-          href: `/portal-v2/campanhas/${event.campanhaId}?foco=${isInfluencerEvent ? "influenciadores" : "conteudos"}`,
+          href: `/portal-v2/campanhas/${event.campanhaId}?${focoParam}${
+            cycleParam ? `&competencia=${cycleKey(cycleParam)}` : ""
+          }`,
           count: siblings.length,
         });
         continue;

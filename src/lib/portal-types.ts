@@ -72,6 +72,10 @@ export type PublicInfluencer = {
   criadoEm?: string;
   historico?: { status: string; at: string }[];
   cicloMes?: string;
+  /** Referência real ao ciclo/mês operacional (`campaign_cycles.id`) desta
+   * participação — ver `PublicCampanha.cycles`. `undefined`/`null` = sem
+   * ciclo atribuído ainda; nunca inferir a partir de `criadoEm`. */
+  campaignCycleId?: string | null;
   justificativaTime?: string;
   activityEvents?: {
     id: string;
@@ -100,6 +104,15 @@ export type PublicRelatorioMensal = {
   nps?: { score: number; comentario?: string; respondedAt: string };
   url: string | null;
 };
+/** Um ciclo/mês operacional real de uma campanha recorrente
+ * (`campaign_cycles`) — só existem os que o time criou explicitamente,
+ * nunca inferidos de `createdAt`. */
+export type PublicCampaignCycle = {
+  id: string;
+  competenceYear: number;
+  competenceMonth: number;
+  status: "active" | "closed";
+};
 export type PublicCampanha = {
   id: string;
   nome: string;
@@ -111,6 +124,9 @@ export type PublicCampanha = {
   relatorios: PublicRelatorioMensal[];
   isRecorrente: boolean;
   recorrenteInicio?: string;
+  /** Ausente/vazio é um estado válido: "campanha recorrente sem ciclo
+   * ainda" — nunca tratar como "carregando" ou preencher com zeros. */
+  cycles?: PublicCampaignCycle[];
 };
 export type PublicArticle = {
   id: string;

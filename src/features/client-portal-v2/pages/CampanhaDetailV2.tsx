@@ -4,7 +4,9 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { deriveCampaignSummaries, deriveContentItems, deriveRecentActivity } from "../lib/derive";
+import { cycleKey, resolveActiveCycle } from "../lib/competencia";
 import { ClientCampaignHeader } from "../components/campaigns/ClientCampaignHeader";
+import { CampaignCycleSelector } from "../components/campaigns/CampaignCycleSelector";
 import { ClientCampaignSummary } from "../components/campaigns/ClientCampaignSummary";
 import { ClientCampaignInfo } from "../components/campaigns/ClientCampaignInfo";
 import { ClientCampaignTimeline } from "../components/campaigns/ClientCampaignTimeline";
@@ -41,41 +43,86 @@ export function CampanhaDetailV2({
   openContentId,
   foco,
   openReportId,
+  competencia,
 }: {
   campanhaId: string;
   openInfluencerId?: string;
   openContentId?: string;
   foco?: Foco;
+  /** `?competencia=YYYY-MM` — só relevante quando a campanha é recorrente. */
+  competencia?: string;
   openReportId?: string;
 }) {
   const { data } = usePortalSessionData();
   const navigate = useNavigate();
-  const campaign = data.campanhas.find((c) => c.id === campanhaId);
+  const campaignRaw = data.campanhas.find((c) => c.id === campanhaId);
 
-  const openInfluencer = (influencerId: string) =>
+  const activeCycle = useMemo(
+    () => (campaignRaw?.isRecorrente ? resolveActiveCycle(campaignRaw.cycles, competencia) : null),
+    [campaignRaw, competencia],
+  );
+
+  // Campanha recorrente: escopa influenciadores (e, por herança, suas
+  // entregas/conteúdo/métricas — eles não têm ciclo próprio) ao mês ativo.
+  // Nome/cliente/descrição/tipo/identidade visual/responsável continuam
+  // globais (não fazem parte de `campaign` aqui, ficam em `summary`).
+  const campaign = useMemo(() => {
+    if (!campaignRaw) return undefined;
+    if (!campaignRaw.isRecorrente) return campaignRaw;
+    if (!activeCycle) return { ...campaignRaw, influencers: [] };
+    return {
+      ...campaignRaw,
+      influencers: campaignRaw.influencers.filter((i) => i.campaignCycleId === activeCycle.id),
+      relatorios: campaignRaw.relatorios.filter((r) => r.mes === cycleKey(activeCycle)),
+    };
+  }, [campaignRaw, activeCycle]);
+
+  const goTo = (search: Record<string, string | undefined>) =>
     navigate({
       to: "/portal-v2/campanhas/$campanhaId",
       params: { campanhaId },
-      search: { influenciador: influencerId },
+      search: { competencia, ...search },
     });
 
-  const closeInfluencer = () =>
+  const openInfluencer = (influencerId: string) => goTo({ influenciador: influencerId });
+
+  const closeInfluencer = () => goTo({});
+
+  const changeCycle = (nextCycle: { competenceYear: number; competenceMonth: number }) => {
+    // Muda de mês: nunca carrega o influenciador/conteúdo/foco do mês
+    // anterior por engano — cada um só sobrevive se existir de verdade no
+    // novo ciclo (checado no efeito abaixo, que fecha o drawer sozinho
+    // quando a participação não existe nesse mês).
     navigate({
       to: "/portal-v2/campanhas/$campanhaId",
       params: { campanhaId },
-      search: {},
+      search: { competencia: cycleKey(nextCycle) },
     });
+  };
+
   const summaries = useMemo(() => deriveCampaignSummaries(data), [data]);
   const summary = summaries.find((c) => c.id === campanhaId);
 
-  const contentItems = useMemo(
-    () => deriveContentItems(data).filter((i) => i.campanhaId === campanhaId),
-    [data, campanhaId],
-  );
+  const contentItems = useMemo(() => {
+    const all = deriveContentItems(data).filter((i) => i.campanhaId === campanhaId);
+    if (!campaign) return all;
+    const visibleInfluencerIds = new Set(campaign.influencers.map((i) => i.id));
+    return all.filter((i) => visibleInfluencerIds.has(i.influencerId));
+  }, [data, campanhaId, campaign]);
   const activity = useMemo(
     () => deriveRecentActivity(data, 30).filter((e) => e.campanhaId === campanhaId),
     [data, campanhaId],
   );
+
+  // Se o influenciador aberto na URL não existe mais no mês ativo (trocou
+  // de ciclo, ou o link é de um mês diferente), fecha o drawer sozinho —
+  // nunca reaproveita o status/entregas de outro mês por engano.
+  useEffect(() => {
+    if (!campaign || !openInfluencerId) return;
+    const stillExists = campaign.influencers.some((i) => i.id === openInfluencerId);
+    if (!stillExists) closeInfluencer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign, openInfluencerId]);
 
   const lastUpdateLabel = useMemo(() => {
     if (!campaign) return undefined;
@@ -124,6 +171,15 @@ export function CampanhaDetailV2({
         clientLogo={data.clienteFoto}
         clientName={data.clienteNome}
         lastUpdateLabel={lastUpdateLabel}
+        cycleSelector={
+          campaignRaw?.isRecorrente ? (
+            <CampaignCycleSelector
+              cycles={campaignRaw.cycles}
+              active={activeCycle}
+              onChange={changeCycle}
+            />
+          ) : undefined
+        }
       />
 
       <ClientCampaignSummary campaign={summary} />
@@ -132,18 +188,28 @@ export function CampanhaDetailV2({
 
       <ClientCampaignTimeline items={campaign.cronograma} />
 
-      <div id="campanha-influenciadores">
-        <ClientCampaignCreators
-          influencers={campaign.influencers}
-          onOpenInfluencer={openInfluencer}
+      {campaignRaw?.isRecorrente && !activeCycle ? (
+        <EmptyState
+          compact
+          title="Campanha recorrente sem ciclo ainda"
+          description="Assim que o time criar o primeiro mês operacional, ele aparece aqui."
         />
-      </div>
+      ) : (
+        <>
+          <div id="campanha-influenciadores">
+            <ClientCampaignCreators
+              influencers={campaign.influencers}
+              onOpenInfluencer={openInfluencer}
+            />
+          </div>
 
-      <div id="campanha-conteudos">
-        <ClientCampaignDeliverables items={contentItems} />
-      </div>
+          <div id="campanha-conteudos">
+            <ClientCampaignDeliverables items={contentItems} />
+          </div>
 
-      <ClientCampaignResults entregas={allEntregas} />
+          <ClientCampaignResults entregas={allEntregas} />
+        </>
+      )}
 
       <div id="campanha-recursos">
         <ClientCampaignResources campaign={campaign} highlightReportId={openReportId} />

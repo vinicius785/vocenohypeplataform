@@ -860,8 +860,19 @@ export type Influ = {
    * referência" configurado na Página de Inscrição (nunca vem direto do
    * formulário público). Usado por `CampanhasSection.tsx` pra decidir em
    * qual mês do kanban esse influenciador aparece, em vez de depender do
-   * timing exato de `createdAt`. Ausente em entradas manuais/antigas. */
+   * timing exato de `createdAt`. Ausente em entradas manuais/antigas.
+   * @deprecated Mantido só por compatibilidade de leitura de registros
+   * antigos — `campaignCycleId` é a relação real (`campaign_cycles`) e
+   * deve ser preenchido em toda participação nova. */
   cicloMes?: string;
+  /** Referência real (`campaign_cycles.id`) ao ciclo/mês operacional desta
+   * participação, pra campanhas recorrentes. Persistida numa coluna de
+   * verdade (não dentro deste JSONB) — ver `campanha-scoped-store.ts` — pra
+   * dar pra filtrar/indexar por ela em SQL. `undefined`/`null` significa
+   * "sem ciclo atribuído ainda": nunca inferir um a partir de `createdAt`
+   * ou de `cicloMes`; fica pendente de atribuição manual pelo time (ver
+   * a view `campanha_influenciadores_sem_ciclo`). */
+  campaignCycleId?: string | null;
 };
 
 /**
