@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { deriveContentItems } from "../../lib/derive";
@@ -31,10 +32,17 @@ import { ClientInfluencerActivity } from "./ClientInfluencerActivity";
 export function ClientCampaignInfluencerDrawer({
   campanhaId,
   influencerId,
+  initialContentId,
+  initialFoco,
   onClose,
 }: {
   campanhaId: string;
   influencerId: string;
+  /** Deep link `?conteudo=` — abre o viewer deste conteúdo por cima do
+   * drawer assim que ele monta. */
+  initialContentId?: string;
+  /** Deep link `?foco=briefing` — rola o drawer até a seção de briefing. */
+  initialFoco?: "briefing";
   onClose: () => void;
 }) {
   const { data } = usePortalSessionData();
@@ -46,6 +54,12 @@ export function ClientCampaignInfluencerDrawer({
         (item) => item.campanhaId === campanhaId && item.influencerId === influencerId,
       )
     : [];
+
+  useEffect(() => {
+    if (initialFoco !== "briefing") return;
+    const el = document.getElementById("influencer-briefing");
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [initialFoco]);
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -73,8 +87,13 @@ export function ClientCampaignInfluencerDrawer({
                 campanhaId={campanhaId}
                 influencerId={influencer.id}
               />
-              <ClientInfluencerBriefing influencer={influencer} />
-              <ClientInfluencerContents items={contentItems} />
+              <div id={initialFoco === "briefing" ? "influencer-briefing" : undefined}>
+                <ClientInfluencerBriefing influencer={influencer} />
+              </div>
+              <ClientInfluencerContents
+                items={contentItems}
+                initialOpenEntregaId={initialContentId}
+              />
               <ClientInfluencerFiles influencer={influencer} />
               <ClientInfluencerComments
                 comments={influencer.clienteComments ?? []}

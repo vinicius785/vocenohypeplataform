@@ -11,7 +11,7 @@ function baseData(): ClienteLinkData {
   return { clienteNome: "Cliente Teste", campanhas: [], artigos: [] };
 }
 
-describe("deriveAttentionItems — só ações reais, uma linha por tipo+campanha", () => {
+describe("deriveAttentionItems — um item individual por pessoa/conteúdo, nunca um agregado genérico", () => {
   it("sem pendências, não gera nenhum item", () => {
     const data: ClienteLinkData = {
       ...baseData(),
@@ -30,7 +30,7 @@ describe("deriveAttentionItems — só ações reais, uma linha por tipo+campanh
     expect(deriveAttentionItems(data)).toEqual([]);
   });
 
-  it("agrupa vários influenciadores pendentes da MESMA campanha num único item (nunca um item por pessoa)", () => {
+  it("gera um item individual por influenciador pendente, nunca um agregado por campanha", () => {
     const data: ClienteLinkData = {
       ...baseData(),
       campanhas: [
@@ -65,8 +65,77 @@ describe("deriveAttentionItems — só ações reais, uma linha por tipo+campanh
     };
     const items = deriveAttentionItems(data);
     const influItems = items.filter((i) => i.kind === "influencer_review");
-    expect(influItems).toHaveLength(1);
-    expect(influItems[0].count).toBe(2);
+    expect(influItems).toHaveLength(2);
+    expect(influItems.map((i) => i.description)).toEqual([
+      "Perfil de A aguarda sua avaliação",
+      "Perfil de B aguarda sua avaliação",
+    ]);
+    expect(influItems.every((i) => i.count === 1)).toBe(true);
+    expect(influItems[0].href).toBe("/portal-v2/campanhas/c1?influenciador=i1");
+    expect(influItems[1].href).toBe("/portal-v2/campanhas/c1?influenciador=i2");
+  });
+
+  it("nunca gera pendência genérica de 'briefing personalizado' — influenciador aprovado sem entregas não vira item algum", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    expect(deriveAttentionItems(data)).toEqual([]);
+  });
+
+  it("nunca considera 'aguardando a equipe'/'em produção' como pendência do cliente", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [
+                {
+                  id: "e1",
+                  tipo: "reel",
+                  quantidade: 1,
+                  status: "combinado",
+                  stage: "PRODUCAO",
+                  statusCliente: "Em produção",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    expect(deriveAttentionItems(data)).toEqual([]);
   });
 
   it("nunca mistura pendências de campanhas diferentes no mesmo item (isolamento por campanha)", () => {
@@ -261,6 +330,179 @@ describe("deriveRecentActivity", () => {
     const entries = deriveRecentActivity(data, 1);
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe("ev2");
+  });
+
+  it("agrupa eventos do mesmo tipo, mesma campanha e mesmo dia num único resumo com contagem", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev1",
+                  kind: "perfil_aprovado",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T10:00:00.000Z",
+                },
+              ],
+            },
+            {
+              id: "i2",
+              nome: "B",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev2",
+                  kind: "perfil_aprovado",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T14:00:00.000Z",
+                },
+              ],
+            },
+            {
+              id: "i3",
+              nome: "C",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev3",
+                  kind: "perfil_aprovado",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T18:00:00.000Z",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const entries = deriveRecentActivity(data, 10);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].count).toBe(3);
+    expect(entries[0].label).toBe("3 perfis foram aprovados");
+  });
+
+  it("nunca agrupa aprovação com recusa, mesmo na mesma campanha e no mesmo dia", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev1",
+                  kind: "perfil_aprovado",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T10:00:00.000Z",
+                },
+              ],
+            },
+            {
+              id: "i2",
+              nome: "B",
+              status: "RECUSADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev2",
+                  kind: "perfil_recusado",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T14:00:00.000Z",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const entries = deriveRecentActivity(data, 10);
+    expect(entries).toHaveLength(2);
+    expect(entries.every((e) => e.count === 1)).toBe(true);
+  });
+
+  it("nunca agrupa comentários ou pedidos de ajuste, mesmo repetidos no mesmo dia/campanha", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [
+            {
+              id: "i1",
+              nome: "A",
+              status: "APROVADO",
+              statusCliente: "x",
+              redes: [],
+              entregas: [],
+              activityEvents: [
+                {
+                  id: "ev1",
+                  kind: "comentario_cliente",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T10:00:00.000Z",
+                },
+                {
+                  id: "ev2",
+                  kind: "comentario_cliente",
+                  actorType: "cliente",
+                  actorName: "Cliente",
+                  createdAt: "2026-01-01T11:00:00.000Z",
+                },
+              ],
+            },
+          ],
+          cronograma: [],
+          relatorios: [],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const entries = deriveRecentActivity(data, 10);
+    expect(entries).toHaveLength(2);
+    expect(entries.every((e) => e.count === 1)).toBe(true);
   });
 });
 

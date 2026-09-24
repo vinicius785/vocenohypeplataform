@@ -1,4 +1,4 @@
-export type ApprovalKind = "influencer" | "content" | "briefing";
+export type ApprovalKind = "influencer" | "content";
 
 export type ApprovalItem = {
   id: string;

@@ -6,7 +6,15 @@ import type { PublicCampanha } from "@/lib/portal-types";
 /** Relatórios e arquivos — unificados numa seção, separados visualmente
  * em duas listas só quando ambas têm itens (nunca duas áreas grandes
  * quando só uma tem conteúdo). */
-export function ClientCampaignResources({ campaign }: { campaign: PublicCampanha }) {
+export function ClientCampaignResources({
+  campaign,
+  highlightReportId,
+}: {
+  campaign: PublicCampanha;
+  /** Relatório pra destacar visualmente (deep link `?relatorio=`) —
+   * nunca uma segunda página, só um anel de foco na linha certa. */
+  highlightReportId?: string;
+}) {
   const reports = campaign.relatorios;
   const files = campaign.influencers.flatMap((i) => [
     ...(i.briefingAnexoUrl
@@ -47,7 +55,9 @@ export function ClientCampaignResources({ campaign }: { campaign: PublicCampanha
               {reports.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center gap-3 rounded-2xl bg-card px-3 py-2.5 dark:shadow-none"
+                  className={`flex items-center gap-3 rounded-2xl bg-card px-3 py-2.5 dark:shadow-none ${
+                    r.id === highlightReportId ? "ring-2 ring-brand" : ""
+                  }`}
                 >
                   <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">

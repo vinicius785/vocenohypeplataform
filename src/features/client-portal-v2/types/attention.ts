@@ -7,26 +7,24 @@ import type { PublicCampanha, PublicEntrega, PublicInfluencer } from "@/lib/port
  * apresentação diferentes do mesmo dado real, não um esquema paralelo.
  */
 
-export type AttentionKind =
-  | "influencer_review"
-  | "content_review"
-  | "briefing_confirmation"
-  | "deadline_soon";
+export type AttentionKind = "influencer_review" | "content_review";
 
 export type AttentionItem = {
   id: string;
   kind: AttentionKind;
   campanhaId: string;
   campanhaNome: string;
-  /** Quantos itens iguais este cartão resume (ex.: "6 influenciadores
-   * aguardam avaliação") — nunca um item por influenciador na Prioridade 1,
-   * pra não virar uma lista longa igual a um feed. */
+  /** Sempre 1 nesta rodada — cada linha é UM item nomeado com destino
+   * próprio (regra explícita: nunca agrupar "Ver briefings"/"Ver
+   * aprovações" genéricos). Mantido pra não quebrar quem já lê `count`. */
   count: number;
   description: string;
   dueLabel?: string;
   priority: "high" | "medium" | "low";
   ctaLabel: string;
-  /** Rota da V2 pra onde o CTA deve levar. */
+  /** Rota da V2 pra onde o CTA deve levar — já aponta pro contexto exato
+   * (campanha + influenciador, e quando aplicável + conteúdo), nunca uma
+   * página-mãe genérica. */
   href: string;
 };
 
@@ -63,6 +61,12 @@ export type ActivityEntry = {
   campanhaId: string;
   campanhaNome: string;
   href: string;
+  /** >1 quando este item representa vários eventos do MESMO tipo,
+   * campanha e resultado agrupados numa linha só (ex.: "3 perfis foram
+   * aprovados") — nunca agrupa aprovação com reprovação, campanhas ou
+   * meses diferentes, nem comentários/ajustes (esses sempre ficam
+   * individuais, `count` é sempre 1 pra eles). */
+  count: number;
 };
 
 export type { PublicCampanha, PublicEntrega, PublicInfluencer };

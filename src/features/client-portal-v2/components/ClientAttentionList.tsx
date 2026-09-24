@@ -4,6 +4,10 @@ import { Card, CardHeader } from "@/components/InicioDashboard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { AttentionItem } from "../types/attention";
 
+// Nunca ligamos "Ver tudo"/"Ver aprovações" pra uma página própria —
+// Aprovações deixou de existir como destino de menu. Cada item já leva
+// direto pro contexto certo; não existe uma lista completa pra "ver".
+
 const PRIORITY_DOT: Record<AttentionItem["priority"], string> = {
   high: "bg-danger",
   medium: "bg-warning",
@@ -21,21 +25,7 @@ export function ClientAttentionList({ items }: { items: AttentionItem[] }) {
 
   return (
     <Card>
-      <CardHeader
-        icon={<AlertCircle className="h-4 w-4" />}
-        title="Precisa da sua atenção"
-        action={
-          items.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/portal-v2/aprovacoes" })}
-              className="text-xs font-medium text-brand hover:underline"
-            >
-              Ver tudo
-            </button>
-          ) : undefined
-        }
-      />
+      <CardHeader icon={<AlertCircle className="h-4 w-4" />} title="Precisa da sua atenção" />
       {items.length === 0 ? (
         <EmptyState
           compact

@@ -52,6 +52,7 @@ export function InicioV2() {
 
   const attentionItems = useMemo(() => deriveAttentionItems(data), [data]);
   const approvalCount = useMemo(() => deriveApprovalItems(data).length, [data]);
+  const firstAttentionHref = attentionItems[0]?.href;
   const campaigns = useMemo(() => deriveCampaignSummaries(data), [data]);
   const activeCampaigns = campaigns.filter((c) => c.stageLabel !== "Concluída");
   const activity = useMemo(() => deriveRecentActivity(data), [data]);
@@ -74,7 +75,7 @@ export function InicioV2() {
               label="Pendências"
               value={approvalCount}
               tone="danger"
-              onClick={() => navigate({ to: "/portal-v2/aprovacoes" })}
+              onClick={firstAttentionHref ? () => navigate({ to: firstAttentionHref }) : undefined}
             />
             <HeaderStatCell
               label="Campanhas ativas"

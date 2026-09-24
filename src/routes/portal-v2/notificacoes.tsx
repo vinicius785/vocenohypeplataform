@@ -1,6 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { NotificacoesV2 } from "@/features/client-portal-v2/pages/NotificacoesV2";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/**
+ * Notificações deixou de ser uma página própria — vira um popover
+ * compacto no sino da topbar (`NotificationsPopover`). Links antigos
+ * caem na Início, nunca numa página em branco.
+ */
 export const Route = createFileRoute("/portal-v2/notificacoes")({
-  component: NotificacoesV2,
+  beforeLoad: () => {
+    throw redirect({ to: "/portal-v2/inicio" });
+  },
 });

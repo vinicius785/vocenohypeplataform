@@ -4,11 +4,8 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Home,
   Megaphone,
-  CheckSquare,
-  Images,
   FileBarChart,
   FolderOpen,
-  Bell,
   Menu,
   X,
   ChevronsLeft,
@@ -16,8 +13,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
-import { deriveApprovalItems } from "../lib/derive";
 import { ClientSidebarHeader } from "../components/ClientSidebarHeader";
+import { NotificationsPopover } from "../components/NotificationsPopover";
 import {
   ClientSidebarProfile,
   ClientSidebarSettingsLink,
@@ -27,26 +24,27 @@ import {
 /**
  * Shell da V2 — navegação própria (nunca os menus internos do time), na
  * MESMA linguagem visual do `AppShell.tsx` (sidebar `w-64`/colapsada
- * `w-[68px]`, `pill-nav-item`, topbar `h-16`). Rodada de correção
- * conceitual: o topo da sidebar agora identifica o CLIENTE ativo (nunca
- * a marca Você no Hype), e a opção "Ajuda" foi removida de toda a
- * árvore — não existe mais em nenhum lugar desta sidebar (nav, rodapé,
- * menu da pessoa, topbar, drawer, estado recolhido).
+ * `w-[68px]`, `pill-nav-item`, topbar `h-16`). O topo da sidebar
+ * identifica o CLIENTE ativo (nunca a marca Você no Hype), e a opção
+ * "Ajuda" continua fora de toda a árvore.
  *
- * Estrutura vertical (spec desta rodada): identidade do cliente → nav →
- * espaço flexível → perfil da pessoa → configurações — só a região
- * central (`<nav>`) rola se crescer, cabeçalho e rodapé continuam
- * acessíveis.
+ * Rodada de simplificação de arquitetura: Aprovações/Conteúdos/
+ * Notificações deixaram de ser destinos de menu — aprovação e conteúdo
+ * acontecem dentro da campanha/drawer do influenciador, e notificações
+ * viraram um popover no sino da topbar (`NotificationsPopover`), nunca
+ * uma página própria. A sidebar fica só com Início/Campanhas/
+ * Relatórios/Arquivos.
+ *
+ * Estrutura vertical: identidade do cliente → nav → espaço flexível →
+ * perfil da pessoa → configurações — só a região central (`<nav>`) rola
+ * se crescer, cabeçalho e rodapé continuam acessíveis.
  */
 
 const NAV_ITEMS = [
   { key: "inicio", label: "Início", icon: Home, href: "/portal-v2/inicio" },
   { key: "campanhas", label: "Campanhas", icon: Megaphone, href: "/portal-v2/campanhas" },
-  { key: "aprovacoes", label: "Aprovações", icon: CheckSquare, href: "/portal-v2/aprovacoes" },
-  { key: "conteudos", label: "Conteúdos", icon: Images, href: "/portal-v2/conteudos" },
   { key: "relatorios", label: "Relatórios", icon: FileBarChart, href: "/portal-v2/relatorios" },
   { key: "arquivos", label: "Arquivos", icon: FolderOpen, href: "/portal-v2/arquivos" },
-  { key: "notificacoes", label: "Notificações", icon: Bell, href: "/portal-v2/notificacoes" },
 ] as const;
 
 function NavButton({
@@ -54,14 +52,12 @@ function NavButton({
   collapsed,
   icon: Icon,
   label,
-  badge,
   onClick,
 }: {
   active: boolean;
   collapsed: boolean;
   icon: typeof Home;
   label: string;
-  badge?: number;
   onClick: () => void;
 }) {
   return (
@@ -82,19 +78,9 @@ function NavButton({
       )}
       <span className="relative shrink-0">
         <Icon className="h-4 w-4" aria-hidden="true" />
-        {badge !== undefined && badge > 0 && collapsed && (
-          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning" />
-        )}
       </span>
       {!collapsed && (
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-          {label}
-          {badge !== undefined && badge > 0 && (
-            <span className="ml-auto shrink-0 rounded-full bg-warning-soft px-1.5 py-0.5 text-xs font-semibold text-warning-soft-foreground">
-              {badge}
-            </span>
-          )}
-        </span>
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">{label}</span>
       )}
     </button>
   );
@@ -135,12 +121,10 @@ function useAuthIdentity(): { name: string; secondary: string } {
 
 function SidebarContent({
   collapsed,
-  pendingApprovals,
   currentPath,
   onNavigate,
 }: {
   collapsed: boolean;
-  pendingApprovals: number;
   currentPath: string;
   onNavigate?: () => void;
 }) {
@@ -167,7 +151,6 @@ function SidebarContent({
             collapsed={collapsed}
             icon={item.icon}
             label={item.label}
-            badge={item.key === "aprovacoes" ? pendingApprovals : undefined}
             onClick={() => {
               navigate({ to: item.href });
               onNavigate?.();
@@ -205,10 +188,6 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const routerState = useRouterState();
   const currentPath = routerState.location.pathname;
-  const navigate = useNavigate();
-  const { data } = usePortalSessionData();
-
-  const pendingApprovals = deriveApprovalItems(data).length;
 
   const toggleCollapsed = () => {
     setCollapsed((v) => {
@@ -248,11 +227,7 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
           collapsed ? "w-[68px]" : "w-64"
         }`}
       >
-        <SidebarContent
-          collapsed={collapsed}
-          pendingApprovals={pendingApprovals}
-          currentPath={currentPath}
-        />
+        <SidebarContent collapsed={collapsed} currentPath={currentPath} />
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -290,7 +265,6 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
             </div>
             <SidebarContent
               collapsed={false}
-              pendingApprovals={pendingApprovals}
               currentPath={currentPath}
               onNavigate={() => setDrawerOpen(false)}
             />
@@ -312,14 +286,7 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <PortalV2Breadcrumb currentPath={currentPath} />
           </div>
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/portal-v2/notificacoes" })}
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Notificações"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
+          <NotificationsPopover />
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
       </div>

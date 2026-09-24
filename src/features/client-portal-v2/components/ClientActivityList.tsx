@@ -35,12 +35,14 @@ export function ClientActivityList({ entries }: { entries: ActivityEntry[] }) {
         />
       ) : (
         <div className="divide-y divide-border/70">
-          {entries.map((entry) => (
+          {entries.map((entry, index) => (
             <button
               key={entry.id}
               type="button"
               onClick={() => navigate({ to: entry.href })}
-              className="group flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-5"
+              className={`group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:px-5 ${
+                index >= 3 ? "hidden md:flex" : ""
+              } ${index >= 4 ? "md:hidden lg:flex" : ""}`}
             >
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Sparkles className="h-3.5 w-3.5" />

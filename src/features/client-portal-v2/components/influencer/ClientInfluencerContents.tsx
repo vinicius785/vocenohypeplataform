@@ -2,13 +2,23 @@ import { useState } from "react";
 import { Film } from "lucide-react";
 import { ENTREGA_STAGE_TONE } from "@/lib/campanha-status";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
-import { ContentDetailDialog } from "../../pages/ConteudosV2";
+import { ContentDetailDialog } from "../ContentDetailDialog";
 import type { ContentItem } from "../../types/content";
 
 /** Conteúdos e versões — mesmo viewer já usado em Conteúdos/campanha
- * (`ContentDetailDialog`), nunca um segundo drawer por cima deste. */
-export function ClientInfluencerContents({ items }: { items: ContentItem[] }) {
-  const [selected, setSelected] = useState<ContentItem | null>(null);
+ * (`ContentDetailDialog`), nunca um segundo drawer por cima deste.
+ * `initialOpenEntregaId` — deep link `?conteudo=`, abre o viewer
+ * automaticamente assim que a lista monta. */
+export function ClientInfluencerContents({
+  items,
+  initialOpenEntregaId,
+}: {
+  items: ContentItem[];
+  initialOpenEntregaId?: string;
+}) {
+  const [selected, setSelected] = useState<ContentItem | null>(
+    () => items.find((i) => i.entrega.id === initialOpenEntregaId) ?? null,
+  );
 
   if (items.length === 0) return null;
 

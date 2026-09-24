@@ -31,83 +31,64 @@ function dueLabelFrom(days: number | null): string | undefined {
 }
 
 /**
- * Prioridade 1 da Início: só ações reais, uma linha por TIPO+CAMPANHA (ex.:
- * "6 influenciadores aguardam avaliação" em vez de 6 linhas repetidas) —
- * regra explícita do produto: nunca virar um feed item-a-item.
+ * "Precisa da sua atenção" — cada linha é UM item real e nomeado, com
+ * destino próprio (campanha + influenciador, e quando aplicável +
+ * conteúdo) — nunca mais um grupo genérico tipo "Ver briefings"/"Ver
+ * aprovações" apontando pra uma página que nem existe mais (rodada de
+ * simplificação: Aprovações/Conteúdos deixaram de ser páginas
+ * independentes). Só entra aqui quem satisfaz TODAS as condições:
+ * depende de uma ação do CLIENTE, está num estado realmente acionável
+ * (nunca "aguardando a equipe"/"em produção"/concluído/cancelado), e tem
+ * um destino contextual válido. Não existe mais a pendência genérica de
+ * "briefing personalizado" — nenhuma campanha exige briefing por regra
+ * global; um briefing só vira pendência quando a campanha realmente usa
+ * um E ele já foi enviado ao cliente com uma ação explícita pendente, o
+ * que hoje não tem um campo de status próprio no dado (só texto livre) —
+ * por isso não há mais nenhum item de briefing aqui até esse status
+ * existir de verdade (ver auditoria desta rodada).
  */
 export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): AttentionItem[] {
   const items: AttentionItem[] = [];
 
   for (const campanha of data.campanhas) {
-    const pendingInfluencers = campanha.influencers.filter(
-      (i) => i.status === "ENVIADO_AO_CLIENTE",
-    );
-    if (pendingInfluencers.length > 0) {
-      const days = daysUntil(campanha.prazo, now);
-      items.push({
-        id: `influ-review:${campanha.id}`,
-        kind: "influencer_review",
-        campanhaId: campanha.id,
-        campanhaNome: campanha.nome,
-        count: pendingInfluencers.length,
-        description: `${pendingInfluencers.length} influenciador${pendingInfluencers.length > 1 ? "es" : ""} aguarda${pendingInfluencers.length > 1 ? "m" : ""} sua avaliação`,
-        dueLabel: dueLabelFrom(days),
-        priority: days !== null && days <= 1 ? "high" : "medium",
-        ctaLabel: "Revisar perfis",
-        href: `/portal-v2/campanhas/${campanha.id}`,
-      });
-    }
-
-    const pendingContent = campanha.influencers.flatMap((i) =>
-      i.entregas.filter((e) => e.stage === "ROTEIRO_APROVACAO" || e.stage === "CONTEUDO_APROVACAO"),
-    );
-    if (pendingContent.length > 0) {
-      const days = daysUntil(campanha.prazo, now);
-      items.push({
-        id: `content-review:${campanha.id}`,
-        kind: "content_review",
-        campanhaId: campanha.id,
-        campanhaNome: campanha.nome,
-        count: pendingContent.length,
-        description: `${pendingContent.length} conteúdo${pendingContent.length > 1 ? "s" : ""} aguarda${pendingContent.length > 1 ? "m" : ""} aprovação`,
-        dueLabel: dueLabelFrom(days),
-        priority: days !== null && days <= 1 ? "high" : "medium",
-        ctaLabel: "Revisar conteúdos",
-        href: `/portal-v2/campanhas/${campanha.id}`,
-      });
-    }
-
-    const missingBriefing = campanha.influencers.filter(
-      (i) => i.status === "APROVADO" && !i.briefingPersonalizado,
-    );
-    if (missingBriefing.length > 0) {
-      items.push({
-        id: `briefing:${campanha.id}`,
-        kind: "briefing_confirmation",
-        campanhaId: campanha.id,
-        campanhaNome: campanha.nome,
-        count: missingBriefing.length,
-        description: `${missingBriefing.length} briefing${missingBriefing.length > 1 ? "s" : ""} aguardando confirmação`,
-        priority: "low",
-        ctaLabel: "Ver briefings",
-        href: `/portal-v2/campanhas/${campanha.id}`,
-      });
-    }
-
     const days = daysUntil(campanha.prazo, now);
-    if (days !== null && days >= 0 && days <= 3) {
-      items.push({
-        id: `deadline:${campanha.id}`,
-        kind: "deadline_soon",
-        campanhaId: campanha.id,
-        campanhaNome: campanha.nome,
-        count: 1,
-        description: "Prazo da campanha se aproxima",
-        dueLabel: dueLabelFrom(days),
-        priority: days <= 1 ? "high" : "medium",
-        ctaLabel: "Ver campanha",
-        href: `/portal-v2/campanhas/${campanha.id}`,
-      });
+    const priority: AttentionItem["priority"] =
+      days !== null && days <= 1 ? "high" : days !== null && days <= 3 ? "medium" : "low";
+
+    for (const influencer of campanha.influencers) {
+      if (influencer.status === "ENVIADO_AO_CLIENTE") {
+        items.push({
+          id: `influ:${influencer.id}`,
+          kind: "influencer_review",
+          campanhaId: campanha.id,
+          campanhaNome: campanha.nome,
+          count: 1,
+          description: `Perfil de ${influencer.nome} aguarda sua avaliação`,
+          dueLabel: dueLabelFrom(days),
+          priority,
+          ctaLabel: "Avaliar perfil",
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}`,
+        });
+      }
+
+      for (const entrega of influencer.entregas) {
+        if (entrega.stage !== "ROTEIRO_APROVACAO" && entrega.stage !== "CONTEUDO_APROVACAO") {
+          continue;
+        }
+        const tipoLabel = entrega.stage === "ROTEIRO_APROVACAO" ? "Roteiro" : entrega.tipo;
+        items.push({
+          id: `entrega:${entrega.id}`,
+          kind: "content_review",
+          campanhaId: campanha.id,
+          campanhaNome: campanha.nome,
+          count: 1,
+          description: `${tipoLabel} de ${influencer.nome} aguarda sua aprovação`,
+          dueLabel: dueLabelFrom(days),
+          priority,
+          ctaLabel: "Revisar",
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&conteudo=${entrega.id}`,
+        });
+      }
     }
   }
 
@@ -167,9 +148,11 @@ export function deriveCampaignSummaries(
 }
 
 /**
- * Central de Aprovações — cada linha é uma DECISÃO pendente real (nunca
- * agrupada, ao contrário da Prioridade 1 da Início): o cliente precisa
- * poder agir item a item aqui. Segmentado por `kind` pela própria página.
+ * Contagem de decisões pendentes reais (uma por influenciador/entrega
+ * acionável) — não alimenta mais uma página própria de Aprovações (essa
+ * página foi removida nesta rodada; cada decisão agora se toma dentro do
+ * drawer do influenciador/conteúdo, na própria campanha). Usado hoje só
+ * pro indicador "Pendências" da Início.
  */
 export function deriveApprovalItems(data: ClienteLinkData, now = Date.now()): ApprovalItem[] {
   const items: ApprovalItem[] = [];
@@ -192,18 +175,6 @@ export function deriveApprovalItems(data: ClienteLinkData, now = Date.now()): Ap
           subtitle: influencer.nicho,
           dueLabel: dueLabelFrom(days),
           priority,
-        });
-      }
-      if (influencer.status === "APROVADO" && !influencer.briefingPersonalizado) {
-        items.push({
-          id: `briefing:${influencer.id}`,
-          kind: "briefing",
-          campanhaId: campanha.id,
-          campanhaNome: campanha.nome,
-          influencerId: influencer.id,
-          influencerNome: influencer.nome,
-          title: `Briefing de ${influencer.nome}`,
-          priority: "low",
         });
       }
       for (const entrega of influencer.entregas) {
@@ -270,35 +241,127 @@ const ACTIVITY_KIND_LABEL: Record<string, string> = {
   comentario_cliente: "Comentário adicionado",
 };
 
-/** Timeline compacta (Prioridade 3) — lê `activityEvents[]` já existente em
- * cada influenciador (mesmo dado da V1), nunca uma tabela nova de log. */
-export function deriveRecentActivity(data: ClienteLinkData, limit = 8): ActivityEntry[] {
-  const entries: ActivityEntry[] = [];
+/** Eventos deste tipo nunca são agrupados — cada um precisa manter autor/
+ * texto/contexto individual (comentários e ajustes têm conteúdo próprio;
+ * "reaberto" é raro o bastante pra nunca precisar resumir). */
+const NEVER_GROUP_KINDS = new Set([
+  "comentario_cliente",
+  "comentario_equipe",
+  "roteiro_ajustes_solicitados",
+  "conteudo_ajustes_solicitados",
+  "ajuste_solicitado",
+  "perfil_reaberto",
+]);
+
+/** Rótulo de GRUPO (plural, "N perfis foram aprovados") pros tipos com
+ * resultado uniforme — só esses têm sentido resumidos em uma linha só,
+ * porque "aprovado" de um item é idêntico ao de outro (nunca aprova com
+ * reprova juntos, isso já é garantido por serem `kind`s diferentes). */
+const GROUP_LABEL: Record<string, (n: number) => string> = {
+  perfil_aprovado: (n) => `${n} perfis foram aprovados`,
+  perfil_recusado: (n) => `${n} perfis não foram aprovados`,
+  roteiro_aprovado: (n) => `${n} roteiros foram aprovados`,
+  conteudo_aprovado: (n) => `${n} conteúdos foram aprovados`,
+  publicado: (n) => `${n} conteúdos foram publicados`,
+};
+
+type RawActivityEvent = {
+  id: string;
+  kind: string;
+  createdAt: string;
+  campanhaId: string;
+  campanhaNome: string;
+  influencerId?: string;
+  href: string;
+  /** Só preenchido pra `report_available` — nome do relatório, pro rótulo
+   * não cair no fallback genérico do `kind`. */
+  label?: string;
+};
+
+/**
+ * Atividade recente — agrupa eventos do MESMO tipo, MESMA campanha e
+ * MESMO dia (janela de tempo coerente) num resumo só ("3 perfis foram
+ * aprovados"), em vez de repetir uma linha idêntica por evento. Nunca
+ * agrupa comentários, ajustes ou reaberturas (mantêm contexto
+ * individual), nem eventos de campanhas/dias/resultados diferentes.
+ * `limit` corta o total — o componente decide quantos MOSTRAR por
+ * breakpoint (5 desktop/4 tablet/3 mobile) via CSS, então aqui só
+ * limitamos ao teto do maior caso (desktop).
+ */
+export function deriveRecentActivity(data: ClienteLinkData, limit = 5): ActivityEntry[] {
+  const raw: RawActivityEvent[] = [];
   for (const campanha of data.campanhas) {
     for (const influencer of campanha.influencers) {
       for (const event of influencer.activityEvents ?? []) {
-        entries.push({
+        raw.push({
           id: event.id,
-          kind: "profile_approved",
-          at: event.createdAt,
-          label: ACTIVITY_KIND_LABEL[event.kind] ?? event.kind,
+          kind: event.kind,
+          createdAt: event.createdAt,
           campanhaId: campanha.id,
           campanhaNome: campanha.nome,
-          href: `/portal-v2/campanhas/${campanha.id}`,
+          influencerId: influencer.id,
+          href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}`,
         });
       }
     }
     for (const relatorio of campanha.relatorios) {
-      entries.push({
+      raw.push({
         id: `relatorio:${relatorio.id}`,
         kind: "report_available",
-        at: relatorio.uploadedAt,
-        label: `Relatório disponível: ${relatorio.nome}`,
+        createdAt: relatorio.uploadedAt,
         campanhaId: campanha.id,
         campanhaNome: campanha.nome,
-        href: `/portal-v2/reports`,
+        href: `/portal-v2/campanhas/${campanha.id}?relatorio=${relatorio.id}`,
+        label: `Relatório disponível: ${relatorio.nome}`,
       });
     }
   }
+  raw.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const entries: ActivityEntry[] = [];
+  const groupedAway = new Set<string>();
+
+  for (let i = 0; i < raw.length; i++) {
+    const event = raw[i];
+    if (groupedAway.has(event.id)) continue;
+
+    const groupLabel = GROUP_LABEL[event.kind];
+    if (groupLabel && !NEVER_GROUP_KINDS.has(event.kind)) {
+      const day = event.createdAt.slice(0, 10);
+      const siblings = raw.filter(
+        (other) =>
+          other.kind === event.kind &&
+          other.campanhaId === event.campanhaId &&
+          other.createdAt.slice(0, 10) === day,
+      );
+      if (siblings.length > 1) {
+        for (const sibling of siblings) groupedAway.add(sibling.id);
+        const isInfluencerEvent = event.kind.startsWith("perfil_");
+        entries.push({
+          id: `group:${event.kind}:${event.campanhaId}:${day}`,
+          kind: "profile_approved",
+          at: siblings[0].createdAt,
+          label: groupLabel(siblings.length),
+          campanhaId: event.campanhaId,
+          campanhaNome: event.campanhaNome,
+          href: `/portal-v2/campanhas/${event.campanhaId}?foco=${isInfluencerEvent ? "influenciadores" : "conteudos"}`,
+          count: siblings.length,
+        });
+        continue;
+      }
+    }
+
+    entries.push({
+      id: event.id,
+      kind: "profile_approved",
+      at: event.createdAt,
+      label: event.label ?? ACTIVITY_KIND_LABEL[event.kind] ?? event.kind,
+      campanhaId: event.campanhaId,
+      campanhaNome: event.campanhaNome,
+      href: event.href,
+      count: 1,
+    });
+  }
+
   return entries.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }
