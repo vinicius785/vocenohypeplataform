@@ -1,51 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Megaphone } from "lucide-react";
-import { usePortalSessionData } from "@/components/portal/portal-session-context";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 /**
- * Portal-app "Início" (Phase 2b) — agora backed pela sessão real (via
- * `PortalSessionDataProvider`, montado na rota-pai `portal-app/route.tsx`)
- * em vez da versão mínima da Fase 1. Lista as campanhas do cliente, cada
- * uma linkando pra `/portal-app/campanhas/$campanhaId`.
+ * V1 (sessão) aposentada como destino de login (2026-09-24) — a V2 é o
+ * padrão agora pra todo cliente com login por sessão. Fica só como
+ * redirect de compatibilidade pra quem tinha essa URL salva/em favoritos.
  */
 export const Route = createFileRoute("/portal-app/inicio")({
-  ssr: false,
-  component: PortalAppInicio,
-  head: () => ({ meta: [{ title: "Portal do Cliente · Você no Hype" }] }),
+  beforeLoad: () => {
+    throw redirect({ to: "/portal-v2/inicio" });
+  },
 });
-
-function PortalAppInicio() {
-  const { data } = usePortalSessionData();
-
-  return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold tracking-tight text-foreground">
-        Bem-vindo, {data.clienteNome}
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">Suas campanhas com a Você no Hype.</p>
-
-      {data.campanhas.length === 0 ? (
-        <p className="mt-8 text-sm text-muted-foreground">Nenhuma campanha encontrada.</p>
-      ) : (
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {data.campanhas.map((c) => (
-            <Link
-              key={c.id}
-              to="/portal-app/campanhas/$campanhaId"
-              params={{ campanhaId: c.id }}
-              className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/20"
-            >
-              <div className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4 text-muted-foreground" />
-                <p className="truncate text-sm font-semibold text-foreground">{c.nome}</p>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {c.influencers.length} influenciador(es)
-              </p>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

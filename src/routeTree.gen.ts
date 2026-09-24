@@ -40,6 +40,7 @@ import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authent
 import { Route as PortalTokenRouteRouteImport } from './routes/portal.$token/route'
 import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token/index'
 import { Route as PortalV2CampanhasIndexRouteImport } from './routes/portal-v2/campanhas.index'
+import { Route as PortalAppCampanhasIndexRouteImport } from './routes/portal-app/campanhas.index'
 import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$token/solicitacoes'
 import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
 import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
@@ -226,6 +227,11 @@ const PortalV2CampanhasIndexRoute = PortalV2CampanhasIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PortalV2CampanhasRoute,
+} as any)
+const PortalAppCampanhasIndexRoute = PortalAppCampanhasIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PortalAppCampanhasRoute,
 } as any)
 const PortalTokenSolicitacoesRoute = PortalTokenSolicitacoesRouteImport.update({
   id: '/solicitacoes',
@@ -430,6 +436,7 @@ export interface FileRoutesByFullPath {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
@@ -460,7 +467,6 @@ export interface FileRoutesByTo {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
-  '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
@@ -487,6 +493,7 @@ export interface FileRoutesByTo {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal-app/campanhas': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasIndexRoute
   '/portal/$token': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
@@ -549,6 +556,7 @@ export interface FileRoutesById {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
@@ -611,6 +619,7 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
     | '/portal/$token/'
     | '/portal-app/campanhas/$campanhaId/revisar'
@@ -641,7 +650,6 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
-    | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
@@ -668,6 +676,7 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/portal-app/campanhas'
     | '/portal-v2/campanhas'
     | '/portal/$token'
     | '/portal-app/campanhas/$campanhaId/revisar'
@@ -729,6 +738,7 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
     | '/portal/$token/'
     | '/portal-app/campanhas/$campanhaId/revisar'
@@ -988,6 +998,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalV2CampanhasIndexRouteImport
       parentRoute: typeof PortalV2CampanhasRoute
     }
+    '/portal-app/campanhas/': {
+      id: '/portal-app/campanhas/'
+      path: '/'
+      fullPath: '/portal-app/campanhas/'
+      preLoaderRoute: typeof PortalAppCampanhasIndexRouteImport
+      parentRoute: typeof PortalAppCampanhasRoute
+    }
     '/portal/$token/solicitacoes': {
       id: '/portal/$token/solicitacoes'
       path: '/solicitacoes'
@@ -1228,11 +1245,13 @@ const PortalAppCampanhasCampanhaIdRouteWithChildren =
 
 interface PortalAppCampanhasRouteChildren {
   PortalAppCampanhasCampanhaIdRoute: typeof PortalAppCampanhasCampanhaIdRouteWithChildren
+  PortalAppCampanhasIndexRoute: typeof PortalAppCampanhasIndexRoute
 }
 
 const PortalAppCampanhasRouteChildren: PortalAppCampanhasRouteChildren = {
   PortalAppCampanhasCampanhaIdRoute:
     PortalAppCampanhasCampanhaIdRouteWithChildren,
+  PortalAppCampanhasIndexRoute: PortalAppCampanhasIndexRoute,
 }
 
 const PortalAppCampanhasRouteWithChildren =

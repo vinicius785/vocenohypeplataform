@@ -9,7 +9,6 @@ import {
   type PortalSessionData,
 } from "@/components/portal/portal-session-context";
 import { PortalV2Shell } from "@/features/client-portal-v2/layouts/PortalV2Shell";
-import { isClientPortalV2Enabled } from "@/features/client-portal-v2/feature-flag";
 
 /**
  * Guarda de sessão da V2 — MESMA lógica de resolução de sessão/organização
@@ -77,13 +76,6 @@ export const Route = createFileRoute("/portal-v2")({
   },
   loader: async () => {
     const data = (await getPortalDataForSession()) as PortalSessionData;
-    // A V2 é limitada a quem tem o flag ligado (ver `feature-flag.ts`) —
-    // nunca desliga a V1, só evita expor a V2 antes de validada. Checado
-    // aqui (depois de já termos a `role` real) em vez de no `beforeLoad`,
-    // que não tem acesso à sessão do portal ainda.
-    if (!isClientPortalV2Enabled(data.role)) {
-      throw redirect({ to: "/portal-app/inicio" });
-    }
     return { clienteData: data };
   },
   component: PortalV2Layout,

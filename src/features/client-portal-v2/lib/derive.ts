@@ -264,6 +264,10 @@ const ACTIVITY_KIND_LABEL: Record<string, string> = {
   roteiro_aprovado: "Roteiro aprovado",
   conteudo_aprovado: "Conteúdo aprovado",
   ajuste_solicitado: "Ajuste solicitado",
+  roteiro_ajustes_solicitados: "Ajustes solicitados no roteiro",
+  conteudo_ajustes_solicitados: "Ajustes solicitados no conteúdo",
+  publicado: "Conteúdo publicado",
+  comentario_cliente: "Comentário adicionado",
 };
 
 /** Timeline compacta (Prioridade 3) — lê `activityEvents[]` já existente em
