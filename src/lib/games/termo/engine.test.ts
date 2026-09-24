@@ -41,6 +41,7 @@ describe("dicionário — nunca mais uma lista mínima de demonstração", () =>
   it.each([
     "TERMO",
     "PEITO",
+    "AUREA",
     "LIVRO",
     "CAMPO",
     "NOITE",
@@ -51,6 +52,16 @@ describe("dicionário — nunca mais uma lista mínima de demonstração", () =>
     "FESTA",
   ])('aceita "%s" como tentativa válida', (word) => {
     expect(isAcceptedGuess(word)).toBe(true);
+  });
+
+  it('aceita "áurea" digitada com o acento igual à forma sem acento (mesma normalização)', () => {
+    expect(isAcceptedGuess("áurea")).toBe(true);
+    expect(isAcceptedGuess("AUREA")).toBe(true);
+    expect(isAcceptedGuess("ÁUREA")).toBe(true);
+  });
+
+  it("ALLOWED_GUESSES é substancialmente maior que DAILY_ANSWERS (tentativas != respostas)", () => {
+    expect(ALLOWED_GUESSES.length).toBeGreaterThan(DAILY_ANSWERS.length * 5);
   });
 
   it("rejeita uma palavra claramente inventada", () => {

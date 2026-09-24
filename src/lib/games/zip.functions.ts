@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 import { getDailyZipChallenge, validateZipChallenge, ZIP_CHALLENGE_VERSION } from "./zip/challenge";
-import { applyZipMove, undoZipMove, nextHintCell, ZIP_ENGINE_VERSION } from "./zip/engine";
+import { applyZipMoveSequence, undoZipMove, nextHintCell, ZIP_ENGINE_VERSION } from "./zip/engine";
 import { ZIP_INITIAL_STATE, type Cell, type ZipChallenge, type ZipState } from "./zip/types";
 import { checkSessionCompatibility, computeElapsedSeconds } from "./shared/session";
 import { todayIsoInBrasilia } from "@/lib/timezone";
@@ -150,30 +150,67 @@ async function fetchCompatibleRow(
   return compat.compatible ? (row as SessionRow) : null;
 }
 
-const moveSchema = z.object({ target: cellSchema });
+const moveSchema = z.object({ targets: z.array(cellSchema).min(1) });
 
 /**
- * Um único movimento por chamada — nunca um `path` inteiro mandado pelo
- * cliente. O servidor sempre revalida a partir do ÚLTIMO ESTADO
- * CONHECIDO DELE MESMO (nunca do que o cliente afirma ser o estado
- * atual), então uma chamada fora de ordem/duplicada nunca corrompe o
- * caminho — na pior hipótese, é rejeitada como movimento inválido contra
- * o estado real.
+ * Persiste UM GESTO INTEIRO por chamada (uma ou mais células, nunca um
+ * `path` completo confiado do cliente) — nunca é chamada a cada
+ * `pointermove`; o componente acumula/valida localmente durante o
+ * arrasto e manda a sequência de uma vez só no fim do gesto. O servidor
+ * sempre revalida `targets` a partir do ÚLTIMO ESTADO CONHECIDO DELE
+ * MESMO (nunca do que o cliente afirma ser o estado atual) via
+ * `applyZipMoveSequence`, então uma chamada fora de ordem/duplicada
+ * nunca corrompe o caminho — na pior hipótese, é rejeitada como
+ * movimento inválido contra o estado real.
+ *
+ * Defesa em profundidade contra a corrida diagnosticada nesta rodada
+ * (duas chamadas concorrentes, ambas veem "sessão não existe" e tentam
+ * INSERT, a segunda batendo em 23505 unique violation): o INSERT trata
+ * 23505 explicitamente, relendo a linha que a chamada concorrente já
+ * criou e reaplicando a sequência sobre ELA via UPDATE, em vez de deixar
+ * o erro subir cru como "não foi possível salvar".
  */
 export const applyZipMoveAction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: z.infer<typeof moveSchema>) => moveSchema.parse(input))
   .handler(async ({ data, context }) => {
     const challenge = todayChallenge();
-    const existing = await fetchCompatibleRow(context.supabase, challenge.id);
+    let existing = await fetchCompatibleRow(context.supabase, challenge.id);
     const currentState = rowToState(existing);
-    const result = applyZipMove(challenge, currentState, data.target);
-    devLog("applyZipMoveAction", { target: data.target, result });
-    if (!result.ok) {
+    const result = applyZipMoveSequence(challenge, currentState, data.targets);
+    devLog("applyZipMoveAction", { targets: data.targets, result });
+    if (result.appliedCount === 0) {
       return { ok: false as const, error: result.error, state: currentState };
     }
 
     const nowIso = new Date().toISOString();
+
+    async function persistAsUpdate(row: SessionRow) {
+      const patch: Record<string, unknown> = {
+        state: result.state,
+        challenge_version: ZIP_CHALLENGE_VERSION,
+        engine_version: ZIP_ENGINE_VERSION,
+      };
+      if (!row.started_at) patch.started_at = nowIso;
+      if (!row.resumed_at) patch.resumed_at = nowIso; // retomou de uma pausa
+      if (result.state.status === "won") {
+        const accumulated = computeElapsedSeconds({
+          status: "in_progress",
+          accumulatedSeconds: row.elapsed_seconds ?? 0,
+          resumedAt: row.resumed_at ?? nowIso,
+          now: Date.now(),
+        });
+        patch.elapsed_seconds = accumulated;
+        patch.resumed_at = null;
+        patch.completed_at = nowIso;
+      }
+      const { error } = await context.supabase
+        .from("daily_game_sessions")
+        .update(patch as never)
+        .eq("id", row.id);
+      if (error) throw new Error(error.message);
+    }
+
     if (!existing) {
       const { error } = await context.supabase.from("daily_game_sessions").insert({
         user_id: context.userId,
@@ -189,31 +226,25 @@ export const applyZipMoveAction = createServerFn({ method: "POST" })
         completed_at: result.state.status === "won" ? nowIso : null,
         attempts: result.state.status === "won" ? 1 : 0,
       } as never);
-      if (error) throw new Error(error.message);
-    } else {
-      const patch: Record<string, unknown> = {
-        state: result.state,
-        challenge_version: ZIP_CHALLENGE_VERSION,
-        engine_version: ZIP_ENGINE_VERSION,
-      };
-      if (!existing.started_at) patch.started_at = nowIso;
-      if (!existing.resumed_at) patch.resumed_at = nowIso; // retomou de uma pausa
-      if (result.state.status === "won") {
-        const accumulated = computeElapsedSeconds({
-          status: "in_progress",
-          accumulatedSeconds: existing.elapsed_seconds ?? 0,
-          resumedAt: existing.resumed_at ?? nowIso,
-          now: Date.now(),
-        });
-        patch.elapsed_seconds = accumulated;
-        patch.resumed_at = null;
-        patch.completed_at = nowIso;
+      if (error) {
+        if (error.code !== "23505") throw new Error(error.message);
+        // Corrida: outra chamada concorrente já criou a linha entre o
+        // `fetchCompatibleRow` acima e este INSERT. Relê o estado real
+        // dela, reaplica a MESMA sequência de alvos sobre esse estado
+        // (nunca sobre o `currentState` já obsoleto) e faz UPDATE — nunca
+        // perde o gesto do jogador nem devolve o toast genérico de erro.
+        const fresh = await fetchCompatibleRow(context.supabase, challenge.id);
+        if (!fresh) throw new Error(error.message);
+        const reapplied = applyZipMoveSequence(challenge, rowToState(fresh), data.targets);
+        if (reapplied.appliedCount === 0) {
+          return { ok: false as const, error: reapplied.error, state: rowToState(fresh) };
+        }
+        await persistAsUpdate(fresh);
+        existing = fresh;
+        return { ok: true as const, state: reapplied.state };
       }
-      const { error } = await context.supabase
-        .from("daily_game_sessions")
-        .update(patch as never)
-        .eq("id", existing.id);
-      if (error) throw new Error(error.message);
+    } else {
+      await persistAsUpdate(existing);
     }
 
     if (result.state.status === "won") {
