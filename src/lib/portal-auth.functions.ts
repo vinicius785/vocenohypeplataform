@@ -109,6 +109,20 @@ async function resolveClienteForSession(
   return { organizationId, role, ...found };
 }
 
+/** Nome real de quem está agindo, pra registrar em atividade/histórico
+ * (ver `campanha-aprovacao.ts`) — só o Portal V2 tem isso, porque cada
+ * pessoa loga com a própria conta (o V1, por link público sem login
+ * individual, nunca chama isto). `undefined` quando a pessoa não
+ * preencheu nome nenhum no cadastro — nesse caso quem exibe o dado cai no
+ * rótulo genérico "Cliente", nunca inventa um nome. */
+async function resolveActorName(ctx: Ctx): Promise<string | undefined> {
+  const {
+    data: { user },
+  } = await ctx.supabase.auth.getUser();
+  const fullName = user?.user_metadata?.full_name;
+  return typeof fullName === "string" && fullName.trim() ? fullName.trim() : undefined;
+}
+
 /**
  * Read-only resolution used by the `/portal-app` route guard (which runs
  * client-side, `ssr: false` — it cannot read the httpOnly active-org cookie
@@ -209,9 +223,11 @@ export const respondCampanhaInfluSession = createServerFn({ method: "POST" })
           ? data.comentario!
           : data.motivoLabel!
         : undefined;
+    const actorName = await resolveActorName(context);
     const next = applyInfluApproval(influ, data.status, motivo, {
       motivoLabel: data.motivoLabel,
       comentario: data.status === "reprovado" ? data.comentario : undefined,
+      actorName,
     });
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
@@ -230,7 +246,8 @@ export const reopenCampanhaInfluSession = createServerFn({ method: "POST" })
     assertCanMutate(role);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
-    const next = reopenInfluApprovalByCliente(influ);
+    const actorName = await resolveActorName(context);
+    const next = reopenInfluApprovalByCliente(influ, actorName);
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });
@@ -263,7 +280,14 @@ export const respondCampanhaEntregaSession = createServerFn({ method: "POST" })
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const entrega = influ.entregas.find((e) => e.id === data.entregaId);
     if (!entrega) throw new Error("Entrega não encontrada.");
-    const next = applyEntregaApproval(influ, data.entregaId, data.status, data.motivo?.trim());
+    const actorName = await resolveActorName(context);
+    const next = applyEntregaApproval(
+      influ,
+      data.entregaId,
+      data.status,
+      data.motivo?.trim(),
+      actorName,
+    );
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     void notifyTeamEntregaResponse(cliente.empresa, entrega, data.status);
     return { ok: true };

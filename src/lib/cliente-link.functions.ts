@@ -97,7 +97,11 @@ const RedeMetricsPublic = z.object({
   cidades: z.array(DemographicEntryPublic).optional(),
 });
 
-const ClienteVeredito = z.object({ motivo: z.string(), respondedAt: z.string() });
+const ClienteVeredito = z.object({
+  motivo: z.string(),
+  respondedAt: z.string(),
+  autorNome: z.string().optional(),
+});
 
 const EntregaPublic = z.object({
   id: z.string(),

@@ -1,6 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
 import { formatMetricValue } from "../../lib/metric-format";
+import { resolveProfileMetricEntries } from "../../lib/profile-metrics";
 import type { PublicInfluencer } from "@/lib/portal-types";
 
 /** Métricas — nunca mostra zero fingindo dado real; usa "Não informado"
@@ -8,8 +9,7 @@ import type { PublicInfluencer } from "@/lib/portal-types";
  * time) de RESULTADOS DESTA CAMPANHA (agregado das entregas publicadas)
  * — nunca a mesma seção misturando as duas fontes. */
 export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfluencer }) {
-  const porRede = influencer.profileMetrics?.porRede;
-  const redeEntries = porRede ? Object.entries(porRede) : [];
+  const redeEntries = resolveProfileMetricEntries(influencer);
 
   const publishedEntregas = influencer.entregas.filter((e) => e.stage === "PUBLICADA" && e.metrics);
   const hasCampaignResults = publishedEntregas.length > 0;
@@ -33,12 +33,14 @@ export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfl
           <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
             Métricas do perfil
           </p>
-          {redeEntries.map(([rede, m]) => (
+          {redeEntries.map(({ plataforma, metrics: m }) => (
             <div
-              key={rede}
+              key={plataforma}
               className="grid grid-cols-2 gap-3 rounded-2xl bg-card p-4 dark:shadow-none sm:grid-cols-4"
             >
-              <p className="col-span-2 text-xs font-medium text-foreground sm:col-span-4">{rede}</p>
+              <p className="col-span-2 text-xs font-medium text-foreground sm:col-span-4">
+                {plataforma}
+              </p>
               <Metric label="Interações" value={m.interacoes} />
               <Metric label="Visualizações" value={m.visualizacoes} />
               <Metric label="Taxa de interação" value={m.taxaInteracao} suffix="%" />

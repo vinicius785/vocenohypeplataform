@@ -6,6 +6,12 @@ import { Check, ChevronDown, Film, X } from "lucide-react";
 import { respondCampanhaEntregaSession } from "@/lib/portal-auth.functions";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
+import {
+  activeAjuste,
+  ajusteSemDetalheDisponivel,
+  entregaHasExpandableDetails,
+  formatAjusteSummary,
+} from "../../lib/ajuste-format";
 import type { PublicEntrega } from "@/lib/portal-types";
 
 const CAN_DECIDE_STAGES = new Set(["ROTEIRO_APROVACAO", "CONTEUDO_APROVACAO"]);
@@ -87,28 +93,72 @@ export function ClientInfluencerDeliverables({
     <InfluencerDrawerSection icon={<Film className="h-4 w-4" />} title="Entregas">
       <div className="space-y-1.5 rounded-2xl bg-card p-2 dark:shadow-none">
         {entregas.map((entrega) => {
-          const expanded = expandedId === entrega.id;
           const canDecide = CAN_DECIDE_STAGES.has(entrega.stage) && !readOnly;
+          const hasDetails = entregaHasExpandableDetails(entrega, canDecide);
+          const expanded = hasDetails && expandedId === entrega.id;
+          const ajuste = activeAjuste(entrega);
           return (
             <div key={entrega.id} className="rounded-xl px-3 py-2.5">
-              <button
-                type="button"
-                onClick={() => setExpandedId(expanded ? null : entrega.id)}
-                className="flex w-full items-center gap-3 text-left"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {entrega.quantidade} {entrega.titulo || entrega.tipo}
-                  </p>
-                  <p className="mt-0.5 text-xs text-text-secondary">{entrega.statusCliente}</p>
+              {hasDetails ? (
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedId(expanded ? null : entrega.id)}
+                  className="flex w-full items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {entrega.quantidade} {entrega.titulo || entrega.tipo}
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-secondary">{entrega.statusCliente}</p>
+                    {ajuste && !expanded && (
+                      <p className="mt-0.5 truncate text-xs text-text-secondary">
+                        {formatAjusteSummary(ajuste.veredito)}
+                      </p>
+                    )}
+                    {!ajuste && !expanded && ajusteSemDetalheDisponivel(entrega) && (
+                      <p className="mt-0.5 truncate text-xs text-text-secondary">
+                        Ajuste solicitado anteriormente.
+                      </p>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+                  />
+                </button>
+              ) : (
+                <div className="flex w-full items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {entrega.quantidade} {entrega.titulo || entrega.tipo}
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-secondary">{entrega.statusCliente}</p>
+                  </div>
                 </div>
-                <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-                />
-              </button>
+              )}
 
               {expanded && (
                 <div className="mt-2 space-y-2 border-t border-border/60 pt-2">
+                  {ajuste && (
+                    <div className="rounded-lg bg-warning-soft p-2.5">
+                      <p className="text-xs font-medium text-foreground">
+                        {formatAjusteSummary(ajuste.veredito)}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap text-xs text-text-secondary">
+                        {ajuste.veredito.motivo}
+                      </p>
+                    </div>
+                  )}
+                  {!ajuste && ajusteSemDetalheDisponivel(entrega) && (
+                    <div className="rounded-lg bg-warning-soft p-2.5">
+                      <p className="text-xs font-medium text-foreground">
+                        Ajuste solicitado anteriormente.
+                      </p>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        Os detalhes da solicitação não estão disponíveis.
+                      </p>
+                    </div>
+                  )}
                   {entrega.dataPostagem && (
                     <p className="text-xs text-text-secondary">
                       Prazo: {new Date(entrega.dataPostagem).toLocaleDateString("pt-BR")}

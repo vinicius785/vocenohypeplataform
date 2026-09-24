@@ -23,7 +23,11 @@ export type RedeMetrics = {
   paises?: DemographicEntry[];
   cidades?: DemographicEntry[];
 };
-export type Veredito = { motivo: string; respondedAt: string };
+/** `autorNome` só existe pra ações feitas pelo Portal V2 (sessão
+ * autenticada) — o link público antigo (V1) não tem identidade
+ * individual, então fica `undefined`; nesse caso a UI mostra um rótulo
+ * genérico ("Cliente"), nunca um nome inventado. */
+export type Veredito = { motivo: string; respondedAt: string; autorNome?: string };
 export type PublicComment = {
   id: string;
   author: string;

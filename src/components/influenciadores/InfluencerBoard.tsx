@@ -676,8 +676,12 @@ export type Entrega = {
 };
 
 /** Motivo + carimbo de quando o cliente reprovou algo pelo link público
- * (seleção de influ, roteiro ou conteúdo de uma entrega). */
-export type ClienteVeredito = { motivo: string; respondedAt: string };
+ * (seleção de influ, roteiro ou conteúdo de uma entrega). `autorNome` só
+ * existe a partir do Portal V2 (sessão autenticada, com nome real do
+ * usuário) — o link público antigo (V1) não tem identidade individual,
+ * então fica `undefined` nesses casos; nunca inventar um nome quando
+ * ausente. */
+export type ClienteVeredito = { motivo: string; respondedAt: string; autorNome?: string };
 
 export type BankInfo = {
   banco?: string;
