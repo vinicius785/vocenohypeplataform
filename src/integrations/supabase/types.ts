@@ -245,6 +245,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      campaign_cycles: {
+        Row: {
+          campanha_id: string;
+          competence_month: number;
+          competence_year: number;
+          created_at: string;
+          ends_at: string | null;
+          id: string;
+          starts_at: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          campanha_id: string;
+          competence_month: number;
+          competence_year: number;
+          created_at?: string;
+          ends_at?: string | null;
+          id?: string;
+          starts_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          campanha_id?: string;
+          competence_month?: number;
+          competence_year?: number;
+          created_at?: string;
+          ends_at?: string | null;
+          id?: string;
+          starts_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       campaign_members: {
         Row: {
           campaign_id: string;
@@ -423,10 +459,18 @@ export type Database = {
             referencedRelation: "campanha_influenciadores";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "campanha_entregas_influenciador_id_fkey";
+            columns: ["influenciador_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_influenciadores_sem_ciclo";
+            referencedColumns: ["campanha_influenciador_id"];
+          },
         ];
       };
       campanha_influenciadores: {
         Row: {
+          campaign_cycle_id: string | null;
           campanha_id: string;
           created_at: string;
           data: Json;
@@ -435,6 +479,7 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          campaign_cycle_id?: string | null;
           campanha_id: string;
           created_at?: string;
           data?: Json;
@@ -443,6 +488,7 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          campaign_cycle_id?: string | null;
           campanha_id?: string;
           created_at?: string;
           data?: Json;
@@ -450,7 +496,15 @@ export type Database = {
           updated_at?: string;
           updated_by?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "campanha_influenciadores_campaign_cycle_id_fkey";
+            columns: ["campaign_cycle_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_cycles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       campanha_tarefas: {
         Row: {
@@ -3043,7 +3097,17 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      campanha_influenciadores_sem_ciclo: {
+        Row: {
+          campanha_id: string | null;
+          campanha_influenciador_id: string | null;
+          campanha_nome: string | null;
+          ciclo_mes_bruto: string | null;
+          created_at: string | null;
+          influenciador_nome: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       apply_task_block: {
