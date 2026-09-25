@@ -8,7 +8,6 @@ import {
   Paperclip,
   Search,
   MoreVertical,
-  Eye,
   Download,
 } from "lucide-react";
 import { PageContainer } from "@/components/shared/PageContainer";
@@ -21,6 +20,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { inferFileKind, type ClientFileKind } from "../lib/client-file-format";
+import { PortalPageHeader } from "../components/shared/PortalPageHeader";
+import { PortalListPanel, PortalListRow } from "../components/shared/PortalListPanel";
+import { portalFieldBase } from "../components/shared/portal-field-styles";
 import { ClientFileViewer } from "../components/files/ClientFileViewer";
 import type { ClientFile } from "../types/files";
 
@@ -56,17 +58,20 @@ const TYPE_ICON: Record<ClientFileKind, typeof FileText> = {
 };
 
 /**
- * Central de arquivos — reestruturada pra seguir o padrão visual do
- * Portal V2 e abrir no `ClientFileViewer` compartilhado (nunca mais
- * download direto ao clicar). Agrega briefings, anexos de entrega e
- * relatórios já presentes em `ClienteLinkData` — nenhuma tabela nova.
+ * Central de arquivos — mesmo sistema visual de `CampanhasV2.tsx`
+ * (fonte da verdade): `PortalPageHeader`, `portalFieldBase` nos filtros,
+ * `PortalListPanel`/`PortalListRow` na lista (linha inteira clicável,
+ * chevron discreto — nunca mais densidade de painel administrativo nem
+ * "Visualizar" repetido em cada linha). Agrega briefings, anexos de
+ * entrega e relatórios já presentes em `ClienteLinkData` — nenhuma
+ * tabela nova.
  *
  * Limitação honesta, não escondida: briefings/anexos de entrega hoje só
  * têm a URL já assinada persistida (1 ano, anti-padrão pré-existente —
  * ver auditoria), sem `storagePath` guardado, então não há como emitir
- * uma URL nova quando essa expira (diferente de relatórios, que têm
- * `storagePath` e regeneram sob demanda). Corrigir isso é trabalho de
- * modelo de dados fora do escopo desta rodada.
+ * uma URL nova quando essa expira (diferente de relatórios, que
+ * regeneram sob demanda). Corrigir isso é modelo de dado fora do escopo
+ * desta rodada.
  */
 export function ArquivosV2({ openFileId }: { openFileId?: string }) {
   const { data } = usePortalSessionData();
@@ -163,30 +168,26 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
 
   return (
     <PageContainer className="space-y-6">
-      <header>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-foreground md:text-[32px]">
-          Arquivos
-        </h1>
-        <p className="mt-1.5 text-sm text-text-secondary">
-          Encontre documentos e mídias compartilhados nas suas campanhas.
-        </p>
-      </header>
+      <PortalPageHeader
+        title="Arquivos"
+        description="Encontre documentos e mídias compartilhados nas suas campanhas."
+      />
 
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar arquivo"
-              className="h-9 w-56 rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={`${portalFieldBase} w-56 pl-9`}
             />
           </div>
           <select
             value={campaignFilter}
             onChange={(e) => setCampaignFilter(e.target.value)}
-            className="h-9 rounded-md border border-border bg-card px-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={portalFieldBase}
           >
             <option value="todas">Todas as campanhas</option>
             {data.campanhas.map((c) => (
@@ -198,7 +199,7 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            className="h-9 rounded-md border border-border bg-card px-2.5 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={portalFieldBase}
           >
             <option value="todos">Todos os tipos</option>
             {availableTypes.has("documentos") && <option value="documentos">Documentos</option>}
@@ -234,66 +235,51 @@ export function ArquivosV2({ openFileId }: { openFileId?: string }) {
           }
         />
       ) : (
-        <div className="divide-y divide-border/70 rounded-2xl bg-card dark:shadow-none">
+        <PortalListPanel>
           {filtered.map((f) => {
             const kind = inferFileKind(f.url);
             const Icon = TYPE_ICON[kind];
             return (
-              <button
+              <PortalListRow
                 key={f.id}
-                type="button"
+                icon={<Icon className="h-4.5 w-4.5" />}
                 onClick={() => openFile(f.id)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Icon className="h-4.5 w-4.5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{f.nome}</p>
-                  <p className="truncate text-xs text-text-secondary">
-                    {f.categoria} · {f.campanhaNome}
-                    {f.influencerNome ? ` · ${f.influencerNome}` : ""}
-                  </p>
-                  {f.createdAt && (
-                    <p className="truncate text-xs text-text-secondary">
-                      Enviado em {new Date(f.createdAt).toLocaleDateString("pt-BR")}
-                    </p>
-                  )}
-                </div>
-                <span className="hidden shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-medium text-brand-foreground sm:flex sm:h-8">
-                  <Eye className="h-3.5 w-3.5" />
-                  Visualizar
-                </span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Mais ações para ${f.nome}`}
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <a
-                        href={f.url}
-                        download
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2"
+                title={f.nome}
+                meta={
+                  <>
+                    <div>
+                      {f.categoria} · {f.campanhaNome}
+                      {f.influencerNome ? ` · ${f.influencerNome}` : ""}
+                    </div>
+                    {f.createdAt && (
+                      <div>Enviado em {new Date(f.createdAt).toLocaleDateString("pt-BR")}</div>
+                    )}
+                  </>
+                }
+                trailing={
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label={`Mais ações para ${f.nome}`}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
-                        <Download className="h-3.5 w-3.5" /> Baixar arquivo
-                      </a>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </button>
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <a href={f.url} download className="flex items-center gap-2">
+                          <Download className="h-3.5 w-3.5" /> Baixar arquivo
+                        </a>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                }
+              />
             );
           })}
-        </div>
+        </PortalListPanel>
       )}
 
       <ClientFileViewer file={activeFile ? toClientFile(activeFile) : null} onClose={closeFile} />

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { deriveCampaignSummaries } from "../lib/derive";
+import { PortalPageHeader } from "../components/shared/PortalPageHeader";
 import { ClientCampaignCard } from "../components/campaigns/ClientCampaignCard";
 import {
   ClientCampaignToolbar,
@@ -53,14 +54,10 @@ export function CampanhasV2() {
 
   return (
     <PageContainer className="space-y-6">
-      <div>
-        <p className="text-[28px] font-bold leading-tight tracking-tight text-foreground md:text-[32px]">
-          Campanhas
-        </p>
-        <p className="mt-1.5 text-sm text-text-secondary">
-          Acompanhe o andamento das campanhas da sua empresa.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Campanhas"
+        description="Acompanhe o andamento das campanhas da sua empresa."
+      />
 
       {campaigns.length > 0 && (
         <div className="flex flex-wrap rounded-2xl bg-card dark:shadow-none">
