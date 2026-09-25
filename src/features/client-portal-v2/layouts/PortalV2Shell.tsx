@@ -15,11 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { ClientSidebarHeader } from "../components/ClientSidebarHeader";
 import { NotificationsPopover } from "../components/NotificationsPopover";
-import {
-  ClientSidebarProfile,
-  ClientSidebarSettingsLink,
-  CLIENT_ROLE_LABEL,
-} from "../components/ClientSidebarProfile";
+import { ClientThemeMenu } from "../components/ClientThemeMenu";
+import { ClientSidebarProfile, CLIENT_ROLE_LABEL } from "../components/ClientSidebarProfile";
 
 /**
  * Shell da V2 — navegação própria (nunca os menus internos do time), na
@@ -106,7 +103,7 @@ function useMultiClientEnv(): boolean {
   return multiEnv;
 }
 
-function useAuthIdentity(): { name: string; secondary: string } {
+function useAuthIdentity(): { name: string; secondary: string; email: string } {
   const { data } = usePortalSessionData();
   const { data: authUser } = useQuery({
     queryKey: ["portal-v2-user"],
@@ -115,8 +112,8 @@ function useAuthIdentity(): { name: string; secondary: string } {
   });
   const name = (authUser?.user_metadata?.full_name as string | undefined) || authUser?.email || "";
   const roleLabel = CLIENT_ROLE_LABEL[data.role] ?? null;
-  const secondary = roleLabel ?? authUser?.email ?? "";
-  return { name, secondary };
+  const email = authUser?.email ?? "";
+  return { name, secondary: roleLabel ?? "", email };
 }
 
 function SidebarContent({
@@ -131,7 +128,7 @@ function SidebarContent({
   const { data } = usePortalSessionData();
   const navigate = useNavigate();
   const multiEnv = useMultiClientEnv();
-  const { name: userName, secondary } = useAuthIdentity();
+  const { name: userName, secondary, email } = useAuthIdentity();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -160,16 +157,12 @@ function SidebarContent({
       </nav>
 
       <div className="shrink-0 border-t border-border p-3">
-        <ClientSidebarProfile name={userName} secondary={secondary} collapsed={collapsed} />
-        <div className="mt-2">
-          <ClientSidebarSettingsLink
-            collapsed={collapsed}
-            onClick={() => {
-              navigate({ to: "/portal-v2/conta" });
-              onNavigate?.();
-            }}
-          />
-        </div>
+        <ClientSidebarProfile
+          name={userName}
+          secondary={secondary}
+          email={email}
+          collapsed={collapsed}
+        />
       </div>
     </div>
   );
@@ -286,7 +279,10 @@ export function PortalV2Shell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <PortalV2Breadcrumb currentPath={currentPath} />
           </div>
-          <NotificationsPopover />
+          <div className="flex items-center gap-1">
+            <ClientThemeMenu />
+            <NotificationsPopover />
+          </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
       </div>

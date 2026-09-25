@@ -1,6 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ContaV2 } from "@/features/client-portal-v2/pages/ContaV2";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+/**
+ * "Minha conta" deixou de ser uma página própria — perfil/conta/segurança
+ * viraram seções âncora dentro de Configurações. Link antigo continua
+ * funcionando, só sobe direto pra "Conta" (a seção que este nome
+ * representava).
+ */
 export const Route = createFileRoute("/portal-v2/conta")({
-  component: ContaV2,
+  beforeLoad: () => {
+    throw redirect({ to: "/portal-v2/configuracoes", hash: "conta" });
+  },
 });

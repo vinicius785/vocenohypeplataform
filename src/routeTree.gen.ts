@@ -19,11 +19,14 @@ import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalV2IndexRouteImport } from './routes/portal-v2/index'
+import { Route as PortalV2SegurancaRouteImport } from './routes/portal-v2/seguranca'
 import { Route as PortalV2RelatoriosRouteImport } from './routes/portal-v2/relatorios'
+import { Route as PortalV2PerfilRouteImport } from './routes/portal-v2/perfil'
 import { Route as PortalV2NotificacoesRouteImport } from './routes/portal-v2/notificacoes'
 import { Route as PortalV2InicioRouteImport } from './routes/portal-v2/inicio'
 import { Route as PortalV2ConteudosRouteImport } from './routes/portal-v2/conteudos'
 import { Route as PortalV2ContaRouteImport } from './routes/portal-v2/conta'
+import { Route as PortalV2ConfiguracoesRouteImport } from './routes/portal-v2/configuracoes'
 import { Route as PortalV2CampanhasRouteImport } from './routes/portal-v2/campanhas'
 import { Route as PortalV2ArquivosRouteImport } from './routes/portal-v2/arquivos'
 import { Route as PortalV2AprovacoesRouteImport } from './routes/portal-v2/aprovacoes'
@@ -119,9 +122,19 @@ const PortalV2IndexRoute = PortalV2IndexRouteImport.update({
   path: '/',
   getParentRoute: () => PortalV2RouteRoute,
 } as any)
+const PortalV2SegurancaRoute = PortalV2SegurancaRouteImport.update({
+  id: '/seguranca',
+  path: '/seguranca',
+  getParentRoute: () => PortalV2RouteRoute,
+} as any)
 const PortalV2RelatoriosRoute = PortalV2RelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
+  getParentRoute: () => PortalV2RouteRoute,
+} as any)
+const PortalV2PerfilRoute = PortalV2PerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
   getParentRoute: () => PortalV2RouteRoute,
 } as any)
 const PortalV2NotificacoesRoute = PortalV2NotificacoesRouteImport.update({
@@ -142,6 +155,11 @@ const PortalV2ConteudosRoute = PortalV2ConteudosRouteImport.update({
 const PortalV2ContaRoute = PortalV2ContaRouteImport.update({
   id: '/conta',
   path: '/conta',
+  getParentRoute: () => PortalV2RouteRoute,
+} as any)
+const PortalV2ConfiguracoesRoute = PortalV2ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
   getParentRoute: () => PortalV2RouteRoute,
 } as any)
 const PortalV2CampanhasRoute = PortalV2CampanhasRouteImport.update({
@@ -413,11 +431,14 @@ export interface FileRoutesByFullPath {
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasRouteWithChildren
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
+  '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
   '/portal-v2/': typeof PortalV2IndexRoute
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -470,11 +491,14 @@ export interface FileRoutesByTo {
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
+  '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
   '/portal-v2': typeof PortalV2IndexRoute
   '/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -533,11 +557,14 @@ export interface FileRoutesById {
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasRouteWithChildren
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
+  '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
   '/portal-v2/': typeof PortalV2IndexRoute
   '/_authenticated/clientes/$id': typeof AuthenticatedClientesIdRoute
   '/_authenticated/projeto/$id': typeof AuthenticatedProjetoIdRoute
@@ -596,11 +623,14 @@ export interface FileRouteTypes {
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
     | '/portal-v2/campanhas'
+    | '/portal-v2/configuracoes'
     | '/portal-v2/conta'
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
+    | '/portal-v2/seguranca'
     | '/portal-v2/'
     | '/clientes/$id'
     | '/projeto/$id'
@@ -653,11 +683,14 @@ export interface FileRouteTypes {
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
+    | '/portal-v2/configuracoes'
     | '/portal-v2/conta'
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
+    | '/portal-v2/seguranca'
     | '/portal-v2'
     | '/clientes/$id'
     | '/projeto/$id'
@@ -715,11 +748,14 @@ export interface FileRouteTypes {
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
     | '/portal-v2/campanhas'
+    | '/portal-v2/configuracoes'
     | '/portal-v2/conta'
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
+    | '/portal-v2/seguranca'
     | '/portal-v2/'
     | '/_authenticated/clientes/$id'
     | '/_authenticated/projeto/$id'
@@ -851,11 +887,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalV2IndexRouteImport
       parentRoute: typeof PortalV2RouteRoute
     }
+    '/portal-v2/seguranca': {
+      id: '/portal-v2/seguranca'
+      path: '/seguranca'
+      fullPath: '/portal-v2/seguranca'
+      preLoaderRoute: typeof PortalV2SegurancaRouteImport
+      parentRoute: typeof PortalV2RouteRoute
+    }
     '/portal-v2/relatorios': {
       id: '/portal-v2/relatorios'
       path: '/relatorios'
       fullPath: '/portal-v2/relatorios'
       preLoaderRoute: typeof PortalV2RelatoriosRouteImport
+      parentRoute: typeof PortalV2RouteRoute
+    }
+    '/portal-v2/perfil': {
+      id: '/portal-v2/perfil'
+      path: '/perfil'
+      fullPath: '/portal-v2/perfil'
+      preLoaderRoute: typeof PortalV2PerfilRouteImport
       parentRoute: typeof PortalV2RouteRoute
     }
     '/portal-v2/notificacoes': {
@@ -884,6 +934,13 @@ declare module '@tanstack/react-router' {
       path: '/conta'
       fullPath: '/portal-v2/conta'
       preLoaderRoute: typeof PortalV2ContaRouteImport
+      parentRoute: typeof PortalV2RouteRoute
+    }
+    '/portal-v2/configuracoes': {
+      id: '/portal-v2/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/portal-v2/configuracoes'
+      preLoaderRoute: typeof PortalV2ConfiguracoesRouteImport
       parentRoute: typeof PortalV2RouteRoute
     }
     '/portal-v2/campanhas': {
@@ -1319,11 +1376,14 @@ interface PortalV2RouteRouteChildren {
   PortalV2AprovacoesRoute: typeof PortalV2AprovacoesRoute
   PortalV2ArquivosRoute: typeof PortalV2ArquivosRoute
   PortalV2CampanhasRoute: typeof PortalV2CampanhasRouteWithChildren
+  PortalV2ConfiguracoesRoute: typeof PortalV2ConfiguracoesRoute
   PortalV2ContaRoute: typeof PortalV2ContaRoute
   PortalV2ConteudosRoute: typeof PortalV2ConteudosRoute
   PortalV2InicioRoute: typeof PortalV2InicioRoute
   PortalV2NotificacoesRoute: typeof PortalV2NotificacoesRoute
+  PortalV2PerfilRoute: typeof PortalV2PerfilRoute
   PortalV2RelatoriosRoute: typeof PortalV2RelatoriosRoute
+  PortalV2SegurancaRoute: typeof PortalV2SegurancaRoute
   PortalV2IndexRoute: typeof PortalV2IndexRoute
 }
 
@@ -1331,11 +1391,14 @@ const PortalV2RouteRouteChildren: PortalV2RouteRouteChildren = {
   PortalV2AprovacoesRoute: PortalV2AprovacoesRoute,
   PortalV2ArquivosRoute: PortalV2ArquivosRoute,
   PortalV2CampanhasRoute: PortalV2CampanhasRouteWithChildren,
+  PortalV2ConfiguracoesRoute: PortalV2ConfiguracoesRoute,
   PortalV2ContaRoute: PortalV2ContaRoute,
   PortalV2ConteudosRoute: PortalV2ConteudosRoute,
   PortalV2InicioRoute: PortalV2InicioRoute,
   PortalV2NotificacoesRoute: PortalV2NotificacoesRoute,
+  PortalV2PerfilRoute: PortalV2PerfilRoute,
   PortalV2RelatoriosRoute: PortalV2RelatoriosRoute,
+  PortalV2SegurancaRoute: PortalV2SegurancaRoute,
   PortalV2IndexRoute: PortalV2IndexRoute,
 }
 

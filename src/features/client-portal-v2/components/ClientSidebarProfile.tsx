@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Settings, LogOut, ShieldCheck, User } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useClientProfile, initialsFromName } from "../lib/client-profile";
 
 export const CLIENT_ROLE_LABEL: Record<string, string> = {
   client_admin: "Administrador",
@@ -11,49 +13,30 @@ export const CLIENT_ROLE_LABEL: Record<string, string> = {
 
 /**
  * Rodapé da sidebar — representa a PESSOA autenticada (nunca a empresa,
- * que já está no cabeçalho). Sem foto disponível hoje pra usuários do
- * portal (nenhum campo de avatar no dado da sessão) — o fallback de
- * iniciais é sempre usado, honestamente, em vez de inventar uma URL de
- * imagem. Cargo (`role`) ou, na ausência dele, e-mail — nunca hardcoded.
+ * que já está no cabeçalho). Bloco clicável único: nome + cargo + avatar
+ * real (`profiles.photo_url`, com fallback de iniciais honesto). Ao
+ * clicar, abre um popover FECHADO POR PADRÃO com nome/e-mail/papel +
+ * "Configurações" + "Sair" — só essa ÚNICA entrada de Configurações
+ * existe no app (antes havia "Minha conta" E "Segurança" duplicadas
+ * aqui dentro, mais um botão "Configurações" solto embaixo, todos
+ * levando pro mesmo lugar).
  */
 export function ClientSidebarProfile({
   name,
   secondary,
+  email,
   collapsed,
 }: {
   name: string;
   secondary: string;
+  email: string;
   collapsed: boolean;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const { data: profile } = useClientProfile();
 
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const initials =
-    name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((s) => s[0]?.toUpperCase())
-      .join("") || "?";
+  const initials = initialsFromName(name);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -61,87 +44,62 @@ export function ClientSidebarProfile({
   };
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title={collapsed ? name : undefined}
-        className={`flex w-full items-center gap-2.5 rounded-md p-1.5 text-left transition-colors hover:bg-muted/60 ${
-          collapsed ? "justify-center" : ""
-        }`}
-      >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-[11px] font-semibold text-muted-foreground">
-          {initials}
-        </div>
-        {!collapsed && (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-foreground">{name || "Sem nome"}</p>
-            <p className="truncate text-xs text-muted-foreground">{secondary}</p>
-          </div>
-        )}
-      </button>
-
-      {open && (
-        <div
-          className={`absolute bottom-full z-20 mb-1 w-48 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-lg ${
-            collapsed ? "left-full ml-1" : "left-0"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title={collapsed ? name : undefined}
+          className={`flex w-full items-center gap-2.5 rounded-md p-1.5 text-left transition-colors hover:bg-muted/60 ${
+            collapsed ? "justify-center" : ""
           }`}
         >
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              navigate({ to: "/portal-v2/conta" });
-            }}
-            className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
-          >
-            <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Minha conta
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              navigate({ to: "/portal-v2/conta" });
-            }}
-            className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
-          >
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Segurança
-          </button>
-          <div className="my-1 border-t border-border" />
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
-          >
-            <LogOut className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Sair
-          </button>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-[11px] font-semibold text-muted-foreground">
+            {profile?.photoUrl ? (
+              <img
+                src={profile.photoUrl}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              initials
+            )}
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-foreground">{name || "Sem nome"}</p>
+              <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+            </div>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side={collapsed ? "right" : "top"} align="start" className="w-56 p-1.5">
+        <div className="px-2 py-1.5">
+          <p className="truncate text-sm font-medium text-foreground">{name || "Sem nome"}</p>
+          <p className="truncate text-xs text-muted-foreground">{email}</p>
+          {secondary && <p className="mt-0.5 text-xs text-muted-foreground">{secondary}</p>}
         </div>
-      )}
-    </div>
-  );
-}
-
-export function ClientSidebarSettingsLink({
-  collapsed,
-  onClick,
-}: {
-  collapsed: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={collapsed ? "Configurações" : undefined}
-      className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item ${
-        collapsed ? "justify-center" : ""
-      }`}
-    >
-      <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-      {!collapsed && "Configurações"}
-    </button>
+        <div className="my-1 border-t border-border" />
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            navigate({ to: "/portal-v2/configuracoes" });
+          }}
+          className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
+        >
+          <Settings className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Configurações
+        </button>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
+        >
+          <LogOut className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Sair
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
