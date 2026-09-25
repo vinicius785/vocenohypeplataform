@@ -2091,6 +2091,7 @@ export type Database = {
           invited_by: string | null;
           last_access_at: string | null;
           organization_id: string;
+          removed_at: string | null;
           role: string;
           status: string;
           updated_at: string;
@@ -2104,6 +2105,7 @@ export type Database = {
           invited_by?: string | null;
           last_access_at?: string | null;
           organization_id: string;
+          removed_at?: string | null;
           role: string;
           status?: string;
           updated_at?: string;
@@ -2117,6 +2119,7 @@ export type Database = {
           invited_by?: string | null;
           last_access_at?: string | null;
           organization_id?: string;
+          removed_at?: string | null;
           role?: string;
           status?: string;
           updated_at?: string;

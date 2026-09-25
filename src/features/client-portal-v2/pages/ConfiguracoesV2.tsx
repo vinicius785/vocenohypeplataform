@@ -1,25 +1,38 @@
 import { PageContainer } from "@/components/shared/PageContainer";
+import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { ClientProfileSettings } from "../components/settings/ClientProfileSettings";
 import { ClientAccountInformation } from "../components/settings/ClientAccountInformation";
 import { ClientSecuritySettings } from "../components/settings/ClientSecuritySettings";
+import { ClientAccessSettings } from "../components/settings/ClientAccessSettings";
 
-const SECTIONS = [
+const BASE_SECTIONS = [
   { id: "perfil", label: "Perfil" },
   { id: "conta", label: "Conta" },
   { id: "seguranca", label: "Segurança" },
 ] as const;
 
 /**
- * Configurações — ÚNICA página pra Perfil/Conta/Segurança (rodada de
- * reconstrução: antes era `ContaV2` misturando os três, mais entradas
- * soltas e duplicadas na sidebar). Tema NÃO mora aqui — é um controle
- * global na topbar (`ClientThemeMenu`), ao lado do sino.
+ * Configurações — ÚNICA página pra Perfil/Conta/Segurança/Pessoas e
+ * acessos (rodada de reconstrução: antes era `ContaV2` misturando os
+ * três, mais entradas soltas e duplicadas na sidebar). Tema NÃO mora
+ * aqui — é um controle global na topbar (`ClientThemeMenu`), ao lado do
+ * sino.
  *
- * Navegação interna por âncoras simples (`#perfil`/`#conta`/`#seguranca`)
- * em vez de tabs — todo o conteúdo continua acessível de uma rolada só,
- * nunca escondido.
+ * "Pessoas e acessos" só aparece (na nav E no conteúdo) pra quem
+ * `usePortalSessionData().role === "client_standard"` — nunca uma tela
+ * bloqueada pra quem não administra, a seção simplesmente não existe.
+ *
+ * Navegação interna por âncoras simples (`#perfil`/`#conta`/`#seguranca`/
+ * `#pessoas-e-acessos`) em vez de tabs — todo o conteúdo continua
+ * acessível de uma rolada só, nunca escondido.
  */
 export function ConfiguracoesV2() {
+  const { data } = usePortalSessionData();
+  const isAdmin = data.role === "client_standard";
+  const sections = isAdmin
+    ? [...BASE_SECTIONS, { id: "pessoas-e-acessos", label: "Pessoas e acessos" } as const]
+    : BASE_SECTIONS;
+
   return (
     <PageContainer className="max-w-3xl space-y-8">
       <header>
@@ -29,8 +42,11 @@ export function ConfiguracoesV2() {
         </p>
       </header>
 
-      <nav aria-label="Seções de configurações" className="flex gap-1 border-b border-border">
-        {SECTIONS.map((s) => (
+      <nav
+        aria-label="Seções de configurações"
+        className="flex flex-wrap gap-1 border-b border-border"
+      >
+        {sections.map((s) => (
           <a
             key={s.id}
             href={`#${s.id}`}
@@ -45,6 +61,7 @@ export function ConfiguracoesV2() {
         <ClientProfileSettings />
         <ClientAccountInformation />
         <ClientSecuritySettings />
+        <ClientAccessSettings />
       </div>
     </PageContainer>
   );

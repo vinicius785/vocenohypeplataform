@@ -7,7 +7,8 @@ import { useClientProfile, initialsFromName } from "../lib/client-profile";
 
 export const CLIENT_ROLE_LABEL: Record<string, string> = {
   client_admin: "Administrador",
-  client_standard: "Membro",
+  client_standard: "Administrador",
+  client_approver: "Aprovador",
   client_viewer: "Visualizador",
 };
 
