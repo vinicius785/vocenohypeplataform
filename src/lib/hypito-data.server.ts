@@ -13,6 +13,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { LinkedRef } from "@/lib/hypito-insights";
+import { listInternalTeamUserIds } from "@/lib/team-membership";
 
 type DB = SupabaseClient<Database>;
 
@@ -178,7 +179,16 @@ export function isMeetingParticipant(m: ParsedMeeting, userId: string): boolean 
 export type DirectoryPerson = { id: string; name: string; email: string | null };
 
 export async function fetchTeamDirectory(db: DB): Promise<DirectoryPerson[]> {
-  const { data, error } = await db.from("profiles").select("id, full_name, email");
+  // Internal team ONLY (mirrors `getTeamDirectory` in `team.functions.ts`) —
+  // `profiles` has a row for every auth user, client-portal accounts
+  // included, so Hypito was resolving/mentioning client-portal accounts as
+  // if they were teammates. See `team-membership.ts`.
+  const internalIds = await listInternalTeamUserIds(db);
+  if (internalIds.size === 0) return [];
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("id", Array.from(internalIds));
   if (error) throw new Error(`[hypito] profiles: ${error.message}`);
   return (data ?? []).map((p) => ({
     id: p.id,
