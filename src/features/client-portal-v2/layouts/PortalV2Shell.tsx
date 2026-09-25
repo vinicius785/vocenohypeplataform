@@ -294,8 +294,8 @@ function PortalV2Breadcrumb({ currentPath }: { currentPath: string }) {
   const active = NAV_ITEMS.find((item) => currentPath.startsWith(item.href));
   // Configurações não é um item de NAV_ITEMS (só existe dentro do popover
   // do usuário) — sem este caso o título cairia no genérico "Portal".
-  const label = active?.label ?? (currentPath.startsWith("/portal-v2/configuracoes")
-    ? "Configurações"
-    : "Portal");
+  const label =
+    active?.label ??
+    (currentPath.startsWith("/portal-v2/configuracoes") ? "Configurações" : "Portal");
   return <p className="truncate text-sm font-medium text-foreground">{label}</p>;
 }

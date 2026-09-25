@@ -610,6 +610,47 @@ export const submitRelatorioNpsSession = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const RelatorioUrlInput = z.object({
+  campanhaId: z.string().min(1),
+  relatorioId: z.string().min(1),
+});
+
+/** Regenera a signed URL de um relatório sob demanda — a única categoria
+ * de arquivo do portal que guarda `storagePath` (a chave real do
+ * Storage, nunca a URL), então é a única pra qual dá pra emitir uma URL
+ * nova com segurança quando a cacheada expira. Reaproveita exatamente a
+ * mesma checagem de acesso de `submitRelatorioNpsSession` (sessão →
+ * cliente → campanha pertence a esse cliente → relatório pertence a essa
+ * campanha) antes de assinar qualquer coisa — nunca confia num
+ * `campanhaId`/`relatorioId` manipulado sozinho. */
+export const getFreshRelatorioUrlSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => RelatorioUrlInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { clienteId } = await resolveClienteForSession(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error: readError } = await supabaseAdmin
+      .from("clientes")
+      .select("data")
+      .eq("id", clienteId)
+      .single();
+    if (readError || !row) throw new Error("Cliente não encontrado.");
+    const cliente = row.data as Cliente;
+
+    const campanha = cliente.campanhas?.find((c) => c.id === data.campanhaId);
+    if (!campanha) throw new Error("Campanha não encontrada.");
+    const relatorio = campanha.relatoriosMensais?.find((r) => r.id === data.relatorioId);
+    if (!relatorio) throw new Error("Relatório não encontrado.");
+
+    const { data: signed, error: signError } = await supabaseAdmin.storage
+      .from("relatorios-mensais")
+      .createSignedUrl(relatorio.storagePath, 60 * 60);
+    if (signError) throw new Error(signError.message);
+
+    return { url: signed.signedUrl };
+  });
+
 const ArtigoIdInput = z.object({ postId: z.string().min(1) });
 
 async function assertArtigoDoClienteSession(clienteId: string, postId: string) {

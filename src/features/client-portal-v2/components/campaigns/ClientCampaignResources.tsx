@@ -1,11 +1,18 @@
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { Download, Eye, FileText, Paperclip } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { getFreshRelatorioUrlSession } from "@/lib/portal-auth.functions";
 import { CampaignSection } from "./CampaignSection";
+import { ClientFileViewer } from "../files/ClientFileViewer";
+import type { ClientFile } from "../../types/files";
 import type { PublicCampanha } from "@/lib/portal-types";
 
 /** Relatórios e arquivos — unificados numa seção, separados visualmente
  * em duas listas só quando ambas têm itens (nunca duas áreas grandes
- * quando só uma tem conteúdo). */
+ * quando só uma tem conteúdo). "Visualizar" abre o MESMO
+ * `ClientFileViewer` das páginas de Relatórios/Arquivos — nunca uma
+ * aba nova nem download direto ao clicar. */
 export function ClientCampaignResources({
   campaign,
   highlightReportId,
@@ -15,6 +22,9 @@ export function ClientCampaignResources({
    * nunca uma segunda página, só um anel de foco na linha certa. */
   highlightReportId?: string;
 }) {
+  const freshUrlFn = useServerFn(getFreshRelatorioUrlSession);
+  const [openFile, setOpenFile] = useState<ClientFile | null>(null);
+
   const reports = campaign.relatorios;
   const files = campaign.influencers.flatMap((i) => [
     ...(i.briefingAnexoUrl
@@ -68,14 +78,30 @@ export function ClientCampaignResources({
                   </div>
                   {r.url && (
                     <div className="flex shrink-0 gap-1">
-                      <a
-                        href={r.url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenFile({
+                            id: r.id,
+                            friendlyName: r.nome,
+                            url: r.url,
+                            category: "Relatório",
+                            campanhaNome: campaign.nome,
+                            competenciaLabel: r.mes,
+                            createdAt: r.uploadedAt,
+                            regenerate: async () => {
+                              const result = await freshUrlFn({
+                                data: { campanhaId: campaign.id, relatorioId: r.id },
+                              });
+                              return result.url;
+                            },
+                          })
+                        }
+                        aria-label={`Visualizar ${r.nome}`}
                         className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
                       >
                         <Eye className="h-3.5 w-3.5" />
-                      </a>
+                      </button>
                       <a
                         href={r.url}
                         download
@@ -106,6 +132,21 @@ export function ClientCampaignResources({
                   <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                     {f.nome}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenFile({
+                        id: f.id,
+                        friendlyName: f.nome,
+                        url: f.url,
+                        campanhaNome: campaign.nome,
+                      })
+                    }
+                    aria-label={`Visualizar ${f.nome}`}
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
                   <a
                     href={f.url}
                     download
@@ -119,6 +160,8 @@ export function ClientCampaignResources({
           </div>
         )}
       </div>
+
+      <ClientFileViewer file={openFile} onClose={() => setOpenFile(null)} />
     </CampaignSection>
   );
 }

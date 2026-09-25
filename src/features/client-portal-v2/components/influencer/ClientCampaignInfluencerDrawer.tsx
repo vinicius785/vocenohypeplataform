@@ -77,6 +77,7 @@ export function ClientCampaignInfluencerDrawer({
               <ClientInfluencerDeliverables
                 entregas={influencer.entregas}
                 campanhaId={campanhaId}
+                campanhaNome={campaign.nome}
                 influencerId={influencer.id}
                 initialOpenEntregaId={initialContentId}
               />

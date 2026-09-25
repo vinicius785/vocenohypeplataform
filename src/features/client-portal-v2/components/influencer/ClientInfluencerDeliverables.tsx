@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, ChevronDown, Download, ExternalLink, Film, Paperclip, X } from "lucide-react";
+import { Check, ChevronDown, Download, Eye, Film, Paperclip, X } from "lucide-react";
 import { respondCampanhaEntregaSession } from "@/lib/portal-auth.functions";
 import { usePortalSessionData } from "@/components/portal/portal-session-context";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
+import { ClientFileViewer } from "../files/ClientFileViewer";
+import type { ClientFile } from "../../types/files";
 import { formatMetricValue } from "../../lib/metric-format";
 import {
   activeAjuste,
@@ -74,14 +76,27 @@ function VersionSection({
   title,
   categoria,
   entrega,
+  campanhaNome,
+  onOpenFile,
 }: {
   title: string;
   categoria: "Roteiro" | "Conteúdo final";
   entrega: PublicEntrega;
+  campanhaNome: string;
+  onOpenFile: (file: ClientFile) => void;
 }) {
   const versions = anexosPorCategoria(entrega, categoria);
   if (versions.length === 0) return null;
   const [current, ...previous] = versions;
+
+  const toFile = (v: (typeof versions)[number], label: string): ClientFile => ({
+    id: v.id,
+    friendlyName: `${entrega.titulo || entrega.tipo} — ${label}`,
+    url: v.url,
+    category: categoria,
+    campanhaNome,
+    createdAt: v.criadoEm,
+  });
 
   return (
     <div className="space-y-1.5">
@@ -93,14 +108,13 @@ function VersionSection({
             {current.criadoEm ? ` · Enviada ${formatDateTime(current.criadoEm)}` : ""}
           </p>
         </div>
-        <a
-          href={current.url}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => onOpenFile(toFile(current, `Versão ${current.versao ?? 1}`))}
           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
         >
-          <ExternalLink className="h-3.5 w-3.5" /> Visualizar
-        </a>
+          <Eye className="h-3.5 w-3.5" /> Visualizar
+        </button>
       </div>
 
       {previous.length > 0 && (
@@ -110,12 +124,11 @@ function VersionSection({
           </summary>
           <div className="mt-1.5 space-y-1.5 border-t border-border/60 pt-1.5">
             {versions.map((v, i) => (
-              <a
+              <button
                 key={v.id}
-                href={v.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/40"
+                type="button"
+                onClick={() => onOpenFile(toFile(v, `Versão ${v.versao ?? 1}`))}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted/40"
               >
                 <span className="text-xs text-foreground">
                   Versão {v.versao ?? 1} {i === 0 ? "· Atual" : ""}
@@ -123,7 +136,7 @@ function VersionSection({
                 <span className="text-xs text-text-secondary">
                   {v.criadoEm ? formatDateTime(v.criadoEm) : ""}
                 </span>
-              </a>
+              </button>
             ))}
           </div>
         </details>
@@ -143,11 +156,13 @@ function VersionSection({
 export function ClientInfluencerDeliverables({
   entregas,
   campanhaId,
+  campanhaNome,
   influencerId,
   initialOpenEntregaId,
 }: {
   entregas: PublicEntrega[];
   campanhaId: string;
+  campanhaNome: string;
   influencerId: string;
   /** Deep link `?entrega=`/`?conteudo=` — abre esta entrega já expandida. */
   initialOpenEntregaId?: string;
@@ -157,6 +172,7 @@ export function ClientInfluencerDeliverables({
   const respondFn = useServerFn(respondCampanhaEntregaSession);
   const [expandedId, setExpandedId] = useState<string | null>(initialOpenEntregaId ?? null);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
+  const [openFile, setOpenFile] = useState<ClientFile | null>(null);
 
   const mutation = useMutation({
     mutationFn: (vars: { entregaId: string; status: "aprovado" | "reprovado"; motivo?: string }) =>
@@ -235,11 +251,19 @@ export function ClientInfluencerDeliverables({
                       title="Briefing e roteiro"
                       categoria="Roteiro"
                       entrega={entrega}
+                      campanhaNome={campanhaNome}
+                      onOpenFile={setOpenFile}
                     />
                   )}
 
                   {conteudo ? (
-                    <VersionSection title="Conteúdo" categoria="Conteúdo final" entrega={entrega} />
+                    <VersionSection
+                      title="Conteúdo"
+                      categoria="Conteúdo final"
+                      entrega={entrega}
+                      campanhaNome={campanhaNome}
+                      onOpenFile={setOpenFile}
+                    />
                   ) : (
                     !isRoteiroStage && (
                       <div className="space-y-1">
@@ -374,6 +398,7 @@ export function ClientInfluencerDeliverables({
           );
         })}
       </div>
+      <ClientFileViewer file={openFile} onClose={() => setOpenFile(null)} />
     </InfluencerDrawerSection>
   );
 }
