@@ -3,21 +3,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { Card, CardHeader } from "@/components/InicioDashboard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import type { CampaignSummary } from "../types/attention";
-
-const HEALTH_LABEL: Record<CampaignSummary["health"], string> = {
-  on_track: "Em dia",
-  attention: "Atenção",
-  at_risk: "Em risco",
-};
-const HEALTH_TONE: Record<CampaignSummary["health"], string> = {
-  on_track: "bg-success-soft text-success-soft-foreground",
-  attention: "bg-warning-soft text-warning-soft-foreground",
-  at_risk: "bg-danger-soft text-danger-soft-foreground",
-};
+import { CLIENT_CAMPAIGN_STATUS_LABEL } from "../lib/client-status";
 
 /** Linhas compactas — nunca cards de capa/banner (regra explícita desta
  * rodada). Barra de progresso discreta: track neutro, preenchimento
- * `--brand`, sem gradiente. */
+ * `--brand`, sem gradiente. Nunca mostra classificação de saúde/risco —
+ * só o status operacional objetivo (ver `client-status.ts`). */
 export function ClientCampaignProgressList({ campaigns }: { campaigns: CampaignSummary[] }) {
   const navigate = useNavigate();
 
@@ -43,15 +34,11 @@ export function ClientCampaignProgressList({ campaigns }: { campaigns: CampaignS
                 <p className="min-w-0 flex-1 truncate text-sm text-foreground group-hover:underline">
                   {c.nome}
                 </p>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${HEALTH_TONE[c.health]}`}
-                >
-                  {HEALTH_LABEL[c.health]}
-                </span>
               </div>
               <p className="truncate text-xs text-muted-foreground">
-                {c.stageLabel} · {c.influencersApproved}/{c.influencersTotal} influenciadores ·{" "}
-                {c.contentPublished}/{c.contentPlanned} publicados
+                {CLIENT_CAMPAIGN_STATUS_LABEL[c.status]} · {c.influencersApproved}/
+                {c.influencersTotal} influenciadores · {c.contentPublished}/{c.contentPlanned}{" "}
+                publicados
               </p>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">

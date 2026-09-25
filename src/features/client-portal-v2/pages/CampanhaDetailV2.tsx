@@ -100,7 +100,7 @@ export function CampanhaDetailV2({
     });
   };
 
-  // Recorrente: KPIs (progresso, conteúdos, pendências, health) sempre a
+  // Recorrente: KPIs (progresso, conteúdos, pendências, status) sempre a
   // partir do mês ATIVO, nunca somando todos os ciclos juntos — trocar de
   // mês no seletor precisa refletir imediatamente nos cards de resumo.
   const summary = useMemo(

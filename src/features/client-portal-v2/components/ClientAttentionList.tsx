@@ -8,8 +8,13 @@ import type { AttentionItem } from "../types/attention";
 // Aprovações deixou de existir como destino de menu. Cada item já leva
 // direto pro contexto certo; não existe uma lista completa pra "ver".
 
+// Vermelho é reservado pra erro real de interface — uma ação pendente do
+// cliente, por mais urgente que seja, nunca é um "erro"/"risco", então o
+// nível mais urgente também usa âmbar (mesma regra de cor do resto do
+// portal: âmbar só quando existe ação concreta do cliente, nunca vermelho
+// pra classificar campanha/prazo).
 const PRIORITY_DOT: Record<AttentionItem["priority"], string> = {
-  high: "bg-danger",
+  high: "bg-warning",
   medium: "bg-warning",
   low: "bg-brand",
 };

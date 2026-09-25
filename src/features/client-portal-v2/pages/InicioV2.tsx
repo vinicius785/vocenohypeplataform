@@ -54,7 +54,7 @@ export function InicioV2() {
   const approvalCount = useMemo(() => deriveApprovalItems(data).length, [data]);
   const firstAttentionHref = attentionItems[0]?.href;
   const campaigns = useMemo(() => deriveCampaignSummaries(data), [data]);
-  const activeCampaigns = campaigns.filter((c) => c.stageLabel !== "Concluída");
+  const activeCampaigns = campaigns.filter((c) => c.status !== "completed");
   const activity = useMemo(() => deriveRecentActivity(data), [data]);
   const contentCount = useMemo(() => deriveContentItems(data).length, [data]);
   const reportCount = useMemo(
@@ -74,7 +74,7 @@ export function InicioV2() {
             <HeaderStatCell
               label="Pendências"
               value={approvalCount}
-              tone="danger"
+              tone="warning"
               onClick={firstAttentionHref ? () => navigate({ to: firstAttentionHref }) : undefined}
             />
             <HeaderStatCell

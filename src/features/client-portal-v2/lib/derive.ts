@@ -2,7 +2,7 @@ import type { ClienteLinkData, PublicCampanha } from "@/lib/portal-types";
 import type {
   ActivityEntry,
   AttentionItem,
-  CampaignHealth,
+  ClientCampaignStatus,
   CampaignSummary,
 } from "../types/attention";
 import type { ApprovalItem } from "../types/approvals";
@@ -41,12 +41,16 @@ function daysUntil(dateIso: string | undefined, now: number): number | null {
   return Math.ceil((t - now) / (1000 * 60 * 60 * 24));
 }
 
-function dueLabelFrom(days: number | null): string | undefined {
-  if (days === null) return undefined;
-  if (days < 0) return "Atrasado";
+/** Sempre factual — nunca um rótulo de julgamento como "Atrasado"/"X dias
+ * atrasado" (isso é uma classificação de saúde/risco interna, não uma
+ * comunicação objetiva de prazo). Um prazo já passado ainda mostra a
+ * data real, só no passado. */
+function dueLabelFrom(days: number | null, prazoIso: string | undefined): string | undefined {
+  if (days === null || !prazoIso) return undefined;
   if (days === 0) return "Prazo hoje";
   if (days === 1) return "Prazo amanhã";
-  return `Prazo em ${days} dias`;
+  if (days > 1) return `Prazo em ${days} dias`;
+  return `Prazo era em ${new Date(prazoIso).toLocaleDateString("pt-BR")}`;
 }
 
 /**
@@ -88,7 +92,7 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
           campanhaNome,
           count: 1,
           description: `Perfil de ${influencer.nome} aguarda sua avaliação`,
-          dueLabel: dueLabelFrom(days),
+          dueLabel: dueLabelFrom(days, campanha.prazo),
           priority,
           ctaLabel: "Avaliar perfil",
           href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}${queryParam}`,
@@ -107,7 +111,7 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
           campanhaNome,
           count: 1,
           description: `${tipoLabel} de ${influencer.nome} aguarda sua aprovação`,
-          dueLabel: dueLabelFrom(days),
+          dueLabel: dueLabelFrom(days, campanha.prazo),
           priority,
           ctaLabel: "Revisar",
           href: `/portal-v2/campanhas/${campanha.id}?influenciador=${influencer.id}&entrega=${entrega.id}${queryParam}`,
@@ -120,11 +124,24 @@ export function deriveAttentionItems(data: ClienteLinkData, now = Date.now()): A
   return items.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority]);
 }
 
-function campaignHealth(pendingCount: number, daysLeft: number | null): CampaignHealth {
-  if (daysLeft !== null && daysLeft < 0) return "at_risk";
-  if (pendingCount >= 3) return "at_risk";
-  if (pendingCount > 0) return "attention";
-  return "on_track";
+/**
+ * Status operacional pro CLIENTE — nunca uma classificação de saúde/risco
+ * (isso é gestão interna da equipe, não pertence ao portal). Cada valor
+ * vem de um FATO real: todo conteúdo planejado já foi publicado
+ * (concluída), existe influenciador aprovado com produção em andamento
+ * (em andamento), ou nada disso ainda aconteceu (planejada). Nunca deriva
+ * de prazo estourado nem de contagem de pendências — essas continuam
+ * visíveis em outro lugar (prazo real no cabeçalho, pendências em
+ * "Precisa da sua atenção"), nunca convertidas numa cor de alerta aqui.
+ */
+function clientCampaignStatus(
+  influencersTotal: number,
+  contentPlanned: number,
+  contentPublished: number,
+): ClientCampaignStatus {
+  if (contentPlanned > 0 && contentPublished === contentPlanned) return "completed";
+  if (influencersTotal === 0) return "planned";
+  return "in_progress";
 }
 
 /**
@@ -156,21 +173,15 @@ export function summarizeCampaign(
   const nextMilestone = [...campanha.cronograma]
     .filter((c) => new Date(c.date).getTime() >= now)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
-  const daysLeft = daysUntil(campanha.prazo, now);
   const progressPercent =
     contentPlanned > 0 ? Math.round((contentPublished / contentPlanned) * 100) : 0;
-
-  let stageLabel = "Planejamento";
-  if (influencersApproved > 0 && contentPublished === 0) stageLabel = "Produção";
-  if (contentPublished > 0 && contentPublished < contentPlanned) stageLabel = "Publicação";
-  if (contentPlanned > 0 && contentPublished === contentPlanned) stageLabel = "Concluída";
 
   return {
     id: campanha.id,
     nome: campanha.nome,
     prazo: campanha.prazo,
     dataInicio: campanha.dataInicio,
-    stageLabel,
+    status: clientCampaignStatus(influencersTotal, contentPlanned, contentPublished),
     progressPercent,
     influencersApproved,
     influencersTotal,
@@ -178,7 +189,6 @@ export function summarizeCampaign(
     contentPlanned,
     pendingCount,
     nextMilestoneLabel: nextMilestone?.title,
-    health: campaignHealth(pendingCount, daysLeft),
   };
 }
 
@@ -215,7 +225,7 @@ export function deriveApprovalItems(data: ClienteLinkData, now = Date.now()): Ap
           influencerNome: influencer.nome,
           title: influencer.nome,
           subtitle: influencer.nicho,
-          dueLabel: dueLabelFrom(days),
+          dueLabel: dueLabelFrom(days, campanha.prazo),
           priority,
         });
       }
@@ -231,7 +241,7 @@ export function deriveApprovalItems(data: ClienteLinkData, now = Date.now()): Ap
             entregaId: entrega.id,
             title: entrega.titulo || entrega.tipo,
             subtitle: `${influencer.nome} · ${entrega.stage === "ROTEIRO_APROVACAO" ? "Roteiro" : "Conteúdo final"}`,
-            dueLabel: dueLabelFrom(days),
+            dueLabel: dueLabelFrom(days, campanha.prazo),
             priority,
           });
         }

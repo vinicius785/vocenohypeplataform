@@ -14,8 +14,8 @@ import {
 import type { CampaignSummary } from "../types/attention";
 
 function statusOf(campaign: CampaignSummary): Exclude<CampaignStatusFilter, "todas"> {
-  if (campaign.stageLabel === "Concluída") return "encerradas";
-  if (campaign.stageLabel === "Planejamento") return "planejadas";
+  if (campaign.status === "completed") return "encerradas";
+  if (campaign.status === "planned") return "planejadas";
   return "ativas";
 }
 

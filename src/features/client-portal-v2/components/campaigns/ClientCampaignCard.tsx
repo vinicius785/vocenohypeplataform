@@ -2,23 +2,16 @@ import { CalendarClock, Users } from "lucide-react";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { Badge } from "@/components/ui/badge";
 import type { CampaignSummary } from "../../types/attention";
-
-const HEALTH_BADGE: Record<
-  CampaignSummary["health"],
-  { label: string; variant: "success" | "warning" | "danger" }
-> = {
-  on_track: { label: "Em dia", variant: "success" },
-  attention: { label: "Atenção", variant: "warning" },
-  at_risk: { label: "Em risco", variant: "danger" },
-};
+import { getClientFacingStatus } from "../../lib/client-status";
 
 /**
  * Card da listagem — MESMA identidade que reaparece no cabeçalho do
- * detalhe (logo do cliente via `ClienteLogo`, nome, badge de saúde,
+ * detalhe (logo do cliente via `ClienteLogo`, nome, status operacional,
  * período, progresso com contexto): nunca números divergentes entre a
  * lista e a página da campanha, porque os dois leem o mesmo
  * `CampaignSummary`. Card inteiro clicável (stretched button, mesma
- * técnica de `campanhas/CampanhaCard.tsx` do time).
+ * técnica de `campanhas/CampanhaCard.tsx` do time). O badge é sempre um
+ * status operacional objetivo — nunca saúde/risco (ver `client-status.ts`).
  */
 export function ClientCampaignCard({
   campaign,
@@ -31,7 +24,7 @@ export function ClientCampaignCard({
   clientName: string;
   onOpen: () => void;
 }) {
-  const health = HEALTH_BADGE[campaign.health];
+  const status = getClientFacingStatus(campaign);
   const periodLabel = campaign.prazo
     ? `Prazo ${new Date(campaign.prazo).toLocaleDateString("pt-BR")}`
     : "Sem prazo definido";
@@ -42,17 +35,16 @@ export function ClientCampaignCard({
         type="button"
         onClick={onOpen}
         className="absolute inset-0 rounded-[20px] transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand active:scale-[0.99]"
-        aria-label={`Ver campanha ${campaign.nome}, ${health.label}`}
+        aria-label={`Ver campanha ${campaign.nome}, ${status.label}`}
       />
 
       <div className="pointer-events-none flex items-start gap-3">
         <ClienteLogo photo={clientLogo} empresa={clientName} size="md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold text-foreground">{campaign.nome}</p>
-          <p className="mt-0.5 truncate text-xs text-text-secondary">{campaign.stageLabel}</p>
         </div>
-        <Badge variant={health.variant} className="shrink-0">
-          {health.label}
+        <Badge variant={status.tone} className="shrink-0">
+          {status.label}
         </Badge>
       </div>
 

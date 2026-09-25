@@ -76,7 +76,10 @@ export function HeaderStatCell({
 }: {
   label: string;
   value: number;
-  tone?: "default" | "danger";
+  /** "warning" (âmbar) é só pra uma contagem que representa uma ação
+   * concreta pendente do CLIENTE (ex.: Pendências) — nunca vermelho, que
+   * fica reservado pra erro real de interface (ver `client-status.ts`). */
+  tone?: "default" | "warning";
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -96,8 +99,8 @@ export function HeaderStatCell({
         className={`text-xl font-semibold tabular-nums md:text-2xl ${
           isZero
             ? "text-muted-foreground/50"
-            : tone === "danger" && value > 0
-              ? "text-danger"
+            : tone === "warning" && value > 0
+              ? "text-warning"
               : active
                 ? "text-brand"
                 : "text-foreground"

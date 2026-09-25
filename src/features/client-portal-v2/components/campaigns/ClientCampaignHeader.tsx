@@ -4,21 +4,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { Badge } from "@/components/ui/badge";
 import type { CampaignSummary } from "../../types/attention";
-
-const HEALTH_BADGE: Record<
-  CampaignSummary["health"],
-  { label: string; variant: "success" | "warning" | "danger" }
-> = {
-  on_track: { label: "Em dia", variant: "success" },
-  attention: { label: "Atenção", variant: "warning" },
-  at_risk: { label: "Em risco", variant: "danger" },
-};
+import { getClientFacingStatus } from "../../lib/client-status";
 
 /**
  * Cabeçalho da página da campanha — breadcrumb + identidade (logo do
- * cliente, nome, badge de saúde, período, última atualização). Sem hero
- * azul: a hierarquia vem da tipografia e da composição, igual ao
- * cabeçalho de campanha do time (`CampanhasSection.tsx`).
+ * cliente, nome, status operacional, período, última atualização). Sem
+ * hero azul: a hierarquia vem da tipografia e da composição, igual ao
+ * cabeçalho de campanha do time (`CampanhasSection.tsx`). O badge é
+ * sempre um status OPERACIONAL objetivo (Planejada/Em andamento/
+ * Concluída) — nunca uma classificação de saúde/risco interna, que
+ * pertence só à gestão da equipe (ver `client-status.ts`).
  */
 export function ClientCampaignHeader({
   campaign,
@@ -36,7 +31,7 @@ export function ClientCampaignHeader({
   cycleSelector?: ReactNode;
 }) {
   const navigate = useNavigate();
-  const health = HEALTH_BADGE[campaign.health];
+  const status = getClientFacingStatus(campaign);
   const periodLabel = campaign.prazo
     ? `Prazo ${new Date(campaign.prazo).toLocaleDateString("pt-BR")}`
     : "Sem prazo definido";
@@ -65,7 +60,7 @@ export function ClientCampaignHeader({
             {campaign.nome}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant={health.variant}>{health.label}</Badge>
+            <Badge variant={status.tone}>{status.label}</Badge>
             <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
               <Calendar className="h-3.5 w-3.5" />
               {periodLabel}

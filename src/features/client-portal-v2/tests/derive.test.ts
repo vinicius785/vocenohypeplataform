@@ -297,7 +297,7 @@ describe("deriveCampaignSummaries", () => {
     expect(summary.influencersApproved).toBe(1);
   });
 
-  it("campanha sem influenciadores/entregas não quebra e fica em 'Planejamento'", () => {
+  it("campanha sem influenciadores/entregas não quebra e fica 'planned'", () => {
     const data: ClienteLinkData = {
       ...baseData(),
       campanhas: [
@@ -313,7 +313,7 @@ describe("deriveCampaignSummaries", () => {
       ],
     };
     const [summary] = deriveCampaignSummaries(data);
-    expect(summary.stageLabel).toBe("Planejamento");
+    expect(summary.status).toBe("planned");
     expect(summary.progressPercent).toBe(0);
   });
 

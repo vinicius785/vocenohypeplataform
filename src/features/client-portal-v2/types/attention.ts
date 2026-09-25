@@ -28,14 +28,23 @@ export type AttentionItem = {
   href: string;
 };
 
-export type CampaignHealth = "on_track" | "attention" | "at_risk";
+/**
+ * Status operacional exposto ao CLIENTE — nunca uma classificação de
+ * saúde/risco interna (isso é gestão da equipe da Você no Hype, não
+ * pertence ao portal). Ver `lib/client-status.ts` pro rótulo/tom de cada
+ * um; nunca converter automaticamente um sinal de risco em "andamento" —
+ * cada valor aqui vem de um fato operacional real (conteúdo publicado,
+ * existe influenciador aprovado, etc), nunca de prazo estourado ou
+ * contagem de pendências.
+ */
+export type ClientCampaignStatus = "planned" | "in_progress" | "completed";
 
 export type CampaignSummary = {
   id: string;
   nome: string;
   prazo?: string;
   dataInicio?: string;
-  stageLabel: string;
+  status: ClientCampaignStatus;
   progressPercent: number;
   influencersApproved: number;
   influencersTotal: number;
@@ -43,7 +52,6 @@ export type CampaignSummary = {
   contentPlanned: number;
   pendingCount: number;
   nextMilestoneLabel?: string;
-  health: CampaignHealth;
 };
 
 export type ActivityKind =
