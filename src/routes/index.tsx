@@ -19,7 +19,19 @@ import { logLoginSuccess, logLoginFailure } from "@/lib/audit-log.functions";
 import { shouldRequireMfaChallenge, checkMfaVerifyRateLimit } from "@/lib/mfa.functions";
 import { acceptPendingInvites } from "@/lib/accept-invite.functions";
 import { LoginScreenShell } from "@/components/auth/LoginScreenShell";
-import { PreparingEnvironmentScreen } from "@/components/auth/PreparingEnvironmentScreen";
+import { AuthPreparingCard, type PreparingStep } from "@/components/auth/AuthPreparingCard";
+import { AuthAccessErrorCard } from "@/components/auth/AuthAccessErrorCard";
+import { withMinimumDuration, withTimeout } from "@/lib/auth-preparing";
+import {
+  authInputBase,
+  authPrimaryButtonBase,
+  authLabelBase,
+  authSecondaryLinkBase,
+  authIconMuted,
+} from "@/components/auth/auth-form-styles";
+
+const PREPARING_MIN_MS = 400;
+const PREPARING_TIMEOUT_MS = 15_000;
 
 const GENERIC_RATE_LIMIT_MESSAGE = "Muitas tentativas. Tente novamente em alguns minutos.";
 const GENERIC_MFA_ERROR = "Código inválido. Tente novamente.";
@@ -38,28 +50,14 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-// Cores fixas (não tokens de tema) — o cartão do login é sempre branco
-// com texto escuro, como uma peça de identidade visual própria, nunca
-// invertendo pro escuro se o SO/app estiver no tema escuro (ver
-// `LoginScreenShell`).
-const inputBase =
-  "h-13 w-full rounded-xl border border-[#e2e0dc] bg-[#faf9f7] text-[15px] text-[#111111] outline-none " +
-  "transition-colors placeholder:text-[#9a978f] hover:border-[#c9c6c0] " +
-  "focus:border-[var(--brand)] focus:ring-4 focus:ring-[var(--brand)]/20 " +
-  "aria-[invalid=true]:border-red-400 aria-[invalid=true]:focus:ring-red-400/20";
-
-const primaryButtonBase =
-  "inline-flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand)] " +
-  "text-[15px] font-semibold text-[var(--brand-foreground)] shadow-[0_8px_24px_-8px_var(--brand)] " +
-  "transition-all duration-200 hover:bg-[var(--brand-hover)] hover:shadow-[0_10px_28px_-8px_var(--brand)] " +
-  "active:scale-[0.99] active:brightness-95 focus-visible:outline-none focus-visible:ring-4 " +
-  "focus-visible:ring-[var(--brand)]/30 focus-visible:ring-offset-2 focus-visible:ring-offset-white " +
-  "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none disabled:active:scale-100";
-
-const labelBase = "mb-2 block text-[13px] font-medium text-[#4b4942]";
-const secondaryLinkBase =
-  "text-[13px] font-medium text-[var(--brand)] hover:underline underline-offset-2";
-const iconMuted = "text-[#9a978f]";
+// Classes compartilhadas com `criar-senha.tsx` (e qualquer tela futura
+// dentro do mesmo shell) — ver `auth-form-styles.ts` pra nunca mais
+// divergir entre telas.
+const inputBase = authInputBase;
+const primaryButtonBase = authPrimaryButtonBase;
+const labelBase = authLabelBase;
+const secondaryLinkBase = authSecondaryLinkBase;
+const iconMuted = authIconMuted;
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -69,8 +67,9 @@ function LoginPage() {
   const logLoginFailureFn = useServerFn(logLoginFailure);
   const checkMfaVerifyRateLimitFn = useServerFn(checkMfaVerifyRateLimit);
   const [view, setView] = useState<
-    "checking" | "login" | "forgot" | "forgot-sent" | "mfa-challenge" | "preparing"
+    "checking" | "login" | "forgot" | "forgot-sent" | "mfa-challenge" | "preparing" | "error"
   >("checking");
+  const [preparingStep, setPreparingStep] = useState<PreparingStep>("verificando");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -93,8 +92,13 @@ function LoginPage() {
   // extracted so both the no-MFA path (handleSubmit) and the post-challenge
   // path (submitMfaCode) call the IDENTICAL sequence instead of two
   // hand-copied versions that could drift.
+  // Etapas REAIS (nunca uma % inventada): verificar sessão → carregar
+  // perfil/ambiente → redirecionar. Envolvido em `withTimeout` (nunca
+  // loading infinito) e `withMinimumDuration` (evita flash de loading
+  // quando tudo resolve rápido demais) — ver `lib/auth-preparing.ts`.
   const completeLogin = async () => {
     setView("preparing");
+    setPreparingStep("verificando");
     logLoginSuccessFn().catch(() => {
       /* best-effort audit log only — never block login on this */
     });
@@ -104,29 +108,52 @@ function LoginPage() {
       /* ignore */
     }
     markTabSessionActive();
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      navigate({ to: "/" });
-      return;
+
+    try {
+      await withTimeout(
+        withMinimumDuration(
+          (async () => {
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (!sessionData.session) {
+              navigate({ to: "/" });
+              return;
+            }
+            setPreparingStep("perfil");
+            let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+            setPreparingStep("acesso");
+            // Só paga a ida extra ao servidor pra ativar convite quando
+            // realmente pode haver um vínculo `invited` (env veio
+            // "pending") — pra quem já tem ambiente ativo (o caso comum,
+            // time e clientes recorrentes) isso nunca roda, então o login
+            // continua rápido como antes. Autenticar com sucesso pela
+            // primeira vez É a aceitação do convite neste modelo (sem
+            // token de convite separado). Fail-open: nunca bloquear o
+            // login por isto.
+            if (env.type === "pending") {
+              try {
+                const { activated } = await acceptPendingInvites();
+                if (activated > 0) {
+                  env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+                }
+              } catch {
+                /* segue com o env original (pending) */
+              }
+            }
+            navigate({ to: env.redirectTo });
+          })(),
+          PREPARING_MIN_MS,
+        ),
+        PREPARING_TIMEOUT_MS,
+      );
+    } catch (err) {
+      console.error("[login] falha ao preparar ambiente", err);
+      setView("error");
     }
-    let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
-    // Só paga a ida extra ao servidor pra ativar convite quando realmente
-    // pode haver um vínculo `invited` (env veio "pending") — pra quem já
-    // tem ambiente ativo (o caso comum, time e clientes recorrentes) isso
-    // nunca roda, então o login continua rápido como antes. Autenticar com
-    // sucesso pela primeira vez É a aceitação do convite neste modelo (sem
-    // token de convite separado). Fail-open: nunca bloquear o login por isto.
-    if (env.type === "pending") {
-      try {
-        const { activated } = await acceptPendingInvites();
-        if (activated > 0) {
-          env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
-        }
-      } catch {
-        /* segue com o env original (pending) */
-      }
-    }
-    navigate({ to: env.redirectTo });
+  };
+
+  const handleSignOutFromError = async () => {
+    await supabase.auth.signOut();
+    setView("login");
   };
 
   useEffect(() => {
@@ -157,8 +184,21 @@ function LoginPage() {
         return;
       }
       setView("preparing");
-      const env = await resolveUserEnvironment(supabase, data.session.user.id);
-      navigate({ to: env.redirectTo });
+      setPreparingStep("perfil");
+      try {
+        const env = await withTimeout(
+          withMinimumDuration(
+            resolveUserEnvironment(supabase, data.session.user.id),
+            PREPARING_MIN_MS,
+          ),
+          PREPARING_TIMEOUT_MS,
+        );
+        setPreparingStep("acesso");
+        navigate({ to: env.redirectTo });
+      } catch (err) {
+        console.error("[login] falha ao preparar ambiente (sessão existente)", err);
+        setView("error");
+      }
     });
   }, [navigate]);
 
@@ -306,8 +346,26 @@ function LoginPage() {
     }
   };
 
+  // "checking"/"preparing"/"error" NUNCA desmontam o shell pra mostrar
+  // uma tela preta vazia — a coluna esquerda (frase de marca) permanece
+  // estável, só o conteúdo do card muda, exatamente como o login/MFA.
   if (view === "checking" || view === "preparing") {
-    return <PreparingEnvironmentScreen />;
+    return (
+      <LoginScreenShell>
+        <AuthPreparingCard step={preparingStep} />
+      </LoginScreenShell>
+    );
+  }
+  if (view === "error") {
+    return (
+      <LoginScreenShell>
+        <AuthAccessErrorCard
+          kind="timeout"
+          onRetry={() => void completeLogin()}
+          onSignOut={() => void handleSignOutFromError()}
+        />
+      </LoginScreenShell>
+    );
   }
 
   const eyebrow =
