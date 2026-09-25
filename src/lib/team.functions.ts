@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
+import { listInternalTeamUserIds } from "@/lib/team-membership";
 
 const RoleEnum = z.enum(["admin", "member"]);
 
@@ -45,10 +46,21 @@ export const getTeamDirectory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Internal-team roster ONLY — `profiles` gets a row for every auth user,
+    // client-portal accounts included (see `handle_new_user`), so without
+    // this filter every client-portal invite showed up here too (Time tab
+    // member list/count/score/availability). See
+    // `20260925090000_internal_team_membership_gate.sql` and
+    // `team-membership.ts`.
+    const internalIds = await listInternalTeamUserIds(supabaseAdmin);
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .select(
         "id,email,full_name,photo_url,birthday,role_label,salary,permissions,time_view,start_times",
+      )
+      .in(
+        "id",
+        internalIds.size > 0 ? Array.from(internalIds) : ["00000000-0000-0000-0000-000000000000"],
       )
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
