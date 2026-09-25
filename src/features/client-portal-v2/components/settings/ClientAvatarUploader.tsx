@@ -24,7 +24,7 @@ const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 ano — mesmo padrão já usado 
  * (token novo na query string). `photo_url` fica só o caminho assinado —
  * nunca base64 no banco.
  */
-export function ClientAvatarUploader({ name }: { name: string }) {
+export function ClientAvatarUploader({ name, roleLabel }: { name: string; roleLabel?: string }) {
   const { data: profile, invalidate } = useClientProfile();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -80,6 +80,7 @@ export function ClientAvatarUploader({ name }: { name: string }) {
 
   const handleRemove = async () => {
     if (busy || !profile?.photoUrl) return;
+    if (!window.confirm("Remover sua foto de perfil?")) return;
     setBusy(true);
     try {
       const {
@@ -122,7 +123,10 @@ export function ClientAvatarUploader({ name }: { name: string }) {
         )}
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{name || "Sem nome"}</p>
+        {roleLabel && <p className="truncate text-xs text-text-secondary">{roleLabel}</p>}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -133,7 +137,7 @@ export function ClientAvatarUploader({ name }: { name: string }) {
             e.target.value = "";
           }}
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"
@@ -154,11 +158,11 @@ export function ClientAvatarUploader({ name }: { name: string }) {
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Remover foto
+              Remover
             </Button>
           )}
         </div>
-        <p className="text-[11px] text-text-secondary">JPG, PNG ou WebP, até 8MB.</p>
+        <p className="mt-1.5 text-[11px] text-text-secondary">JPG, PNG ou WebP, até 8 MB.</p>
       </div>
 
       <ClientAvatarCropDialog

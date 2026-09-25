@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
  * aqui — cai direto na seção "Perfil" de Configurações. */
 export const Route = createFileRoute("/portal-v2/perfil")({
   beforeLoad: () => {
-    throw redirect({ to: "/portal-v2/configuracoes", hash: "perfil" });
+    throw redirect({ to: "/portal-v2/configuracoes/perfil" });
   },
 });

@@ -42,12 +42,16 @@ import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './r
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
 import { Route as PortalTokenRouteRouteImport } from './routes/portal.$token/route'
 import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token/index'
+import { Route as PortalV2ConfiguracoesIndexRouteImport } from './routes/portal-v2/configuracoes.index'
 import { Route as PortalV2CampanhasIndexRouteImport } from './routes/portal-v2/campanhas.index'
 import { Route as PortalAppCampanhasIndexRouteImport } from './routes/portal-app/campanhas.index'
 import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$token/solicitacoes'
 import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
 import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
 import { Route as PortalTokenAprovacoesRouteImport } from './routes/portal.$token/aprovacoes'
+import { Route as PortalV2ConfiguracoesSegurancaRouteImport } from './routes/portal-v2/configuracoes.seguranca'
+import { Route as PortalV2ConfiguracoesPerfilRouteImport } from './routes/portal-v2/configuracoes.perfil'
+import { Route as PortalV2ConfiguracoesAcessosRouteImport } from './routes/portal-v2/configuracoes.acessos'
 import { Route as PortalV2CampanhasCampanhaIdRouteImport } from './routes/portal-v2/campanhas.$campanhaId'
 import { Route as PortalAppCampanhasCampanhaIdRouteImport } from './routes/portal-app/campanhas.$campanhaId'
 import { Route as EmailDescadastroTokenRouteImport } from './routes/email.descadastro.$token'
@@ -241,6 +245,12 @@ const PortalTokenIndexRoute = PortalTokenIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PortalTokenRouteRoute,
 } as any)
+const PortalV2ConfiguracoesIndexRoute =
+  PortalV2ConfiguracoesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => PortalV2ConfiguracoesRoute,
+  } as any)
 const PortalV2CampanhasIndexRoute = PortalV2CampanhasIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -271,6 +281,24 @@ const PortalTokenAprovacoesRoute = PortalTokenAprovacoesRouteImport.update({
   path: '/aprovacoes',
   getParentRoute: () => PortalTokenRouteRoute,
 } as any)
+const PortalV2ConfiguracoesSegurancaRoute =
+  PortalV2ConfiguracoesSegurancaRouteImport.update({
+    id: '/seguranca',
+    path: '/seguranca',
+    getParentRoute: () => PortalV2ConfiguracoesRoute,
+  } as any)
+const PortalV2ConfiguracoesPerfilRoute =
+  PortalV2ConfiguracoesPerfilRouteImport.update({
+    id: '/perfil',
+    path: '/perfil',
+    getParentRoute: () => PortalV2ConfiguracoesRoute,
+  } as any)
+const PortalV2ConfiguracoesAcessosRoute =
+  PortalV2ConfiguracoesAcessosRouteImport.update({
+    id: '/acessos',
+    path: '/acessos',
+    getParentRoute: () => PortalV2ConfiguracoesRoute,
+  } as any)
 const PortalV2CampanhasCampanhaIdRoute =
   PortalV2CampanhasCampanhaIdRouteImport.update({
     id: '/$campanhaId',
@@ -431,7 +459,7 @@ export interface FileRoutesByFullPath {
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasRouteWithChildren
-  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRouteWithChildren
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
@@ -453,12 +481,16 @@ export interface FileRoutesByFullPath {
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRouteWithChildren
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
+  '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
+  '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
+  '/portal-v2/configuracoes/seguranca': typeof PortalV2ConfiguracoesSegurancaRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
+  '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
@@ -491,7 +523,6 @@ export interface FileRoutesByTo {
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
-  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
@@ -513,12 +544,16 @@ export interface FileRoutesByTo {
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRouteWithChildren
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
+  '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
+  '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
+  '/portal-v2/configuracoes/seguranca': typeof PortalV2ConfiguracoesSegurancaRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasIndexRoute
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
@@ -557,7 +592,7 @@ export interface FileRoutesById {
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasRouteWithChildren
-  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRoute
+  '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesRouteWithChildren
   '/portal-v2/conta': typeof PortalV2ContaRoute
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
@@ -579,12 +614,16 @@ export interface FileRoutesById {
   '/email/descadastro/$token': typeof EmailDescadastroTokenRoute
   '/portal-app/campanhas/$campanhaId': typeof PortalAppCampanhasCampanhaIdRouteWithChildren
   '/portal-v2/campanhas/$campanhaId': typeof PortalV2CampanhasCampanhaIdRouteWithChildren
+  '/portal-v2/configuracoes/acessos': typeof PortalV2ConfiguracoesAcessosRoute
+  '/portal-v2/configuracoes/perfil': typeof PortalV2ConfiguracoesPerfilRoute
+  '/portal-v2/configuracoes/seguranca': typeof PortalV2ConfiguracoesSegurancaRoute
   '/portal/$token/aprovacoes': typeof PortalTokenAprovacoesRoute
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
   '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
+  '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
@@ -645,12 +684,16 @@ export interface FileRouteTypes {
     | '/email/descadastro/$token'
     | '/portal-app/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId'
+    | '/portal-v2/configuracoes/acessos'
+    | '/portal-v2/configuracoes/perfil'
+    | '/portal-v2/configuracoes/seguranca'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
+    | '/portal-v2/configuracoes/'
     | '/portal/$token/'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
@@ -683,7 +726,6 @@ export interface FileRouteTypes {
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
-    | '/portal-v2/configuracoes'
     | '/portal-v2/conta'
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
@@ -705,12 +747,16 @@ export interface FileRouteTypes {
     | '/email/descadastro/$token'
     | '/portal-app/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId'
+    | '/portal-v2/configuracoes/acessos'
+    | '/portal-v2/configuracoes/perfil'
+    | '/portal-v2/configuracoes/seguranca'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/portal-app/campanhas'
     | '/portal-v2/campanhas'
+    | '/portal-v2/configuracoes'
     | '/portal/$token'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
@@ -770,12 +816,16 @@ export interface FileRouteTypes {
     | '/email/descadastro/$token'
     | '/portal-app/campanhas/$campanhaId'
     | '/portal-v2/campanhas/$campanhaId'
+    | '/portal-v2/configuracoes/acessos'
+    | '/portal-v2/configuracoes/perfil'
+    | '/portal-v2/configuracoes/seguranca'
     | '/portal/$token/aprovacoes'
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
     | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
+    | '/portal-v2/configuracoes/'
     | '/portal/$token/'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
@@ -1048,6 +1098,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalTokenIndexRouteImport
       parentRoute: typeof PortalTokenRouteRoute
     }
+    '/portal-v2/configuracoes/': {
+      id: '/portal-v2/configuracoes/'
+      path: '/'
+      fullPath: '/portal-v2/configuracoes/'
+      preLoaderRoute: typeof PortalV2ConfiguracoesIndexRouteImport
+      parentRoute: typeof PortalV2ConfiguracoesRoute
+    }
     '/portal-v2/campanhas/': {
       id: '/portal-v2/campanhas/'
       path: '/'
@@ -1089,6 +1146,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/$token/aprovacoes'
       preLoaderRoute: typeof PortalTokenAprovacoesRouteImport
       parentRoute: typeof PortalTokenRouteRoute
+    }
+    '/portal-v2/configuracoes/seguranca': {
+      id: '/portal-v2/configuracoes/seguranca'
+      path: '/seguranca'
+      fullPath: '/portal-v2/configuracoes/seguranca'
+      preLoaderRoute: typeof PortalV2ConfiguracoesSegurancaRouteImport
+      parentRoute: typeof PortalV2ConfiguracoesRoute
+    }
+    '/portal-v2/configuracoes/perfil': {
+      id: '/portal-v2/configuracoes/perfil'
+      path: '/perfil'
+      fullPath: '/portal-v2/configuracoes/perfil'
+      preLoaderRoute: typeof PortalV2ConfiguracoesPerfilRouteImport
+      parentRoute: typeof PortalV2ConfiguracoesRoute
+    }
+    '/portal-v2/configuracoes/acessos': {
+      id: '/portal-v2/configuracoes/acessos'
+      path: '/acessos'
+      fullPath: '/portal-v2/configuracoes/acessos'
+      preLoaderRoute: typeof PortalV2ConfiguracoesAcessosRouteImport
+      parentRoute: typeof PortalV2ConfiguracoesRoute
     }
     '/portal-v2/campanhas/$campanhaId': {
       id: '/portal-v2/campanhas/$campanhaId'
@@ -1372,11 +1450,30 @@ const PortalV2CampanhasRouteChildren: PortalV2CampanhasRouteChildren = {
 const PortalV2CampanhasRouteWithChildren =
   PortalV2CampanhasRoute._addFileChildren(PortalV2CampanhasRouteChildren)
 
+interface PortalV2ConfiguracoesRouteChildren {
+  PortalV2ConfiguracoesAcessosRoute: typeof PortalV2ConfiguracoesAcessosRoute
+  PortalV2ConfiguracoesPerfilRoute: typeof PortalV2ConfiguracoesPerfilRoute
+  PortalV2ConfiguracoesSegurancaRoute: typeof PortalV2ConfiguracoesSegurancaRoute
+  PortalV2ConfiguracoesIndexRoute: typeof PortalV2ConfiguracoesIndexRoute
+}
+
+const PortalV2ConfiguracoesRouteChildren: PortalV2ConfiguracoesRouteChildren = {
+  PortalV2ConfiguracoesAcessosRoute: PortalV2ConfiguracoesAcessosRoute,
+  PortalV2ConfiguracoesPerfilRoute: PortalV2ConfiguracoesPerfilRoute,
+  PortalV2ConfiguracoesSegurancaRoute: PortalV2ConfiguracoesSegurancaRoute,
+  PortalV2ConfiguracoesIndexRoute: PortalV2ConfiguracoesIndexRoute,
+}
+
+const PortalV2ConfiguracoesRouteWithChildren =
+  PortalV2ConfiguracoesRoute._addFileChildren(
+    PortalV2ConfiguracoesRouteChildren,
+  )
+
 interface PortalV2RouteRouteChildren {
   PortalV2AprovacoesRoute: typeof PortalV2AprovacoesRoute
   PortalV2ArquivosRoute: typeof PortalV2ArquivosRoute
   PortalV2CampanhasRoute: typeof PortalV2CampanhasRouteWithChildren
-  PortalV2ConfiguracoesRoute: typeof PortalV2ConfiguracoesRoute
+  PortalV2ConfiguracoesRoute: typeof PortalV2ConfiguracoesRouteWithChildren
   PortalV2ContaRoute: typeof PortalV2ContaRoute
   PortalV2ConteudosRoute: typeof PortalV2ConteudosRoute
   PortalV2InicioRoute: typeof PortalV2InicioRoute
@@ -1391,7 +1488,7 @@ const PortalV2RouteRouteChildren: PortalV2RouteRouteChildren = {
   PortalV2AprovacoesRoute: PortalV2AprovacoesRoute,
   PortalV2ArquivosRoute: PortalV2ArquivosRoute,
   PortalV2CampanhasRoute: PortalV2CampanhasRouteWithChildren,
-  PortalV2ConfiguracoesRoute: PortalV2ConfiguracoesRoute,
+  PortalV2ConfiguracoesRoute: PortalV2ConfiguracoesRouteWithChildren,
   PortalV2ContaRoute: PortalV2ContaRoute,
   PortalV2ConteudosRoute: PortalV2ConteudosRoute,
   PortalV2InicioRoute: PortalV2InicioRoute,

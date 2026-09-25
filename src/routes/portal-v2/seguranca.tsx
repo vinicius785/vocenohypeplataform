@@ -4,6 +4,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
  * aqui — cai direto na seção "Segurança" de Configurações. */
 export const Route = createFileRoute("/portal-v2/seguranca")({
   beforeLoad: () => {
-    throw redirect({ to: "/portal-v2/configuracoes", hash: "seguranca" });
+    throw redirect({ to: "/portal-v2/configuracoes/seguranca" });
   },
 });
