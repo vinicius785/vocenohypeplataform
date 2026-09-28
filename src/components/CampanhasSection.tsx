@@ -244,11 +244,11 @@ export function CampanhasSection() {
   // hooks (useMemo) não podem ser chamados condicionalmente, e esse retorno
   // antecipado pra `CampanhaDetail` é condicional.
   //
-  // "Arquivada" nunca aparece no filtro "Todos" (pedido explícito) — só
-  // quando o usuário escolhe o filtro "Arquivadas" explicitamente. Isso
-  // substitui a antiga seção recolhível "Ver campanhas encerradas": não há
-  // mais uma segunda lista separada, é só mais um valor do mesmo filtro de
-  // status que já existe pros outros três.
+  // "Concluída" e "Arquivada" nunca aparecem no filtro "Todos" (pedido
+  // explícito) — só quando o usuário escolhe esse status especificamente.
+  // Isso substitui a antiga seção recolhível "Ver campanhas encerradas":
+  // não há mais uma segunda lista separada, é só mais um valor do mesmo
+  // filtro de status que já existe pros outros dois.
   const filteredRows = useMemo(
     () => filterCampanhas(rows, query, filters, influsByCampanha),
     [rows, query, filters, influsByCampanha],
@@ -256,9 +256,12 @@ export function CampanhasSection() {
   const visibleRows = useMemo(
     () =>
       sortCampanhas(
-        filters.status === "archived"
-          ? filteredRows
-          : filteredRows.filter((r) => campanhaStatus(r.campanha) !== "archived"),
+        filters.status === "todos"
+          ? filteredRows.filter((r) => {
+              const s = campanhaStatus(r.campanha);
+              return s !== "completed" && s !== "archived";
+            })
+          : filteredRows,
         filters.sort,
         influsByCampanha,
       ),
