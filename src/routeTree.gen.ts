@@ -40,11 +40,13 @@ import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authe
 import { Route as AuthenticatedFocoRouteImport } from './routes/_authenticated/foco'
 import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './routes/_authenticated/design-system-finance-concept'
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
+import { Route as AuthenticatedChatV2RouteImport } from './routes/_authenticated/chat-v2'
 import { Route as PortalTokenRouteRouteImport } from './routes/portal.$token/route'
 import { Route as PortalTokenIndexRouteImport } from './routes/portal.$token/index'
 import { Route as PortalV2ConfiguracoesIndexRouteImport } from './routes/portal-v2/configuracoes.index'
 import { Route as PortalV2CampanhasIndexRouteImport } from './routes/portal-v2/campanhas.index'
 import { Route as PortalAppCampanhasIndexRouteImport } from './routes/portal-app/campanhas.index'
+import { Route as AuthenticatedChatV2IndexRouteImport } from './routes/_authenticated/chat-v2.index'
 import { Route as PortalTokenSolicitacoesRouteImport } from './routes/portal.$token/solicitacoes'
 import { Route as PortalTokenRelatoriosRouteImport } from './routes/portal.$token/relatorios'
 import { Route as PortalTokenInicioRouteImport } from './routes/portal.$token/inicio'
@@ -74,6 +76,9 @@ import { Route as PortalV2CampanhasCampanhaIdFilesRouteImport } from './routes/p
 import { Route as PortalV2CampanhasCampanhaIdCreatorsRouteImport } from './routes/portal-v2/campanhas.$campanhaId.creators'
 import { Route as PortalV2CampanhasCampanhaIdContentRouteImport } from './routes/portal-v2/campanhas.$campanhaId.content'
 import { Route as PortalAppCampanhasCampanhaIdRevisarRouteImport } from './routes/portal-app/campanhas.$campanhaId.revisar'
+import { Route as AuthenticatedChatV2DmIdRouteImport } from './routes/_authenticated/chat-v2.dm.$id'
+import { Route as AuthenticatedChatV2ChannelIdRouteImport } from './routes/_authenticated/chat-v2.channel.$id'
+import { Route as AuthenticatedChatV2CampaignIdRouteImport } from './routes/_authenticated/chat-v2.campaign.$id'
 import { Route as PortalTokenCampanhasCampanhaIdRevisarRouteImport } from './routes/portal.$token/campanhas.$campanhaId.revisar'
 import { Route as PortalTokenCampanhasCampanhaIdAprovacoesRouteImport } from './routes/portal.$token/campanhas.$campanhaId.aprovacoes'
 
@@ -235,6 +240,11 @@ const AuthenticatedDesignSystemRoute =
     path: '/design-system',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedChatV2Route = AuthenticatedChatV2RouteImport.update({
+  id: '/chat-v2',
+  path: '/chat-v2',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const PortalTokenRouteRoute = PortalTokenRouteRouteImport.update({
   id: '/portal/$token',
   path: '/portal/$token',
@@ -261,6 +271,12 @@ const PortalAppCampanhasIndexRoute = PortalAppCampanhasIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PortalAppCampanhasRoute,
 } as any)
+const AuthenticatedChatV2IndexRoute =
+  AuthenticatedChatV2IndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedChatV2Route,
+  } as any)
 const PortalTokenSolicitacoesRoute = PortalTokenSolicitacoesRouteImport.update({
   id: '/solicitacoes',
   path: '/solicitacoes',
@@ -423,6 +439,23 @@ const PortalAppCampanhasCampanhaIdRevisarRoute =
     path: '/revisar',
     getParentRoute: () => PortalAppCampanhasCampanhaIdRoute,
   } as any)
+const AuthenticatedChatV2DmIdRoute = AuthenticatedChatV2DmIdRouteImport.update({
+  id: '/dm/$id',
+  path: '/dm/$id',
+  getParentRoute: () => AuthenticatedChatV2Route,
+} as any)
+const AuthenticatedChatV2ChannelIdRoute =
+  AuthenticatedChatV2ChannelIdRouteImport.update({
+    id: '/channel/$id',
+    path: '/channel/$id',
+    getParentRoute: () => AuthenticatedChatV2Route,
+  } as any)
+const AuthenticatedChatV2CampaignIdRoute =
+  AuthenticatedChatV2CampaignIdRouteImport.update({
+    id: '/campaign/$id',
+    path: '/campaign/$id',
+    getParentRoute: () => AuthenticatedChatV2Route,
+  } as any)
 const PortalTokenCampanhasCampanhaIdRevisarRoute =
   PortalTokenCampanhasCampanhaIdRevisarRouteImport.update({
     id: '/revisar',
@@ -446,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
+  '/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/foco': typeof AuthenticatedFocoRoute
@@ -488,10 +522,14 @@ export interface FileRoutesByFullPath {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/chat-v2/': typeof AuthenticatedChatV2IndexRoute
   '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
+  '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
+  '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
+  '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -551,10 +589,14 @@ export interface FileRoutesByTo {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/chat-v2': typeof AuthenticatedChatV2IndexRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token': typeof PortalTokenIndexRoute
+  '/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
+  '/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
+  '/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -579,6 +621,7 @@ export interface FileRoutesById {
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
+  '/_authenticated/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
   '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/_authenticated/foco': typeof AuthenticatedFocoRoute
@@ -621,10 +664,14 @@ export interface FileRoutesById {
   '/portal/$token/inicio': typeof PortalTokenInicioRoute
   '/portal/$token/relatorios': typeof PortalTokenRelatoriosRoute
   '/portal/$token/solicitacoes': typeof PortalTokenSolicitacoesRoute
+  '/_authenticated/chat-v2/': typeof AuthenticatedChatV2IndexRoute
   '/portal-app/campanhas/': typeof PortalAppCampanhasIndexRoute
   '/portal-v2/campanhas/': typeof PortalV2CampanhasIndexRoute
   '/portal-v2/configuracoes/': typeof PortalV2ConfiguracoesIndexRoute
   '/portal/$token/': typeof PortalTokenIndexRoute
+  '/_authenticated/chat-v2/campaign/$id': typeof AuthenticatedChatV2CampaignIdRoute
+  '/_authenticated/chat-v2/channel/$id': typeof AuthenticatedChatV2ChannelIdRoute
+  '/_authenticated/chat-v2/dm/$id': typeof AuthenticatedChatV2DmIdRoute
   '/portal-app/campanhas/$campanhaId/revisar': typeof PortalAppCampanhasCampanhaIdRevisarRoute
   '/portal-v2/campanhas/$campanhaId/content': typeof PortalV2CampanhasCampanhaIdContentRoute
   '/portal-v2/campanhas/$campanhaId/creators': typeof PortalV2CampanhasCampanhaIdCreatorsRoute
@@ -649,6 +696,7 @@ export interface FileRouteTypes {
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
+    | '/chat-v2'
     | '/design-system'
     | '/design-system-finance-concept'
     | '/foco'
@@ -691,10 +739,14 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/chat-v2/'
     | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
+    | '/chat-v2/campaign/$id'
+    | '/chat-v2/channel/$id'
+    | '/chat-v2/dm/$id'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -754,10 +806,14 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/chat-v2'
     | '/portal-app/campanhas'
     | '/portal-v2/campanhas'
     | '/portal-v2/configuracoes'
     | '/portal/$token'
+    | '/chat-v2/campaign/$id'
+    | '/chat-v2/channel/$id'
+    | '/chat-v2/dm/$id'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -781,6 +837,7 @@ export interface FileRouteTypes {
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
+    | '/_authenticated/chat-v2'
     | '/_authenticated/design-system'
     | '/_authenticated/design-system-finance-concept'
     | '/_authenticated/foco'
@@ -823,10 +880,14 @@ export interface FileRouteTypes {
     | '/portal/$token/inicio'
     | '/portal/$token/relatorios'
     | '/portal/$token/solicitacoes'
+    | '/_authenticated/chat-v2/'
     | '/portal-app/campanhas/'
     | '/portal-v2/campanhas/'
     | '/portal-v2/configuracoes/'
     | '/portal/$token/'
+    | '/_authenticated/chat-v2/campaign/$id'
+    | '/_authenticated/chat-v2/channel/$id'
+    | '/_authenticated/chat-v2/dm/$id'
     | '/portal-app/campanhas/$campanhaId/revisar'
     | '/portal-v2/campanhas/$campanhaId/content'
     | '/portal-v2/campanhas/$campanhaId/creators'
@@ -1084,6 +1145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDesignSystemRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/chat-v2': {
+      id: '/_authenticated/chat-v2'
+      path: '/chat-v2'
+      fullPath: '/chat-v2'
+      preLoaderRoute: typeof AuthenticatedChatV2RouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/portal/$token': {
       id: '/portal/$token'
       path: '/portal/$token'
@@ -1118,6 +1186,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal-app/campanhas/'
       preLoaderRoute: typeof PortalAppCampanhasIndexRouteImport
       parentRoute: typeof PortalAppCampanhasRoute
+    }
+    '/_authenticated/chat-v2/': {
+      id: '/_authenticated/chat-v2/'
+      path: '/'
+      fullPath: '/chat-v2/'
+      preLoaderRoute: typeof AuthenticatedChatV2IndexRouteImport
+      parentRoute: typeof AuthenticatedChatV2Route
     }
     '/portal/$token/solicitacoes': {
       id: '/portal/$token/solicitacoes'
@@ -1322,6 +1397,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAppCampanhasCampanhaIdRevisarRouteImport
       parentRoute: typeof PortalAppCampanhasCampanhaIdRoute
     }
+    '/_authenticated/chat-v2/dm/$id': {
+      id: '/_authenticated/chat-v2/dm/$id'
+      path: '/dm/$id'
+      fullPath: '/chat-v2/dm/$id'
+      preLoaderRoute: typeof AuthenticatedChatV2DmIdRouteImport
+      parentRoute: typeof AuthenticatedChatV2Route
+    }
+    '/_authenticated/chat-v2/channel/$id': {
+      id: '/_authenticated/chat-v2/channel/$id'
+      path: '/channel/$id'
+      fullPath: '/chat-v2/channel/$id'
+      preLoaderRoute: typeof AuthenticatedChatV2ChannelIdRouteImport
+      parentRoute: typeof AuthenticatedChatV2Route
+    }
+    '/_authenticated/chat-v2/campaign/$id': {
+      id: '/_authenticated/chat-v2/campaign/$id'
+      path: '/campaign/$id'
+      fullPath: '/chat-v2/campaign/$id'
+      preLoaderRoute: typeof AuthenticatedChatV2CampaignIdRouteImport
+      parentRoute: typeof AuthenticatedChatV2Route
+    }
     '/portal/$token/campanhas/$campanhaId/revisar': {
       id: '/portal/$token/campanhas/$campanhaId/revisar'
       path: '/revisar'
@@ -1339,7 +1435,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedChatV2RouteChildren {
+  AuthenticatedChatV2IndexRoute: typeof AuthenticatedChatV2IndexRoute
+  AuthenticatedChatV2CampaignIdRoute: typeof AuthenticatedChatV2CampaignIdRoute
+  AuthenticatedChatV2ChannelIdRoute: typeof AuthenticatedChatV2ChannelIdRoute
+  AuthenticatedChatV2DmIdRoute: typeof AuthenticatedChatV2DmIdRoute
+}
+
+const AuthenticatedChatV2RouteChildren: AuthenticatedChatV2RouteChildren = {
+  AuthenticatedChatV2IndexRoute: AuthenticatedChatV2IndexRoute,
+  AuthenticatedChatV2CampaignIdRoute: AuthenticatedChatV2CampaignIdRoute,
+  AuthenticatedChatV2ChannelIdRoute: AuthenticatedChatV2ChannelIdRoute,
+  AuthenticatedChatV2DmIdRoute: AuthenticatedChatV2DmIdRoute,
+}
+
+const AuthenticatedChatV2RouteWithChildren =
+  AuthenticatedChatV2Route._addFileChildren(AuthenticatedChatV2RouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedChatV2Route: typeof AuthenticatedChatV2RouteWithChildren
   AuthenticatedDesignSystemRoute: typeof AuthenticatedDesignSystemRoute
   AuthenticatedDesignSystemFinanceConceptRoute: typeof AuthenticatedDesignSystemFinanceConceptRoute
   AuthenticatedFocoRoute: typeof AuthenticatedFocoRoute
@@ -1350,6 +1464,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedChatV2Route: AuthenticatedChatV2RouteWithChildren,
   AuthenticatedDesignSystemRoute: AuthenticatedDesignSystemRoute,
   AuthenticatedDesignSystemFinanceConceptRoute:
     AuthenticatedDesignSystemFinanceConceptRoute,

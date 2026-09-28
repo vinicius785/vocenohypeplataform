@@ -115,7 +115,7 @@ import { messagePreviewLabel, isVoiceAttachment } from "@/lib/voice-messages";
 import { VoiceMessagePlayer } from "@/components/chat/VoiceMessagePlayer";
 import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
 
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { loadProjetos } from "@/lib/projetos";
 import {
   OPEN_CAMPANHA_TASK_KEY,
@@ -900,6 +900,12 @@ export function ChatSection() {
             <p className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</p>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Link
+              to="/chat-v2"
+              className="hidden shrink-0 whitespace-nowrap text-[11px] font-medium text-brand hover:underline md:inline"
+            >
+              Experimentar novo Chat (beta)
+            </Link>
             {activeId && (
               <div className="relative hidden md:block">
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
