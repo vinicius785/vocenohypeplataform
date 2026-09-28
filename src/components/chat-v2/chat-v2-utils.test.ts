@@ -22,13 +22,16 @@ class MemoryStorage {
 }
 (globalThis as unknown as { localStorage: MemoryStorage }).localStorage = new MemoryStorage();
 import {
+  countUnreadMentions,
   dateDividerLabel,
   firstUnreadIndex,
   getDraft,
+  getLastConvoRoute,
   groupMessages,
   isSameDay,
   isSidebarSectionCollapsed,
   setDraft,
+  setLastConvoRoute,
   setSidebarSectionCollapsed,
 } from "./chat-v2-utils";
 
@@ -165,6 +168,51 @@ describe("rascunho por conversa (localStorage)", () => {
     setDraft("c:2", "conversa 2");
     expect(getDraft("c:1")).toBe("conversa 1");
     expect(getDraft("c:2")).toBe("conversa 2");
+  });
+});
+
+describe("countUnreadMentions", () => {
+  it("conta só menções de outra pessoa a mim, não lidas", () => {
+    const t0 = Date.now();
+    const messages = [
+      msg({
+        id: "1",
+        createdAt: t0,
+        authorId: "u2",
+        convoId: "c:geral",
+        mentions: [{ kind: "user", id: "me", label: "Você" }],
+      }),
+      msg({
+        id: "2",
+        createdAt: t0,
+        authorId: "me",
+        convoId: "c:geral",
+        mentions: [{ kind: "user", id: "me", label: "Você" }],
+      }),
+      msg({
+        id: "3",
+        createdAt: t0 - 10_000,
+        authorId: "u2",
+        convoId: "c:geral",
+        mentions: [{ kind: "user", id: "me", label: "Você" }],
+      }),
+    ];
+    expect(countUnreadMentions(messages, "me", { "c:geral": t0 - 5000 })).toBe(1);
+  });
+});
+
+describe("rota da última conversa (localStorage)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("persiste e recupera a última conversa aberta", () => {
+    setLastConvoRoute({ kind: "dm", id: "u2" });
+    expect(getLastConvoRoute()).toEqual({ kind: "dm", id: "u2" });
+  });
+
+  it("retorna null quando nunca foi setado", () => {
+    expect(getLastConvoRoute()).toBeNull();
   });
 });
 

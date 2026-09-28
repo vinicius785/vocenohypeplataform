@@ -135,6 +135,58 @@ export function setDraft(convoId: string, text: string): void {
   }
 }
 
+/** Conta menções não lidas endereçadas a `meId` em qualquer conversa —
+ * alimenta o atalho "Menções" da navegação (`ChatV2Shortcuts`). Não conta
+ * a própria mensagem da pessoa (não faz sentido se automencionar) nem
+ * menções já lidas (mensagem mais antiga que `lastReadByConvo` daquela
+ * conversa). */
+export function countUnreadMentions(
+  messages: ChatMessage[],
+  meId: string,
+  lastReadByConvo: Record<string, number>,
+): number {
+  let n = 0;
+  for (const m of messages) {
+    if (m.authorId === meId) continue;
+    const lastRead = lastReadByConvo[m.convoId] ?? 0;
+    if (m.createdAt <= lastRead) continue;
+    if ((m.mentions ?? []).some((mention) => mention.kind === "user" && mention.id === meId)) n++;
+  }
+  return n;
+}
+
+// ---------- Última conversa aberta (restaurada ao entrar em /chat-v2) ----------
+export type LastConvoRoute = { kind: "dm" | "channel" | "campaign"; id: string };
+const LAST_CONVO_KEY = "chat-v2:last-convo";
+
+export function getLastConvoRoute(): LastConvoRoute | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LAST_CONVO_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LastConvoRoute;
+    if (
+      parsed &&
+      (parsed.kind === "dm" || parsed.kind === "channel" || parsed.kind === "campaign") &&
+      parsed.id
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setLastConvoRoute(route: LastConvoRoute): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(LAST_CONVO_KEY, JSON.stringify(route));
+  } catch {
+    /* ignore */
+  }
+}
+
 // ---------- Preferências de recolhimento da sidebar (por seção) ----------
 const SIDEBAR_COLLAPSE_PREFIX = "chat-v2:sidebar-collapsed:";
 

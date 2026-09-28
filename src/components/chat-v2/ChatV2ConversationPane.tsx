@@ -18,7 +18,7 @@ type HeaderInfo = React.ComponentProps<typeof ChatV2Header>["info"];
  * IntersectionObserver por mensagem; reavaliado a cada nova mensagem
  * enquanto a conversa permanece aberta.
  */
-export function ChatV2Conversation({
+export function ChatV2ConversationPane({
   convoId,
   headerInfo,
   messages,

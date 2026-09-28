@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { useChatV2Data } from "@/components/chat-v2/use-chat-v2-data";
-import { ChatV2Conversation } from "@/components/chat-v2/ChatV2Conversation";
+import { ChatV2ConversationPane } from "@/components/chat-v2/ChatV2ConversationPane";
+import { setLastConvoRoute } from "@/components/chat-v2/chat-v2-utils";
 
 export const Route = createFileRoute("/_authenticated/chat-v2/campaign/$id")({
   component: ChatV2CampaignPage,
@@ -14,9 +16,10 @@ function ChatV2CampaignPage() {
   const { me, members, messages, campaignChannels } = useChatV2Data();
   const convoId = `camp:${id}`;
   const campaign = campaignChannels.find((c) => c.id === convoId);
+  useEffect(() => setLastConvoRoute({ kind: "campaign", id }), [id]);
 
   return (
-    <ChatV2Conversation
+    <ChatV2ConversationPane
       convoId={convoId}
       headerInfo={
         campaign ? { kind: "campaign", name: campaign.name, empresa: campaign.empresa } : null
