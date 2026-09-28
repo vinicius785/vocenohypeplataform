@@ -206,7 +206,17 @@ function TimePage() {
   // useState local, nunca a URL, então um refresh sempre voltava pro
   // "início" mesmo tendo acabado de entrar em Comercial.
   const active = search.section ?? "inicio";
+  // O Chat V2 (`/chat-v2`) virou o Chat oficial da plataforma — qualquer
+  // caminho que antes levava a `?section=chat` (clique na sidebar, busca
+  // global, sino de notificações, link antigo salvo) agora sai desta
+  // rota em vez de renderizar a V1. `ChatSection.tsx` continua intacto no
+  // repositório como referência/rollback rápido, só não tem mais rota
+  // apontando pra ele.
   const setActive = (key: SectionKey) => {
+    if (key === "chat") {
+      void navigate({ to: "/chat-v2" });
+      return;
+    }
     void navigate({ to: "/time", search: { section: key }, replace: true });
   };
   useEffect(() => {
@@ -218,6 +228,12 @@ function TimePage() {
     return () => window.removeEventListener("nav:section", onNav);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Cobre acesso direto por URL/bookmark antigo (`/time?section=chat`),
+  // que não passa pelo `setActive` acima.
+  useEffect(() => {
+    if (active === "chat") void navigate({ to: "/chat-v2", replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   // Subitem ativo da sidebar — só relevante pras seções com subnav
   // (`SECTION_SUBNAV`: Financeiro/Metas); as outras seções passam

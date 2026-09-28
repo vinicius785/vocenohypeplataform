@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Hash, Lock, Users } from "lucide-react";
 import {
   STATUS_LABEL,
@@ -69,15 +68,6 @@ export function ChatV2Header({ info, onBack }: { info: HeaderInfo | null; onBack
           <span className="text-[11px] text-muted-foreground">campanha · {info.empresa}</span>
         </>
       )}
-      <div className="ml-auto">
-        <Link
-          to="/time"
-          search={{ section: "chat" }}
-          className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
-        >
-          Voltar ao Chat clássico
-        </Link>
-      </div>
     </header>
   );
 }
