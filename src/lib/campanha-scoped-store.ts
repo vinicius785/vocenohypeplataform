@@ -26,7 +26,10 @@ export type CronogramaItem = {
   recurring?: boolean;
 };
 
-const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "campanha_id");
+const influsStore = createScopedArrayStore<Influ>("campanha_influenciadores", "campanha_id", {
+  name: "campaign_cycle_id",
+  itemKey: "campaignCycleId",
+});
 const tarefasStore = createScopedArrayStore<Task>("campanha_tarefas", "campanha_id");
 const docsStore = createScopedArrayStore<CampaignDoc>("campanha_documentos", "campanha_id");
 const cronogramaStore = createScopedArrayStore<CronogramaItem>(

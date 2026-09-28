@@ -109,6 +109,20 @@ async function resolveClienteForSession(
   return { organizationId, role, ...found };
 }
 
+/** Nome real de quem está agindo, pra registrar em atividade/histórico
+ * (ver `campanha-aprovacao.ts`) — só o Portal V2 tem isso, porque cada
+ * pessoa loga com a própria conta (o V1, por link público sem login
+ * individual, nunca chama isto). `undefined` quando a pessoa não
+ * preencheu nome nenhum no cadastro — nesse caso quem exibe o dado cai no
+ * rótulo genérico "Cliente", nunca inventa um nome. */
+async function resolveActorName(ctx: Ctx): Promise<string | undefined> {
+  const {
+    data: { user },
+  } = await ctx.supabase.auth.getUser();
+  const fullName = user?.user_metadata?.full_name;
+  return typeof fullName === "string" && fullName.trim() ? fullName.trim() : undefined;
+}
+
 /**
  * Read-only resolution used by the `/portal-app` route guard (which runs
  * client-side, `ssr: false` — it cannot read the httpOnly active-org cookie
@@ -209,9 +223,11 @@ export const respondCampanhaInfluSession = createServerFn({ method: "POST" })
           ? data.comentario!
           : data.motivoLabel!
         : undefined;
+    const actorName = await resolveActorName(context);
     const next = applyInfluApproval(influ, data.status, motivo, {
       motivoLabel: data.motivoLabel,
       comentario: data.status === "reprovado" ? data.comentario : undefined,
+      actorName,
     });
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
@@ -230,7 +246,8 @@ export const reopenCampanhaInfluSession = createServerFn({ method: "POST" })
     assertCanMutate(role);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
-    const next = reopenInfluApprovalByCliente(influ);
+    const actorName = await resolveActorName(context);
+    const next = reopenInfluApprovalByCliente(influ, actorName);
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
   });
@@ -263,7 +280,14 @@ export const respondCampanhaEntregaSession = createServerFn({ method: "POST" })
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const entrega = influ.entregas.find((e) => e.id === data.entregaId);
     if (!entrega) throw new Error("Entrega não encontrada.");
-    const next = applyEntregaApproval(influ, data.entregaId, data.status, data.motivo?.trim());
+    const actorName = await resolveActorName(context);
+    const next = applyEntregaApproval(
+      influ,
+      data.entregaId,
+      data.status,
+      data.motivo?.trim(),
+      actorName,
+    );
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     void notifyTeamEntregaResponse(cliente.empresa, entrega, data.status);
     return { ok: true };
@@ -308,6 +332,59 @@ export const updateInfluObservacoesSession = createServerFn({ method: "POST" })
     const next: Influ = { ...influ, observacoes: data.observacoes || undefined };
     await saveInfluRow(data.campanhaId, data.influencerId, next);
     return { ok: true };
+  });
+
+const AddInfluClienteComentarioInput = z.object({
+  campanhaId: z.string().min(1),
+  influencerId: z.string().min(1),
+  text: z.string().trim().min(1).max(2000),
+});
+
+/**
+ * Comentário do cliente sobre a participação de um influenciador NESTA
+ * campanha — canal separado de `Influ.comments` (conversa interna do
+ * time, nunca lida nem escrita por aqui). Append-only: sempre lê a linha
+ * mais recente e ACRESCENTA ao array (nunca substitui um comentário
+ * anterior) — mesmo padrão de `saveInfluRow` já usado por toda mutação
+ * do portal.
+ */
+export const addInfluClienteComentario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => AddInfluClienteComentarioInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { role, cliente } = await resolveClienteForSession(context);
+    assertCanMutate(role);
+    assertCampanhaInCliente(cliente, data.campanhaId);
+    const influ = await loadInfluRow(data.campanhaId, data.influencerId);
+    const nowIso = new Date().toISOString();
+    const comment = {
+      id: crypto.randomUUID(),
+      author: "Cliente",
+      initials: "CL",
+      color: "bg-slate-500 text-white",
+      text: data.text,
+      createdAt: nowIso,
+    };
+    const next: Influ = {
+      ...influ,
+      clienteComments: [...(influ.clienteComments ?? []), comment],
+      activityEvents: [
+        ...(influ.activityEvents ?? []),
+        {
+          id: crypto.randomUUID(),
+          kind: "comentario_cliente",
+          actor: {
+            type: "cliente",
+            name: "Cliente",
+            initials: "CL",
+            color: "bg-slate-500 text-white",
+          },
+          createdAt: nowIso,
+        },
+      ],
+    };
+    await saveInfluRow(data.campanhaId, data.influencerId, next);
+    return { ok: true, comment };
   });
 
 const UpdateInfluBriefingAnexoInput = z.object({
@@ -531,6 +608,47 @@ export const submitRelatorioNpsSession = createServerFn({ method: "POST" })
     if (writeError) throw new Error(writeError.message);
 
     return { ok: true };
+  });
+
+const RelatorioUrlInput = z.object({
+  campanhaId: z.string().min(1),
+  relatorioId: z.string().min(1),
+});
+
+/** Regenera a signed URL de um relatório sob demanda — a única categoria
+ * de arquivo do portal que guarda `storagePath` (a chave real do
+ * Storage, nunca a URL), então é a única pra qual dá pra emitir uma URL
+ * nova com segurança quando a cacheada expira. Reaproveita exatamente a
+ * mesma checagem de acesso de `submitRelatorioNpsSession` (sessão →
+ * cliente → campanha pertence a esse cliente → relatório pertence a essa
+ * campanha) antes de assinar qualquer coisa — nunca confia num
+ * `campanhaId`/`relatorioId` manipulado sozinho. */
+export const getFreshRelatorioUrlSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => RelatorioUrlInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { clienteId } = await resolveClienteForSession(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: row, error: readError } = await supabaseAdmin
+      .from("clientes")
+      .select("data")
+      .eq("id", clienteId)
+      .single();
+    if (readError || !row) throw new Error("Cliente não encontrado.");
+    const cliente = row.data as Cliente;
+
+    const campanha = cliente.campanhas?.find((c) => c.id === data.campanhaId);
+    if (!campanha) throw new Error("Campanha não encontrada.");
+    const relatorio = campanha.relatoriosMensais?.find((r) => r.id === data.relatorioId);
+    if (!relatorio) throw new Error("Relatório não encontrado.");
+
+    const { data: signed, error: signError } = await supabaseAdmin.storage
+      .from("relatorios-mensais")
+      .createSignedUrl(relatorio.storagePath, 60 * 60);
+    if (signError) throw new Error(signError.message);
+
+    return { url: signed.signedUrl };
   });
 
 const ArtigoIdInput = z.object({ postId: z.string().min(1) });

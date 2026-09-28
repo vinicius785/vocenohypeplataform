@@ -66,7 +66,7 @@ function SelecionarAmbientePage() {
     } catch {
       /* best-effort audit log only */
     }
-    navigate({ to: env.type === "internal" ? "/time" : "/portal-app/inicio" });
+    navigate({ to: env.type === "internal" ? "/time" : "/portal-v2/inicio" });
   };
 
   const handleLogout = async () => {

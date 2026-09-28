@@ -42,7 +42,10 @@ export type UserEnvironment =
 // top-level segment with no collision, per the file-based routing rules in
 // src/routes/README.md.
 export const INTERNAL_HOME_ROUTE = "/time";
-export const CLIENT_PORTAL_HOME_ROUTE = "/portal-app/inicio";
+// Portal V2 é agora o padrão pra todo cliente com login por sessão — V1
+// (`/portal-app/*`) fica só como redirect de compatibilidade (ver
+// `routes/portal-app/*.tsx`), nunca mais o destino de um login novo.
+export const CLIENT_PORTAL_HOME_ROUTE = "/portal-v2/inicio";
 export const ENVIRONMENT_PICKER_ROUTE = "/selecionar-ambiente";
 export const PENDING_ACCESS_ROUTE = "/acesso-pendente";
 export const SUSPENDED_ACCESS_ROUTE = "/acesso-bloqueado";

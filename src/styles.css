@@ -332,3 +332,16 @@ h4 {
     transform: translateX(-4%);
   }
 }
+
+/* Linha de progresso indeterminada de "Preparando seu ambiente"
+ * (AuthPreparingCard.tsx) — nunca uma % real, só um indicador de
+ * atividade discreto. `motion-reduce:animate-none` no componente já
+ * substitui isso por uma barra cheia parada. */
+@keyframes auth-preparing-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}

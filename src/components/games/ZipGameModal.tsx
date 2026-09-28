@@ -18,7 +18,8 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { useConfirm } from "@/hooks/use-confirm";
-import { cellsEqual, hasWallBetween, type Cell } from "@/lib/games/zip/types";
+import { cellsEqual, type Cell, type ZipState } from "@/lib/games/zip/types";
+import { applyZipMove } from "@/lib/games/zip/engine";
 import {
   getZipSession,
   applyZipMoveAction,
@@ -103,9 +104,25 @@ export function ZipGameModal({
   const sessionLoadedAt = useRef<number>(Date.now());
 
   const challenge = data?.challenge;
-  const status = data?.state.status ?? "not_started";
-  const path = useMemo(() => data?.state.path ?? [], [data?.state.path]);
-  const expectedNumber = data?.state.expectedNumber ?? 1;
+
+  // Estado ÚNICO de origem enquanto o jogador arrasta: nada é persistido
+  // por `pointermove` (era a causa raiz do "Não foi possível salvar seu
+  // progresso" — duas jogadas quase simultâneas corriam pra criar a
+  // mesma sessão). Durante o gesto, cada célula tocada é validada
+  // localmente pelo MESMO motor puro (`applyZipMove`) e só entra em
+  // `optimisticState`; a sequência inteira do gesto (`gestureTargets`)
+  // só é mandada ao servidor UMA VEZ, no fim (pointerup/pointercancel).
+  // Sem gesto em andamento, a fonte da verdade volta a ser `data.state`
+  // (o que o servidor confirmou).
+  const [optimisticState, setOptimisticState] = useState<ZipState | null>(null);
+  const gestureTargets = useRef<Cell[]>([]);
+  const savingRef = useRef(false);
+
+  const serverState = data?.state ?? null;
+  const currentState = optimisticState ?? serverState;
+  const status = currentState?.status ?? "not_started";
+  const path = useMemo(() => currentState?.path ?? [], [currentState]);
+  const expectedNumber = currentState?.expectedNumber ?? 1;
 
   // Cronômetro: enquanto `in_progress`, o valor exibido é a base vinda do
   // servidor (`data.elapsedSeconds`, calculada no momento do GET a partir
@@ -130,26 +147,30 @@ export function ZipGameModal({
     setNow(Date.now());
   }, [data?.elapsedSeconds]);
 
-  // Pausa o cronômetro no servidor ao fechar o modal (soma o trecho
-  // corrente ao acumulado); retomado automaticamente no próximo
-  // movimento válido (o servidor seta `resumed_at` de novo).
+  // Ao fechar: primeiro persiste qualquer gesto pendente (nunca perde um
+  // arrasto por causa do fechamento), só depois pausa o cronômetro no
+  // servidor (soma o trecho corrente ao acumulado) — retomado
+  // automaticamente no próximo movimento válido.
   useEffect(() => {
     if (open) return;
-    void pauseFn().catch(() => {
-      /* best-effort — não bloqueia o fechamento por causa disso */
+    void persistGesture().finally(() => {
+      void pauseFn().catch(() => {
+        /* best-effort — não bloqueia o fechamento por causa disso */
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   useEffect(() => {
     return () => {
-      void pauseFn().catch(() => {});
+      void persistGesture().finally(() => {
+        void pauseFn().catch(() => {});
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const moveMutation = useMutation({
-    mutationFn: (target: Cell) => moveFn({ data: { target } }),
-    onError: () => setSaveError(true),
+    mutationFn: (targets: Cell[]) => moveFn({ data: { targets } }),
   });
   const undoMutation = useMutation({ mutationFn: () => undoFn() });
   const resetMutation = useMutation({ mutationFn: () => resetFn() });
@@ -161,18 +182,49 @@ export function ZipGameModal({
     flashTimeout.current = setTimeout(() => setInvalidMessage(null), 1600);
   };
 
-  const tryMove = async (target: Cell) => {
-    if (!challenge || status === "won" || pendingMove) return;
+  /** Aplica UMA célula localmente (feedback instantâneo, mesmo motor
+   * puro do servidor) — nunca faz rede. Acumula em `gestureTargets` só
+   * quando o movimento é válido; um alvo inválido durante o arrasto só
+   * mostra a mensagem, não aborta o gesto nem o que já foi acumulado. */
+  const applyLocally = (target: Cell) => {
+    if (!challenge) return;
+    const base = optimisticState ?? serverState;
+    if (!base || base.status === "won") return;
+    const result = applyZipMove(challenge, base, target);
+    if (!result.ok) {
+      flashInvalid(MOVE_ERROR_MESSAGE[result.error] ?? "Movimento inválido.");
+      devLog("movimento local rejeitado", result.error);
+      return;
+    }
+    setOptimisticState(result.state);
+    gestureTargets.current.push(target);
+    devLog("movimento local aceito", target, result.state);
+  };
+
+  /** Persiste o GESTO inteiro de uma vez (pointerup/pointercancel, ou
+   * fechamento com gesto pendente) — nunca por `pointermove`. Trava com
+   * `savingRef` (não só estado do React, que é assíncrono/batched — foi
+   * exatamente essa lacuna que permitia duas chamadas concorrentes na
+   * versão anterior) pra nunca sobrepor dois saves. */
+  const persistGesture = async () => {
+    if (savingRef.current) return;
+    const targets = gestureTargets.current;
+    if (targets.length === 0) return;
+    gestureTargets.current = [];
+    savingRef.current = true;
     setPendingMove(true);
     setSaveError(false);
     try {
-      const result = await moveMutation.mutateAsync(target);
+      const result = await moveMutation.mutateAsync(targets);
       if (!result.ok) {
-        flashInvalid(MOVE_ERROR_MESSAGE[result.error] ?? "Movimento inválido.");
-        devLog("movimento rejeitado", result.error);
+        // O servidor rejeitou algo que o cliente aceitou localmente
+        // (estado real divergiu, ex.: outra aba) — descarta o estado
+        // otimista e recarrega do servidor, nunca finge sucesso.
+        setOptimisticState(null);
+        queryClient.invalidateQueries({ queryKey: ["zip-session"] });
+        flashInvalid((result.error && MOVE_ERROR_MESSAGE[result.error]) ?? "Movimento inválido.");
         return;
       }
-      devLog("movimento aceito", target, result.state);
       queryClient.setQueryData(["zip-session"], (prev: ZipSessionPublic | undefined) =>
         prev
           ? {
@@ -184,26 +236,40 @@ export function ZipGameModal({
             }
           : prev,
       );
+      setOptimisticState(null);
       if (result.state.status === "won") {
         toast.success("ZIP concluído!");
         queryClient.invalidateQueries({ queryKey: ["zip-session"] });
       }
     } catch {
+      setOptimisticState(null);
       setSaveError(true);
       toast.error("Não foi possível salvar seu progresso. Tente novamente.");
+      queryClient.invalidateQueries({ queryKey: ["zip-session"] });
     } finally {
+      savingRef.current = false;
       setPendingMove(false);
     }
   };
 
+  /** Toque único (clique/teclado) — mesmo caminho do arrasto: aplica
+   * localmente e já fecha o gesto imediatamente (persiste na hora). */
+  const tryMove = async (target: Cell) => {
+    if (!challenge || status === "won" || pendingMove) return;
+    applyLocally(target);
+    await persistGesture();
+  };
+
   const handleUndo = async () => {
     if (path.length === 0 || pendingMove) return;
+    gestureTargets.current = []; // desfazer descarta qualquer gesto local não persistido
     setPendingMove(true);
     try {
       const result = await undoMutation.mutateAsync();
       queryClient.setQueryData(["zip-session"], (prev: ZipSessionPublic | undefined) =>
         prev ? { ...prev, state: result.state } : prev,
       );
+      setOptimisticState(null);
       setHintCell(null);
     } catch {
       toast.error("Não foi possível desfazer. Tente novamente.");
@@ -219,8 +285,10 @@ export function ZipGameModal({
     ) {
       return;
     }
+    gestureTargets.current = [];
     try {
       await resetMutation.mutateAsync();
+      setOptimisticState(null);
       setHintCell(null);
       queryClient.invalidateQueries({ queryKey: ["zip-session"] });
       devLog("reiniciado");
@@ -341,26 +409,32 @@ export function ZipGameModal({
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
                 onPointerDown={(e) => {
+                  if (pendingMove) return;
                   const cell = cellFromPoint(e.clientX, e.clientY);
                   if (!cell) return;
                   setHasInteracted(true);
                   activePointerId.current = e.pointerId;
                   boardRef.current?.setPointerCapture(e.pointerId);
-                  void tryMove(cell);
+                  applyLocally(cell);
                 }}
                 onPointerMove={(e) => {
                   if (activePointerId.current !== e.pointerId || pendingMove) return;
                   const cell = cellFromPoint(e.clientX, e.clientY);
-                  if (cell) void tryMove(cell);
+                  if (!cell) return;
+                  const last = path[path.length - 1];
+                  if (last && cellEq(last, cell)) return;
+                  applyLocally(cell);
                 }}
                 onPointerUp={(e) => {
                   if (activePointerId.current === e.pointerId) {
                     boardRef.current?.releasePointerCapture(e.pointerId);
                   }
                   activePointerId.current = null;
+                  void persistGesture();
                 }}
                 onPointerCancel={() => {
                   activePointerId.current = null;
+                  void persistGesture();
                 }}
                 className="relative touch-none select-none rounded-xl bg-muted/30 p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 style={{ width: boardPixelSize + 16, height: boardPixelSize + 16 }}

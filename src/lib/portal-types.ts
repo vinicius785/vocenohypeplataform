@@ -23,7 +23,19 @@ export type RedeMetrics = {
   paises?: DemographicEntry[];
   cidades?: DemographicEntry[];
 };
-export type Veredito = { motivo: string; respondedAt: string };
+/** `autorNome` só existe pra ações feitas pelo Portal V2 (sessão
+ * autenticada) — o link público antigo (V1) não tem identidade
+ * individual, então fica `undefined`; nesse caso a UI mostra um rótulo
+ * genérico ("Cliente"), nunca um nome inventado. */
+export type Veredito = { motivo: string; respondedAt: string; autorNome?: string };
+export type PublicComment = {
+  id: string;
+  author: string;
+  initials: string;
+  color: string;
+  text: string;
+  createdAt: string;
+};
 export type PublicEntrega = {
   id: string;
   tipo: string;
@@ -35,7 +47,15 @@ export type PublicEntrega = {
   dataPostagem?: string;
   publicadoEm?: string;
   url?: string;
-  anexos?: { id: string; categoria: string; nome: string; url: string }[];
+  anexos?: {
+    id: string;
+    categoria: string;
+    nome: string;
+    url: string;
+    /** Ausente = trata como v1 (anexo anterior ao versionamento). */
+    versao?: number;
+    criadoEm?: string;
+  }[];
   metrics?: PostMetrics;
   roteiroReprovacao?: Veredito;
   conteudoReprovacao?: Veredito;
@@ -64,6 +84,10 @@ export type PublicInfluencer = {
   criadoEm?: string;
   historico?: { status: string; at: string }[];
   cicloMes?: string;
+  /** Referência real ao ciclo/mês operacional (`campaign_cycles.id`) desta
+   * participação — ver `PublicCampanha.cycles`. `undefined`/`null` = sem
+   * ciclo atribuído ainda; nunca inferir a partir de `criadoEm`. */
+  campaignCycleId?: string | null;
   justificativaTime?: string;
   activityEvents?: {
     id: string;
@@ -75,6 +99,7 @@ export type PublicInfluencer = {
     motivoLabel?: string;
     comentario?: string;
   }[];
+  clienteComments?: PublicComment[];
 };
 export type PublicCronogramaItem = {
   id: string;
@@ -91,6 +116,15 @@ export type PublicRelatorioMensal = {
   nps?: { score: number; comentario?: string; respondedAt: string };
   url: string | null;
 };
+/** Um ciclo/mês operacional real de uma campanha recorrente
+ * (`campaign_cycles`) — só existem os que o time criou explicitamente,
+ * nunca inferidos de `createdAt`. */
+export type PublicCampaignCycle = {
+  id: string;
+  competenceYear: number;
+  competenceMonth: number;
+  status: "active" | "closed";
+};
 export type PublicCampanha = {
   id: string;
   nome: string;
@@ -102,6 +136,9 @@ export type PublicCampanha = {
   relatorios: PublicRelatorioMensal[];
   isRecorrente: boolean;
   recorrenteInicio?: string;
+  /** Ausente/vazio é um estado válido: "campanha recorrente sem ciclo
+   * ainda" — nunca tratar como "carregando" ou preencher com zeros. */
+  cycles?: PublicCampaignCycle[];
 };
 export type PublicArticle = {
   id: string;

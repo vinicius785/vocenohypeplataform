@@ -153,4 +153,84 @@ export function nextHintCell(challenge: ZipChallenge, state: ZipState): Cell | n
   return null;
 }
 
+/**
+ * Aplica uma SEQUÊNCIA de alvos (o gesto inteiro de arrastar, ou um
+ * único toque) de uma vez — única forma de persistir o ZIP nesta
+ * rodada. Não persiste a cada `pointermove`: o cliente valida cada
+ * célula localmente enquanto arrasta (feedback instantâneo, mesma
+ * `applyZipMove`) e só manda a sequência acumulada ao SERVIDOR quando o
+ * gesto termina (`pointerup`). O servidor então roda esta mesma função
+ * a partir do último estado CONHECIDO DELE (nunca do que o cliente diz
+ * que é o estado atual) — isso elimina a corrida de duas chamadas
+ * concorrentes tentando criar a mesma linha (o bug real por trás de
+ * "Não foi possível salvar seu progresso": duas jogadas quase
+ * simultâneas, cada uma vendo "sessão não existe" e tentando o INSERT,
+ * a segunda batendo na constraint única).
+ *
+ * Para no primeiro alvo inválido (nunca aplica parcialmente um alvo
+ * ruim) e devolve quantos alvos realmente entraram no caminho.
+ */
+export function applyZipMoveSequence(
+  challenge: ZipChallenge,
+  initialState: ZipState,
+  targets: Cell[],
+): { state: ZipState; appliedCount: number; error?: ZipMoveError } {
+  let state = initialState;
+  for (let i = 0; i < targets.length; i++) {
+    const result = applyZipMove(challenge, state, targets[i]);
+    if (!result.ok) {
+      return { state, appliedCount: i, error: result.error };
+    }
+    state = result.state;
+  }
+  return { state, appliedCount: targets.length };
+}
+
+/**
+ * Invariantes do `ZipState` — checadas em desenvolvimento depois de
+ * cada mudança de estado local (seção 8 do pedido). Nunca chamada em
+ * produção pra decidir comportamento, só pra detectar cedo uma
+ * divergência entre o estado visual e o motor.
+ */
+export function checkZipStateInvariants(
+  challenge: ZipChallenge,
+  state: ZipState,
+): { ok: true } | { ok: false; violations: string[] } {
+  const violations: string[] = [];
+  const first = challenge.numberedCells.find((n) => n.value === 1);
+  if (state.path.length > 0 && first && !cellsEqual(state.path[0], first.cell)) {
+    violations.push("caminho não começa no número 1");
+  }
+  const seen = new Set<string>();
+  for (let i = 0; i < state.path.length; i++) {
+    const k = cellKey(state.path[i]);
+    if (seen.has(k)) violations.push(`célula repetida: ${k}`);
+    seen.add(k);
+    if (i > 0) {
+      if (!isAdjacent(state.path[i - 1], state.path[i])) {
+        violations.push(`passo não-adjacente no índice ${i}`);
+      } else if (hasWallBetween(challenge.walls, state.path[i - 1], state.path[i])) {
+        violations.push(`passo atravessa parede no índice ${i}`);
+      }
+    }
+  }
+  let expectedFromPath = 1;
+  for (const cell of state.path) {
+    const value = numberedValueAt(challenge, cell);
+    if (value !== null) {
+      if (value !== expectedFromPath) violations.push(`número fora de ordem: ${value}`);
+      expectedFromPath = value + 1;
+    }
+  }
+  if (expectedFromPath !== state.expectedNumber) {
+    violations.push(
+      `expectedNumber (${state.expectedNumber}) não corresponde ao caminho (esperado ${expectedFromPath})`,
+    );
+  }
+  if (state.path.length === 0 && state.status !== "not_started") {
+    violations.push("caminho vazio mas status não é not_started");
+  }
+  return violations.length === 0 ? { ok: true } : { ok: false, violations };
+}
+
 export { cellKey, cellsEqual };

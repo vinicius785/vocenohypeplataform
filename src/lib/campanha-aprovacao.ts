@@ -15,11 +15,23 @@ import { canReopenInfluApproval } from "@/lib/campanha-status";
  * de qual status vira qual.
  */
 
-function clientActivity(action: string, entregaId?: string) {
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "CL";
+  return (parts[0][0] + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+/** Nome real do cliente que agiu, quando disponível — só o Portal V2
+ * (sessão autenticada) consegue fornecer um (via `user_metadata.full_name`
+ * do usuário logado). O link público antigo (V1, sem login individual)
+ * passa `undefined`, e o rótulo genérico "Cliente" é usado — nunca um nome
+ * inventado nem uma suposição de quem foi. */
+function clientActivity(action: string, entregaId?: string, actorName?: string) {
+  const name = actorName?.trim() || "Cliente";
   return {
     id: crypto.randomUUID(),
-    author: "Cliente",
-    initials: "CL",
+    author: name,
+    initials: initialsFor(name),
     color: "bg-slate-500 text-white",
     action,
     entregaId,
@@ -28,24 +40,26 @@ function clientActivity(action: string, entregaId?: string) {
 }
 
 /** Grava um evento tipado (decisão 1 — ver comentário em `InfluActivityEvent`
- * no InfluencerBoard). "Cliente" é sempre o ator, já que o portal não tem
- * login individual — a empresa do cliente já fica registrada no link/
- * campanha, não precisa ser repetida em cada evento. */
+ * no InfluencerBoard). Ver `clientActivity` sobre `actorName`. */
 function clientActivityEvent(
   kind: InfluActivityEvent["kind"],
   fields: Partial<InfluActivityEvent> = {},
+  actorName?: string,
 ): InfluActivityEvent {
+  const name = actorName?.trim() || "Cliente";
   return {
     id: crypto.randomUUID(),
     kind,
-    actor: { type: "cliente", name: "Cliente", initials: "CL", color: "bg-slate-500 text-white" },
+    actor: { type: "cliente", name, initials: initialsFor(name), color: "bg-slate-500 text-white" },
     createdAt: new Date().toISOString(),
     ...fields,
   };
 }
 
-function stamp(motivo?: string): ClienteVeredito | undefined {
-  return motivo !== undefined ? { motivo, respondedAt: new Date().toISOString() } : undefined;
+function stamp(motivo?: string, actorName?: string): ClienteVeredito | undefined {
+  return motivo !== undefined
+    ? { motivo, respondedAt: new Date().toISOString(), autorNome: actorName?.trim() || undefined }
+    : undefined;
 }
 
 /** Etapa 1 — aprovar/reprovar a seleção do influenciador pra campanha.
@@ -55,7 +69,7 @@ export function applyInfluApproval(
   influ: Influ,
   status: "aprovado" | "reprovado",
   motivo?: string,
-  extra: { motivoLabel?: string; comentario?: string } = {},
+  extra: { motivoLabel?: string; comentario?: string; actorName?: string } = {},
 ): Influ {
   const at = new Date().toISOString();
   const statusAnterior = influ.status;
@@ -65,10 +79,17 @@ export function applyInfluApproval(
       status: "APROVADO",
       clienteReprovacao: undefined,
       lastClientAction: { kind: "influ", status: "aprovado", at },
-      activity: [...(influ.activity ?? []), clientActivity("aprovou a seleção pra campanha")],
+      activity: [
+        ...(influ.activity ?? []),
+        clientActivity("aprovou a seleção pra campanha", undefined, extra.actorName),
+      ],
       activityEvents: [
         ...(influ.activityEvents ?? []),
-        clientActivityEvent("perfil_aprovado", { statusAnterior, statusNovo: "APROVADO" }),
+        clientActivityEvent(
+          "perfil_aprovado",
+          { statusAnterior, statusNovo: "APROVADO" },
+          extra.actorName,
+        ),
       ],
       updatedAt: at,
     };
@@ -76,21 +97,29 @@ export function applyInfluApproval(
   return {
     ...influ,
     status: "RECUSADO",
-    clienteReprovacao: stamp(motivo ?? ""),
+    clienteReprovacao: stamp(motivo ?? "", extra.actorName),
     lastClientAction: { kind: "influ", status: "reprovado", at },
     activity: [
       ...(influ.activity ?? []),
-      clientActivity(`reprovou a seleção pra campanha — ${motivo ?? "sem motivo"}`),
+      clientActivity(
+        `reprovou a seleção pra campanha — ${motivo ?? "sem motivo"}`,
+        undefined,
+        extra.actorName,
+      ),
     ],
     activityEvents: [
       ...(influ.activityEvents ?? []),
-      clientActivityEvent("perfil_recusado", {
-        statusAnterior,
-        statusNovo: "RECUSADO",
-        motivo,
-        motivoLabel: extra.motivoLabel,
-        comentario: extra.comentario,
-      }),
+      clientActivityEvent(
+        "perfil_recusado",
+        {
+          statusAnterior,
+          statusNovo: "RECUSADO",
+          motivo,
+          motivoLabel: extra.motivoLabel,
+          comentario: extra.comentario,
+        },
+        extra.actorName,
+      ),
     ],
     updatedAt: at,
   };
@@ -100,7 +129,7 @@ export function applyInfluApproval(
  * redesenho) — mesma transição usada pelo time (APROVADO → ENVIADO_AO_CLIENTE)
  * e a MESMA trava de `canReopenInfluApproval` (bloqueia se já há entrega
  * além de ROTEIRO_PRODUCAO), pra manter consistência entre quem reabre. */
-export function reopenInfluApprovalByCliente(influ: Influ): Influ {
+export function reopenInfluApprovalByCliente(influ: Influ, actorName?: string): Influ {
   const guard = canReopenInfluApproval(
     influ.status,
     influ.entregas.map((e) => e.stage),
@@ -112,10 +141,17 @@ export function reopenInfluApprovalByCliente(influ: Influ): Influ {
     ...influ,
     status: "ENVIADO_AO_CLIENTE",
     clienteReprovacao: undefined,
-    activity: [...(influ.activity ?? []), clientActivity("reabriu a decisão sobre a seleção")],
+    activity: [
+      ...(influ.activity ?? []),
+      clientActivity("reabriu a decisão sobre a seleção", undefined, actorName),
+    ],
     activityEvents: [
       ...(influ.activityEvents ?? []),
-      clientActivityEvent("perfil_reaberto", { statusAnterior, statusNovo: "ENVIADO_AO_CLIENTE" }),
+      clientActivityEvent(
+        "perfil_reaberto",
+        { statusAnterior, statusNovo: "ENVIADO_AO_CLIENTE" },
+        actorName,
+      ),
     ],
     updatedAt: at,
   };
@@ -138,6 +174,7 @@ export function applyEntregaApproval(
   entregaId: string,
   status: "aprovado" | "reprovado",
   motivo?: string,
+  actorName?: string,
 ): Influ {
   const at = new Date().toISOString();
   const entrega = influ.entregas.find((e) => e.id === entregaId);
@@ -161,7 +198,7 @@ export function applyEntregaApproval(
             ...e,
             stage: "ROTEIRO_AJUSTES",
             dataRecebimentoRoteiro: undefined,
-            roteiroReprovacao: stamp(motivo ?? ""),
+            roteiroReprovacao: stamp(motivo ?? "", actorName),
           };
     }
     return status === "aprovado"
@@ -170,7 +207,7 @@ export function applyEntregaApproval(
           ...e,
           stage: "CONTEUDO_AJUSTES",
           dataRecebimentoConteudo: undefined,
-          conteudoReprovacao: stamp(motivo ?? ""),
+          conteudoReprovacao: stamp(motivo ?? "", actorName),
         };
   });
   const label = isRoteiro ? "o roteiro" : "o conteúdo";
@@ -187,7 +224,7 @@ export function applyEntregaApproval(
       status,
       at,
     },
-    activity: [...(influ.activity ?? []), clientActivity(action, entregaId)],
+    activity: [...(influ.activity ?? []), clientActivity(action, entregaId, actorName)],
     activityEvents: [
       ...(influ.activityEvents ?? []),
       clientActivityEvent(
@@ -199,6 +236,7 @@ export function applyEntregaApproval(
             ? "roteiro_ajustes_solicitados"
             : "conteudo_ajustes_solicitados",
         { entregaId, comentario: motivo },
+        actorName,
       ),
     ],
     updatedAt: at,

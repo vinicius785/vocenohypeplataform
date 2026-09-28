@@ -18,8 +18,20 @@ import { checkLoginRateLimit, checkRecoveryRateLimit } from "@/lib/rate-limit.fu
 import { logLoginSuccess, logLoginFailure } from "@/lib/audit-log.functions";
 import { shouldRequireMfaChallenge, checkMfaVerifyRateLimit } from "@/lib/mfa.functions";
 import { acceptPendingInvites } from "@/lib/accept-invite.functions";
-import { AuthCardShell } from "@/components/auth/AuthCardShell";
-import { PreparingEnvironmentScreen } from "@/components/auth/PreparingEnvironmentScreen";
+import { LoginScreenShell } from "@/components/auth/LoginScreenShell";
+import { AuthPreparingCard, type PreparingStep } from "@/components/auth/AuthPreparingCard";
+import { AuthAccessErrorCard } from "@/components/auth/AuthAccessErrorCard";
+import { withMinimumDuration, withTimeout } from "@/lib/auth-preparing";
+import {
+  authInputBase,
+  authPrimaryButtonBase,
+  authLabelBase,
+  authSecondaryLinkBase,
+  authIconMuted,
+} from "@/components/auth/auth-form-styles";
+
+const PREPARING_MIN_MS = 400;
+const PREPARING_TIMEOUT_MS = 15_000;
 
 const GENERIC_RATE_LIMIT_MESSAGE = "Muitas tentativas. Tente novamente em alguns minutos.";
 const GENERIC_MFA_ERROR = "Código inválido. Tente novamente.";
@@ -38,18 +50,14 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-const inputBase =
-  "h-11 w-full rounded-lg border border-input bg-background/60 text-sm text-foreground outline-none " +
-  "transition-colors placeholder:text-muted-foreground/60 hover:border-foreground/30 " +
-  "focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/40 " +
-  "aria-[invalid=true]:border-destructive aria-[invalid=true]:focus:ring-destructive/30";
-
-const primaryButtonBase =
-  "inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-[var(--brand)] " +
-  "text-sm font-medium text-[var(--brand-foreground)] transition-all duration-200 " +
-  "hover:bg-[var(--brand-hover)] active:brightness-95 focus-visible:outline-none focus-visible:ring-2 " +
-  "focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 focus-visible:ring-offset-card " +
-  "disabled:cursor-not-allowed disabled:opacity-60";
+// Classes compartilhadas com `criar-senha.tsx` (e qualquer tela futura
+// dentro do mesmo shell) — ver `auth-form-styles.ts` pra nunca mais
+// divergir entre telas.
+const inputBase = authInputBase;
+const primaryButtonBase = authPrimaryButtonBase;
+const labelBase = authLabelBase;
+const secondaryLinkBase = authSecondaryLinkBase;
+const iconMuted = authIconMuted;
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -59,8 +67,9 @@ function LoginPage() {
   const logLoginFailureFn = useServerFn(logLoginFailure);
   const checkMfaVerifyRateLimitFn = useServerFn(checkMfaVerifyRateLimit);
   const [view, setView] = useState<
-    "checking" | "login" | "forgot" | "forgot-sent" | "mfa-challenge" | "preparing"
+    "checking" | "login" | "forgot" | "forgot-sent" | "mfa-challenge" | "preparing" | "error"
   >("checking");
+  const [preparingStep, setPreparingStep] = useState<PreparingStep>("verificando");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -83,8 +92,13 @@ function LoginPage() {
   // extracted so both the no-MFA path (handleSubmit) and the post-challenge
   // path (submitMfaCode) call the IDENTICAL sequence instead of two
   // hand-copied versions that could drift.
+  // Etapas REAIS (nunca uma % inventada): verificar sessão → carregar
+  // perfil/ambiente → redirecionar. Envolvido em `withTimeout` (nunca
+  // loading infinito) e `withMinimumDuration` (evita flash de loading
+  // quando tudo resolve rápido demais) — ver `lib/auth-preparing.ts`.
   const completeLogin = async () => {
     setView("preparing");
+    setPreparingStep("verificando");
     logLoginSuccessFn().catch(() => {
       /* best-effort audit log only — never block login on this */
     });
@@ -94,29 +108,52 @@ function LoginPage() {
       /* ignore */
     }
     markTabSessionActive();
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      navigate({ to: "/" });
-      return;
+
+    try {
+      await withTimeout(
+        withMinimumDuration(
+          (async () => {
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (!sessionData.session) {
+              navigate({ to: "/" });
+              return;
+            }
+            setPreparingStep("perfil");
+            let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+            setPreparingStep("acesso");
+            // Só paga a ida extra ao servidor pra ativar convite quando
+            // realmente pode haver um vínculo `invited` (env veio
+            // "pending") — pra quem já tem ambiente ativo (o caso comum,
+            // time e clientes recorrentes) isso nunca roda, então o login
+            // continua rápido como antes. Autenticar com sucesso pela
+            // primeira vez É a aceitação do convite neste modelo (sem
+            // token de convite separado). Fail-open: nunca bloquear o
+            // login por isto.
+            if (env.type === "pending") {
+              try {
+                const { activated } = await acceptPendingInvites();
+                if (activated > 0) {
+                  env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
+                }
+              } catch {
+                /* segue com o env original (pending) */
+              }
+            }
+            navigate({ to: env.redirectTo });
+          })(),
+          PREPARING_MIN_MS,
+        ),
+        PREPARING_TIMEOUT_MS,
+      );
+    } catch (err) {
+      console.error("[login] falha ao preparar ambiente", err);
+      setView("error");
     }
-    let env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
-    // Só paga a ida extra ao servidor pra ativar convite quando realmente
-    // pode haver um vínculo `invited` (env veio "pending") — pra quem já
-    // tem ambiente ativo (o caso comum, time e clientes recorrentes) isso
-    // nunca roda, então o login continua rápido como antes. Autenticar com
-    // sucesso pela primeira vez É a aceitação do convite neste modelo (sem
-    // token de convite separado). Fail-open: nunca bloquear o login por isto.
-    if (env.type === "pending") {
-      try {
-        const { activated } = await acceptPendingInvites();
-        if (activated > 0) {
-          env = await resolveUserEnvironment(supabase, sessionData.session.user.id);
-        }
-      } catch {
-        /* segue com o env original (pending) */
-      }
-    }
-    navigate({ to: env.redirectTo });
+  };
+
+  const handleSignOutFromError = async () => {
+    await supabase.auth.signOut();
+    setView("login");
   };
 
   useEffect(() => {
@@ -147,8 +184,21 @@ function LoginPage() {
         return;
       }
       setView("preparing");
-      const env = await resolveUserEnvironment(supabase, data.session.user.id);
-      navigate({ to: env.redirectTo });
+      setPreparingStep("perfil");
+      try {
+        const env = await withTimeout(
+          withMinimumDuration(
+            resolveUserEnvironment(supabase, data.session.user.id),
+            PREPARING_MIN_MS,
+          ),
+          PREPARING_TIMEOUT_MS,
+        );
+        setPreparingStep("acesso");
+        navigate({ to: env.redirectTo });
+      } catch (err) {
+        console.error("[login] falha ao preparar ambiente (sessão existente)", err);
+        setView("error");
+      }
     });
   }, [navigate]);
 
@@ -296,26 +346,51 @@ function LoginPage() {
     }
   };
 
+  // "checking"/"preparing"/"error" NUNCA desmontam o shell pra mostrar
+  // uma tela preta vazia — a coluna esquerda (frase de marca) permanece
+  // estável, só o conteúdo do card muda, exatamente como o login/MFA.
   if (view === "checking" || view === "preparing") {
-    return <PreparingEnvironmentScreen />;
+    return (
+      <LoginScreenShell>
+        <AuthPreparingCard step={preparingStep} />
+      </LoginScreenShell>
+    );
+  }
+  if (view === "error") {
+    return (
+      <LoginScreenShell>
+        <AuthAccessErrorCard
+          kind="timeout"
+          onRetry={() => void completeLogin()}
+          onSignOut={() => void handleSignOutFromError()}
+        />
+      </LoginScreenShell>
+    );
   }
 
+  const eyebrow =
+    view === "login"
+      ? "Bem-vindo de volta"
+      : view === "forgot" || view === "forgot-sent"
+        ? "Recuperar acesso"
+        : view === "mfa-challenge"
+          ? "Verificação em duas etapas"
+          : undefined;
+
   return (
-    <AuthCardShell>
+    <LoginScreenShell eyebrow={eyebrow}>
       {view === "login" && (
         <>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Bem-vindo</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Acesse sua conta para continuar.</p>
-          <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
+          <p className="text-sm text-[#6b6862]">Acesse sua conta para continuar.</p>
+          <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
             <div>
-              <label
-                htmlFor="login-email"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="login-email" className={labelBase}>
                 E-mail
               </label>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Mail
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="login-email"
                   type="email"
@@ -325,19 +400,18 @@ function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   aria-invalid={error ? "true" : "false"}
-                  className={`${inputBase} pl-10 pr-3`}
+                  className={`${inputBase} pl-11 pr-4`}
                 />
               </div>
             </div>
             <div>
-              <label
-                htmlFor="login-password"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="login-password" className={labelBase}>
                 Senha
               </label>
               <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Lock
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -346,26 +420,30 @@ function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={error ? "true" : "false"}
-                  className={`${inputBase} pl-10 pr-10`}
+                  className={`${inputBase} pl-11 pr-11`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 transition-colors hover:text-[#111111] ${iconMuted}`}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? (
+                    <EyeOff className="h-[18px] w-[18px]" />
+                  ) : (
+                    <Eye className="h-[18px] w-[18px]" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#6b6862]">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-input accent-[var(--brand)]"
+                  className="h-3.5 w-3.5 rounded border-[#c9c6c0] accent-[var(--brand)]"
                 />
                 Manter conectado
               </label>
@@ -375,7 +453,7 @@ function LoginPage() {
                   setForgotEmail(email);
                   setView("forgot");
                 }}
-                className="text-xs font-medium text-foreground underline underline-offset-2 hover:text-[var(--brand)]"
+                className={secondaryLinkBase}
               >
                 Esqueci minha senha
               </button>
@@ -386,7 +464,7 @@ function LoginPage() {
                 ref={errorRef}
                 tabIndex={-1}
                 role="alert"
-                className="text-xs text-destructive outline-none"
+                className="text-xs text-red-600 outline-none"
               >
                 {error}
               </p>
@@ -416,26 +494,23 @@ function LoginPage() {
           <button
             type="button"
             onClick={() => setView("login")}
-            className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-[#6b6862] hover:text-[#111111]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </button>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Esqueci minha senha
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-lg font-semibold tracking-tight text-[#111111]">Esqueci minha senha</p>
+          <p className="mt-1 text-sm text-[#6b6862]">
             Informe seu e-mail e enviaremos um link para redefinir sua senha.
           </p>
           <form onSubmit={handleForgotSubmit} noValidate className="mt-6 space-y-4">
             <div>
-              <label
-                htmlFor="forgot-email"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="forgot-email" className={labelBase}>
                 Seu e-mail
               </label>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Mail
+                  className={`pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 ${iconMuted}`}
+                />
                 <input
                   id="forgot-email"
                   type="email"
@@ -444,7 +519,7 @@ function LoginPage() {
                   autoFocus
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  className={`${inputBase} pl-10 pr-3`}
+                  className={`${inputBase} pl-11 pr-4`}
                 />
               </div>
             </div>
@@ -461,18 +536,15 @@ function LoginPage() {
 
       {view === "mfa-challenge" && (
         <>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Verificação em duas etapas
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-lg font-semibold tracking-tight text-[#111111]">
+            Digite o código de verificação
+          </p>
+          <p className="mt-1 text-sm text-[#6b6862]">
             Digite o código de 6 dígitos do seu app autenticador.
           </p>
           <form onSubmit={submitMfaCode} noValidate className="mt-6 space-y-4">
             <div>
-              <label
-                htmlFor="mfa-code"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
+              <label htmlFor="mfa-code" className={labelBase}>
                 Código de verificação
               </label>
               <input
@@ -493,7 +565,7 @@ function LoginPage() {
                 ref={mfaErrorRef}
                 tabIndex={-1}
                 role="alert"
-                className="text-xs text-destructive outline-none"
+                className="text-xs text-red-600 outline-none"
               >
                 {mfaError}
               </p>
@@ -516,28 +588,22 @@ function LoginPage() {
 
       {view === "forgot-sent" && (
         <div className="py-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-6 w-6" />
           </div>
-          <h1 className="mt-4 text-lg font-semibold tracking-tight text-foreground">
-            Pedido enviado
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-4 text-lg font-semibold tracking-tight text-[#111111]">Pedido enviado</p>
+          <p className="mt-1.5 text-sm text-[#6b6862]">
             Se existir uma conta vinculada a este e-mail, enviaremos as instruções de recuperação.
           </p>
           <button
             type="button"
             onClick={() => setView("login")}
-            className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-[#e2e0dc] px-4 py-2 text-xs font-medium text-[#111111] transition-colors hover:bg-[#f1efec]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar para login
           </button>
         </div>
       )}
-
-      <p className="mt-7 text-center text-[11px] leading-relaxed text-muted-foreground/70">
-        Acesso seguro para equipe e clientes.
-      </p>
-    </AuthCardShell>
+    </LoginScreenShell>
   );
 }

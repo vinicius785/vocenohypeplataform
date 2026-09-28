@@ -146,7 +146,8 @@ export type InfluActivityEventKind =
   | "conteudo_ajustes_solicitados"
   | "publicado"
   | "observacao_cliente"
-  | "comentario_equipe";
+  | "comentario_equipe"
+  | "comentario_cliente";
 
 export type InfluActivityEvent = {
   id: string;
@@ -675,8 +676,12 @@ export type Entrega = {
 };
 
 /** Motivo + carimbo de quando o cliente reprovou algo pelo link público
- * (seleção de influ, roteiro ou conteúdo de uma entrega). */
-export type ClienteVeredito = { motivo: string; respondedAt: string };
+ * (seleção de influ, roteiro ou conteúdo de uma entrega). `autorNome` só
+ * existe a partir do Portal V2 (sessão autenticada, com nome real do
+ * usuário) — o link público antigo (V1) não tem identidade individual,
+ * então fica `undefined` nesses casos; nunca inventar um nome quando
+ * ausente. */
+export type ClienteVeredito = { motivo: string; respondedAt: string; autorNome?: string };
 
 export type BankInfo = {
   banco?: string;
@@ -772,6 +777,12 @@ export type Influ = {
   statusUpdatedAt?: string; // data em que o status atual foi definido (p/ SLA de aprovação)
   bank?: BankInfo;
   comments?: InfluComment[];
+  /** Comentários do CLIENTE no portal, sobre a participação deste
+   * influenciador na campanha — canal separado de `comments` (que é
+   * conversa INTERNA do time, nunca deve ser exposta ao portal). Mesma
+   * forma de `InfluComment`, append-only (nunca sobrescreve um comentário
+   * anterior). */
+  clienteComments?: InfluComment[];
   activity?: InfluActivity[];
   /** Histórico tipado (decisão 1 da reformulação do Portal do Cliente) —
    * ver comentário acima de `InfluActivityEvent`. */
@@ -853,8 +864,19 @@ export type Influ = {
    * referência" configurado na Página de Inscrição (nunca vem direto do
    * formulário público). Usado por `CampanhasSection.tsx` pra decidir em
    * qual mês do kanban esse influenciador aparece, em vez de depender do
-   * timing exato de `createdAt`. Ausente em entradas manuais/antigas. */
+   * timing exato de `createdAt`. Ausente em entradas manuais/antigas.
+   * @deprecated Mantido só por compatibilidade de leitura de registros
+   * antigos — `campaignCycleId` é a relação real (`campaign_cycles`) e
+   * deve ser preenchido em toda participação nova. */
   cicloMes?: string;
+  /** Referência real (`campaign_cycles.id`) ao ciclo/mês operacional desta
+   * participação, pra campanhas recorrentes. Persistida numa coluna de
+   * verdade (não dentro deste JSONB) — ver `campanha-scoped-store.ts` — pra
+   * dar pra filtrar/indexar por ela em SQL. `undefined`/`null` significa
+   * "sem ciclo atribuído ainda": nunca inferir um a partir de `createdAt`
+   * ou de `cicloMes`; fica pendente de atribuição manual pelo time (ver
+   * a view `campanha_influenciadores_sem_ciclo`). */
+  campaignCycleId?: string | null;
 };
 
 /**

@@ -134,11 +134,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// Roda ANTES do React hidratar, então precisa ser um script inline puro
+// (não pode importar `theme.ts`) — a chave "config:theme" é a mesma
+// constante `KEY` de `src/lib/theme.ts`; se um dia mudar lá, mudar aqui
+// também. Sem isso, `initTheme()` só aplicava a classe `dark` dentro de
+// um `useEffect` (depois do primeiro paint), causando um flash do tema
+// claro em quem já tinha escolhido escuro.
+const THEME_FOUC_SCRIPT = `(function(){try{var t=localStorage.getItem("config:theme");var d=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: THEME_FOUC_SCRIPT }} />
       </head>
       <body>
         {children}

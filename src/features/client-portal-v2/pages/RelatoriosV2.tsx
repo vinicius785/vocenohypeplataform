@@ -1,0 +1,235 @@
+import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { FileText, MoreVertical, Download } from "lucide-react";
+import { PageContainer } from "@/components/shared/PageContainer";
+import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { usePortalSessionData } from "@/components/portal/portal-session-context";
+import { getFreshRelatorioUrlSession } from "@/lib/portal-auth.functions";
+import { PortalPageHeader } from "../components/shared/PortalPageHeader";
+import { PortalListPanel, PortalListRow } from "../components/shared/PortalListPanel";
+import { portalFieldBase } from "../components/shared/portal-field-styles";
+import { ClientFileViewer } from "../components/files/ClientFileViewer";
+import type { ClientFile } from "../types/files";
+
+type ReportRow = {
+  id: string;
+  campanhaId: string;
+  campanhaNome: string;
+  nome: string;
+  mes: string;
+  uploadedAt: string;
+  url: string | null;
+};
+
+function competenceLabel(mes: string): string {
+  const [year, month] = mes.split("-");
+  const MONTHS = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+  const idx = Number(month) - 1;
+  return idx >= 0 && idx < 12 ? `${MONTHS[idx]} de ${year}` : mes;
+}
+
+/**
+ * Central de relatórios — mesmo sistema visual de `CampanhasV2.tsx`
+ * (fonte da verdade): `PortalPageHeader` pro título/subtítulo,
+ * `portalFieldBase` pros filtros (mesma altura/borda/foco dos controles
+ * de Campanhas), `PortalListPanel`/`PortalListRow` pra lista (linha
+ * inteira clicável, chevron discreto — nunca mais um botão azul enorme
+ * competindo por atenção em cada card). Dado vem do mesmo
+ * `ClienteLinkData` de sempre — nenhuma tabela nova. `url` já é uma
+ * signed URL de 1h gerada a cada load; quando expira dentro da mesma
+ * sessão, o viewer regenera sob demanda via `getFreshRelatorioUrlSession`.
+ */
+export function RelatoriosV2({ openFileId }: { openFileId?: string }) {
+  const { data } = usePortalSessionData();
+  const navigate = useNavigate();
+  const freshUrlFn = useServerFn(getFreshRelatorioUrlSession);
+  const [campaignFilter, setCampaignFilter] = useState<string>("todas");
+  const [sortBy, setSortBy] = useState<"recentes" | "antigos" | "campanha">("recentes");
+
+  const reports: ReportRow[] = useMemo(() => {
+    return data.campanhas.flatMap((c) =>
+      c.relatorios.map((r) => ({
+        id: r.id,
+        campanhaId: c.id,
+        campanhaNome: c.nome,
+        nome: r.nome,
+        mes: r.mes,
+        uploadedAt: r.uploadedAt,
+        url: r.url,
+      })),
+    );
+  }, [data]);
+
+  const filtered =
+    campaignFilter === "todas" ? reports : reports.filter((r) => r.campanhaId === campaignFilter);
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "campanha") return a.campanhaNome.localeCompare(b.campanhaNome);
+    return sortBy === "recentes"
+      ? b.uploadedAt.localeCompare(a.uploadedAt)
+      : a.uploadedAt.localeCompare(b.uploadedAt);
+  });
+
+  const groups = useMemo(() => {
+    const map = new Map<string, ReportRow[]>();
+    for (const r of sorted) {
+      const list = map.get(r.mes) ?? [];
+      list.push(r);
+      map.set(r.mes, list);
+    }
+    return Array.from(map.entries());
+  }, [sorted]);
+
+  const mostRecentId = sorted[0]?.id;
+
+  const toClientFile = (r: ReportRow): ClientFile => ({
+    id: r.id,
+    friendlyName: r.nome,
+    url: r.url,
+    category: "Relatório",
+    campanhaNome: r.campanhaNome,
+    competenciaLabel: competenceLabel(r.mes),
+    createdAt: r.uploadedAt,
+    regenerate: async () => {
+      const result = await freshUrlFn({
+        data: { campanhaId: r.campanhaId, relatorioId: r.id },
+      });
+      return result.url;
+    },
+  });
+
+  const openFile = (id: string) =>
+    navigate({ to: "/portal-v2/relatorios", search: { arquivo: id } });
+  const closeFile = () => navigate({ to: "/portal-v2/relatorios", search: {} });
+  const activeReport = sorted.find((r) => r.id === openFileId);
+
+  return (
+    <PageContainer className="space-y-6">
+      <PortalPageHeader
+        title="Relatórios"
+        description="Acompanhe os resultados das suas campanhas."
+      />
+
+      {reports.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={campaignFilter}
+            onChange={(e) => setCampaignFilter(e.target.value)}
+            className={portalFieldBase}
+          >
+            <option value="todas">Todas as campanhas</option>
+            {data.campanhas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className={portalFieldBase}
+          >
+            <option value="recentes">Mais recentes</option>
+            <option value="antigos">Mais antigos</option>
+            <option value="campanha">Campanha A–Z</option>
+          </select>
+        </div>
+      )}
+
+      {reports.length === 0 ? (
+        <EmptyState
+          icon={<FileText className="h-5 w-5" />}
+          title="Nenhum relatório disponível"
+          description="Os relatórios das suas campanhas aparecerão aqui quando forem publicados."
+        />
+      ) : sorted.length === 0 ? (
+        <EmptyState
+          icon={<FileText className="h-5 w-5" />}
+          title="Nenhum relatório corresponde aos filtros selecionados."
+          secondaryAction={{ label: "Limpar filtros", onClick: () => setCampaignFilter("todas") }}
+        />
+      ) : (
+        <div className="space-y-8">
+          {groups.map(([mes, items]) => (
+            <div key={mes}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                {competenceLabel(mes)}
+              </p>
+              <PortalListPanel>
+                {items.map((r) => (
+                  <PortalListRow
+                    key={`${r.campanhaId}:${r.id}`}
+                    icon={<FileText className="h-4.5 w-4.5" />}
+                    onClick={() => r.url && openFile(r.id)}
+                    title={
+                      <span className="flex items-center gap-1.5">
+                        {r.nome}
+                        {r.id === mostRecentId && (
+                          <span className="shrink-0 rounded-full bg-brand-subtle px-1.5 py-0.5 text-[10px] font-semibold text-brand">
+                            Mais recente
+                          </span>
+                        )}
+                      </span>
+                    }
+                    meta={
+                      <>
+                        {r.campanhaNome} · Disponibilizado em{" "}
+                        {new Date(r.uploadedAt).toLocaleDateString("pt-BR")}
+                      </>
+                    }
+                    trailing={
+                      r.url ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Mais ações para ${r.nome}`}
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <a href={r.url} download className="flex items-center gap-2">
+                                <Download className="h-3.5 w-3.5" /> Baixar arquivo
+                              </a>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : undefined
+                    }
+                  />
+                ))}
+              </PortalListPanel>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <ClientFileViewer
+        file={activeReport ? toClientFile(activeReport) : null}
+        onClose={closeFile}
+      />
+    </PageContainer>
+  );
+}
