@@ -12,9 +12,10 @@ import { fmtDate } from "@/components/influenciadores/InfluencerBoard";
 import { campanhaStatus, CAMPANHA_STATUS_LABEL, type CampanhaRow } from "./campanha-ui";
 
 const STATUS_BADGE_VARIANT = {
-  ativa: "success",
-  encerrada: "secondary",
-  sem_prazo: "outline",
+  negotiation: "outline",
+  active: "success",
+  completed: "secondary",
+  archived: "outline",
 } as const;
 
 /**
@@ -44,7 +45,7 @@ export function CampanhaCard({
   onDelete: () => void;
 }) {
   const { campanha: c, cliente } = row;
-  const status = campanhaStatus(c, new Date());
+  const status = campanhaStatus(c);
   const isRecorrente = c.pagClienteTipo === "Recorrente";
   const prazoLabel = isRecorrente
     ? `Mensal · dia ${c.pagClienteRecorrenteDia ?? "—"}`

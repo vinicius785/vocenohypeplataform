@@ -6,31 +6,22 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { usePortalData } from "@/components/portal/portal-context";
 import { pendingReason } from "@/components/portal/portal-widgets";
-import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import { t } from "@/lib/portal-i18n";
-import type { PublicCampanha } from "@/lib/portal-types";
 
 export const Route = createFileRoute("/portal/$token/campanhas/")({
   component: PortalCampanhasIndexPage,
 });
 
-function toStatusShim(c: PublicCampanha) {
-  return {
-    prazo: c.prazo,
-    pagClienteTipo: c.isRecorrente ? ("Recorrente" as const) : undefined,
-  } as Parameters<typeof campanhaStatus>[0];
-}
-
 /**
  * `/portal/$token/campanhas` — destino do "Ver todas" da sidebar
  * (Seção 11 do pedido: precisa de `PageHeader` + cards completos, não
- * uma lista mínima de texto). Mostra TODAS as campanhas (ativas +
- * encerradas, com selo) — a sidebar já esconde as encerradas por
- * padrão; esta é a única tela que precisa mostrar as duas juntas.
+ * uma lista mínima de texto). `data.campanhas` já vem pré-filtrada pelo
+ * servidor pra só "active"/"completed" (nunca "negotiation"/"archived" —
+ * ver `buildClienteLinkData`) — mostra as duas juntas, com selo pra
+ * diferenciar a concluída; a sidebar já esconde a concluída por padrão.
  */
 function PortalCampanhasIndexPage() {
   const { token, data, lang } = usePortalData();
-  const today = new Date();
 
   if (data.campanhas.length === 0) {
     return (
@@ -48,7 +39,6 @@ function PortalCampanhasIndexPage() {
       <PageHeader title="Campanhas" />
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {data.campanhas.map((c) => {
-          const status = campanhaStatus(toStatusShim(c), today);
           const planejado = c.planejado || 0;
           const publicadas = c.influencers.reduce(
             (s, i) => s + i.entregas.filter((e) => e.status === "publicado").length,
@@ -69,9 +59,9 @@ function PortalCampanhasIndexPage() {
               />
               <div className="flex items-start justify-between gap-2">
                 <p className="truncate text-sm font-semibold text-foreground">{c.nome}</p>
-                {status === "encerrada" && (
+                {c.status === "completed" && (
                   <Badge variant="secondary" className="shrink-0">
-                    Encerrada
+                    Concluída
                   </Badge>
                 )}
               </div>

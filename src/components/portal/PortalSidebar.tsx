@@ -2,18 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useRouterState } from "@tanstack/react-router";
 import { ChevronDown, LayoutGrid, Megaphone } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import { pendingReason } from "./portal-widgets";
 import type { PortalLang } from "@/lib/portal-i18n";
 import type { PublicCampanha } from "@/lib/portal-types";
 import type { Workspace } from "@/lib/workspace-store";
-
-function toStatusShim(c: PublicCampanha) {
-  return {
-    prazo: c.prazo,
-    pagClienteTipo: c.isRecorrente ? ("Recorrente" as const) : undefined,
-  } as Parameters<typeof campanhaStatus>[0];
-}
 
 /** Prefixo próprio (`portal:sidebar:*`) pra não colidir com as chaves
  * `sidebar:collapsed`/`sidebar:expanded` do AppShell interno, caso o time
@@ -88,11 +80,12 @@ export function PortalSidebar({
     setEncerradasOpen(localStorage.getItem(ENCERRADAS_KEY) === "1");
   }, []);
 
-  const today = new Date();
-  const ativas = campanhas.filter((c) => campanhaStatus(toStatusShim(c), today) !== "encerrada");
-  const encerradas = campanhas.filter(
-    (c) => campanhaStatus(toStatusShim(c), today) === "encerrada",
-  );
+  // `campanhas` aqui já vem pré-filtrada pelo servidor (só "active"/
+  // "completed", nunca "negotiation"/"archived" — ver
+  // `buildClienteLinkData`/`isVisibleToClientPortal`). A separação abaixo é
+  // só organizacional: concluídas ficam num grupo recolhido, sem sumir.
+  const ativas = campanhas.filter((c) => c.status !== "completed");
+  const encerradas = campanhas.filter((c) => c.status === "completed");
 
   const toggleEncerradas = () => {
     setEncerradasOpen((prev) => {
@@ -209,7 +202,7 @@ export function PortalSidebar({
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${encerradasOpen ? "rotate-180" : ""}`}
             />
-            Campanhas encerradas ({encerradas.length})
+            Campanhas concluídas ({encerradas.length})
           </button>
           {encerradasOpen && <div className="space-y-0.5">{encerradas.map(campanhaItem)}</div>}
         </div>

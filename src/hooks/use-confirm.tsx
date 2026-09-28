@@ -59,14 +59,18 @@ export function useConfirmChoice<T extends string>() {
   const [state, setState] = useState<{
     message: string;
     options: { value: T; label: string }[];
+    title?: string;
     resolve: (v: T | null) => void;
   } | null>(null);
 
-  const confirmChoice = useCallback((message: string, options: { value: T; label: string }[]) => {
-    return new Promise<T | null>((resolve) => {
-      setState({ message, options, resolve });
-    });
-  }, []);
+  const confirmChoice = useCallback(
+    (message: string, options: { value: T; label: string }[], title?: string) => {
+      return new Promise<T | null>((resolve) => {
+        setState({ message, options, title, resolve });
+      });
+    },
+    [],
+  );
 
   const settle = (value: T | null) => {
     state?.resolve(value);
@@ -77,7 +81,7 @@ export function useConfirmChoice<T extends string>() {
     <AlertDialog open={!!state} onOpenChange={(o) => !o && settle(null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Reunião recorrente</AlertDialogTitle>
+          <AlertDialogTitle>{state?.title ?? "Reunião recorrente"}</AlertDialogTitle>
           <AlertDialogDescription>{state?.message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

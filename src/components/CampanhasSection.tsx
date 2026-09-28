@@ -57,12 +57,18 @@ import {
   sortCampanhas,
   DEFAULT_CAMPANHA_FILTERS,
   CAMPANHA_STATUS_LABEL,
+  CAMPANHA_STATUS_TRANSITIONS,
+  ARCHIVE_ACTION,
+  restoreConfirmMessage,
+  buildStatusChangePatch,
   getEligibleCampaignInfluencers,
   getEligibleCampaignDeliveries,
   type CampanhaFiltersState,
   type CampanhaRow,
+  type CampanhaStatus,
 } from "./campanhas/campanha-ui";
 import { buildMesReferenciaOptions } from "@/lib/inscricao-page";
+import { useMyAccess } from "@/lib/permissions";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
@@ -85,7 +91,7 @@ import {
   nextActionForEntrega,
   NEXT_ACTOR_LABEL,
 } from "@/lib/campanha-status";
-import { useConfirm } from "@/hooks/use-confirm";
+import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
 import { formatIsoDate } from "@/lib/utils";
 import {
   type RelatorioMensal,
@@ -234,53 +240,29 @@ export function CampanhasSection() {
     setWizardOpen(true);
   };
 
-  // `today`/`visibleRows` precisam ser calculados ANTES do `if (current)`
-  // abaixo — hooks (useMemo) não podem ser chamados condicionalmente, e
-  // esse retorno antecipado pra `CampanhaDetail` é condicional.
-  const today = new Date();
-  // Campanhas encerradas ficam escondidas por padrão (item 2 do pedido) —
-  // só quando o usuário não escolheu um status explícito no filtro
-  // principal (senão o filtro já manda: pedir "Encerrada" ali já mostra
-  // todas, sem precisar da seção separada). "Encerrada" é sempre o mesmo
-  // `campanhaStatus()` já usado em todo o resto da tela — nunca uma
-  // segunda inferência por data.
-  const statusFilterActive = filters.status !== "todos";
-  const [showEncerradas, setShowEncerradas] = useState(false);
+  // `visibleRows` precisa ser calculado ANTES do `if (current)` abaixo —
+  // hooks (useMemo) não podem ser chamados condicionalmente, e esse retorno
+  // antecipado pra `CampanhaDetail` é condicional.
+  //
+  // "Arquivada" nunca aparece no filtro "Todos" (pedido explícito) — só
+  // quando o usuário escolhe o filtro "Arquivadas" explicitamente. Isso
+  // substitui a antiga seção recolhível "Ver campanhas encerradas": não há
+  // mais uma segunda lista separada, é só mais um valor do mesmo filtro de
+  // status que já existe pros outros três.
   const filteredRows = useMemo(
-    () => filterCampanhas(rows, query, filters, today, influsByCampanha),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => filterCampanhas(rows, query, filters, influsByCampanha),
     [rows, query, filters, influsByCampanha],
   );
   const visibleRows = useMemo(
     () =>
       sortCampanhas(
-        statusFilterActive
+        filters.status === "archived"
           ? filteredRows
-          : filteredRows.filter((r) => campanhaStatus(r.campanha, today) !== "encerrada"),
+          : filteredRows.filter((r) => campanhaStatus(r.campanha) !== "archived"),
         filters.sort,
         influsByCampanha,
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filteredRows, statusFilterActive, filters.sort, influsByCampanha],
-  );
-  // Mesmos query/filters de cima, só forçando status="encerrada" — busca e
-  // filtros continuam valendo dentro da seção de encerradas também.
-  const encerradasFilters = useMemo(
-    () => ({ ...filters, status: "encerrada" as const }),
-    [filters],
-  );
-  const encerradasRowsAll = useMemo(
-    () =>
-      statusFilterActive
-        ? []
-        : filterCampanhas(rows, query, encerradasFilters, today, influsByCampanha),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, query, encerradasFilters, influsByCampanha, statusFilterActive],
-  );
-  const encerradasCount = encerradasRowsAll.length;
-  const encerradasRows = useMemo(
-    () => (showEncerradas ? sortCampanhas(encerradasRowsAll, filters.sort, influsByCampanha) : []),
-    [showEncerradas, encerradasRowsAll, filters.sort, influsByCampanha],
+    [filteredRows, filters.status, filters.sort, influsByCampanha],
   );
 
   if (current) {
@@ -295,8 +277,8 @@ export function CampanhasSection() {
   }
 
   const totalCampanhas = rows.length;
-  const ativas = rows.filter((r) => campanhaStatus(r.campanha, today) === "ativa").length;
-  const semPrazo = rows.filter((r) => campanhaStatus(r.campanha, today) === "sem_prazo").length;
+  const ativas = rows.filter((r) => campanhaStatus(r.campanha) === "active").length;
+  const emNegociacao = rows.filter((r) => campanhaStatus(r.campanha) === "negotiation").length;
   const totalInflusReais = Array.from(influsByCampanha.values()).reduce(
     (s, list) => s + list.length,
     0,
@@ -377,10 +359,10 @@ export function CampanhasSection() {
                   </span>
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Sem prazo
+                      Em negociação
                     </p>
                     <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {semPrazo}
+                      {emNegociacao}
                     </p>
                   </div>
                 </div>
@@ -449,60 +431,6 @@ export function CampanhasSection() {
                 />
               );
             })}
-          </div>
-        )}
-
-        {encerradasCount > 0 && (
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setShowEncerradas((v) => !v)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-full py-2.5 text-sm font-medium text-brand hover:underline"
-            >
-              {showEncerradas
-                ? "Ocultar campanhas encerradas"
-                : `Ver campanhas encerradas (${encerradasCount})`}
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform ${showEncerradas ? "rotate-180" : ""}`}
-              />
-            </button>
-
-            {showEncerradas && (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Campanhas encerradas
-                </p>
-                {encerradasRows.length === 0 ? (
-                  <EmptyState
-                    compact
-                    icon={<Megaphone className="h-5 w-5" />}
-                    title="Nenhuma campanha encerrada encontrada"
-                    description="Ajuste a busca ou os filtros para ver outras campanhas encerradas."
-                  />
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {encerradasRows.map((row) => {
-                      const influs = influsByCampanha.get(row.campanha.id) ?? [];
-                      const entregas = influs.flatMap((i) => i.entregas ?? []);
-                      return (
-                        <CampanhaCard
-                          key={row.campanha.id}
-                          row={row}
-                          influCount={influs.length}
-                          entregasTotal={entregas.length}
-                          entregasPublicadas={
-                            entregas.filter((e) => e.stage === "PUBLICADA").length
-                          }
-                          onOpen={() => setOpenId(row.campanha.id)}
-                          onEdit={() => openEditCampanha(row)}
-                          onDelete={() => void requestDeleteCampanha(row)}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
       </PageContainer>
@@ -814,8 +742,57 @@ function CampanhaDetail({
   };
   const saveEditedCampaign = (patch: Campaign) => saveInscricaoPage(patch);
 
-  const status = campanhaStatus(c, new Date());
+  const status = campanhaStatus(c);
   const briefingIsLong = (c.briefing?.length ?? 0) > 320;
+
+  // Troca de status — transições fixas (Negociação→Ativa sem confirmação;
+  // Ativa↔Concluída com confirmação, textos exatos pedidos) + arquivar (de
+  // qualquer status) + restaurar (pergunta o status de destino só quando
+  // `statusBeforeArchive` não foi gravado — ex. campanhas arquivadas antes
+  // desta fase existir).
+  const { confirm: confirmStatusChange, confirmDialog: confirmStatusChangeDialog } = useConfirm();
+  const { confirmChoice: confirmRestoreChoice, confirmChoiceDialog: confirmRestoreChoiceDialog } =
+    useConfirmChoice<CampanhaStatus>();
+  const applyStatusChange = (next: CampanhaStatus) =>
+    saveInscricaoPage(buildStatusChangePatch(c, next));
+  const changeStatus = async (next: CampanhaStatus, confirmMessage?: string) => {
+    if (confirmMessage) {
+      const ok = await confirmStatusChange(confirmMessage);
+      if (!ok) return;
+    }
+    applyStatusChange(next);
+  };
+  const archiveCampaign = () => void changeStatus("archived", ARCHIVE_ACTION.confirmMessage);
+  const restoreCampaign = async () => {
+    const target =
+      c.statusBeforeArchive ??
+      (await confirmRestoreChoice(
+        "Esta campanha foi arquivada antes de o histórico de status existir — escolha pra onde restaurá-la.",
+        [
+          { value: "negotiation", label: CAMPANHA_STATUS_LABEL.negotiation },
+          { value: "active", label: CAMPANHA_STATUS_LABEL.active },
+          { value: "completed", label: CAMPANHA_STATUS_LABEL.completed },
+        ],
+        "Restaurar campanha",
+      ));
+    if (!target) return;
+    const ok = await confirmStatusChange(restoreConfirmMessage(target));
+    if (!ok) return;
+    applyStatusChange(target);
+  };
+
+  // Permissões (pedido: "administrador: todas as transições; gestor:
+  // transições operacionais; membro: só visualização"). Este app só tem
+  // admin/membro de verdade em `user_roles` (sem papel "gestor" à parte) —
+  // qualquer um com a permissão `campanhas` já vale como "gestor" aqui, e
+  // arquivar/restaurar (a ação mais consequente, difícil de reverter sem
+  // saber o status anterior) fica reservada a admin. Quem chegou nesta
+  // tela já passou pela RLS de `campanhas`; não checar de novo aqui seria
+  // redundante, só a distinção admin/não-admin é nova.
+  const myAccess = useMyAccess();
+  const canArchiveOrRestore = Boolean(myAccess?.isAdmin);
+  const availableTransitions = CAMPANHA_STATUS_TRANSITIONS[status];
+  const canChangeStatus = availableTransitions.length > 0 || canArchiveOrRestore;
 
   return (
     // Canvas fix (mesma correção do Financeiro/Clientes/Campanhas): fundo
@@ -835,6 +812,8 @@ function CampanhaDetail({
       <PageContainer variant="wide" className="space-y-6 md:space-y-8 lg:space-y-10 xl:space-y-12">
         {confirmDeleteRelatorioDialog}
         {confirmDeleteCampanhaDialog}
+        {confirmStatusChangeDialog}
+        {confirmRestoreChoiceDialog}
 
         {/* CABEÇALHO DA CAMPANHA — breadcrumb + identidade/ações agrupados
          * num único bloco visual (gap interno pequeno, "content gap");
@@ -865,17 +844,55 @@ function CampanhaDetail({
                   {c.nome}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant={
-                      status === "ativa"
-                        ? "success"
-                        : status === "encerrada"
-                          ? "secondary"
-                          : "outline"
-                    }
-                  >
-                    {CAMPANHA_STATUS_LABEL[status]}
-                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={!canChangeStatus}
+                        className="disabled:cursor-default"
+                      >
+                        <Badge
+                          variant={
+                            status === "active"
+                              ? "success"
+                              : status === "completed"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className={canChangeStatus ? "cursor-pointer hover:opacity-80" : ""}
+                        >
+                          {CAMPANHA_STATUS_LABEL[status]}
+                        </Badge>
+                      </button>
+                    </DropdownMenuTrigger>
+                    {canChangeStatus && (
+                      <DropdownMenuContent align="start">
+                        {CAMPANHA_STATUS_TRANSITIONS[status].map((t) => (
+                          <DropdownMenuItem
+                            key={t.to}
+                            onSelect={() =>
+                              void changeStatus(t.to, t.needsConfirm ? t.confirmMessage : undefined)
+                            }
+                          >
+                            {t.actionLabel}
+                          </DropdownMenuItem>
+                        ))}
+                        {canArchiveOrRestore && status !== "archived" && (
+                          <DropdownMenuItem
+                            onSelect={archiveCampaign}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            {ARCHIVE_ACTION.actionLabel}
+                          </DropdownMenuItem>
+                        )}
+                        {canArchiveOrRestore && status === "archived" && (
+                          <DropdownMenuItem onSelect={() => void restoreCampaign()}>
+                            Restaurar campanha
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    )}
+                  </DropdownMenu>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
                     <Calendar className="h-3.5 w-3.5" />
                     {isRecorrente
@@ -941,6 +958,31 @@ function CampanhaDetail({
             </div>
           </div>
         </div>
+
+        {(c.activity?.length ?? 0) > 0 && (
+          <details className="group text-xs text-text-secondary">
+            <summary className="cursor-pointer select-none font-medium hover:text-foreground">
+              Histórico de status ({c.activity!.length})
+            </summary>
+            <ul className="mt-2 space-y-1.5 border-l border-border/60 pl-3">
+              {[...c.activity!]
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                .map((entry) => (
+                  <li key={entry.id}>
+                    <span className="font-medium text-foreground">{entry.author}</span>{" "}
+                    {entry.action}
+                    <span className="ml-1.5 text-text-secondary/70">
+                      ·{" "}
+                      {new Date(entry.createdAt).toLocaleString("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </details>
+        )}
 
         <InscricaoPageDialog
           open={inscricaoOpen}

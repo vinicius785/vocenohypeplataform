@@ -92,6 +92,21 @@ export type PublicoAlvo = {
 
 const emptyPublicoAlvo: PublicoAlvo = { generos: [] };
 
+/** Status do ciclo de vida comercial/operacional da campanha — 4 valores
+ * possíveis, sempre explícito, nunca derivado de data/progresso/pendência.
+ * Definido aqui (não em `campanha-ui.ts`) porque é parte do próprio tipo
+ * `Campaign`; `campanha-ui.ts` importa daqui, evitando um ciclo de import
+ * (ele já importa `Campaign` deste arquivo). */
+export type CampanhaStatus = "negotiation" | "active" | "completed" | "archived";
+
+export type CampanhaActivityEntry = {
+  id: string;
+  author: string;
+  action: string;
+  createdAt: string;
+  reason?: string;
+};
+
 export type Campaign = {
   id: string;
   nome: string;
@@ -135,6 +150,33 @@ export type Campaign = {
    * campanha "legada", continua funcionando com o formulário padrão atual
    * (ver `getEffectiveInscricaoPage` em `src/lib/inscricao-page.ts`). */
   inscricaoPage?: InscricaoPageConfig;
+
+  /* ==========================================================
+   * Status do ciclo de vida (reconstrução do modelo de status) — NUNCA
+   * derivado de `prazo`/progresso/pendências, sempre um valor explícito
+   * escolhido por alguém. Ver `campanha-ui.ts` pros helpers/transições.
+   * ========================================================== */
+  /** Ausente só em campanhas anteriores à migration de backfill que ainda
+   * não passaram por ela por algum motivo — `campanhaStatus()` trata como
+   * "negotiation" nesse caso, nunca "active". */
+  status?: CampanhaStatus;
+  statusChangedAt?: string;
+  /** Nome de quem alterou (mesma convenção de `TaskBoard.tsx`'s log de
+   * atividade — não um UUID; campanha é um objeto client-side dentro do
+   * JSONB do cliente, sem contexto de servidor pra resolver um id aqui). */
+  statusChangedBy?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  /** Status de antes de arquivar — usado pra restaurar pro lugar certo.
+   * Limpo assim que a campanha sai de "archived" (restaurada). */
+  statusBeforeArchive?: CampanhaStatus;
+  activity?: CampanhaActivityEntry[];
+  /** Visibilidade no Portal do Cliente — propriedade PRÓPRIA, nunca
+   * derivada do `status` (uma campanha em Negociação pode em tese ser
+   * liberada, uma Concluída pode ficar oculta etc.). Ausente = `true`
+   * (campanhas existentes antes desta fase continuam visíveis como
+   * sempre foram, comportamento inalterado). */
+  clientVisible?: boolean;
 };
 
 const newLinha = (): InfluLinha => ({

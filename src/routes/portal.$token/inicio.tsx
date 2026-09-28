@@ -11,7 +11,6 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { HomeHeaderShell } from "@/components/shared/HomeHeaderShell";
 import { HypitoPortalSummary } from "@/components/portal/HypitoPortalSummary";
 import { PortalSectionCard } from "@/components/portal/PortalSectionCard";
-import { campanhaStatus } from "@/components/campanhas/campanha-ui";
 import {
   loadArtigoEngagement,
   toggleArtigoLike,
@@ -22,18 +21,10 @@ import { mesLabel } from "@/lib/relatorio-mensal";
 import { t } from "@/lib/portal-i18n";
 import { usePortalData } from "@/components/portal/portal-context";
 import { fmtDate, initialsOf, isImageUrl, pendingReason } from "@/components/portal/portal-widgets";
-import type { PublicCampanha } from "@/lib/portal-types";
 
 export const Route = createFileRoute("/portal/$token/inicio")({
   component: PortalInicioPage,
 });
-
-function toStatusShim(c: PublicCampanha) {
-  return {
-    prazo: c.prazo,
-    pagClienteTipo: c.isRecorrente ? ("Recorrente" as const) : undefined,
-  } as Parameters<typeof campanhaStatus>[0];
-}
 
 /**
  * Página inicial do portal — correção visual/estrutural: cabeçalho vira
@@ -68,9 +59,10 @@ function PortalInicioPage() {
   }, [readingArticleId, loadEngagementFn, token]);
 
   const today = new Date();
-  const campanhasAtivas = data.campanhas.filter(
-    (c) => campanhaStatus(toStatusShim(c), today) !== "encerrada",
-  );
+  // `data.campanhas` já vem pré-filtrada pelo servidor (só "active"/
+  // "completed" — ver `buildClienteLinkData`); aqui só separa as
+  // concluídas pra não competir com as em andamento no resumo da Início.
+  const campanhasAtivas = data.campanhas.filter((c) => c.status !== "completed");
 
   const allInfluencers = data.campanhas.flatMap((c) => c.influencers);
   const totalAguardando = allInfluencers.filter((i) => pendingReason(i, lang)).length;

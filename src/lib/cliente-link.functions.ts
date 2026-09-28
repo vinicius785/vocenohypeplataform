@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Cliente } from "@/lib/clientes-store";
+import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type {
   Influ,
   Entrega,
@@ -633,9 +634,25 @@ const _CampaignCyclePublic = z.object({
  * função decide autorização — isso já aconteceu antes (token válido, ou
  * sessão + organização confirmada) em quem chamou.
  */
+/** Visibilidade no Portal do Cliente é decidida aqui, no servidor — nunca
+ * no frontend. Regras (reconstrução do modelo de status): campanha em
+ * Negociação não aparece por padrão; Arquivada nunca aparece (dado
+ * preservado, só não exposto); Ativa/Concluída aparecem só quando
+ * `clientVisible` não for explicitamente `false` (padrão `true` pra
+ * campanhas de antes desta fase, que sempre apareceram). Status e
+ * visibilidade são conceitos INDEPENDENTES de propósito — `clientVisible`
+ * nunca é derivado do `status`. */
+export function isVisibleToClientPortal(
+  c: Campaign,
+): c is Campaign & { status: "active" | "completed" } {
+  const status = c.status ?? "negotiation";
+  if (status !== "active" && status !== "completed") return false;
+  return c.clientVisible !== false;
+}
+
 export async function buildClienteLinkData(clienteId: string, cliente: Cliente) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const campanhas = cliente.campanhas ?? [];
+  const campanhas = (cliente.campanhas ?? []).filter(isVisibleToClientPortal);
 
   const campanhasComInflus = await Promise.all(
     campanhas.map(async (c) => {
@@ -711,6 +728,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         isRecorrente: c.pagClienteTipo === "Recorrente",
         recorrenteInicio: c.pagClienteRecorrenteInicio,
         cycles,
+        status: c.status as "active" | "completed",
       };
     }),
   );

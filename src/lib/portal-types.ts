@@ -139,6 +139,14 @@ export type PublicCampanha = {
   /** Ausente/vazio é um estado válido: "campanha recorrente sem ciclo
    * ainda" — nunca tratar como "carregando" ou preencher com zeros. */
   cycles?: PublicCampaignCycle[];
+  /** Só "active"/"completed" chegam aqui — `buildClienteLinkData` já
+   * filtra fora "negotiation"/"archived" e qualquer campanha com
+   * `clientVisible === false` antes de montar a resposta (reconstrução do
+   * modelo de status: visibilidade no portal nunca é decidida no
+   * frontend). Opcional só pra não quebrar fixtures de teste existentes do
+   * Portal V2 que montam `PublicCampanha` à mão sem essa propriedade — a
+   * própria `buildClienteLinkData` sempre preenche. */
+  status?: "active" | "completed";
 };
 export type PublicArticle = {
   id: string;

@@ -84,7 +84,7 @@ export function CampanhaFiltersBar({
             <div>
               <p className="mb-1.5 text-[11px] font-medium text-text-secondary">Status</p>
               <div className="flex flex-wrap gap-1">
-                {(["todos", "ativa", "encerrada", "sem_prazo"] as const).map((v) => (
+                {(["todos", "negotiation", "active", "completed", "archived"] as const).map((v) => (
                   <button
                     key={v}
                     type="button"
