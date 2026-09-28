@@ -45,11 +45,31 @@ export const getTeamDirectory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Fonte única da separação interno/cliente: `organization_members` +
+    // `organizations.type = 'internal'` (ver `is_internal_team_member` no
+    // banco, migration `20260928120000_separate_internal_from_client_users`).
+    // Antes esta consulta trazia TODA a tabela `profiles` sem filtro — é o
+    // cache raiz (`localStorage["time:membros"]`) que alimenta a aba Time,
+    // o Chat e, por tabela, score/performance, então uma conta de cliente
+    // convidada pelo Portal (que ganha uma linha em `profiles` idêntica à
+    // de um funcionário, mesmo trigger de criação) aparecia em todos esses
+    // lugares ao mesmo tempo.
+    const { data: internalMemberships, error: membershipError } = await supabaseAdmin
+      .from("organization_members")
+      .select("user_id, organizations!inner(type, status)")
+      .eq("status", "active")
+      .eq("organizations.status", "active")
+      .eq("organizations.type", "internal");
+    if (membershipError) throw new Error(membershipError.message);
+    const internalIds = (internalMemberships ?? []).map((m) => m.user_id);
+    if (internalIds.length === 0) return [];
+
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .select(
         "id,email,full_name,photo_url,birthday,role_label,salary,permissions,time_view,start_times",
       )
+      .in("id", internalIds)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id,role");
@@ -117,9 +137,45 @@ export const createTeamMember = createServerFn({ method: "POST" })
       .eq("id", userId);
 
     await setUserRole(supabaseAdmin, userId, data.role);
+    await addToInternalOrganization(supabaseAdmin, userId, data.role);
 
     return { id: userId, email: data.email, tempPassword: data.tempPassword };
   });
+
+/** Vincula `userId` à organização interna ("Você no Hype", `type =
+ * 'internal'`) — sem isso, a conta criada aqui não é distinguível de uma
+ * conta de cliente (o trigger `handle_new_user` cria `profiles`/`user_roles`
+ * do mesmo jeito pros dois casos). `getTeamDirectory` e as políticas de RLS
+ * de Chat/score agora exigem essa linha (`is_internal_team_member`,
+ * migration `20260928120000_separate_internal_from_client_users`) — sem
+ * ela, um membro recém-criado ficaria invisível na própria aba Time.
+ * `upsert` porque `resetMemberPassword`/reativações nunca deveriam falhar
+ * por já existir uma linha antiga (ex: membro desativado e recriado). */
+async function addToInternalOrganization(
+  supabaseAdmin: SupabaseClient<Database>,
+  userId: string,
+  role: "admin" | "member",
+): Promise<void> {
+  const { data: internalOrg, error: orgError } = await supabaseAdmin
+    .from("organizations")
+    .select("id")
+    .eq("type", "internal")
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  if (orgError) throw new Error(orgError.message);
+  if (!internalOrg) throw new Error("Organização interna não encontrada.");
+  const { error } = await supabaseAdmin.from("organization_members").upsert(
+    {
+      organization_id: internalOrg.id,
+      user_id: userId,
+      role: role === "admin" ? "internal_admin" : "internal_member",
+      status: "active",
+    },
+    { onConflict: "organization_id,user_id" },
+  );
+  if (error) throw new Error(error.message);
+}
 
 const UpdateInput = z.object({
   id: z.string().uuid(),
@@ -161,6 +217,10 @@ export const updateTeamMember = createServerFn({ method: "POST" })
       }
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await setUserRole(supabaseAdmin, data.id, data.role);
+      // Mantém `organization_members.role` em sincronia com `user_roles` —
+      // é `organization_members` (não `user_roles`) que decide se essa
+      // pessoa é "do time" pra `is_internal_team_member`/`getTeamDirectory`.
+      await addToInternalOrganization(supabaseAdmin, data.id, data.role);
     }
     return { ok: true };
   });
