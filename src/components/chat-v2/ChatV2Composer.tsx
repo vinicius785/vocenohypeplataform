@@ -196,7 +196,14 @@ export function ChatV2Composer({
     "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
 
   return (
-    <div ref={rootRef} className="shrink-0 border-t border-border px-3 pb-3 pt-2.5 md:px-4">
+    // `bg-muted/20` (não `bg-background`) de propósito: mesmo token de
+    // superfície já usado pela coluna de conversas (`ChatV2Navigation.tsx`)
+    // — antes o composer usava exatamente a mesma cor de fundo da timeline
+    // (`bg-background`), zero hierarquia entre as camadas do chat.
+    <div
+      ref={rootRef}
+      className="shrink-0 border-t border-border bg-muted/20 px-3 pb-3 pt-2.5 md:px-4"
+    >
       {error && (
         <p className="mb-1.5 text-xs text-destructive">
           {error}{" "}

@@ -34,17 +34,13 @@ export function ChatV2ConversationItem({
         active ? "bg-brand-subtle" : "hover:bg-muted/60"
       }`}
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center">{icon}</span>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <span
-              className={`block truncate text-sm ${
-                active
-                  ? "font-semibold text-brand-foreground"
-                  : unreadState
-                    ? "font-semibold text-foreground"
-                    : "font-medium text-foreground"
+              className={`block truncate text-sm font-semibold ${
+                active ? "text-brand-foreground" : "text-foreground"
               }`}
             >
               {name}

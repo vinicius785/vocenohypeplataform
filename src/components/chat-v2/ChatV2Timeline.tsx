@@ -250,7 +250,7 @@ export function ChatV2Timeline({
           return (
             <div key={group.messages[0].id}>
               {showDateDivider && (
-                <div className="my-3 flex items-center gap-3 px-5 md:px-6">
+                <div className="my-3 mx-auto flex max-w-[min(960px,calc(100%-64px))] items-center gap-3 px-5 md:px-6">
                   <div className="h-px flex-1 bg-border" />
                   <span className="text-[11px] font-medium text-muted-foreground">
                     {dateDividerLabel(group.messages[0].createdAt)}
@@ -274,7 +274,7 @@ export function ChatV2Timeline({
                     {isUnreadDivider && (
                       <div
                         data-unread-divider="1"
-                        className="my-2 flex items-center gap-3 px-5 md:px-6"
+                        className="my-2 mx-auto flex max-w-[min(960px,calc(100%-64px))] items-center gap-3 px-5 md:px-6"
                       >
                         <div className="h-px flex-1 bg-brand/40" />
                         <span className="text-[11px] font-semibold text-brand">

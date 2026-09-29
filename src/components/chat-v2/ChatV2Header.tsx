@@ -42,7 +42,7 @@ function PinnedPopover({ convoId }: { convoId: string }) {
         <Button
           variant="ghost"
           size="sm"
-          className="ml-auto h-7 gap-1 px-2 text-[11px] text-muted-foreground"
+          className="ml-auto h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-brand"
           aria-label="Mensagens fixadas"
         >
           <Pin className="h-3.5 w-3.5" /> {pinned.length}
@@ -116,14 +116,14 @@ export function ChatV2Header({
       : 0;
 
   return (
-    <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-0.5 border-b border-border bg-background px-4 py-3">
+    <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-0.5 border-b border-border bg-background px-4 py-4">
       <div className="flex items-center gap-2">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
             aria-label="Voltar pra lista de conversas"
-            className="-ml-1.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            className="-ml-1.5 mr-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-brand md:hidden"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>

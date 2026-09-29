@@ -25,6 +25,7 @@ import {
 } from "@/lib/chat-store";
 import { MENTION_KIND_CONFIG } from "@/lib/mention-kinds";
 import { splitMentionParts } from "@/lib/mention-render";
+import { linkifyText } from "@/lib/linkify";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -130,7 +131,11 @@ function renderTextWithMentions(
 ) {
   const parts = splitMentionParts(text, mentions);
   return parts.map((p, i) => {
-    if (typeof p === "string") return <span key={i}>{p}</span>;
+    // Reaproveita a mesma função de linkificação já usada no Chat V1
+    // (`src/lib/linkify.tsx`, `ChatSection.tsx`) em vez de escrever uma nova
+    // — mesma regex de URL, mesmo comportamento de link (nova aba, sem
+    // vazar `rel`), texto normal e menções continuam intocados.
+    if (typeof p === "string") return <span key={i}>{linkifyText(p, `msg-link-${i}`)}</span>;
 
     if (p.kind === "user") {
       const isSelf = p.id === meId;
@@ -380,14 +385,11 @@ export function ChatV2Message({
          * (100% de largura), por isso `right-3` ancorava no extremo direito
          * da TIMELINE, não da mensagem, mesmo com o texto bem mais curto e
          * alinhado à esquerda. */}
-        <div className="relative w-fit max-w-[min(900px,calc(100%-64px))]">
+        <div className="relative w-fit max-w-[min(960px,calc(100%-64px))]">
           {showHeader && (
             <div className="flex items-baseline gap-2 pr-16">
-              <span
-                className={`text-sm font-semibold ${isMine ? "text-brand" : "text-foreground"}`}
-              >
-                {message.authorName}
-              </span>
+              <span className="text-sm font-semibold text-foreground">{message.authorName}</span>
+              {isMine && <span className="text-[11px] text-muted-foreground">· você</span>}
               <span className="text-[11px] text-muted-foreground">
                 {formatTime(message.createdAt)}
               </span>

@@ -153,15 +153,15 @@ export function ChatV2Navigation({
                         <img
                           src={item.photo}
                           alt=""
-                          className="h-8 w-8 rounded-full object-cover"
+                          className="h-9 w-9 rounded-full object-cover"
                         />
                       ) : (
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-semibold">
                           {item.name.slice(0, 1).toUpperCase()}
                         </span>
                       )}
                       <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
+                        className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-background ${STATUS_COLOR[status]}`}
                       />
                     </span>
                   }
@@ -187,7 +187,7 @@ export function ChatV2Navigation({
                   active={activeConvoId === item.id}
                   hasMention={hasMention(item)}
                   icon={
-                    <span className="flex h-8 w-8 items-center justify-center text-base text-muted-foreground">
+                    <span className="flex h-9 w-9 items-center justify-center text-base text-muted-foreground">
                       <Hash className="h-4 w-4" />
                     </span>
                   }
@@ -213,7 +213,7 @@ export function ChatV2Navigation({
                   active={activeConvoId === item.id}
                   hasMention={hasMention(item)}
                   icon={
-                    <span className="flex h-8 w-8 items-center justify-center text-muted-foreground">
+                    <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">
                       <Briefcase className="h-4 w-4" />
                     </span>
                   }
@@ -247,7 +247,7 @@ export function ChatV2Navigation({
                   active={activeConvoId === item.id}
                   hasMention={hasMention(item)}
                   icon={
-                    <span className="flex h-8 w-8 items-center justify-center text-muted-foreground">
+                    <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">
                       <Megaphone className="h-4 w-4" />
                     </span>
                   }
