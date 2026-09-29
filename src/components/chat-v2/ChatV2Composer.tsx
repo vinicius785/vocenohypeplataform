@@ -202,7 +202,7 @@ export function ChatV2Composer({
     // (`bg-background`), zero hierarquia entre as camadas do chat.
     <div
       ref={rootRef}
-      className="shrink-0 border-t border-border bg-muted/20 px-3 pb-3 pt-2.5 md:px-4"
+      className="shrink-0 border-t border-border bg-muted/20 px-4 pb-3 pt-2.5 md:px-6"
     >
       {error && (
         <p className="mb-1.5 text-xs text-destructive">

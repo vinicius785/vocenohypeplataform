@@ -384,7 +384,7 @@ export function ChatV2Message({
 
   return (
     <div
-      className={`message-row group relative grid grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-0.5 hover:bg-muted/40 md:px-6 ${rowSpacing}`}
+      className={`message-row group relative grid grid-cols-[40px_minmax(0,1fr)] gap-2.5 -mx-3 px-3 py-0.5 hover:bg-muted/40 sm:-mx-4 sm:px-4 ${rowSpacing}`}
       onTouchStart={startLongPress}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
@@ -410,7 +410,7 @@ export function ChatV2Message({
           </span>
         )}
       </div>
-      <div className="min-w-0 max-w-[900px]">
+      <div className="message-content min-w-0 max-w-[820px]">
         {/* Nome + horário acima do corpo, só na primeira mensagem do grupo —
          * SEMPRE à esquerda, mesmo para mensagens próprias (nunca balão,
          * nunca alinhamento à direita, nunca fundo colorido). Mensagens

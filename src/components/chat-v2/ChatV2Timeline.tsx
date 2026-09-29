@@ -240,12 +240,13 @@ export function ChatV2Timeline({
         className="message-scroll-area h-full overflow-y-auto overflow-x-hidden"
         aria-live="off"
       >
-        {/* Conteúdo centralizado com largura de leitura confortável — em
-         * telas ultrawide isso evita tanto "tudo colado à esquerda" quanto
-         * "vazio enorme à direita": o painel ocupa 100% da largura, mas o
-         * texto nunca passa de 1120px, com margens automáticas equilibradas
-         * dos dois lados. */}
-        <div className="message-timeline-inner mx-auto w-full max-w-[1120px] px-4 pb-8 pt-5 md:px-7">
+        {/* ClickUp-style: NÃO centralizar uma coluna estreita no meio do
+         * painel (bug da rodada anterior, `mx-auto` + coluna estreita gerava
+         * vazios enormes dos dois lados e sensação de "conteúdo flutuando").
+         * A timeline ocupa 100% da largura do painel e o conteúdo é ANCORADO
+         * À ESQUERDA, com um teto de largura só pra telas ultrawide não
+         * esticarem o texto até o infinito — sem `margin-inline: auto`. */}
+        <div className="message-timeline-inner w-full max-w-[1180px] px-3 pb-8 pt-5 sm:px-6 md:px-[72px]">
           {loadingOlder && (
             <p className="py-2 text-center text-xs text-muted-foreground">Carregando mensagens…</p>
           )}
