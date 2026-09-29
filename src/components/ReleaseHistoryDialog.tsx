@@ -51,7 +51,7 @@ function ReleaseChanges({ release }: { release: PlatformRelease }) {
  * Novidades" (já removida) por um Dialog/Drawer, sem criar uma aba nova
  * (Seção 7/8 do pedido). Lista da mais recente pra mais antiga, cada
  * versão expansível (`Accordion`, já existente no design system).
- * Aberto por: aviso do Hypito ("Ver novidades"), `NovidadesButton`
+ * Aberto por: aviso de nova versão ("Ver novidades"), `NovidadesButton`
  * (rodapé da sidebar) e clique na versão em Configurações.
  */
 export function ReleaseHistoryDialog({

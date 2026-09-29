@@ -11,7 +11,6 @@ import {
   Lock,
   Download,
   Sliders,
-  Bot,
   Bug,
   ImageIcon,
   Trash2,
@@ -45,7 +44,6 @@ import { TimePermissoesTab } from "@/components/configuracoes/TimePermissoesTab"
 import { SegurancaSection } from "@/components/configuracoes/SegurancaSection";
 import { DadosBackupSection } from "@/components/configuracoes/DadosBackupSection";
 import { ScoreOperacionalSection } from "@/components/configuracoes/ScoreOperacionalSection";
-import { HypitoReportTab } from "@/components/configuracoes/HypitoReportTab";
 import { AuditLogTab } from "@/components/configuracoes/AuditLogTab";
 
 export type { Perfil };
@@ -141,10 +139,7 @@ function buildGroups(
     {
       label: "Automação e administração",
       items: isAdmin
-        ? [
-            { key: "score_operacional" as ConfigTab, label: "Score operacional", icon: Sliders },
-            { key: "hypito" as ConfigTab, label: "Relatório semanal do Hypito", icon: Bot },
-          ]
+        ? [{ key: "score_operacional" as ConfigTab, label: "Score operacional", icon: Sliders }]
         : [],
     },
   ].filter((g) => g.items.length > 0);
@@ -198,7 +193,6 @@ export function ConfiguracoesSection() {
       {tab === "dados_backup" && <DadosBackupSection isAdmin={isAdmin} />}
       {tab === "log_auditoria" && <AuditLogTab isAdmin={isAdmin} />}
       {tab === "score_operacional" && <ScoreOperacionalSection isAdmin={isAdmin} />}
-      {tab === "hypito" && (isAdmin ? <HypitoReportTab /> : null)}
     </ConfiguracoesLayout>
   );
 }

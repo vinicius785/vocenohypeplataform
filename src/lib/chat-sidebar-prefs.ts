@@ -1,9 +1,7 @@
 /**
  * Grupos recolhidos da barra lateral do Chat (pedido: "salvar os grupos
  * recolhidos no localStorage") — só estado de UI local, nunca sincronizado
- * entre dispositivos (mesmo espírito de `hypito-widget-store.ts`). O
- * Hypito nunca entra aqui — é sempre 1 item fixo, nunca um grupo
- * recolhível.
+ * entre dispositivos.
  */
 const KEY = "chat:sidebar-collapsed-groups";
 

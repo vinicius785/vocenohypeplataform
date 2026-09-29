@@ -6,9 +6,10 @@
  *
  * Deliberately reuses the existing permission machinery instead of building
  * a second, parallel one: `requirePermission` delegates to
- * `hypito-permissions.server.ts`'s `can`/`assertCan` (the same functions
- * that already gate the Hypito bot against `has_permission`/`is_admin`),
- * and organization/role checks reuse `is_admin` via `loadUserAccess` only
+ * `hypito-permissions.server.ts`'s `can`/`assertCan` (general-purpose
+ * permission infra, despite the filename — used platform-wide against
+ * `has_permission`/`is_admin`), and organization/role checks reuse
+ * `is_admin` via `loadUserAccess` only
  * where relevant. See CLAUDE.md, "Phase 1 of a large, high-risk auth/
  * authorization overhaul".
  */

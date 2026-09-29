@@ -105,7 +105,7 @@ export function PortalTopBar({
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-0">
               <div className="border-b border-border px-3.5 py-2.5">
-                <p className="text-sm font-semibold text-foreground">Hypito</p>
+                <p className="text-sm font-semibold text-foreground">Pendências</p>
                 <p className="text-xs text-muted-foreground">Pendências em suas campanhas</p>
               </div>
               {!pendingItems?.length ? (

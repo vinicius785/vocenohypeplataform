@@ -1,5 +1,4 @@
 import { Loader2 } from "lucide-react";
-import { HYPITO_AVATAR_URL } from "@/lib/hypito";
 
 /**
  * Shared "Preparando seu ambiente…" screen. Reused in three places so the
@@ -19,8 +18,10 @@ export function PreparingEnvironmentScreen() {
   return (
     <div className="flex min-h-[100dvh] w-full items-center justify-center bg-background p-6">
       <div className="flex flex-col items-center gap-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-card shadow-lg ring-1 ring-border">
-          <img src={HYPITO_AVATAR_URL} alt="" className="h-full w-full object-cover" />
+        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-foreground text-background shadow-lg ring-1 ring-border">
+          <span className="text-sm font-bold tracking-tight" aria-hidden="true">
+            VH
+          </span>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />

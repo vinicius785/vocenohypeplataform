@@ -23,8 +23,6 @@ import {
   type ChatMember,
   type ChatMention,
 } from "@/lib/chat-store";
-import { openHypitoWidget } from "@/lib/hypito-widget-store";
-import { seedHypitoTaskFromMessage } from "@/lib/hypito-chat.functions";
 import { MENTION_KIND_CONFIG } from "@/lib/mention-kinds";
 import { splitMentionParts } from "@/lib/mention-render";
 import { Button } from "@/components/ui/button";
@@ -39,6 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentionCard";
 import { AttachmentList } from "@/components/chat/AttachmentList";
+import { MessageAvatar } from "@/components/chat/MessageAvatar";
 import { useMentionNavigation } from "./use-mention-navigation";
 
 function formatTime(ts: number): string {
@@ -290,24 +289,6 @@ export function ChatV2Message({
     setEditing(false);
   };
 
-  const handleCreateTask = () => {
-    const mentionedUserIds = (message.mentions ?? [])
-      .filter((m) => m.kind === "user")
-      .map((m) => m.id);
-    openHypitoWidget();
-    void seedHypitoTaskFromMessage({
-      data: {
-        messageId: message.id,
-        convoId: effectiveConvoId,
-        channelName: "Chat",
-        authorName: message.authorName,
-        text: message.text,
-        createdAtIso: new Date(message.createdAt).toISOString(),
-        mentionedUserIds,
-      },
-    });
-  };
-
   if (isSystem) {
     return (
       <div className="px-4 py-1 text-center text-xs text-muted-foreground">{message.text}</div>
@@ -318,13 +299,12 @@ export function ChatV2Message({
     <div className="group relative flex gap-3 rounded-md px-4 py-0.5 hover:bg-muted/40">
       <div className="w-9 shrink-0">
         {showHeader ? (
-          message.authorPhoto ? (
-            <img src={message.authorPhoto} alt="" className="h-9 w-9 rounded-md object-cover" />
-          ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-sm font-semibold text-foreground">
-              {message.authorName.slice(0, 1).toUpperCase()}
-            </span>
-          )
+          <MessageAvatar
+            photo={message.authorPhoto}
+            name={message.authorName}
+            shape="square"
+            className="h-9 w-9 text-sm"
+          />
         ) : (
           <span className="block h-4 w-9 text-right text-[10px] leading-4 text-muted-foreground opacity-0 group-hover:opacity-100">
             {formatTime(message.createdAt)}
@@ -485,7 +465,6 @@ export function ChatV2Message({
               )}
               {pinned ? "Desafixar" : "Fixar"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleCreateTask}>Criar tarefa</DropdownMenuItem>
             {isMine && (
               <>
                 <DropdownMenuItem

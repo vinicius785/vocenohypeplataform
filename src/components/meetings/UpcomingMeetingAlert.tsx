@@ -1,10 +1,9 @@
 import { createPortal } from "react-dom";
-import { Video, X } from "lucide-react";
+import { Bell, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { AvatarStack, type AvatarPerson } from "@/components/meetings/AvatarStack";
-import { HYPITO_AVATAR_URL, HYPITO_NAME, HYPITO_BADGE_LABEL, HYPITO_TAGLINE } from "@/lib/hypito";
 import { meetingStartTime, meetingEndTime, type Meeting } from "@/lib/reunioes-store";
 import type { SemanticTone } from "@/lib/design-tokens";
 
@@ -49,7 +48,8 @@ function timeRangeLabel(m: Meeting): string {
 }
 
 /**
- * Card de aviso "reunião prestes a começar", assinado pelo Hypito —
+ * Card de aviso "reunião prestes a começar", estilo padrão de
+ * alerta/notificação da plataforma (sem identidade/persona) —
  * puramente apresentacional: quem dispara/deduplica/agenda é
  * `MeetingReminderToast.tsx`, que também é quem monta este componente.
  * Renderiza em Portal direto em `document.body` pra nunca ser cortado
@@ -94,41 +94,16 @@ export function UpcomingMeetingAlert({
   return createPortal(
     <div
       role="alertdialog"
-      aria-label={`Aviso do Hypito: reunião "${meeting.titulo}" ${urgency.label.toLowerCase()}`}
+      aria-label={`Reunião "${meeting.titulo}" ${urgency.label.toLowerCase()}`}
       className="fixed inset-x-3 bottom-3 z-40 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:[width:min(400px,calc(100vw-32px))] [padding-bottom:env(safe-area-inset-bottom)]"
     >
       <div className="relative animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-xl duration-300 motion-reduce:animate-none sm:slide-in-from-bottom-0 sm:slide-in-from-right-4 sm:p-5">
-        {/* Identidade sutil do Hypito — brilho azul discreto atrás do
-            avatar, não uma ilustração; puramente decorativo (aria-hidden). */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -left-6 -top-6 h-24 w-24 rounded-full bg-brand/20 blur-2xl"
-        />
-
         <div className="relative flex items-start gap-3">
-          <div className="relative shrink-0">
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 -m-1 rounded-full bg-brand-subtle blur-[2px]"
-            />
-            <img
-              src={HYPITO_AVATAR_URL}
-              alt=""
-              aria-hidden="true"
-              className="relative h-9 w-9 rounded-full object-cover ring-2 ring-card sm:h-10 sm:w-10"
-            />
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-subtle ring-2 ring-card sm:h-10 sm:w-10">
+            <Bell className="h-4 w-4 text-brand" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p className="text-xs font-semibold text-foreground">{HYPITO_NAME}</p>
-              <Badge
-                variant="brand"
-                title={HYPITO_TAGLINE}
-                className="px-1.5 py-0 text-[9px] normal-case"
-              >
-                {HYPITO_BADGE_LABEL}
-              </Badge>
-            </div>
+            <p className="text-xs font-semibold text-foreground">Reunião em breve</p>
             <p className="mt-1 text-xs text-muted-foreground">Sua reunião começa em breve</p>
           </div>
           <IconButton

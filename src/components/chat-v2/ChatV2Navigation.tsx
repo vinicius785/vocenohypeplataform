@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import {
   buildChatList,
-  dmId,
   getStatus,
   loadCampaignChannels,
   loadLastRead,
@@ -13,12 +12,10 @@ import {
   type ChatMember,
   type ChatMessage,
 } from "@/lib/chat-store";
-import { HYPITO_AUTHOR_ID } from "@/lib/hypito";
 import { countUnreadMentions } from "./chat-v2-utils";
 import { ChatV2NavigationHeader } from "./ChatV2NavigationHeader";
 import { ChatV2Search } from "./ChatV2Search";
 import { ChatV2Shortcuts } from "./ChatV2Shortcuts";
-import { ChatV2HypitoItem } from "./ChatV2HypitoItem";
 import { ChatV2Section } from "./ChatV2Section";
 import { ChatV2ConversationItem } from "./ChatV2ConversationItem";
 import { ChatV2NewConversationDialog } from "./ChatV2NewConversationDialog";
@@ -26,7 +23,7 @@ import { ChatV2NewConversationDialog } from "./ChatV2NewConversationDialog";
 const CAMPAIGNS_INITIAL_LIMIT = 5;
 
 /**
- * Navegação do Chat V2 — 300–320px, ordem fixa: Atalhos → Hypito → Diretas
+ * Navegação do Chat V2 — 300–320px, ordem fixa: Atalhos → Diretas
  * → Canais → Campanhas. Campanhas começam limitadas (atividade recente/não
  * lidas/menções primeiro) pra não dominar a lista, com "Mostrar mais".
  */
@@ -75,8 +72,7 @@ export function ChatV2Navigation({
       .filter((i) => i.kind === kind)
       .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0));
 
-  const dms = byKind("dm").filter((i) => i.id !== dmId(meId, HYPITO_AUTHOR_ID));
-  const hypito = list.find((i) => i.id === dmId(meId, HYPITO_AUTHOR_ID));
+  const dms = byKind("dm");
   const canais = byKind("channel");
   // Campanhas/projetos: não lidas primeiro (que é o proxy mais próximo de
   // "precisa de atenção" que já temos), depois por atividade recente.
@@ -113,9 +109,6 @@ export function ChatV2Navigation({
       <ChatV2Search value={search} onChange={setSearch} meId={meId} />
       <ChatV2Shortcuts unreadCount={totalUnread} mentionCount={mentionCount} />
       <div className="flex-1 overflow-y-auto pb-3">
-        {hypito && !q && (
-          <ChatV2HypitoItem unread={hypito.unread} preview={hypito.lastMessage?.text} />
-        )}
         <ChatV2Section
           id="diretas"
           title="Diretas"

@@ -59,8 +59,6 @@ import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
-import { HypitoFloatingWidget } from "./hypito/HypitoFloatingWidget";
-import { HypitoReleaseAlert } from "./HypitoReleaseAlert";
 import { NovidadesButton } from "./configuracoes/NovidadesButton";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
@@ -413,10 +411,8 @@ export function AppShell({
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       <BomDiaDialog />
-      <HypitoReleaseAlert />
       <MeetingReminderToast />
       <BugReportButton />
-      <HypitoFloatingWidget />
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"

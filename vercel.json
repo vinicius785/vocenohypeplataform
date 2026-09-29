@@ -20,18 +20,6 @@
       "schedule": "0 13 * * *"
     },
     {
-      "path": "/api/cron/hypito-weekly-report",
-      "schedule": "0 20 * * 5"
-    },
-    {
-      "path": "/api/cron/hypito-daily-briefing",
-      "schedule": "30 11 * * 1-5"
-    },
-    {
-      "path": "/api/cron/hypito-alerts",
-      "schedule": "0 12 * * 1-5"
-    },
-    {
       "path": "/api/cron/google-calendar-sync",
       "schedule": "0 6 * * *"
     }

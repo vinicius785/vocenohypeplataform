@@ -391,9 +391,8 @@ const UpdateRoleInput = z.object({
 });
 
 /** Core logic behind `updateClientMemberRole`, extracted so it's directly
- * unit-testable without the `createServerFn`/request-middleware machinery —
- * mirrors the plain-function-under-a-server-fn pattern already used by
- * `hypito-tools.server.ts` (see `hypito-tools.server.test.ts`). The
+ * unit-testable without the `createServerFn`/request-middleware machinery.
+ * The
  * defense-in-depth check below (never touch a membership belonging to a
  * non-'client' org, i.e. an internal team member) is the one CLAUDE.md
  * explicitly asks to be covered by a real test. */

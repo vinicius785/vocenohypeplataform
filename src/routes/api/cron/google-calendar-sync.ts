@@ -8,8 +8,8 @@ import { timingSafeEqual } from "node:crypto";
  * aberta a plataforma simplesmente não sincronizava, em nenhum sentido).
  *
  * O plano Vercel deste projeto é o gratuito (Hobby), que só permite UMA
- * execução de cron por dia — mais que isso derruba o deploy inteiro (ver
- * mesmo comentário em `api/cron/hypito-alerts.ts`). Por isso este endpoint
+ * execução de cron por dia — mais que isso derruba o deploy inteiro. Por
+ * isso este endpoint
  * é registrado no `vercel.json` só uma vez por dia, como rede de
  * segurança — a cadência real (5-10min) deve vir de um cron EXTERNO
  * gratuito (ex.: cron-job.org) batendo aqui com o mesmo `CRON_SECRET`

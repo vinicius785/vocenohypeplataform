@@ -63,7 +63,7 @@ export type ReleaseWatchState = {
 
 /**
  * Realtime + fallback + dedup entre abas do aviso de nova versão. Usado
- * só por `HypitoReleaseAlert.tsx` (interno) — o Portal do Cliente
+ * pelo aviso de nova versão da plataforma interna — o Portal do Cliente
  * continua com `VersionWatcher.tsx`/`public/version.json`, intocado.
  */
 export function useReleaseWatch(): ReleaseWatchState {

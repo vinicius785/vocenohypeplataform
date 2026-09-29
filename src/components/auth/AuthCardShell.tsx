@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { HYPITO_AVATAR_URL } from "@/lib/hypito";
 import Grainient from "@/components/Grainient";
 
 /**
@@ -67,7 +66,9 @@ export function AuthCardShell({
         {showHeader && (
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
-              <img src={HYPITO_AVATAR_URL} alt="" className="h-full w-full object-cover" />
+              <span className="text-sm font-bold tracking-tight" aria-hidden="true">
+                VH
+              </span>
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold leading-tight text-foreground">

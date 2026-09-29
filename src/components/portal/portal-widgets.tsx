@@ -179,7 +179,7 @@ export function pendingReason(inf: PublicInfluencer, lang: PortalLang): string |
 }
 
 /** ID da entrega que está gerando a pendência de `pendingReason` (quando é
- * uma entrega, não o perfil) — usado pelo Hypito (item C do redesenho) pra
+ * uma entrega, não o perfil) — usado (item C do redesenho) pra
  * levar o cliente direto pra ela via `?entregaId=`. */
 export function pendingEntregaId(inf: PublicInfluencer): string | null {
   return (
@@ -1119,7 +1119,7 @@ export function InfluencerDetail({
    * (`canReopenInfluApproval`), aqui só oferece a ação. */
   onReopen?: () => Promise<void>;
   /** Entrega pra rolar até e destacar ao abrir (vem do clique num item do
-   * Hypito, item C do redesenho) — simplificação: só rola/realça, não abre
+   * item C do redesenho) — simplificação: só rola/realça, não abre
    * nenhum modal/ação automaticamente. */
   focusEntregaId?: string;
   /** Portal por token nunca passa isto (permanece `undefined`/falsy, sem
@@ -1211,7 +1211,7 @@ export function InfluencerDetail({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsavedObservacao]);
-  // Rola até a entrega focada (vinda de um clique no Hypito) e realça por
+  // Rola até a entrega focada (vinda de um clique num item pendente) e realça por
   // alguns segundos — só um efeito visual, sem side-effect nenhum.
   const [highlightedEntregaId, setHighlightedEntregaId] = useState<string | null>(null);
   useEffect(() => {

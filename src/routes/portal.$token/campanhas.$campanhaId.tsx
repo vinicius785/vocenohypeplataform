@@ -35,7 +35,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const searchSchema = z.object({
   influ: z.string().optional(),
   // Foco numa entrega específica ao abrir o detalhe do influenciador —
-  // usado pelo clique do Hypito num item "entrega pendente" (item C do
+  // usado pelo clique num item "entrega pendente" (item C do
   // redesenho do Portal do Cliente).
   entregaId: z.string().optional(),
   relatorio: z.string().optional(),

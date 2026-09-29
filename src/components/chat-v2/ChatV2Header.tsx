@@ -11,13 +11,11 @@ import {
   type ChatMember,
   type MemberStatus,
 } from "@/lib/chat-store";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { HYPITO_BADGE_LABEL, HYPITO_TAGLINE } from "@/lib/hypito";
 
 type HeaderInfo =
-  | { kind: "dm"; member: ChatMember; status: MemberStatus; isHypito: boolean }
+  | { kind: "dm"; member: ChatMember; status: MemberStatus }
   | { kind: "channel"; channel: ChatChannel; memberCount: number }
   | { kind: "campaign"; name: string; empresa: string };
 
@@ -142,13 +140,7 @@ export function ChatV2Header({
               </span>
             )}
             <p className="min-w-0 truncate text-sm font-semibold">{info.member.name}</p>
-            {info.isHypito ? (
-              <Badge variant="brand" title={HYPITO_TAGLINE}>
-                {HYPITO_BADGE_LABEL}
-              </Badge>
-            ) : (
-              <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[info.status]}</span>
-            )}
+            <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[info.status]}</span>
           </>
         )}
         {info?.kind === "channel" && (

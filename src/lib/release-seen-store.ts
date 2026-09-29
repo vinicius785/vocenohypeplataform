@@ -71,7 +71,7 @@ export function markReleaseDismissed(version: string): void {
 }
 
 /** Assina mudanças feitas nesta aba (evento próprio) ou em outra aba
- * (`BroadcastChannel`) — usado pelo `HypitoReleaseAlert` pra esconder o
+ * (`BroadcastChannel`) — usado pelo aviso de nova versão pra esconder o
  * aviso imediatamente se outra aba já mostrou/dispensou. */
 export function subscribeReleaseSeen(cb: () => void): () => void {
   const onEvent = () => cb();

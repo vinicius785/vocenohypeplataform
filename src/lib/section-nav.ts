@@ -102,7 +102,6 @@ export type ConfigTab =
   | "seguranca"
   | "dados_backup"
   | "score_operacional"
-  | "hypito"
   | "log_auditoria";
 
 const CONFIG_TAB_VALUES: ConfigTab[] = [
@@ -116,7 +115,6 @@ const CONFIG_TAB_VALUES: ConfigTab[] = [
   "seguranca",
   "dados_backup",
   "score_operacional",
-  "hypito",
   "log_auditoria",
 ];
 

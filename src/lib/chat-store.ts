@@ -19,12 +19,10 @@ export type ChatChannel = {
   photo?: string;
   allowedMemberIds?: string[];
   sortOrder?: number;
-  /** Vínculo opcional com um projeto/campanha (upgrade do Hypito, seção
-   * 5) — habilita `@Hypito` DENTRO do canal, sem inventar um vínculo:
-   * `@Hypito` só funciona em canais com este campo preenchido. Nunca
-   * confundir com o `scope` de uma TAREFA (`Task.scope`/`scopeId`) — é o
-   * canal inteiro que fica ligado a um projeto/campanha, não uma
-   * mensagem específica. */
+  /** Vínculo opcional do canal com um projeto/campanha. Nunca confundir
+   * com o `scope` de uma TAREFA (`Task.scope`/`scopeId`) — é o canal
+   * inteiro que fica ligado a um projeto/campanha, não uma mensagem
+   * específica. */
   linkedScope?: { type: "project" | "campaign"; id: string; name: string } | null;
 };
 
@@ -87,12 +85,11 @@ export type ChatMessage = {
   /** emoji -> user ids who reacted with it */
   reactions?: Record<string, string[]>;
   replyToId?: string;
-  /** Payload estruturado do Hypito (cards/ações) — só mensagens do
-   * próprio Hypito têm isso; `text` continua sendo o fallback legível
-   * pra busca/notificações/clientes antigos. Tipo real em
-   * `hypito-messages.ts` (não importado aqui pra manter este módulo
-   * genérico de chat sem depender de tipos específicos do Hypito). */
-  hypitoPayload?: unknown;
+  /** Payload estruturado legado (cards/ações), preservado só por
+   * compatibilidade com mensagens históricas que já tinham isso
+   * gravado; `text` continua sendo o fallback legível pra busca/
+   * notificações/clientes antigos. Nada gera este campo hoje. */
+  legacyStructuredPayload?: unknown;
 };
 
 export const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
@@ -248,7 +245,7 @@ function mapMessage(r: MessageRow): ChatMessage {
     attachments,
     reactions,
     replyToId: r.reply_to_id ?? undefined,
-    hypitoPayload: r.hypito_payload ?? undefined,
+    legacyStructuredPayload: r.hypito_payload ?? undefined,
   };
 }
 

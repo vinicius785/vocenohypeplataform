@@ -9,7 +9,6 @@ import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { HomeHeaderShell } from "@/components/shared/HomeHeaderShell";
-import { HypitoPortalSummary } from "@/components/portal/HypitoPortalSummary";
 import { PortalSectionCard } from "@/components/portal/PortalSectionCard";
 import {
   loadArtigoEngagement,
@@ -31,9 +30,7 @@ export const Route = createFileRoute("/portal/$token/inicio")({
  * `HomeHeaderShell` (mesmo padrão de saudação + faixa de indicadores
  * embutida da Início interna), seções viram `PortalSectionCard` (mesmo
  * `SURFACE.raised`/`rounded-2xl` da Início). "Aguardando você" só
- * renderiza quando há pendência real — o resumo do Hypito já cobre o
- * caso vazio, evitando a duplicação de mensagem "tudo certo" apontada
- * pelo usuário.
+ * renderiza quando há pendência real.
  */
 function PortalInicioPage() {
   const { token, data, lang } = usePortalData();
@@ -207,10 +204,7 @@ function PortalInicioPage() {
         ]}
       />
 
-      <HypitoPortalSummary token={token} data={data} lang={lang} />
-
-      {/* AGUARDANDO VOCÊ — só renderiza quando há pendência real; o
-          resumo do Hypito já cobre o estado vazio, sem duplicar. */}
+      {/* AGUARDANDO VOCÊ — só renderiza quando há pendência real. */}
       {feed.length > 0 && (
         <PortalSectionCard id="aguardando-voce" title={t(lang, "acoesPendentes")}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

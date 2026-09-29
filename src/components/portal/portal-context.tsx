@@ -102,7 +102,7 @@ export function PortalDataProvider({
   // feito aqui — ficou fora do escopo (rever com o time antes de mudar
   // RLS). O código abaixo fica pronto pra funcionar assim que essa policy
   // existir (ou vier via um mecanismo de broadcast dedicado), e o polling
-  // continua sendo o caminho que de fato mantém a Início/Hypito atualizados
+  // continua sendo o caminho que de fato mantém a Início atualizada
   // hoje.
   useEffect(() => {
     const channel = supabase
