@@ -199,6 +199,13 @@ function taskMentionsOf(
  * "formatação" que precisamos preservar visualmente (markdown controlado
  * fica pra uma rodada futura de bold/itálico/código, ver limitações
  * conhecidas do relatório final). */
+// Acima de ~900 caracteres (~12 linhas visuais num balão de 680px), a
+// mensagem vira uma candidata a colapso — nunca truncada silenciosamente:
+// sempre com um botão explícito "Mostrar mais"/"Mostrar menos" no lugar de
+// cortar o texto sem indicação.
+const LONG_TEXT_THRESHOLD = 900;
+const COLLAPSED_MAX_HEIGHT = 220;
+
 function MessageText({
   text,
   mentions,
@@ -212,11 +219,31 @@ function MessageText({
   members: ChatMember[];
   onOpenMention: (m: ChatMention) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (!text) return null;
-  return (
-    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+  const isLong = text.length > LONG_TEXT_THRESHOLD;
+  const body = (
+    <p className="whitespace-pre-wrap break-words text-[14.5px] font-normal leading-relaxed text-foreground">
       {renderTextWithMentions(text, mentions, meId, members, onOpenMention)}
     </p>
+  );
+  if (!isLong) return body;
+  return (
+    <div>
+      <div
+        className="relative overflow-hidden"
+        style={expanded ? undefined : { maxHeight: COLLAPSED_MAX_HEIGHT }}
+      >
+        {body}
+      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="mt-1 text-xs font-medium text-brand hover:underline"
+      >
+        {expanded ? "Mostrar menos" : "Mostrar mais"}
+      </button>
+    </div>
   );
 }
 
@@ -265,6 +292,8 @@ function ReactionBar({
 export function ChatV2Message({
   message,
   showHeader,
+  isLastInGroup = true,
+  isMine: isMineProp,
   meId,
   members,
   onReply,
@@ -275,6 +304,13 @@ export function ChatV2Message({
 }: {
   message: ChatMessage;
   showHeader: boolean;
+  /** Última mensagem do grupo (mesmo autor, mesma janela de tempo) — só ela
+   * mostra o horário/estado de envio, pra não repetir em cada balão. */
+  isLastInGroup?: boolean;
+  /** Já calculado pela Timeline (compara com `meId` uma vez por grupo) —
+   * opcional só pra não quebrar o painel de thread, que ainda não passa;
+   * cai de volta pra comparar aqui mesmo. */
+  isMine?: boolean;
   meId: string;
   members: ChatMember[];
   onReply: (message: ChatMessage) => void;
@@ -300,7 +336,7 @@ export function ChatV2Message({
   const [deleting, setDeleting] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMine = message.authorId === meId;
+  const isMine = isMineProp ?? message.authorId === meId;
   const isSystem = message.authorId === "system";
   const { openMention, openTask, taskInfoById } = useMentionNavigation();
   const effectiveConvoId = convoId ?? message.convoId;
@@ -354,111 +390,135 @@ export function ChatV2Message({
     );
   }
 
+  // Espaçamento entre balões: 4px dentro do mesmo grupo (`showHeader` só é
+  // true no primeiro), 18px entre grupos já é aplicado pela Timeline no
+  // wrapper do grupo — aqui só cuidamos do espaçamento INTERNO ao grupo.
+  const rowSpacing = showHeader ? "" : "mt-1";
+
   return (
     <div
-      className="group relative flex gap-3 rounded-md px-5 py-0.5 hover:bg-muted/40 md:px-6"
+      className={`group relative flex gap-2.5 px-4 py-0 md:px-2 ${rowSpacing} ${
+        isMine ? "flex-row-reverse" : "flex-row"
+      }`}
       onTouchStart={startLongPress}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
       onTouchCancel={cancelLongPress}
     >
-      <div className="w-9 shrink-0">
-        {showHeader ? (
-          <MessageAvatar
-            photo={message.authorPhoto}
-            name={message.authorName}
-            shape="square"
-            className="h-9 w-9 text-sm"
-          />
-        ) : (
-          <span className="block h-4 w-9 text-right text-[10px] leading-4 text-muted-foreground opacity-0 group-hover:opacity-100">
-            {formatTime(message.createdAt)}
-          </span>
-        )}
-      </div>
-      <div className="min-w-0 flex-1 py-0.5">
-        {/* Wrapper de CONTEÚDO real (não a linha inteira, que ocupa 100% da
-         * timeline) — `w-fit` faz a caixa abraçar o conteúdo (mensagem curta
-         * = caixa estreita), `max-w-[...]` limita mensagens longas a uma
-         * largura de leitura confortável. Este é o ancestral `relative` da
-         * barra de ações agora — antes ela era filha da linha inteira
-         * (100% de largura), por isso `right-3` ancorava no extremo direito
-         * da TIMELINE, não da mensagem, mesmo com o texto bem mais curto e
-         * alinhado à esquerda. */}
-        <div className="relative w-fit max-w-[min(960px,calc(100%-64px))]">
+      {/* Coluna de avatar: só mensagens recebidas mostram avatar (próprias
+       * nunca repetem o próprio avatar, pedido explícito) — e só no primeiro
+       * balão do grupo; nas seguintes, um espaçador da mesma largura mantém
+       * o alinhamento do balão sem repetir avatar/nome. */}
+      {!isMine && (
+        <div className="w-[34px] shrink-0 self-end">
           {showHeader && (
-            <div className="flex items-baseline gap-2 pr-16">
-              <span className="text-sm font-semibold text-foreground">{message.authorName}</span>
-              {isMine && <span className="text-[11px] text-muted-foreground">· você</span>}
-              <span className="text-[11px] text-muted-foreground">
-                {formatTime(message.createdAt)}
-              </span>
-              {message.editedAt && (
-                <span className="text-[11px] text-muted-foreground">(editada)</span>
-              )}
-            </div>
-          )}
-          {editing ? (
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">Editando mensagem</p>
-              <Textarea
-                autoFocus
-                value={editText}
-                onChange={(e) => setEditText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void saveEdit();
-                  } else if (e.key === "Escape") {
-                    setEditing(false);
-                    setEditText(message.text);
-                  }
-                }}
-                className="min-h-[60px] text-sm"
-              />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => void saveEdit()}>
-                  Salvar
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditing(false);
-                    setEditText(message.text);
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <MessageText
-              text={message.text}
-              mentions={message.mentions}
-              meId={meId}
-              members={members}
-              onOpenMention={openMention}
+            <MessageAvatar
+              photo={message.authorPhoto}
+              name={message.authorName}
+              shape="circle"
+              className="h-[34px] w-[34px] text-xs"
             />
           )}
-          {taskMentionsOf(message.mentions, taskInfoById).map((task) => (
-            <div key={task.id} className="mt-1.5">
-              <TaskMentionCard task={task} onOpen={openTask} />
-            </div>
-          ))}
-          {message.attachments && message.attachments.length > 0 && (
-            <AttachmentList message={message} attachments={message.attachments} />
-          )}
-          <ReactionBar message={message} meId={meId} members={members} />
-          {!!replyCount && replyCount > 0 && (
-            <button
-              type="button"
-              onClick={() => onReply(message)}
-              className="mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle"
+        </div>
+      )}
+      <div className={`flex min-w-0 flex-col ${isMine ? "items-end" : "items-start"}`}>
+        {/* Nome acima do primeiro balão do grupo — só para recebidas; balões
+         * próprios se identificam pelo alinhamento à direita + cor, sem
+         * repetir "Você" acima de cada balão (o pedido só proíbe repetir
+         * avatar; manter o nome nas próprias seria redundante e ruidoso). */}
+        {showHeader && !isMine && (
+          <span className="mb-1 px-1 text-[13px] font-semibold text-foreground">
+            {message.authorName}
+          </span>
+        )}
+        {/* Wrapper de CONTEÚDO real da barra de ações (não a linha inteira) —
+         * `w-fit` faz a caixa abraçar o conteúdo (mensagem curta = caixa
+         * estreita), `max-w-[...]` limita mensagens longas a uma largura de
+         * leitura confortável (680px, ou 72% do painel, o que for menor; até
+         * 86% em mobile). */}
+        <div className="relative w-fit max-w-[86%] sm:max-w-[min(680px,72%)]">
+          <div
+            className={`rounded-[14px] border px-3.5 py-2.5 pr-9 ${
+              isMine
+                ? "border-brand-border/60 bg-brand-subtle text-foreground"
+                : "border-border bg-muted/60 text-foreground"
+            }`}
+          >
+            {editing ? (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Editando mensagem</p>
+                <Textarea
+                  autoFocus
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void saveEdit();
+                    } else if (e.key === "Escape") {
+                      setEditing(false);
+                      setEditText(message.text);
+                    }
+                  }}
+                  className="min-h-[60px] text-sm"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void saveEdit()}>
+                    Salvar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(false);
+                      setEditText(message.text);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <MessageText
+                text={message.text}
+                mentions={message.mentions}
+                meId={meId}
+                members={members}
+                onOpenMention={openMention}
+              />
+            )}
+            {taskMentionsOf(message.mentions, taskInfoById).map((task) => (
+              <div key={task.id} className="mt-1.5">
+                <TaskMentionCard task={task} onOpen={openTask} />
+              </div>
+            ))}
+            {message.attachments && message.attachments.length > 0 && (
+              <AttachmentList message={message} attachments={message.attachments} />
+            )}
+            <ReactionBar message={message} meId={meId} members={members} />
+            {!!replyCount && replyCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onReply(message)}
+                className="mt-1 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand hover:bg-brand-subtle"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                {replyCount} resposta{replyCount === 1 ? "" : "s"}
+              </button>
+            )}
+          </div>
+          {/* Horário/estado — discreto, só na última mensagem do grupo (não
+           * repetido em cada balão). "Falha ao enviar" e "editada" também
+           * entram aqui, nunca só como cor: sempre texto explícito. */}
+          {isLastInGroup && (
+            <div
+              className={`mt-1 flex items-center gap-1 px-1 text-[11px] text-muted-foreground ${
+                isMine ? "justify-end" : "justify-start"
+              }`}
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-              {replyCount} resposta{replyCount === 1 ? "" : "s"}
-            </button>
+              <span>{formatTime(message.createdAt)}</span>
+              {message.editedAt && <span>· editada</span>}
+            </div>
           )}
 
           {/* Visível no hover/foco do teclado (`group-hover`/`group-focus-within`,
@@ -480,9 +540,9 @@ export function ChatV2Message({
            * `right-*` media a partir da borda direita da TIMELINE, não do
            * balão de texto, mesmo com mensagens curtas alinhadas à esquerda. */}
           <div
-            className={`absolute -top-3 right-1 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm ${
-              pickerOpen || moreOpen ? "flex" : "hidden group-hover:flex group-focus-within:flex"
-            }`}
+            className={`absolute -top-3 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm ${
+              isMine ? "left-1" : "right-1"
+            } ${pickerOpen || moreOpen ? "flex" : "hidden group-hover:flex group-focus-within:flex"}`}
           >
             <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
               <DropdownMenuTrigger asChild>

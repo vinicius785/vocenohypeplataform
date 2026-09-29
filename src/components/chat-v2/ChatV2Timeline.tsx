@@ -229,89 +229,100 @@ export function ChatV2Timeline({
   };
 
   return (
-    <div className="relative flex-1 overflow-hidden">
+    // `relative` + `min-h-0` (não `flex-1`): a linha do meio do grid pai já
+    // define a altura disponível (`minmax(0,1fr)`) — este componente só
+    // precisa respeitar essa altura (`h-full`) e nunca ultrapassá-la, que é
+    // o que `min-h-0` garante num filho de grid/flex com conteúdo que cresce.
+    <div className="message-scroll-wrap relative h-full min-h-0 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={() => void handleScroll()}
-        className="h-full overflow-y-auto py-3"
+        className="message-scroll-area h-full overflow-y-auto overflow-x-hidden"
         aria-live="off"
       >
-        {loadingOlder && (
-          <p className="py-2 text-center text-xs text-muted-foreground">Carregando mensagens…</p>
-        )}
-        {groups.map((group, gi) => {
-          const prevGroup = groups[gi - 1];
-          const showDateDivider =
-            !prevGroup ||
-            !isSameDay(
-              prevGroup.messages[prevGroup.messages.length - 1].createdAt,
-              group.messages[0].createdAt,
-            );
-          return (
-            <div key={group.messages[0].id}>
-              {showDateDivider && (
-                <div className="my-3 mx-auto flex max-w-[min(960px,calc(100%-64px))] items-center gap-3 px-5 md:px-6">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-[11px] font-medium text-muted-foreground">
-                    {dateDividerLabel(group.messages[0].createdAt)}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-              )}
-              {group.messages.map((m, mi) => {
-                const globalIndex = rootMessages.indexOf(m);
-                const isUnreadDivider = globalIndex === initialUnreadIndex;
-                return (
-                  <div
-                    key={m.id}
-                    data-message-id={m.id}
-                    className={
-                      activeHighlight === m.id
-                        ? "rounded-md bg-brand/10 outline outline-2 outline-brand/40 transition-colors duration-1000"
-                        : undefined
-                    }
-                  >
-                    {isUnreadDivider && (
-                      <div
-                        data-unread-divider="1"
-                        className="my-2 mx-auto flex max-w-[min(960px,calc(100%-64px))] items-center gap-3 px-5 md:px-6"
-                      >
-                        <div className="h-px flex-1 bg-brand/40" />
-                        <span className="text-[11px] font-semibold text-brand">
-                          Novas mensagens
-                        </span>
-                        <div className="h-px flex-1 bg-brand/40" />
-                      </div>
-                    )}
-                    <ChatV2Message
-                      message={m}
-                      showHeader={mi === 0}
-                      meId={meId}
-                      members={members}
-                      onReply={onReply}
-                      onDelete={(id) => deleteMessage(id)}
-                      replyCount={replyCounts.get(m.id)}
-                      closeMenusSignal={closeMenusSignal}
-                    />
+        {/* Conteúdo centralizado com largura de leitura confortável — em
+         * telas ultrawide isso evita tanto "tudo colado à esquerda" quanto
+         * "vazio enorme à direita": o painel ocupa 100% da largura, mas o
+         * texto nunca passa de 1120px, com margens automáticas equilibradas
+         * dos dois lados. */}
+        <div className="message-timeline-inner mx-auto w-full max-w-[1120px] px-4 pb-8 pt-5 md:px-7">
+          {loadingOlder && (
+            <p className="py-2 text-center text-xs text-muted-foreground">Carregando mensagens…</p>
+          )}
+          {groups.map((group, gi) => {
+            const prevGroup = groups[gi - 1];
+            const showDateDivider =
+              !prevGroup ||
+              !isSameDay(
+                prevGroup.messages[prevGroup.messages.length - 1].createdAt,
+                group.messages[0].createdAt,
+              );
+            const isMine = group.authorId === meId;
+            return (
+              <div key={group.messages[0].id} className={gi > 0 ? "mt-[18px]" : undefined}>
+                {showDateDivider && (
+                  // Pill pequena centralizada, sem linhas atravessando a
+                  // tela — substitui o antigo separador "linha — texto —
+                  // linha" (que criava uma régua horizontal cruzando todo o
+                  // painel, item explicitamente proibido no pedido).
+                  <div className={`flex justify-center ${gi > 0 ? "mb-[18px] mt-2" : "mb-[18px]"}`}>
+                    <span className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                      {dateDividerLabel(group.messages[0].createdAt)}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          );
-        })}
-        {messages.length === 0 &&
-          (channelName ? (
-            <div className="px-5 py-8 md:px-6">
-              <p className="text-lg font-semibold text-foreground"># {channelName}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Este é o início do canal #{channelName}.
+                )}
+                {group.messages.map((m, mi) => {
+                  const globalIndex = rootMessages.indexOf(m);
+                  const isUnreadDivider = globalIndex === initialUnreadIndex;
+                  return (
+                    <div
+                      key={m.id}
+                      data-message-id={m.id}
+                      className={
+                        activeHighlight === m.id
+                          ? "rounded-lg bg-brand/10 outline outline-2 outline-brand/40 transition-colors duration-1000"
+                          : undefined
+                      }
+                    >
+                      {isUnreadDivider && (
+                        <div data-unread-divider="1" className="my-3 flex justify-center">
+                          <span className="rounded-full border border-brand-border bg-brand-subtle px-3 py-1 text-[11px] font-semibold text-brand">
+                            Novas mensagens
+                          </span>
+                        </div>
+                      )}
+                      <ChatV2Message
+                        message={m}
+                        showHeader={mi === 0}
+                        isLastInGroup={mi === group.messages.length - 1}
+                        isMine={isMine}
+                        meId={meId}
+                        members={members}
+                        onReply={onReply}
+                        onDelete={(id) => deleteMessage(id)}
+                        replyCount={replyCounts.get(m.id)}
+                        closeMenusSignal={closeMenusSignal}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {messages.length === 0 &&
+            (channelName ? (
+              <div className="flex flex-col items-center gap-1 py-16 text-center">
+                <p className="text-lg font-semibold text-foreground"># {channelName}</p>
+                <p className="text-sm text-muted-foreground">
+                  Este é o início do canal #{channelName}.
+                </p>
+              </div>
+            ) : (
+              <p className="py-16 text-center text-sm text-muted-foreground">
+                Nenhuma mensagem ainda. Envie a primeira.
               </p>
-            </div>
-          ) : (
-            <p className="px-5 py-8 text-center text-sm text-muted-foreground md:px-6">
-              Nenhuma mensagem ainda. Envie a primeira.
-            </p>
-          ))}
+            ))}
+        </div>
       </div>
       <ChatV2NewMessagesIndicator count={newBelowCount} onClick={jumpToLatest} />
     </div>

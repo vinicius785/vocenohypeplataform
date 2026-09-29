@@ -78,7 +78,15 @@ export function ChatV2ConversationPane({
 
   return (
     <div className="flex h-full min-w-0 flex-1">
-      <div className="flex h-full min-w-0 flex-1 flex-col">
+      {/* .conversation-pane: grid de 3 linhas (header/timeline/composer) em
+       * vez do antigo `flex flex-col` — a diferença importa porque um filho
+       * flex sem `min-height:0` explícito cresce pra caber seu conteúdo
+       * (a timeline com muitas mensagens), empurra o composer pra fora da
+       * área visível e é isso que fazia mensagens ficarem escondidas atrás
+       * do cabeçalho/composer. Com `grid-template-rows: auto minmax(0,1fr)
+       * auto`, a linha do meio (timeline) é forçada a caber na altura
+       * disponível e é ELA que rola — não a página. */}
+      <div className="grid h-full min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
         <ChatV2Header
           info={headerInfo}
           onBack={onBack}
