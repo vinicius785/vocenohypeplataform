@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoiceRecorderBar } from "@/components/chat/VoiceRecorderBar";
+import { computeComposerPlaceholder } from "./composer-placeholder";
 
 /** Fonte das opções de @menção do composer — mesmos 5 tipos do Chat V1
  * (pessoa/tarefa/projeto/campanha/cliente), reaproveitando `useMentions`/
@@ -75,10 +76,15 @@ export function ChatV2Composer({
   convoId,
   replyToId,
   onSent,
+  conversationLabel,
 }: {
   convoId: string;
   replyToId?: string;
   onSent?: () => void;
+  /** Nome da conversa (pessoa da DM, #canal, campanha) — vira o placeholder
+   * contextual ("Mensagem para X"). Sem isso (ou dentro de uma thread, que
+   * tem seu próprio placeholder fixo), cai num texto genérico. */
+  conversationLabel?: string;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -87,7 +93,9 @@ export function ChatV2Composer({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const mentionOptions = useV2MentionOptions();
+  const placeholder = computeComposerPlaceholder({ replyToId, conversationLabel });
 
   const insertEmoji = (emoji: string) => {
     const el = textareaRef.current;
@@ -130,6 +138,28 @@ export function ChatV2Composer({
     return () => window.clearTimeout(t);
   }, [convoId, text]);
 
+  // Publica a própria altura numa CSS custom property — é o que permite o
+  // botão flutuante "Encontrou um bug?" (`BugReportButton.tsx`) nunca
+  // sobrepor o composer, mesmo quando ele cresce com o texto, SEM chutar
+  // nenhum valor fixo de `bottom` (o composer pode ir de ~92px até
+  // ~290px de altura com uma mensagem longa).
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const set = () =>
+      document.documentElement.style.setProperty(
+        "--chat-v2-composer-height",
+        `${el.getBoundingClientRect().height}px`,
+      );
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--chat-v2-composer-height");
+    };
+  }, [voiceMode, pendingFiles.length]);
+
   const handleSend = async () => {
     const trimmed = text.trim();
     if ((!trimmed && pendingFiles.length === 0) || sending) return;
@@ -162,34 +192,18 @@ export function ChatV2Composer({
     }
   };
 
+  const iconButtonClass =
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
+
   return (
-    <div className="border-t border-border px-4 py-3">
+    <div ref={rootRef} className="shrink-0 border-t border-border px-3 pb-3 pt-2.5 md:px-4">
       {error && (
-        <p className="mb-2 text-xs text-destructive">
+        <p className="mb-1.5 text-xs text-destructive">
           {error}{" "}
           <button type="button" className="underline" onClick={() => void handleSend()}>
             Tentar novamente
           </button>
         </p>
-      )}
-      {pendingFiles.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {pendingFiles.map((pf, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
-            >
-              <span className="max-w-[160px] truncate">{pf.file.name}</span>
-              <button
-                type="button"
-                aria-label="Remover anexo"
-                onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
       )}
       {voiceMode ? (
         <VoiceRecorderBar
@@ -202,54 +216,34 @@ export function ChatV2Composer({
           }}
         />
       ) : (
-        <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring">
-          <label className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
-            <Paperclip className="h-4 w-4" />
-            <input
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                setPendingFiles((prev) => [
-                  ...prev,
-                  ...files.map((file) => ({ file, uploading: false })),
-                ]);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label="Inserir emoji"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <SmilePlus className="h-4 w-4" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="flex w-auto gap-0.5 p-1">
-              {REACTION_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  className="rounded p-1 text-lg hover:bg-muted"
-                  onClick={() => insertEmoji(emoji)}
+        // Duas áreas empilhadas (padrão Slack): texto em cima usando 100%
+        // da largura, toolbar de ações no rodapé — nunca os ícones dentro
+        // da MESMA linha flex do textarea, que era o que forçava a área
+        // digitável a dividir espaço com 3 botões e nunca ocupar a largura
+        // real disponível.
+        <div className="flex min-h-[92px] flex-col rounded-lg border border-border bg-background transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/25">
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-b border-border/70 px-3 pt-2.5">
+              {pendingFiles.map((pf, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs"
                 >
-                  {emoji}
-                </button>
+                  <span className="max-w-[160px] truncate">{pf.file.name}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {(pf.file.size / 1024).toFixed(0)} KB
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Remover anexo ${pf.file.name}`}
+                    onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
               ))}
-            </PopoverContent>
-          </Popover>
-          <button
-            type="button"
-            onClick={() => setVoiceMode(true)}
-            aria-label="Gravar mensagem de voz"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Mic className="h-4 w-4" />
-          </button>
+            </div>
+          )}
           <MentionTextarea
             ref={textareaRef}
             value={text}
@@ -259,19 +253,71 @@ export function ChatV2Composer({
             }}
             options={mentionOptions}
             onEnterSubmit={() => void handleSend()}
-            placeholder="Escreva uma mensagem…"
+            placeholder={placeholder}
             rows={1}
-            className="max-h-[200px] min-h-[28px] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+            className="block max-h-[240px] min-h-[44px] w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-left text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
           />
-          <Button
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            disabled={sending || (!text.trim() && pendingFiles.length === 0)}
-            onClick={() => void handleSend()}
-            aria-label="Enviar mensagem"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5 px-1.5 pb-1.5">
+            <label className={`cursor-pointer ${iconButtonClass}`} title="Anexar arquivo">
+              <Paperclip className="h-4 w-4" />
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  setPendingFiles((prev) => [
+                    ...prev,
+                    ...files.map((file) => ({ file, uploading: false })),
+                  ]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="Inserir emoji" className={iconButtonClass}>
+                  <SmilePlus className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                collisionPadding={12}
+                avoidCollisions
+                className="flex w-auto gap-0.5 p-1"
+              >
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="rounded p-1 text-lg hover:bg-muted"
+                    onClick={() => insertEmoji(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+            <button
+              type="button"
+              onClick={() => setVoiceMode(true)}
+              aria-label="Gravar mensagem de voz"
+              title="Gravar mensagem de voz"
+              className={iconButtonClass}
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+            <Button
+              size="icon"
+              className="ml-auto h-8 w-8 shrink-0"
+              disabled={sending || (!text.trim() && pendingFiles.length === 0)}
+              onClick={() => void handleSend()}
+              aria-label="Enviar mensagem"
+              title="Enviar mensagem"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
     </div>

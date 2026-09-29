@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Bookmark,
   MessageSquare,
@@ -16,6 +17,8 @@ import {
   toggleSavedMessage,
   isMessagePinned,
   togglePinnedMessage,
+  getStatus,
+  STATUS_LABEL,
   type ChatMessage,
   type ChatMember,
   type ChatMention,
@@ -23,6 +26,7 @@ import {
 import { openHypitoWidget } from "@/lib/hypito-widget-store";
 import { seedHypitoTaskFromMessage } from "@/lib/hypito-chat.functions";
 import { MENTION_KIND_CONFIG } from "@/lib/mention-kinds";
+import { splitMentionParts } from "@/lib/mention-render";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentionCard";
 import { AttachmentList } from "@/components/chat/AttachmentList";
@@ -40,33 +45,105 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Mesma convenção de renderização de @menção inline do Chat V1
- * (`ChatSection.tsx`'s `renderText`) — badge de texto simples, nunca um
- * bloco maior aqui dentro, pra não quebrar o fluxo do parágrafo. Cards de
- * tarefa mencionada aparecem à parte, abaixo do texto. */
+/** Popover compacto de pessoa mencionada — foto, nome, função, presença e
+ * "Enviar mensagem". Deliberadamente NADA administrativo (sem score, sem
+ * métricas de desempenho, sem dado de cliente) — é só o que o pedido de
+ * design permite mostrar aqui. */
+function PersonMentionPopover({
+  member,
+  meId,
+  children,
+}: {
+  member: ChatMember;
+  meId: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const status = getStatus(member.id);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={12}
+        avoidCollisions
+        className="w-64 p-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2.5">
+          {member.photo ? (
+            <img src={member.photo} alt="" className="h-10 w-10 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+              {member.name.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{member.name}</p>
+            {member.role && <p className="truncate text-xs text-muted-foreground">{member.role}</p>}
+            <p className="text-[11px] text-muted-foreground">{STATUS_LABEL[status]}</p>
+          </div>
+        </div>
+        {member.id !== meId && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3 w-full"
+            onClick={() => {
+              setOpen(false);
+              void navigate({ to: "/chat-v2/dm/$id", params: { id: member.id } });
+            }}
+          >
+            Enviar mensagem
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Menção de pessoa: texto simples na cor da marca, sem pílula/fundo — só
+ * ganha um fundo sutil quando é o próprio usuário mencionado. Entidade
+ * (tarefa/projeto/campanha/cliente): ícone + rótulo compacto num badge
+ * neutro, deliberadamente MENOS chamativo que uma pessoa (a diferença
+ * semântica pedida: pessoa é "parte da frase", entidade é "uma referência
+ * a outra coisa"). Cards de tarefa mencionada continuam aparecendo à
+ * parte, abaixo do texto — isso aqui é só a menção inline. */
 function renderTextWithMentions(
   text: string,
   mentions: ChatMention[] | undefined,
+  meId: string,
+  members: ChatMember[],
   onOpenMention: (m: ChatMention) => void,
 ) {
-  const parts: (string | ChatMention)[] = [text];
-  if (mentions && mentions.length > 0) {
-    for (const m of mentions) {
-      const token = "@" + m.label;
-      for (let i = 0; i < parts.length; i++) {
-        const seg = parts[i];
-        if (typeof seg !== "string") continue;
-        const idx = seg.indexOf(token);
-        if (idx < 0) continue;
-        const before = seg.slice(0, idx);
-        const after = seg.slice(idx + token.length);
-        parts.splice(i, 1, before, m, after);
-        i += 2;
-      }
-    }
-  }
+  const parts = splitMentionParts(text, mentions);
   return parts.map((p, i) => {
     if (typeof p === "string") return <span key={i}>{p}</span>;
+
+    if (p.kind === "user") {
+      const isSelf = p.id === meId;
+      const member = members.find((m) => m.id === p.id);
+      const trigger = (
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={`rounded px-0.5 font-medium text-brand hover:underline ${
+            isSelf ? "bg-brand/10" : ""
+          }`}
+        >
+          @{p.label}
+        </button>
+      );
+      if (!member) return <span key={i}>{trigger}</span>;
+      return (
+        <PersonMentionPopover key={i} member={member} meId={meId}>
+          {trigger}
+        </PersonMentionPopover>
+      );
+    }
+
+    const { Icon } = MENTION_KIND_CONFIG[p.kind];
     return (
       <button
         key={i}
@@ -75,9 +152,10 @@ function renderTextWithMentions(
           e.stopPropagation();
           onOpenMention(p);
         }}
-        className={`rounded px-1 py-0.5 text-xs font-medium hover:underline ${MENTION_KIND_CONFIG[p.kind].badgeClass}`}
+        className="mx-0.5 inline-flex items-center gap-1 rounded border border-border/80 bg-muted/60 px-1.5 py-px align-middle text-xs font-medium text-foreground hover:bg-muted"
       >
-        @{p.label}
+        <Icon className="h-3 w-3 text-muted-foreground" />
+        {p.label}
       </button>
     );
   });
@@ -108,16 +186,20 @@ function taskMentionsOf(
 function MessageText({
   text,
   mentions,
+  meId,
+  members,
   onOpenMention,
 }: {
   text: string;
   mentions: ChatMention[] | undefined;
+  meId: string;
+  members: ChatMember[];
   onOpenMention: (m: ChatMention) => void;
 }) {
   if (!text) return null;
   return (
     <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-      {renderTextWithMentions(text, mentions, onOpenMention)}
+      {renderTextWithMentions(text, mentions, meId, members, onOpenMention)}
     </p>
   );
 }
@@ -301,6 +383,8 @@ export function ChatV2Message({
             <MessageText
               text={message.text}
               mentions={message.mentions}
+              meId={meId}
+              members={members}
               onOpenMention={openMention}
             />
           )}

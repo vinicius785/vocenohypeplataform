@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { Bug, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,14 @@ import {
 import { submitBugReport } from "@/lib/bug-reports";
 
 export function BugReportButton() {
+  // O Chat V2 tem um composer fixo no rodapé da mesma região onde este
+  // botão flutua (`bottom-4 right-4`) — sem isso, o botão ficava sobre a
+  // toolbar/botão de enviar sempre que a conversa aberta era estreita o
+  // bastante. Sobe o suficiente pra nunca sobrepor o composer (que tem
+  // altura mínima ~92px + padding), sem mover o botão em nenhuma outra
+  // rota da plataforma.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChatV2 = pathname.startsWith("/chat-v2");
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -65,7 +74,16 @@ export function BugReportButton() {
         onClick={() => setOpen(true)}
         size="sm"
         variant="outline"
-        className="fixed bottom-4 right-4 z-40 gap-1.5 rounded-full border-destructive/60 bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground"
+        className={`fixed right-4 z-40 gap-1.5 rounded-full border-destructive/60 bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground ${
+          isChatV2 ? "" : "bottom-4"
+        }`}
+        // No Chat V2, `bottom` vem da altura REAL do composer (publicada por
+        // ele mesmo em `--chat-v2-composer-height`, ver `ChatV2Composer.tsx`)
+        // + 16px de respiro — nunca um valor chutado, então continua correto
+        // mesmo quando o composer cresce com uma mensagem longa.
+        style={
+          isChatV2 ? { bottom: "calc(var(--chat-v2-composer-height, 96px) + 16px)" } : undefined
+        }
       >
         <Bug className="h-3.5 w-3.5" />
         Encontrou um bug?

@@ -353,8 +353,17 @@ export const MentionTextarea = forwardRef<
         rows={rows}
         placeholder={placeholder}
         className={
+          // `w-full block` é a parte que importa: o wrapper (`.relative`,
+          // linha acima) é `display:block`, não `flex` — a classe Tailwind
+          // `flex-1` que os callers às vezes passam aqui não tem NENHUM
+          // efeito num filho de um container que não é flex. Sem `w-full`,
+          // um `<textarea>` cai no comportamento padrão do navegador
+          // (`display:inline-block`, largura baseada em `cols`, ~20
+          // caracteres) — era exatamente essa a causa da área digitável
+          // aparecer estreita e centralizada no Chat V2, mesmo com bastante
+          // espaço disponível ao redor.
           className ??
-          "max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-sm"
+          "block max-h-40 min-h-[28px] w-full resize-none overflow-y-auto rounded border border-border bg-background px-2 py-1 text-base outline-none focus:ring-1 focus:ring-ring md:text-sm"
         }
       />
       {query !== null && options.length > 0 && (

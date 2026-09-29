@@ -53,6 +53,18 @@ export function ChatV2ConversationPane({
       search: (prev: Record<string, unknown>) => ({ ...prev, thread: m.id }),
     });
   };
+  // Placeholder contextual do composer ("Mensagem para X") — derivado do
+  // mesmo `headerInfo` que o cabeçalho já usa, nunca um texto genérico
+  // quando o nome da conversa está disponível.
+  const conversationLabel =
+    headerInfo?.kind === "dm"
+      ? headerInfo.member.name
+      : headerInfo?.kind === "channel"
+        ? `#${headerInfo.channel.name}`
+        : headerInfo?.kind === "campaign"
+          ? headerInfo.name
+          : undefined;
+
   const closeThread = () => {
     void navigate({
       to: ".",
@@ -83,7 +95,7 @@ export function ChatV2ConversationPane({
           onReply={openThread}
           highlightId={highlightId}
         />
-        <ChatV2Composer convoId={convoId} />
+        <ChatV2Composer convoId={convoId} conversationLabel={conversationLabel} />
       </div>
       {rootMessage && (
         <div className="fixed inset-0 z-20 md:static md:inset-auto md:z-auto">
