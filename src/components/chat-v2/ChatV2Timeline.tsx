@@ -259,13 +259,13 @@ export function ChatV2Timeline({
               );
             const isMine = group.authorId === meId;
             return (
-              <div key={group.messages[0].id} className={gi > 0 ? "mt-[18px]" : undefined}>
+              <div key={group.messages[0].id} className={gi > 0 ? "mt-3" : undefined}>
                 {showDateDivider && (
                   // Pill pequena centralizada, sem linhas atravessando a
                   // tela — substitui o antigo separador "linha — texto —
                   // linha" (que criava uma régua horizontal cruzando todo o
                   // painel, item explicitamente proibido no pedido).
-                  <div className={`flex justify-center ${gi > 0 ? "mb-[18px] mt-2" : "mb-[18px]"}`}>
+                  <div className={`flex justify-center ${gi > 0 ? "mb-4" : "mb-4"}`}>
                     <span className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
                       {dateDividerLabel(group.messages[0].createdAt)}
                     </span>
@@ -294,7 +294,6 @@ export function ChatV2Timeline({
                       <ChatV2Message
                         message={m}
                         showHeader={mi === 0}
-                        isLastInGroup={mi === group.messages.length - 1}
                         isMine={isMine}
                         meId={meId}
                         members={members}
