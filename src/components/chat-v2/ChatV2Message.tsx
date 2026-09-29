@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Bookmark,
@@ -31,8 +31,20 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentionCard";
@@ -254,13 +266,14 @@ export function ChatV2Message({
   onDelete,
   replyCount,
   convoId,
+  closeMenusSignal,
 }: {
   message: ChatMessage;
   showHeader: boolean;
   meId: string;
   members: ChatMember[];
   onReply: (message: ChatMessage) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
   /** Quantidade de respostas em thread desta mensagem (só é passado na
    * timeline principal — dentro do próprio painel de thread não faz
    * sentido mostrar contagem recursiva). */
@@ -269,11 +282,19 @@ export function ChatV2Message({
    * mensagem) — cai de volta pro `message.convoId` quando não informado
    * (painel de thread não passa, mas a mensagem já carrega o convo certo). */
   convoId?: string;
+  /** Incrementado pela Timeline a cada rolagem relevante — fecha qualquer
+   * menu local (picker/mais ações/bottom sheet) desta mensagem, pra não
+   * deixá-lo "flutuando" numa posição antiga depois que ela saiu de vista. */
+  closeMenusSignal?: number;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMine = message.authorId === meId;
   const isSystem = message.authorId === "system";
   const { openMention, openTask, taskInfoById } = useMentionNavigation();
@@ -281,12 +302,44 @@ export function ChatV2Message({
   const saved = isMessageSaved(message.id);
   const pinned = isMessagePinned(effectiveConvoId, message.id);
 
+  // Fecha qualquer menu local desta mensagem quando a timeline rola.
+  useEffect(() => {
+    if (closeMenusSignal === undefined) return;
+    setPickerOpen(false);
+    setMoreOpen(false);
+    setSheetOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeMenusSignal]);
+
   const saveEdit = async () => {
     const trimmed = editText.trim();
     if (trimmed && trimmed !== message.text) {
       await editMessage(message.id, trimmed, message.mentions ?? []);
     }
     setEditing(false);
+  };
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete(message.id);
+      setConfirmDeleteOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Toque-e-segurar (~500ms) abre o bottom sheet de ações em mobile, onde o
+  // hover (`group-hover`) não existe pra revelar a barra de ações.
+  const startLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => setSheetOpen(true), 500);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
   };
 
   if (isSystem) {
@@ -298,7 +351,13 @@ export function ChatV2Message({
   }
 
   return (
-    <div className="group relative flex gap-3 rounded-md px-5 py-0.5 hover:bg-muted/40 md:px-6">
+    <div
+      className="group relative flex gap-3 rounded-md px-5 py-0.5 hover:bg-muted/40 md:px-6"
+      onTouchStart={startLongPress}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      onTouchCancel={cancelLongPress}
+    >
       <div className="w-9 shrink-0">
         {showHeader ? (
           <MessageAvatar
@@ -330,6 +389,7 @@ export function ChatV2Message({
         <div className="max-w-[720px]">
           {editing ? (
             <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">Editando mensagem</p>
               <Textarea
                 autoFocus
                 value={editText}
@@ -469,6 +529,7 @@ export function ChatV2Message({
             </DropdownMenuItem>
             {isMine && (
               <>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => {
                     setEditText(message.text);
@@ -479,7 +540,7 @@ export function ChatV2Message({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
-                  onClick={() => onDelete(message.id)}
+                  onClick={() => setConfirmDeleteOpen(true)}
                 >
                   Excluir
                 </DropdownMenuItem>
@@ -488,6 +549,115 @@ export function ChatV2Message({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Confirmação de exclusão — nunca some a mensagem otimisticamente
+       * antes da mutation confirmar sucesso; se `onDelete` falhar, o diálogo
+       * fica aberto (o `finally` só libera o botão, não fecha o diálogo). */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir mensagem?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta mensagem será removida da conversa para todos. Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Excluindo…" : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bottom sheet mobile — mesmas ações do menu "Mais ações", abertas
+       * via toque-e-segurar (hover não existe em touch pra revelar a barra
+       * de ações). Botões com altura mínima de 44px pra área de toque. */}
+      <Drawer open={sheetOpen} onOpenChange={setSheetOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle className="text-left">Ações da mensagem</DrawerTitle>
+          </DrawerHeader>
+          <div className="flex flex-col gap-1 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm hover:bg-muted"
+              onClick={() => {
+                navigator.clipboard.writeText(message.text);
+                setSheetOpen(false);
+              }}
+            >
+              Copiar texto
+            </button>
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm hover:bg-muted"
+              onClick={() => {
+                void toggleSavedMessage(message.id);
+                setSheetOpen(false);
+              }}
+            >
+              <Bookmark className="h-4 w-4" />
+              {saved ? "Remover dos salvos" : "Salvar"}
+            </button>
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm hover:bg-muted"
+              onClick={() => {
+                void togglePinnedMessage(effectiveConvoId, message.id);
+                setSheetOpen(false);
+              }}
+            >
+              {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              {pinned ? "Desafixar" : "Fixar"}
+            </button>
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm hover:bg-muted"
+              onClick={() => {
+                onReply(message);
+                setSheetOpen(false);
+              }}
+            >
+              <Reply className="h-4 w-4" />
+              Responder em thread
+            </button>
+            {isMine && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <button
+                  type="button"
+                  className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm hover:bg-muted"
+                  onClick={() => {
+                    setEditText(message.text);
+                    setEditing(true);
+                    setSheetOpen(false);
+                  }}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm text-destructive hover:bg-muted"
+                  onClick={() => {
+                    setSheetOpen(false);
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  Excluir
+                </button>
+              </>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

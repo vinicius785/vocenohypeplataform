@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronUp } from "lucide-react";
 import {
   deleteMessage,
   ensurePinnedLoaded,
@@ -8,9 +7,11 @@ import {
   type ChatMember,
   type ChatMessage,
 } from "@/lib/chat-store";
-import { Button } from "@/components/ui/button";
 import { dateDividerLabel, firstUnreadIndex, groupMessages, isSameDay } from "./chat-v2-utils";
 import { ChatV2Message } from "./ChatV2Message";
+import { ChatV2NewMessagesIndicator } from "./ChatV2NewMessagesIndicator";
+
+const NEAR_BOTTOM_PX = 150;
 
 export function ChatV2Timeline({
   convoId,
@@ -40,7 +41,28 @@ export function ChatV2Timeline({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [newBelowCount, setNewBelowCount] = useState(0);
   const [activeHighlight, setActiveHighlight] = useState<string | undefined>(undefined);
-  const prevCountRef = useRef(messages.length);
+  // Incrementado a cada rolagem relevante — cada `ChatV2Message` observa
+  // esse valor pra fechar seus próprios menus locais (picker/mais ações),
+  // evitando um menu "flutuando" numa posição antiga depois que a mensagem
+  // saiu de vista.
+  const [closeMenusSignal, setCloseMenusSignal] = useState(0);
+
+  // Baseline da contagem de "novas mensagens" — deliberadamente não
+  // inicializada no mount (que pode capturar `messages.length` ainda
+  // parcial/zero, antes do lote inicial carregar). Só passa a valer quando
+  // `settledConvoRef` confirma que o scroll inicial desta conversa já foi
+  // aplicado — ver o efeito de abertura de conversa abaixo.
+  const prevCountRef = useRef<number | null>(null);
+  const settledConvoRef = useRef<string | null>(null);
+  // true enquanto uma página de mensagens antigas está sendo carregada via
+  // scroll pro topo — o efeito de "mensagens novas" ignora esse ciclo
+  // (adicionado no topo, não embaixo).
+  const isPaginatingRef = useRef(false);
+  // Última leitura de "está no final" — usada pelo ResizeObserver (que roda
+  // DEPOIS que o conteúdo já cresceu, quando recalcular pela posição atual
+  // já daria falso negativo).
+  const wasAtBottomRef = useRef(true);
+
   const replyCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of messages) {
@@ -51,57 +73,106 @@ export function ChatV2Timeline({
   // Respostas em thread não aparecem como mensagens completas no canal
   // principal — só a mensagem raiz, com o indicador compacto de contagem.
   const rootMessages = useMemo(() => messages.filter((m) => !m.replyToId), [messages]);
+  // Só usado pra desenhar o divisor visual "Novas mensagens" como
+  // referência de leitura — NÃO é mais usado como ponto de ancoragem do
+  // scroll inicial (ver efeito abaixo: abrir uma conversa vai sempre para
+  // o final, exceto em deep link de destaque).
   const initialUnreadIndex = useMemo(
     () => firstUnreadIndex(rootMessages, lastReadAt, meId),
-    // Fixado na abertura da conversa — não deve se mover conforme o usuário
-    // lê (senão o divisor "Novas mensagens" ficaria pulando).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [convoId],
   );
   const groups = useMemo(() => groupMessages(rootMessages), [rootMessages]);
 
-  // Ao trocar de conversa: ir para a primeira não lida, ou pro final.
+  const isAtBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+  };
+
+  // Ao trocar de conversa: sempre ir para o final. A única exceção é um
+  // deep link de destaque (`?highlight=`, ver `ChatV2ConversationPane.tsx`)
+  // — nesse caso o efeito de highlight abaixo cuida do scroll até a
+  // mensagem indicada, sem forçar o final. Não existe hoje uma feature real
+  // de "marcar como não lida" que registre onde abrir (só um botão
+  // decorativo, se algum dia existir) nem um deep link de thread que exija
+  // ancorar a timeline principal de outro jeito — abrir `?thread=` só abre
+  // o painel de thread (`ChatV2ConversationPane.tsx`), sem afetar este
+  // scroll.
+  useEffect(() => {
+    settledConvoRef.current = null;
+    prevCountRef.current = null;
+    setNewBelowCount(0);
+    const el = scrollRef.current;
+    if (!el) return;
+    if (highlightId) {
+      // O efeito de highlight (abaixo) faz o scroll até a mensagem; aqui só
+      // fixamos a baseline pra não tratar o lote inicial como "novas".
+      prevCountRef.current = messages.length;
+      settledConvoRef.current = convoId;
+      wasAtBottomRef.current = false;
+      return;
+    }
+    // Ajusta o scroll de imediato (layout já commitado nesta altura do
+    // efeito, `scrollHeight` já reflete o DOM atual) — evita depender de
+    // `requestAnimationFrame`, que pode ficar parado enquanto a aba não
+    // está em primeiro plano/visível. Ainda assim agenda uma segunda
+    // correção num rAF (quando disponível) pra cobrir imagens/anexos que só
+    // terminam de medir depois deste commit.
+    el.scrollTop = el.scrollHeight;
+    prevCountRef.current = messages.length;
+    settledConvoRef.current = convoId;
+    wasAtBottomRef.current = true;
+    const raf = requestAnimationFrame(() => {
+      const node = scrollRef.current;
+      if (node && wasAtBottomRef.current) node.scrollTop = node.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convoId, highlightId]);
+
+  // Nova mensagem chegando: se já estava perto do final, acompanha
+  // automaticamente; senão, só conta (indicador "N novas mensagens"). Não
+  // conta enquanto o scroll inicial desta conversa ainda não se
+  // estabilizou, e não conta um lote carregado via paginação pro topo.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    requestAnimationFrame(() => {
-      if (initialUnreadIndex !== null) {
-        const target = el.querySelector(`[data-unread-divider="1"]`);
-        target?.scrollIntoView({ block: "center" });
-      } else {
-        el.scrollTop = el.scrollHeight;
-      }
-    });
+    if (settledConvoRef.current !== convoId) {
+      // Ainda estabilizando (ou aguardando o efeito de highlight) — só
+      // atualiza a baseline, sem contar como mensagem nova.
+      prevCountRef.current = messages.length;
+      return;
+    }
+    if (isPaginatingRef.current) {
+      isPaginatingRef.current = false;
+      prevCountRef.current = messages.length;
+      return;
+    }
+    const prev = prevCountRef.current ?? messages.length;
+    const added = messages.length - prev;
     prevCountRef.current = messages.length;
-    setNewBelowCount(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convoId]);
-
-  // Nova mensagem chegando: se já estava perto do final, acompanha
-  // automaticamente; senão, só conta (botão "N novas mensagens").
-  useEffect(() => {
-    const el = scrollRef.current;
-    const added = messages.length - prevCountRef.current;
-    prevCountRef.current = messages.length;
-    if (!el || added <= 0) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-    if (nearBottom) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight;
-      });
+    if (added <= 0) return;
+    // Usa a ÚLTIMA posição conhecida (antes deste lote chegar), não a
+    // posição recalculada agora — o DOM já cresceu com o lote novo, então
+    // `isAtBottom()` neste ponto compararia contra um `scrollHeight` maior
+    // e daria falso negativo mesmo quando o usuário estava, de fato, no
+    // final (é exatamente esse o caso de um lote grande do carregamento
+    // inicial chegando em várias ondas — sem isso, ficaria preso no topo).
+    if (wasAtBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
     } else {
       setNewBelowCount((n) => n + added);
     }
-  }, [messages.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, convoId]);
 
   useEffect(() => {
     if (!highlightId) return;
     setActiveHighlight(highlightId);
     const el = scrollRef.current;
-    requestAnimationFrame(() => {
-      const target = el?.querySelector(`[data-message-id="${highlightId}"]`);
-      target?.scrollIntoView({ block: "center" });
-    });
+    const target = el?.querySelector(`[data-message-id="${highlightId}"]`);
+    target?.scrollIntoView({ block: "center" });
     const t = setTimeout(() => setActiveHighlight(undefined), 2000);
     return () => clearTimeout(t);
   }, [highlightId, convoId]);
@@ -110,11 +181,34 @@ export function ChatV2Timeline({
     void ensurePinnedLoaded(convoId);
   }, [convoId]);
 
+  // Enquanto o usuário está no final da timeline, qualquer crescimento de
+  // altura do conteúdo (imagem carregando, anexo, card) reancora pro final
+  // — sem isso, uma imagem que termina de carregar empurra o "final" pra
+  // baixo da área visível. Enquanto NÃO está no final (lendo histórico),
+  // não mexe na posição.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const content = el.firstElementChild;
+    const ro = new ResizeObserver(() => {
+      if (wasAtBottomRef.current && scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    });
+    ro.observe(el);
+    if (content) ro.observe(content);
+    return () => ro.disconnect();
+  }, [convoId]);
+
   const handleScroll = async () => {
     const el = scrollRef.current;
-    if (!el || loadingOlder) return;
+    if (!el) return;
+    wasAtBottomRef.current = isAtBottom();
+    setCloseMenusSignal((n) => n + 1);
+    if (loadingOlder) return;
     if (el.scrollTop < 80 && hasMoreOlderMessages(convoId)) {
       setLoadingOlder(true);
+      isPaginatingRef.current = true;
       const prevHeight = el.scrollHeight;
       await loadOlderMessages(convoId);
       requestAnimationFrame(() => {
@@ -130,6 +224,7 @@ export function ChatV2Timeline({
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
+    wasAtBottomRef.current = true;
     setNewBelowCount(0);
   };
 
@@ -194,8 +289,9 @@ export function ChatV2Timeline({
                       meId={meId}
                       members={members}
                       onReply={onReply}
-                      onDelete={(id) => void deleteMessage(id)}
+                      onDelete={(id) => deleteMessage(id)}
                       replyCount={replyCounts.get(m.id)}
+                      closeMenusSignal={closeMenusSignal}
                     />
                   </div>
                 );
@@ -217,19 +313,7 @@ export function ChatV2Timeline({
             </p>
           ))}
       </div>
-      {newBelowCount > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-          <Button
-            size="sm"
-            className="pointer-events-auto gap-1.5 shadow-md"
-            onClick={jumpToLatest}
-          >
-            <ChevronUp className="h-3.5 w-3.5 rotate-180" />
-            {newBelowCount} nova{newBelowCount > 1 ? "s" : ""} mensage
-            {newBelowCount > 1 ? "ns" : "m"}
-          </Button>
-        </div>
-      )}
+      <ChatV2NewMessagesIndicator count={newBelowCount} onClick={jumpToLatest} />
     </div>
   );
 }
