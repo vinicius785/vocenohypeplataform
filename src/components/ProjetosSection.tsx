@@ -11,8 +11,6 @@ import {
   LayoutPanelTop,
   ChevronDown,
   FolderKanban,
-  AlertTriangle,
-  Clock,
 } from "lucide-react";
 import {
   FEATURES,
@@ -52,6 +50,11 @@ import {
 } from "./projetos/projeto-ui";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageContainer } from "@/components/shared/PageContainer";
+import {
+  PageSummaryPanel,
+  SummaryPrimaryMetric,
+  SummaryMetric,
+} from "@/components/shared/PageSummaryPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -239,60 +242,21 @@ export function ProjetosSection() {
         </div>
 
         {hasAnyProject && (
-          <div className="rounded-[24px] bg-brand p-5 dark:shadow-none md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-              <div className="shrink-0">
-                <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
-                  Projetos ativos
-                </span>
-                <p className="mt-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[46px] md:text-[52px]">
-                  {ativosCount}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 lg:justify-end">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <FolderKanban className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Total de projetos
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {totalCount}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <AlertTriangle className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Em risco
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {emRiscoCount}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <Clock className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Tarefas atrasadas
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {tarefasAtrasadasCount}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <PageSummaryPanel title="Visão geral">
+            <SummaryPrimaryMetric value={String(ativosCount)} label="projetos ativos" />
+            <SummaryMetric label="Total" value={totalCount} />
+            <SummaryMetric label="Em risco" value={emRiscoCount} />
+            <SummaryMetric
+              label="Tarefas atrasadas"
+              value={
+                tarefasAtrasadasCount > 0 ? (
+                  <span className="text-destructive">{tarefasAtrasadasCount}</span>
+                ) : (
+                  tarefasAtrasadasCount
+                )
+              }
+            />
+          </PageSummaryPanel>
         )}
 
         {hasAnyProject && (

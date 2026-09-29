@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus, Building2, Megaphone, Users } from "lucide-react";
+import { Plus, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  PageSummaryPanel,
+  SummaryPrimaryMetric,
+  SummaryMetric,
+} from "@/components/shared/PageSummaryPanel";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { useConfirm } from "@/hooks/use-confirm";
 import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
@@ -160,66 +165,12 @@ export function ClientesSection() {
         </div>
 
         {hasAnyClient && (
-          // Compactado na rodada corretiva: era uma pilha vertical (rótulo →
-          // número gigante → linha de apoio), alta e com muito vazio à
-          // direita em telas largas. Agora é uma faixa única — número
-          // dominante à esquerda, os 3 indicadores de apoio distribuídos à
-          // direita — que só empilha verticalmente (`flex-col`) quando o
-          // espaço aperta (mobile), sem crescer em altura à toa no desktop.
-          <div className="rounded-[24px] bg-brand p-5 dark:shadow-none md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-              <div className="shrink-0">
-                <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
-                  Total de clientes
-                </span>
-                <p className="mt-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[46px] md:text-[52px]">
-                  {totalClientes}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 lg:justify-end">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <Megaphone className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Com campanha
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {comCampanha}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <Users className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Sem campanha
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {semCampanha}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <Building2 className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Campanhas no total
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {totalCampanhas}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <PageSummaryPanel title="Visão geral">
+            <SummaryPrimaryMetric value={String(totalClientes)} label="clientes" />
+            <SummaryMetric label="Com campanha" value={comCampanha} />
+            <SummaryMetric label="Sem campanha" value={semCampanha} />
+            <SummaryMetric label="Campanhas no total" value={totalCampanhas} />
+          </PageSummaryPanel>
         )}
 
         {hasAnyClient && (

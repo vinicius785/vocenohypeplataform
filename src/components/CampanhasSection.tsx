@@ -39,6 +39,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  PageSummaryPanel,
+  SummaryPrimaryMetric,
+  SummaryMetric,
+} from "@/components/shared/PageSummaryPanel";
 import { ClienteLogo } from "@/components/clientes/ClienteLogo";
 import { useClientes, clientesStore } from "@/lib/clientes-store";
 import {
@@ -318,60 +323,12 @@ export function CampanhasSection() {
         </div>
 
         {hasAnyCampanha && (
-          <div className="rounded-[24px] bg-brand p-5 dark:shadow-none md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
-              <div className="shrink-0">
-                <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
-                  Campanhas ativas
-                </span>
-                <p className="mt-2 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[46px] md:text-[52px]">
-                  {ativas}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 lg:justify-end">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <Megaphone className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Total de campanhas
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {totalCampanhas}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <User className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Influenciadores
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {totalInflusReais}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/10 text-brand-foreground">
-                    <CalendarClock className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-foreground-secondary">
-                      Em negociação
-                    </p>
-                    <p className="whitespace-nowrap text-base font-bold leading-none text-brand-foreground">
-                      {emNegociacao}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <PageSummaryPanel title="Visão geral">
+            <SummaryPrimaryMetric value={String(ativas)} label="campanhas ativas" />
+            <SummaryMetric label="Total" value={totalCampanhas} />
+            <SummaryMetric label="Influenciadores" value={totalInflusReais} />
+            <SummaryMetric label="Em negociação" value={emNegociacao} />
+          </PageSummaryPanel>
         )}
 
         {hasAnyCampanha && (

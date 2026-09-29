@@ -23,6 +23,14 @@ export function BugReportButton() {
   const searchString = useRouterState({ select: (s) => s.location.searchStr });
   const isReunioes =
     pathname === "/time" && new URLSearchParams(searchString).get("section") === "reunioes";
+  // Mesma exclusão condicional pras seções recém-migradas pro padrão visual
+  // de Reuniões (Clientes, Campanhas, Projetos, Comercial, Time e Metas).
+  const sectionParam = new URLSearchParams(searchString).get("section");
+  const isMigratedSection =
+    pathname === "/time" &&
+    ["clientes", "campanhas", "projetos", "comercial", "time", "metas"].includes(
+      sectionParam ?? "",
+    );
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +42,7 @@ export function BugReportButton() {
 
   if (isReunioes) return null;
   if (isChatV2) return null;
+  if (isMigratedSection) return null;
 
   const reset = () => {
     setDescription("");

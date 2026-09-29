@@ -10,6 +10,11 @@ import {
 } from "@/lib/metas-engine";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  PageSummaryPanel,
+  SummaryMetric,
+  SummaryPrimaryMetric,
+} from "@/components/shared/PageSummaryPanel";
 import { fmtMonthYear } from "./metas-ui-utils";
 import { Avatar } from "./Avatar";
 import { ObjetivoSummaryCard } from "./ObjetivoSummaryCard";
@@ -160,59 +165,43 @@ export function ObjetivosView({
     <div className="space-y-6">
       {/* Protagonista — progresso médio é o dado dominante; os demais
        * (ativos/saudáveis/atenção/risco) são apoio dentro da mesma
-       * composição, nunca 4 cards do mesmo peso. */}
-      <div className="rounded-[28px] bg-brand p-6 dark:shadow-none md:p-7">
-        <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
-          Progresso médio
-        </span>
-        <p className="mt-4 whitespace-nowrap text-[48px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[56px] md:text-[64px]">
-          {resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
-        </p>
-        <div className="mt-6 flex flex-wrap items-end gap-x-8 gap-y-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Ativos
-            </p>
-            <p className="text-lg font-semibold text-brand-foreground">{resumo.ativos}</p>
+       * composição, nunca 4 cards do mesmo peso. Painel neutro
+       * (`PageSummaryPanel`) substitui o antigo `bg-brand` grande — a
+       * barra de progresso abaixo continua azul de propósito (é uma
+       * barra fina, não uma superfície). */}
+      <PageSummaryPanel title="Progresso geral">
+        <SummaryPrimaryMetric
+          value={resumo.progressoMedio == null ? "—" : `${resumo.progressoMedio}%`}
+          label="progresso médio"
+        />
+        <SummaryMetric label="Ativos" value={resumo.ativos} />
+        <SummaryMetric
+          label="Saudáveis"
+          value={resumo.saudaveis}
+          onClick={() => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel"))}
+          active={saudeFilter === "saudavel"}
+        />
+        <SummaryMetric
+          label="Em atenção"
+          value={resumo.atencao}
+          onClick={() => setSaudeFilter((s) => (s === "atencao" ? "" : "atencao"))}
+          active={saudeFilter === "atencao"}
+        />
+        <SummaryMetric
+          label="Em risco"
+          value={<span className="text-destructive">{resumo.emRisco}</span>}
+          onClick={() => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco"))}
+          active={saudeFilter === "em_risco"}
+        />
+        {resumo.progressoMedio != null && (
+          <div className="h-1.5 w-full rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-brand"
+              style={{ width: `${resumo.progressoMedio}%` }}
+            />
           </div>
-          <button
-            type="button"
-            onClick={() => setSaudeFilter((s) => (s === "saudavel" ? "" : "saudavel"))}
-            className="text-left"
-          >
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Saudáveis
-            </p>
-            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
-              {resumo.saudaveis}
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSaudeFilter((s) => (s === "atencao" ? "" : "atencao"))}
-            className="text-left"
-          >
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Em atenção
-            </p>
-            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
-              {resumo.atencao}
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSaudeFilter((s) => (s === "em_risco" ? "" : "em_risco"))}
-            className="text-left"
-          >
-            <p className="text-[11px] font-medium uppercase tracking-wide text-brand-foreground-secondary">
-              Em risco
-            </p>
-            <p className="text-lg font-semibold text-brand-foreground underline-offset-4 hover:underline">
-              {resumo.emRisco}
-            </p>
-          </button>
-        </div>
-      </div>
+        )}
+      </PageSummaryPanel>
 
       {/* Toolbar única — busca + filtros, sincronizados com a mesma lista. */}
       <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-2 dark:shadow-none">

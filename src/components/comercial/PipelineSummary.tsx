@@ -54,19 +54,27 @@ export function PipelineSummary({
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-      {/* Protagonista — pipeline total, único bloco azul da página */}
+      {/* Protagonista — pipeline total. Migração visual: container antes era
+       * `bg-brand` sólido preenchendo toda a área; agora usa a mesma
+       * superfície neutra do resto da página (`bg-card`) com acento azul só
+       * na borda lateral (padrão do `PageSummaryPanel`), mantendo o botão
+       * clicável que limpa o filtro do Kanban. As cores das barras do funil
+       * (`OPPORTUNITY_STAGE_COLOR`) foram mantidas como estão — são a mesma
+       * paleta categórica usada nos dots das colunas e nos badges do
+       * drawer, então recolorir aqui quebraria essa correspondência; só o
+       * fundo ao redor deixou de ser azul. */}
       <button
         type="button"
         onClick={() => onFilter({})}
-        className="rounded-[28px] bg-brand p-7 text-left dark:shadow-none md:p-8 lg:col-span-7"
+        className="rounded-[28px] border border-border/60 border-l-[3px] border-l-brand bg-card p-7 text-left dark:shadow-none md:p-8 lg:col-span-7"
       >
-        <span className="inline-flex items-center rounded-full bg-black/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-foreground">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
           Pipeline total
         </span>
-        <p className="mt-5 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-brand-foreground sm:text-[48px] md:text-[56px]">
+        <p className="mt-5 whitespace-nowrap text-[40px] font-bold leading-none tracking-tight text-foreground sm:text-[48px] md:text-[56px]">
           {formatBRL(kpis.pipelineTotal)}
         </p>
-        <p className="mt-3 text-sm text-brand-foreground-secondary">
+        <p className="mt-3 text-sm text-text-secondary">
           {kpis.oportunidadesAbertas} oportunidade{kpis.oportunidadesAbertas === 1 ? "" : "s"} em
           aberto
         </p>
@@ -74,10 +82,9 @@ export function PipelineSummary({
         {buckets.length > 0 && (
           // Cada barra usa a cor categórica centralizada da própria etapa
           // (`OPPORTUNITY_STAGE_COLOR`, mesma fonte do dot da coluna e do
-          // badge do drawer) — sem opacidade reduzida, pra não perder
-          // contraste em cima do azul. Altura mínima de 18% garante que
-          // etapas com valor baixo continuam visíveis sem fingir que têm
-          // o mesmo peso das maiores.
+          // badge do drawer) — inalterada, ver comentário acima. Altura
+          // mínima de 18% garante que etapas com valor baixo continuam
+          // visíveis sem fingir que têm o mesmo peso das maiores.
           <div className="mt-6 flex items-end gap-2">
             {buckets.map((b) => (
               <div key={b.stage} className="flex flex-1 flex-col items-center gap-1.5">
@@ -87,10 +94,10 @@ export function PipelineSummary({
                     style={{ height: `${Math.max(18, (b.value / maxValue) * 100)}%` }}
                   />
                 </div>
-                <span className="line-clamp-2 text-center text-[10px] leading-tight text-brand-foreground-secondary">
+                <span className="line-clamp-2 text-center text-[10px] leading-tight text-text-secondary">
                   {OPPORTUNITY_STAGE_LABEL[b.stage]}
                 </span>
-                <span className="text-[10px] font-semibold tabular-nums text-brand-foreground">
+                <span className="text-[10px] font-semibold tabular-nums text-foreground">
                   {b.count}
                 </span>
               </div>
