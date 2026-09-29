@@ -190,6 +190,7 @@ export function ChatV2Message({
   convoId?: string;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
   const isMine = message.authorId === meId;
@@ -324,14 +325,34 @@ export function ChatV2Message({
           )}
         </div>
       </div>
-      <div className="absolute right-3 top-0 hidden items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm group-hover:flex">
+      {/* Visível no hover/foco do teclado (`group-hover`/`group-focus-within`,
+       * CSS puro) — MAS também precisa ficar visível enquanto qualquer menu
+       * dela está aberto (`pickerOpen`/`moreOpen`, estado React), senão um
+       * clique que solta o `:hover` (teclado, toque, ou o próprio Radix
+       * movendo o foco pro Portal ao abrir) faz este container colapsar pra
+       * `display:none` ENQUANTO o Popover/DropdownMenu ainda está montado —
+       * o Radix então mede `getBoundingClientRect()` do trigger escondido
+       * (retorna 0,0,0,0) e ancora o menu no canto superior esquerdo da
+       * página em vez de perto da mensagem. Forçar `flex` explícito quando
+       * aberto é a correção real: nunca deixar o trigger existir sem estar
+       * visível/mensurável enquanto seu próprio menu está montado. */}
+      <div
+        className={`absolute right-3 top-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm ${
+          pickerOpen || moreOpen ? "flex" : "hidden group-hover:flex group-focus-within:flex"
+        }`}
+      >
         <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Reagir">
               <SmilePlus className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="flex w-auto gap-0.5 p-1">
+          <DropdownMenuContent
+            align="end"
+            collisionPadding={12}
+            avoidCollisions
+            className="flex w-auto gap-0.5 p-1"
+          >
             {REACTION_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
@@ -356,13 +377,13 @@ export function ChatV2Message({
         >
           <Reply className="h-4 w-4" />
         </Button>
-        <DropdownMenu>
+        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais ações">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" collisionPadding={12} avoidCollisions>
             <DropdownMenuItem onClick={() => navigator.clipboard.writeText(message.text)}>
               Copiar texto
             </DropdownMenuItem>
