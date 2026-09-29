@@ -21,6 +21,12 @@ export function BugReportButton() {
   // rota da plataforma.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isChatV2 = pathname.startsWith("/chat-v2");
+  // Reuniões (`/time?section=reunioes`) não é uma rota própria — é uma
+  // `SectionKey` dentro de `time.tsx` — então a mesma exclusão condicional
+  // do Chat V2 aqui é feita pela search string em vez do pathname.
+  const searchString = useRouterState({ select: (s) => s.location.searchStr });
+  const isReunioes =
+    pathname === "/time" && new URLSearchParams(searchString).get("section") === "reunioes";
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,6 +35,8 @@ export function BugReportButton() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  if (isReunioes) return null;
 
   const reset = () => {
     setDescription("");

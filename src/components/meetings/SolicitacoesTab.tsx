@@ -51,10 +51,10 @@ export function SolicitacoesTab({
 
   if (pend.length === 0) {
     return (
-      <div className="rounded-[24px] bg-card p-10 text-center dark:shadow-none">
-        <Users className="mx-auto h-8 w-8 text-text-secondary/50" />
-        <p className="mt-3 text-sm font-medium text-foreground">Nenhuma solicitação pendente</p>
-        <p className="mt-1 text-sm text-text-secondary">
+      <div className="mx-auto max-w-[440px] rounded-2xl bg-card px-6 py-8 text-center dark:shadow-none">
+        <Users className="mx-auto h-6 w-6 text-text-secondary/50" />
+        <p className="mt-2.5 text-sm font-medium text-foreground">Nenhuma solicitação pendente</p>
+        <p className="mt-1 text-xs text-text-secondary">
           Quando alguém convidar você para uma reunião, ela aparece aqui.
         </p>
       </div>

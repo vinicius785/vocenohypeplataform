@@ -447,6 +447,7 @@ function MonthGrid({
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = iso === today;
           const isSelected = iso === selectedDate;
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
           const meetingItems = byDate.get(iso) ?? [];
           const blocks = blocksForDateAllMembers(disponibilidades, team, me, iso);
           const totalCount = meetingItems.length + blocks.length;
@@ -456,8 +457,8 @@ function MonthGrid({
           return (
             <div
               key={idx}
-              className={`min-h-[112px] border-b border-r border-border/60 p-1.5 text-left align-top transition-colors last-in-row:border-r-0 ${
-                inMonth ? "" : "bg-muted/20 text-text-secondary/60"
+              className={`min-h-[128px] border-b border-r border-border/60 p-1.5 text-left align-top transition-colors last-in-row:border-r-0 hover:bg-muted/30 ${
+                inMonth ? (isWeekend ? "bg-muted/15" : "") : "bg-muted/20 text-text-secondary/60"
               } ${isSelected ? "bg-brand-subtle" : ""}`}
             >
               <button
@@ -466,7 +467,7 @@ function MonthGrid({
                 className="flex w-full items-center rounded hover:bg-muted/40"
               >
                 <span
-                  className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-medium tabular-nums ${
+                  className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-sm font-medium tabular-nums ${
                     isToday ? "bg-brand text-brand-foreground" : isSelected ? "text-brand" : ""
                   }`}
                 >
