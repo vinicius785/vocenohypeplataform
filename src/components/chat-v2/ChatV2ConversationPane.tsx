@@ -94,6 +94,7 @@ export function ChatV2ConversationPane({
           lastReadAt={lastReadAt}
           onReply={openThread}
           highlightId={highlightId}
+          channelName={headerInfo?.kind === "channel" ? headerInfo.channel.name : undefined}
         />
         <ChatV2Composer convoId={convoId} conversationLabel={conversationLabel} />
       </div>

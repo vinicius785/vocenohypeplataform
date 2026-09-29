@@ -20,6 +20,7 @@ export function ChatV2Timeline({
   lastReadAt,
   onReply,
   highlightId,
+  channelName,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -30,6 +31,10 @@ export function ChatV2Timeline({
   /** Id de mensagem a destacar (vindo da busca) — recebe um scroll-into-view
    * e um realce temporário de ~2s, depois volta ao normal. */
   highlightId?: string;
+  /** Nome do canal (sem `#`), só quando `convoId` é um canal — usado pra
+   * mostrar a introdução "# nome / Este é o início do canal #nome." no
+   * lugar do texto genérico quando o canal está vazio. */
+  channelName?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -150,7 +155,7 @@ export function ChatV2Timeline({
           return (
             <div key={group.messages[0].id}>
               {showDateDivider && (
-                <div className="my-3 flex items-center gap-3 px-4">
+                <div className="my-3 flex items-center gap-3 px-5 md:px-6">
                   <div className="h-px flex-1 bg-border" />
                   <span className="text-[11px] font-medium text-muted-foreground">
                     {dateDividerLabel(group.messages[0].createdAt)}
@@ -172,7 +177,10 @@ export function ChatV2Timeline({
                     }
                   >
                     {isUnreadDivider && (
-                      <div data-unread-divider="1" className="my-2 flex items-center gap-3 px-4">
+                      <div
+                        data-unread-divider="1"
+                        className="my-2 flex items-center gap-3 px-5 md:px-6"
+                      >
                         <div className="h-px flex-1 bg-brand/40" />
                         <span className="text-[11px] font-semibold text-brand">
                           Novas mensagens
@@ -195,11 +203,19 @@ export function ChatV2Timeline({
             </div>
           );
         })}
-        {messages.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            Nenhuma mensagem ainda. Envie a primeira.
-          </p>
-        )}
+        {messages.length === 0 &&
+          (channelName ? (
+            <div className="px-5 py-8 md:px-6">
+              <p className="text-lg font-semibold text-foreground"># {channelName}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Este é o início do canal #{channelName}.
+              </p>
+            </div>
+          ) : (
+            <p className="px-5 py-8 text-center text-sm text-muted-foreground md:px-6">
+              Nenhuma mensagem ainda. Envie a primeira.
+            </p>
+          ))}
       </div>
       {newBelowCount > 0 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">

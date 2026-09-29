@@ -104,7 +104,7 @@ export function ChatV2Navigation({
     item.unread > 0;
 
   return (
-    <div className="flex h-full w-full flex-col border-r border-border bg-muted/20 md:w-[320px]">
+    <div className="flex h-full w-full flex-col border-r border-border bg-muted/20 md:w-[280px] lg:w-[300px]">
       <ChatV2NavigationHeader onNewConversation={() => setNewConvoOpen(true)} meId={meId} />
       <ChatV2Search value={search} onChange={setSearch} meId={meId} />
       <ChatV2Shortcuts unreadCount={totalUnread} mentionCount={mentionCount} />

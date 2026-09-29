@@ -291,12 +291,14 @@ export function ChatV2Message({
 
   if (isSystem) {
     return (
-      <div className="px-4 py-1 text-center text-xs text-muted-foreground">{message.text}</div>
+      <div className="px-5 py-1 text-center text-xs text-muted-foreground md:px-6">
+        {message.text}
+      </div>
     );
   }
 
   return (
-    <div className="group relative flex gap-3 rounded-md px-4 py-0.5 hover:bg-muted/40">
+    <div className="group relative flex gap-3 rounded-md px-5 py-0.5 hover:bg-muted/40 md:px-6">
       <div className="w-9 shrink-0">
         {showHeader ? (
           <MessageAvatar
