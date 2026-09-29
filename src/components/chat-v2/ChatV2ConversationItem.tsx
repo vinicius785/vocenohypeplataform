@@ -11,6 +11,9 @@ export function ChatV2ConversationItem({
   unread,
   hasMention,
   preview,
+  /** Contexto secundário exibido no lugar da prévia quando ainda não há
+   * mensagem (ex: "Campanha · Cix Citizen") — nunca junto da prévia real. */
+  subtitle,
 }: {
   to: string;
   params: Record<string, string>;
@@ -20,6 +23,7 @@ export function ChatV2ConversationItem({
   unread: number;
   hasMention?: boolean;
   preview?: string;
+  subtitle?: string;
 }) {
   const unreadState = unread > 0;
   return (
@@ -48,13 +52,11 @@ export function ChatV2ConversationItem({
           </TooltipTrigger>
           <TooltipContent>{name}</TooltipContent>
         </Tooltip>
-        {preview && (
-          <span
-            className={`block truncate text-xs ${unreadState ? "text-foreground/80" : "text-muted-foreground"}`}
-          >
-            {preview}
-          </span>
-        )}
+        <span
+          className={`block truncate text-xs ${unreadState ? "text-foreground/80" : "text-muted-foreground"}`}
+        >
+          {preview || subtitle || "Nenhuma mensagem ainda"}
+        </span>
       </span>
       {hasMention && (
         <Badge variant="brand" className="h-5 shrink-0 px-1.5 text-[10px]">

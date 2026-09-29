@@ -81,7 +81,7 @@ import { AttachmentList } from "@/components/chat/AttachmentList";
 import { MessageAvatar } from "@/components/chat/MessageAvatar";
 
 import { Link, useNavigate } from "@tanstack/react-router";
-import { loadProjetos } from "@/lib/projetos";
+import { loadProjetos, type ProjectStatus } from "@/lib/projetos";
 import {
   OPEN_CAMPANHA_TASK_KEY,
   OPEN_CLIENTE_KEY,
@@ -1115,7 +1115,7 @@ function ChatConversationList({
 }: {
   channels: ChatChannel[];
   campaignChannels: CampaignChannel[];
-  projectChannels: { id: string; name: string }[];
+  projectChannels: { id: string; name: string; status: ProjectStatus }[];
   members: ChatMember[];
   messages: ChatMessage[];
   meId: string;

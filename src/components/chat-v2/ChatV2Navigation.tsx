@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParams } from "@tanstack/react-router";
+import { Hash, Briefcase, Megaphone } from "lucide-react";
+import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import {
   buildChatList,
   getStatus,
@@ -20,12 +22,13 @@ import { ChatV2Section } from "./ChatV2Section";
 import { ChatV2ConversationItem } from "./ChatV2ConversationItem";
 import { ChatV2NewConversationDialog } from "./ChatV2NewConversationDialog";
 
-const CAMPAIGNS_INITIAL_LIMIT = 5;
-
 /**
- * Navegação do Chat V2 — 300–320px, ordem fixa: Atalhos → Diretas
- * → Canais → Campanhas. Campanhas começam limitadas (atividade recente/não
- * lidas/menções primeiro) pra não dominar a lista, com "Mostrar mais".
+ * Navegação do Chat V2 — 280–320px, ordem fixa: Diretas → Canais → Projetos
+ * → Campanhas (não há sistema de favoritos implementado ainda — quando
+ * existir, entra antes de Diretas). Cada seção só aparece se tiver ao menos
+ * 1 item; todas rolam naturalmente dentro do scroll da coluna, sem
+ * paginação artificial. Projetos/Campanhas encerrados ficam ocultos por
+ * padrão (toggle local "Ver encerrados"/"Ver arquivados").
  */
 export function ChatV2Navigation({
   channels,
@@ -38,11 +41,16 @@ export function ChatV2Navigation({
   members: ChatMember[];
   messages: ChatMessage[];
   meId: string;
-  clientes: { id: string; empresa: string; campanhas?: { id: string; nome: string }[] }[];
+  clientes: {
+    id: string;
+    empresa: string;
+    campanhas?: { id: string; nome: string; status?: CampanhaStatus }[];
+  }[];
 }) {
   const [search, setSearch] = useState("");
   const [newConvoOpen, setNewConvoOpen] = useState(false);
-  const [campaignsExpanded, setCampaignsExpanded] = useState(false);
+  const [showArchivedCampaigns, setShowArchivedCampaigns] = useState(false);
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false);
   const params = useParams({ strict: false }) as { kind?: string; id?: string };
   const activeConvoId =
     params.kind === "dm"
@@ -74,15 +82,24 @@ export function ChatV2Navigation({
 
   const dms = byKind("dm");
   const canais = byKind("channel");
-  // Campanhas/projetos: não lidas primeiro (que é o proxy mais próximo de
-  // "precisa de atenção" que já temos), depois por atividade recente.
-  const campanhasTodas = [...byKind("campanha"), ...byKind("projeto")].sort((a, b) => {
-    if (a.unread !== b.unread) return b.unread - a.unread;
-    return (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0);
-  });
-  const campanhasVisiveis = campaignsExpanded
-    ? campanhasTodas
-    : campanhasTodas.slice(0, CAMPAIGNS_INITIAL_LIMIT);
+
+  const projetosTodos = byKind("projeto");
+  const projetosEncerrados = projetosTodos.filter(
+    (p) => p.projetoStatus === "concluido" || p.projetoStatus === "arquivado",
+  );
+  const projetosAtivos = projetosTodos.filter(
+    (p) => p.projetoStatus !== "concluido" && p.projetoStatus !== "arquivado",
+  );
+  const projetosVisiveis = showArchivedProjects ? projetosTodos : projetosAtivos;
+
+  const campanhasTodas = byKind("campanha");
+  const campanhasEncerradas = campanhasTodas.filter(
+    (c) => c.campanhaStatus === "completed" || c.campanhaStatus === "archived",
+  );
+  const campanhasAtivas = campanhasTodas.filter(
+    (c) => c.campanhaStatus !== "completed" && c.campanhaStatus !== "archived",
+  );
+  const campanhasVisiveis = showArchivedCampaigns ? campanhasTodas : campanhasAtivas;
 
   const routeFor = (item: ChatListItem): { to: string; params: Record<string, string> } => {
     if (item.kind === "dm") {
@@ -171,7 +188,7 @@ export function ChatV2Navigation({
                   hasMention={hasMention(item)}
                   icon={
                     <span className="flex h-8 w-8 items-center justify-center text-base text-muted-foreground">
-                      #
+                      <Hash className="h-4 w-4" />
                     </span>
                   }
                   name={item.name}
@@ -181,6 +198,40 @@ export function ChatV2Navigation({
               ),
             };
           })}
+        />
+        <ChatV2Section
+          id="projetos"
+          title="Projetos"
+          items={projetosVisiveis.map((item) => {
+            const r = routeFor(item);
+            return {
+              key: item.id,
+              el: (
+                <ChatV2ConversationItem
+                  to={r.to}
+                  params={r.params}
+                  active={activeConvoId === item.id}
+                  hasMention={hasMention(item)}
+                  icon={
+                    <span className="flex h-8 w-8 items-center justify-center text-muted-foreground">
+                      <Briefcase className="h-4 w-4" />
+                    </span>
+                  }
+                  name={item.name}
+                  unread={item.unread}
+                  preview={item.lastMessage?.text}
+                />
+              ),
+            };
+          })}
+          action={
+            projetosEncerrados.length > 0
+              ? {
+                  label: showArchivedProjects ? "Ocultar encerrados" : "Ver projetos encerrados",
+                  onClick: () => setShowArchivedProjects((v) => !v),
+                }
+              : undefined
+          }
         />
         <ChatV2Section
           id="campanhas"
@@ -196,19 +247,26 @@ export function ChatV2Navigation({
                   active={activeConvoId === item.id}
                   hasMention={hasMention(item)}
                   icon={
-                    <span className="flex h-8 w-8 items-center justify-center text-base text-muted-foreground">
-                      #
+                    <span className="flex h-8 w-8 items-center justify-center text-muted-foreground">
+                      <Megaphone className="h-4 w-4" />
                     </span>
                   }
                   name={item.name}
                   unread={item.unread}
                   preview={item.lastMessage?.text}
+                  subtitle={item.empresa ? `Campanha · ${item.empresa}` : undefined}
                 />
               ),
             };
           })}
-          moreCount={campaignsExpanded ? 0 : campanhasTodas.length - campanhasVisiveis.length}
-          onShowMore={() => setCampaignsExpanded(true)}
+          action={
+            campanhasEncerradas.length > 0
+              ? {
+                  label: showArchivedCampaigns ? "Ocultar encerradas" : "Ver campanhas encerradas",
+                  onClick: () => setShowArchivedCampaigns((v) => !v),
+                }
+              : undefined
+          }
         />
       </div>
       <ChatV2NewConversationDialog

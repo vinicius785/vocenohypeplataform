@@ -33,11 +33,7 @@ function ChatV2ChannelPage() {
               memberCount: channel.allowedMemberIds?.length || members.length,
             }
           : project
-            ? {
-                kind: "channel",
-                channel: { id: convoId, name: project.name, createdAt: 0 },
-                memberCount: members.length,
-              }
+            ? { kind: "projeto", name: project.name }
             : null
       }
       messages={messages}

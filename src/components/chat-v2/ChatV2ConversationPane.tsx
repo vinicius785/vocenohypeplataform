@@ -61,7 +61,7 @@ export function ChatV2ConversationPane({
       ? headerInfo.member.name
       : headerInfo?.kind === "channel"
         ? `#${headerInfo.channel.name}`
-        : headerInfo?.kind === "campaign"
+        : headerInfo?.kind === "projeto" || headerInfo?.kind === "campaign"
           ? headerInfo.name
           : undefined;
 

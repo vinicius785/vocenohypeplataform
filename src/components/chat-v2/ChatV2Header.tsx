@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Hash, Lock, Pin, Users } from "lucide-react";
+import { ArrowLeft, Briefcase, Hash, Lock, Megaphone, Pin, Users } from "lucide-react";
 import {
   STATUS_LABEL,
   ensurePinnedLoaded,
@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 type HeaderInfo =
   | { kind: "dm"; member: ChatMember; status: MemberStatus }
   | { kind: "channel"; channel: ChatChannel; memberCount: number }
+  | { kind: "projeto"; name: string }
   | { kind: "campaign"; name: string; empresa: string };
 
 function formatDate(ts: number): string {
@@ -152,16 +153,23 @@ export function ChatV2Header({
             )}
             <p className="min-w-0 truncate text-sm font-semibold">{info.channel.name}</p>
             <span className="ml-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Users className="h-3 w-3" /> {info.memberCount}
+              <Users className="h-3 w-3" /> {info.memberCount} membros
               {onlineCount > 0 ? ` · ${onlineCount} online` : ""}
             </span>
           </>
         )}
+        {info?.kind === "projeto" && (
+          <>
+            <Briefcase className="h-4 w-4 text-muted-foreground" />
+            <p className="min-w-0 truncate text-sm font-semibold">{info.name}</p>
+            <span className="text-[11px] text-muted-foreground">Projeto interno</span>
+          </>
+        )}
         {info?.kind === "campaign" && (
           <>
-            <Hash className="h-4 w-4 text-muted-foreground" />
+            <Megaphone className="h-4 w-4 text-muted-foreground" />
             <p className="min-w-0 truncate text-sm font-semibold">{info.name}</p>
-            <span className="text-[11px] text-muted-foreground">campanha · {info.empresa}</span>
+            <span className="text-[11px] text-muted-foreground">Campanha · {info.empresa}</span>
           </>
         )}
         {convoId && <PinnedPopover convoId={convoId} />}

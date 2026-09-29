@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { loadProjetos, type Project } from "./projetos";
+import { loadProjetos, type Project, type ProjectStatus, DEFAULT_PROJECT_STATUS } from "./projetos";
+import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 export type ChatMember = {
@@ -1012,6 +1013,14 @@ export type ChatListItem = {
   kind: "channel" | "campanha" | "projeto" | "dm";
   private?: boolean;
   status?: MemberStatus;
+  /** Status real da campanha/projeto (quando `kind` for "campanha"/"projeto")
+   * — repassado de `CampaignChannel`/`loadProjectChannels()`, usado pra
+   * filtrar encerradas/arquivados por padrão na navegação do Chat V2. */
+  campanhaStatus?: CampanhaStatus;
+  projetoStatus?: ProjectStatus;
+  /** Empresa dona da campanha (quando `kind === "campanha"`) — exibida como
+   * contexto secundário no lugar da prévia quando ainda não há mensagem. */
+  empresa?: string;
   lastMessage?: ChatMessage;
   unread: number;
 };
@@ -1024,7 +1033,7 @@ export type ChatListItem = {
 export function buildChatList(args: {
   channels: ChatChannel[];
   campaignChannels: CampaignChannel[];
-  projectChannels: { id: string; name: string }[];
+  projectChannels: { id: string; name: string; status: ProjectStatus }[];
   members: ChatMember[];
   messages: ChatMessage[];
   meId: string;
@@ -1051,6 +1060,8 @@ export function buildChatList(args: {
         id: c.id,
         name: c.name,
         kind: "campanha",
+        campanhaStatus: c.status,
+        empresa: c.empresa,
         lastMessage: lastMessageByConvo.get(c.id),
         unread: getUnreadCount(c.id, messages, meId),
       }),
@@ -1060,6 +1071,7 @@ export function buildChatList(args: {
         id: p.id,
         name: p.name,
         kind: "projeto",
+        projetoStatus: p.status,
         lastMessage: lastMessageByConvo.get(p.id),
         unread: getUnreadCount(p.id, messages, meId),
       }),
@@ -1197,9 +1209,19 @@ export function playMeetingReminderSound() {
 }
 
 // ---------- Derived channels ----------
-export type CampaignChannel = { id: string; name: string; clienteId: string; empresa: string };
+export type CampaignChannel = {
+  id: string;
+  name: string;
+  clienteId: string;
+  empresa: string;
+  status: CampanhaStatus;
+};
 export function loadCampaignChannels(
-  clientes: { id: string; empresa: string; campanhas?: { id: string; nome: string }[] }[],
+  clientes: {
+    id: string;
+    empresa: string;
+    campanhas?: { id: string; nome: string; status?: CampanhaStatus }[];
+  }[],
 ): CampaignChannel[] {
   return clientes.flatMap((c) =>
     (c.campanhas ?? []).map((camp) => ({
@@ -1207,11 +1229,19 @@ export function loadCampaignChannels(
       name: camp.nome,
       clienteId: c.id,
       empresa: c.empresa,
+      // Mesmo fallback de `campanhaStatus()` (campanha-ui.ts): ausência de
+      // `status` gravado vira "negotiation", nunca "active" — evita que uma
+      // campanha legada aparente estar mais adiantada do que está.
+      status: camp.status ?? "negotiation",
     })),
   );
 }
-export function loadProjectChannels(): { id: string; name: string }[] {
-  return loadProjetos().map((p: Project) => ({ id: "proj:" + p.id, name: p.name }));
+export function loadProjectChannels(): { id: string; name: string; status: ProjectStatus }[] {
+  return loadProjetos().map((p: Project) => ({
+    id: "proj:" + p.id,
+    name: p.name,
+    status: p.status ?? DEFAULT_PROJECT_STATUS,
+  }));
 }
 
 // ---------- External event bridges ----------
