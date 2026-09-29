@@ -59,7 +59,6 @@ import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
 import { BugReportButton } from "./BugReportButton";
-import { NovidadesButton } from "./configuracoes/NovidadesButton";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
   getMe,
@@ -93,7 +92,6 @@ import { useRunningTimer, stopTimer } from "@/lib/time-entries";
 import { toast } from "sonner";
 import { idbAuthStorage } from "@/lib/idb-auth-storage";
 import { TaskModalStack } from "@/components/tasks/TaskModalStack";
-import { FocusHeaderButton } from "@/components/focus/FocusHeaderButton";
 import { type SectionKey, SECTION_SUBNAV } from "@/lib/section-nav";
 
 export type { SectionKey };
@@ -645,12 +643,6 @@ export function AppShell({
               <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
               {showFull && "Configurações"}
             </button>
-            <NovidadesButton
-              showLabel={showFull}
-              className={`mt-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item ${
-                !showFull ? "justify-center" : ""
-              }`}
-            />
             {access?.isAdmin && (
               <button
                 type="button"
@@ -705,7 +697,6 @@ export function AppShell({
           <GlobalSearch onSelect={onSelect} />
           <div className="ml-auto flex items-center gap-1">
             <ActiveTimerIndicator onSelect={onSelect} />
-            <FocusHeaderButton />
             <button
               type="button"
               onClick={toggleTheme}

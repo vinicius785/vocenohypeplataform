@@ -76,7 +76,6 @@ import {
   type TaskCommentMention,
 } from "@/lib/task-aggregation";
 import { usePerformanceSettings } from "@/lib/performance-events-store";
-import { TomatoIcon } from "@/components/focus/TomatoIcon";
 import { useWeather } from "@/hooks/use-weather";
 import type { WeatherSnapshot } from "@/lib/weather-cache";
 import { WeatherHeaderEffect } from "@/components/inicio/WeatherHeaderEffect";
@@ -805,16 +804,6 @@ export function InicioDashboard() {
     navigate({ to: "/projeto/$id", params: { id: t.projectId }, search: { taskId: t.id } });
   };
 
-  const goToFocus = (t: Pick<DashTask, "id" | "parentId">) => {
-    // `findTaskContext` (Modo Foco) já procura em `subtasks` também —
-    // passa o id de verdade, sem colapsar pro pai.
-    const targetId = t.id.replace(/^mkt:/, "");
-    navigate({
-      to: "/foco",
-      search: { taskId: targetId, from: `${window.location.pathname}${window.location.search}` },
-    });
-  };
-
   const visibleWorkTasks = workExpanded ? filteredTasks : filteredTasks.slice(0, WORK_PAGE_SIZE);
   const visibleComments = commentsExpanded
     ? assignedComments
@@ -1019,17 +1008,6 @@ export function InicioDashboard() {
                     >
                       {t.due}
                     </span>
-                    <IconButton
-                      label="Iniciar foco nesta tarefa"
-                      tone="neutral"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        goToFocus(t);
-                      }}
-                      className="h-7 w-7 shrink-0 text-muted-foreground/70 opacity-60 transition-opacity hover:text-brand focus-visible:opacity-100"
-                    >
-                      <TomatoIcon className="h-3.5 w-3.5" />
-                    </IconButton>
                     <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
                 ))}

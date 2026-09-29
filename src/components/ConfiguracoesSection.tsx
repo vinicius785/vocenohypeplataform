@@ -75,12 +75,10 @@ function applyPresenceStatus(next: UserStatus) {
 
 /**
  * Grupos/itens da navegação de Configurações (reconstrução completa —
- * ver plano). "Novidades" saiu daqui de propósito (não é uma
- * configuração; virou o botão "Novidades da plataforma" no rodapé da
- * sidebar, ver `AppShell.tsx`/`NovidadesButton.tsx`). Visibilidade por
- * item usa a MESMA condição booleana que antes decidia `LockedSection`
- * — a diferença é que agora, se a condição for falsa, o item some da
- * navegação em vez de aparecer bloqueado com cadeado.
+ * ver plano). Visibilidade por item usa a MESMA condição booleana que
+ * antes decidia `LockedSection` — a diferença é que agora, se a condição
+ * for falsa, o item some da navegação em vez de aparecer bloqueado com
+ * cadeado.
  */
 function buildGroups(
   canConfig: boolean,

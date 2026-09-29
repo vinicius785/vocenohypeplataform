@@ -6,7 +6,7 @@ import { ChatV2Shell } from "@/components/chat-v2/ChatV2Shell";
  * Layout da Chat V2 — reconstrução isolada do Chat (ver pedido do
  * usuário), acessível em `/chat-v2` SEM substituir a V1
  * (`/time?section=chat`, ainda intacta) e SEM sair do `AppShell` oficial:
- * sidebar global, barra superior, busca global, modo foco, tema e sino de
+ * sidebar global, barra superior, busca global, tema e sino de
  * notificações continuam todos visíveis — só a área de conteúdo interna
  * é o Chat V2. "Chat" continua marcado como item ativo na sidebar global
  * enquanto o usuário está em qualquer rota `/chat-v2/*`.

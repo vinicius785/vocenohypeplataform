@@ -32,8 +32,6 @@ import {
   FolderInput,
   Lock,
 } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
-import { TomatoIcon } from "@/components/focus/TomatoIcon";
 import { toast } from "sonner";
 import { type TaskRecurrence, computeNextRecurrenceDueDate } from "@/lib/task-recurrence";
 import {
@@ -1177,14 +1175,9 @@ function CardTags({ tags, taskTags }: { tags: string[]; taskTags: TaskTag[] }) {
 function CardQuickActions({
   onOpen,
   onDelete,
-  onFocus,
 }: {
   onOpen: () => void;
   onDelete: (e: React.MouseEvent) => void;
-  /** Opcional — só aparece quando quem chama sabe resolver o id "cru"
-   * da tarefa (sem prefixo `mkt:`) pro Modo Foco (item 1: "Iniciar foco"
-   * no menu de cada tarefa). */
-  onFocus?: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -1207,16 +1200,6 @@ function CardQuickActions({
         >
           <ExternalLink className="h-3.5 w-3.5" /> Abrir tarefa
         </DropdownMenuItem>
-        {onFocus && (
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              onFocus();
-            }}
-          >
-            <TomatoIcon className="h-3.5 w-3.5" /> Iniciar foco
-          </DropdownMenuItem>
-        )}
         <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="h-3.5 w-3.5" /> Excluir
         </DropdownMenuItem>
@@ -1273,14 +1256,6 @@ export function TaskBoard({
    * === "projeto"`; ver comentário equivalente em `TaskDialog`. */
   fases?: ProjetoFase[];
 }) {
-  const navigate = useNavigate();
-  const goToFocus = (taskId: string) => {
-    const rawId = taskId.replace(/^mkt:/, "");
-    navigate({
-      to: "/foco",
-      search: { taskId: rawId, from: `${window.location.pathname}${window.location.search}` },
-    });
-  };
   const [taskDialog, setTaskDialog] = useState<{
     mode: "new" | "edit";
     data?: Task;
@@ -2293,7 +2268,6 @@ export function TaskBoard({
                                 openSubtaskId: t.__parentTask ? t.id : undefined,
                               })
                             }
-                            onFocus={() => goToFocus(t.id)}
                             onDelete={(e) => {
                               e.stopPropagation();
                               if (t.__parentTask) {
@@ -2671,14 +2645,6 @@ export function TaskDialog({
       no board não deve mostrar a tarefa-mãe primeiro). */
   initialEditSubtaskId?: string;
 }) {
-  const navigate = useNavigate();
-  const goToFocus = (taskId: string) => {
-    const rawId = taskId.replace(/^mkt:/, "");
-    navigate({
-      to: "/foco",
-      search: { taskId: rawId, from: `${window.location.pathname}${window.location.search}` },
-    });
-  };
   const members = useTeamMembers();
   const taskTags = useTaskTags();
   const { settings: performanceSettings } = usePerformanceSettings();
@@ -3897,11 +3863,6 @@ export function TaskDialog({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {initial && (
-                        <DropdownMenuItem onClick={() => goToFocus(initial.id)}>
-                          <TomatoIcon className="h-3.5 w-3.5" /> Iniciar foco
-                        </DropdownMenuItem>
-                      )}
                       {scope && (
                         <DropdownMenuItem onClick={() => setMoveDialogOpen(true)}>
                           <FolderInput className="h-3.5 w-3.5" /> Mover para...
