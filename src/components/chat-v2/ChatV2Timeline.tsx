@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronUp } from "lucide-react";
 import {
   deleteMessage,
+  ensurePinnedLoaded,
   hasMoreOlderMessages,
   loadOlderMessages,
   type ChatMember,
@@ -18,6 +19,7 @@ export function ChatV2Timeline({
   members,
   lastReadAt,
   onReply,
+  highlightId,
 }: {
   convoId: string;
   messages: ChatMessage[];
@@ -25,19 +27,33 @@ export function ChatV2Timeline({
   members: ChatMember[];
   lastReadAt: number;
   onReply: (message: ChatMessage) => void;
+  /** Id de mensagem a destacar (vindo da busca) — recebe um scroll-into-view
+   * e um realce temporário de ~2s, depois volta ao normal. */
+  highlightId?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [newBelowCount, setNewBelowCount] = useState(0);
+  const [activeHighlight, setActiveHighlight] = useState<string | undefined>(undefined);
   const prevCountRef = useRef(messages.length);
+  const replyCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of messages) {
+      if (m.replyToId) counts.set(m.replyToId, (counts.get(m.replyToId) ?? 0) + 1);
+    }
+    return counts;
+  }, [messages]);
+  // Respostas em thread não aparecem como mensagens completas no canal
+  // principal — só a mensagem raiz, com o indicador compacto de contagem.
+  const rootMessages = useMemo(() => messages.filter((m) => !m.replyToId), [messages]);
   const initialUnreadIndex = useMemo(
-    () => firstUnreadIndex(messages, lastReadAt, meId),
+    () => firstUnreadIndex(rootMessages, lastReadAt, meId),
     // Fixado na abertura da conversa — não deve se mover conforme o usuário
     // lê (senão o divisor "Novas mensagens" ficaria pulando).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [convoId],
   );
-  const groups = useMemo(() => groupMessages(messages), [messages]);
+  const groups = useMemo(() => groupMessages(rootMessages), [rootMessages]);
 
   // Ao trocar de conversa: ir para a primeira não lida, ou pro final.
   useEffect(() => {
@@ -72,6 +88,22 @@ export function ChatV2Timeline({
       setNewBelowCount((n) => n + added);
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    setActiveHighlight(highlightId);
+    const el = scrollRef.current;
+    requestAnimationFrame(() => {
+      const target = el?.querySelector(`[data-message-id="${highlightId}"]`);
+      target?.scrollIntoView({ block: "center" });
+    });
+    const t = setTimeout(() => setActiveHighlight(undefined), 2000);
+    return () => clearTimeout(t);
+  }, [highlightId, convoId]);
+
+  useEffect(() => {
+    void ensurePinnedLoaded(convoId);
+  }, [convoId]);
 
   const handleScroll = async () => {
     const el = scrollRef.current;
@@ -127,10 +159,18 @@ export function ChatV2Timeline({
                 </div>
               )}
               {group.messages.map((m, mi) => {
-                const globalIndex = messages.indexOf(m);
+                const globalIndex = rootMessages.indexOf(m);
                 const isUnreadDivider = globalIndex === initialUnreadIndex;
                 return (
-                  <div key={m.id}>
+                  <div
+                    key={m.id}
+                    data-message-id={m.id}
+                    className={
+                      activeHighlight === m.id
+                        ? "rounded-md bg-brand/10 outline outline-2 outline-brand/40 transition-colors duration-1000"
+                        : undefined
+                    }
+                  >
                     {isUnreadDivider && (
                       <div data-unread-divider="1" className="my-2 flex items-center gap-3 px-4">
                         <div className="h-px flex-1 bg-brand/40" />
@@ -147,6 +187,7 @@ export function ChatV2Timeline({
                       members={members}
                       onReply={onReply}
                       onDelete={(id) => void deleteMessage(id)}
+                      replyCount={replyCounts.get(m.id)}
                     />
                   </div>
                 );

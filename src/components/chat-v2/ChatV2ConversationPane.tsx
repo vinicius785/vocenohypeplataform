@@ -34,8 +34,9 @@ export function ChatV2ConversationPane({
   onBack: () => void;
 }) {
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { thread?: string };
+  const search = useSearch({ strict: false }) as { thread?: string; highlight?: string };
   const threadId = search.thread;
+  const highlightId = search.highlight;
   const convoMessages = messages.filter((m) => m.convoId === convoId);
   const rootMessage = threadId ? convoMessages.find((m) => m.id === threadId) : undefined;
   const [lastReadAt, setLastReadAt] = useState(() => loadLastRead()[convoId] ?? 0);
@@ -66,7 +67,13 @@ export function ChatV2ConversationPane({
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <ChatV2Header info={headerInfo} onBack={onBack} />
+        <ChatV2Header
+          info={headerInfo}
+          onBack={onBack}
+          convoId={convoId}
+          meId={meId}
+          members={members}
+        />
         <ChatV2Timeline
           convoId={convoId}
           messages={convoMessages}
@@ -74,6 +81,7 @@ export function ChatV2ConversationPane({
           members={members}
           lastReadAt={lastReadAt}
           onReply={openThread}
+          highlightId={highlightId}
         />
         <ChatV2Composer convoId={convoId} />
       </div>

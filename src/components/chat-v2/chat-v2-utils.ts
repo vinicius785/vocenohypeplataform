@@ -109,30 +109,32 @@ export function firstUnreadIndex(
   return null;
 }
 
-// ---------- Rascunhos por conversa (client-side only, sem tabela nova) ----------
-// Decisão de escopo: rascunho é puramente uma conveniência de digitação, não
-// precisa sincronizar entre dispositivos/abas nem sobreviver a troca de
-// navegador — por isso fica em localStorage (mesmo padrão de `chat-store.ts`
-// pra `chat:me`/`chat:active`), em vez de criar uma tabela `chat_drafts`.
-const DRAFT_PREFIX = "chat-v2:draft:";
+// ---------- Rascunhos por conversa ----------
+// Fonte de verdade é a tabela `chat_drafts` (ver `chat-store.ts`'s
+// `loadDraftFromDb`/`saveDraftToDb`/`deleteDraftFromDb`) — sem cache local,
+// `ChatV2Composer` carrega direto da tabela ao montar/trocar de conversa.
 
-export function getDraft(convoId: string): string {
-  if (!convoId || typeof localStorage === "undefined") return "";
-  try {
-    return localStorage.getItem(DRAFT_PREFIX + convoId) ?? "";
-  } catch {
-    return "";
+/** Mapeia um `convoId` (`dm:a|b`, `c:<uuid>`, `proj:<id>`, `camp:<id>`) pra
+ * rota + params do Chat V2 — mesma lógica de `ChatV2Navigation`'s
+ * `routeFor`, mas partindo do id da conversa em vez de um `ChatListItem`
+ * (útil pra navegar a partir de uma mensagem salva/fixada, que só carrega
+ * o `convoId`). */
+export function routeForConvoId(
+  convoId: string,
+  meId: string,
+): { to: string; params: Record<string, string> } {
+  if (convoId.startsWith("dm:")) {
+    const otherId =
+      convoId
+        .slice(3)
+        .split("|")
+        .find((id) => id !== meId) ?? convoId;
+    return { to: "/chat-v2/dm/$id", params: { id: otherId } };
   }
-}
-
-export function setDraft(convoId: string, text: string): void {
-  if (!convoId || typeof localStorage === "undefined") return;
-  try {
-    if (text) localStorage.setItem(DRAFT_PREFIX + convoId, text);
-    else localStorage.removeItem(DRAFT_PREFIX + convoId);
-  } catch {
-    /* ignore */
-  }
+  if (convoId.startsWith("camp:"))
+    return { to: "/chat-v2/campaign/$id", params: { id: convoId.slice(5) } };
+  if (convoId.startsWith("proj:")) return { to: "/chat-v2/channel/$id", params: { id: convoId } };
+  return { to: "/chat-v2/channel/$id", params: { id: convoId.slice(2) } };
 }
 
 /** Conta menções não lidas endereçadas a `meId` em qualquer conversa —

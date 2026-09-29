@@ -25,12 +25,10 @@ import {
   countUnreadMentions,
   dateDividerLabel,
   firstUnreadIndex,
-  getDraft,
   getLastConvoRoute,
   groupMessages,
   isSameDay,
   isSidebarSectionCollapsed,
-  setDraft,
   setLastConvoRoute,
   setSidebarSectionCollapsed,
 } from "./chat-v2-utils";
@@ -144,30 +142,6 @@ describe("firstUnreadIndex", () => {
     const t0 = Date.now();
     const messages = [msg({ id: "1", createdAt: t0, authorId: "u2" })];
     expect(firstUnreadIndex(messages, t0 + 1, "me")).toBeNull();
-  });
-});
-
-describe("rascunho por conversa (localStorage)", () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
-
-  it("persiste e recupera um rascunho", () => {
-    setDraft("c:1", "olá mundo");
-    expect(getDraft("c:1")).toBe("olá mundo");
-  });
-
-  it("remove o rascunho quando o texto fica vazio", () => {
-    setDraft("c:1", "algo");
-    setDraft("c:1", "");
-    expect(getDraft("c:1")).toBe("");
-  });
-
-  it("não mistura rascunhos de conversas diferentes", () => {
-    setDraft("c:1", "conversa 1");
-    setDraft("c:2", "conversa 2");
-    expect(getDraft("c:1")).toBe("conversa 1");
-    expect(getDraft("c:2")).toBe("conversa 2");
   });
 });
 

@@ -109,8 +109,8 @@ export function ChatV2Navigation({
 
   return (
     <div className="flex h-full w-full flex-col border-r border-border bg-muted/20 md:w-[320px]">
-      <ChatV2NavigationHeader onNewConversation={() => setNewConvoOpen(true)} />
-      <ChatV2Search value={search} onChange={setSearch} />
+      <ChatV2NavigationHeader onNewConversation={() => setNewConvoOpen(true)} meId={meId} />
+      <ChatV2Search value={search} onChange={setSearch} meId={meId} />
       <ChatV2Shortcuts unreadCount={totalUnread} mentionCount={mentionCount} />
       <div className="flex-1 overflow-y-auto pb-3">
         {hypito && !q && (

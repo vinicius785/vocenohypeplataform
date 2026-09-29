@@ -7,7 +7,7 @@ import { setLastConvoRoute } from "@/components/chat-v2/chat-v2-utils";
 
 export const Route = createFileRoute("/_authenticated/chat-v2/channel/$id")({
   component: ChatV2ChannelPage,
-  validateSearch: z.object({ thread: z.string().optional() }),
+  validateSearch: z.object({ thread: z.string().optional(), highlight: z.string().optional() }),
 });
 
 function ChatV2ChannelPage() {

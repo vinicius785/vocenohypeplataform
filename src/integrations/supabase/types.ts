@@ -572,6 +572,62 @@ export type Database = {
         };
         Relationships: [];
       };
+      chat_conversation_members: {
+        Row: {
+          conversation_id: string;
+          created_at: string;
+          user_id: string;
+        };
+        Insert: {
+          conversation_id: string;
+          created_at?: string;
+          user_id: string;
+        };
+        Update: {
+          conversation_id?: string;
+          created_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_conversation_members_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_conversations: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string | null;
+          photo: string | null;
+          type: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id: string;
+          name?: string | null;
+          photo?: string | null;
+          type: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string | null;
+          photo?: string | null;
+          type?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       chat_deliveries: {
         Row: {
           convo_id: string;
@@ -589,6 +645,103 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      chat_drafts: {
+        Row: {
+          content: string;
+          convo_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          content?: string;
+          convo_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          content?: string;
+          convo_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      chat_message_attachments: {
+        Row: {
+          created_at: string;
+          duration_seconds: number | null;
+          id: string;
+          kind: string;
+          message_id: string;
+          mime_type: string;
+          name: string;
+          size_bytes: number | null;
+          storage_path: string;
+        };
+        Insert: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          id?: string;
+          kind?: string;
+          message_id: string;
+          mime_type: string;
+          name: string;
+          size_bytes?: number | null;
+          storage_path: string;
+        };
+        Update: {
+          created_at?: string;
+          duration_seconds?: number | null;
+          id?: string;
+          kind?: string;
+          message_id?: string;
+          mime_type?: string;
+          name?: string;
+          size_bytes?: number | null;
+          storage_path?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_attachments_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_message_reactions: {
+        Row: {
+          created_at: string;
+          emoji: string;
+          id: string;
+          message_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          emoji: string;
+          id?: string;
+          message_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          emoji?: string;
+          id?: string;
+          message_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_message_reactions_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       chat_messages: {
         Row: {
@@ -646,6 +799,38 @@ export type Database = {
           },
         ];
       };
+      chat_pinned_messages: {
+        Row: {
+          convo_id: string;
+          id: string;
+          message_id: string;
+          pinned_at: string;
+          pinned_by: string;
+        };
+        Insert: {
+          convo_id: string;
+          id?: string;
+          message_id: string;
+          pinned_at?: string;
+          pinned_by: string;
+        };
+        Update: {
+          convo_id?: string;
+          id?: string;
+          message_id?: string;
+          pinned_at?: string;
+          pinned_by?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_pinned_messages_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_reads: {
         Row: {
           convo_id: string;
@@ -663,6 +848,35 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      chat_saved_messages: {
+        Row: {
+          created_at: string;
+          id: string;
+          message_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          message_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          message_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_saved_messages_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       chat_status: {
         Row: {
@@ -3178,6 +3392,7 @@ export type Database = {
         Returns: boolean;
       };
       is_admin: { Args: { _user_id: string }; Returns: boolean };
+      is_internal_team_member: { Args: { _user_id: string }; Returns: boolean };
       publish_scheduled_blog_posts: { Args: never; Returns: undefined };
       resolve_task_block: {
         Args: {
@@ -3189,6 +3404,17 @@ export type Database = {
           p_resolution_note: string;
         };
         Returns: undefined;
+      };
+      search_chat_messages: {
+        Args: { p_limit?: number; p_query: string };
+        Returns: {
+          author_name: string;
+          author_photo: string;
+          convo_id: string;
+          created_at: string;
+          id: string;
+          text: string;
+        }[];
       };
       toggle_message_reaction: {
         Args: { p_emoji: string; p_message_id: string };

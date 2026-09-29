@@ -406,6 +406,7 @@ export async function initChatSync(userId: string) {
       reloadAllReads(),
       reloadAllDeliveries(),
       reloadStatuses(),
+      reloadSavedMessageIds(),
     ]);
     if (realtimeStarted) return;
     realtimeStarted = true;
@@ -1288,4 +1289,177 @@ export function broadcastTyping(convoId: string) {
 export function getTypingUsers(convoId: string, meId: string): TypingEntry[] {
   pruneTyping();
   return (typingCache[convoId] ?? []).filter((e) => e.userId !== meId);
+}
+
+// ---------- Drafts (chat_drafts, Chat V2) ----------
+// Fonte de verdade é a tabela — `chat-v2-utils.ts`'s `getDraft`/`setDraft`
+// (localStorage) seguem existindo só como cache otimista sem delay visual.
+export async function loadDraftFromDb(convoId: string): Promise<string> {
+  if (!currentUserId || !convoId) return "";
+  const { data } = await supabase
+    .from("chat_drafts")
+    .select("content")
+    .eq("user_id", currentUserId)
+    .eq("convo_id", convoId)
+    .maybeSingle();
+  return data?.content ?? "";
+}
+
+export async function saveDraftToDb(convoId: string, content: string): Promise<void> {
+  if (!currentUserId || !convoId) return;
+  if (!content.trim()) {
+    await deleteDraftFromDb(convoId);
+    return;
+  }
+  await supabase.from("chat_drafts").upsert({
+    user_id: currentUserId,
+    convo_id: convoId,
+    content,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function deleteDraftFromDb(convoId: string): Promise<void> {
+  if (!currentUserId || !convoId) return;
+  await supabase.from("chat_drafts").delete().eq("user_id", currentUserId).eq("convo_id", convoId);
+}
+
+// ---------- Mensagens salvas (chat_saved_messages, Chat V2) ----------
+export type SavedMessage = { savedId: string; message: ChatMessage; createdAt: number };
+
+let savedMessageIdsCache = new Set<string>();
+export function isMessageSaved(messageId: string): boolean {
+  return savedMessageIdsCache.has(messageId);
+}
+
+export async function reloadSavedMessageIds(): Promise<void> {
+  if (!currentUserId) return;
+  const { data } = await supabase
+    .from("chat_saved_messages")
+    .select("message_id")
+    .eq("user_id", currentUserId);
+  savedMessageIdsCache = new Set((data ?? []).map((r) => r.message_id));
+  emit();
+}
+
+/** Alterna salvo/não-salvo, otimista. Uma violação de unique constraint
+ * (já estava salvo — corrida entre abas) é tratada como sucesso. */
+export async function toggleSavedMessage(messageId: string): Promise<void> {
+  const uid = currentUserId;
+  if (!uid) return;
+  const wasSaved = savedMessageIdsCache.has(messageId);
+  if (wasSaved) {
+    savedMessageIdsCache.delete(messageId);
+    emit();
+    const { error } = await supabase
+      .from("chat_saved_messages")
+      .delete()
+      .eq("user_id", uid)
+      .eq("message_id", messageId);
+    if (error) {
+      savedMessageIdsCache.add(messageId);
+      emit();
+    }
+  } else {
+    savedMessageIdsCache.add(messageId);
+    emit();
+    const { error } = await supabase
+      .from("chat_saved_messages")
+      .insert({ user_id: uid, message_id: messageId });
+    if (error && error.code !== "23505") {
+      console.error("[chat] falha ao salvar mensagem", error);
+      savedMessageIdsCache.delete(messageId);
+      emit();
+    }
+  }
+}
+
+export async function loadSavedMessagesList(): Promise<SavedMessage[]> {
+  const uid = currentUserId;
+  if (!uid) return [];
+  const { data, error } = await supabase
+    .from("chat_saved_messages")
+    .select(`id, created_at, chat_messages ( ${MESSAGE_COLUMNS} )`)
+    .eq("user_id", uid)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  const out: SavedMessage[] = [];
+  for (const row of data as unknown as {
+    id: string;
+    created_at: string;
+    chat_messages: MessageRow | null;
+  }[]) {
+    if (!row.chat_messages) continue;
+    out.push({
+      savedId: row.id,
+      message: mapMessage(row.chat_messages),
+      createdAt: new Date(row.created_at).getTime(),
+    });
+  }
+  return out;
+}
+
+// ---------- Mensagens fixadas (chat_pinned_messages, Chat V2) ----------
+export type PinnedMessage = { pinId: string; message: ChatMessage; pinnedAt: number };
+
+let pinnedCache: Record<string, PinnedMessage[]> = {};
+export function getPinnedMessages(convoId: string): PinnedMessage[] {
+  return pinnedCache[convoId] ?? [];
+}
+export function isMessagePinned(convoId: string, messageId: string): boolean {
+  return (pinnedCache[convoId] ?? []).some((p) => p.message.id === messageId);
+}
+
+export async function reloadPinnedMessages(convoId: string): Promise<PinnedMessage[]> {
+  if (!convoId) return [];
+  const { data, error } = await supabase
+    .from("chat_pinned_messages")
+    .select(`id, pinned_at, chat_messages ( ${MESSAGE_COLUMNS} )`)
+    .eq("convo_id", convoId)
+    .order("pinned_at", { ascending: false });
+  if (error || !data) return pinnedCache[convoId] ?? [];
+  const list: PinnedMessage[] = [];
+  for (const row of data as unknown as {
+    id: string;
+    pinned_at: string;
+    chat_messages: MessageRow | null;
+  }[]) {
+    if (!row.chat_messages) continue;
+    list.push({
+      pinId: row.id,
+      message: mapMessage(row.chat_messages),
+      pinnedAt: new Date(row.pinned_at).getTime(),
+    });
+  }
+  pinnedCache = { ...pinnedCache, [convoId]: list };
+  emit();
+  return list;
+}
+
+/** Carrega os fixados desta conversa só na primeira vez (chamar de novo
+ * depois de um toggle usa `reloadPinnedMessages` diretamente). */
+export async function ensurePinnedLoaded(convoId: string): Promise<void> {
+  if (pinnedCache[convoId]) return;
+  await reloadPinnedMessages(convoId);
+}
+
+export async function togglePinnedMessage(convoId: string, messageId: string): Promise<void> {
+  const uid = currentUserId;
+  if (!uid || !convoId) return;
+  const currentlyPinned = isMessagePinned(convoId, messageId);
+  if (currentlyPinned) {
+    await supabase
+      .from("chat_pinned_messages")
+      .delete()
+      .eq("convo_id", convoId)
+      .eq("message_id", messageId);
+  } else {
+    const { error } = await supabase
+      .from("chat_pinned_messages")
+      .insert({ convo_id: convoId, message_id: messageId, pinned_by: uid });
+    if (error && error.code !== "23505") {
+      console.error("[chat] falha ao fixar mensagem", error);
+    }
+  }
+  await reloadPinnedMessages(convoId);
 }
