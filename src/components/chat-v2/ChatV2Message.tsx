@@ -308,7 +308,6 @@ export function ChatV2Message({
     setPickerOpen(false);
     setMoreOpen(false);
     setSheetOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closeMenusSignal]);
 
   const saveEdit = async () => {
@@ -373,20 +372,30 @@ export function ChatV2Message({
         )}
       </div>
       <div className="min-w-0 flex-1 py-0.5">
-        {showHeader && (
-          <div className="flex items-baseline gap-2">
-            <span className={`text-sm font-semibold ${isMine ? "text-brand" : "text-foreground"}`}>
-              {message.authorName}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              {formatTime(message.createdAt)}
-            </span>
-            {message.editedAt && (
-              <span className="text-[11px] text-muted-foreground">(editada)</span>
-            )}
-          </div>
-        )}
-        <div className="max-w-[720px]">
+        {/* Wrapper de CONTEÚDO real (não a linha inteira, que ocupa 100% da
+         * timeline) — `w-fit` faz a caixa abraçar o conteúdo (mensagem curta
+         * = caixa estreita), `max-w-[...]` limita mensagens longas a uma
+         * largura de leitura confortável. Este é o ancestral `relative` da
+         * barra de ações agora — antes ela era filha da linha inteira
+         * (100% de largura), por isso `right-3` ancorava no extremo direito
+         * da TIMELINE, não da mensagem, mesmo com o texto bem mais curto e
+         * alinhado à esquerda. */}
+        <div className="relative w-fit max-w-[min(900px,calc(100%-64px))]">
+          {showHeader && (
+            <div className="flex items-baseline gap-2 pr-16">
+              <span
+                className={`text-sm font-semibold ${isMine ? "text-brand" : "text-foreground"}`}
+              >
+                {message.authorName}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {formatTime(message.createdAt)}
+              </span>
+              {message.editedAt && (
+                <span className="text-[11px] text-muted-foreground">(editada)</span>
+              )}
+            </div>
+          )}
           {editing ? (
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">Editando mensagem</p>
@@ -449,105 +458,113 @@ export function ChatV2Message({
               {replyCount} resposta{replyCount === 1 ? "" : "s"}
             </button>
           )}
-        </div>
-      </div>
-      {/* Visível no hover/foco do teclado (`group-hover`/`group-focus-within`,
-       * CSS puro) — MAS também precisa ficar visível enquanto qualquer menu
-       * dela está aberto (`pickerOpen`/`moreOpen`, estado React), senão um
-       * clique que solta o `:hover` (teclado, toque, ou o próprio Radix
-       * movendo o foco pro Portal ao abrir) faz este container colapsar pra
-       * `display:none` ENQUANTO o Popover/DropdownMenu ainda está montado —
-       * o Radix então mede `getBoundingClientRect()` do trigger escondido
-       * (retorna 0,0,0,0) e ancora o menu no canto superior esquerdo da
-       * página em vez de perto da mensagem. Forçar `flex` explícito quando
-       * aberto é a correção real: nunca deixar o trigger existir sem estar
-       * visível/mensurável enquanto seu próprio menu está montado. */}
-      <div
-        className={`absolute right-3 top-0 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm ${
-          pickerOpen || moreOpen ? "flex" : "hidden group-hover:flex group-focus-within:flex"
-        }`}
-      >
-        <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Reagir">
-              <SmilePlus className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            collisionPadding={12}
-            avoidCollisions
-            className="flex w-auto gap-0.5 p-1"
+
+          {/* Visível no hover/foco do teclado (`group-hover`/`group-focus-within`,
+           * CSS puro) — MAS também precisa ficar visível enquanto qualquer menu
+           * dela está aberto (`pickerOpen`/`moreOpen`, estado React), senão um
+           * clique que solta o `:hover` (teclado, toque, ou o próprio Radix
+           * movendo o foco pro Portal ao abrir) faz este container colapsar pra
+           * `display:none` ENQUANTO o Popover/DropdownMenu ainda está montado —
+           * o Radix então mede `getBoundingClientRect()` do trigger escondido
+           * (retorna 0,0,0,0) e ancora o menu no canto superior esquerdo da
+           * página em vez de perto da mensagem. Forçar `flex` explícito quando
+           * aberto é a correção real: nunca deixar o trigger existir sem estar
+           * visível/mensurável enquanto seu próprio menu está montado.
+           *
+           * ANCORADA NESTE WRAPPER (largura real do conteúdo), não na linha
+           * inteira da mensagem — é essa a correção do bug de "menu longe da
+           * mensagem, preso no canto direito do chat": antes esta barra era
+           * filha da linha inteira (100% da largura da timeline), então
+           * `right-*` media a partir da borda direita da TIMELINE, não do
+           * balão de texto, mesmo com mensagens curtas alinhadas à esquerda. */}
+          <div
+            className={`absolute -top-3 right-1 items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm ${
+              pickerOpen || moreOpen ? "flex" : "hidden group-hover:flex group-focus-within:flex"
+            }`}
           >
-            {REACTION_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                className="rounded p-1 text-lg hover:bg-muted"
-                onClick={() => {
-                  void toggleReaction(message.id, emoji);
-                  setPickerOpen(false);
-                }}
+            <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Reagir">
+                  <SmilePlus className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                collisionPadding={12}
+                avoidCollisions
+                className="flex w-auto gap-0.5 p-1"
               >
-                {emoji}
-              </button>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          aria-label="Responder em thread"
-          onClick={() => onReply(message)}
-        >
-          <Reply className="h-4 w-4" />
-        </Button>
-        <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais ações">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" collisionPadding={12} avoidCollisions>
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(message.text)}>
-              Copiar texto
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void toggleSavedMessage(message.id)}>
-              <Bookmark className="mr-2 h-3.5 w-3.5" />
-              {saved ? "Remover dos salvos" : "Salvar"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => void togglePinnedMessage(effectiveConvoId, message.id)}
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="rounded p-1 text-lg hover:bg-muted"
+                    onClick={() => {
+                      void toggleReaction(message.id, emoji);
+                      setPickerOpen(false);
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label="Responder em thread"
+              onClick={() => onReply(message)}
             >
-              {pinned ? (
-                <PinOff className="mr-2 h-3.5 w-3.5" />
-              ) : (
-                <Pin className="mr-2 h-3.5 w-3.5" />
-              )}
-              {pinned ? "Desafixar" : "Fixar"}
-            </DropdownMenuItem>
-            {isMine && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    setEditText(message.text);
-                    setEditing(true);
-                  }}
-                >
-                  Editar
+              <Reply className="h-4 w-4" />
+            </Button>
+            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Mais ações">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" collisionPadding={12} avoidCollisions>
+                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(message.text)}>
+                  Copiar texto
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void toggleSavedMessage(message.id)}>
+                  <Bookmark className="mr-2 h-3.5 w-3.5" />
+                  {saved ? "Remover dos salvos" : "Salvar"}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => setConfirmDeleteOpen(true)}
+                  onClick={() => void togglePinnedMessage(effectiveConvoId, message.id)}
                 >
-                  Excluir
+                  {pinned ? (
+                    <PinOff className="mr-2 h-3.5 w-3.5" />
+                  ) : (
+                    <Pin className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  {pinned ? "Desafixar" : "Fixar"}
                 </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                {isMine && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditText(message.text);
+                        setEditing(true);
+                      }}
+                    >
+                      Editar
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                    >
+                      Excluir
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
       </div>
 
       {/* Confirmação de exclusão — nunca some a mensagem otimisticamente
