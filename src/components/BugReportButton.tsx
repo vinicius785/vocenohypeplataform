@@ -12,19 +12,16 @@ import {
 } from "@/components/ui/dialog";
 import { submitBugReport } from "@/lib/bug-reports";
 
-/**
- * Dialog de "Reportar bug", separado do gatilho flutuante pra poder ser
- * aberto a partir de outro lugar (ex.: o item de bug na faixa compacta do
- * Chat V2, ver `ChatCompactRail.tsx`) sem duplicar o formulário — mesmo
- * componente, controlado de fora via `open`/`onOpenChange`.
- */
-export function BugReportDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+export function BugReportButton() {
+  // O Chat V2 tem um composer fixo no rodapé da mesma região onde este
+  // botão flutua (`bottom-4 right-4`) — sem isso, o botão ficava sobre a
+  // toolbar/botão de enviar sempre que a conversa aberta era estreita o
+  // bastante. Sobe o suficiente pra nunca sobrepor o composer (que tem
+  // altura mínima ~92px + padding), sem mover o botão em nenhuma outra
+  // rota da plataforma.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChatV2 = pathname.startsWith("/chat-v2");
+  const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -42,7 +39,7 @@ export function BugReportDialog({
   };
 
   const handleOpenChange = (next: boolean) => {
-    onOpenChange(next);
+    setOpen(next);
     if (!next) reset();
   };
 
@@ -73,6 +70,25 @@ export function BugReportDialog({
 
   return (
     <>
+      <Button
+        onClick={() => setOpen(true)}
+        size="sm"
+        variant="outline"
+        className={`fixed right-4 z-40 gap-1.5 rounded-full border-destructive/60 bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground ${
+          isChatV2 ? "" : "bottom-4"
+        }`}
+        // No Chat V2, `bottom` vem da altura REAL do composer (publicada por
+        // ele mesmo em `--chat-v2-composer-height`, ver `ChatV2Composer.tsx`)
+        // + 16px de respiro — nunca um valor chutado, então continua correto
+        // mesmo quando o composer cresce com uma mensagem longa.
+        style={
+          isChatV2 ? { bottom: "calc(var(--chat-v2-composer-height, 96px) + 16px)" } : undefined
+        }
+      >
+        <Bug className="h-3.5 w-3.5" />
+        Encontrou um bug?
+      </Button>
+
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -144,35 +160,6 @@ export function BugReportDialog({
           )}
         </DialogContent>
       </Dialog>
-    </>
-  );
-}
-
-/**
- * Botão flutuante "Encontrou um bug?" — visível em toda a plataforma, EXCETO
- * no Chat V2, onde a ação equivalente fica na faixa compacta (ver
- * `ChatCompactRail.tsx`), pra não flutuar sobre a área de conversa. Reaproveita
- * o mesmo `BugReportDialog`, nunca duplica o formulário.
- */
-export function BugReportButton() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const isChatV2 = pathname.startsWith("/chat-v2");
-  const [open, setOpen] = useState(false);
-
-  if (isChatV2) return null;
-
-  return (
-    <>
-      <Button
-        onClick={() => setOpen(true)}
-        size="sm"
-        variant="outline"
-        className="fixed bottom-4 right-4 z-40 gap-1.5 rounded-full border-destructive/60 bg-background/95 text-xs text-muted-foreground shadow-md backdrop-blur hover:text-foreground"
-      >
-        <Bug className="h-3.5 w-3.5" />
-        Encontrou um bug?
-      </Button>
-      <BugReportDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }

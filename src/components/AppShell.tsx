@@ -41,7 +41,6 @@ import { setFaviconBadge } from "@/lib/favicon-badge";
 import { SidebarProfile, BugsReportadosTab } from "./ConfiguracoesSection";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Drawer,
   DrawerTrigger,
@@ -59,7 +58,7 @@ import { SURFACE, type SemanticTone } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 import { loadWorkspace, subscribeWorkspace, type Workspace } from "@/lib/workspace-store";
 import { BomDiaDialog } from "./BomDiaDialog";
-import { BugReportButton, BugReportDialog } from "./BugReportButton";
+import { BugReportButton } from "./BugReportButton";
 import { MeetingReminderToast } from "./MeetingReminderToast";
 import {
   getMe,
@@ -119,12 +118,6 @@ export const OPEN_MEMBER_EVENT = "time:openMember:event";
 
 type NavItem = { key: SectionKey; label: string; icon: typeof LayoutGrid };
 type NavGroup = { title: string; items: NavItem[] };
-
-/** No modo Chat, a faixa compacta mostra só atalhos principais — não a
- * sidebar administrativa inteira (Clientes, Campanhas, Comercial,
- * Financeiro, Metas...). Reaproveita os MESMOS itens/ícones/rotas da nav
- * normal, só filtra quais aparecem. */
-const CHAT_MODE_VISIBLE_KEYS: SectionKey[] = ["inicio", "chat", "reunioes", "projetos"];
 
 const groups: NavGroup[] = [
   {
@@ -340,14 +333,7 @@ export function AppShell({
     });
   };
   const [mobileOpen, setMobileOpen] = useState(false);
-  // No modo Chat, a faixa global sempre fica compacta (68px) — independente
-  // da preferência real do usuário (`collapsed`, persistida acima). Isso
-  // NUNCA escreve em `collapsed`/localStorage: ao sair do Chat, a largura
-  // volta sozinha pro que o usuário tinha escolhido antes.
-  const isChatMode = active === "chat";
-  const effectiveCollapsed = isChatMode || collapsed;
-  const showFull = !effectiveCollapsed || mobileOpen;
-  const [bugReportOpen, setBugReportOpen] = useState(false);
+  const showFull = !collapsed || mobileOpen;
   useEffect(() => {
     setMobileOpen(false);
   }, [active]);
@@ -425,7 +411,6 @@ export function AppShell({
       <BomDiaDialog />
       <MeetingReminderToast />
       <BugReportButton />
-      {isChatMode && <BugReportDialog open={bugReportOpen} onOpenChange={setBugReportOpen} />}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/40 md:hidden"
@@ -436,7 +421,7 @@ export function AppShell({
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] md:duration-150 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } ${effectiveCollapsed ? "md:w-[68px]" : "md:w-64"}`}
+        } ${collapsed ? "md:w-[68px]" : "md:w-64"}`}
       >
         <div className="flex items-center gap-3 px-5 py-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-foreground text-background">
@@ -468,39 +453,8 @@ export function AppShell({
           )}
         </div>
 
-        {isChatMode && (
-          <div className="flex shrink-0 flex-col items-center gap-1 border-b border-border px-2 pb-3">
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={toggleTheme}
-                    className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    aria-label="Tema"
-                  >
-                    {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Alternar tema</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <NotificationsBell onSelect={onSelect} />
-          </div>
-        )}
-
         <nav ref={mobileNavRef} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-          {(isChatMode
-            ? [
-                {
-                  title: "",
-                  items: groups
-                    .flatMap((g) => g.items)
-                    .filter((item) => CHAT_MODE_VISIBLE_KEYS.includes(item.key)),
-                },
-              ]
-            : groups
-          ).map((group) => (
+          {groups.map((group) => (
             <div key={group.title} className="mb-4">
               {showFull && (
                 <div className="px-2 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -702,16 +656,6 @@ export function AppShell({
                 {showFull && "Bugs reportados"}
               </button>
             )}
-            {isChatMode && (
-              <button
-                type="button"
-                onClick={() => setBugReportOpen(true)}
-                title="Encontrou um bug?"
-                className="mt-1 flex w-full items-center justify-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors pill-nav-item"
-              >
-                <Bug className="h-4 w-4 shrink-0" aria-hidden="true" />
-              </button>
-            )}
           </div>
         </div>
       </aside>
@@ -731,69 +675,41 @@ export function AppShell({
         className="flex h-screen min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         inert={mobileOpen ? true : undefined}
       >
-        {isChatMode ? (
-          // Modo Chat: sem topbar grande (busca própria já vive na sidebar de
-          // conversas do Chat V2, tema/notificações moveram pra faixa
-          // compacta — ver bloco `isChatMode` dentro do <aside>). Mantém só o
-          // botão de abrir o menu no mobile, já que a faixa compacta do
-          // <aside> fica fora da tela até o usuário abrir o drawer lá.
-          <div className="flex h-12 shrink-0 items-center border-b border-border px-3 md:hidden">
+        <header className="flex h-16 items-center gap-3 border-b border-border px-6">
+          <button
+            ref={mobileMenuButtonRef}
+            type="button"
+            onClick={() => setMobileOpen((v) => !v)}
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={mobileOpen}
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            className="hidden rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
+            aria-label="Alternar menu lateral"
+          >
+            <PanelLeft className="h-4 w-4" />
+          </button>
+          <GlobalSearch onSelect={onSelect} />
+          <div className="ml-auto flex items-center gap-1">
+            <ActiveTimerIndicator onSelect={onSelect} />
             <button
-              ref={mobileMenuButtonRef}
               type="button"
-              onClick={() => setMobileOpen((v) => !v)}
+              onClick={toggleTheme}
               className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-              aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
-              aria-expanded={mobileOpen}
+              aria-label="Tema"
             >
-              <Menu className="h-4 w-4" />
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
+            <NotificationsBell onSelect={onSelect} />
           </div>
-        ) : (
-          <header className="flex h-16 items-center gap-3 border-b border-border px-6">
-            <button
-              ref={mobileMenuButtonRef}
-              type="button"
-              onClick={() => setMobileOpen((v) => !v)}
-              className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
-              aria-label={mobileOpen ? "Fechar menu" : "Abrir menu"}
-              aria-expanded={mobileOpen}
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setCollapsed((c) => !c)}
-              className="hidden rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
-              aria-label="Alternar menu lateral"
-            >
-              <PanelLeft className="h-4 w-4" />
-            </button>
-            <GlobalSearch onSelect={onSelect} />
-            <div className="ml-auto flex items-center gap-1">
-              <ActiveTimerIndicator onSelect={onSelect} />
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Tema"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
-              <NotificationsBell onSelect={onSelect} />
-            </div>
-          </header>
-        )}
+        </header>
 
-        <main
-          className={
-            isChatMode
-              ? "min-h-0 min-w-0 flex-1 overflow-hidden p-0"
-              : "min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8"
-          }
-        >
-          {children}
-        </main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-8">{children}</main>
       </div>
       <TaskModalStack />
     </div>
