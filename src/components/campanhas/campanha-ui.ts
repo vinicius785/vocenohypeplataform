@@ -263,3 +263,30 @@ export function getEligibleCampaignDeliveries(influs: Influ[]): CampaignDelivery
     (i.entregas ?? []).map((entrega) => ({ influ: i, entrega })),
   );
 }
+
+/** Checklist informativo (não bloqueante) mostrado ao ativar uma campanha
+ * (Negociação → Ativa, Fase 3). Só usa campos que já existem em `Campaign`
+ * — não há campo de "responsável" na campanha, então ele não entra. */
+export type CampanhaActivationCheck = { key: string; label: string; ok: boolean };
+
+export function campanhaActivationChecklist(c: Campaign): CampanhaActivationCheck[] {
+  const hasBriefing =
+    (c.briefing ?? "").trim().length > 0 || !!c.briefingFile || (c.briefingLinks?.length ?? 0) > 0;
+  return [
+    { key: "briefing", label: "Briefing preenchido", ok: hasBriefing },
+    {
+      key: "valor",
+      label: c.semFaturamento
+        ? "Sem faturamento (valor não se aplica)"
+        : "Valor do cliente definido",
+      ok: c.semFaturamento ? true : (c.valorCliente ?? "").trim().length > 0,
+    },
+    {
+      key: "pagamento",
+      label: "Condição de pagamento do cliente definida",
+      ok: c.semFaturamento ? true : !!c.pagClienteTipo,
+    },
+    { key: "prazo", label: "Prazo definido", ok: (c.prazo ?? "").trim().length > 0 },
+    { key: "influs", label: "Influenciadores planejados", ok: (c.linhas?.length ?? 0) > 0 },
+  ];
+}

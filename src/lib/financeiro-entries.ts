@@ -648,6 +648,7 @@ export function buildEntries(
     for (const camp of c.campanhas ?? []) {
       const cStatus = campanhaStatus(camp);
       if (cStatus === "negotiation" || cStatus === "archived") continue;
+      if (camp.semFaturamento) continue;
       const parcelas = camp.pagClienteParcelas ?? [];
       const pushReceita = (id: string, date: string, amount: number) => {
         if (amount <= 0) return;

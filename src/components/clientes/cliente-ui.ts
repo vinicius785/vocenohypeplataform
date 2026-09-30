@@ -4,10 +4,11 @@
  * `campanha-ui.ts` e o bloco de status de cliente abaixo, Fase 1 da
  * reconstrução do modelo de status). */
 import { initialsOf } from "@/components/metas/metas-ui-utils";
-import type { Cliente, ClienteStatus } from "@/lib/clientes-store";
+import type { Cliente, ClienteStatus, ClienteActivityEntry } from "@/lib/clientes-store";
+import type { Campaign } from "@/components/VincularCampanhaDialog";
 
 export { initialsOf };
-export type { ClienteStatus };
+export type { ClienteStatus, ClienteActivityEntry };
 
 export const CLIENTE_STATUS_LABEL: Record<ClienteStatus, string> = {
   negotiating: "Negociando",
@@ -62,22 +63,32 @@ export function currentClienteActor(): string {
   return "Você";
 }
 
-/** Monta o patch de uma troca de status de cliente — função pura, base para
- * o dialog de mudança de status da Fase 3. Registra os mesmos campos de
- * auditoria usados em `Campaign` (`statusChangedAt/By`, `archivedAt/By`,
- * `statusBeforeArchive`), sem histórico de atividade completo (isso é Fase
- * 3 — aqui não existe ainda um array de log análogo a `Campaign.activity`). */
+/** Monta o patch de uma troca de status de cliente — função pura usada pelo
+ * dialog de mudança de status (Fase 3, `ClienteStatusControl.tsx`). Registra
+ * os mesmos campos de auditoria usados em `Campaign` (`statusChangedAt/By`,
+ * `archivedAt/By`, `statusBeforeArchive`) e anexa uma entrada em `activity`
+ * (mesma forma/texto de `buildStatusChangePatch` de campanha). */
 export function buildClienteStatusChangePatch(
   cliente: Cliente,
   next: ClienteStatus,
+  reason?: string,
 ): Partial<Cliente> {
   const current = clienteStatus(cliente);
   const author = currentClienteActor();
   const now = new Date().toISOString();
+  const trimmed = reason?.trim();
+  const entry: ClienteActivityEntry = {
+    id: crypto.randomUUID(),
+    author,
+    action: `alterou o status de ${CLIENTE_STATUS_LABEL[current]} para ${CLIENTE_STATUS_LABEL[next]}`,
+    createdAt: now,
+    ...(trimmed ? { reason: trimmed } : {}),
+  };
   const patch: Partial<Cliente> = {
     status: next,
     statusChangedAt: now,
     statusChangedBy: author,
+    activity: [...(cliente.activity ?? []), entry],
   };
   if (next === "archived") {
     patch.archivedAt = now;
@@ -87,6 +98,26 @@ export function buildClienteStatusChangePatch(
     patch.statusBeforeArchive = undefined;
   }
   return patch;
+}
+
+/** Campanhas que tornam sensível encerrar/arquivar o cliente (Fase 3): só
+ * importa quando o destino é "closed"/"archived"; aí retorna as campanhas
+ * com status "active". Lista vazia = segue o fluxo normal. Nunca bloqueia
+ * sozinha — a UI pede confirmação explícita mostrando essas campanhas. */
+export function activeCampaignsBlockingClienteStatus(
+  cliente: Cliente,
+  next: ClienteStatus,
+  statusOf: (c: Campaign) => string,
+): Campaign[] {
+  if (next !== "closed" && next !== "archived") return [];
+  return (cliente.campanhas ?? []).filter((c) => statusOf(c) === "active");
+}
+
+/** Destino da restauração de um cliente arquivado — o status de antes de
+ * arquivar, ou "active" quando não foi gravado (arquivados antes da Fase 3). */
+export function clienteRestoreTarget(cliente: Cliente): ClienteStatus {
+  const prev = cliente.statusBeforeArchive;
+  return prev && prev !== "archived" ? prev : "active";
 }
 
 /** Regra de default do status inicial no wizard de criação (Etapa 2, Fase

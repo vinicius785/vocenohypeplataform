@@ -29,6 +29,7 @@ import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { VincularCampanhaDialog } from "@/components/VincularCampanhaDialog";
 import { ClienteFormSheet } from "./ClienteFormSheet";
 import { ClienteLogo } from "./ClienteLogo";
+import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
 import { waLink, mailtoLink } from "./cliente-ui";
 import { listAuditLog } from "@/lib/audit-log.functions";
@@ -48,17 +49,6 @@ import { formatIsoDate } from "@/lib/utils";
  * CLAUDE.md's routing conventions — this is the one other real nested route
  * in Clientes, mirroring `projeto.$id.tsx`'s "not found" + header pattern.
  */
-
-function statusRelacionamento(cliente: Cliente): { label: string; tone: string } {
-  // `Cliente` não tem um campo de status de relacionamento armazenado (ver
-  // nota em `cliente-ui.ts`: "Campaign não tem status" — o mesmo vale pro
-  // cliente). Isto é um rótulo PURAMENTE inferido para a UI, não um dado
-  // persistido — documentado no relatório final.
-  const hasCampanha = (cliente.campanhas?.length ?? 0) > 0;
-  return hasCampanha
-    ? { label: "Ativo", tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" }
-    : { label: "Sem campanha ativa", tone: "bg-muted text-text-secondary" };
-}
 
 export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   const navigate = useNavigate();
@@ -114,6 +104,15 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
     setEditOpen(false);
   };
 
+  // Troca de status (Fase 3) — UPDATE de um cliente existente pelo mesmo
+  // `clientesStore.set` já usado em `saveCliente` (edição já faz UPDATE de
+  // verdade em `table-array-store.ts`, sem o problema de `organization_id`
+  // que só afetava CRIAÇÃO).
+  const applyStatusPatch = (patch: Partial<Cliente>) => {
+    if (!cliente) return;
+    clientesStore.set((prev) => prev.map((c) => (c.id === cliente.id ? { ...c, ...patch } : c)));
+  };
+
   const saveCampaign = (c: Campaign) => {
     if (!cliente) return;
     clientesStore.set((prev) =>
@@ -143,7 +142,6 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   };
 
   const campanhas = cliente?.campanhas ?? [];
-  const relacionamento = cliente ? statusRelacionamento(cliente) : null;
 
   const [portalUsersCount, setPortalUsersCount] = useState<number | null>(null);
   const listMembersFn = useServerFn(listOrganizationMembers);
@@ -234,13 +232,14 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
                 <p className="truncate text-sm text-text-secondary">
                   {cliente.responsavel || "Contato não informado"}
                 </p>
-                {relacionamento && (
-                  <span
-                    className={`mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${relacionamento.tone}`}
-                  >
-                    {relacionamento.label}
-                  </span>
-                )}
+                <div className="mt-1.5">
+                  <ClienteStatusControl
+                    cliente={cliente}
+                    canChange={canManage}
+                    canArchiveOrRestore={Boolean(access?.isAdmin)}
+                    onApply={applyStatusPatch}
+                  />
+                </div>
               </div>
             </div>
 

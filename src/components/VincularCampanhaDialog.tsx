@@ -177,6 +177,10 @@ export type Campaign = {
    * (campanhas existentes antes desta fase continuam visíveis como
    * sempre foram, comportamento inalterado). */
   clientVisible?: boolean;
+  /** Campanha "sem faturamento" (Fase 3) — quando `true`, nunca gera
+   * receita no Financeiro (`buildEntries()`), independente de
+   * `valorCliente` preenchido. Ausente = `false`. */
+  semFaturamento?: boolean;
 };
 
 const newLinha = (): InfluLinha => ({

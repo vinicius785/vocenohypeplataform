@@ -8,6 +8,7 @@ import {
   filterCampanhas,
   DEFAULT_CAMPANHA_FILTERS,
   type CampanhaRow,
+  campanhaActivationChecklist,
 } from "./campanha-ui";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 
@@ -151,5 +152,39 @@ describe("filterCampanhas — filtro de status", () => {
     );
     expect(result).toHaveLength(1);
     expect(result[0].campanha.status).toBe("archived");
+  });
+});
+
+describe("campanhaActivationChecklist", () => {
+  const byKey = (c: Campaign) =>
+    Object.fromEntries(campanhaActivationChecklist(c).map((i) => [i.key, i.ok]));
+
+  it("marca pendências numa campanha vazia", () => {
+    const r = byKey(baseCampaign({ prazo: "" }));
+    expect(r).toEqual({
+      briefing: false,
+      valor: false,
+      pagamento: false,
+      prazo: false,
+      influs: false,
+    });
+  });
+
+  it("marca itens preenchidos", () => {
+    const r = byKey(
+      baseCampaign({
+        briefing: "x",
+        valorCliente: "1000",
+        pagClienteTipo: "unica" as Campaign["pagClienteTipo"],
+        linhas: [{ id: "l", tipo: "", tamanho: "", quantidade: 1, enviar: 1 }],
+      }),
+    );
+    expect(Object.values(r).every(Boolean)).toBe(true);
+  });
+
+  it("semFaturamento dispensa valor e pagamento", () => {
+    const r = byKey(baseCampaign({ semFaturamento: true }));
+    expect(r.valor).toBe(true);
+    expect(r.pagamento).toBe(true);
   });
 });

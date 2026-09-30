@@ -461,4 +461,12 @@ describe("buildEntries — filtro por status de campanha/cliente", () => {
     const entries = buildEntries(clientes, [], {}, {});
     expect(entries.some((e) => e.campanhaId === "c6")).toBe(false);
   });
+
+  it("NÃO gera lançamento para campanha active marcada semFaturamento, mesmo com valorCliente", () => {
+    const clientes = [
+      makeCliente([makeCampaign({ id: "c7", status: "active", semFaturamento: true })]),
+    ];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c7")).toBe(false);
+  });
 });

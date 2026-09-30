@@ -4,6 +4,8 @@ import {
   CLIENTE_STATUS_TRANSITIONS,
   buildClienteStatusChangePatch,
   defaultClienteStatusForOrigin,
+  activeCampaignsBlockingClienteStatus,
+  clienteRestoreTarget,
 } from "./cliente-ui";
 import type { Cliente } from "@/lib/clientes-store";
 
@@ -95,5 +97,50 @@ describe("defaultClienteStatusForOrigin", () => {
 
   it("importar do Comercial, lead já ganho (stage GANHO) => default 'active'", () => {
     expect(defaultClienteStatusForOrigin("crm-import", "GANHO")).toBe("active");
+  });
+});
+
+describe("Fase 3 — histórico e bloqueio", () => {
+  it("buildClienteStatusChangePatch anexa entrada de activity com observação", () => {
+    const prev = { id: "a0", author: "X", action: "old", createdAt: "2026-01-01T00:00:00Z" };
+    const cliente = baseCliente({ status: "negotiating", activity: [prev] });
+    const patch = buildClienteStatusChangePatch(cliente, "active", "  fechou contrato  ");
+    expect(patch.activity).toHaveLength(2);
+    expect(patch.activity?.[0]).toBe(prev);
+    const entry = patch.activity![1];
+    expect(entry.action).toBe("alterou o status de Negociando para Ativo");
+    expect(entry.reason).toBe("fechou contrato");
+    expect(entry.author).toBeTruthy();
+    expect(entry.createdAt).toBe(patch.statusChangedAt);
+  });
+
+  it("observação vazia não grava reason", () => {
+    const patch = buildClienteStatusChangePatch(baseCliente(), "closed", "   ");
+    expect(patch.activity?.[0].reason).toBeUndefined();
+  });
+
+  const statusOf = (c: { status?: string }) => c.status ?? "negotiation";
+  const withCamps = baseCliente({
+    campanhas: [
+      { id: "k1", nome: "Ativa", status: "active" },
+      { id: "k2", nome: "Neg", status: "negotiation" },
+    ] as unknown as Cliente["campanhas"],
+  });
+
+  it("activeCampaignsBlockingClienteStatus lista só campanhas ativas ao encerrar/arquivar", () => {
+    expect(
+      activeCampaignsBlockingClienteStatus(withCamps, "closed", statusOf).map((c) => c.id),
+    ).toEqual(["k1"]);
+    expect(activeCampaignsBlockingClienteStatus(withCamps, "archived", statusOf)).toHaveLength(1);
+  });
+
+  it("não bloqueia para destinos que não são encerrar/arquivar", () => {
+    expect(activeCampaignsBlockingClienteStatus(withCamps, "active", statusOf)).toEqual([]);
+    expect(activeCampaignsBlockingClienteStatus(baseCliente(), "closed", statusOf)).toEqual([]);
+  });
+
+  it("clienteRestoreTarget usa statusBeforeArchive, com fallback active", () => {
+    expect(clienteRestoreTarget(baseCliente({ statusBeforeArchive: "closed" }))).toBe("closed");
+    expect(clienteRestoreTarget(baseCliente())).toBe("active");
   });
 });

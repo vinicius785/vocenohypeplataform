@@ -97,6 +97,8 @@ import {
   NEXT_ACTOR_LABEL,
 } from "@/lib/campanha-status";
 import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
+import { CampanhaActivationDialog } from "@/components/campanhas/CampanhaActivationDialog";
+import { buildClienteStatusChangePatch, clienteStatus } from "@/components/clientes/cliente-ui";
 import { formatIsoDate } from "@/lib/utils";
 import {
   type RelatorioMensal,
@@ -715,7 +717,41 @@ function CampanhaDetail({
     useConfirmChoice<CampanhaStatus>();
   const applyStatusChange = (next: CampanhaStatus) =>
     saveInscricaoPage(buildStatusChangePatch(c, next));
+  // Ativação (Negociação → Ativa, Fase 3): abre o dialog com checklist,
+  // "sem faturamento" e — se o cliente ainda está "Negociando" — o aviso de
+  // que ele também será ativado. Cliente + campanha num único update.
+  const [activationOpen, setActivationOpen] = useState(false);
+  const clienteNegotiating = fullCliente ? clienteStatus(fullCliente) === "negotiating" : false;
+  const confirmActivation = ({ semFaturamento }: { semFaturamento: boolean }) => {
+    setActivationOpen(false);
+    const campPatch: Partial<Campaign> = { ...buildStatusChangePatch(c, "active"), semFaturamento };
+    const clientePatch =
+      fullCliente && clienteNegotiating
+        ? buildClienteStatusChangePatch(
+            fullCliente,
+            "active",
+            `Ativado junto com a campanha "${c.nome}"`,
+          )
+        : {};
+    setClientes((prev) =>
+      prev.map((cl) =>
+        cl.id !== cliente.id
+          ? cl
+          : {
+              ...cl,
+              ...clientePatch,
+              campanhas: (cl.campanhas ?? []).map((camp) =>
+                camp.id === c.id ? { ...camp, ...campPatch } : camp,
+              ),
+            },
+      ),
+    );
+  };
   const changeStatus = async (next: CampanhaStatus, confirmMessage?: string) => {
+    if (next === "active" && status === "negotiation") {
+      setActivationOpen(true);
+      return;
+    }
     if (confirmMessage) {
       const ok = await confirmStatusChange(confirmMessage);
       if (!ok) return;
@@ -774,6 +810,13 @@ function CampanhaDetail({
         {confirmDeleteCampanhaDialog}
         {confirmStatusChangeDialog}
         {confirmRestoreChoiceDialog}
+        <CampanhaActivationDialog
+          open={activationOpen}
+          campaign={c}
+          clienteNegotiating={clienteNegotiating}
+          onCancel={() => setActivationOpen(false)}
+          onConfirm={confirmActivation}
+        />
 
         {/* CABEÇALHO DA CAMPANHA — breadcrumb + identidade/ações agrupados
          * num único bloco visual (gap interno pequeno, "content gap");

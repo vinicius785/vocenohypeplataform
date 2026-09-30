@@ -43,6 +43,10 @@ export type Cliente = {
   archivedAt?: string;
   archivedBy?: string;
   statusBeforeArchive?: ClienteStatus;
+  /** Histórico de mudanças de status (Fase 3) — mesma forma de
+   * `Campaign.activity` (`CampanhaActivityEntry`), gravado por
+   * `buildClienteStatusChangePatch()` a cada troca. */
+  activity?: ClienteActivityEntry[];
   /** Contexto comercial opcional, preenchido só quando o status inicial é
    * "negotiating" (Etapa 4 do wizard de criação, Fase 2). Todos texto livre
    * de propósito — sem forecast estruturado (faixa de orçamento/probabilidade
@@ -50,6 +54,14 @@ export type Cliente = {
   proximoPasso?: string;
   previsaoFechamento?: string;
   observacaoNegociacao?: string;
+};
+
+export type ClienteActivityEntry = {
+  id: string;
+  author: string;
+  action: string;
+  createdAt: string;
+  reason?: string;
 };
 
 export type ClienteStatus = "negotiating" | "active" | "closed" | "archived";
