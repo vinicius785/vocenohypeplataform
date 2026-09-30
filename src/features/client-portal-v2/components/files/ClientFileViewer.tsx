@@ -1,8 +1,66 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Download, RefreshCw, X } from "lucide-react";
+import { Download, Loader2, RefreshCw, X } from "lucide-react";
 import { fileKindLabel, formatFileSize, inferFileKind } from "../../lib/client-file-format";
+import { downloadCrossOriginFile } from "../../lib/download-file";
 import type { ClientFile } from "../../types/files";
+
+/** Botão de download real — ver `downloadCrossOriginFile` pro motivo de
+ * não usar `<a download>` puro (silenciosamente ignorado em link
+ * cross-origin, que é sempre o caso aqui: signed URL do Supabase
+ * Storage). Mesmo visual dos 3 lugares que precisavam disso. */
+function DownloadButton({
+  url,
+  filename,
+  variant = "icon",
+}: {
+  url: string;
+  filename: string;
+  variant?: "icon" | "button";
+}) {
+  const [downloading, setDownloading] = useState(false);
+  const run = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadCrossOriginFile(url, filename);
+    } finally {
+      setDownloading(false);
+    }
+  };
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        onClick={() => void run()}
+        disabled={downloading}
+        aria-label="Baixar arquivo"
+        className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        {downloading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void run()}
+      disabled={downloading}
+      className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-60"
+    >
+      {downloading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      {downloading ? "Baixando…" : "Baixar arquivo"}
+    </button>
+  );
+}
 
 /**
  * Viewer nativo único, compartilhado por Relatórios, Arquivos, a página
@@ -74,16 +132,7 @@ function ClientFileViewerBody({ file, onClose }: { file: ClientFile; onClose: ()
         <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground sm:inline-block">
           {fileKindLabel(kind)}
         </span>
-        {currentUrl && (
-          <a
-            href={currentUrl}
-            download
-            aria-label="Baixar arquivo"
-            className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Download className="h-4 w-4" />
-          </a>
-        )}
+        {currentUrl && <DownloadButton url={currentUrl} filename={file.friendlyName} />}
         <button
           type="button"
           onClick={onClose}
@@ -101,13 +150,18 @@ function ClientFileViewerBody({ file, onClose }: { file: ClientFile; onClose: ()
             regenerating={regenerating}
             onRetry={() => void handleRetry()}
             downloadUrl={currentUrl}
+            filename={file.friendlyName}
           />
         ) : kind === "pdf" ? (
           <PdfBody url={currentUrl} onError={() => setLoadError(true)} />
         ) : kind === "image" ? (
           <ImageBody url={currentUrl} alt={file.friendlyName} onError={() => setLoadError(true)} />
         ) : kind === "video" ? (
-          <VideoBody url={currentUrl} onError={() => setLoadError(true)} />
+          <VideoBody
+            url={currentUrl}
+            filename={file.friendlyName}
+            onError={() => setLoadError(true)}
+          />
         ) : kind === "audio" ? (
           <AudioBody url={currentUrl} name={file.friendlyName} onError={() => setLoadError(true)} />
         ) : kind === "text" ? (
@@ -125,11 +179,13 @@ function ViewerError({
   regenerating,
   onRetry,
   downloadUrl,
+  filename,
 }: {
   canRetry: boolean;
   regenerating: boolean;
   onRetry: () => void;
   downloadUrl: string | null;
+  filename: string;
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
@@ -149,16 +205,7 @@ function ViewerError({
             {regenerating ? "Tentando…" : "Tentar novamente"}
           </button>
         )}
-        {downloadUrl && (
-          <a
-            href={downloadUrl}
-            download
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Baixar arquivo
-          </a>
-        )}
+        {downloadUrl && <DownloadButton url={downloadUrl} filename={filename} variant="button" />}
       </div>
     </div>
   );
@@ -199,7 +246,41 @@ function ImageBody({ url, alt, onError }: { url: string; alt: string; onError: (
   );
 }
 
-function VideoBody({ url, onError }: { url: string; onError: () => void }) {
+/** Alguns vídeos (ex: `.MOV` do iPhone em HEVC) chegam com um container
+ * que o navegador reconhece o suficiente pra tocar o ÁUDIO, mas cujo
+ * codec de vídeo ele não consegue decodificar — nesse caso o elemento
+ * `<video>` não dispara `onError` nenhum, só renderiza a barra de
+ * controle nativa sem nenhuma imagem (exatamente o bug relatado: "só
+ * vem o áudio"). Detectamos isso checando `videoWidth === 0` depois do
+ * `loadedmetadata` — sem trilha de vídeo decodificada, a largura nunca é
+ * preenchida — e trocamos pra um aviso claro + download em destaque, em
+ * vez de deixar a barra de áudio "crua" do navegador sem explicação. */
+function VideoBody({
+  url,
+  filename,
+  onError,
+}: {
+  url: string;
+  filename: string;
+  onError: () => void;
+}) {
+  const [videoOnlyAudio, setVideoOnlyAudio] = useState(false);
+
+  if (videoOnlyAudio) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm font-medium text-foreground">
+          Este navegador não consegue exibir a imagem deste vídeo.
+        </p>
+        <p className="max-w-xs text-xs text-text-secondary">
+          O formato do arquivo não é compatível com a pré-visualização do portal. Baixe o arquivo
+          para assistir normalmente.
+        </p>
+        <DownloadButton url={url} filename={filename} variant="button" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full items-center justify-center p-4">
       <video
@@ -207,6 +288,10 @@ function VideoBody({ url, onError }: { url: string; onError: () => void }) {
         controls
         autoPlay={false}
         onError={onError}
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          if (v.videoWidth === 0 && v.videoHeight === 0) setVideoOnlyAudio(true);
+        }}
         className="max-h-full max-w-full rounded-md"
       />
     </div>
@@ -278,14 +363,7 @@ function UnsupportedBody({ file, downloadUrl }: { file: ClientFile; downloadUrl:
         {file.createdAt && <div>Data: {new Date(file.createdAt).toLocaleDateString("pt-BR")}</div>}
       </dl>
       {downloadUrl && (
-        <a
-          href={downloadUrl}
-          download
-          className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Baixar arquivo
-        </a>
+        <DownloadButton url={downloadUrl} filename={file.friendlyName} variant="button" />
       )}
     </div>
   );
