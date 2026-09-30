@@ -506,6 +506,53 @@ export type Database = {
           },
         ];
       };
+      campanha_nps: {
+        Row: {
+          answered_at: string;
+          answered_by: string | null;
+          campanha_id: string;
+          cliente_id: string;
+          comment: string | null;
+          created_at: string;
+          id: string;
+          reference_month: string;
+          score: number;
+          updated_at: string;
+        };
+        Insert: {
+          answered_at?: string;
+          answered_by?: string | null;
+          campanha_id: string;
+          cliente_id: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          reference_month: string;
+          score: number;
+          updated_at?: string;
+        };
+        Update: {
+          answered_at?: string;
+          answered_by?: string | null;
+          campanha_id?: string;
+          cliente_id?: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          reference_month?: string;
+          score?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_nps_cliente_id_fkey";
+            columns: ["cliente_id"];
+            isOneToOne: false;
+            referencedRelation: "clientes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campanha_tarefas: {
         Row: {
           campanha_id: string;

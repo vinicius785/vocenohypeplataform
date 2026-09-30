@@ -87,21 +87,24 @@ describe("resolveActiveClientOrganization", () => {
 });
 
 describe("assertCanMutate", () => {
-  it("rejects client_viewer (read-only per spec)", () => {
-    expect(() => assertCanMutate("client_viewer")).toThrow(/somente leitura/i);
+  // Sem `cliente` passado, a checagem de NPS pendente (que precisa
+  // consultar o banco via `supabaseAdmin`) é pulada — cobre só o gate de
+  // `client_viewer`, que é síncrono e puro.
+  it("rejects client_viewer (read-only per spec)", async () => {
+    await expect(assertCanMutate("client_viewer")).rejects.toThrow(/somente leitura/i);
   });
 
-  it("allows client_standard to mutate", () => {
-    expect(() => assertCanMutate("client_standard")).not.toThrow();
+  it("allows client_standard to mutate", async () => {
+    await expect(assertCanMutate("client_standard")).resolves.not.toThrow();
   });
 
-  it("rejects client_viewer specifically, not by accident of an unrecognized role", () => {
+  it("rejects client_viewer specifically, not by accident of an unrecognized role", async () => {
     // Merging client_admin+client_member into client_standard must not
     // accidentally grant client_viewer anything MORE than it already had —
     // the check is a viewer-specific blocklist, not an allowlist, so this
     // guards against that check ever silently becoming an allowlist that
     // would reject client_standard by mistake.
-    expect(() => assertCanMutate("client_viewer")).toThrow();
-    expect(() => assertCanMutate("client_standard")).not.toThrow();
+    await expect(assertCanMutate("client_viewer")).rejects.toThrow();
+    await expect(assertCanMutate("client_standard")).resolves.not.toThrow();
   });
 });

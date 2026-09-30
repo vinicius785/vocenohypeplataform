@@ -49,6 +49,12 @@ import { PERFIL_REJEICAO_MOTIVOS } from "@/lib/campanha-status";
 import type { Influ } from "@/components/influenciadores/InfluencerBoard";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Task } from "@/components/tasks/TaskBoard";
+import {
+  currentReferenceMonth,
+  campanhasComNpsPendente,
+  mapCampanhaNpsRow,
+  type CampanhaNpsRow,
+} from "@/lib/campanha-nps";
 
 type DB = SupabaseClient<Database>;
 type Ctx = { supabase: DB; userId: string };
@@ -94,9 +100,46 @@ export async function resolveActiveClientOrganization(ctx: Ctx): Promise<ActiveC
   return { organizationId: match.organization_id, role: match.role };
 }
 
-export function assertCanMutate(role: string): void {
+/** Campanhas elegíveis do cliente sem resposta de NPS no mês corrente —
+ * ÚNICA função que resolve pendência de NPS no backend (item 12 do
+ * pedido: nunca duplicar essa lógica), usada tanto pelo endpoint de
+ * leitura (`getPendingNpsSession`) quanto pelo bloqueio de mutação em
+ * `assertCanMutate` abaixo (defesa em profundidade — item 5: "não confiar
+ * somente no frontend"). */
+async function loadPendingNpsCampanhas(clienteId: string, cliente: Cliente) {
+  const referenceMonth = currentReferenceMonth();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: rows, error } = await supabaseAdmin
+    .from("campanha_nps")
+    .select(
+      "id,cliente_id,campanha_id,reference_month,score,comment,answered_by,answered_at,created_at,updated_at",
+    )
+    .eq("cliente_id", clienteId)
+    .eq("reference_month", referenceMonth);
+  if (error) throw new Error(error.message);
+  const respondidas = (rows ?? []).map((r) => mapCampanhaNpsRow(r as CampanhaNpsRow));
+  const pendentes = campanhasComNpsPendente(cliente.campanhas ?? [], respondidas, referenceMonth);
+  return { referenceMonth, pendentes };
+}
+
+/** `cliente`, quando passado, também bloqueia a ação se houver NPS mensal
+ * pendente pra esse cliente — mesma checagem usada pelo gate de
+ * navegação do portal, repetida aqui no servidor porque o frontend
+ * (modal bloqueante) pode ser contornado por chamada direta de rota/API
+ * (item 5 do pedido). Chamadas que não recebem `cliente` (ex: resposta de
+ * bug report) não fazem essa checagem — não são ações sobre dados de
+ * campanha. */
+export async function assertCanMutate(role: string, cliente?: Cliente): Promise<void> {
   if (role === "client_viewer") {
     throw new Error("Este acesso é somente leitura e não pode realizar esta ação.");
+  }
+  if (cliente) {
+    const { pendentes } = await loadPendingNpsCampanhas(cliente.id, cliente);
+    if (pendentes.length > 0) {
+      throw new Error(
+        "Existe avaliação de NPS pendente. Responda a pesquisa para continuar usando o portal.",
+      );
+    }
   }
 }
 
@@ -214,7 +257,7 @@ export const respondCampanhaInfluSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RespondInfluInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const motivo =
@@ -243,7 +286,7 @@ export const reopenCampanhaInfluSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => ReopenInfluInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const actorName = await resolveActorName(context);
@@ -275,7 +318,7 @@ export const respondCampanhaEntregaSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => RespondEntregaInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const entrega = influ.entregas.find((e) => e.id === data.entregaId);
@@ -304,7 +347,7 @@ export const updateInfluBriefingSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => UpdateInfluBriefingInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const next: Influ = {
@@ -326,7 +369,7 @@ export const updateInfluObservacoesSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => UpdateInfluObservacoesInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const next: Influ = { ...influ, observacoes: data.observacoes || undefined };
@@ -353,7 +396,7 @@ export const addInfluClienteComentario = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => AddInfluClienteComentarioInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const nowIso = new Date().toISOString();
@@ -403,7 +446,7 @@ export const updateInfluBriefingAnexoSession = createServerFn({ method: "POST" }
   .inputValidator((raw: unknown) => UpdateInfluBriefingAnexoInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente, organizationId } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
     const influ = await loadInfluRow(data.campanhaId, data.influencerId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -460,7 +503,7 @@ export const submitClientDemandSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => SubmitClientDemandInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, cliente, organizationId } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     assertCampanhaInCliente(cliente, data.campanhaId);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -561,8 +604,8 @@ export const submitRelatorioNpsSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => SubmitRelatorioNpsInput.parse(raw))
   .handler(async ({ data, context }) => {
-    const { role, clienteId } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    const { role, clienteId, cliente } = await resolveClienteForSession(context);
+    await assertCanMutate(role, cliente);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: row, error: readError } = await supabaseAdmin
@@ -571,16 +614,16 @@ export const submitRelatorioNpsSession = createServerFn({ method: "POST" })
       .eq("id", clienteId)
       .single();
     if (readError || !row) throw new Error("Cliente não encontrado.");
-    const cliente = row.data as Cliente;
+    const freshCliente = row.data as Cliente;
 
-    const campanha = cliente.campanhas?.find((c) => c.id === data.campanhaId);
+    const campanha = freshCliente.campanhas?.find((c) => c.id === data.campanhaId);
     if (!campanha) throw new Error("Campanha não encontrada.");
     const relatorio = campanha.relatoriosMensais?.find((r) => r.id === data.relatorioId);
     if (!relatorio) throw new Error("Relatório não encontrado.");
 
     const nextCliente: Cliente = {
-      ...cliente,
-      campanhas: (cliente.campanhas ?? []).map((c) =>
+      ...freshCliente,
+      campanhas: (freshCliente.campanhas ?? []).map((c) =>
         c.id !== data.campanhaId
           ? c
           : {
@@ -696,7 +739,7 @@ export const toggleArtigoLikeSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => ArtigoIdInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, clienteId, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     await assertArtigoDoClienteSession(clienteId, data.postId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const likerKey = `cliente:${clienteId}`;
@@ -731,7 +774,7 @@ export const addArtigoComentarioSession = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => AddArtigoComentarioInput.parse(raw))
   .handler(async ({ data, context }) => {
     const { role, clienteId, cliente } = await resolveClienteForSession(context);
-    assertCanMutate(role);
+    await assertCanMutate(role, cliente);
     await assertArtigoDoClienteSession(clienteId, data.postId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("blog_comments").insert({
@@ -740,6 +783,78 @@ export const addArtigoComentarioSession = createServerFn({ method: "POST" })
       author_kind: "cliente",
       body: data.body.trim(),
     });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * NPS mensal obrigatório (não confundir com `submitRelatorioNpsSession`,
+ * NPS opcional por relatório específico) — lista as campanhas elegíveis
+ * do cliente logado sem resposta no mês corrente. Sem gate de
+ * `client_viewer`: mesmo acesso somente-leitura precisa responder pra
+ * liberar o próprio uso do portal (é a própria ação que destrava a
+ * navegação, não uma mutação sobre dados de campanha).
+ */
+export const getPendingNpsSession = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { clienteId, cliente } = await resolveClienteForSession(context);
+    const { referenceMonth, pendentes } = await loadPendingNpsCampanhas(clienteId, cliente);
+    return {
+      referenceMonth,
+      pendentes: pendentes.map((c) => ({ campanhaId: c.id, nome: c.nome })),
+    };
+  });
+
+const SubmitNpsInput = z.object({
+  respostas: z
+    .array(
+      z.object({
+        campanhaId: z.string().min(1),
+        score: z.number().int().min(0).max(10),
+        comment: z.string().trim().max(2000).optional(),
+      }),
+    )
+    .min(1),
+});
+
+/**
+ * Registra as respostas de NPS mensal — uma linha por campanha em
+ * `campanha_nps`, chave lógica `(campanha_id, reference_month)` (nunca
+ * `answered_by`, guardado só como auditoria). `reference_month` é sempre
+ * calculado no servidor (nunca aceito do cliente, item 13 do pedido).
+ * `assertCampanhaInCliente` garante que cada `campanhaId` pertence
+ * mesmo ao cliente da sessão antes de qualquer escrita — nunca confia no
+ * id enviado.
+ *
+ * Concorrência (item 8): duas pessoas do mesmo cliente podem enviar o
+ * mesmo formulário ao mesmo tempo — `upsert(..., { ignoreDuplicates:
+ * true })` sobre a UNIQUE(campanha_id, reference_month) faz a segunda
+ * escrita ser silenciosamente ignorada pelo banco, sem erro visível: a
+ * campanha já está resolvida de qualquer forma, então o resultado pro
+ * usuário é o mesmo como se sua resposta tivesse sido salva.
+ */
+export const submitNpsSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => SubmitNpsInput.parse(raw))
+  .handler(async ({ data, context }) => {
+    const { clienteId, cliente } = await resolveClienteForSession(context);
+    for (const r of data.respostas) {
+      assertCampanhaInCliente(cliente, r.campanhaId);
+    }
+    const referenceMonth = currentReferenceMonth();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("campanha_nps").upsert(
+      data.respostas.map((r) => ({
+        cliente_id: clienteId,
+        campanha_id: r.campanhaId,
+        reference_month: referenceMonth,
+        score: r.score,
+        comment: r.comment?.trim() || null,
+        answered_by: context.userId,
+      })),
+      { onConflict: "campanha_id,reference_month", ignoreDuplicates: true },
+    );
     if (error) throw new Error(error.message);
     return { ok: true };
   });

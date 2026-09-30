@@ -17,6 +17,7 @@ import { ClientSidebarHeader } from "../components/ClientSidebarHeader";
 import { NotificationsPopover } from "../components/NotificationsPopover";
 import { ClientThemeMenu } from "../components/ClientThemeMenu";
 import { ClientSidebarProfile, CLIENT_ROLE_LABEL } from "../components/ClientSidebarProfile";
+import { PendingNpsGate } from "../components/PendingNpsGate";
 
 /**
  * Shell da V2 — navegação própria (nunca os menus internos do time), na
@@ -170,7 +171,19 @@ function SidebarContent({
 
 const COLLAPSE_KEY = "portal-v2:sidebar-collapsed";
 
+/** `PendingNpsGate` envolve o shell INTEIRO (sidebar/topbar incluídos) —
+ * enquanto houver NPS pendente, nada do menu de navegação é renderizado,
+ * só o formulário; não basta esconder `{children}` deixando a sidebar
+ * clicável por trás. */
 export function PortalV2Shell({ children }: { children: ReactNode }) {
+  return (
+    <PendingNpsGate>
+      <PortalV2ShellInner>{children}</PortalV2ShellInner>
+    </PendingNpsGate>
+  );
+}
+
+function PortalV2ShellInner({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === "1";
