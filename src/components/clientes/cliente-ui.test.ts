@@ -48,20 +48,21 @@ describe("clienteStatus", () => {
 });
 
 describe("CLIENTE_STATUS_TRANSITIONS", () => {
-  it("capture pode ir para active, closed ou archived", () => {
-    expect(CLIENTE_STATUS_TRANSITIONS.capture).toEqual(["active", "closed", "archived"]);
+  it("capture pode ir para active ou archived, nunca direto para closed", () => {
+    expect(CLIENTE_STATUS_TRANSITIONS.capture).toEqual(["active", "archived"]);
+    expect(CLIENTE_STATUS_TRANSITIONS.capture).not.toContain("closed");
   });
 
-  it("active pode ir para closed ou archived, nunca de volta pra capture", () => {
-    expect(CLIENTE_STATUS_TRANSITIONS.active).toEqual(["closed", "archived"]);
+  it("active só pode encerrar (nunca arquivar direto nem voltar pra capture)", () => {
+    expect(CLIENTE_STATUS_TRANSITIONS.active).toEqual(["closed"]);
   });
 
   it("closed pode reabrir (active) ou arquivar", () => {
     expect(CLIENTE_STATUS_TRANSITIONS.closed).toEqual(["active", "archived"]);
   });
 
-  it("archived não tem transições diretas listadas (restauração é tratada à parte)", () => {
-    expect(CLIENTE_STATUS_TRANSITIONS.archived).toEqual([]);
+  it("archived pode voltar pra captação ou ser ativado direto", () => {
+    expect(CLIENTE_STATUS_TRANSITIONS.archived).toEqual(["capture", "active"]);
   });
 });
 

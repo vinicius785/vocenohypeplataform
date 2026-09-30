@@ -30,18 +30,24 @@ export function clienteStatus(cliente: Cliente): ClienteStatus {
   return cliente.status ?? "active";
 }
 
-/** Transições válidas de status de cliente (Fase 2 da reconstrução do
- * modelo de status) — mesmo padrão de `CAMPANHA_STATUS_TRANSITIONS`
- * (`campanha-ui.ts`), mas simplificado: aqui só a lista de destinos válidos,
- * sem `actionLabel`/`confirmMessage`, porque nesta fase não existe ainda o
- * dialog de mudança de status pós-criação (Fase 3) que consumiria isso como
- * ações de UI. "archived" não tem transições diretas listadas porque a
- * restauração depende de `statusBeforeArchive` (igual campanha). */
+/** Transições válidas de status de cliente — lista EXAUSTIVA pedida
+ * explicitamente na reconstrução do domínio Comercial/Clientes/Campanhas:
+ *   Captação → Ativo
+ *   Captação → Arquivado
+ *   Ativo → Encerrado
+ *   Encerrado → Ativo
+ *   Encerrado → Arquivado
+ *   Arquivado → Captação
+ *   Arquivado → Ativo (com confirmação — a UI já confirma toda transição)
+ * Deliberadamente SEM "Captação → Encerrado": um cliente que nunca foi
+ * ativo deve ser arquivado, nunca encerrado (encerrado = relacionamento
+ * que já esteve ativo e terminou). "Ativo → Arquivado" também não está na
+ * lista pedida — encerrar é o caminho normal para sair de "Ativo". */
 export const CLIENTE_STATUS_TRANSITIONS: Record<ClienteStatus, ClienteStatus[]> = {
-  capture: ["active", "closed", "archived"],
-  active: ["closed", "archived"],
+  capture: ["active", "archived"],
+  active: ["closed"],
   closed: ["active", "archived"],
-  archived: [],
+  archived: ["capture", "active"],
 };
 
 /** Nome de quem está agindo, pra auditoria de troca de status — mesma

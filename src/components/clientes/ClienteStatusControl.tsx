@@ -25,7 +25,6 @@ import {
   CLIENTE_STATUS_TRANSITIONS,
   activeCampaignsBlockingClienteStatus,
   buildClienteStatusChangePatch,
-  clienteRestoreTarget,
   clienteStatus,
   type ClienteStatus,
 } from "./cliente-ui";
@@ -74,8 +73,20 @@ export function ClienteStatusControl({
   const [pending, setPending] = useState<Pending | null>(null);
   const [reason, setReason] = useState("");
 
-  const transitions = CLIENTE_STATUS_TRANSITIONS[status].filter((t) => t !== "archived");
-  const enabled = canChange && (transitions.length > 0 || canArchiveOrRestore);
+  const allTransitions = CLIENTE_STATUS_TRANSITIONS[status];
+  const canGoArchived = allTransitions.includes("archived");
+  // Sair de "arquivado" (restaurar) é reservado a quem pode arquivar/
+  // restaurar, mesma regra de sempre — as outras transições seguem `canChange`.
+  const transitions =
+    status === "archived"
+      ? canArchiveOrRestore
+        ? allTransitions
+        : []
+      : allTransitions.filter((t) => t !== "archived");
+  const enabled =
+    status === "archived"
+      ? canArchiveOrRestore && transitions.length > 0
+      : canChange && (transitions.length > 0 || (canArchiveOrRestore && canGoArchived));
 
   const request = (next: ClienteStatus, title: string) => {
     setReason("");
@@ -118,19 +129,12 @@ export function ClienteStatusControl({
                 {ACTION_LABEL[to]}
               </DropdownMenuItem>
             ))}
-            {canArchiveOrRestore && status !== "archived" && (
+            {canArchiveOrRestore && canGoArchived && (
               <DropdownMenuItem
                 onSelect={() => request("archived", ACTION_LABEL.archived)}
                 className="text-destructive focus:text-destructive"
               >
                 {ACTION_LABEL.archived}
-              </DropdownMenuItem>
-            )}
-            {canArchiveOrRestore && status === "archived" && (
-              <DropdownMenuItem
-                onSelect={() => request(clienteRestoreTarget(cliente), "Restaurar cliente")}
-              >
-                Restaurar cliente
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
