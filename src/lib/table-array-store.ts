@@ -79,6 +79,21 @@ export function createTableArrayStore<T extends { id: string }>(table: ArrayStor
       listeners.add(l);
       return () => listeners.delete(l);
     },
+    /**
+     * Merges one row into the local cache WITHOUT writing to Supabase —
+     * for call sites that already persisted the row themselves via a
+     * dedicated server function (e.g. `createClienteComOrganizacao`, which
+     * also has to write a NOT NULL column — `clientes.organization_id` —
+     * that this generic store never sends). Using `set()` for this would
+     * re-trigger its own upsert (missing that column) and fail again, or
+     * double-write. The realtime subscription would eventually merge the
+     * row too, but this makes it appear immediately.
+     */
+    hydrateOne: (item: T) => {
+      const idx = cache.findIndex((x) => x.id === item.id);
+      cache = idx >= 0 ? cache.map((x, i) => (i === idx ? item : x)) : [...cache, item];
+      emit();
+    },
     set: (updater: (prev: T[]) => T[], onError?: (err: Error) => void) => {
       const prev = cache;
       const next = updater(prev);

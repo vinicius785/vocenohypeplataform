@@ -66,6 +66,7 @@ export const clientesStore = {
   get: store.get,
   set: store.set,
   subscribe: store.subscribe,
+  hydrateOne: store.hydrateOne,
 };
 
 export function useClientes() {

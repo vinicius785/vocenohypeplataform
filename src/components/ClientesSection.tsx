@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { Plus, Building2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -10,6 +12,7 @@ import {
   SummaryMetric,
 } from "@/components/shared/PageSummaryPanel";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
+import { createClienteComOrganizacao } from "@/lib/clientes.functions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
 import { ClienteCard } from "./clientes/ClienteCard";
@@ -39,6 +42,7 @@ export function ClientesSection() {
   const clientes = useClientes();
   const setClientes = clientesStore.set;
   const navigate = useNavigate();
+  const createClienteComOrganizacaoFn = useServerFn(createClienteComOrganizacao);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -110,16 +114,31 @@ export function ClientesSection() {
       savedId = formId;
       setClientes((prev) => prev.map((c) => (c.id === formId ? { ...c, ...rest } : c)));
     } else {
+      // Cliente genuinamente novo: `clientesStore.set` (upsert genérico do
+      // `createTableArrayStore`) nunca envia `organization_id` — coluna
+      // NOT NULL em `clientes` desde a migration
+      // `20260918160000_client_organizations_phase1.sql` — então criar
+      // direto pelo store sempre falhava com "null value ... violates
+      // not-null constraint". `createClienteComOrganizacao` cria a
+      // organização dedicada do cliente (multi-tenancy do Portal) e o
+      // registro de `clientes` numa única chamada de servidor; o resultado
+      // é só mesclado no cache local (`hydrateOne`, sem novo upsert) assim
+      // que confirma.
       savedId = formId ?? crypto.randomUUID();
-      setClientes((prev) => [
-        ...prev,
-        {
-          ...rest,
-          id: savedId,
-          campanhas: [],
-          status: rest.status ?? "active",
-        },
-      ]);
+      const novoCliente: Cliente = {
+        ...rest,
+        id: savedId,
+        campanhas: [],
+        status: rest.status ?? "active",
+      };
+      void createClienteComOrganizacaoFn({
+        data: { id: savedId, empresa: novoCliente.empresa, cliente: novoCliente },
+      })
+        .then(() => clientesStore.hydrateOne(novoCliente))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : "Falha ao criar cliente.";
+          toast.error("Não foi possível criar o cliente", { description: message });
+        });
     }
     setFormOpen(false);
     setEditingCliente(null);

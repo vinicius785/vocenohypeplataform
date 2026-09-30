@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   User,
   Mail,
@@ -947,8 +948,14 @@ function ConvertButton({ lead, onConverted }: { lead: Lead; onConverted: (l: Lea
     <button
       type="button"
       onClick={() => {
-        const { clienteId, projectId } = convertLeadToClienteEProjeto(lead);
-        onConverted({ ...lead, clienteId, projectId });
+        void convertLeadToClienteEProjeto(lead)
+          .then(({ clienteId, projectId }) => {
+            onConverted({ ...lead, clienteId, projectId });
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : "Falha ao converter lead.";
+            toast.error("Não foi possível converter o lead em cliente", { description: message });
+          });
       }}
       className="inline-flex items-center gap-1.5 rounded-full border border-foreground px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted"
     >
