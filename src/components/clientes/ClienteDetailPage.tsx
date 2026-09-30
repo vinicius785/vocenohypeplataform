@@ -32,6 +32,7 @@ import { ClienteLogo } from "./ClienteLogo";
 import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
 import { ClienteContratosSection } from "./ClienteContratosSection";
+import { ClienteFinancialSummary } from "./ClienteFinancialSummary";
 import { waLink, mailtoLink, campanhaCreatedActivityEntry } from "./cliente-ui";
 import { listAuditLog } from "@/lib/audit-log.functions";
 import {
@@ -414,6 +415,9 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
 
         {/* ===== Contratos ===== */}
         <ClienteContratosSection clienteId={cliente.id} canManage={canManage} />
+
+        {/* ===== Financeiro ===== */}
+        <ClienteFinancialSummary clienteId={cliente.id} />
 
         {/* ===== Acessos ao portal ===== */}
         <section id="acessos-ao-portal" className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
