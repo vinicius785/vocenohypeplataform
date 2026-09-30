@@ -33,7 +33,13 @@ import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
 import { ClienteContratosSection } from "./ClienteContratosSection";
 import { ClienteFinancialSummary } from "./ClienteFinancialSummary";
-import { waLink, mailtoLink, campanhaCreatedActivityEntry, clienteStatus } from "./cliente-ui";
+import {
+  waLink,
+  mailtoLink,
+  campanhaCreatedActivityEntry,
+  clienteStatus,
+  CLIENTE_STATUS_LABEL,
+} from "./cliente-ui";
 import { listAuditLog } from "@/lib/audit-log.functions";
 import {
   getClienteOrganizationId,
@@ -58,6 +64,16 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const access = useMyAccess();
   const canManage = hasPermission(access, "clientes");
+  // Item 8/10 da reconstrução do domínio Comercial/Clientes/Campanhas/
+  // Contratos/Financeiro: "Se estiver Encerrado ou Arquivado, bloquear
+  // nova campanha e explicar o motivo." Captação/Ativo permitem (a
+  // diferença entre os dois — campanha nasce "planning" pra Captação e
+  // pode nascer "planning" ou "active" pra Ativo — já é decidida dentro do
+  // próprio `VincularCampanhaDialog`/`CampanhaActivationDialog`, não aqui).
+  const canCreateCampanha =
+    canManage &&
+    cliente !== null &&
+    (clienteStatus(cliente) === "capture" || clienteStatus(cliente) === "active");
 
   const [editOpen, setEditOpen] = useState(false);
   const [campanhaOpen, setCampanhaOpen] = useState(false);
@@ -253,6 +269,12 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
                 variant="primary"
                 size="comfortable"
                 className="w-full gap-1.5 sm:w-auto"
+                disabled={!canCreateCampanha}
+                title={
+                  canCreateCampanha
+                    ? undefined
+                    : `Cliente ${CLIENTE_STATUS_LABEL[clienteStatus(cliente)]} não permite novas campanhas.`
+                }
                 onClick={() => {
                   setEditingCampaign(null);
                   setCampanhaOpen(true);
@@ -402,14 +424,22 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
               icon={<Megaphone className="h-5 w-5" />}
               compact
               title="Nenhuma campanha criada para este cliente."
-              description="Crie a primeira campanha para começar a operação."
-              primaryAction={{
-                label: "Nova campanha",
-                onClick: () => {
-                  setEditingCampaign(null);
-                  setCampanhaOpen(true);
-                },
-              }}
+              description={
+                canCreateCampanha
+                  ? "Crie a primeira campanha para começar a operação."
+                  : `Cliente ${cliente ? CLIENTE_STATUS_LABEL[clienteStatus(cliente)] : ""} não permite novas campanhas.`
+              }
+              primaryAction={
+                canCreateCampanha
+                  ? {
+                      label: "Nova campanha",
+                      onClick: () => {
+                        setEditingCampaign(null);
+                        setCampanhaOpen(true);
+                      },
+                    }
+                  : undefined
+              }
             />
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
