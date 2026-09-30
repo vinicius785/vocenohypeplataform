@@ -17,7 +17,6 @@ import {
   MoreVertical,
   Paperclip,
   Pencil,
-  Plus,
   Send,
   ShieldCheck,
   Trash2,
@@ -55,7 +54,6 @@ import {
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { CampanhaCard } from "./campanhas/CampanhaCard";
 import { CampanhaFiltersBar } from "./campanhas/CampanhaFiltersBar";
-import { SelecionarClienteDialog } from "./campanhas/SelecionarClienteDialog";
 import {
   campanhaStatus,
   filterCampanhas,
@@ -202,7 +200,6 @@ export function CampanhasSection() {
 
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<CampanhaFiltersState>(DEFAULT_CAMPANHA_FILTERS);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardClienteId, setWizardClienteId] = useState<string | null>(null);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
@@ -240,7 +237,6 @@ export function CampanhasSection() {
     );
   };
 
-  const openNovaCampanha = () => setPickerOpen(true);
   const openEditCampanha = (row: CampanhaRow) => {
     setWizardClienteId(row.cliente.id);
     setEditingCampaign(row.campanha);
@@ -319,9 +315,6 @@ export function CampanhasSection() {
               Todas as campanhas vinculadas aos clientes.
             </p>
           </div>
-          <Button variant="primary" size="comfortable" onClick={openNovaCampanha}>
-            <Plus className="h-4 w-4" /> Nova campanha
-          </Button>
         </div>
 
         {hasAnyCampanha && (
@@ -347,8 +340,12 @@ export function CampanhasSection() {
           <EmptyState
             icon={<Megaphone className="h-5 w-5" />}
             title="Nenhuma campanha cadastrada ainda"
-            description="Crie a primeira campanha para começar a acompanhar influenciadores, entregas e pagamentos."
-            primaryAction={{ label: "Nova campanha", onClick: openNovaCampanha }}
+            description="Campanhas são criadas dentro da Central do Cliente."
+            primaryAction={{
+              label: "Abrir Clientes",
+              onClick: () =>
+                window.dispatchEvent(new CustomEvent("nav:section", { detail: "clientes" })),
+            }}
           />
         ) : !hasResults ? (
           <EmptyState
@@ -396,18 +393,6 @@ export function CampanhasSection() {
           </div>
         )}
       </PageContainer>
-
-      <SelecionarClienteDialog
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        clientes={clientes}
-        onSelect={(cliente) => {
-          setWizardClienteId(cliente.id);
-          setEditingCampaign(null);
-          setPickerOpen(false);
-          setWizardOpen(true);
-        }}
-      />
 
       <VincularCampanhaDialog
         open={wizardOpen}
