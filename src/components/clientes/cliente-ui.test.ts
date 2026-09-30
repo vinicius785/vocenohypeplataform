@@ -14,6 +14,7 @@ import {
   countActiveClienteFilters,
   lastClienteActivityAt,
   campanhaCreatedActivityEntry,
+  findPossibleDuplicateCliente,
 } from "./cliente-ui";
 import type { Cliente } from "@/lib/clientes-store";
 
@@ -238,5 +239,78 @@ describe("campanhaCreatedActivityEntry", () => {
   it("usa um rótulo neutro pra campanha sem nome", () => {
     const entry = campanhaCreatedActivityEntry("");
     expect(entry.action).toBe('criou a campanha "sem nome"');
+  });
+});
+
+describe("findPossibleDuplicateCliente", () => {
+  function mkCliente(overrides: Partial<Cliente> = {}): Cliente {
+    return {
+      id: "existing",
+      empresa: "Acme Corp",
+      responsavel: "",
+      responsavelInterno: "",
+      email: "contato@acme.com",
+      whatsapp: "(11) 91234-5678",
+      ...overrides,
+    } as Cliente;
+  }
+
+  it("detecta empresa idêntica, tolerante a acento/caixa", () => {
+    const list = [mkCliente({ empresa: "Açme Corp" })];
+    const match = findPossibleDuplicateCliente(list, { empresa: "ACME CORP" });
+    expect(match?.reason).toBe("empresa");
+  });
+
+  it("detecta e-mail idêntico mesmo com empresa diferente", () => {
+    const list = [mkCliente()];
+    const match = findPossibleDuplicateCliente(list, {
+      empresa: "Outra Empresa Ltda",
+      email: "CONTATO@acme.com",
+    });
+    expect(match?.reason).toBe("email");
+  });
+
+  it("detecta telefone igual mesmo com formatação diferente", () => {
+    const list = [mkCliente({ whatsapp: "(11) 91234-5678" })];
+    const match = findPossibleDuplicateCliente(list, {
+      empresa: "Nome Totalmente Diferente",
+      whatsapp: "+55 11 91234-5678",
+    });
+    expect(match?.reason).toBe("telefone");
+  });
+
+  it("nunca casa dois telefones vazios", () => {
+    const list = [mkCliente({ whatsapp: "" })];
+    const match = findPossibleDuplicateCliente(list, { empresa: "Nome Diferente", whatsapp: "" });
+    expect(match).toBeNull();
+  });
+
+  it("detecta nome parecido (um é prefixo do outro)", () => {
+    const list = [mkCliente({ empresa: "Acme" })];
+    const match = findPossibleDuplicateCliente(list, {
+      empresa: "Acme Corporação Brasil",
+      email: "outro@email.com",
+    });
+    expect(match?.reason).toBe("nome_parecido");
+  });
+
+  it("não alerta pra nomes curtos genéricos", () => {
+    const list = [mkCliente({ empresa: "Abc" })];
+    const match = findPossibleDuplicateCliente(list, { empresa: "Abcd" });
+    expect(match).toBeNull();
+  });
+
+  it("retorna null sem nenhum sinal de duplicidade", () => {
+    const list = [mkCliente()];
+    const match = findPossibleDuplicateCliente(list, {
+      empresa: "Empresa Totalmente Nova",
+      email: "nova@empresa.com",
+      whatsapp: "(21) 90000-0000",
+    });
+    expect(match).toBeNull();
+  });
+
+  it("retorna null com lista vazia", () => {
+    expect(findPossibleDuplicateCliente([], { empresa: "Qualquer" })).toBeNull();
   });
 });

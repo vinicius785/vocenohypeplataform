@@ -7,6 +7,7 @@ import { initialsOf } from "@/components/metas/metas-ui-utils";
 import type { Cliente, ClienteStatus, ClienteActivityEntry } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { legacyStage, type OpportunityStage } from "@/lib/comercial-engine";
+import { normalizeForSearch } from "@/lib/mention-kinds";
 
 export { initialsOf };
 export type { ClienteStatus, ClienteActivityEntry };
@@ -249,6 +250,91 @@ export function campanhaCreatedActivityEntry(campanhaNome: string): ClienteActiv
     createdAt: new Date().toISOString(),
   };
 }
+
+/** Motivo do match — usado pra explicar na UI por que dois cadastros
+ * parecem ser o mesmo (item 6 da reconstrução do domínio Comercial/
+ * Clientes/Campanhas/Contratos/Financeiro: "Detectar cliente existente por
+ * vínculo, empresa, documento, e-mail, telefone e semelhança de nome"). Não
+ * há campo de documento/CNPJ no cadastro hoje — fica de fora até existir. */
+export type ClienteDuplicateMatchReason = "empresa" | "email" | "telefone" | "nome_parecido";
+
+export type ClienteDuplicateMatch = { cliente: Cliente; reason: ClienteDuplicateMatchReason };
+
+function onlyDigits(s: string): string {
+  return s.replace(/\D/g, "");
+}
+
+/** Compara telefone por dígitos, olhando só os últimos 8 (linha fixa
+ * mínima sem DDD) pra tolerar diferenças de formatação/DDI/DDD entre dois
+ * cadastros do mesmo número — nunca compara strings vazias entre si (dois
+ * cadastros sem telefone não são "duplicados" por isso). */
+function samePhone(a: string, b: string): boolean {
+  const da = onlyDigits(a);
+  const db = onlyDigits(b);
+  if (da.length < 8 || db.length < 8) return false;
+  return da.slice(-8) === db.slice(-8);
+}
+
+/** "Semelhança de nome" tolerante a acento/caixa e a um nome ser prefixo
+ * do outro (ex. "Acme" vs "Acme Corporação") — deliberadamente simples
+ * (sem distância de edição): o objetivo é um alerta pra revisão humana,
+ * nunca um bloqueio automático, então falso positivo ocasional é aceitável
+ * e falso negativo é pior que isso. Nomes curtos (<4 chars normalizados)
+ * nunca contam, pra não alertar em cada empresa de nome genérico. */
+function similarName(a: string, b: string): boolean {
+  const na = normalizeForSearch(a).trim();
+  const nb = normalizeForSearch(b).trim();
+  if (na.length < 4 || nb.length < 4) return false;
+  if (na === nb) return true;
+  return na.startsWith(nb) || nb.startsWith(na);
+}
+
+/** Único ponto de checagem de duplicidade na criação de cliente — usado
+ * pelo wizard (`ClienteFormSheet.tsx`) antes de salvar. Verifica, nesta
+ * ordem de prioridade (primeiro match encontrado vence): empresa idêntica,
+ * e-mail idêntico, telefone igual, nome parecido. Nunca compara contra o
+ * próprio registro em edição (o chamador já filtra isso via
+ * `clientesExistentes`, que na prática nunca inclui o cliente atual). */
+export function findPossibleDuplicateCliente(
+  clientes: Cliente[],
+  candidate: { empresa: string; email?: string; whatsapp?: string },
+): ClienteDuplicateMatch | null {
+  const empresa = normalizeForSearch(candidate.empresa.trim());
+  const email = (candidate.email ?? "").trim().toLowerCase();
+  const whatsapp = candidate.whatsapp ?? "";
+  if (!empresa && !email) return null;
+
+  for (const c of clientes) {
+    if (empresa && normalizeForSearch(c.empresa.trim()) === empresa) {
+      return { cliente: c, reason: "empresa" };
+    }
+  }
+  if (email) {
+    for (const c of clientes) {
+      if (c.email.trim().toLowerCase() === email) return { cliente: c, reason: "email" };
+    }
+  }
+  if (whatsapp) {
+    for (const c of clientes) {
+      if (samePhone(c.whatsapp, whatsapp)) return { cliente: c, reason: "telefone" };
+    }
+  }
+  if (candidate.empresa.trim()) {
+    for (const c of clientes) {
+      if (similarName(c.empresa, candidate.empresa)) {
+        return { cliente: c, reason: "nome_parecido" };
+      }
+    }
+  }
+  return null;
+}
+
+export const CLIENTE_DUPLICATE_REASON_LABEL: Record<ClienteDuplicateMatchReason, string> = {
+  empresa: "mesmo nome de empresa",
+  email: "mesmo e-mail",
+  telefone: "mesmo telefone",
+  nome_parecido: "nome parecido",
+};
 
 export type ClienteFiltersState = {
   status: ClienteStatusFilter;

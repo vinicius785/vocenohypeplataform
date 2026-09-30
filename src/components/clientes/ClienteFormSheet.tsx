@@ -24,6 +24,8 @@ import {
   CLIENTE_STATUS_LABEL,
   defaultClienteStatusForOrigin,
   suggestClienteStatusFromLeadStage,
+  findPossibleDuplicateCliente,
+  CLIENTE_DUPLICATE_REASON_LABEL,
 } from "./cliente-ui";
 import { ClienteLogo } from "./ClienteLogo";
 
@@ -237,19 +239,19 @@ export function ClienteFormSheet({
 
   const importableLeads = useMemo(() => (leads ?? []).filter((l) => !l.clienteId), [leads]);
 
-  const possibleDuplicate = useMemo(() => {
+  // Item 6 da reconstrução do domínio Comercial/Clientes/Campanhas/
+  // Contratos/Financeiro: detecção de duplicidade por empresa, e-mail,
+  // telefone e semelhança de nome — nunca bloqueia, só alerta e oferece
+  // reaproveitar o cadastro existente (`selectExistingCliente` abaixo).
+  const duplicateMatch = useMemo(() => {
     if (initial) return null;
-    const empresa = form.empresa.trim().toLowerCase();
-    const email = form.email.trim().toLowerCase();
-    if (!empresa && !email) return null;
-    return (
-      clientesExistentes.find(
-        (c) =>
-          (empresa && c.empresa.trim().toLowerCase() === empresa) ||
-          (email && c.email.trim().toLowerCase() === email),
-      ) ?? null
-    );
-  }, [clientesExistentes, form.empresa, form.email, initial]);
+    return findPossibleDuplicateCliente(clientesExistentes, {
+      empresa: form.empresa,
+      email: form.email,
+      whatsapp: form.whatsapp,
+    });
+  }, [clientesExistentes, form.empresa, form.email, form.whatsapp, initial]);
+  const possibleDuplicate = duplicateMatch?.cliente ?? null;
 
   const applyLead = (lead: Lead) => {
     const mapped: Partial<ClienteForm> = {
@@ -622,10 +624,11 @@ export function ClienteFormSheet({
 
               {step === "empresa" && (
                 <>
-                  {possibleDuplicate && (
+                  {possibleDuplicate && duplicateMatch && (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5">
                       <p className="text-xs text-warning-soft-foreground">
-                        Já existe um cliente parecido: <strong>{possibleDuplicate.empresa}</strong>
+                        Já existe um cliente parecido: <strong>{possibleDuplicate.empresa}</strong>{" "}
+                        ({CLIENTE_DUPLICATE_REASON_LABEL[duplicateMatch.reason]})
                       </p>
                       <Button
                         type="button"
