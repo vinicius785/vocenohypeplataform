@@ -4,9 +4,21 @@ import { createClienteComOrganizacao } from "@/lib/clientes.functions";
 import { DEFAULT_FEATURES, upsertProjeto } from "@/lib/projetos";
 import { formatDateToIso } from "@/lib/utils";
 
-/** Converte um lead GANHO em Cliente + Projeto — extraído de
- * `ComercialSection.tsx` sem alteração de comportamento (mesmo formato de
- * `Cliente`/`Project` já usado lá).
+/** Converte uma oportunidade (lead) em Cliente + Projeto — reconstrução do
+ * domínio Comercial/Clientes/Campanhas/Contratos/Financeiro, item 3.2/3.3:
+ * "converter" NUNCA ativa silenciosamente. O cliente sempre nasce em
+ * "capture" (Captação), mesmo quando a oportunidade já está "Ganho" — a
+ * ativação de verdade é uma ação separada e explícita (a transição
+ * capture→active já existente em `ClienteStatusControl.tsx`, com sua
+ * própria confirmação). Antes desta correção, este caminho colocava o
+ * cliente direto em "active" sem nenhuma confirmação — divergente do outro
+ * caminho de conversão (`ClienteFormSheet.tsx`'s "Importar do Comercial"),
+ * que já derivava o status a partir da etapa do lead. Os dois caminhos
+ * agora concordam: todo lead convertido vira Captação, nunca Ativo direto.
+ *
+ * `crmLeadId` também passa a ser gravado aqui — antes só o outro caminho
+ * de conversão fazia isso, criando uma segunda divergência (um cliente
+ * convertido por aqui não tinha como saber de qual oportunidade veio).
  *
  * Async desde a correção do bug de `organization_id`: um `Cliente` novo
  * precisa de uma organização dedicada no Portal (mesmo motivo e mesma
@@ -30,11 +42,8 @@ export async function convertLeadToClienteEProjeto(
     whatsapp: lead.phone || "",
     clienteDesde: formatDateToIso(new Date()),
     campanhas: [],
-    // Fase 1 da reconstrução do modelo de status de cliente: todo cliente
-    // novo nasce com status explícito (não implícito) — por enquanto
-    // sempre "active", já que a etapa de escolha de status na criação é
-    // trabalho de fase futura, fora do escopo desta migração.
-    status: "active",
+    status: "capture",
+    crmLeadId: lead.id,
     orcamentoSugerido: lead.proposta?.precoFinal ?? (lead.value > 0 ? lead.value : undefined),
   };
   await createClienteComOrganizacao({
