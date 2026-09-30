@@ -39,7 +39,7 @@ function baseCliente(overrides: Partial<Cliente> = {}): Cliente {
 
 describe("clienteStatus", () => {
   it("lê o campo status persistido diretamente", () => {
-    expect(clienteStatus(baseCliente({ status: "negotiating" }))).toBe("negotiating");
+    expect(clienteStatus(baseCliente({ status: "capture" }))).toBe("capture");
   });
 
   it("cai pra 'active' quando não há status (cliente antigo sem backfill)", () => {
@@ -48,11 +48,11 @@ describe("clienteStatus", () => {
 });
 
 describe("CLIENTE_STATUS_TRANSITIONS", () => {
-  it("negotiating pode ir para active, closed ou archived", () => {
-    expect(CLIENTE_STATUS_TRANSITIONS.negotiating).toEqual(["active", "closed", "archived"]);
+  it("capture pode ir para active, closed ou archived", () => {
+    expect(CLIENTE_STATUS_TRANSITIONS.capture).toEqual(["active", "closed", "archived"]);
   });
 
-  it("active pode ir para closed ou archived, nunca de volta pra negotiating", () => {
+  it("active pode ir para closed ou archived, nunca de volta pra capture", () => {
     expect(CLIENTE_STATUS_TRANSITIONS.active).toEqual(["closed", "archived"]);
   });
 
@@ -66,8 +66,8 @@ describe("CLIENTE_STATUS_TRANSITIONS", () => {
 });
 
 describe("buildClienteStatusChangePatch", () => {
-  it("grava status + statusChangedAt/By ao mudar de negotiating para active", () => {
-    const cliente = baseCliente({ status: "negotiating" });
+  it("grava status + statusChangedAt/By ao mudar de capture para active", () => {
+    const cliente = baseCliente({ status: "capture" });
     const patch = buildClienteStatusChangePatch(cliente, "active");
     expect(patch.status).toBe("active");
     expect(typeof patch.statusChangedAt).toBe("string");
@@ -97,9 +97,9 @@ describe("defaultClienteStatusForOrigin", () => {
     expect(defaultClienteStatusForOrigin("scratch")).toBe("active");
   });
 
-  it("importar do Comercial, lead não-ganho => default 'negotiating'", () => {
-    expect(defaultClienteStatusForOrigin("crm-import", "NEGOCIACAO")).toBe("negotiating");
-    expect(defaultClienteStatusForOrigin("crm-import", undefined)).toBe("negotiating");
+  it("importar do Comercial, lead não-ganho => default 'capture'", () => {
+    expect(defaultClienteStatusForOrigin("crm-import", "NEGOCIACAO")).toBe("capture");
+    expect(defaultClienteStatusForOrigin("crm-import", undefined)).toBe("capture");
   });
 
   it("importar do Comercial, lead já ganho (stage GANHO) => default 'active'", () => {
@@ -109,11 +109,11 @@ describe("defaultClienteStatusForOrigin", () => {
 
 describe("suggestClienteStatusFromLeadStage (Fase 5)", () => {
   it.each([
-    ["CONTATO_FEITO", "negotiating"],
-    ["REUNIAO_AGENDADA", "negotiating"],
-    ["PROPOSTA_PREPARO", "negotiating"],
-    ["PROPOSTA_ENVIADA", "negotiating"],
-    ["NEGOCIACAO", "negotiating"],
+    ["CONTATO_FEITO", "capture"],
+    ["REUNIAO_AGENDADA", "capture"],
+    ["PROPOSTA_PREPARO", "capture"],
+    ["PROPOSTA_ENVIADA", "capture"],
+    ["NEGOCIACAO", "capture"],
     ["GANHO", "active"],
     ["PERDIDO", "not-recommended"],
   ])("%s => %s", (stage, expected) => {
@@ -123,8 +123,8 @@ describe("suggestClienteStatusFromLeadStage (Fase 5)", () => {
   it("valores legados e etapas fora da tabela", () => {
     expect(suggestClienteStatusFromLeadStage("ganho")).toBe("active");
     expect(suggestClienteStatusFromLeadStage("perdido")).toBe("not-recommended");
-    expect(suggestClienteStatusFromLeadStage("REUNIAO_REALIZADA")).toBe("negotiating");
-    expect(suggestClienteStatusFromLeadStage(undefined)).toBe("negotiating");
+    expect(suggestClienteStatusFromLeadStage("REUNIAO_REALIZADA")).toBe("capture");
+    expect(suggestClienteStatusFromLeadStage(undefined)).toBe("capture");
   });
 
   it("wizard: lead perdido pré-seleciona 'closed'", () => {
@@ -135,12 +135,12 @@ describe("suggestClienteStatusFromLeadStage (Fase 5)", () => {
 describe("Fase 3 — histórico e bloqueio", () => {
   it("buildClienteStatusChangePatch anexa entrada de activity com observação", () => {
     const prev = { id: "a0", author: "X", action: "old", createdAt: "2026-01-01T00:00:00Z" };
-    const cliente = baseCliente({ status: "negotiating", activity: [prev] });
+    const cliente = baseCliente({ status: "capture", activity: [prev] });
     const patch = buildClienteStatusChangePatch(cliente, "active", "  fechou contrato  ");
     expect(patch.activity).toHaveLength(2);
     expect(patch.activity?.[0]).toBe(prev);
     const entry = patch.activity![1];
-    expect(entry.action).toBe("alterou o status de Negociando para Ativo");
+    expect(entry.action).toBe("alterou o status de Captação para Ativo");
     expect(entry.reason).toBe("fechou contrato");
     expect(entry.author).toBeTruthy();
     expect(entry.createdAt).toBe(patch.statusChangedAt);
@@ -151,11 +151,11 @@ describe("Fase 3 — histórico e bloqueio", () => {
     expect(patch.activity?.[0].reason).toBeUndefined();
   });
 
-  const statusOf = (c: { status?: string }) => c.status ?? "negotiation";
+  const statusOf = (c: { status?: string }) => c.status ?? "planning";
   const withCamps = baseCliente({
     campanhas: [
       { id: "k1", nome: "Ativa", status: "active" },
-      { id: "k2", nome: "Neg", status: "negotiation" },
+      { id: "k2", nome: "Neg", status: "planning" },
     ] as unknown as Cliente["campanhas"],
   });
 
@@ -181,7 +181,7 @@ describe("Fase 4 — filtro por status", () => {
   const mk = (id: string, status?: Cliente["status"], extra: Partial<Cliente> = {}) =>
     ({ id, empresa: id, responsavel: "", responsavelInterno: "", status, ...extra }) as Cliente;
   const list = [
-    mk("n", "negotiating"),
+    mk("n", "capture"),
     mk("a", "active"),
     mk("legacy"),
     mk("c", "closed"),
@@ -203,7 +203,7 @@ describe("Fase 4 — filtro por status", () => {
   it("contagens por status", () => {
     expect(countClientesByStatusFilter(list)).toEqual({
       operacao: 4,
-      negotiating: 1,
+      capture: 1,
       active: 2,
       closed: 1,
       archived: 1,

@@ -616,10 +616,10 @@ export function buildEntries(
   // Bug corrigido (Fase 1 da reconstrução do modelo de status de
   // cliente/campanha): antes desta checagem, QUALQUER campanha com
   // `valorCliente`/parcelas preenchidos virava lançamento de receita,
-  // mesmo em "negotiation" (proposta ainda não fechada) — inflava o
+  // mesmo em "planning" (proposta ainda não fechada) — inflava o
   // Financeiro com receita que nunca foi confirmada. Regra adotada, uma
   // por status (`campanhaStatus`, `campanha-ui.ts`):
-  //   - "negotiation": NUNCA gera lançamento — é exatamente o caso do bug
+  //   - "planning": NUNCA gera lançamento — é exatamente o caso do bug
   //     (dinheiro ainda não confirmado não é receita real).
   //   - "active": gera normalmente — é o caso operacional padrão.
   //   - "completed": gera normalmente — é receita/despesa já realizada
@@ -638,16 +638,16 @@ export function buildEntries(
   //     mesmo que tivesse sido "completed" antes.
   //
   // Defesa em profundidade: além do status da campanha, também pula TODA
-  // campanha de um cliente em `clienteStatus() === "negotiating"` — hoje
+  // campanha de um cliente em `clienteStatus() === "capture"` — hoje
   // redundante (uma campanha de cliente em negociação normalmente já nasce
-  // em "negotiation"), mas o pedido é explícito: nunca contar valor de
+  // em "planning"), mas o pedido é explícito: nunca contar valor de
   // cliente ainda não confirmado como receita, mesmo se algum caminho
   // futuro deixar as duas flags inconsistentes.
   for (const c of clientes) {
-    if (clienteStatus(c) === "negotiating") continue;
+    if (clienteStatus(c) === "capture") continue;
     for (const camp of c.campanhas ?? []) {
       const cStatus = campanhaStatus(camp);
-      if (cStatus === "negotiation" || cStatus === "archived") continue;
+      if (cStatus === "planning" || cStatus === "archived") continue;
       if (camp.semFaturamento) continue;
       const parcelas = camp.pagClienteParcelas ?? [];
       const pushReceita = (id: string, date: string, amount: number) => {

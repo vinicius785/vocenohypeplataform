@@ -18,7 +18,7 @@ import { campanhaActivationChecklist } from "./campanha-ui";
  * Ativação de campanha (Negociação → Ativa, Fase 3) — mesmo `AlertDialog`
  * do `useConfirm` usado nas outras trocas de status da campanha, com:
  * checklist informativo (não bloqueante), toggle "sem faturamento" e, se o
- * cliente ainda está "Negociando", o aviso de que ele também precisa ser
+ * cliente ainda está "Captação", o aviso de que ele também precisa ser
  * ativado (o botão vira "Ativar cliente e continuar" — nunca ativa o cliente
  * sem essa confirmação explícita).
  */

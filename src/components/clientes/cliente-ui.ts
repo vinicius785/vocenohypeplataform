@@ -12,7 +12,7 @@ export { initialsOf };
 export type { ClienteStatus, ClienteActivityEntry };
 
 export const CLIENTE_STATUS_LABEL: Record<ClienteStatus, string> = {
-  negotiating: "Negociando",
+  capture: "Captação",
   active: "Ativo",
   closed: "Encerrado",
   archived: "Arquivado",
@@ -24,7 +24,7 @@ export const CLIENTE_STATUS_LABEL: Record<ClienteStatus, string> = {
  * produto explícita, pois TODOS os clientes existentes hoje são
  * operacionalmente ativos (confirmado em auditoria — nenhum sinal de
  * "negociando" nos dados atuais), diferente do critério usado para
- * campanha (`campanhaStatus`, que assume "negotiation" por ser mais
+ * campanha (`campanhaStatus`, que assume "planning" por ser mais
  * conservador lá). */
 export function clienteStatus(cliente: Cliente): ClienteStatus {
   return cliente.status ?? "active";
@@ -38,7 +38,7 @@ export function clienteStatus(cliente: Cliente): ClienteStatus {
  * ações de UI. "archived" não tem transições diretas listadas porque a
  * restauração depende de `statusBeforeArchive` (igual campanha). */
 export const CLIENTE_STATUS_TRANSITIONS: Record<ClienteStatus, ClienteStatus[]> = {
-  negotiating: ["active", "closed", "archived"],
+  capture: ["active", "closed", "archived"],
   active: ["closed", "archived"],
   closed: ["active", "archived"],
   archived: [],
@@ -124,27 +124,27 @@ export function clienteRestoreTarget(cliente: Cliente): ClienteStatus {
 /** Sugestão de status do cliente a partir da etapa do lead no funil
  * (Fase 5, "Importação do CRM"). Valores reais de `OPPORTUNITY_STAGES`
  * (`comercial-engine.ts`) — correspondência com a tabela do pedido:
- *   CONTATO_FEITO     ("Contato feito")          → negotiating
- *   REUNIAO_AGENDADA  ("Reunião agendada")       → negotiating
- *   PROPOSTA_PREPARO  ("Proposta em preparação") → negotiating
- *   PROPOSTA_ENVIADA  ("Proposta enviada")       → negotiating
- *   NEGOCIACAO        ("Negociação")             → negotiating
+ *   CONTATO_FEITO     ("Contato feito")          → capture
+ *   REUNIAO_AGENDADA  ("Reunião agendada")       → capture
+ *   PROPOSTA_PREPARO  ("Proposta em preparação") → capture
+ *   PROPOSTA_ENVIADA  ("Proposta enviada")       → capture
+ *   NEGOCIACAO        ("Negociação")             → capture (etapa comercial "Negociação" != status "Captação")
  *   GANHO             ("Ganho")                  → active
  *   PERDIDO           ("Perdido")                → "not-recommended"
  * Etapas fora da tabela (LEAD_RECEBIDO, REUNIAO_REALIZADA) seguem o mesmo
- * significado de "oportunidade em andamento" → negotiating. Valores legados
+ * significado de "oportunidade em andamento" → capture. Valores legados
  * (`ganho`, `perdido`, ...) passam por `legacyStage` antes. */
 export const LEAD_STAGE_CLIENTE_SUGGESTION: Record<
   OpportunityStage,
   ClienteStatus | "not-recommended"
 > = {
-  LEAD_RECEBIDO: "negotiating",
-  CONTATO_FEITO: "negotiating",
-  REUNIAO_AGENDADA: "negotiating",
-  REUNIAO_REALIZADA: "negotiating",
-  PROPOSTA_PREPARO: "negotiating",
-  PROPOSTA_ENVIADA: "negotiating",
-  NEGOCIACAO: "negotiating",
+  LEAD_RECEBIDO: "capture",
+  CONTATO_FEITO: "capture",
+  REUNIAO_AGENDADA: "capture",
+  REUNIAO_REALIZADA: "capture",
+  PROPOSTA_PREPARO: "capture",
+  PROPOSTA_ENVIADA: "capture",
+  NEGOCIACAO: "capture",
   GANHO: "active",
   PERDIDO: "not-recommended",
 };
@@ -188,7 +188,7 @@ export type ClienteStatusFilter = "operacao" | ClienteStatus;
 
 export const CLIENTE_STATUS_FILTER_LABEL: Record<ClienteStatusFilter, string> = {
   operacao: "Em operação",
-  negotiating: "Negociando",
+  capture: "Captação",
   active: "Ativos",
   closed: "Encerrados",
   archived: "Arquivados",
@@ -205,7 +205,7 @@ export function countClientesByStatusFilter(
 ): Record<ClienteStatusFilter, number> {
   const out: Record<ClienteStatusFilter, number> = {
     operacao: 0,
-    negotiating: 0,
+    capture: 0,
     active: 0,
     closed: 0,
     archived: 0,

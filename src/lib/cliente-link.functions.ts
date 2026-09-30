@@ -645,7 +645,7 @@ const _CampaignCyclePublic = z.object({
 export function isVisibleToClientPortal(
   c: Campaign,
 ): c is Campaign & { status: "active" | "completed" } {
-  const status = c.status ?? "negotiation";
+  const status = c.status ?? "planning";
   if (status !== "active" && status !== "completed") return false;
   return c.clientVisible !== false;
 }

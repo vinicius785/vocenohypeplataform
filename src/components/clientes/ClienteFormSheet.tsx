@@ -100,7 +100,7 @@ function formsEqual(a: ClienteForm, b: ClienteForm): boolean {
  * pré-selecionado muda, via `defaultClienteStatusForOrigin`). */
 const STATUS_OPTIONS: { value: ClienteStatus; description: string }[] = [
   {
-    value: "negotiating",
+    value: "capture",
     description:
       "A oportunidade ainda está sendo trabalhada. Permite planejamento e campanhas preliminares sem financeiro obrigatório.",
   },
@@ -311,7 +311,7 @@ export function ClienteFormSheet({
   };
 
   // Lista de etapas efetiva — dinâmica: edição pula Origem/Status inicial;
-  // Contexto comercial só entra quando o status escolhido é "negotiating";
+  // Contexto comercial só entra quando o status escolhido é "capture";
   // Origem some quando a pessoa não tem permissão pra importar do Comercial.
   const steps = useMemo<StepKey[]>(() => {
     const list: StepKey[] = [];
@@ -320,7 +320,7 @@ export function ClienteFormSheet({
       list.push("status");
     }
     list.push("empresa");
-    if (status === "negotiating") list.push("contexto");
+    if (status === "capture") list.push("contexto");
     list.push("campanha", "revisao");
     return list;
   }, [isEdit, canImportCrm, status]);
@@ -377,11 +377,10 @@ export function ClienteFormSheet({
     const cleaned: ClienteForm = {
       ...form,
       status,
-      proximoPasso: status === "negotiating" ? form.proximoPasso || undefined : undefined,
-      previsaoFechamento:
-        status === "negotiating" ? form.previsaoFechamento || undefined : undefined,
+      proximoPasso: status === "capture" ? form.proximoPasso || undefined : undefined,
+      previsaoFechamento: status === "capture" ? form.previsaoFechamento || undefined : undefined,
       observacaoNegociacao:
-        status === "negotiating" ? form.observacaoNegociacao || undefined : undefined,
+        status === "capture" ? form.observacaoNegociacao || undefined : undefined,
     };
     const payload: ClienteForm & { id?: string; openCampanhaAfter?: boolean } = {
       ...(crmLead ? { ...cleaned, id: crypto.randomUUID(), crmLeadId: crmLead.id } : cleaned),
@@ -855,7 +854,7 @@ export function ClienteFormSheet({
                         variant={
                           status === "active"
                             ? "success"
-                            : status === "negotiating"
+                            : status === "capture"
                               ? "warning"
                               : "secondary"
                         }
@@ -871,7 +870,7 @@ export function ClienteFormSheet({
                     </p>
                   )}
 
-                  {status === "negotiating" && (
+                  {status === "capture" && (
                     <p className="rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5 text-xs text-warning-soft-foreground">
                       Este cliente será criado como Negociando.
                     </p>

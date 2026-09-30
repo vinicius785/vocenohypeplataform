@@ -24,7 +24,7 @@ import { ClienteLogo } from "./ClienteLogo";
  * estados "fora da operação". `archived` usa `outline` (mais apagado que
  * `secondary`) pra reforçar que é o estado mais "desligado" dos 4. */
 const STATUS_BADGE_VARIANT: Record<string, BadgeProps["variant"]> = {
-  negotiating: "warning",
+  capture: "warning",
   active: "success",
   closed: "secondary",
   archived: "outline",
@@ -69,7 +69,7 @@ export function ClienteCard({
   // Fase 4: "próxima ação" só pra negociação e só com dado real preenchido.
   const proximoPasso = cliente.proximoPasso?.trim();
   const previsao = cliente.previsaoFechamento?.trim();
-  const showProximaAcao = status === "negotiating" && !!(proximoPasso || previsao);
+  const showProximaAcao = status === "capture" && !!(proximoPasso || previsao);
   const lastActivity = lastClienteActivityAt(cliente);
 
   return (

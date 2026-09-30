@@ -380,7 +380,7 @@ describe("clienteStatus", () => {
   });
 
   it("respeita o status explícito quando presente", () => {
-    expect(clienteStatus(makeCliente({ status: "negotiating" }))).toBe("negotiating");
+    expect(clienteStatus(makeCliente({ status: "capture" }))).toBe("capture");
     expect(clienteStatus(makeCliente({ status: "archived" }))).toBe("archived");
   });
 });
@@ -421,8 +421,8 @@ describe("buildEntries — filtro por status de campanha/cliente", () => {
     };
   }
 
-  it("NÃO gera lançamento de receita para campanha em negotiation, mesmo com valorCliente preenchido", () => {
-    const clientes = [makeCliente([makeCampaign({ id: "c1", status: "negotiation" })])];
+  it("NÃO gera lançamento de receita para campanha em planning, mesmo com valorCliente preenchido", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c1", status: "planning" })])];
     const entries = buildEntries(clientes, [], {}, {});
     expect(entries.some((e) => e.campanhaId === "c1")).toBe(false);
   });
@@ -448,15 +448,15 @@ describe("buildEntries — filtro por status de campanha/cliente", () => {
     expect(entries.some((e) => e.campanhaId === "c4")).toBe(false);
   });
 
-  it("campanha sem status é tratada como negotiation (campanhaStatus) e não entra no financeiro", () => {
+  it("campanha sem status é tratada como planning (campanhaStatus) e não entra no financeiro", () => {
     const clientes = [makeCliente([makeCampaign({ id: "c5", status: undefined })])];
     const entries = buildEntries(clientes, [], {}, {});
     expect(entries.some((e) => e.campanhaId === "c5")).toBe(false);
   });
 
-  it("defesa em profundidade: cliente negotiating bloqueia TODAS as suas campanhas, mesmo uma marcada active", () => {
+  it("defesa em profundidade: cliente capture bloqueia TODAS as suas campanhas, mesmo uma marcada active", () => {
     const clientes = [
-      makeCliente([makeCampaign({ id: "c6", status: "active" })], { status: "negotiating" }),
+      makeCliente([makeCampaign({ id: "c6", status: "active" })], { status: "capture" }),
     ];
     const entries = buildEntries(clientes, [], {}, {});
     expect(entries.some((e) => e.campanhaId === "c6")).toBe(false);

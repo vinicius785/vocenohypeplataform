@@ -34,14 +34,14 @@ import {
  * `CAMPANHA_STATUS_TRANSITIONS.actionLabel`: "Ativar cliente", nunca "Mudar
  * para Ativo"). */
 const ACTION_LABEL: Record<ClienteStatus, string> = {
-  negotiating: "Voltar para negociação",
+  capture: "Voltar para captação",
   active: "Ativar cliente",
   closed: "Encerrar cliente",
   archived: "Arquivar cliente",
 };
 
 const CONFIRM_MESSAGE: Record<ClienteStatus, string> = {
-  negotiating: "O cliente voltará a ser considerado em negociação.",
+  capture: "O cliente voltará a ser considerado em captação.",
   active: "O cliente passará a ser considerado ativo e entrará nos indicadores operacionais.",
   closed: "O cliente será marcado como encerrado. Seus dados e campanhas continuarão disponíveis.",
   archived: "O cliente será removido das visualizações padrão, mas nenhum dado será apagado.",

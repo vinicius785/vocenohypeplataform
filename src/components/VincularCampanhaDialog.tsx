@@ -97,7 +97,7 @@ const emptyPublicoAlvo: PublicoAlvo = { generos: [] };
  * Definido aqui (não em `campanha-ui.ts`) porque é parte do próprio tipo
  * `Campaign`; `campanha-ui.ts` importa daqui, evitando um ciclo de import
  * (ele já importa `Campaign` deste arquivo). */
-export type CampanhaStatus = "negotiation" | "active" | "completed" | "archived";
+export type CampanhaStatus = "planning" | "active" | "completed" | "archived";
 
 export type CampanhaActivityEntry = {
   id: string;
@@ -158,7 +158,7 @@ export type Campaign = {
    * ========================================================== */
   /** Ausente só em campanhas anteriores à migration de backfill que ainda
    * não passaram por ela por algum motivo — `campanhaStatus()` trata como
-   * "negotiation" nesse caso, nunca "active". */
+   * "planning" nesse caso, nunca "active". */
   status?: CampanhaStatus;
   statusChangedAt?: string;
   /** Nome de quem alterou (mesma convenção de `TaskBoard.tsx`'s log de

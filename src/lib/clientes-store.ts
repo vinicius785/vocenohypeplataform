@@ -48,7 +48,7 @@ export type Cliente = {
    * `buildClienteStatusChangePatch()` a cada troca. */
   activity?: ClienteActivityEntry[];
   /** Contexto comercial opcional, preenchido só quando o status inicial é
-   * "negotiating" (Etapa 4 do wizard de criação, Fase 2). Todos texto livre
+   * "capture" (Etapa 4 do wizard de criação, Fase 2). Todos texto livre
    * de propósito — sem forecast estruturado (faixa de orçamento/probabilidade
    * ficam fora de escopo desta fase). */
   proximoPasso?: string;
@@ -64,7 +64,7 @@ export type ClienteActivityEntry = {
   reason?: string;
 };
 
-export type ClienteStatus = "negotiating" | "active" | "closed" | "archived";
+export type ClienteStatus = "capture" | "active" | "closed" | "archived";
 
 const store = createTableArrayStore<Cliente>("clientes");
 

@@ -26,7 +26,7 @@ function baseCampaign(overrides: Partial<Campaign> = {}): Campaign {
 
 describe("isVisibleToClientPortal", () => {
   it("campanha em negociação nunca aparece por padrão", () => {
-    expect(isVisibleToClientPortal(baseCampaign({ status: "negotiation" }))).toBe(false);
+    expect(isVisibleToClientPortal(baseCampaign({ status: "planning" }))).toBe(false);
   });
 
   it("campanha arquivada nunca aparece", () => {
@@ -47,7 +47,7 @@ describe("isVisibleToClientPortal", () => {
     );
   });
 
-  it("sem status persistido (fallback negotiation) também não aparece", () => {
+  it("sem status persistido (fallback planning) também não aparece", () => {
     expect(isVisibleToClientPortal(baseCampaign({ status: undefined }))).toBe(false);
   });
 });

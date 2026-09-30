@@ -81,7 +81,7 @@ export function PortalSidebar({
   }, []);
 
   // `campanhas` aqui já vem pré-filtrada pelo servidor (só "active"/
-  // "completed", nunca "negotiation"/"archived" — ver
+  // "completed", nunca "planning"/"archived" — ver
   // `buildClienteLinkData`/`isVisibleToClientPortal`). A separação abaixo é
   // só organizacional: concluídas ficam num grupo recolhido, sem sumir.
   const ativas = campanhas.filter((c) => c.status !== "completed");

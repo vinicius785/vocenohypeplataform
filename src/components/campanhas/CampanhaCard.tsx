@@ -12,7 +12,7 @@ import { fmtDate } from "@/components/influenciadores/InfluencerBoard";
 import { campanhaStatus, CAMPANHA_STATUS_LABEL, type CampanhaRow } from "./campanha-ui";
 
 const STATUS_BADGE_VARIANT = {
-  negotiation: "outline",
+  planning: "outline",
   active: "success",
   completed: "secondary",
   archived: "outline",

@@ -147,9 +147,9 @@ export function ClientesSection() {
     // Etapa 5 do wizard ("Criar campanha") — abre o assistente de campanha
     // já com este cliente selecionado, assim que o cadastro é persistido.
     // Nenhum `status` é forçado aqui: uma `Campaign` nova sem `status`
-    // definido já cai em "negotiation" por padrão via `campanhaStatus()`
+    // definido já cai em "planning" por padrão via `campanhaStatus()`
     // (ver `campanha-ui.ts`), que é exatamente o comportamento pedido para
-    // uma campanha criada a partir de um cliente "Negociando".
+    // uma campanha criada a partir de um cliente "Captação".
     if (openCampanhaAfter) setCampanhaWizardClienteId(savedId);
   };
 
@@ -210,7 +210,7 @@ export function ClientesSection() {
   const setStatusFilter = (s: ClienteStatusFilter) =>
     setFilters((f) => ({ ...f, status: f.status === s && s !== "operacao" ? "operacao" : s }));
   const STATUS_METRICS: { key: ClienteStatusFilter; label: string }[] = [
-    { key: "negotiating", label: "Negociando" },
+    { key: "capture", label: "Captação" },
     { key: "active", label: "Ativos" },
     { key: "closed", label: "Encerrados" },
     { key: "archived", label: "Arquivados" },

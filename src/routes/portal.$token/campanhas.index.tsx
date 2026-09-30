@@ -16,7 +16,7 @@ export const Route = createFileRoute("/portal/$token/campanhas/")({
  * `/portal/$token/campanhas` — destino do "Ver todas" da sidebar
  * (Seção 11 do pedido: precisa de `PageHeader` + cards completos, não
  * uma lista mínima de texto). `data.campanhas` já vem pré-filtrada pelo
- * servidor pra só "active"/"completed" (nunca "negotiation"/"archived" —
+ * servidor pra só "active"/"completed" (nunca "planning"/"archived" —
  * ver `buildClienteLinkData`) — mostra as duas juntas, com selo pra
  * diferenciar a concluída; a sidebar já esconde a concluída por padrão.
  */

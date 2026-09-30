@@ -15,7 +15,7 @@ import type { Campaign } from "@/components/VincularCampanhaDialog";
 /**
  * Reconstrução do modelo de status de campanhas: status NUNCA é derivado
  * de data/progresso/pendência — é sempre um campo persistido explícito,
- * com só 4 valores possíveis (negotiation/active/completed/archived).
+ * com só 4 valores possíveis (planning/active/completed/archived).
  */
 
 function baseCampaign(overrides: Partial<Campaign> = {}): Campaign {
@@ -39,8 +39,8 @@ describe("campanhaStatus", () => {
     expect(campanhaStatus(baseCampaign({ status: "active", prazo: "2020-01-01" }))).toBe("active");
   });
 
-  it("cai pra 'negotiation' quando não há status (campanha antiga sem backfill)", () => {
-    expect(campanhaStatus(baseCampaign({ status: undefined }))).toBe("negotiation");
+  it("cai pra 'planning' quando não há status (campanha antiga sem backfill)", () => {
+    expect(campanhaStatus(baseCampaign({ status: undefined }))).toBe("planning");
   });
 
   it("prazo vencido NÃO muda o status — regra central do pedido", () => {
@@ -49,14 +49,14 @@ describe("campanhaStatus", () => {
   });
 
   it("prazo futuro NÃO muda o status sozinho", () => {
-    const c = baseCampaign({ status: "negotiation", prazo: "2099-01-01" });
-    expect(campanhaStatus(c)).toBe("negotiation");
+    const c = baseCampaign({ status: "planning", prazo: "2099-01-01" });
+    expect(campanhaStatus(c)).toBe("planning");
   });
 });
 
 describe("CAMPANHA_STATUS_TRANSITIONS", () => {
-  it("negotiation só permite ir pra active, sem confirmação", () => {
-    expect(CAMPANHA_STATUS_TRANSITIONS.negotiation).toEqual([
+  it("planning só permite ir pra active, sem confirmação", () => {
+    expect(CAMPANHA_STATUS_TRANSITIONS.planning).toEqual([
       { to: "active", actionLabel: "Iniciar campanha", needsConfirm: false },
     ]);
   });
@@ -87,17 +87,17 @@ describe("ARCHIVE_ACTION / restoreConfirmMessage", () => {
 
   it("mensagem de restaurar informa o status de destino", () => {
     expect(restoreConfirmMessage("active")).toContain("Ativa");
-    expect(restoreConfirmMessage("negotiation")).toContain("Negociação");
+    expect(restoreConfirmMessage("planning")).toContain("Planejamento");
   });
 });
 
 describe("buildStatusChangePatch", () => {
   it("registra o histórico com o texto exato pedido", () => {
-    const c = baseCampaign({ status: "negotiation" });
+    const c = baseCampaign({ status: "planning" });
     const patch = buildStatusChangePatch(c, "active");
     expect(patch.status).toBe("active");
     expect(patch.activity).toHaveLength(1);
-    expect(patch.activity![0].action).toBe("alterou o status de Negociação para Ativa");
+    expect(patch.activity![0].action).toBe("alterou o status de Planejamento para Ativa");
   });
 
   it("arquivar grava archivedAt/By e o status anterior pra restaurar depois", () => {
@@ -116,7 +116,7 @@ describe("buildStatusChangePatch", () => {
 
   it("acumula atividades anteriores em vez de substituir", () => {
     const c = baseCampaign({
-      status: "negotiation",
+      status: "planning",
       activity: [
         { id: "a1", author: "Ana", action: "criou a campanha", createdAt: "2026-01-01T00:00:00Z" },
       ],
@@ -132,7 +132,7 @@ describe("filterCampanhas — filtro de status", () => {
     cliente: { id: "cl1", empresa: "Cliente 1" },
     campanha: baseCampaign({ id: `c-${status}`, status }),
   });
-  const rows = [row("negotiation"), row("active"), row("completed"), row("archived")];
+  const rows = [row("planning"), row("active"), row("completed"), row("archived")];
   const influsByCampanha = new Map<string, { nome: string }[]>();
 
   it("'todos' (sem filtro) inclui todos os status quando aplicado diretamente por filterCampanhas", () => {

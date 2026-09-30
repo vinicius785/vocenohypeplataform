@@ -288,7 +288,7 @@ export function CampanhasSection() {
 
   const totalCampanhas = rows.length;
   const ativas = rows.filter((r) => campanhaStatus(r.campanha) === "active").length;
-  const emNegociacao = rows.filter((r) => campanhaStatus(r.campanha) === "negotiation").length;
+  const emNegociacao = rows.filter((r) => campanhaStatus(r.campanha) === "planning").length;
   const totalInflusReais = Array.from(influsByCampanha.values()).reduce(
     (s, list) => s + list.length,
     0,
@@ -718,10 +718,10 @@ function CampanhaDetail({
   const applyStatusChange = (next: CampanhaStatus) =>
     saveInscricaoPage(buildStatusChangePatch(c, next));
   // Ativação (Negociação → Ativa, Fase 3): abre o dialog com checklist,
-  // "sem faturamento" e — se o cliente ainda está "Negociando" — o aviso de
+  // "sem faturamento" e — se o cliente ainda está "Captação" — o aviso de
   // que ele também será ativado. Cliente + campanha num único update.
   const [activationOpen, setActivationOpen] = useState(false);
-  const clienteNegotiating = fullCliente ? clienteStatus(fullCliente) === "negotiating" : false;
+  const clienteNegotiating = fullCliente ? clienteStatus(fullCliente) === "capture" : false;
   const confirmActivation = ({ semFaturamento }: { semFaturamento: boolean }) => {
     setActivationOpen(false);
     const campPatch: Partial<Campaign> = { ...buildStatusChangePatch(c, "active"), semFaturamento };
@@ -748,7 +748,7 @@ function CampanhaDetail({
     );
   };
   const changeStatus = async (next: CampanhaStatus, confirmMessage?: string) => {
-    if (next === "active" && status === "negotiation") {
+    if (next === "active" && status === "planning") {
       setActivationOpen(true);
       return;
     }
@@ -765,7 +765,7 @@ function CampanhaDetail({
       (await confirmRestoreChoice(
         "Esta campanha foi arquivada antes de o histórico de status existir — escolha pra onde restaurá-la.",
         [
-          { value: "negotiation", label: CAMPANHA_STATUS_LABEL.negotiation },
+          { value: "planning", label: CAMPANHA_STATUS_LABEL.planning },
           { value: "active", label: CAMPANHA_STATUS_LABEL.active },
           { value: "completed", label: CAMPANHA_STATUS_LABEL.completed },
         ],

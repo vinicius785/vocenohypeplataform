@@ -1230,9 +1230,9 @@ export function loadCampaignChannels(
       clienteId: c.id,
       empresa: c.empresa,
       // Mesmo fallback de `campanhaStatus()` (campanha-ui.ts): ausência de
-      // `status` gravado vira "negotiation", nunca "active" — evita que uma
+      // `status` gravado vira "planning", nunca "active" — evita que uma
       // campanha legada aparente estar mais adiantada do que está.
-      status: camp.status ?? "negotiation",
+      status: camp.status ?? "planning",
     })),
   );
 }

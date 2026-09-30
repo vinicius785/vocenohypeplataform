@@ -21,7 +21,7 @@ import { isInfluencerEligibleForDeliveries } from "@/lib/campanha-status";
 export type { CampanhaStatus, CampanhaActivityEntry };
 
 export const CAMPANHA_STATUS_LABEL: Record<CampanhaStatus, string> = {
-  negotiation: "Negociação",
+  planning: "Planejamento",
   active: "Ativa",
   completed: "Concluída",
   archived: "Arquivada",
@@ -31,10 +31,10 @@ export const CAMPANHA_STATUS_LABEL: Record<CampanhaStatus, string> = {
  * gravado no momento da criação no cliente — a migration de backfill cobre
  * as que já existiam no banco quando ela rodou, mas qualquer linha nova
  * criada por um caminho que ainda não tenha sido atualizado cairia aqui.
- * "Negociação" é o valor mais seguro pra uma campanha sem status conhecido
+ * "Planejamento" é o valor mais seguro pra uma campanha sem status conhecido
  * (nunca assume "Ativa" por conta própria). */
 export function campanhaStatus(c: Campaign): CampanhaStatus {
-  return c.status ?? "negotiation";
+  return c.status ?? "planning";
 }
 
 /** Transições válidas a partir de cada status, com o texto de AÇÃO (nunca
@@ -47,7 +47,7 @@ export const CAMPANHA_STATUS_TRANSITIONS: Record<
   CampanhaStatus,
   { to: CampanhaStatus; actionLabel: string; needsConfirm: boolean; confirmMessage?: string }[]
 > = {
-  negotiation: [{ to: "active", actionLabel: "Iniciar campanha", needsConfirm: false }],
+  planning: [{ to: "active", actionLabel: "Iniciar campanha", needsConfirm: false }],
   active: [
     {
       to: "completed",
