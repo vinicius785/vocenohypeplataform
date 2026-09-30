@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useConfirm } from "@/hooks/use-confirm";
 import {
   listContratosDoCliente,
@@ -34,6 +35,8 @@ import {
   type Contrato,
   type ContratoStatus,
 } from "@/lib/contratos";
+import type { Campaign } from "@/components/VincularCampanhaDialog";
+import { CAMPANHA_STATUS_LABEL, campanhaStatus } from "@/components/campanhas/campanha-ui";
 import { formatIsoDate } from "@/lib/utils";
 
 const STATUS_BADGE_VARIANT: Record<ContratoStatus, "outline" | "success" | "secondary"> = {
@@ -53,6 +56,7 @@ type FormState = {
   vigenciaFim: string;
   valor: string;
   observacoes: string;
+  campanhaIds: string[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -63,6 +67,7 @@ const EMPTY_FORM: FormState = {
   vigenciaFim: "",
   valor: "",
   observacoes: "",
+  campanhaIds: [],
 };
 
 /**
@@ -76,9 +81,17 @@ const EMPTY_FORM: FormState = {
 export function ClienteContratosSection({
   clienteId,
   canManage,
+  campanhas,
 }: {
   clienteId: string;
   canManage: boolean;
+  /** Campanhas do cliente, pra vincular ao contrato (`campanhaIds`) — sem
+   * validação server-side de pertencimento (campanhas são JSONB dentro de
+   * `clientes.data`, não uma tabela própria pra checar por FK), então essa
+   * lista é a única barreira contra vincular id de campanha de outro
+   * cliente. Vem sempre do mesmo `cliente.campanhas` já carregado pela
+   * página, nunca buscada à parte aqui. */
+  campanhas: Campaign[];
 }) {
   const listFn = useServerFn(listContratosDoCliente);
   const createFn = useServerFn(createContrato);
@@ -110,8 +123,18 @@ export function ClienteContratosSection({
       vigenciaFim: c.vigenciaFim ?? "",
       valor: c.valor !== null ? String(c.valor) : "",
       observacoes: c.observacoes ?? "",
+      campanhaIds: c.campanhaIds,
     });
     setOpen(true);
+  };
+
+  const toggleCampanha = (id: string) => {
+    setForm((f) => ({
+      ...f,
+      campanhaIds: f.campanhaIds.includes(id)
+        ? f.campanhaIds.filter((x) => x !== id)
+        : [...f.campanhaIds, id],
+    }));
   };
 
   const save = async () => {
@@ -130,6 +153,7 @@ export function ClienteContratosSection({
             vigenciaFim: form.vigenciaFim || null,
             valor: valorNum ?? null,
             observacoes: form.observacoes.trim() || null,
+            campanhaIds: form.campanhaIds,
           },
         });
       } else {
@@ -143,6 +167,7 @@ export function ClienteContratosSection({
             vigenciaFim: form.vigenciaFim || undefined,
             valor: valorNum,
             observacoes: form.observacoes.trim() || undefined,
+            campanhaIds: form.campanhaIds,
           },
         });
       }
@@ -197,6 +222,14 @@ export function ClienteContratosSection({
                     ? `Vigência até ${formatIsoDate(c.vigenciaFim)}`
                     : "Vigência não definida"}
                 </p>
+                {c.campanhaIds.length > 0 && (
+                  <p className="mt-1 truncate text-xs text-text-secondary">
+                    {c.campanhaIds
+                      .map((id) => campanhas.find((camp) => camp.id === id)?.nome)
+                      .filter(Boolean)
+                      .join(", ")}
+                  </p>
+                )}
               </div>
               <Badge variant={STATUS_BADGE_VARIANT[c.status]}>
                 {CONTRATO_STATUS_LABEL[c.status]}
@@ -280,6 +313,30 @@ export function ClienteContratosSection({
                 rows={2}
               />
             </label>
+            <div className="space-y-1 text-sm">
+              <span className="font-medium text-foreground">Campanhas cobertas (opcional)</span>
+              {campanhas.length === 0 ? (
+                <p className="text-xs text-text-secondary">Este cliente ainda não tem campanhas.</p>
+              ) : (
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border/60 p-2">
+                  {campanhas.map((camp) => (
+                    <label
+                      key={camp.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-accent/40"
+                    >
+                      <Checkbox
+                        checked={form.campanhaIds.includes(camp.id)}
+                        onCheckedChange={() => toggleCampanha(camp.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-foreground">{camp.nome}</span>
+                      <span className="shrink-0 text-xs text-text-secondary">
+                        {CAMPANHA_STATUS_LABEL[campanhaStatus(camp)]}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter className="flex-row justify-between sm:justify-between">
             {form.id ? (

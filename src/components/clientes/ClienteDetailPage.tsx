@@ -471,7 +471,11 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         </section>
 
         {/* ===== Contratos ===== */}
-        <ClienteContratosSection clienteId={cliente.id} canManage={canManage} />
+        <ClienteContratosSection
+          clienteId={cliente.id}
+          canManage={canManage}
+          campanhas={campanhas}
+        />
 
         {/* ===== Financeiro ===== */}
         <ClienteFinancialSummary clienteId={cliente.id} />
