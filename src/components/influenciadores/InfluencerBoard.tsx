@@ -3423,12 +3423,26 @@ function EntregaDetailBody({
     try {
       const categoria: EntregaAnexoCategoria =
         step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      // Cada arquivo sobe de forma independente — um falhar (ex: excedeu o
+      // limite de tamanho) não derruba os outros do mesmo lote.
       const anexos: { categoria: EntregaAnexoCategoria; nome: string; url: string }[] = [];
+      const falhas: string[] = [];
       for (const file of files) {
-        const url = await uploadEntregaAnexo(file);
-        anexos.push({ categoria, nome: file.name, url });
+        try {
+          const url = await uploadEntregaAnexo(file);
+          anexos.push({ categoria, nome: file.name, url });
+        } catch (err) {
+          falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
+        }
       }
-      onRunAction(step.action, { anexos });
+      if (anexos.length > 0) onRunAction(step.action, { anexos });
+      if (falhas.length > 0) {
+        setUploadError(
+          falhas.length === files.length
+            ? `Falha ao subir. ${falhas[0]}`
+            : `${anexos.length} de ${files.length} arquivo(s) subiram. Falha: ${falhas.join("; ")}`,
+        );
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
     } finally {
@@ -4822,6 +4836,7 @@ function NextActionPanel({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const steps = influ.entregas.map((e) => ({
     entrega: e,
@@ -4858,15 +4873,32 @@ function NextActionPanel({
       return;
     }
     setUploading(true);
+    setUploadError("");
     try {
       const categoria: EntregaAnexoCategoria =
         primary.step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      // Cada arquivo sobe de forma independente — um falhar (ex: excedeu o
+      // limite de tamanho) não derruba os outros do mesmo lote.
       const anexos: { categoria: EntregaAnexoCategoria; nome: string; url: string }[] = [];
+      const falhas: string[] = [];
       for (const file of files) {
-        const url = await uploadEntregaAnexo(file);
-        anexos.push({ categoria, nome: file.name, url });
+        try {
+          const url = await uploadEntregaAnexo(file);
+          anexos.push({ categoria, nome: file.name, url });
+        } catch (err) {
+          falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
+        }
       }
-      onRunEntregaAction(primary.entrega.id, primary.step.action, { anexos });
+      if (anexos.length > 0) {
+        onRunEntregaAction(primary.entrega.id, primary.step.action, { anexos });
+      }
+      if (falhas.length > 0) {
+        setUploadError(
+          falhas.length === files.length
+            ? `Falha ao subir. ${falhas[0]}`
+            : `${anexos.length} de ${files.length} arquivo(s) subiram. Falha: ${falhas.join("; ")}`,
+        );
+      }
     } finally {
       setUploading(false);
     }
@@ -4911,6 +4943,7 @@ function NextActionPanel({
               Ver entrega
             </button>
           </div>
+          {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
         </div>
       ) : aguardandoCliente.length > 0 ? (
         <p className="mt-2 text-sm text-foreground">Aguardando aprovação do cliente</p>
@@ -6274,18 +6307,28 @@ function EntregaAnexosEditor({
     if (files.length === 0) return;
     setError("");
     setUploading(pendingCategoria.current);
-    try {
-      const novos: { nome: string; url: string }[] = [];
-      for (const file of files) {
+    // Cada arquivo sobe de forma independente — se um falhar (ex: excedeu
+    // o limite de tamanho), os outros continuam e são anexados normalmente
+    // em vez de perder o lote inteiro por causa de 1 arquivo problemático.
+    const novos: { nome: string; url: string }[] = [];
+    const falhas: string[] = [];
+    for (const file of files) {
+      try {
         const url = await uploadEntregaAnexo(file);
         novos.push({ nome: file.name, url });
+      } catch (err) {
+        falhas.push(`${file.name}: ${err instanceof Error ? err.message : "falha desconhecida"}`);
       }
-      onChange(addAnexosComVersao(anexos, pendingCategoria.current, novos));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao subir o arquivo. Tente de novo.");
-    } finally {
-      setUploading(null);
     }
+    if (novos.length > 0) onChange(addAnexosComVersao(anexos, pendingCategoria.current, novos));
+    if (falhas.length > 0) {
+      setError(
+        falhas.length === files.length
+          ? `Falha ao subir. ${falhas[0]}`
+          : `${novos.length} de ${files.length} arquivo(s) subiram. Falha: ${falhas.join("; ")}`,
+      );
+    }
+    setUploading(null);
   };
 
   return (
