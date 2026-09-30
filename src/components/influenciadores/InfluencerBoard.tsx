@@ -3385,15 +3385,23 @@ function EntregaDetailBody({
     onRunAction(step.action);
   };
 
-  const handleFileForAction = async (file: File) => {
+  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3
+  // arquivos) — sobe e anexa cada um em sequência; cada chamada de
+  // `onRunAction` já ANEXA (nunca substitui) ao array `anexos` da entrega,
+  // com versão incremental por categoria (`addAnexoComVersao`), então N
+  // arquivos selecionados viram N anexos versionados na mesma categoria.
+  const handleFilesForAction = async (files: File[]) => {
     if (step.action !== "anexar_roteiro" && step.action !== "anexar_conteudo") return;
+    if (files.length === 0) return;
     setUploading(true);
     setUploadError("");
     try {
-      const url = await uploadEntregaAnexo(file);
       const categoria: EntregaAnexoCategoria =
         step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
-      onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
+      for (const file of files) {
+        const url = await uploadEntregaAnexo(file);
+        onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
     } finally {
@@ -3406,11 +3414,12 @@ function EntregaDetailBody({
       <input
         ref={fileRef}
         type="file"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files ?? []);
           if (fileRef.current) fileRef.current.value = "";
-          if (file) void handleFileForAction(file);
+          if (files.length > 0) void handleFilesForAction(files);
         }}
       />
 
@@ -4809,19 +4818,24 @@ function NextActionPanel({
     onRunEntregaAction(primary.entrega.id, primary.step.action);
   };
 
-  const handlePrimaryFile = async (file: File) => {
-    if (!primary?.step.action) return;
+  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades) — mesma
+  // lógica de `handleFilesForAction` acima: cada `onRunEntregaAction`
+  // ANEXA ao array `anexos` da entrega, nunca substitui.
+  const handlePrimaryFiles = async (files: File[]) => {
+    if (!primary?.step.action || files.length === 0) return;
     if (primary.step.action !== "anexar_roteiro" && primary.step.action !== "anexar_conteudo") {
       return;
     }
     setUploading(true);
     try {
-      const url = await uploadEntregaAnexo(file);
       const categoria: EntregaAnexoCategoria =
         primary.step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
-      onRunEntregaAction(primary.entrega.id, primary.step.action, {
-        anexo: { categoria, nome: file.name, url },
-      });
+      for (const file of files) {
+        const url = await uploadEntregaAnexo(file);
+        onRunEntregaAction(primary.entrega.id, primary.step.action, {
+          anexo: { categoria, nome: file.name, url },
+        });
+      }
     } finally {
       setUploading(false);
     }
@@ -4832,11 +4846,12 @@ function NextActionPanel({
       <input
         ref={fileRef}
         type="file"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files ?? []);
           if (fileRef.current) fileRef.current.value = "";
-          if (file) void handlePrimaryFile(file);
+          if (files.length > 0) void handlePrimaryFiles(files);
         }}
       />
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
