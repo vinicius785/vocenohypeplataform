@@ -663,6 +663,13 @@ export type Entrega = {
   tipo: string;
   titulo?: string;
   quantidade: number;
+  /** Quando uma entrega multi-unidade (ex: "3 Storys") é dividida em
+   * unidades independentes, cada unidade ganha o mesmo `grupoId` — cada
+   * uma com seu próprio `stage`/aprovação, nunca uma aprovação
+   * compartilhada. Ausente em entregas antigas (pré-divisão) ou que
+   * nunca foram divididas — nesse caso `quantidade` continua sendo o
+   * único sinal de "quantas unidades", como sempre foi. */
+  grupoId?: string;
   status: "orcado" | "combinado" | "publicado";
   /** Estágio de produção/aprovação da entrega — independente do status de
    * orçamento/publicação acima. Um único campo linear (ver
@@ -700,6 +707,76 @@ export type Entrega = {
  * então fica `undefined` nesses casos; nunca inventar um nome quando
  * ausente. */
 export type ClienteVeredito = { motivo: string; respondedAt: string; autorNome?: string };
+
+/** Tira o sufixo "(i/N)" que `addEntregaUnidade`/`removeEntregaUnidade`
+ * mantêm no título de cada unidade dividida, pra recuperar o título-base
+ * comum ao grupo. */
+function stripUnidadeSuffix(titulo?: string): string | undefined {
+  if (!titulo) return titulo;
+  const stripped = titulo.replace(/\s*\(\d+\/\d+\)$/, "").trim();
+  return stripped || undefined;
+}
+
+function relabelGrupo(entregas: Entrega[], grupoId: string, baseTitulo?: string): Entrega[] {
+  const grupo = entregas.filter((x) => x.grupoId === grupoId);
+  const total = grupo.length;
+  if (total <= 1) {
+    return entregas.map((x) =>
+      x.grupoId === grupoId ? { ...x, grupoId: undefined, titulo: baseTitulo } : x,
+    );
+  }
+  const labels = new Map(
+    grupo.map((x, i) => [x.id, `${baseTitulo ? baseTitulo + " " : ""}(${i + 1}/${total})`]),
+  );
+  return entregas.map((x) => (labels.has(x.id) ? { ...x, titulo: labels.get(x.id) } : x));
+}
+
+/** Divide uma entrega multi-unidade em unidades independentes — cada uma
+ * com seu próprio ciclo de aprovação (roteiro/conteúdo/publicação), em vez
+ * de um `quantidade` só que faz o cliente aprovar/reprovar tudo junto.
+ * Chamada repetidamente (uma unidade por clique) a partir da entrega
+ * "origem": a 1ª chamada transforma a origem + 1 nova unidade num grupo
+ * de 2; chamadas seguintes acrescentam mais uma unidade fresca (sem
+ * anexos, estágio inicial) ao mesmo grupo. */
+function addEntregaUnidade(entregas: Entrega[], e: Entrega): Entrega[] {
+  const grupoId = e.grupoId ?? crypto.randomUUID();
+  const baseTitulo = stripUnidadeSuffix(e.titulo);
+  const nova: Entrega = {
+    id: crypto.randomUUID(),
+    tipo: e.tipo,
+    titulo: baseTitulo,
+    quantidade: 1,
+    grupoId,
+    status: "combinado",
+    stage: "ROTEIRO_PRODUCAO",
+  };
+  const withGrupo = entregas.map((x) => (x.id === e.id ? { ...x, grupoId } : x));
+  return relabelGrupo([...withGrupo, nova], grupoId, baseTitulo);
+}
+
+/** Remove a última unidade de um grupo dividido — nunca uma unidade que
+ * já tem progresso (anexo enviado ou saiu do estágio inicial), pra nunca
+ * apagar trabalho já feito silenciosamente. Retorna `null` quando `e` não
+ * faz parte de um grupo (nada a fazer). */
+function removeEntregaUnidade(
+  entregas: Entrega[],
+  e: Entrega,
+): { next: Entrega[]; blocked?: string } | null {
+  if (!e.grupoId) return null;
+  const grupo = entregas.filter((x) => x.grupoId === e.grupoId);
+  if (grupo.length <= 1) return null;
+  const ultima = grupo[grupo.length - 1];
+  const temProgresso = (ultima.anexos?.length ?? 0) > 0 || ultima.stage !== "ROTEIRO_PRODUCAO";
+  if (temProgresso) {
+    return {
+      next: entregas,
+      blocked: `A última unidade (${ultima.titulo ?? ultima.tipo}) já tem progresso — remova-a manualmente pela lista de entregas.`,
+    };
+  }
+  const semUltima = entregas.filter((x) => x.id !== ultima.id);
+  const baseTitulo = stripUnidadeSuffix(e.titulo);
+  return { next: relabelGrupo(semUltima, e.grupoId, baseTitulo) };
+}
 
 export type BankInfo = {
   banco?: string;
@@ -2817,9 +2894,11 @@ function EntregasEditor({
               >
                 <p className="min-w-0 truncate font-medium text-foreground">
                   {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
-                  <span className="ml-1.5 font-normal text-muted-foreground">
-                    · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
-                  </span>
+                  {!e.grupoId && (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
+                    </span>
+                  )}
                 </p>
 
                 <div className="flex items-center gap-1.5 text-xs">
@@ -2906,6 +2985,16 @@ function EntregasEditor({
           onSetStage={(coluna) => setStage(selected.id, coluna)}
           onRemove={async () => {
             if (await removeEntrega(selected)) setSelectedId(null);
+          }}
+          onSplitUnidade={(delta) => {
+            if (delta === 1) {
+              onChange(addEntregaUnidade(entregas, selected));
+              return;
+            }
+            const result = removeEntregaUnidade(entregas, selected);
+            if (!result) return;
+            if (result.blocked) toast.error(result.blocked);
+            onChange(result.next);
           }}
         />
       )}
@@ -3362,6 +3451,7 @@ function EntregaDetailBody({
   onRunAction,
   onSetStage,
   onRemove,
+  onSplitUnidade,
 }: {
   influNome?: string;
   influFoto?: string;
@@ -3371,6 +3461,10 @@ function EntregaDetailBody({
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
+  /** Divide esta entrega em unidades independentes (+1) ou remove a
+   * última unidade do grupo (-1) — cada unidade aprovada separadamente
+   * pelo cliente, em vez de um `quantidade` só aprovado em bloco. */
+  onSplitUnidade: (delta: 1 | -1) => void;
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
@@ -3485,12 +3579,19 @@ function EntregaDetailBody({
               )}
               <p className="truncate text-lg font-bold text-foreground">
                 {entrega.tipo || "Sem tipo"}
-                <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                  · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
-                </span>
+                {!entrega.grupoId && (
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                    · {entrega.quantidade} {entrega.quantidade === 1 ? "unidade" : "unidades"}
+                  </span>
+                )}
               </p>
               {entrega.titulo && (
                 <p className="truncate text-xs text-muted-foreground">{entrega.titulo}</p>
+              )}
+              {entrega.grupoId && (
+                <p className="truncate text-xs text-muted-foreground">
+                  Unidade independente — aprovada separadamente das demais.
+                </p>
               )}
             </div>
             <button
@@ -3517,25 +3618,44 @@ function EntregaDetailBody({
                 placeholder="Título (opcional)"
                 className="min-w-[130px] flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring"
               />
-              <div className="flex shrink-0 items-center rounded-md bg-background">
+              {!entrega.grupoId && (
+                <div className="flex shrink-0 items-center rounded-md bg-background">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    −
+                  </button>
+                  <span className="w-7 text-center text-xs font-medium tabular-nums">
+                    {entrega.quantidade}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
+                    className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => onSplitUnidade(1)}
+                title="Dividir em unidades independentes — cada uma aprovada separadamente"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-dashed border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+              >
+                <Plus className="h-3 w-3" /> Unidade
+              </button>
+              {entrega.grupoId && (
                 <button
                   type="button"
-                  onClick={() => onChange({ quantidade: Math.max(1, entrega.quantidade - 1) })}
-                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => onSplitUnidade(-1)}
+                  className="shrink-0 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
-                  −
+                  − Unidade
                 </button>
-                <span className="w-7 text-center text-xs font-medium tabular-nums">
-                  {entrega.quantidade}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onChange({ quantidade: entrega.quantidade + 1 })}
-                  className="h-7 w-7 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  +
-                </button>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -3734,6 +3854,7 @@ function EntregaDetailSheet({
   onRunAction,
   onSetStage,
   onRemove,
+  onSplitUnidade,
 }: {
   influNome?: string;
   influFoto?: string;
@@ -3745,6 +3866,7 @@ function EntregaDetailSheet({
   onRunAction: (action: EntregaEngineActionKind, opts?: EntregaActionOpts) => void;
   onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
+  onSplitUnidade: (delta: 1 | -1) => void;
 }) {
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   return (
@@ -3767,6 +3889,7 @@ function EntregaDetailSheet({
             onRunAction={onRunAction}
             onSetStage={onSetStage}
             onRemove={onRemove}
+            onSplitUnidade={onSplitUnidade}
           />
         </div>
       </SheetContent>
@@ -3975,9 +4098,9 @@ function InfluencerWorkspaceSheet({
             <span className="text-muted-foreground">·</span>
             <p className="min-w-0 truncate text-xs font-medium text-foreground">
               {influ.nome} — {selectedEntrega.tipo}
-              {selectedEntrega.titulo ? ` · ${selectedEntrega.titulo}` : ""} ·{" "}
-              {selectedEntrega.quantidade}{" "}
-              {selectedEntrega.quantidade === 1 ? "unidade" : "unidades"}
+              {selectedEntrega.titulo ? ` · ${selectedEntrega.titulo}` : ""}
+              {!selectedEntrega.grupoId &&
+                ` · ${selectedEntrega.quantidade} ${selectedEntrega.quantidade === 1 ? "unidade" : "unidades"}`}
             </p>
           </div>
         )}
@@ -4028,6 +4151,16 @@ function InfluencerWorkspaceSheet({
                 onSetStage={(coluna) => onSetEntregaStage(selectedEntrega.id, coluna)}
                 onRemove={async () => {
                   if (await removeEntrega(selectedEntrega)) backToDetail();
+                }}
+                onSplitUnidade={(delta) => {
+                  if (delta === 1) {
+                    onPatch({ entregas: addEntregaUnidade(influ.entregas, selectedEntrega) });
+                    return;
+                  }
+                  const result = removeEntregaUnidade(influ.entregas, selectedEntrega);
+                  if (!result) return;
+                  if (result.blocked) toast.error(result.blocked);
+                  onPatch({ entregas: result.next });
                 }}
               />
             </div>
@@ -4757,9 +4890,11 @@ function EntregasOperationalList({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">
                     {e.titulo ? `${e.tipo} · ${e.titulo}` : e.tipo || "Sem tipo"}
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
-                    </span>
+                    {!e.grupoId && (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        · {e.quantidade} {e.quantidade === 1 ? "unidade" : "unidades"}
+                      </span>
+                    )}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                     <span
