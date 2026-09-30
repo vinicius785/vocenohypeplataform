@@ -177,14 +177,21 @@ export function ClienteStatusControl({
                 }`}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {pending && pending.blocking.length > 0 && (
+          {/* "Encerrar" com campanha ativa é BLOQUEIO de verdade (item 10 do
+           * pedido de reconstrução do domínio Comercial/Clientes/Campanhas/
+           * Contratos/Financeiro: "Ao encerrar cliente com campanha ativa:
+           * Bloquear inicialmente... Exigir conclusão, arquivamento ou
+           * tratamento explícito") — diferente de arquivar, que só pede
+           * confirmação e preserva tudo sem exigir tratar antes. */}
+          {pending && pending.blocking.length > 0 && pending.next === "closed" ? (
             <div
               role="alert"
-              className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
             >
               <p className="font-medium">
                 Este cliente tem {pending.blocking.length}{" "}
-                {pending.blocking.length === 1 ? "campanha ativa" : "campanhas ativas"}:
+                {pending.blocking.length === 1 ? "campanha ativa" : "campanhas ativas"} — trate-as
+                antes de encerrar:
               </p>
               <ul className="mt-1 list-disc pl-5">
                 {pending.blocking.map((c) => (
@@ -192,24 +199,50 @@ export function ClienteStatusControl({
                 ))}
               </ul>
               <p className="mt-1">
-                As campanhas não serão alteradas. Deseja prosseguir mesmo assim?
+                Conclua ou arquive cada campanha ativa na página da campanha antes de encerrar o
+                cliente.
               </p>
             </div>
+          ) : (
+            pending &&
+            pending.blocking.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
+              >
+                <p className="font-medium">
+                  Este cliente tem {pending.blocking.length}{" "}
+                  {pending.blocking.length === 1 ? "campanha ativa" : "campanhas ativas"}:
+                </p>
+                <ul className="mt-1 list-disc pl-5">
+                  {pending.blocking.map((c) => (
+                    <li key={c.id}>{c.nome || "Campanha sem nome"}</li>
+                  ))}
+                </ul>
+                <p className="mt-1">Elas serão preservadas, sem nenhuma alteração.</p>
+              </div>
+            )
           )}
-          <label className="block space-y-1 text-sm">
-            <span className="font-medium text-foreground">Observação (opcional)</span>
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Motivo da mudança"
-              rows={2}
-            />
-          </label>
+          {!(pending && pending.blocking.length > 0 && pending.next === "closed") && (
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-foreground">Observação (opcional)</span>
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Motivo da mudança"
+                rows={2}
+              />
+            </label>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirm}>
-              {pending && pending.blocking.length > 0 ? "Prosseguir mesmo assim" : "Confirmar"}
-            </AlertDialogAction>
+            {pending && pending.blocking.length > 0 && pending.next === "closed" ? (
+              <AlertDialogAction onClick={() => setPending(null)}>Entendi</AlertDialogAction>
+            ) : (
+              <>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={confirm}>Confirmar</AlertDialogAction>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
