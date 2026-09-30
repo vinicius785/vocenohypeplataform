@@ -6131,11 +6131,16 @@ async function uploadInfluFoto(file: File): Promise<string | null> {
   return signed?.signedUrl ?? null;
 }
 
-// Precisa acompanhar o "Max file size" configurado no Storage do Supabase
-// (Dashboard → Storage → Configuration) — hoje 100MB. Checar no cliente
-// evita esperar o upload inteiro (às vezes minutos, num vídeo grande) só
-// pra descobrir no fim que o servidor ia recusar.
-const ENTREGA_ANEXO_MAX_BYTES = 100 * 1024 * 1024;
+// Precisa acompanhar o `file_size_limit` do bucket `entrega-anexos`
+// (500MB, ver migration `20260930120000_raise_relatorios_entregas_bucket_limits_500mb.sql`)
+// E o "Max file size" configurado no Storage do Supabase (Dashboard →
+// Storage → Configuration) — esse teto GLOBAL do projeto vale
+// independente do limite do bucket, então precisa estar em pelo menos
+// 500MB também (ajuste manual no Dashboard, não dá pra mudar por SQL/
+// migration). Checar no cliente evita esperar o upload inteiro (às vezes
+// minutos, num vídeo grande) só pra descobrir no fim que o servidor ia
+// recusar.
+const ENTREGA_ANEXO_MAX_BYTES = 500 * 1024 * 1024;
 
 function formatMB(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
