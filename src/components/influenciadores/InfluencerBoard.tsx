@@ -615,29 +615,47 @@ export type EntregaAnexo = {
   criadoEm?: string;
 };
 
-/** Acrescenta um anexo novo na categoria certa, calculando a versão
- * seguinte (nunca sobrescreve um anexo anterior) — usado tanto pelo editor
- * genérico de anexos quanto pela ação contextual do motor de entrega. */
+/** Acrescenta um ou mais anexos novos na categoria certa, calculando a
+ * versão seguinte (nunca sobrescreve um anexo anterior) — usado tanto pelo
+ * editor genérico de anexos quanto pela ação contextual do motor de
+ * entrega. Todos os arquivos passados numa mesma chamada recebem a MESMA
+ * versão: eles vieram da mesma seleção/ação do usuário (ex: as 3 unidades
+ * de um Story enviadas juntas), então são arquivos IRMÃOS — partes da
+ * mesma entrega, não revisões sequenciais um do outro. Só uma nova chamada
+ * (upload feito depois, separado) avança pra próxima versão. */
+export function addAnexosComVersao(
+  anexos: EntregaAnexo[],
+  categoria: EntregaAnexoCategoria,
+  novos: { nome: string; url: string }[],
+): EntregaAnexo[] {
+  if (novos.length === 0) return anexos;
+  const maxVersaoAtual = anexos
+    .filter((a) => a.categoria === categoria)
+    .reduce((max, a) => Math.max(max, a.versao ?? 1), 0);
+  const versao = maxVersaoAtual + 1;
+  const criadoEm = todayISO();
+  return [
+    ...anexos,
+    ...novos.map((n) => ({
+      id: crypto.randomUUID(),
+      categoria,
+      nome: n.nome,
+      url: n.url,
+      versao,
+      criadoEm,
+    })),
+  ];
+}
+
+/** Variante de conveniência de `addAnexosComVersao` pra um único arquivo —
+ * mantida pra não obrigar todo call site a montar um array de 1 item. */
 export function addAnexoComVersao(
   anexos: EntregaAnexo[],
   categoria: EntregaAnexoCategoria,
   nome: string,
   url: string,
 ): EntregaAnexo[] {
-  const maxVersaoAtual = anexos
-    .filter((a) => a.categoria === categoria)
-    .reduce((max, a) => Math.max(max, a.versao ?? 1), 0);
-  return [
-    ...anexos,
-    {
-      id: crypto.randomUUID(),
-      categoria,
-      nome,
-      url,
-      versao: maxVersaoAtual + 1,
-      criadoEm: todayISO(),
-    },
-  ];
+  return addAnexosComVersao(anexos, categoria, [{ nome, url }]);
 }
 
 export type Entrega = {
@@ -1726,20 +1744,25 @@ export function InfluencerBoard({
        * nunca em dois `onChange` separados, senão o segundo sobrescreveria
        * o primeiro com um snapshot desatualizado da entrega. */
       anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
+      /** Vários arquivos de uma vez (ex: Story de N unidades) — todos
+       * entram como IRMÃOS na mesma versão, nunca um substituindo o outro. */
+      anexos?: { categoria: EntregaAnexoCategoria; nome: string; url: string }[];
     },
   ) => {
     const next = latestInflusRef.current.map((x) => {
       if (x.id !== influId) return x;
       const entrega = x.entregas.find((e) => e.id === entregaId);
       if (!entrega) return x;
-      const anexos = opts?.anexo
-        ? addAnexoComVersao(
-            entrega.anexos ?? [],
-            opts.anexo.categoria,
-            opts.anexo.nome,
-            opts.anexo.url,
-          )
-        : entrega.anexos;
+      const anexos = opts?.anexos
+        ? addAnexosComVersao(entrega.anexos ?? [], opts.anexos[0].categoria, opts.anexos)
+        : opts?.anexo
+          ? addAnexoComVersao(
+              entrega.anexos ?? [],
+              opts.anexo.categoria,
+              opts.anexo.nome,
+              opts.anexo.url,
+            )
+          : entrega.anexos;
       let patch: Partial<Entrega>;
       try {
         patch = applyEntregaAction({ ...entrega, anexos }, action, opts);
@@ -2678,6 +2701,7 @@ function NextActionBadge({ actor }: { actor: NextActor }) {
 export type EntregaActionOpts = {
   url?: string;
   anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
+  anexos?: { categoria: EntregaAnexoCategoria; nome: string; url: string }[];
 };
 
 function EntregasEditor({
@@ -2736,9 +2760,11 @@ function EntregasEditor({
     }
     const e = entregas.find((x) => x.id === entregaId);
     if (!e) return;
-    const anexos = opts?.anexo
-      ? addAnexoComVersao(e.anexos ?? [], opts.anexo.categoria, opts.anexo.nome, opts.anexo.url)
-      : e.anexos;
+    const anexos = opts?.anexos
+      ? addAnexosComVersao(e.anexos ?? [], opts.anexos[0].categoria, opts.anexos)
+      : opts?.anexo
+        ? addAnexoComVersao(e.anexos ?? [], opts.anexo.categoria, opts.anexo.nome, opts.anexo.url)
+        : e.anexos;
     try {
       update(entregaId, { anexos, ...applyEntregaAction({ ...e, anexos }, action, opts) });
     } catch (err) {
@@ -3386,10 +3412,9 @@ function EntregaDetailBody({
   };
 
   // Aceita vários arquivos de uma vez (ex: Story de 3 unidades = 3
-  // arquivos) — sobe e anexa cada um em sequência; cada chamada de
-  // `onRunAction` já ANEXA (nunca substitui) ao array `anexos` da entrega,
-  // com versão incremental por categoria (`addAnexoComVersao`), então N
-  // arquivos selecionados viram N anexos versionados na mesma categoria.
+  // arquivos) — sobe todos e anexa numa ÚNICA chamada de `onRunAction`
+  // (`opts.anexos`, plural), pra virarem IRMÃOS na mesma versão em vez de
+  // 3 versões sequenciais um "substituindo" o outro.
   const handleFilesForAction = async (files: File[]) => {
     if (step.action !== "anexar_roteiro" && step.action !== "anexar_conteudo") return;
     if (files.length === 0) return;
@@ -3398,10 +3423,12 @@ function EntregaDetailBody({
     try {
       const categoria: EntregaAnexoCategoria =
         step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      const anexos: { categoria: EntregaAnexoCategoria; nome: string; url: string }[] = [];
       for (const file of files) {
         const url = await uploadEntregaAnexo(file);
-        onRunAction(step.action, { anexo: { categoria, nome: file.name, url } });
+        anexos.push({ categoria, nome: file.name, url });
       }
+      onRunAction(step.action, { anexos });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Falha ao subir o arquivo.");
     } finally {
@@ -3770,6 +3797,7 @@ function InfluencerWorkspaceSheet({
     opts?: {
       url?: string;
       anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
+      anexos?: { categoria: EntregaAnexoCategoria; nome: string; url: string }[];
     },
   ) => void;
   onSetEntregaStage: (entregaId: string, coluna: EntregaFaseColuna) => void;
@@ -4786,7 +4814,10 @@ function NextActionPanel({
   onRunEntregaAction: (
     entregaId: string,
     action: EntregaEngineActionKind,
-    opts?: { anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string } },
+    opts?: {
+      anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
+      anexos?: { categoria: EntregaAnexoCategoria; nome: string; url: string }[];
+    },
   ) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -4818,9 +4849,9 @@ function NextActionPanel({
     onRunEntregaAction(primary.entrega.id, primary.step.action);
   };
 
-  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades) — mesma
-  // lógica de `handleFilesForAction` acima: cada `onRunEntregaAction`
-  // ANEXA ao array `anexos` da entrega, nunca substitui.
+  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades) — sobe
+  // todos e anexa numa ÚNICA chamada (`opts.anexos`, plural), pra virarem
+  // IRMÃOS na mesma versão em vez de 3 versões sequenciais.
   const handlePrimaryFiles = async (files: File[]) => {
     if (!primary?.step.action || files.length === 0) return;
     if (primary.step.action !== "anexar_roteiro" && primary.step.action !== "anexar_conteudo") {
@@ -4830,12 +4861,12 @@ function NextActionPanel({
     try {
       const categoria: EntregaAnexoCategoria =
         primary.step.action === "anexar_roteiro" ? "Roteiro" : "Conteúdo final";
+      const anexos: { categoria: EntregaAnexoCategoria; nome: string; url: string }[] = [];
       for (const file of files) {
         const url = await uploadEntregaAnexo(file);
-        onRunEntregaAction(primary.entrega.id, primary.step.action, {
-          anexo: { categoria, nome: file.name, url },
-        });
+        anexos.push({ categoria, nome: file.name, url });
       }
+      onRunEntregaAction(primary.entrega.id, primary.step.action, { anexos });
     } finally {
       setUploading(false);
     }
@@ -4938,7 +4969,10 @@ function WorkspaceDetailBody({
   onRunEntregaAction: (
     entregaId: string,
     action: EntregaEngineActionKind,
-    opts?: { anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string } },
+    opts?: {
+      anexo?: { categoria: EntregaAnexoCategoria; nome: string; url: string };
+      anexos?: { categoria: EntregaAnexoCategoria; nome: string; url: string }[];
+    },
   ) => void;
 }) {
   const entregas = influ.entregas;
@@ -6232,12 +6266,21 @@ function EntregaAnexosEditor({
     fileRef.current?.click();
   };
 
-  const handleFile = async (file: File) => {
+  // Aceita vários arquivos de uma vez (ex: Story de 3 unidades) — sobe
+  // todos e anexa numa ÚNICA chamada de `addAnexosComVersao`, na MESMA
+  // categoria escolhida: os arquivos são IRMÃOS (mesma versão), não
+  // revisões sequenciais um do outro.
+  const handleFiles = async (files: File[]) => {
+    if (files.length === 0) return;
     setError("");
     setUploading(pendingCategoria.current);
     try {
-      const url = await uploadEntregaAnexo(file);
-      onChange(addAnexoComVersao(anexos, pendingCategoria.current, file.name, url));
+      const novos: { nome: string; url: string }[] = [];
+      for (const file of files) {
+        const url = await uploadEntregaAnexo(file);
+        novos.push({ nome: file.name, url });
+      }
+      onChange(addAnexosComVersao(anexos, pendingCategoria.current, novos));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao subir o arquivo. Tente de novo.");
     } finally {
@@ -6250,11 +6293,12 @@ function EntregaAnexosEditor({
       <input
         ref={fileRef}
         type="file"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files ?? []);
           if (fileRef.current) fileRef.current.value = "";
-          if (file) void handleFile(file);
+          if (files.length > 0) void handleFiles(files);
         }}
       />
 
