@@ -722,9 +722,19 @@ function CampanhaDetail({
   // que ele também será ativado. Cliente + campanha num único update.
   const [activationOpen, setActivationOpen] = useState(false);
   const clienteNegotiating = fullCliente ? clienteStatus(fullCliente) === "capture" : false;
-  const confirmActivation = ({ semFaturamento }: { semFaturamento: boolean }) => {
+  const confirmActivation = ({
+    semFaturamento,
+    semFaturamentoMotivo,
+  }: {
+    semFaturamento: boolean;
+    semFaturamentoMotivo?: string;
+  }) => {
     setActivationOpen(false);
-    const campPatch: Partial<Campaign> = { ...buildStatusChangePatch(c, "active"), semFaturamento };
+    const campPatch: Partial<Campaign> = {
+      ...buildStatusChangePatch(c, "active"),
+      semFaturamento,
+      semFaturamentoMotivo: semFaturamento ? semFaturamentoMotivo : undefined,
+    };
     const clientePatch =
       fullCliente && clienteNegotiating
         ? buildClienteStatusChangePatch(

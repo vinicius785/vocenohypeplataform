@@ -290,3 +290,44 @@ export function campanhaActivationChecklist(c: Campaign): CampanhaActivationChec
     { key: "influs", label: "Influenciadores planejados", ok: (c.linhas?.length ?? 0) > 0 },
   ];
 }
+
+/**
+ * Estado financeiro da campanha (item 15 da reconstrução do domínio
+ * Comercial/Clientes/Campanhas/Contratos/Financeiro) — DISTINTO de
+ * "gera ou não lançamento" (`buildEntries()`, que é um gate binário sobre
+ * este estado). Quatro estados, nunca confundidos:
+ *   "sem_faturamento" — condição explícita (`semFaturamento`), nunca
+ *     sinônimo de valor zero.
+ *   "estimado" — valor preenchido, mas a campanha ainda está em
+ *     "planning" (ou o cliente ainda em "capture"): é uma estimativa
+ *     comercial, nunca vira receita confirmada nem entra no fluxo de
+ *     caixa realizado (`buildEntries()` já não gera nada pra este caso).
+ *   "confirmado" — valor preenchido, campanha "active"/"completed" e
+ *     cliente fora de "capture": é isso que vira lançamento de verdade.
+ *   "nao_configurado" — nada preenchido ainda; estado de partida de toda
+ *     campanha nova (nunca inferido como "R$ 0,00").
+ */
+export type CampanhaFinancialState =
+  | "nao_configurado"
+  | "estimado"
+  | "confirmado"
+  | "sem_faturamento";
+
+export const CAMPANHA_FINANCIAL_STATE_LABEL: Record<CampanhaFinancialState, string> = {
+  nao_configurado: "Financeiro não configurado",
+  estimado: "Estimativa comercial",
+  confirmado: "Financeiro confirmado",
+  sem_faturamento: "Sem faturamento",
+};
+
+export function campanhaFinancialState(
+  c: Campaign,
+  clienteIsCapture: boolean,
+): CampanhaFinancialState {
+  if (c.semFaturamento) return "sem_faturamento";
+  const hasValor = (c.valorCliente ?? "").trim().length > 0;
+  if (!hasValor) return "nao_configurado";
+  const status = campanhaStatus(c);
+  const isPreOperational = status === "planning" || clienteIsCapture;
+  return isPreOperational ? "estimado" : "confirmado";
+}

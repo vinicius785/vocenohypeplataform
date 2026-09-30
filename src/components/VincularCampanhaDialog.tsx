@@ -181,6 +181,12 @@ export type Campaign = {
    * receita no Financeiro (`buildEntries()`), independente de
    * `valorCliente` preenchido. Ausente = `false`. */
   semFaturamento?: boolean;
+  /** Motivo obrigatório de "sem faturamento" (reconstrução do domínio
+   * Comercial/Clientes/Campanhas/Contratos/Financeiro, item 15: "Campanha
+   * sem faturamento deve exigir motivo e ser diferente de valor zero") —
+   * só existe quando `semFaturamento === true`; limpo se a pessoa desliga
+   * o toggle de novo. */
+  semFaturamentoMotivo?: string;
 };
 
 const newLinha = (): InfluLinha => ({

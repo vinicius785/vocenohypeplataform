@@ -9,6 +9,7 @@ import {
   DEFAULT_CAMPANHA_FILTERS,
   type CampanhaRow,
   campanhaActivationChecklist,
+  campanhaFinancialState,
 } from "./campanha-ui";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 
@@ -186,5 +187,37 @@ describe("campanhaActivationChecklist", () => {
     const r = byKey(baseCampaign({ semFaturamento: true }));
     expect(r.valor).toBe(true);
     expect(r.pagamento).toBe(true);
+  });
+});
+
+describe("campanhaFinancialState", () => {
+  it("sem_faturamento tem prioridade sobre qualquer outro sinal", () => {
+    const c = baseCampaign({ status: "active", valorCliente: "1000", semFaturamento: true });
+    expect(campanhaFinancialState(c, false)).toBe("sem_faturamento");
+  });
+
+  it("nao_configurado quando não há valor preenchido", () => {
+    const c = baseCampaign({ status: "active", valorCliente: "" });
+    expect(campanhaFinancialState(c, false)).toBe("nao_configurado");
+  });
+
+  it("estimado quando a campanha está em planejamento, mesmo com valor", () => {
+    const c = baseCampaign({ status: "planning", valorCliente: "1000" });
+    expect(campanhaFinancialState(c, false)).toBe("estimado");
+  });
+
+  it("estimado quando o cliente ainda está em captação, mesmo com campanha ativa", () => {
+    const c = baseCampaign({ status: "active", valorCliente: "1000" });
+    expect(campanhaFinancialState(c, true)).toBe("estimado");
+  });
+
+  it("confirmado só quando campanha ativa/concluída E cliente fora de captação", () => {
+    const c = baseCampaign({ status: "active", valorCliente: "1000" });
+    expect(campanhaFinancialState(c, false)).toBe("confirmado");
+  });
+
+  it("nunca retorna 'confirmado' pra valor vazio, mesmo campanha ativa e cliente fora de captação", () => {
+    const c = baseCampaign({ status: "active", valorCliente: "" });
+    expect(campanhaFinancialState(c, false)).not.toBe("confirmado");
   });
 });

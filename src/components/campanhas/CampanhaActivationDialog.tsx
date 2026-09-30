@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import { campanhaActivationChecklist } from "./campanha-ui";
 
@@ -33,14 +34,22 @@ export function CampanhaActivationDialog({
   campaign: Campaign;
   clienteNegotiating: boolean;
   onCancel: () => void;
-  onConfirm: (opts: { semFaturamento: boolean }) => void;
+  onConfirm: (opts: { semFaturamento: boolean; semFaturamentoMotivo?: string }) => void;
 }) {
   const [semFaturamento, setSemFaturamento] = useState(Boolean(campaign.semFaturamento));
+  const [motivo, setMotivo] = useState(campaign.semFaturamentoMotivo ?? "");
   useEffect(() => {
-    if (open) setSemFaturamento(Boolean(campaign.semFaturamento));
-  }, [open, campaign.semFaturamento]);
+    if (open) {
+      setSemFaturamento(Boolean(campaign.semFaturamento));
+      setMotivo(campaign.semFaturamentoMotivo ?? "");
+    }
+  }, [open, campaign.semFaturamento, campaign.semFaturamentoMotivo]);
 
   const checklist = campanhaActivationChecklist({ ...campaign, semFaturamento });
+  // "Sem faturamento" é uma condição explícita, nunca um valor zero — por
+  // isso exige motivo (item 15 do pedido de reconstrução do domínio
+  // Comercial/Clientes/Campanhas/Contratos/Financeiro).
+  const motivoValido = !semFaturamento || motivo.trim().length > 0;
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
@@ -93,9 +102,29 @@ export function CampanhaActivationDialog({
           <Switch checked={semFaturamento} onCheckedChange={setSemFaturamento} />
         </label>
 
+        {semFaturamento && (
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-foreground">Motivo (obrigatório)</span>
+            <Textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Por que esta campanha não gera faturamento?"
+              rows={2}
+            />
+          </label>
+        )}
+
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => onConfirm({ semFaturamento })}>
+          <AlertDialogAction
+            disabled={!motivoValido}
+            onClick={() =>
+              onConfirm({
+                semFaturamento,
+                semFaturamentoMotivo: semFaturamento ? motivo.trim() : undefined,
+              })
+            }
+          >
             {clienteNegotiating ? "Ativar cliente e continuar" : "Iniciar campanha"}
           </AlertDialogAction>
         </AlertDialogFooter>
