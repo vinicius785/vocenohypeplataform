@@ -7,7 +7,13 @@ import {
   type ChatMember,
   type ChatMessage,
 } from "@/lib/chat-store";
-import { dateDividerLabel, firstUnreadIndex, groupMessages, isSameDay } from "./chat-v2-utils";
+import {
+  CHAT_V2_READING_COLUMN_CLASS,
+  dateDividerLabel,
+  firstUnreadIndex,
+  groupMessages,
+  isSameDay,
+} from "./chat-v2-utils";
 import { ChatV2Message } from "./ChatV2Message";
 import { ChatV2NewMessagesIndicator } from "./ChatV2NewMessagesIndicator";
 
@@ -20,6 +26,7 @@ export function ChatV2Timeline({
   members,
   lastReadAt,
   onReply,
+  onInlineReply,
   highlightId,
   channelName,
 }: {
@@ -29,6 +36,10 @@ export function ChatV2Timeline({
   members: ChatMember[];
   lastReadAt: number;
   onReply: (message: ChatMessage) => void;
+  /** Resposta inline (item 9) — distinta de `onReply` (que abre a thread
+   * lateral). Opcional só pra não quebrar quem ainda não a usa (painel de
+   * thread não abre resposta inline de novo dentro de si mesmo). */
+  onInlineReply?: (message: ChatMessage) => void;
   /** Id de mensagem a destacar (vindo da busca) — recebe um scroll-into-view
    * e um realce temporário de ~2s, depois volta ao normal. */
   highlightId?: string;
@@ -233,20 +244,19 @@ export function ChatV2Timeline({
     // define a altura disponível (`minmax(0,1fr)`) — este componente só
     // precisa respeitar essa altura (`h-full`) e nunca ultrapassá-la, que é
     // o que `min-h-0` garante num filho de grid/flex com conteúdo que cresce.
-    <div className="message-scroll-wrap relative h-full min-h-0 overflow-hidden">
+    <div className="message-scroll-wrap relative h-full min-h-0 w-full min-w-0 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={() => void handleScroll()}
         className="message-scroll-area h-full overflow-y-auto overflow-x-hidden"
         aria-live="off"
       >
-        {/* ClickUp-style: NÃO centralizar uma coluna estreita no meio do
-         * painel (bug da rodada anterior, `mx-auto` + coluna estreita gerava
-         * vazios enormes dos dois lados e sensação de "conteúdo flutuando").
-         * A timeline ocupa 100% da largura do painel e o conteúdo é ANCORADO
-         * À ESQUERDA, com um teto de largura só pra telas ultrawide não
-         * esticarem o texto até o infinito — sem `margin-inline: auto`. */}
-        <div className="message-timeline-inner w-full max-w-[1180px] px-3 pb-8 pt-5 sm:px-6 md:px-[72px]">
+        {/* Coluna central de leitura (item 1 do pedido): mesma classe
+         * (`CHAT_V2_READING_COLUMN_CLASS`) usada pelo `ChatV2Composer` —
+         * `mx-auto` centraliza os 1080px no espaço restante do painel
+         * (depois das duas sidebars), em vez de ancorar à esquerda (bug da
+         * rodada anterior) ou esticar full-width. */}
+        <div className={`message-timeline-inner pb-8 pt-5 ${CHAT_V2_READING_COLUMN_CLASS}`}>
           {loadingOlder && (
             <p className="py-2 text-center text-xs text-muted-foreground">Carregando mensagens…</p>
           )}
@@ -262,14 +272,16 @@ export function ChatV2Timeline({
             return (
               <div key={group.messages[0].id} className={gi > 0 ? "mt-3" : undefined}>
                 {showDateDivider && (
-                  // Pill pequena centralizada, sem linhas atravessando a
-                  // tela — substitui o antigo separador "linha — texto —
-                  // linha" (que criava uma régua horizontal cruzando todo o
-                  // painel, item explicitamente proibido no pedido).
-                  <div className={`flex justify-center ${gi > 0 ? "mb-4" : "mb-4"}`}>
-                    <span className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                  // Referência ClickUp: linhas laterais conectadas ao
+                  // rótulo ("──── Hoje ────"), não uma pill flutuante
+                  // isolada no vazio — as linhas ficam DENTRO da coluna de
+                  // leitura (nunca atravessam o painel inteiro).
+                  <div className="mb-4 flex items-center gap-3" role="separator">
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       {dateDividerLabel(group.messages[0].createdAt)}
                     </span>
+                    <span className="h-px flex-1 bg-border" />
                   </div>
                 )}
                 {group.messages.map((m, mi) => {
@@ -286,10 +298,16 @@ export function ChatV2Timeline({
                       }
                     >
                       {isUnreadDivider && (
-                        <div data-unread-divider="1" className="my-3 flex justify-center">
-                          <span className="rounded-full border border-brand-border bg-brand-subtle px-3 py-1 text-[11px] font-semibold text-brand">
+                        <div
+                          data-unread-divider="1"
+                          role="separator"
+                          className="my-3 flex items-center gap-3"
+                        >
+                          <span className="h-px flex-1 bg-brand-border" />
+                          <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-brand">
                             Novas mensagens
                           </span>
+                          <span className="h-px flex-1 bg-brand-border" />
                         </div>
                       )}
                       <ChatV2Message
@@ -299,6 +317,7 @@ export function ChatV2Timeline({
                         meId={meId}
                         members={members}
                         onReply={onReply}
+                        onInlineReply={onInlineReply}
                         onDelete={(id) => deleteMessage(id)}
                         replyCount={replyCounts.get(m.id)}
                         closeMenusSignal={closeMenusSignal}

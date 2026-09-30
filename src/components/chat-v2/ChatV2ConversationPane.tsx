@@ -40,6 +40,10 @@ export function ChatV2ConversationPane({
   const convoMessages = messages.filter((m) => m.convoId === convoId);
   const rootMessage = threadId ? convoMessages.find((m) => m.id === threadId) : undefined;
   const [lastReadAt, setLastReadAt] = useState(() => loadLastRead()[convoId] ?? 0);
+  // Resposta inline (item 9): distinta de abrir a thread lateral — mostra
+  // "Respondendo a X" acima do composer. Reseta ao trocar de conversa.
+  const [inlineReplyTo, setInlineReplyTo] = useState<ChatMessage | undefined>(undefined);
+  useEffect(() => setInlineReplyTo(undefined), [convoId]);
 
   useEffect(() => {
     setLastReadAt(loadLastRead()[convoId] ?? 0);
@@ -101,10 +105,21 @@ export function ChatV2ConversationPane({
           members={members}
           lastReadAt={lastReadAt}
           onReply={openThread}
+          onInlineReply={setInlineReplyTo}
           highlightId={highlightId}
           channelName={headerInfo?.kind === "channel" ? headerInfo.channel.name : undefined}
         />
-        <ChatV2Composer convoId={convoId} conversationLabel={conversationLabel} />
+        <ChatV2Composer
+          convoId={convoId}
+          conversationLabel={conversationLabel}
+          replyToId={inlineReplyTo?.id}
+          replyPreview={
+            inlineReplyTo
+              ? { authorName: inlineReplyTo.authorName, text: inlineReplyTo.text }
+              : undefined
+          }
+          onCancelReply={() => setInlineReplyTo(undefined)}
+        />
       </div>
       {rootMessage && (
         <div className="fixed inset-0 z-20 md:static md:inset-auto md:z-auto">

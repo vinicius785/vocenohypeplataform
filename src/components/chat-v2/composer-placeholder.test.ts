@@ -14,10 +14,20 @@ describe("computeComposerPlaceholder", () => {
     );
   });
 
-  it("usa o placeholder fixo de thread quando há replyToId, mesmo com nome de conversa disponível", () => {
+  it("usa o placeholder fixo de thread quando há replyToId E isThread, mesmo com nome de conversa disponível", () => {
+    expect(
+      computeComposerPlaceholder({
+        replyToId: "msg-1",
+        conversationLabel: "Lucas Ragnoni",
+        isThread: true,
+      }),
+    ).toBe("Responder nesta thread");
+  });
+
+  it("resposta inline (replyToId sem isThread) mantém o placeholder contextual — o contexto já aparece no banner 'Respondendo a X'", () => {
     expect(
       computeComposerPlaceholder({ replyToId: "msg-1", conversationLabel: "Lucas Ragnoni" }),
-    ).toBe("Responder nesta thread");
+    ).toBe("Mensagem para Lucas Ragnoni");
   });
 
   it("cai no texto genérico só quando não há nome de conversa nem thread", () => {

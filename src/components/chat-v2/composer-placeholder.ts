@@ -6,8 +6,15 @@
 export function computeComposerPlaceholder(input: {
   replyToId?: string;
   conversationLabel?: string;
+  /** true só dentro do `ChatV2ThreadPanel` — onde o `replyToId` é sempre a
+   * mensagem raiz da thread, e faz sentido um placeholder fixo. Uma
+   * resposta inline na timeline principal (item 9 do pedido) também usa
+   * `replyToId`, mas ali o placeholder contextual ("Mensagem para X")
+   * continua fazendo mais sentido, já que a resposta some do texto (o
+   * contexto já aparece no banner "Respondendo a X" acima do composer). */
+  isThread?: boolean;
 }): string {
-  if (input.replyToId) return "Responder nesta thread";
+  if (input.replyToId && input.isThread) return "Responder nesta thread";
   if (input.conversationLabel) return `Mensagem para ${input.conversationLabel}`;
   return "Escreva uma mensagem…";
 }

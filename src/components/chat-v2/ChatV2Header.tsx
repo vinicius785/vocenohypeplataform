@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Briefcase, Hash, Lock, Megaphone, Pin, Users } from "lucide-react";
+import { ArrowLeft, Briefcase, Hash, Lock, Megaphone, Pin } from "lucide-react";
 import {
   STATUS_LABEL,
   ensurePinnedLoaded,
@@ -115,9 +115,61 @@ export function ChatV2Header({
         }).length
       : 0;
 
+  // Ícone/avatar da linha 1 — mesmo elemento pros 4 tipos de conversa,
+  // calculado uma vez em vez de repetir o `<img>`/fallback em cada branch.
+  let leadingIcon: React.ReactNode = null;
+  let title = "";
+  // Linha 2 (referência ClickUp: "Canal · descrição/contexto") — só dados
+  // REAIS já disponíveis nas props/tipos existentes, nunca inventados (ex.
+  // nenhuma contagem de membros pra DM/projeto/campanha, que não existe
+  // como fonte de dados hoje).
+  let subtitle = "";
+  if (info?.kind === "dm") {
+    leadingIcon = info.member.photo ? (
+      <img src={info.member.photo} alt="" className="h-9 w-9 rounded-full object-cover" />
+    ) : (
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+        {info.member.name.slice(0, 1).toUpperCase()}
+      </span>
+    );
+    title = info.member.name;
+    subtitle = STATUS_LABEL[info.status];
+  } else if (info?.kind === "channel") {
+    leadingIcon = (
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        {info.channel.private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
+      </span>
+    );
+    title = info.channel.name;
+    subtitle = `${info.memberCount} membro${info.memberCount === 1 ? "" : "s"}${
+      onlineCount > 0 ? ` · ${onlineCount} online` : ""
+    }`;
+  } else if (info?.kind === "projeto") {
+    leadingIcon = (
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Briefcase className="h-4 w-4" />
+      </span>
+    );
+    title = info.name;
+    subtitle = "Projeto interno";
+  } else if (info?.kind === "campaign") {
+    leadingIcon = (
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Megaphone className="h-4 w-4" />
+      </span>
+    );
+    title = info.name;
+    subtitle = `Campanha · ${info.empresa}`;
+  }
+
   return (
-    <header className="sticky top-0 z-10 flex shrink-0 flex-col gap-0.5 border-b border-border bg-background px-4 py-4">
-      <div className="flex items-center gap-2">
+    // Duas linhas fixas (referência ClickUp): linha 1 = identidade + ações,
+    // linha 2 = contexto (status/membros/tipo) — nunca uma faixa com só
+    // "avatar + nome + Offline" e espaço vazio embaixo. `min-h` garante que
+    // a segunda linha sempre reserva espaço (mesmo vazia em "Selecione uma
+    // conversa"), pra não pular de altura ao trocar de conversa.
+    <header className="sticky top-0 z-10 flex min-w-0 shrink-0 flex-col justify-center gap-0.5 border-b border-border bg-background px-4 py-3 md:px-6">
+      <div className="flex items-center gap-2.5">
         {onBack && (
           <button
             type="button"
@@ -131,51 +183,16 @@ export function ChatV2Header({
         {!info && (
           <p className="text-sm font-semibold text-muted-foreground">Selecione uma conversa</p>
         )}
-        {info?.kind === "dm" && (
-          <>
-            {info.member.photo ? (
-              <img src={info.member.photo} alt="" className="h-7 w-7 rounded-full object-cover" />
-            ) : (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                {info.member.name.slice(0, 1).toUpperCase()}
-              </span>
-            )}
-            <p className="min-w-0 truncate text-sm font-semibold">{info.member.name}</p>
-            <span className="text-[11px] text-muted-foreground">{STATUS_LABEL[info.status]}</span>
-          </>
-        )}
-        {info?.kind === "channel" && (
-          <>
-            {info.channel.private ? (
-              <Lock className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <Hash className="h-4 w-4 text-muted-foreground" />
-            )}
-            <p className="min-w-0 truncate text-sm font-semibold">{info.channel.name}</p>
-            <span className="ml-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Users className="h-3 w-3" /> {info.memberCount} membros
-              {onlineCount > 0 ? ` · ${onlineCount} online` : ""}
-            </span>
-          </>
-        )}
-        {info?.kind === "projeto" && (
-          <>
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-            <p className="min-w-0 truncate text-sm font-semibold">{info.name}</p>
-            <span className="text-[11px] text-muted-foreground">Projeto interno</span>
-          </>
-        )}
-        {info?.kind === "campaign" && (
-          <>
-            <Megaphone className="h-4 w-4 text-muted-foreground" />
-            <p className="min-w-0 truncate text-sm font-semibold">{info.name}</p>
-            <span className="text-[11px] text-muted-foreground">Campanha · {info.empresa}</span>
-          </>
+        {info && leadingIcon}
+        {info && (
+          <p className="min-w-0 truncate text-[15px] font-semibold text-foreground">{title}</p>
         )}
         {convoId && <PinnedPopover convoId={convoId} />}
       </div>
-      {typingLabel && (
-        <p className="pl-9 text-[11px] italic text-muted-foreground">{typingLabel}</p>
+      {info && (
+        <p className="truncate pl-[46px] text-[12px] text-muted-foreground">
+          {typingLabel ?? subtitle}
+        </p>
       )}
     </header>
   );

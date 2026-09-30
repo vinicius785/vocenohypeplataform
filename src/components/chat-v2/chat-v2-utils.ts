@@ -7,6 +7,16 @@ import type { ChatMessage } from "@/lib/chat-store";
  * `campanha-ui.test.ts` pro mesmo padrão).
  */
 
+/** Coluna central de leitura compartilhada entre a timeline e o composer
+ * (item 1+11 do pedido de reconstrução do Chat V2): 1080px de largura
+ * máxima (dentro da faixa 960-1120px pedida), `mx-auto` pra ficar
+ * CENTRALIZADA no espaço restante do painel (depois das duas sidebars),
+ * nunca ancorada à esquerda nem esticada full-width. Timeline e composer
+ * usam exatamente esta mesma classe pra garantir que compartilham a mesma
+ * grade — qualquer ajuste de largura/padding deve ser feito aqui, uma vez
+ * só, nunca duplicado nos dois componentes. */
+export const CHAT_V2_READING_COLUMN_CLASS = "mx-auto w-full max-w-[1080px] px-4 sm:px-6 md:px-8";
+
 export type MessageGroup = {
   authorId: string;
   authorName: string;

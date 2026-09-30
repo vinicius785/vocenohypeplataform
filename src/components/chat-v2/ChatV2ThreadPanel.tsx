@@ -71,7 +71,7 @@ export function ChatV2ThreadPanel({
           </p>
         )}
       </div>
-      <ChatV2Composer convoId={rootMessage.convoId} replyToId={rootMessage.id} />
+      <ChatV2Composer convoId={rootMessage.convoId} replyToId={rootMessage.id} isThread />
     </div>
   );
 }

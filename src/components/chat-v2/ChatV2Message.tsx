@@ -286,6 +286,7 @@ export function ChatV2Message({
   meId,
   members,
   onReply,
+  onInlineReply,
   onDelete,
   replyCount,
   convoId,
@@ -299,7 +300,15 @@ export function ChatV2Message({
   isMine?: boolean;
   meId: string;
   members: ChatMember[];
+  /** Abre a thread lateral (`ChatV2ThreadPanel`) — usado pelo item "N
+   * respostas" e pelo item de menu "Responder em thread". */
   onReply: (message: ChatMessage) => void;
+  /** Resposta inline (item 9 do pedido) — mostra "Respondendo a X" acima do
+   * composer principal, sem abrir a thread lateral. É o que o ícone rápido
+   * de responder (hover) aciona; sem essa prop (ex. dentro do próprio
+   * painel de thread), cai de volta pra `onReply` (abrir/permanecer na
+   * thread). */
+  onInlineReply?: (message: ChatMessage) => void;
   onDelete: (id: string) => void | Promise<void>;
   /** Quantidade de respostas em thread desta mensagem (só é passado na
    * timeline principal — dentro do próprio painel de thread não faz
@@ -537,8 +546,9 @@ export function ChatV2Message({
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          aria-label="Responder em thread"
-          onClick={() => onReply(message)}
+          aria-label="Responder"
+          title="Responder"
+          onClick={() => (onInlineReply ?? onReply)(message)}
         >
           <Reply className="h-4 w-4" />
         </Button>
@@ -549,6 +559,10 @@ export function ChatV2Message({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" collisionPadding={12} avoidCollisions>
+            <DropdownMenuItem onClick={() => onReply(message)}>
+              <MessageSquare className="mr-2 h-3.5 w-3.5" />
+              Responder em thread
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigator.clipboard.writeText(message.text)}>
               Copiar texto
             </DropdownMenuItem>
