@@ -19,6 +19,7 @@ import {
   DEFAULT_CLIENTE_FILTERS,
   filterClientes,
   sortClientes,
+  clienteStatus,
   type ClienteFiltersState,
 } from "./clientes/cliente-ui";
 
@@ -100,7 +101,12 @@ export function ClientesSection() {
     } else {
       setClientes((prev) => [
         ...prev,
-        { ...rest, id: formId ?? crypto.randomUUID(), campanhas: [] },
+        {
+          ...rest,
+          id: formId ?? crypto.randomUUID(),
+          campanhas: [],
+          status: rest.status ?? "active",
+        },
       ]);
     }
     setFormOpen(false);
@@ -135,6 +141,14 @@ export function ClientesSection() {
   const comCampanha = clientes.filter((c) => (c.campanhas?.length ?? 0) > 0).length;
   const semCampanha = totalClientes - comCampanha;
   const totalCampanhas = clientes.reduce((s, c) => s + (c.campanhas?.length ?? 0), 0);
+  // Status de CLIENTE (Fase 1) é um conceito novo e separado do status de
+  // campanha — só o indicador mais essencial entra no painel por ora
+  // (negociando é o número que importa pro financeiro: são os clientes cujo
+  // valor ainda não pode ser tratado como receita, ver `financeiro-entries.ts`).
+  // Um breakdown completo (ativo/encerrado/arquivado) fica pra quando o
+  // painel for redesenhado (Fase 4 do plano maior) — não cabe aqui sem virar
+  // um painel cheio de badges.
+  const emNegociacao = clientes.filter((c) => clienteStatus(c) === "negotiating").length;
 
   const hasAnyClient = totalClientes > 0;
   const hasResults = visibleClientes.length > 0;
@@ -170,6 +184,7 @@ export function ClientesSection() {
             <SummaryMetric label="Com campanha" value={comCampanha} />
             <SummaryMetric label="Sem campanha" value={semCampanha} />
             <SummaryMetric label="Campanhas no total" value={totalCampanhas} />
+            {emNegociacao > 0 && <SummaryMetric label="Negociando" value={emNegociacao} />}
           </PageSummaryPanel>
         )}
 

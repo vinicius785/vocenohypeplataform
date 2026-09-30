@@ -1,11 +1,32 @@
 /** Helpers puros da migração visual de Clientes — busca/filtro/ordenação
  * operam só sobre campos já carregados em `Cliente[]` (nenhuma chamada
- * remota nova) e nenhum cálculo aqui inventa dado que não existe (ex.:
- * `Campaign` não tem status, então não existe "campanha ativa" real). */
+ * remota nova). `Campaign` e `Cliente` já têm status persistido (ver
+ * `campanha-ui.ts` e o bloco de status de cliente abaixo, Fase 1 da
+ * reconstrução do modelo de status). */
 import { initialsOf } from "@/components/metas/metas-ui-utils";
-import type { Cliente } from "@/lib/clientes-store";
+import type { Cliente, ClienteStatus } from "@/lib/clientes-store";
 
 export { initialsOf };
+export type { ClienteStatus };
+
+export const CLIENTE_STATUS_LABEL: Record<ClienteStatus, string> = {
+  negotiating: "Negociando",
+  active: "Ativo",
+  closed: "Encerrado",
+  archived: "Arquivado",
+};
+
+/** Clientes criados antes desta fase nunca tiveram `status` gravado — a
+ * migration de backfill (`clientes_status`) cobre os que já existiam no
+ * banco quando ela rodou. Ausência é tratada como `"active"`: decisão de
+ * produto explícita, pois TODOS os clientes existentes hoje são
+ * operacionalmente ativos (confirmado em auditoria — nenhum sinal de
+ * "negociando" nos dados atuais), diferente do critério usado para
+ * campanha (`campanhaStatus`, que assume "negotiation" por ser mais
+ * conservador lá). */
+export function clienteStatus(cliente: Cliente): ClienteStatus {
+  return cliente.status ?? "active";
+}
 
 export function waLink(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");

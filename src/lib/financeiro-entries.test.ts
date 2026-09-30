@@ -19,7 +19,11 @@ import {
   alertItems,
   dedupeImportEntries,
   prazoMedioLiquidacao,
+  buildEntries,
 } from "./financeiro-entries";
+import { clienteStatus } from "@/components/clientes/cliente-ui";
+import type { Cliente } from "./clientes-store";
+import type { Campaign } from "@/components/VincularCampanhaDialog";
 
 function makeEntry(overrides: Partial<Entry> = {}): Entry {
   return {
@@ -350,5 +354,111 @@ describe("prazoMedioLiquidacao", () => {
       }),
     ];
     expect(prazoMedioLiquidacao(entries, "receita")).toBe(4);
+  });
+});
+
+// Fase 1 da reconstrução do modelo de status de cliente/campanha:
+// `clienteStatus()` trata ausência de status como "active" (todo cliente
+// existente antes desta fase é operacionalmente ativo).
+describe("clienteStatus", () => {
+  function makeCliente(overrides: Partial<Cliente> = {}): Cliente {
+    return {
+      id: "cli-1",
+      empresa: "Cliente Teste",
+      responsavel: "",
+      responsavelInterno: "",
+      email: "",
+      whatsapp: "",
+      clienteDesde: "2026-01-01",
+      campanhas: [],
+      ...overrides,
+    };
+  }
+
+  it("trata ausência de status como active", () => {
+    expect(clienteStatus(makeCliente())).toBe("active");
+  });
+
+  it("respeita o status explícito quando presente", () => {
+    expect(clienteStatus(makeCliente({ status: "negotiating" }))).toBe("negotiating");
+    expect(clienteStatus(makeCliente({ status: "archived" }))).toBe("archived");
+  });
+});
+
+// Bug corrigido nesta fase: campanha em negociação com valorCliente
+// preenchido não pode gerar receita — só campanhas confirmadas
+// (active/completed) entram no Financeiro. Ver comentário em
+// `financeiro-entries.ts` (buildEntries, seção 1) para a decisão completa
+// por status.
+describe("buildEntries — filtro por status de campanha/cliente", () => {
+  function makeCampaign(overrides: Partial<Campaign> = {}): Campaign {
+    return {
+      id: "camp-1",
+      nome: "Campanha Teste",
+      briefing: "",
+      prazo: "2026-12-31",
+      linhas: [],
+      valorCliente: "1000",
+      orcamento: "0",
+      pagTipos: [],
+      pagConfig: {} as Campaign["pagConfig"],
+      prazoPag: "",
+      ...overrides,
+    } as Campaign;
+  }
+
+  function makeCliente(campanhas: Campaign[], overrides: Partial<Cliente> = {}): Cliente {
+    return {
+      id: "cli-1",
+      empresa: "Cliente Teste",
+      responsavel: "",
+      responsavelInterno: "",
+      email: "",
+      whatsapp: "",
+      clienteDesde: "2026-01-01",
+      campanhas,
+      ...overrides,
+    };
+  }
+
+  it("NÃO gera lançamento de receita para campanha em negotiation, mesmo com valorCliente preenchido", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c1", status: "negotiation" })])];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c1")).toBe(false);
+  });
+
+  it("continua gerando lançamento de receita para campanha active (não-regressão)", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c2", status: "active" })])];
+    const entries = buildEntries(clientes, [], {}, {});
+    const receita = entries.find((e) => e.campanhaId === "c2");
+    expect(receita).toBeDefined();
+    expect(receita?.kind).toBe("receita");
+    expect(receita?.amount).toBe(1000);
+  });
+
+  it("continua gerando lançamento para campanha completed (receita histórica já realizada)", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c3", status: "completed" })])];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c3")).toBe(true);
+  });
+
+  it("NÃO gera lançamento para campanha archived", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c4", status: "archived" })])];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c4")).toBe(false);
+  });
+
+  it("campanha sem status é tratada como negotiation (campanhaStatus) e não entra no financeiro", () => {
+    const clientes = [makeCliente([makeCampaign({ id: "c5", status: undefined })])];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c5")).toBe(false);
+  });
+
+  it("defesa em profundidade: cliente negotiating bloqueia TODAS as suas campanhas, mesmo uma marcada active", () => {
+    const clientes = [
+      makeCliente([makeCampaign({ id: "c6", status: "active" })], { status: "negotiating" }),
+    ];
+    const entries = buildEntries(clientes, [], {}, {});
+    expect(entries.some((e) => e.campanhaId === "c6")).toBe(false);
   });
 });

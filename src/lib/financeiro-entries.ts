@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useClientes, type Cliente } from "@/lib/clientes-store";
 import { supabase } from "@/integrations/supabase/client";
 import type { BankInfo } from "@/components/CampanhasSection";
+import { campanhaStatus } from "@/components/campanhas/campanha-ui";
+import { clienteStatus } from "@/components/clientes/cliente-ui";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 import {
   pagamentoCashValue,
@@ -598,7 +600,10 @@ function paymentFromOverride(
   };
 }
 
-function buildEntries(
+// Exportado só para teste unitário direto (`financeiro-entries.test.ts`) —
+// nenhum outro código deve importar `buildEntries` fora daqui, use sempre
+// `useFinanceiroEntries()`.
+export function buildEntries(
   clientes: Cliente[],
   manual: ManualEntry[],
   overrides: Record<string, StatusOverride>,
@@ -607,8 +612,42 @@ function buildEntries(
   const out: Entry[] = [];
 
   // 1. Campanhas: receita (valor do cliente / parcelas) + despesas (influenciadores)
+  //
+  // Bug corrigido (Fase 1 da reconstrução do modelo de status de
+  // cliente/campanha): antes desta checagem, QUALQUER campanha com
+  // `valorCliente`/parcelas preenchidos virava lançamento de receita,
+  // mesmo em "negotiation" (proposta ainda não fechada) — inflava o
+  // Financeiro com receita que nunca foi confirmada. Regra adotada, uma
+  // por status (`campanhaStatus`, `campanha-ui.ts`):
+  //   - "negotiation": NUNCA gera lançamento — é exatamente o caso do bug
+  //     (dinheiro ainda não confirmado não é receita real).
+  //   - "active": gera normalmente — é o caso operacional padrão.
+  //   - "completed": gera normalmente — é receita/despesa já realizada
+  //     historicamente (a campanha rodou), não uma reversão; excluí-la
+  //     apagaria histórico financeiro real. Consistente com o resto do
+  //     app: `CampanhasSection.tsx` só tira "completed"/"archived" da
+  //     listagem OPERACIONAL padrão, nunca trata "completed" como
+  //     cancelada ou sem valor.
+  //   - "archived": NÃO gera lançamento — arquivar remove a campanha de
+  //     toda visualização operacional padrão (mesmo critério de
+  //     `CampanhasSection.tsx`, linha do filtro "ativas"), e não há hoje
+  //     nenhum outro lugar do código que trate uma campanha arquivada como
+  //     fonte de novo lançamento financeiro corrente. `statusBeforeArchive`
+  //     existe só para restauração (voltar ao status anterior), não é lido
+  //     em nenhum cálculo — arquivar então também tira do Financeiro,
+  //     mesmo que tivesse sido "completed" antes.
+  //
+  // Defesa em profundidade: além do status da campanha, também pula TODA
+  // campanha de um cliente em `clienteStatus() === "negotiating"` — hoje
+  // redundante (uma campanha de cliente em negociação normalmente já nasce
+  // em "negotiation"), mas o pedido é explícito: nunca contar valor de
+  // cliente ainda não confirmado como receita, mesmo se algum caminho
+  // futuro deixar as duas flags inconsistentes.
   for (const c of clientes) {
+    if (clienteStatus(c) === "negotiating") continue;
     for (const camp of c.campanhas ?? []) {
+      const cStatus = campanhaStatus(camp);
+      if (cStatus === "negotiation" || cStatus === "archived") continue;
       const parcelas = camp.pagClienteParcelas ?? [];
       const pushReceita = (id: string, date: string, amount: number) => {
         if (amount <= 0) return;

@@ -25,7 +25,16 @@ export type Cliente = {
    * cliente↔CRM sem duplicar dado. Aditivo: clientes criados antes disso
    * simplesmente não têm o campo. */
   crmLeadId?: string;
+  /** Status do ciclo de vida do CLIENTE (Fase 1 da reconstrução do modelo de
+   * status) — independente do status de cada `Campaign`. Ausência é tratada
+   * como `"active"` por `clienteStatus()` (`cliente-ui.ts`): todo cliente
+   * existente antes desta fase é operacionalmente ativo hoje (confirmado em
+   * auditoria + backfill da migration), então "sem status" nunca deve virar
+   * "negociando" por omissão. */
+  status?: ClienteStatus;
 };
+
+export type ClienteStatus = "negotiating" | "active" | "closed" | "archived";
 
 const store = createTableArrayStore<Cliente>("clientes");
 

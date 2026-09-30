@@ -23,6 +23,11 @@ export function convertLeadToClienteEProjeto(lead: Lead): {
       whatsapp: lead.phone || "",
       clienteDesde: formatDateToIso(new Date()),
       campanhas: [],
+      // Fase 1 da reconstrução do modelo de status de cliente: todo cliente
+      // novo nasce com status explícito (não implícito) — por enquanto
+      // sempre "active", já que a etapa de escolha de status na criação é
+      // trabalho de fase futura, fora do escopo desta migração.
+      status: "active",
       orcamentoSugerido: lead.proposta?.precoFinal ?? (lead.value > 0 ? lead.value : undefined),
     },
   ]);
