@@ -33,7 +33,7 @@ import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
 import { ClienteContratosSection } from "./ClienteContratosSection";
 import { ClienteFinancialSummary } from "./ClienteFinancialSummary";
-import { waLink, mailtoLink, campanhaCreatedActivityEntry } from "./cliente-ui";
+import { waLink, mailtoLink, campanhaCreatedActivityEntry, clienteStatus } from "./cliente-ui";
 import { listAuditLog } from "@/lib/audit-log.functions";
 import {
   getClienteOrganizationId,
@@ -361,6 +361,33 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
             />
           </div>
         </section>
+
+        {/* ===== Comercial (só pra clientes em Captação — item 3/7 do pedido
+         * de reconstrução do domínio Comercial/Clientes/Campanhas/Contratos/
+         * Financeiro) ===== */}
+        {clienteStatus(cliente) === "capture" && (
+          <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
+            <h2 className="text-sm font-semibold text-foreground">Comercial</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <InfoField label="Próximo passo" value={cliente.proximoPasso || "Não definido"} />
+              <InfoField
+                label="Previsão de fechamento"
+                value={
+                  cliente.previsaoFechamento
+                    ? new Date(cliente.previsaoFechamento).toLocaleDateString("pt-BR")
+                    : "Não definida"
+                }
+              />
+              <InfoField
+                label="Observação"
+                value={cliente.observacaoNegociacao || "Nenhuma observação"}
+              />
+            </div>
+            <p className="mt-3 text-[11px] text-text-secondary">
+              Estimativa comercial — nenhum valor aqui é receita confirmada.
+            </p>
+          </section>
+        )}
 
         {/* ===== Campanhas ===== */}
         <section className="rounded-2xl bg-card p-5 dark:shadow-none md:p-6">
