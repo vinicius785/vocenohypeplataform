@@ -778,6 +778,63 @@ function removeEntregaUnidade(
   return { next: relabelGrupo(semUltima, e.grupoId, baseTitulo) };
 }
 
+/** Anexos da versão mais recente de uma categoria — os arquivos IRMÃOS
+ * que hoje aparecem juntos no portal como "Story 1/2/3", mas que
+ * compartilham um único veredito de aprovação por serem uma entrega só. */
+function currentVersionAnexos(
+  anexos: EntregaAnexo[],
+  categoria: EntregaAnexoCategoria,
+): EntregaAnexo[] {
+  const daCategoria = anexos.filter((a) => a.categoria === categoria);
+  if (daCategoria.length === 0) return [];
+  const maxVersao = daCategoria.reduce((max, a) => Math.max(max, a.versao ?? 1), 0);
+  return daCategoria.filter((a) => (a.versao ?? 1) === maxVersao);
+}
+
+/** Divide uma entrega JÁ EXISTENTE, com vários arquivos irmãos enviados
+ * juntos (ex: "3 Storys" com 3 anexos de conteúdo final na mesma versão),
+ * em N entregas independentes — uma por arquivo, cada uma com seu próprio
+ * estágio a partir de agora, pra poder ser aprovada/ajustada separado.
+ * Diferente de `addEntregaUnidade` (que cria unidades vazias do zero),
+ * esta reaproveita os anexos que o influenciador já subiu. Preserva
+ * `stage`/`status`/reprovações atuais em todas as unidades (o veredito
+ * era compartilhado até aqui) e mantém o `id` da entrega original na 1ª
+ * unidade, pra não perder a seleção/histórico ligado a ele. Retorna
+ * `null` quando não há o que dividir (0 ou 1 arquivo na versão atual). */
+function splitEntregaExistente(e: Entrega): Entrega[] | null {
+  const anexos = e.anexos ?? [];
+  const conteudoAtual = currentVersionAnexos(anexos, "Conteúdo final");
+  const roteiroAtual = currentVersionAnexos(anexos, "Roteiro");
+  const usandoConteudo = conteudoAtual.length > 1;
+  const unidades = usandoConteudo ? conteudoAtual : roteiroAtual.length > 1 ? roteiroAtual : [];
+  if (unidades.length <= 1) return null;
+
+  const total = unidades.length;
+  const idsUsados = new Set(unidades.map((a) => a.id));
+  const outrosAnexos = anexos.filter((a) => !idsUsados.has(a.id));
+  const roteiroPorUnidade = usandoConteudo && roteiroAtual.length === total;
+  const grupoId = crypto.randomUUID();
+  const baseTitulo = stripUnidadeSuffix(e.titulo);
+
+  return unidades.map((anexoUnidade, i) => {
+    const anexosDaUnidade: EntregaAnexo[] = usandoConteudo
+      ? roteiroPorUnidade
+        ? [anexoUnidade, roteiroAtual[i]]
+        : i === 0
+          ? [anexoUnidade, ...roteiroAtual]
+          : [anexoUnidade]
+      : [anexoUnidade];
+    return {
+      ...e,
+      id: i === 0 ? e.id : crypto.randomUUID(),
+      grupoId,
+      titulo: `${baseTitulo ? baseTitulo + " " : ""}(${i + 1}/${total})`,
+      quantidade: 1,
+      anexos: i === 0 ? [...anexosDaUnidade, ...outrosAnexos] : anexosDaUnidade,
+    };
+  });
+}
+
 export type BankInfo = {
   banco?: string;
   agencia?: string;
@@ -2996,6 +3053,11 @@ function EntregasEditor({
             if (result.blocked) toast.error(result.blocked);
             onChange(result.next);
           }}
+          onSplitExistente={() => {
+            const novos = splitEntregaExistente(selected);
+            if (!novos) return;
+            onChange([...entregas.filter((x) => x.id !== selected.id), ...novos]);
+          }}
         />
       )}
       {confirmDialog}
@@ -3452,6 +3514,7 @@ function EntregaDetailBody({
   onSetStage,
   onRemove,
   onSplitUnidade,
+  onSplitExistente,
 }: {
   influNome?: string;
   influFoto?: string;
@@ -3465,6 +3528,10 @@ function EntregaDetailBody({
    * última unidade do grupo (-1) — cada unidade aprovada separadamente
    * pelo cliente, em vez de um `quantidade` só aprovado em bloco. */
   onSplitUnidade: (delta: 1 | -1) => void;
+  /** Divide uma entrega que JÁ TEM vários arquivos irmãos enviados (ex:
+   * "3 Storys" com 3 anexos) em N entregas independentes, uma por
+   * arquivo — ver `splitEntregaExistente`. */
+  onSplitExistente: () => void;
 }) {
   const stage = entrega.stage ?? "ROTEIRO_PRODUCAO";
   const step = deriveEntregaNextStep(entrega);
@@ -3638,6 +3705,16 @@ function EntregaDetailBody({
                     +
                   </button>
                 </div>
+              )}
+              {!entrega.grupoId && splitEntregaExistente(entrega) && (
+                <button
+                  type="button"
+                  onClick={onSplitExistente}
+                  title="Divide os arquivos já enviados em entregas independentes, uma por arquivo"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  Dividir em unidades
+                </button>
               )}
               <button
                 type="button"
@@ -3855,6 +3932,7 @@ function EntregaDetailSheet({
   onSetStage,
   onRemove,
   onSplitUnidade,
+  onSplitExistente,
 }: {
   influNome?: string;
   influFoto?: string;
@@ -3867,6 +3945,7 @@ function EntregaDetailSheet({
   onSetStage: (coluna: EntregaFaseColuna) => void;
   onRemove: () => void;
   onSplitUnidade: (delta: 1 | -1) => void;
+  onSplitExistente: () => void;
 }) {
   const label = entrega.titulo ? `${entrega.tipo} · ${entrega.titulo}` : entrega.tipo;
   return (
@@ -3890,6 +3969,7 @@ function EntregaDetailSheet({
             onSetStage={onSetStage}
             onRemove={onRemove}
             onSplitUnidade={onSplitUnidade}
+            onSplitExistente={onSplitExistente}
           />
         </div>
       </SheetContent>
@@ -4161,6 +4241,16 @@ function InfluencerWorkspaceSheet({
                   if (!result) return;
                   if (result.blocked) toast.error(result.blocked);
                   onPatch({ entregas: result.next });
+                }}
+                onSplitExistente={() => {
+                  const novos = splitEntregaExistente(selectedEntrega);
+                  if (!novos) return;
+                  onPatch({
+                    entregas: [
+                      ...influ.entregas.filter((x) => x.id !== selectedEntrega.id),
+                      ...novos,
+                    ],
+                  });
                 }}
               />
             </div>

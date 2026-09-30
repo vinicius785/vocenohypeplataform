@@ -82,6 +82,7 @@ export function ClientFileViewer({
       <DialogContent
         className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 rounded-none p-0 sm:h-[92dvh] sm:w-[92vw] sm:max-w-5xl sm:rounded-2xl"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        showCloseButton={false}
       >
         {file && <ClientFileViewerBody file={file} onClose={onClose} />}
       </DialogContent>

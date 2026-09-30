@@ -42,8 +42,12 @@ const DialogContent = React.forwardRef<
      * nunca perder essa prioridade pro `max-w-*` que o consumidor define
      * sem prefixo de breakpoint. */
     mobileFullScreen?: boolean;
+    /** Esconde o X padrão do canto superior direito — pra telas que já
+     * montam seu próprio cabeçalho com botão de fechar (ex: o viewer de
+     * arquivo do portal do cliente), evitando dois X sobrepostos. */
+    showCloseButton?: boolean;
   }
->(({ className, children, mobileFullScreen, ...props }, ref) => (
+>(({ className, children, mobileFullScreen, showCloseButton = true, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     {/* O centering por `top-50%/translate(-50%,-50%)` deixava diálogos altos
@@ -68,10 +72,12 @@ const DialogContent = React.forwardRef<
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {showCloseButton && (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background cursor-pointer transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </div>
   </DialogPortal>
