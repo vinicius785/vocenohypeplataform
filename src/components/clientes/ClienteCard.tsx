@@ -1,4 +1,4 @@
-import { MoreVertical, Megaphone, User, Pencil, Trash2 } from "lucide-react";
+import { MoreVertical, Megaphone, User, Pencil, Trash2, ArrowRight, History } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import type { Cliente } from "@/lib/clientes-store";
-import { clienteStatus, CLIENTE_STATUS_LABEL } from "./cliente-ui";
+import { clienteStatus, CLIENTE_STATUS_LABEL, lastClienteActivityAt } from "./cliente-ui";
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
 import { ClienteLogo } from "./ClienteLogo";
 
 /** Variante de badge por status de cliente (Fase 2 da reconstrução do
@@ -59,6 +66,11 @@ export function ClienteCard({
       ? "nenhuma campanha"
       : `${campanhaCount} ${campanhaCount === 1 ? "campanha" : "campanhas"}`;
   const status = clienteStatus(cliente);
+  // Fase 4: "próxima ação" só pra negociação e só com dado real preenchido.
+  const proximoPasso = cliente.proximoPasso?.trim();
+  const previsao = cliente.previsaoFechamento?.trim();
+  const showProximaAcao = status === "negotiating" && !!(proximoPasso || previsao);
+  const lastActivity = lastClienteActivityAt(cliente);
 
   return (
     <div className="group relative cursor-pointer rounded-[20px] bg-card p-4 text-left transition-colors hover:bg-accent/40 dark:shadow-none">
@@ -125,7 +137,26 @@ export function ClienteCard({
           <Megaphone className="h-3.5 w-3.5" />
           {campanhasLabel}
         </span>
+        {lastActivity && (
+          <span className="inline-flex items-center gap-1.5" title="Última atividade registrada">
+            <History className="h-3.5 w-3.5" />
+            {fmtDate(lastActivity)}
+          </span>
+        )}
       </div>
+
+      {showProximaAcao && (
+        <div className="relative mt-2 flex items-start gap-1.5 text-xs text-foreground pointer-events-none">
+          <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+          <span className="min-w-0 truncate">
+            <span className="text-text-secondary">Próxima ação: </span>
+            {proximoPasso || "—"}
+            {previsao && (
+              <span className="text-text-secondary"> · fechamento {fmtDate(previsao)}</span>
+            )}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

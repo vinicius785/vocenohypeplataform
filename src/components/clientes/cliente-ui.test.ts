@@ -6,6 +6,12 @@ import {
   defaultClienteStatusForOrigin,
   activeCampaignsBlockingClienteStatus,
   clienteRestoreTarget,
+  DEFAULT_CLIENTE_FILTERS,
+  filterClientes,
+  matchesClienteStatusFilter,
+  countClientesByStatusFilter,
+  countActiveClienteFilters,
+  lastClienteActivityAt,
 } from "./cliente-ui";
 import type { Cliente } from "@/lib/clientes-store";
 
@@ -142,5 +148,52 @@ describe("Fase 3 — histórico e bloqueio", () => {
   it("clienteRestoreTarget usa statusBeforeArchive, com fallback active", () => {
     expect(clienteRestoreTarget(baseCliente({ statusBeforeArchive: "closed" }))).toBe("closed");
     expect(clienteRestoreTarget(baseCliente())).toBe("active");
+  });
+});
+
+describe("Fase 4 — filtro por status", () => {
+  const mk = (id: string, status?: Cliente["status"], extra: Partial<Cliente> = {}) =>
+    ({ id, empresa: id, responsavel: "", responsavelInterno: "", status, ...extra }) as Cliente;
+  const list = [
+    mk("n", "negotiating"),
+    mk("a", "active"),
+    mk("legacy"),
+    mk("c", "closed"),
+    mk("x", "archived"),
+  ];
+
+  it("default 'operacao' exclui arquivados", () => {
+    expect(DEFAULT_CLIENTE_FILTERS.status).toBe("operacao");
+    const ids = filterClientes(list, "", DEFAULT_CLIENTE_FILTERS).map((c) => c.id);
+    expect(ids).toEqual(["n", "a", "legacy", "c"]);
+  });
+
+  it("arquivados só com filtro explícito", () => {
+    const ids = filterClientes(list, "", { ...DEFAULT_CLIENTE_FILTERS, status: "archived" });
+    expect(ids.map((c) => c.id)).toEqual(["x"]);
+    expect(matchesClienteStatusFilter(list[2], "active")).toBe(true);
+  });
+
+  it("contagens por status", () => {
+    expect(countClientesByStatusFilter(list)).toEqual({
+      operacao: 4,
+      negotiating: 1,
+      active: 2,
+      closed: 1,
+      archived: 1,
+    });
+    expect(countActiveClienteFilters({ ...DEFAULT_CLIENTE_FILTERS, status: "closed" })).toBe(1);
+    expect(countActiveClienteFilters(DEFAULT_CLIENTE_FILTERS)).toBe(0);
+  });
+
+  it("última atividade usa a entrada mais recente, ou null", () => {
+    expect(lastClienteActivityAt(mk("z"))).toBeNull();
+    const c = mk("z", "active", {
+      activity: [
+        { id: "1", author: "a", action: "x", createdAt: "2026-01-02T00:00:00Z" },
+        { id: "2", author: "a", action: "y", createdAt: "2026-03-01T00:00:00Z" },
+      ],
+    });
+    expect(lastClienteActivityAt(c)).toBe("2026-03-01T00:00:00Z");
   });
 });

@@ -23,8 +23,10 @@ import {
   DEFAULT_CLIENTE_FILTERS,
   filterClientes,
   sortClientes,
-  clienteStatus,
+  countClientesByStatusFilter,
+  matchesClienteStatusFilter,
   type ClienteFiltersState,
+  type ClienteStatusFilter,
 } from "./clientes/cliente-ui";
 
 /* ============================================================
@@ -196,22 +198,29 @@ export function ClientesSection() {
   );
 
   const totalClientes = clientes.length;
-  const comCampanha = clientes.filter((c) => (c.campanhas?.length ?? 0) > 0).length;
-  const semCampanha = totalClientes - comCampanha;
-  const totalCampanhas = clientes.reduce((s, c) => s + (c.campanhas?.length ?? 0), 0);
-  // Status de CLIENTE (Fase 1) é um conceito novo e separado do status de
-  // campanha — só o indicador mais essencial entra no painel por ora
-  // (negociando é o número que importa pro financeiro: são os clientes cujo
-  // valor ainda não pode ser tratado como receita, ver `financeiro-entries.ts`).
-  // Um breakdown completo (ativo/encerrado/arquivado) fica pra quando o
-  // painel for redesenhado (Fase 4 do plano maior) — não cabe aqui sem virar
-  // um painel cheio de badges.
-  const emNegociacao = clientes.filter((c) => clienteStatus(c) === "negotiating").length;
+  // Indicadores de campanha consideram só o que está "em operação" (sem
+  // arquivados), coerente com a listagem padrão.
+  const operacaoClientes = clientes.filter((c) => matchesClienteStatusFilter(c, "operacao"));
+  const comCampanha = operacaoClientes.filter((c) => (c.campanhas?.length ?? 0) > 0).length;
+  const semCampanha = operacaoClientes.length - comCampanha;
+  // Fase 4: indicadores de status clicáveis. "Em operação" (default) =
+  // Negociando + Ativos + Encerrados; Arquivados só aparecem quando o
+  // indicador "Arquivados" é escolhido explicitamente.
+  const statusCounts = countClientesByStatusFilter(clientes);
+  const setStatusFilter = (s: ClienteStatusFilter) =>
+    setFilters((f) => ({ ...f, status: f.status === s && s !== "operacao" ? "operacao" : s }));
+  const STATUS_METRICS: { key: ClienteStatusFilter; label: string }[] = [
+    { key: "negotiating", label: "Negociando" },
+    { key: "active", label: "Ativos" },
+    { key: "closed", label: "Encerrados" },
+    { key: "archived", label: "Arquivados" },
+  ];
 
   const hasAnyClient = totalClientes > 0;
   const hasResults = visibleClientes.length > 0;
   const hasActiveSearchOrFilter =
     query.trim().length > 0 ||
+    filters.status !== "operacao" ||
     filters.campanha !== "todos" ||
     filters.contato !== "todos" ||
     filters.responsavelInterno.length > 0;
@@ -238,11 +247,24 @@ export function ClientesSection() {
 
         {hasAnyClient && (
           <PageSummaryPanel title="Visão geral">
-            <SummaryPrimaryMetric value={String(totalClientes)} label="clientes" />
+            <SummaryPrimaryMetric value={String(statusCounts.operacao)} label="em operação" />
+            <SummaryMetric
+              label="Em operação"
+              value={statusCounts.operacao}
+              active={filters.status === "operacao"}
+              onClick={() => setStatusFilter("operacao")}
+            />
+            {STATUS_METRICS.map((m) => (
+              <SummaryMetric
+                key={m.key}
+                label={m.label}
+                value={statusCounts[m.key]}
+                active={filters.status === m.key}
+                onClick={() => setStatusFilter(m.key)}
+              />
+            ))}
             <SummaryMetric label="Com campanha" value={comCampanha} />
             <SummaryMetric label="Sem campanha" value={semCampanha} />
-            <SummaryMetric label="Campanhas no total" value={totalCampanhas} />
-            {emNegociacao > 0 && <SummaryMetric label="Negociando" value={emNegociacao} />}
           </PageSummaryPanel>
         )}
 

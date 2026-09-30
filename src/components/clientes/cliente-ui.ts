@@ -150,7 +150,55 @@ export function mailtoLink(email: string): string | null {
 
 export type ClienteSortKey = "nome" | "recente" | "antigo" | "campanhas";
 
+/** Filtro de status de cliente (Fase 4). `"operacao"` é o default e
+ * significa "tudo menos arquivados" (Negociando + Ativo + Encerrado) —
+ * arquivados nunca aparecem sem um filtro explícito `"archived"`. */
+export type ClienteStatusFilter = "operacao" | ClienteStatus;
+
+export const CLIENTE_STATUS_FILTER_LABEL: Record<ClienteStatusFilter, string> = {
+  operacao: "Em operação",
+  negotiating: "Negociando",
+  active: "Ativos",
+  closed: "Encerrados",
+  archived: "Arquivados",
+};
+
+export function matchesClienteStatusFilter(c: Cliente, f: ClienteStatusFilter): boolean {
+  const s = clienteStatus(c);
+  return f === "operacao" ? s !== "archived" : s === f;
+}
+
+/** Contagem por filtro de status — alimenta os indicadores clicáveis. */
+export function countClientesByStatusFilter(
+  clientes: Cliente[],
+): Record<ClienteStatusFilter, number> {
+  const out: Record<ClienteStatusFilter, number> = {
+    operacao: 0,
+    negotiating: 0,
+    active: 0,
+    closed: 0,
+    archived: 0,
+  };
+  for (const c of clientes) {
+    const s = clienteStatus(c);
+    out[s] += 1;
+    if (s !== "archived") out.operacao += 1;
+  }
+  return out;
+}
+
+/** Entrada mais recente de `activity` (histórico real gravado na Fase 3),
+ * ou `null` quando não há nenhuma — nunca inventa uma data. */
+export function lastClienteActivityAt(c: Cliente): string | null {
+  let best: string | null = null;
+  for (const e of c.activity ?? []) {
+    if (e.createdAt && (!best || e.createdAt > best)) best = e.createdAt;
+  }
+  return best;
+}
+
 export type ClienteFiltersState = {
+  status: ClienteStatusFilter;
   campanha: "todos" | "com" | "sem";
   responsavelInterno: string[];
   contato: "todos" | "com" | "sem";
@@ -158,6 +206,7 @@ export type ClienteFiltersState = {
 };
 
 export const DEFAULT_CLIENTE_FILTERS: ClienteFiltersState = {
+  status: "operacao",
   campanha: "todos",
   responsavelInterno: [],
   contato: "todos",
@@ -173,6 +222,7 @@ export const CLIENTE_SORT_LABEL: Record<ClienteSortKey, string> = {
 
 export function countActiveClienteFilters(f: ClienteFiltersState): number {
   let n = 0;
+  if (f.status !== "operacao") n += 1;
   if (f.campanha !== "todos") n += 1;
   if (f.responsavelInterno.length) n += 1;
   if (f.contato !== "todos") n += 1;
@@ -196,6 +246,7 @@ export function filterClientes(
 ): Cliente[] {
   return clientes.filter((c) => {
     if (!matchesSearch(c, query)) return false;
+    if (!matchesClienteStatusFilter(c, filters.status)) return false;
     const count = c.campanhas?.length ?? 0;
     if (filters.campanha === "com" && count === 0) return false;
     if (filters.campanha === "sem" && count > 0) return false;

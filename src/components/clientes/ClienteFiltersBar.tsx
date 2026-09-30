@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   type ClienteFiltersState,
   CLIENTE_SORT_LABEL,
+  CLIENTE_STATUS_FILTER_LABEL,
   DEFAULT_CLIENTE_FILTERS,
   countActiveClienteFilters,
 } from "./cliente-ui";
@@ -176,6 +177,15 @@ function ClienteFilterChips({
   onChange: (f: ClienteFiltersState) => void;
 }) {
   const chips: { id: string; label: string; onRemove: () => void }[] = [
+    ...(filters.status !== "operacao"
+      ? [
+          {
+            id: "status",
+            label: `Status: ${CLIENTE_STATUS_FILTER_LABEL[filters.status]}`,
+            onRemove: () => onChange({ ...filters, status: "operacao" as const }),
+          },
+        ]
+      : []),
     ...(filters.campanha !== "todos"
       ? [
           {
