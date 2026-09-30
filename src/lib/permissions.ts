@@ -35,7 +35,14 @@ export type Permission =
   /** Dados bancários (PIX/conta) de influenciador — separado de
    * `influenciadores` (perfil geral). Aplicado em
    * `InfluencerBoard.tsx`. */
-  | "influenciadores:bancario";
+  | "influenciadores:bancario"
+  /** Gerenciar contratos (tabela `contratos`, `contratos.functions.ts`) —
+   * separada de "clientes" porque nem todo mundo que edita um cliente
+   * deveria poder criar/editar contrato (item 21 do pedido de reconstrução
+   * do domínio). A RLS de `contratos` aceita `clientes` OU `contratos`
+   * (mesma limitação já documentada para `clientes`/`campanhas`: contrato
+   * vive dentro do escopo do cliente). */
+  | "contratos";
 
 export const CONFIG_SUB_PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "configuracoes:perfil", label: "Meu Perfil" },
@@ -57,6 +64,7 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     items: [
       { key: "clientes", label: "Clientes" },
       { key: "campanhas", label: "Campanhas" },
+      { key: "contratos", label: "Contratos" },
       { key: "projetos", label: "Projetos" },
       { key: "influenciadores", label: "Banco de influenciadores" },
     ],

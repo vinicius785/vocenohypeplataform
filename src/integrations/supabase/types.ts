@@ -1020,6 +1020,74 @@ export type Database = {
           },
         ];
       };
+      contratos: {
+        Row: {
+          arquivo_url: string | null;
+          campanha_ids: string[];
+          cliente_id: string;
+          created_at: string;
+          criado_por: string | null;
+          data_assinatura: string | null;
+          id: string;
+          nome: string;
+          observacoes: string | null;
+          renovacao: string | null;
+          responsavel_interno: string | null;
+          status: string;
+          tipo: string | null;
+          updated_at: string;
+          valor: number | null;
+          vigencia_fim: string | null;
+          vigencia_inicio: string | null;
+        };
+        Insert: {
+          arquivo_url?: string | null;
+          campanha_ids?: string[];
+          cliente_id: string;
+          created_at?: string;
+          criado_por?: string | null;
+          data_assinatura?: string | null;
+          id?: string;
+          nome: string;
+          observacoes?: string | null;
+          renovacao?: string | null;
+          responsavel_interno?: string | null;
+          status?: string;
+          tipo?: string | null;
+          updated_at?: string;
+          valor?: number | null;
+          vigencia_fim?: string | null;
+          vigencia_inicio?: string | null;
+        };
+        Update: {
+          arquivo_url?: string | null;
+          campanha_ids?: string[];
+          cliente_id?: string;
+          created_at?: string;
+          criado_por?: string | null;
+          data_assinatura?: string | null;
+          id?: string;
+          nome?: string;
+          observacoes?: string | null;
+          renovacao?: string | null;
+          responsavel_interno?: string | null;
+          status?: string;
+          tipo?: string | null;
+          updated_at?: string;
+          valor?: number | null;
+          vigencia_fim?: string | null;
+          vigencia_inicio?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contratos_cliente_id_fkey";
+            columns: ["cliente_id"];
+            isOneToOne: false;
+            referencedRelation: "clientes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       daily_game_sessions: {
         Row: {
           attempts: number;
