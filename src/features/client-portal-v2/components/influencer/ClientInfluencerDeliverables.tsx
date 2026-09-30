@@ -15,11 +15,12 @@ import {
   formatAjusteSummary,
 } from "../../lib/ajuste-format";
 import {
-  anexosPorCategoria,
   arquivosDaEntrega,
   conteudoAtual,
   entregaTemDetalhes,
   roteiroAtual,
+  versionGroupsPorCategoria,
+  type VersionGroup,
 } from "../../lib/entrega-content";
 import type { PublicEntrega } from "@/lib/portal-types";
 
@@ -85,11 +86,11 @@ function VersionSection({
   campanhaNome: string;
   onOpenFile: (file: ClientFile) => void;
 }) {
-  const versions = anexosPorCategoria(entrega, categoria);
-  if (versions.length === 0) return null;
-  const [current, ...previous] = versions;
+  const groups = versionGroupsPorCategoria(entrega, categoria);
+  if (groups.length === 0) return null;
+  const [current, ...previous] = groups;
 
-  const toFile = (v: (typeof versions)[number], label: string): ClientFile => ({
+  const toFile = (v: VersionGroup["anexos"][number], label: string): ClientFile => ({
     id: v.id,
     friendlyName: `${entrega.titulo || entrega.tipo} — ${label}`,
     url: v.url,
@@ -98,23 +99,35 @@ function VersionSection({
     createdAt: v.criadoEm,
   });
 
+  const labelFor = (v: VersionGroup["anexos"][number], versao: number, group: VersionGroup) =>
+    group.anexos.length > 1 ? `Versão ${versao} — ${v.nome}` : `Versão ${versao}`;
+
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{title}</p>
-      <div className="flex items-center justify-between gap-2 rounded-lg bg-card p-2.5">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">
-            Versão {current.versao ?? 1}
-            {current.criadoEm ? ` · Enviada ${formatDateTime(current.criadoEm)}` : ""}
-          </p>
+      <div className="space-y-1.5 rounded-lg bg-card p-2.5">
+        <p className="truncate text-xs font-medium text-foreground">
+          Versão {current.versao}
+          {current.anexos[0]?.criadoEm
+            ? ` · Enviada ${formatDateTime(current.anexos[0].criadoEm)}`
+            : ""}
+        </p>
+        <div className="space-y-1">
+          {current.anexos.map((v) => (
+            <div key={v.id} className="flex items-center justify-between gap-2">
+              {current.anexos.length > 1 && (
+                <span className="min-w-0 truncate text-xs text-text-secondary">{v.nome}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onOpenFile(toFile(v, labelFor(v, current.versao, current)))}
+                className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
+              >
+                <Eye className="h-3.5 w-3.5" /> Visualizar
+              </button>
+            </div>
+          ))}
         </div>
-        <button
-          type="button"
-          onClick={() => onOpenFile(toFile(current, `Versão ${current.versao ?? 1}`))}
-          className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted"
-        >
-          <Eye className="h-3.5 w-3.5" /> Visualizar
-        </button>
       </div>
 
       {previous.length > 0 && (
@@ -123,20 +136,25 @@ function VersionSection({
             Histórico de versões
           </summary>
           <div className="mt-1.5 space-y-1.5 border-t border-border/60 pt-1.5">
-            {versions.map((v, i) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => onOpenFile(toFile(v, `Versão ${v.versao ?? 1}`))}
-                className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted/40"
-              >
-                <span className="text-xs text-foreground">
-                  Versão {v.versao ?? 1} {i === 0 ? "· Atual" : ""}
-                </span>
-                <span className="text-xs text-text-secondary">
-                  {v.criadoEm ? formatDateTime(v.criadoEm) : ""}
-                </span>
-              </button>
+            {previous.map((group) => (
+              <div key={group.versao} className="space-y-1">
+                {group.anexos.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => onOpenFile(toFile(v, labelFor(v, group.versao, group)))}
+                    className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted/40"
+                  >
+                    <span className="min-w-0 truncate text-xs text-foreground">
+                      Versão {group.versao}
+                      {group.anexos.length > 1 ? ` — ${v.nome}` : ""}
+                    </span>
+                    <span className="shrink-0 text-xs text-text-secondary">
+                      {v.criadoEm ? formatDateTime(v.criadoEm) : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </details>
