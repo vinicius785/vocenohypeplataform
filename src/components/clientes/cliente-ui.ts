@@ -234,6 +234,22 @@ export function lastClienteActivityAt(c: Cliente): string | null {
   return best;
 }
 
+/** Entrada de atividade "campanha criada" pra timeline do cliente (item 18
+ * da reconstrução do domínio Comercial/Clientes/Campanhas/Contratos/
+ * Financeiro: "Timeline unificada por cliente" precisa registrar, entre
+ * outros eventos, "Campanha criada"). Usada pelos dois pontos de entrada
+ * legítimos de criação de campanha (`ClientesSection.tsx`,
+ * `ClienteDetailPage.tsx`) — só quando a campanha é NOVA, nunca numa
+ * edição (o chamador decide isso comparando com a lista anterior). */
+export function campanhaCreatedActivityEntry(campanhaNome: string): ClienteActivityEntry {
+  return {
+    id: crypto.randomUUID(),
+    author: currentClienteActor(),
+    action: `criou a campanha "${campanhaNome || "sem nome"}"`,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export type ClienteFiltersState = {
   status: ClienteStatusFilter;
   campanha: "todos" | "com" | "sem";

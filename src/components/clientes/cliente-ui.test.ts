@@ -13,6 +13,7 @@ import {
   countClientesByStatusFilter,
   countActiveClienteFilters,
   lastClienteActivityAt,
+  campanhaCreatedActivityEntry,
 } from "./cliente-ui";
 import type { Cliente } from "@/lib/clientes-store";
 
@@ -222,5 +223,20 @@ describe("Fase 4 — filtro por status", () => {
       ],
     });
     expect(lastClienteActivityAt(c)).toBe("2026-03-01T00:00:00Z");
+  });
+});
+
+describe("campanhaCreatedActivityEntry", () => {
+  it("monta uma entrada de atividade com o nome da campanha", () => {
+    const entry = campanhaCreatedActivityEntry("Lançamento de verão");
+    expect(entry.action).toBe('criou a campanha "Lançamento de verão"');
+    expect(entry.author).toBeTruthy();
+    expect(entry.id).toBeTruthy();
+    expect(entry.createdAt).toBeTruthy();
+  });
+
+  it("usa um rótulo neutro pra campanha sem nome", () => {
+    const entry = campanhaCreatedActivityEntry("");
+    expect(entry.action).toBe('criou a campanha "sem nome"');
   });
 });

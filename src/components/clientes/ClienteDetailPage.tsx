@@ -31,7 +31,7 @@ import { ClienteFormSheet } from "./ClienteFormSheet";
 import { ClienteLogo } from "./ClienteLogo";
 import { ClienteStatusControl } from "./ClienteStatusControl";
 import { PortalAccessSection } from "./PortalAccessSection";
-import { waLink, mailtoLink } from "./cliente-ui";
+import { waLink, mailtoLink, campanhaCreatedActivityEntry } from "./cliente-ui";
 import { listAuditLog } from "@/lib/audit-log.functions";
 import {
   getClienteOrganizationId,
@@ -123,6 +123,9 @@ export function ClienteDetailPage({ clienteId }: { clienteId: string }) {
         return {
           ...cli,
           campanhas: exists ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c],
+          activity: exists
+            ? cli.activity
+            : [...(cli.activity ?? []), campanhaCreatedActivityEntry(c.nome)],
         };
       }),
     );

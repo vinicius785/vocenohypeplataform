@@ -25,6 +25,7 @@ import {
   sortClientes,
   countClientesByStatusFilter,
   matchesClienteStatusFilter,
+  campanhaCreatedActivityEntry,
   type ClienteFiltersState,
   type ClienteStatusFilter,
 } from "./clientes/cliente-ui";
@@ -164,6 +165,9 @@ export function ClientesSection() {
           campanhas: exists
             ? list.map((x) => (x.id === campaign.id ? campaign : x))
             : [...list, campaign],
+          activity: exists
+            ? cli.activity
+            : [...(cli.activity ?? []), campanhaCreatedActivityEntry(campaign.nome)],
         };
       }),
     );
