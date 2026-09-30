@@ -13,6 +13,7 @@ import {
 } from "@/components/shared/PageSummaryPanel";
 import { clientesStore, useClientes, type Cliente } from "@/lib/clientes-store";
 import { createClienteComOrganizacao } from "@/lib/clientes.functions";
+import { listContratosProximosDoVencimento } from "@/lib/contratos-alertas.functions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
 import { ClienteCard } from "./clientes/ClienteCard";
@@ -46,6 +47,27 @@ export function ClientesSection() {
   const setClientes = clientesStore.set;
   const navigate = useNavigate();
   const createClienteComOrganizacaoFn = useServerFn(createClienteComOrganizacao);
+  const listContratosProximosDoVencimentoFn = useServerFn(listContratosProximosDoVencimento);
+  // Indicador "Contratos próximos do vencimento" (item 19 do pedido de
+  // reconstrução do domínio Comercial/Clientes/Campanhas/Contratos/
+  // Financeiro) — busca uma vez ao montar; `contratos` é tabela própria
+  // (não embutida em `Cliente`), então não vem de graça com `useClientes()`.
+  // `null` = ainda carregando (nunca mostra "0" antes da resposta real).
+  const [contratosVencendo, setContratosVencendo] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void listContratosProximosDoVencimentoFn({ data: { withinDays: 30 } })
+      .then((rows) => {
+        if (!cancelled) setContratosVencendo(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setContratosVencendo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -269,6 +291,9 @@ export function ClientesSection() {
             ))}
             <SummaryMetric label="Com campanha" value={comCampanha} />
             <SummaryMetric label="Sem campanha" value={semCampanha} />
+            {contratosVencendo !== null && contratosVencendo > 0 && (
+              <SummaryMetric label="Contratos vencendo (30 dias)" value={contratosVencendo} />
+            )}
           </PageSummaryPanel>
         )}
 
