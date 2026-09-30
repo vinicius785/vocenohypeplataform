@@ -15,6 +15,7 @@ import { OPEN_CLIENTE_KEY, OPEN_CLIENTE_EVENT } from "./AppShell";
 import { ClienteCard } from "./clientes/ClienteCard";
 import { ClienteFiltersBar } from "./clientes/ClienteFiltersBar";
 import { ClienteFormSheet } from "./clientes/ClienteFormSheet";
+import { VincularCampanhaDialog, type Campaign } from "./VincularCampanhaDialog";
 import {
   DEFAULT_CLIENTE_FILTERS,
   filterClientes,
@@ -41,6 +42,11 @@ export function ClientesSection() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  // Encadeamento "criar cliente → criar campanha" (Etapa 5 do wizard de
+  // Clientes): guarda o id do cliente recém-salvo pra abrir o
+  // VincularCampanhaDialog já com ele pré-selecionado, sem depender de
+  // `editingCliente` (que já foi limpo nesse ponto).
+  const [campanhaWizardClienteId, setCampanhaWizardClienteId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<ClienteFiltersState>(DEFAULT_CLIENTE_FILTERS);
   const { confirm, confirmDialog } = useConfirm();
@@ -92,18 +98,24 @@ export function ClientesSection() {
   // aqui, nunca gerar outro) ou "Usar cliente existente" na checagem de
   // duplicidade (id de um cliente que já existe — vira uma seleção/merge,
   // nunca uma segunda linha duplicada).
-  const saveCliente = (form: Omit<Cliente, "id" | "campanhas"> & { id?: string }) => {
-    const { id: formId, ...rest } = form;
+  const saveCliente = (
+    form: Omit<Cliente, "id" | "campanhas"> & { id?: string; openCampanhaAfter?: boolean },
+  ) => {
+    const { id: formId, openCampanhaAfter, ...rest } = form;
+    let savedId: string;
     if (editingCliente) {
+      savedId = editingCliente.id;
       setClientes((prev) => prev.map((c) => (c.id === editingCliente.id ? { ...c, ...rest } : c)));
     } else if (formId && clientes.some((c) => c.id === formId)) {
+      savedId = formId;
       setClientes((prev) => prev.map((c) => (c.id === formId ? { ...c, ...rest } : c)));
     } else {
+      savedId = formId ?? crypto.randomUUID();
       setClientes((prev) => [
         ...prev,
         {
           ...rest,
-          id: formId ?? crypto.randomUUID(),
+          id: savedId,
           campanhas: [],
           status: rest.status ?? "active",
         },
@@ -111,7 +123,34 @@ export function ClientesSection() {
     }
     setFormOpen(false);
     setEditingCliente(null);
+    // Etapa 5 do wizard ("Criar campanha") — abre o assistente de campanha
+    // já com este cliente selecionado, assim que o cadastro é persistido.
+    // Nenhum `status` é forçado aqui: uma `Campaign` nova sem `status`
+    // definido já cai em "negotiation" por padrão via `campanhaStatus()`
+    // (ver `campanha-ui.ts`), que é exatamente o comportamento pedido para
+    // uma campanha criada a partir de um cliente "Negociando".
+    if (openCampanhaAfter) setCampanhaWizardClienteId(savedId);
   };
+
+  const saveCampanhaToCliente = (clienteId: string, campaign: Campaign) => {
+    setClientes((prev) =>
+      prev.map((cli) => {
+        if (cli.id !== clienteId) return cli;
+        const list = cli.campanhas ?? [];
+        const exists = list.some((x) => x.id === campaign.id);
+        return {
+          ...cli,
+          campanhas: exists
+            ? list.map((x) => (x.id === campaign.id ? campaign : x))
+            : [...list, campaign],
+        };
+      }),
+    );
+  };
+
+  const campanhaWizardCliente = campanhaWizardClienteId
+    ? clientes.find((c) => c.id === campanhaWizardClienteId)
+    : undefined;
 
   const requestDeleteCliente = async (c: Cliente) => {
     const campanhaCount = c.campanhas?.length ?? 0;
@@ -251,6 +290,19 @@ export function ClientesSection() {
           setEditingCliente(null);
         }}
         onSave={saveCliente}
+      />
+
+      <VincularCampanhaDialog
+        open={!!campanhaWizardClienteId}
+        onOpenChange={(o) => {
+          if (!o) setCampanhaWizardClienteId(null);
+        }}
+        clienteNome={campanhaWizardCliente?.empresa}
+        clienteOrcamentoSugerido={campanhaWizardCliente?.orcamentoSugerido}
+        onSave={(campaign) => {
+          if (campanhaWizardClienteId) saveCampanhaToCliente(campanhaWizardClienteId, campaign);
+          setCampanhaWizardClienteId(null);
+        }}
       />
 
       {confirmDialog}

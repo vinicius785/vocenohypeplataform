@@ -32,6 +32,24 @@ export type Cliente = {
    * auditoria + backfill da migration), então "sem status" nunca deve virar
    * "negociando" por omissão. */
   status?: ClienteStatus;
+  /** Auditoria de troca de status (Fase 2 da reconstrução do modelo de
+   * status) — mesmos nomes de campo usados em `Campaign` (`campanha-ui.ts`)
+   * para consistência. `buildClienteStatusChangePatch()` em `cliente-ui.ts`
+   * é a função pura que calcula esses valores; ainda não há UI de troca de
+   * status pós-criação (isso é Fase 3) nem histórico completo de atividade
+   * — só os campos de auditoria simples, análogos aos de campanha. */
+  statusChangedAt?: string;
+  statusChangedBy?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  statusBeforeArchive?: ClienteStatus;
+  /** Contexto comercial opcional, preenchido só quando o status inicial é
+   * "negotiating" (Etapa 4 do wizard de criação, Fase 2). Todos texto livre
+   * de propósito — sem forecast estruturado (faixa de orçamento/probabilidade
+   * ficam fora de escopo desta fase). */
+  proximoPasso?: string;
+  previsaoFechamento?: string;
+  observacaoNegociacao?: string;
 };
 
 export type ClienteStatus = "negotiating" | "active" | "closed" | "archived";

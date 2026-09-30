@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ImageIcon, Sparkles, X } from "lucide-react";
+import { Check, ImageIcon, Sparkles, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DateField } from "@/components/ui/date-field";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Command,
   CommandInput,
@@ -15,12 +14,13 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { loadMembers } from "@/lib/chat-store";
-import { useClientes, type Cliente } from "@/lib/clientes-store";
+import { useClientes, type Cliente, type ClienteStatus } from "@/lib/clientes-store";
 import { useMyAccess, hasPermission } from "@/lib/permissions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { listLeads, upsertLead } from "@/lib/comercial.functions";
 import type { Lead } from "@/lib/comercial";
 import { OPPORTUNITY_STAGE_LABEL, legacyStage } from "@/lib/comercial-engine";
+import { CLIENTE_STATUS_LABEL, defaultClienteStatusForOrigin } from "./cliente-ui";
 import { ClienteLogo } from "./ClienteLogo";
 
 type ClienteForm = Omit<Cliente, "id" | "campanhas">;
@@ -31,6 +31,11 @@ type ClienteForm = Omit<Cliente, "id" | "campanhas">;
 const CRM_FILLABLE_FIELDS = ["empresa", "responsavel", "email", "whatsapp"] as const;
 type CrmFillableField = (typeof CRM_FILLABLE_FIELDS)[number];
 
+/** Origem do cadastro (Etapa 1 do wizard) — renomeado de "zero"/"crm" pra
+ * `origin` porque agora é um conceito de wizard (não mais um modo de UI que
+ * troca o corpo inteiro do formulário). */
+type ClienteOrigin = "scratch" | "crm-import";
+
 const emptyForm: ClienteForm = {
   photo: undefined,
   empresa: "",
@@ -39,6 +44,9 @@ const emptyForm: ClienteForm = {
   email: "",
   whatsapp: "",
   clienteDesde: "",
+  proximoPasso: "",
+  previsaoFechamento: "",
+  observacaoNegociacao: "",
 };
 
 const inputCls =
@@ -76,17 +84,53 @@ function formsEqual(a: ClienteForm, b: ClienteForm): boolean {
     a.email === b.email &&
     a.whatsapp === b.whatsapp &&
     a.clienteDesde === b.clienteDesde &&
-    a.photo === b.photo
+    a.photo === b.photo &&
+    (a.proximoPasso ?? "") === (b.proximoPasso ?? "") &&
+    (a.previsaoFechamento ?? "") === (b.previsaoFechamento ?? "") &&
+    (a.observacaoNegociacao ?? "") === (b.observacaoNegociacao ?? "")
   );
 }
 
+/** 4 opções fixas da Etapa 2 (status inicial) — descrições curtas pedidas,
+ * sempre as mesmas 4 mostradas independente da origem (só o default
+ * pré-selecionado muda, via `defaultClienteStatusForOrigin`). */
+const STATUS_OPTIONS: { value: ClienteStatus; description: string }[] = [
+  {
+    value: "negotiating",
+    description:
+      "A oportunidade ainda está sendo trabalhada. Permite planejamento e campanhas preliminares sem financeiro obrigatório.",
+  },
+  {
+    value: "active",
+    description:
+      "Cliente confirmado e pronto para operação. Alguns dados adicionais poderão ser necessários.",
+  },
+  {
+    value: "closed",
+    description: "Cadastro histórico de uma relação já finalizada.",
+  },
+  {
+    value: "archived",
+    description: "Cadastro preservado, mas fora da operação atual.",
+  },
+];
+
+type StepKey = "origem" | "status" | "empresa" | "contexto" | "campanha" | "revisao";
+const STEP_LABEL: Record<StepKey, string> = {
+  origem: "Origem",
+  status: "Status inicial",
+  empresa: "Empresa e contato",
+  contexto: "Contexto comercial",
+  campanha: "Campanha",
+  revisao: "Revisão",
+};
+
 /**
- * Drawer lateral de criação/edição — substitui o modal central antigo.
- * Reaproveita o padrão "sempre montado + reset no reabrir" já usado em
- * `EntryDialog.tsx`/`MeetingDialog.tsx` (necessário pro `Sheet` animar o
- * fechamento em vez de desmontar na hora). Nenhuma validação/campo novo:
- * mesmos 3 blocos de dado que o modal antigo tinha (empresa, contato,
- * gestão interna), só reorganizados em seções.
+ * Drawer lateral de criação/edição de cliente — reconstruído como wizard de
+ * até 6 etapas (Fase 2 do modelo de status), no mesmo padrão de
+ * navegação/step-indicator do `VincularCampanhaDialog.tsx`. Em edição
+ * (`initial` presente), pula direto para a etapa "Empresa e contato" — as
+ * etapas de Origem/Status inicial só fazem sentido na criação.
  */
 export function ClienteFormSheet({
   open,
@@ -107,9 +151,13 @@ export function ClienteFormSheet({
    * poder gravar o vínculo em `upsertLead` no mesmo instante) e "Usar
    * cliente existente" (id de um cliente JÁ existente — o chamador deve
    * selecionar em vez de inserir de novo). Sem `id`, comportamento
-   * idêntico a antes: o chamador gera o id de sempre. */
-  onSave: (form: ClienteForm & { id?: string }) => void;
+   * idêntico a antes: o chamador gera o id de sempre.
+   * `openCampanhaAfter`: true quando a Etapa 5 escolheu "Criar campanha" —
+   * o chamador deve, após persistir o cliente, abrir o
+   * `VincularCampanhaDialog` já com este cliente selecionado. */
+  onSave: (form: ClienteForm & { id?: string; openCampanhaAfter?: boolean }) => void;
 }) {
+  const isEdit = !!initial;
   const [form, setForm] = useState<ClienteForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -119,7 +167,7 @@ export function ClienteFormSheet({
   const access = useMyAccess();
   const canImportCrm = hasPermission(access, "comercial");
 
-  const [mode, setMode] = useState<"zero" | "crm">("zero");
+  const [origin, setOrigin] = useState<ClienteOrigin>("scratch");
   const [crmFields, setCrmFields] = useState<Set<CrmFillableField>>(new Set());
   const [crmLead, setCrmLead] = useState<Lead | null>(null);
   const [leads, setLeads] = useState<Lead[] | null>(null);
@@ -127,38 +175,58 @@ export function ClienteFormSheet({
   const listLeadsFn = useServerFn(listLeads);
   const upsertLeadFn = useServerFn(upsertLead);
 
+  const [status, setStatus] = useState<ClienteStatus>("active");
+  const [createCampaignChoice, setCreateCampaignChoice] = useState<"yes" | "no" | null>(null);
+
+  const [step, setStep] = useState<StepKey>("empresa");
+  const [, setMaxVisitedIndex] = useState(0);
+
+  const baselineFormRef = useRef<ClienteForm>(emptyForm);
+
   useEffect(() => {
     if (!open) return;
-    setForm(
-      initial
-        ? {
-            photo: initial.photo,
-            empresa: initial.empresa,
-            responsavel: initial.responsavel,
-            responsavelInterno: initial.responsavelInterno,
-            email: initial.email,
-            whatsapp: initial.whatsapp,
-            clienteDesde: initial.clienteDesde,
-          }
-        : { ...emptyForm, ...prefill },
-    );
+    const baseline: ClienteForm = initial
+      ? {
+          photo: initial.photo,
+          empresa: initial.empresa,
+          responsavel: initial.responsavel,
+          responsavelInterno: initial.responsavelInterno,
+          email: initial.email,
+          whatsapp: initial.whatsapp,
+          clienteDesde: initial.clienteDesde,
+          proximoPasso: initial.proximoPasso ?? "",
+          previsaoFechamento: initial.previsaoFechamento ?? "",
+          observacaoNegociacao: initial.observacaoNegociacao ?? "",
+        }
+      : { ...emptyForm, ...prefill };
+    setForm(baseline);
+    baselineFormRef.current = baseline;
     setSaving(false);
-    setMode("zero");
+    setOrigin("scratch");
     setCrmFields(new Set());
     setCrmLead(null);
+    setCreateCampaignChoice(null);
+    setMaxVisitedIndex(0);
+    if (initial) {
+      setStatus(initial.status ?? "active");
+      setStep("empresa");
+    } else {
+      setStatus(defaultClienteStatusForOrigin("scratch"));
+      setStep(canImportCrm ? "origem" : "status");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
-  // Carrega a lista de leads só quando o modo "Importar do CRM" é aberto
-  // pela primeira vez — não busca nada se ninguém nunca clicar ali.
+  // Carrega a lista de leads só quando a origem "Importar do Comercial" é
+  // aberta pela primeira vez — não busca nada se ninguém nunca clicar ali.
   useEffect(() => {
-    if (mode !== "crm" || leads !== null) return;
+    if (origin !== "crm-import" || leads !== null) return;
     setLeadsLoading(true);
     void listLeadsFn()
       .then((rows) => setLeads(rows))
       .catch(() => setLeads([]))
       .finally(() => setLeadsLoading(false));
-  }, [mode, leads, listLeadsFn]);
+  }, [origin, leads, listLeadsFn]);
 
   const importableLeads = useMemo(() => (leads ?? []).filter((l) => !l.clienteId), [leads]);
 
@@ -186,7 +254,7 @@ export function ClienteFormSheet({
     setForm((f) => ({ ...f, ...mapped }));
     setCrmFields(new Set(CRM_FILLABLE_FIELDS.filter((k) => mapped[k]?.trim())));
     setCrmLead(lead);
-    setMode("zero");
+    setStatus(defaultClienteStatusForOrigin("crm-import", lead.stage));
   };
 
   const update = <K extends keyof ClienteForm>(k: K, v: ClienteForm[K]) => {
@@ -208,20 +276,7 @@ export function ClienteFormSheet({
     reader.readAsDataURL(file);
   };
 
-  const isDirty = () => {
-    const baseline: ClienteForm = initial
-      ? {
-          photo: initial.photo,
-          empresa: initial.empresa,
-          responsavel: initial.responsavel,
-          responsavelInterno: initial.responsavelInterno,
-          email: initial.email,
-          whatsapp: initial.whatsapp,
-          clienteDesde: initial.clienteDesde,
-        }
-      : emptyForm;
-    return !formsEqual(form, baseline);
-  };
+  const isDirty = () => !formsEqual(form, baselineFormRef.current) || (!isEdit && !!crmLead);
 
   const requestClose = async () => {
     if (isDirty()) {
@@ -231,24 +286,60 @@ export function ClienteFormSheet({
     onClose();
   };
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.empresa.trim() || saving) return;
-    setSaving(true);
-    const payload: ClienteForm & { id?: string } = crmLead
-      ? { ...form, id: crypto.randomUUID(), crmLeadId: crmLead.id }
-      : form;
-    onSave(payload);
-    // Grava o vínculo de volta no lead — mesmo `upsertLead` que o resto do
-    // Comercial já usa, sem tabela de vínculo nova. Preserva o histórico
-    // (o servidor sempre mantém `extra.history` no caminho de update) e
-    // nunca duplica/apaga o registro original.
-    if (crmLead && payload.id) {
-      void upsertLeadFn({ data: { ...crmLead, clienteId: payload.id } }).catch(() => {
-        /* vínculo é um "nice to have" pós-criação — falha aqui não deve
-         * impedir nem reverter a criação do cliente, que já aconteceu. */
-      });
+  const requestSwitchOrigin = async (next: ClienteOrigin) => {
+    if (next === origin) return;
+    const hasData = !formsEqual(form, baselineFormRef.current) || !!crmLead;
+    if (hasData) {
+      const ok = await confirm(
+        "Trocar a origem do cadastro vai descartar os dados já preenchidos. Continuar?",
+      );
+      if (!ok) return;
     }
+    setOrigin(next);
+    setForm(baselineFormRef.current);
+    setCrmFields(new Set());
+    setCrmLead(null);
+    if (next === "scratch") setStatus(defaultClienteStatusForOrigin("scratch"));
+  };
+
+  // Lista de etapas efetiva — dinâmica: edição pula Origem/Status inicial;
+  // Contexto comercial só entra quando o status escolhido é "negotiating";
+  // Origem some quando a pessoa não tem permissão pra importar do Comercial.
+  const steps = useMemo<StepKey[]>(() => {
+    const list: StepKey[] = [];
+    if (!isEdit) {
+      if (canImportCrm) list.push("origem");
+      list.push("status");
+    }
+    list.push("empresa");
+    if (status === "negotiating") list.push("contexto");
+    list.push("campanha", "revisao");
+    return list;
+  }, [isEdit, canImportCrm, status]);
+
+  const stepIndex = Math.max(0, steps.indexOf(step));
+
+  const canContinue = useMemo(() => {
+    if (step === "origem") return origin === "scratch" || !!crmLead;
+    if (step === "empresa") return form.empresa.trim().length > 0;
+    if (step === "campanha") return createCampaignChoice !== null;
+    return true;
+  }, [step, origin, crmLead, form.empresa, createCampaignChoice]);
+
+  const goNext = () => {
+    const next = Math.min(stepIndex + 1, steps.length - 1);
+    setStep(steps[next]);
+    setMaxVisitedIndex((m) => Math.max(m, next));
+  };
+  const goBack = () => {
+    const prev = Math.max(stepIndex - 1, 0);
+    setStep(steps[prev]);
+  };
+  const skipContexto = () => {
+    update("proximoPasso", "");
+    update("previsaoFechamento", "");
+    update("observacaoNegociacao", "");
+    goNext();
   };
 
   const selectExistingCliente = (cliente: Cliente) => {
@@ -267,78 +358,224 @@ export function ClienteFormSheet({
     });
   };
 
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.empresa.trim() || saving) return;
+    setSaving(true);
+    const cleaned: ClienteForm = {
+      ...form,
+      status,
+      proximoPasso: status === "negotiating" ? form.proximoPasso || undefined : undefined,
+      previsaoFechamento:
+        status === "negotiating" ? form.previsaoFechamento || undefined : undefined,
+      observacaoNegociacao:
+        status === "negotiating" ? form.observacaoNegociacao || undefined : undefined,
+    };
+    const payload: ClienteForm & { id?: string; openCampanhaAfter?: boolean } = {
+      ...(crmLead ? { ...cleaned, id: crypto.randomUUID(), crmLeadId: crmLead.id } : cleaned),
+      openCampanhaAfter: createCampaignChoice === "yes",
+    };
+    onSave(payload);
+    // Grava o vínculo de volta no lead — mesmo `upsertLead` que o resto do
+    // Comercial já usa, sem tabela de vínculo nova. Preserva o histórico
+    // (o servidor sempre mantém `extra.history` no caminho de update) e
+    // nunca duplica/apaga o registro original.
+    if (crmLead && payload.id) {
+      void upsertLeadFn({ data: { ...crmLead, clienteId: payload.id } }).catch(() => {
+        /* vínculo é um "nice to have" pós-criação — falha aqui não deve
+         * impedir nem reverter a criação do cliente, que já aconteceu. */
+      });
+    }
+  };
+
+  const responsaveisPendentes = [
+    !form.responsavel.trim() && "responsável",
+    !form.email.trim() && "e-mail",
+    !form.whatsapp.trim() && "WhatsApp",
+    !form.responsavelInterno.trim() && "responsável interno",
+    !form.clienteDesde.trim() && "cliente desde",
+  ].filter(Boolean) as string[];
+
   return (
     <>
       <Sheet open={open} onOpenChange={(v) => !v && void requestClose()}>
-        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <SheetContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+          <div className="border-b border-border/60 px-6 py-5">
+            <SheetTitle>{isEdit ? "Editar cliente" : "Novo cliente"}</SheetTitle>
+            <SheetDescription className="sr-only">Cadastro de cliente da agência</SheetDescription>
+          </div>
+
+          {/* Indicador de etapa — versão compacta "Etapa X de Y" + barra de
+           * progresso, mesmo padrão mobile do `VincularCampanhaDialog`,
+           * usado aqui em toda largura (wizard mais simples, sem precisar
+           * do stepper cheio com ícones). */}
+          <div className="border-b border-border/60 px-6 py-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground">
+                {stepIndex + 1}. {STEP_LABEL[step]}
+              </span>
+              <span className="text-text-secondary">
+                Etapa {stepIndex + 1} de {steps.length}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-brand transition-all"
+                style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+              />
+            </div>
+          </div>
+
           <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="border-b border-border/60 px-6 py-5">
-              <SheetTitle>{initial ? "Editar cliente" : "Novo cliente"}</SheetTitle>
-              <SheetDescription className="sr-only">
-                Cadastro de cliente da agência
-              </SheetDescription>
-              {!initial && canImportCrm && (
-                <div className="mt-3">
-                  <SegmentedControl
-                    aria-label="Origem do cadastro"
-                    value={mode}
-                    onChange={setMode}
-                    options={[
-                      { value: "zero", label: "Criar do zero" },
-                      { value: "crm", label: "Importar do CRM" },
-                    ]}
-                    size="sm"
-                  />
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
+              {step === "origem" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-text-secondary">
+                    Como este cliente vai entrar no sistema?
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { value: "scratch" as const, label: "Criar do zero" },
+                      { value: "crm-import" as const, label: "Importar do Comercial" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => void requestSwitchOrigin(opt.value)}
+                        aria-pressed={origin === opt.value}
+                        className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
+                          origin === opt.value
+                            ? "border-brand bg-brand-subtle text-brand"
+                            : "border-border bg-card text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {origin === "crm-import" &&
+                    (crmLead ? (
+                      <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-foreground">
+                            {crmLead.company || crmLead.name}
+                          </span>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {OPPORTUNITY_STAGE_LABEL[legacyStage(crmLead.stage)]}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-text-secondary">
+                          {[crmLead.contact, crmLead.email, crmLead.phone]
+                            .filter(Boolean)
+                            .join(" · ") || "Sem contato registrado"}
+                        </p>
+                        {crmLead.responsible && (
+                          <p className="text-xs text-text-secondary">
+                            Responsável: {crmLead.responsible}
+                          </p>
+                        )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCrmLead(null)}
+                        >
+                          Trocar registro
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex h-72 flex-col">
+                        <p className="mb-3 text-xs text-text-secondary">
+                          Selecione um registro do Comercial pra pré-preencher o cadastro — você
+                          ainda revisa e confirma antes de criar.
+                        </p>
+                        <Command className="flex-1 rounded-lg border border-border">
+                          <CommandInput placeholder="Buscar por nome, empresa, e-mail ou telefone..." />
+                          <CommandList className="max-h-none flex-1">
+                            {leadsLoading ? (
+                              <p className="p-4 text-center text-sm text-text-secondary">
+                                Carregando...
+                              </p>
+                            ) : (
+                              <CommandEmpty>Nenhum registro elegível encontrado.</CommandEmpty>
+                            )}
+                            <CommandGroup>
+                              {importableLeads.map((lead) => {
+                                const stage = legacyStage(lead.stage);
+                                return (
+                                  <CommandItem
+                                    key={lead.id}
+                                    value={`${lead.name} ${lead.company ?? ""} ${lead.email ?? ""} ${lead.phone ?? ""}`}
+                                    onSelect={() => applyLead(lead)}
+                                    className="flex flex-col items-start gap-0.5 py-2.5"
+                                  >
+                                    <div className="flex w-full items-center justify-between gap-2">
+                                      <span className="truncate text-sm font-medium text-foreground">
+                                        {lead.company || lead.name}
+                                      </span>
+                                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                        {OPPORTUNITY_STAGE_LABEL[stage]}
+                                      </Badge>
+                                    </div>
+                                    <span className="truncate text-xs text-text-secondary">
+                                      {[lead.responsible, lead.email, lead.phone]
+                                        .filter(Boolean)
+                                        .join(" · ") || "Sem contato registrado"}
+                                    </span>
+                                  </CommandItem>
+                                );
+                              })}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </div>
+                    ))}
                 </div>
               )}
-            </div>
 
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
-              {mode === "crm" ? (
-                <div className="flex h-full flex-col">
-                  <p className="mb-3 text-xs text-text-secondary">
-                    Selecione um registro do Comercial pra pré-preencher o cadastro — você ainda
-                    revisa e confirma antes de criar.
+              {step === "status" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-text-secondary">
+                    Qual o status inicial deste cliente? Você pode trocar depois.
                   </p>
-                  <Command className="flex-1 rounded-lg border border-border">
-                    <CommandInput placeholder="Buscar por nome, empresa, e-mail ou telefone..." />
-                    <CommandList className="max-h-none flex-1">
-                      {leadsLoading ? (
-                        <p className="p-4 text-center text-sm text-text-secondary">Carregando...</p>
-                      ) : (
-                        <CommandEmpty>Nenhum registro elegível encontrado.</CommandEmpty>
-                      )}
-                      <CommandGroup>
-                        {importableLeads.map((lead) => {
-                          const stage = legacyStage(lead.stage);
-                          return (
-                            <CommandItem
-                              key={lead.id}
-                              value={`${lead.name} ${lead.company ?? ""} ${lead.email ?? ""} ${lead.phone ?? ""}`}
-                              onSelect={() => applyLead(lead)}
-                              className="flex flex-col items-start gap-0.5 py-2.5"
-                            >
-                              <div className="flex w-full items-center justify-between gap-2">
-                                <span className="truncate text-sm font-medium text-foreground">
-                                  {lead.company || lead.name}
-                                </span>
-                                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                  {OPPORTUNITY_STAGE_LABEL[stage]}
-                                </Badge>
-                              </div>
-                              <span className="truncate text-xs text-text-secondary">
-                                {[lead.responsible, lead.email, lead.phone]
-                                  .filter(Boolean)
-                                  .join(" · ") || "Sem contato registrado"}
-                              </span>
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
+                  <div className="space-y-2">
+                    {STATUS_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setStatus(opt.value)}
+                        aria-pressed={status === opt.value}
+                        className={`flex w-full items-start gap-3 rounded-lg border p-3.5 text-left transition-colors ${
+                          status === opt.value
+                            ? "border-brand bg-brand-subtle"
+                            : "border-border bg-card hover:bg-muted"
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                            status === opt.value
+                              ? "border-brand bg-brand text-brand-foreground"
+                              : "border-input"
+                          }`}
+                        >
+                          {status === opt.value && <Check className="h-2.5 w-2.5" />}
+                        </span>
+                        <span>
+                          <span className="block text-sm font-medium text-foreground">
+                            {CLIENTE_STATUS_LABEL[opt.value]}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-text-secondary">
+                            {opt.description}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ) : (
+              )}
+
+              {step === "empresa" && (
                 <>
                   {possibleDuplicate && (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5">
@@ -467,9 +704,144 @@ export function ClienteFormSheet({
                   </section>
                 </>
               )}
+
+              {step === "contexto" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-text-secondary">
+                    Contexto opcional da negociação — ajuda quem for continuar essa conversa.
+                  </p>
+                  <Field label="Próximo passo">
+                    <input
+                      value={form.proximoPasso ?? ""}
+                      onChange={(e) => update("proximoPasso", e.target.value)}
+                      placeholder="Ex: enviar proposta revisada"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Previsão de fechamento">
+                    <DateField
+                      value={form.previsaoFechamento || undefined}
+                      onChange={(v) => update("previsaoFechamento", v ?? "")}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Observações">
+                    <textarea
+                      value={form.observacaoNegociacao ?? ""}
+                      onChange={(e) => update("observacaoNegociacao", e.target.value)}
+                      rows={3}
+                      placeholder="Contexto adicional sobre a negociação..."
+                      className={`${inputCls} h-auto resize-none py-2`}
+                    />
+                  </Field>
+                  <Button type="button" variant="ghost" size="sm" onClick={skipContexto}>
+                    Pular esta etapa
+                  </Button>
+                </div>
+              )}
+
+              {step === "campanha" && (
+                <div className="space-y-3">
+                  <p className="text-xs text-text-secondary">Deseja criar uma campanha agora?</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setCreateCampaignChoice("yes")}
+                      aria-pressed={createCampaignChoice === "yes"}
+                      className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
+                        createCampaignChoice === "yes"
+                          ? "border-brand bg-brand-subtle text-brand"
+                          : "border-border bg-card text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Criar campanha
+                      <span className="mt-1 block text-xs font-normal text-text-secondary">
+                        Abre o assistente de campanha logo após salvar o cliente.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateCampaignChoice("no")}
+                      aria-pressed={createCampaignChoice === "no"}
+                      className={`rounded-lg border p-4 text-left text-sm font-medium transition-colors ${
+                        createCampaignChoice === "no"
+                          ? "border-brand bg-brand-subtle text-brand"
+                          : "border-border bg-card text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Criar somente o cliente
+                      <span className="mt-1 block text-xs font-normal text-text-secondary">
+                        Você pode criar campanhas depois, a qualquer momento.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === "revisao" && (
+                <div className="space-y-4">
+                  <section className="space-y-2 rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">Origem</span>
+                      <span className="font-medium text-foreground">
+                        {crmLead ? "Importado do Comercial" : "Criado do zero"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">Empresa</span>
+                      <span className="font-medium text-foreground">{form.empresa || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">Contato</span>
+                      <span className="font-medium text-foreground">
+                        {form.responsavel || "Não informado"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">Responsável interno</span>
+                      <span className="font-medium text-foreground">
+                        {form.responsavelInterno || "Não informado"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-secondary">Status inicial</span>
+                      <Badge
+                        variant={
+                          status === "active"
+                            ? "success"
+                            : status === "negotiating"
+                              ? "warning"
+                              : "secondary"
+                        }
+                      >
+                        {CLIENTE_STATUS_LABEL[status]}
+                      </Badge>
+                    </div>
+                  </section>
+
+                  {responsaveisPendentes.length > 0 && (
+                    <p className="text-xs text-text-secondary">
+                      Campos que ficaram vazios: {responsaveisPendentes.join(", ")}.
+                    </p>
+                  )}
+
+                  {status === "negotiating" && (
+                    <p className="rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5 text-xs text-warning-soft-foreground">
+                      Este cliente será criado como Negociando.
+                    </p>
+                  )}
+
+                  {createCampaignChoice === "yes" && (
+                    <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-text-secondary">
+                      Uma campanha será criada em seguida e ficará em Negociação — não conta como
+                      receita ou campanha ativa até você ativá-la.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-border/60 px-6 py-4">
+            <div className="flex items-center justify-between gap-2 border-t border-border/60 px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
@@ -478,9 +850,28 @@ export function ClienteFormSheet({
               >
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" size="comfortable" isLoading={saving}>
-                {initial ? "Salvar alterações" : "Criar cliente"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {stepIndex > 0 && (
+                  <Button type="button" variant="outline" size="comfortable" onClick={goBack}>
+                    Voltar
+                  </Button>
+                )}
+                {stepIndex < steps.length - 1 ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="comfortable"
+                    disabled={!canContinue}
+                    onClick={goNext}
+                  >
+                    Continuar
+                  </Button>
+                ) : (
+                  <Button type="submit" variant="primary" size="comfortable" isLoading={saving}>
+                    {isEdit ? "Salvar alterações" : "Criar cliente"}
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
         </SheetContent>

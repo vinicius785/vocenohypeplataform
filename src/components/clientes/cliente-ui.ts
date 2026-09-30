@@ -28,6 +28,84 @@ export function clienteStatus(cliente: Cliente): ClienteStatus {
   return cliente.status ?? "active";
 }
 
+/** Transições válidas de status de cliente (Fase 2 da reconstrução do
+ * modelo de status) — mesmo padrão de `CAMPANHA_STATUS_TRANSITIONS`
+ * (`campanha-ui.ts`), mas simplificado: aqui só a lista de destinos válidos,
+ * sem `actionLabel`/`confirmMessage`, porque nesta fase não existe ainda o
+ * dialog de mudança de status pós-criação (Fase 3) que consumiria isso como
+ * ações de UI. "archived" não tem transições diretas listadas porque a
+ * restauração depende de `statusBeforeArchive` (igual campanha). */
+export const CLIENTE_STATUS_TRANSITIONS: Record<ClienteStatus, ClienteStatus[]> = {
+  negotiating: ["active", "closed", "archived"],
+  active: ["closed", "archived"],
+  closed: ["active", "archived"],
+  archived: [],
+};
+
+/** Nome de quem está agindo, pra auditoria de troca de status — mesma
+ * convenção já usada em `currentCampanhaActor()` (`campanha-ui.ts`), lida do
+ * mesmo `config:perfil` do localStorage. Duplicada aqui (em vez de
+ * importada) porque `campanha-ui.ts` importa `Cliente` deste módulo
+ * indiretamente via `Campaign`/`clientes-store` — importar de lá criaria
+ * risco de ciclo sem ganho real. */
+export function currentClienteActor(): string {
+  if (typeof window === "undefined") return "Você";
+  try {
+    const raw = window.localStorage.getItem("config:perfil");
+    if (raw) {
+      const name = ((JSON.parse(raw) as { nome?: string }).nome ?? "").trim();
+      if (name) return name;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "Você";
+}
+
+/** Monta o patch de uma troca de status de cliente — função pura, base para
+ * o dialog de mudança de status da Fase 3. Registra os mesmos campos de
+ * auditoria usados em `Campaign` (`statusChangedAt/By`, `archivedAt/By`,
+ * `statusBeforeArchive`), sem histórico de atividade completo (isso é Fase
+ * 3 — aqui não existe ainda um array de log análogo a `Campaign.activity`). */
+export function buildClienteStatusChangePatch(
+  cliente: Cliente,
+  next: ClienteStatus,
+): Partial<Cliente> {
+  const current = clienteStatus(cliente);
+  const author = currentClienteActor();
+  const now = new Date().toISOString();
+  const patch: Partial<Cliente> = {
+    status: next,
+    statusChangedAt: now,
+    statusChangedBy: author,
+  };
+  if (next === "archived") {
+    patch.archivedAt = now;
+    patch.archivedBy = author;
+    patch.statusBeforeArchive = current;
+  } else if (current === "archived") {
+    patch.statusBeforeArchive = undefined;
+  }
+  return patch;
+}
+
+/** Regra de default do status inicial no wizard de criação (Etapa 2, Fase
+ * 2): "criar do zero" mantém o comportamento atual (`"active"`); "importar
+ * do Comercial" usa `"negotiating"` por padrão, EXCETO quando o lead de
+ * origem já está marcado como ganho no funil (`stage === "GANHO"`,
+ * `OPPORTUNITY_STAGES` em `comercial-engine.ts`), caso em que o default é
+ * `"active"`. Nunca esconde as outras opções — isso é decidido pela UI do
+ * wizard, esta função só calcula o default pré-selecionado. Recebe só o
+ * `stage` (não o `Lead` inteiro) pra ficar testável sem depender do tipo
+ * completo de `comercial.ts`. */
+export function defaultClienteStatusForOrigin(
+  origin: "scratch" | "crm-import",
+  leadStage?: string,
+): ClienteStatus {
+  if (origin === "scratch") return "active";
+  return leadStage === "GANHO" ? "active" : "negotiating";
+}
+
 export function waLink(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return null;

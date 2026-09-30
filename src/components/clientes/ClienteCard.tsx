@@ -6,8 +6,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import type { Cliente } from "@/lib/clientes-store";
+import { clienteStatus, CLIENTE_STATUS_LABEL } from "./cliente-ui";
 import { ClienteLogo } from "./ClienteLogo";
+
+/** Variante de badge por status de cliente (Fase 2 da reconstrução do
+ * modelo de status) — âmbar pra negociando (nunca vermelho, é um estado
+ * normal do funil, não um alerta), verde pra ativo, cinza pros dois
+ * estados "fora da operação". `archived` usa `outline` (mais apagado que
+ * `secondary`) pra reforçar que é o estado mais "desligado" dos 4. */
+const STATUS_BADGE_VARIANT: Record<string, BadgeProps["variant"]> = {
+  negotiating: "warning",
+  active: "success",
+  closed: "secondary",
+  archived: "outline",
+};
 
 /**
  * Substitui a linha `FlowingMenu` (nome gigante centralizado + marquee de
@@ -44,6 +58,7 @@ export function ClienteCard({
     campanhaCount === 0
       ? "nenhuma campanha"
       : `${campanhaCount} ${campanhaCount === 1 ? "campanha" : "campanhas"}`;
+  const status = clienteStatus(cliente);
 
   return (
     <div className="group relative cursor-pointer rounded-[20px] bg-card p-4 text-left transition-colors hover:bg-accent/40 dark:shadow-none">
@@ -60,7 +75,14 @@ export function ClienteCard({
         <div className="flex min-w-0 items-center gap-3">
           <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="md" />
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-foreground">{cliente.empresa}</p>
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[15px] font-semibold text-foreground">
+                {cliente.empresa}
+              </p>
+              <Badge variant={STATUS_BADGE_VARIANT[status]} className="shrink-0 text-[10px]">
+                {CLIENTE_STATUS_LABEL[status]}
+              </Badge>
+            </div>
             <p className="truncate text-xs text-text-secondary">
               {cliente.responsavel ? cliente.responsavel : "Contato não informado"}
             </p>
