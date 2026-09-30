@@ -610,7 +610,6 @@ function CampanhaDetail({
     setRelatorioError("");
     try {
       const storagePath = await uploadRelatorioMensalPdf(file);
-      if (!storagePath) throw new Error("Falha ao subir o arquivo.");
       const novo: RelatorioMensal = {
         id: crypto.randomUUID(),
         mes: relatorioMes,

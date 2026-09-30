@@ -32,11 +32,14 @@ export function mesLabel(mes: string): string {
 /** Sobe o PDF do relatório mensal (uso do time, autenticado) — mesmo
  * padrão de `uploadFinanceiroAnexo`/`uploadEntregaAnexo`. Retorna o path no
  * bucket (não a URL — URLs assinadas são geradas sob demanda, tanto aqui
- * quanto no portal público). */
-export async function uploadRelatorioMensalPdf(file: File): Promise<string | null> {
+ * quanto no portal público). Lança erro com a mensagem real do Supabase
+ * (em vez de engolir e devolver `null`) — antes disso, qualquer falha
+ * (limite de tamanho, RLS, rede) virava sempre o mesmo "Falha ao subir o
+ * arquivo." genérico na tela, sem pista nenhuma de qual foi a causa real. */
+export async function uploadRelatorioMensalPdf(file: File): Promise<string> {
   const { data: userData } = await supabase.auth.getUser();
   const uid = userData.user?.id;
-  if (!uid) return null;
+  if (!uid) throw new Error("Sessão expirada — atualize a página e tente de novo.");
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
   const { error } = await supabase.storage.from(RELATORIO_MENSAL_BUCKET).upload(path, file, {
@@ -45,7 +48,7 @@ export async function uploadRelatorioMensalPdf(file: File): Promise<string | nul
   });
   if (error) {
     console.warn("[relatorio-mensal] upload failed", error);
-    return null;
+    throw new Error(error.message || "Falha ao subir o arquivo.");
   }
   return path;
 }
