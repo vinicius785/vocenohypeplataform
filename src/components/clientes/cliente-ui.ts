@@ -6,6 +6,7 @@
 import { initialsOf } from "@/components/metas/metas-ui-utils";
 import type { Cliente, ClienteStatus, ClienteActivityEntry } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
+import { legacyStage, type OpportunityStage } from "@/lib/comercial-engine";
 
 export { initialsOf };
 export type { ClienteStatus, ClienteActivityEntry };
@@ -120,21 +121,51 @@ export function clienteRestoreTarget(cliente: Cliente): ClienteStatus {
   return prev && prev !== "archived" ? prev : "active";
 }
 
-/** Regra de default do status inicial no wizard de criação (Etapa 2, Fase
- * 2): "criar do zero" mantém o comportamento atual (`"active"`); "importar
- * do Comercial" usa `"negotiating"` por padrão, EXCETO quando o lead de
- * origem já está marcado como ganho no funil (`stage === "GANHO"`,
- * `OPPORTUNITY_STAGES` em `comercial-engine.ts`), caso em que o default é
- * `"active"`. Nunca esconde as outras opções — isso é decidido pela UI do
- * wizard, esta função só calcula o default pré-selecionado. Recebe só o
- * `stage` (não o `Lead` inteiro) pra ficar testável sem depender do tipo
- * completo de `comercial.ts`. */
+/** Sugestão de status do cliente a partir da etapa do lead no funil
+ * (Fase 5, "Importação do CRM"). Valores reais de `OPPORTUNITY_STAGES`
+ * (`comercial-engine.ts`) — correspondência com a tabela do pedido:
+ *   CONTATO_FEITO     ("Contato feito")          → negotiating
+ *   REUNIAO_AGENDADA  ("Reunião agendada")       → negotiating
+ *   PROPOSTA_PREPARO  ("Proposta em preparação") → negotiating
+ *   PROPOSTA_ENVIADA  ("Proposta enviada")       → negotiating
+ *   NEGOCIACAO        ("Negociação")             → negotiating
+ *   GANHO             ("Ganho")                  → active
+ *   PERDIDO           ("Perdido")                → "not-recommended"
+ * Etapas fora da tabela (LEAD_RECEBIDO, REUNIAO_REALIZADA) seguem o mesmo
+ * significado de "oportunidade em andamento" → negotiating. Valores legados
+ * (`ganho`, `perdido`, ...) passam por `legacyStage` antes. */
+export const LEAD_STAGE_CLIENTE_SUGGESTION: Record<
+  OpportunityStage,
+  ClienteStatus | "not-recommended"
+> = {
+  LEAD_RECEBIDO: "negotiating",
+  CONTATO_FEITO: "negotiating",
+  REUNIAO_AGENDADA: "negotiating",
+  REUNIAO_REALIZADA: "negotiating",
+  PROPOSTA_PREPARO: "negotiating",
+  PROPOSTA_ENVIADA: "negotiating",
+  NEGOCIACAO: "negotiating",
+  GANHO: "active",
+  PERDIDO: "not-recommended",
+};
+
+export function suggestClienteStatusFromLeadStage(
+  stage: string | undefined,
+): ClienteStatus | "not-recommended" {
+  return LEAD_STAGE_CLIENTE_SUGGESTION[legacyStage(stage)];
+}
+
+/** Status pré-selecionado na Etapa 2 do wizard. "Criar do zero" → active;
+ * "importar do Comercial" → `suggestClienteStatusFromLeadStage`. Para lead
+ * perdido ("not-recommended") pré-seleciona "closed" — a UI exige uma
+ * confirmação explícita na Etapa 1 antes de deixar avançar com esse lead. */
 export function defaultClienteStatusForOrigin(
   origin: "scratch" | "crm-import",
   leadStage?: string,
 ): ClienteStatus {
   if (origin === "scratch") return "active";
-  return leadStage === "GANHO" ? "active" : "negotiating";
+  const s = suggestClienteStatusFromLeadStage(leadStage);
+  return s === "not-recommended" ? "closed" : s;
 }
 
 export function waLink(raw: string): string | null {

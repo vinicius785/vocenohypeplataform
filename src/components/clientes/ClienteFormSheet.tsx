@@ -20,7 +20,11 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { listLeads, upsertLead } from "@/lib/comercial.functions";
 import type { Lead } from "@/lib/comercial";
 import { OPPORTUNITY_STAGE_LABEL, legacyStage } from "@/lib/comercial-engine";
-import { CLIENTE_STATUS_LABEL, defaultClienteStatusForOrigin } from "./cliente-ui";
+import {
+  CLIENTE_STATUS_LABEL,
+  defaultClienteStatusForOrigin,
+  suggestClienteStatusFromLeadStage,
+} from "./cliente-ui";
 import { ClienteLogo } from "./ClienteLogo";
 
 type ClienteForm = Omit<Cliente, "id" | "campanhas">;
@@ -172,6 +176,9 @@ export function ClienteFormSheet({
   const [crmLead, setCrmLead] = useState<Lead | null>(null);
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [leadsLoading, setLeadsLoading] = useState(false);
+  // Lead "Perdido": não sugerimos criação — exige confirmação consciente
+  // (checkbox) antes de avançar, sem bloquear (Fase 5).
+  const [lostLeadConfirmed, setLostLeadConfirmed] = useState(false);
   const listLeadsFn = useServerFn(listLeads);
   const upsertLeadFn = useServerFn(upsertLead);
 
@@ -254,6 +261,7 @@ export function ClienteFormSheet({
     setForm((f) => ({ ...f, ...mapped }));
     setCrmFields(new Set(CRM_FILLABLE_FIELDS.filter((k) => mapped[k]?.trim())));
     setCrmLead(lead);
+    setLostLeadConfirmed(false);
     setStatus(defaultClienteStatusForOrigin("crm-import", lead.stage));
   };
 
@@ -319,12 +327,16 @@ export function ClienteFormSheet({
 
   const stepIndex = Math.max(0, steps.indexOf(step));
 
+  const crmLeadIsLost =
+    !!crmLead && suggestClienteStatusFromLeadStage(crmLead.stage) === "not-recommended";
+
   const canContinue = useMemo(() => {
-    if (step === "origem") return origin === "scratch" || !!crmLead;
+    if (step === "origem")
+      return origin === "scratch" || (!!crmLead && (!crmLeadIsLost || lostLeadConfirmed));
     if (step === "empresa") return form.empresa.trim().length > 0;
     if (step === "campanha") return createCampaignChoice !== null;
     return true;
-  }, [step, origin, crmLead, form.empresa, createCampaignChoice]);
+  }, [step, origin, crmLead, crmLeadIsLost, lostLeadConfirmed, form.empresa, createCampaignChoice]);
 
   const goNext = () => {
     const next = Math.min(stepIndex + 1, steps.length - 1);
@@ -475,6 +487,35 @@ export function ClienteFormSheet({
                             Responsável: {crmLead.responsible}
                           </p>
                         )}
+                        <p className="text-xs text-text-secondary">
+                          Status sugerido:{" "}
+                          <strong className="text-foreground">
+                            {crmLeadIsLost
+                              ? "não recomendado (lead perdido)"
+                              : CLIENTE_STATUS_LABEL[
+                                  defaultClienteStatusForOrigin("crm-import", crmLead.stage)
+                                ]}
+                          </strong>
+                        </p>
+                        {crmLeadIsLost && (
+                          <div className="space-y-2 rounded-md border border-warning/40 bg-warning-soft px-3 py-2.5">
+                            <p className="text-xs text-warning-soft-foreground">
+                              Este registro está marcado como <strong>perdido</strong> no Comercial
+                              {crmLead.lossReason ? ` (motivo: ${crmLead.lossReason})` : ""}. Não
+                              recomendamos criar um cliente a partir dele — se for só um cadastro
+                              histórico, ele entra como <strong>Encerrado</strong>.
+                            </p>
+                            <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={lostLeadConfirmed}
+                                onChange={(e) => setLostLeadConfirmed(e.target.checked)}
+                                className="h-3.5 w-3.5 accent-[var(--brand)]"
+                              />
+                              Entendo e quero prosseguir mesmo assim
+                            </label>
+                          </div>
+                        )}
                         <Button
                           type="button"
                           variant="outline"
@@ -519,7 +560,12 @@ export function ClienteFormSheet({
                                       </Badge>
                                     </div>
                                     <span className="truncate text-xs text-text-secondary">
-                                      {[lead.responsible, lead.email, lead.phone]
+                                      {[
+                                        lead.contact,
+                                        lead.email,
+                                        lead.phone,
+                                        lead.responsible && `Resp.: ${lead.responsible}`,
+                                      ]
                                         .filter(Boolean)
                                         .join(" · ") || "Sem contato registrado"}
                                     </span>

@@ -4,6 +4,7 @@ import {
   CLIENTE_STATUS_TRANSITIONS,
   buildClienteStatusChangePatch,
   defaultClienteStatusForOrigin,
+  suggestClienteStatusFromLeadStage,
   activeCampaignsBlockingClienteStatus,
   clienteRestoreTarget,
   DEFAULT_CLIENTE_FILTERS,
@@ -103,6 +104,31 @@ describe("defaultClienteStatusForOrigin", () => {
 
   it("importar do Comercial, lead já ganho (stage GANHO) => default 'active'", () => {
     expect(defaultClienteStatusForOrigin("crm-import", "GANHO")).toBe("active");
+  });
+});
+
+describe("suggestClienteStatusFromLeadStage (Fase 5)", () => {
+  it.each([
+    ["CONTATO_FEITO", "negotiating"],
+    ["REUNIAO_AGENDADA", "negotiating"],
+    ["PROPOSTA_PREPARO", "negotiating"],
+    ["PROPOSTA_ENVIADA", "negotiating"],
+    ["NEGOCIACAO", "negotiating"],
+    ["GANHO", "active"],
+    ["PERDIDO", "not-recommended"],
+  ])("%s => %s", (stage, expected) => {
+    expect(suggestClienteStatusFromLeadStage(stage)).toBe(expected);
+  });
+
+  it("valores legados e etapas fora da tabela", () => {
+    expect(suggestClienteStatusFromLeadStage("ganho")).toBe("active");
+    expect(suggestClienteStatusFromLeadStage("perdido")).toBe("not-recommended");
+    expect(suggestClienteStatusFromLeadStage("REUNIAO_REALIZADA")).toBe("negotiating");
+    expect(suggestClienteStatusFromLeadStage(undefined)).toBe("negotiating");
+  });
+
+  it("wizard: lead perdido pré-seleciona 'closed'", () => {
+    expect(defaultClienteStatusForOrigin("crm-import", "PERDIDO")).toBe("closed");
   });
 });
 
