@@ -52,6 +52,7 @@ import { TaskMentionCard, type ChatTaskInfo } from "@/components/chat/TaskMentio
 import { AttachmentList } from "@/components/chat/AttachmentList";
 import { MessageAvatar } from "@/components/chat/MessageAvatar";
 import { useMentionNavigation } from "./use-mention-navigation";
+import { ChatV2LinkPreviews } from "./ChatV2LinkPreview";
 
 function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -486,6 +487,7 @@ export function ChatV2Message({
             <TaskMentionCard task={task} onOpen={openTask} />
           </div>
         ))}
+        {!editing && <ChatV2LinkPreviews text={message.text} />}
         {message.attachments && message.attachments.length > 0 && (
           <AttachmentList message={message} attachments={message.attachments} />
         )}
