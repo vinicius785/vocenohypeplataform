@@ -33,6 +33,7 @@ import { Route as PortalV2ArquivosRouteImport } from './routes/portal-v2/arquivo
 import { Route as PortalV2AprovacoesRouteImport } from './routes/portal-v2/aprovacoes'
 import { Route as PortalAppInicioRouteImport } from './routes/portal-app/inicio'
 import { Route as PortalAppCampanhasRouteImport } from './routes/portal-app/campanhas'
+import { Route as NpsInfluenciadorTokenRouteImport } from './routes/nps-influenciador.$token'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
@@ -198,6 +199,11 @@ const PortalAppCampanhasRoute = PortalAppCampanhasRouteImport.update({
   id: '/campanhas',
   path: '/campanhas',
   getParentRoute: () => PortalAppRouteRoute,
+} as any)
+const NpsInfluenciadorTokenRoute = NpsInfluenciadorTokenRouteImport.update({
+  id: '/nps-influenciador/$token',
+  path: '/nps-influenciador/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const InscricaoTokenRoute = InscricaoTokenRouteImport.update({
   id: '/inscricao/$token',
@@ -474,6 +480,7 @@ export interface FileRoutesByFullPath {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
@@ -542,6 +549,7 @@ export interface FileRoutesByTo {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
   '/portal-v2/arquivos': typeof PortalV2ArquivosRoute
@@ -612,6 +620,7 @@ export interface FileRoutesById {
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
+  '/nps-influenciador/$token': typeof NpsInfluenciadorTokenRoute
   '/portal-app/campanhas': typeof PortalAppCampanhasRouteWithChildren
   '/portal-app/inicio': typeof PortalAppInicioRoute
   '/portal-v2/aprovacoes': typeof PortalV2AprovacoesRoute
@@ -685,6 +694,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/nps-influenciador/$token'
     | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/nps-influenciador/$token'
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
     | '/portal-v2/arquivos'
@@ -822,6 +833,7 @@ export interface FileRouteTypes {
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
+    | '/nps-influenciador/$token'
     | '/portal-app/campanhas'
     | '/portal-app/inicio'
     | '/portal-v2/aprovacoes'
@@ -889,6 +901,7 @@ export interface RootRouteChildren {
   BugsTokenRoute: typeof BugsTokenRoute
   CalculadoraPropostaTokenRoute: typeof CalculadoraPropostaTokenRoute
   InscricaoTokenRoute: typeof InscricaoTokenRoute
+  NpsInfluenciadorTokenRoute: typeof NpsInfluenciadorTokenRoute
   ApiCronEmailFlowsRoute: typeof ApiCronEmailFlowsRoute
   ApiCronGoogleCalendarSyncRoute: typeof ApiCronGoogleCalendarSyncRoute
   ApiGoogleOauthCallbackRoute: typeof ApiGoogleOauthCallbackRoute
@@ -1066,6 +1079,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal-app/campanhas'
       preLoaderRoute: typeof PortalAppCampanhasRouteImport
       parentRoute: typeof PortalAppRouteRoute
+    }
+    '/nps-influenciador/$token': {
+      id: '/nps-influenciador/$token'
+      path: '/nps-influenciador/$token'
+      fullPath: '/nps-influenciador/$token'
+      preLoaderRoute: typeof NpsInfluenciadorTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/inscricao/$token': {
       id: '/inscricao/$token'
@@ -1633,6 +1653,7 @@ const rootRouteChildren: RootRouteChildren = {
   BugsTokenRoute: BugsTokenRoute,
   CalculadoraPropostaTokenRoute: CalculadoraPropostaTokenRoute,
   InscricaoTokenRoute: InscricaoTokenRoute,
+  NpsInfluenciadorTokenRoute: NpsInfluenciadorTokenRoute,
   ApiCronEmailFlowsRoute: ApiCronEmailFlowsRoute,
   ApiCronGoogleCalendarSyncRoute: ApiCronGoogleCalendarSyncRoute,
   ApiGoogleOauthCallbackRoute: ApiGoogleOauthCallbackRoute,

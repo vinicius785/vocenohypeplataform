@@ -35,7 +35,7 @@ export const CAMPAIGN_TOOLS: Record<
   },
   nps: {
     label: "NPS",
-    description: "Avaliações e percepção do cliente",
+    description: "Avaliações do cliente e dos influenciadores",
     icon: Star,
     size: "medium",
   },

@@ -562,6 +562,57 @@ export type Database = {
           },
         ];
       };
+      campanha_nps_influenciador: {
+        Row: {
+          answered_at: string | null;
+          campanha_id: string;
+          comment: string | null;
+          created_at: string;
+          id: string;
+          influenciador_id: string;
+          score: number | null;
+          token: string;
+          updated_at: string;
+        };
+        Insert: {
+          answered_at?: string | null;
+          campanha_id: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          influenciador_id: string;
+          score?: number | null;
+          token: string;
+          updated_at?: string;
+        };
+        Update: {
+          answered_at?: string | null;
+          campanha_id?: string;
+          comment?: string | null;
+          created_at?: string;
+          id?: string;
+          influenciador_id?: string;
+          score?: number | null;
+          token?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_nps_influenciador_influenciador_id_fkey";
+            columns: ["influenciador_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_influenciadores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campanha_nps_influenciador_influenciador_id_fkey";
+            columns: ["influenciador_id"];
+            isOneToOne: false;
+            referencedRelation: "campanha_influenciadores_sem_ciclo";
+            referencedColumns: ["campanha_influenciador_id"];
+          },
+        ];
+      };
       campanha_tarefas: {
         Row: {
           campanha_id: string;

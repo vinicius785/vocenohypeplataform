@@ -14,6 +14,7 @@ import { SummaryStat } from "@/components/shared/SummaryStat";
 import { CampaignToolShell, ToolEmpty, ToolError, ToolLoading } from "./tools/CampaignToolShell";
 import { CAMPAIGN_TOOLS } from "./tools/campaign-tools";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CampanhaNpsInfluenciadoresPanel } from "./CampanhaNpsInfluenciadoresPanel";
 import { getCampanhaNpsInterno } from "@/lib/campanha-nps.functions";
 import {
   MIN_MONTHS_FOR_NPS_INDEX,
@@ -85,6 +87,7 @@ export function CampanhaNpsTool({
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [tab, setTab] = useState<"cliente" | "influenciadores">("cliente");
 
   useEffect(() => {
     if (!open) return;
@@ -124,6 +127,7 @@ export function CampanhaNpsTool({
       title={meta.label}
       description={meta.description}
       actions={
+        tab === "cliente" &&
         months.length > 0 &&
         selected && (
           <Select value={selected} onValueChange={setSelected}>
@@ -141,72 +145,88 @@ export function CampanhaNpsTool({
         )
       }
     >
-      <div className="space-y-4">
-        {load.state === "loading" && <ToolLoading label="Carregando avaliações…" />}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "cliente" | "influenciadores")}>
+        <TabsList>
+          <TabsTrigger value="cliente">Cliente</TabsTrigger>
+          <TabsTrigger value="influenciadores">Influenciadores</TabsTrigger>
+        </TabsList>
 
-        {load.state === "error" && (
-          <ToolError
-            title="Não foi possível carregar o NPS"
-            message={load.message}
-            onRetry={() => setReloadKey((k) => k + 1)}
-          />
-        )}
+        <TabsContent value="cliente" className="mt-4">
+          <div className="space-y-4">
+            {load.state === "loading" && <ToolLoading label="Carregando avaliações…" />}
 
-        {load.state === "ready" && months.length === 0 && (
-          <ToolEmpty
-            icon={Star}
-            title="Ainda não temos uma avaliação para este mês."
-            description={`A avaliação mensal será exibida aqui assim que o cliente responder. Esta campanha ainda não recebeu nenhuma avaliação de NPS (mês atual: ${formatReferenceMonth(thisMonth)}).`}
-          />
-        )}
-
-        {current && (
-          <>
-            {thisMonthMissing && (
-              <p className="rounded-lg bg-muted px-3 py-2 text-xs text-text-secondary">
-                Ainda não temos uma avaliação para {formatReferenceMonth(thisMonth)}. A avaliação
-                mensal será exibida aqui assim que o cliente responder.
-              </p>
+            {load.state === "error" && (
+              <ToolError
+                title="Não foi possível carregar o NPS"
+                message={load.message}
+                onRetry={() => setReloadKey((k) => k + 1)}
+              />
             )}
 
-            <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
-              <div className="flex flex-wrap">
-                <SummaryStat
-                  label="NPS"
-                  value={formatNpsIndex(current.cumulative.nps)}
-                  complement={
-                    current.cumulative.nps === null
-                      ? `Nota do mês: ${current.entry.score} · ${NPS_CATEGORY_LABEL[current.category]}`
-                      : `${current.cumulative.distribution.total} meses · nota do mês ${current.entry.score}`
-                  }
-                />
-                <SummaryStat
-                  label="Satisfação geral"
-                  value={formatOutOfFive(current.entry.satisfactionScore)}
-                  complement={NPS_SATISFACTION_LABELS[current.entry.satisfactionScore]}
-                />
-                <SummaryStat
-                  label="Qualidade das entregas"
-                  value={formatOutOfFive(current.deliveryScore)}
-                  complement={ratingLabel(current.entry.deliveryQuality)}
-                />
-                <SummaryStat
-                  label="Atendimento e comunicação"
-                  value={formatOutOfFive(current.communicationScore)}
-                  complement={ratingLabel(current.entry.communicationRating)}
-                />
-              </div>
-            </div>
+            {load.state === "ready" && months.length === 0 && (
+              <ToolEmpty
+                icon={Star}
+                title="Ainda não temos uma avaliação para este mês."
+                description={`A avaliação mensal será exibida aqui assim que o cliente responder. Esta campanha ainda não recebeu nenhuma avaliação de NPS (mês atual: ${formatReferenceMonth(thisMonth)}).`}
+              />
+            )}
 
-            <div className="grid gap-4 md:grid-cols-5">
-              <NpsEvolucao months={months} selected={current.referenceMonth} />
-              <NpsDistribuicao current={current} />
-            </div>
+            {current && (
+              <>
+                {thisMonthMissing && (
+                  <p className="rounded-lg bg-muted px-3 py-2 text-xs text-text-secondary">
+                    Ainda não temos uma avaliação para {formatReferenceMonth(thisMonth)}. A
+                    avaliação mensal será exibida aqui assim que o cliente responder.
+                  </p>
+                )}
 
-            <RespostaDoCliente current={current} />
-          </>
-        )}
-      </div>
+                <div className="overflow-hidden rounded-xl border border-border/60 bg-background">
+                  <div className="flex flex-wrap">
+                    <SummaryStat
+                      label="NPS"
+                      value={formatNpsIndex(current.cumulative.nps)}
+                      complement={
+                        current.cumulative.nps === null
+                          ? `Nota do mês: ${current.entry.score} · ${NPS_CATEGORY_LABEL[current.category]}`
+                          : `${current.cumulative.distribution.total} meses · nota do mês ${current.entry.score}`
+                      }
+                    />
+                    <SummaryStat
+                      label="Satisfação geral"
+                      value={formatOutOfFive(current.entry.satisfactionScore)}
+                      complement={NPS_SATISFACTION_LABELS[current.entry.satisfactionScore]}
+                    />
+                    <SummaryStat
+                      label="Qualidade das entregas"
+                      value={formatOutOfFive(current.deliveryScore)}
+                      complement={ratingLabel(current.entry.deliveryQuality)}
+                    />
+                    <SummaryStat
+                      label="Atendimento e comunicação"
+                      value={formatOutOfFive(current.communicationScore)}
+                      complement={ratingLabel(current.entry.communicationRating)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-5">
+                  <NpsEvolucao months={months} selected={current.referenceMonth} />
+                  <NpsDistribuicao current={current} />
+                </div>
+
+                <RespostaDoCliente current={current} />
+              </>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="influenciadores" className="mt-4">
+          <CampanhaNpsInfluenciadoresPanel
+            open={open && tab === "influenciadores"}
+            campanhaId={campanhaId}
+          />
+        </TabsContent>
+      </Tabs>
     </CampaignToolShell>
   );
 }

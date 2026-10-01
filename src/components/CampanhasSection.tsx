@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -45,6 +47,8 @@ import {
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { CampanhaCard } from "./campanhas/CampanhaCard";
 import { CampanhaNpsTool } from "./campanhas/CampanhaNpsPanel";
+import { getCampanhaNpsInfluenciadoresStatus } from "@/lib/campanha-nps-influenciador-interno.functions";
+import type { InfluNpsBoardProp } from "@/components/influenciadores/InfluencerBoard";
 import { CampaignToolCard } from "./campanhas/tools/CampaignToolCard";
 import { DocumentsTool } from "./campanhas/tools/DocumentsTool";
 import { ReportsTool } from "./campanhas/tools/ReportsTool";
@@ -461,6 +465,48 @@ function CampanhaDetail({
   useEffect(
     () => onCampanhaInflusChange(() => setInflus(normalizeInflus(loadCampanhaInflus(c.id)))),
     [c.id],
+  );
+
+  // Links/status de NPS por influenciador aprovado — carregado uma vez por
+  // campanha, só pra alimentar "Copiar link NPS" e o indicador no card do
+  // InfluencerBoard (dado completo/agregado fica na aba Influenciadores de
+  // Recursos → NPS, buscado à parte só quando aberta).
+  const fetchNpsStatus = useServerFn(getCampanhaNpsInfluenciadoresStatus);
+  const [npsLinks, setNpsLinks] = useState<
+    { influenciadorId: string; token: string; respondido: boolean; score: number | null }[]
+  >([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchNpsStatus({ data: { campanhaId: c.id } })
+      .then((rows) => {
+        if (!cancelled) setNpsLinks(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setNpsLinks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps -- fetchNpsStatus (useServerFn) não é estável entre renders
+  const npsBoardProp = useMemo<InfluNpsBoardProp>(
+    () => ({
+      linksByInfluId: Object.fromEntries(
+        npsLinks.map((r) => [
+          r.influenciadorId,
+          { token: r.token, respondido: r.respondido, score: r.score },
+        ]),
+      ),
+      onCopyLink: (influId: string) => {
+        const link = npsLinks.find((r) => r.influenciadorId === influId);
+        if (!link) return;
+        const url = `${window.location.origin}/nps-influenciador/${link.token}`;
+        navigator.clipboard
+          .writeText(url)
+          .then(() => toast.success("Link de NPS copiado"))
+          .catch(() => toast.error("Não foi possível copiar o link"));
+      },
+    }),
+    [npsLinks],
   );
 
   const [docs, setDocs] = useState<CampaignDoc[]>(() => loadCampanhaDocs(c.id));
@@ -1160,6 +1206,7 @@ function CampanhaDetail({
             exportName={c.nome}
             defaultCicloMes={isRecorrente ? monthFilter : undefined}
             cicloMesOptions={isRecorrente ? monthOptions : undefined}
+            nps={npsBoardProp}
           />
         </section>
 

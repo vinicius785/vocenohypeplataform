@@ -1763,6 +1763,14 @@ function useDropdown() {
  * both Campanhas and Projetos mount.
  * ============================================================ */
 
+/** Dados de NPS por influenciador (link/status), só passados por Campanhas
+ * (`CampanhasSection.tsx`) — ausente em Projetos, onde o recurso fica
+ * totalmente invisível, sem tocar nesse fluxo. */
+export type InfluNpsBoardProp = {
+  linksByInfluId: Record<string, { token: string; respondido: boolean; score: number | null }>;
+  onCopyLink: (influId: string) => void;
+};
+
 export function InfluencerBoard({
   influs,
   onChange,
@@ -1771,11 +1779,15 @@ export function InfluencerBoard({
   headerExtra,
   defaultCicloMes,
   cicloMesOptions,
+  nps,
 }: {
   influs: Influ[];
   onChange: (next: Influ[]) => void;
   exportName: string;
   allowedFields?: InfluencerFieldKey[];
+  /** NPS por influenciador aprovado (link de resposta + status) — só
+   * presente quando o board é renderizado dentro de uma campanha. */
+  nps?: InfluNpsBoardProp;
   /** Extra action rendered in the header row, next to "Baixar lista" (e.g. campaign public-link button).
    * Receives a `closeMenu` callback so it can close the "Exportar" dropdown itself once its own
    * dialog opens — the dropdown used to auto-close on any click inside it, which unmounted this
@@ -2373,6 +2385,7 @@ export function InfluencerBoard({
                         onView={() => setViewing(i)}
                         onStatus={(status) => changeStatus(i.id, status)}
                         onRemove={() => void removeInflu(i.id)}
+                        nps={nps}
                       />
                     </div>
                   ))}
@@ -2399,6 +2412,7 @@ export function InfluencerBoard({
               onView={() => setViewing(i)}
               onStatus={(status) => changeStatus(i.id, status)}
               onRemove={() => void removeInflu(i.id)}
+              nps={nps}
             />
           ))}
         </div>
@@ -2487,13 +2501,16 @@ function InfluCard({
   onView,
   onStatus,
   onRemove,
+  nps,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   onView: () => void;
   onStatus: (s: InfluStatus) => void;
   onRemove: () => void;
+  nps?: InfluNpsBoardProp;
 }) {
+  const npsLink = nps?.linksByInfluId[influ.id];
   // Selo de aprovação do cliente (etapa 1 do link público) — derivado
   // direto do status/veredito do influ, sem depender de uma tabela à
   // parte (o link público agora escreve nesses mesmos campos).
@@ -2606,6 +2623,11 @@ function InfluCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={stop}>
             <DropdownMenuItem onSelect={onView}>Ver detalhes</DropdownMenuItem>
+            {npsLink && (
+              <DropdownMenuItem onSelect={() => nps?.onCopyLink(influ.id)}>
+                Copiar link NPS
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={onRemove}
               className="text-destructive focus:text-destructive"
@@ -2624,6 +2646,11 @@ function InfluCard({
         >
           <InfluStatusPill value={influ.status} onChange={onStatus} />
           <NextActionBadge actor={nextActionForInflu(influ.status)} />
+          {npsLink && (
+            <span className="text-[11px] text-muted-foreground">
+              NPS · {npsLink.respondido ? `Respondido · ${npsLink.score}` : "Link disponível"}
+            </span>
+          )}
           {budget ? (
             <span
               className="ml-auto text-[11px] font-medium text-foreground"
