@@ -9,10 +9,14 @@ import { type BankInflu, loadBank, saveBank, onBankChange } from "@/lib/banco-in
 import { getAllCampanhaInflus } from "@/lib/campanha-scoped-store";
 import { BankInfluWizard } from "@/components/influenciadores/BankInfluWizard";
 import { getAvaliacoesPorParticipacoes } from "@/lib/campanha-influenciador-avaliacao.functions";
-import { mediaGeralAvaliacoes } from "@/lib/campanha-influenciador-avaliacao";
+import {
+  mediaGeralAvaliacoes,
+  type CampanhaInfluenciadorAvaliacao,
+} from "@/lib/campanha-influenciador-avaliacao";
 import {
   findParticipacoes,
   filterBankInflus,
+  countAvaliacoesPendentes,
   DEFAULT_INFLUENCER_BANCO_FILTERS,
   type InfluencerBancoFiltersState,
   type InfluencerBancoEnrichment,
@@ -64,9 +68,7 @@ export function InfluencerBancoV2Page() {
   );
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: BankInflu } | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [avaliacoesByParticipacao, setAvaliacoesByParticipacao] = useState<
-    Map<string, { media: number; count: number }>
-  >(new Map());
+  const [avaliacoesRows, setAvaliacoesRows] = useState<CampanhaInfluenciadorAvaliacao[]>([]);
 
   useEffect(() => onBankChange(() => setList(loadBank())), []);
   useEffect(() => setPage(1), [query, filters]);
@@ -87,35 +89,23 @@ export function InfluencerBancoV2Page() {
 
   // Avaliações do time — busca em lote de TODAS as participações de TODOS
   // os influenciadores listados, uma única ida ao servidor (nunca N
-  // requisições por card).
+  // requisições por card). Guarda as linhas cruas (não só o agregado) pra
+  // também derivar pendências por participação, não só a média.
   useEffect(() => {
     const allIds = Array.from(participacoesById.values())
       .flat()
       .map((p) => p.campanhaInfluenciadorId);
     if (allIds.length === 0) {
-      setAvaliacoesByParticipacao(new Map());
+      setAvaliacoesRows([]);
       return;
     }
     let cancelled = false;
     fetchAvaliacoes({ data: { campanhaInfluenciadorIds: allIds } })
       .then((rows) => {
-        if (cancelled) return;
-        // Agrupa por influenciador do Banco (via participacoesById) pra
-        // calcular a média geral de cada um.
-        const rowsByParticipacao = new Map(rows.map((r) => [r.campanhaInfluenciadorId, r]));
-        const next = new Map<string, { media: number; count: number }>();
-        for (const [bancoId, participacoes] of participacoesById) {
-          const avals = participacoes
-            .map((p) => rowsByParticipacao.get(p.campanhaInfluenciadorId))
-            .filter((a): a is NonNullable<typeof a> => !!a);
-          if (avals.length > 0) {
-            next.set(bancoId, { media: mediaGeralAvaliacoes(avals) ?? 0, count: avals.length });
-          }
-        }
-        setAvaliacoesByParticipacao(next);
+        if (!cancelled) setAvaliacoesRows(rows);
       })
       .catch(() => {
-        if (!cancelled) setAvaliacoesByParticipacao(new Map());
+        if (!cancelled) setAvaliacoesRows([]);
       });
     return () => {
       cancelled = true;
@@ -123,18 +113,30 @@ export function InfluencerBancoV2Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAvaliacoes (useServerFn) não é estável entre renders
   }, [participacoesById]);
 
+  const avaliadasIds = useMemo(
+    () => new Set(avaliacoesRows.map((r) => r.campanhaInfluenciadorId)),
+    [avaliacoesRows],
+  );
+
   const enrichmentById = useMemo(() => {
+    const avaliacaoByParticipacaoId = new Map(
+      avaliacoesRows.map((r) => [r.campanhaInfluenciadorId, r]),
+    );
     const map = new Map<string, InfluencerBancoEnrichment>();
     for (const i of list) {
-      const aval = avaliacoesByParticipacao.get(i.id);
+      const participacoes = participacoesById.get(i.id) ?? [];
+      const avals = participacoes
+        .map((p) => avaliacaoByParticipacaoId.get(p.campanhaInfluenciadorId))
+        .filter((a): a is NonNullable<typeof a> => !!a);
       map.set(i.id, {
-        historicoCount: participacoesById.get(i.id)?.length ?? 0,
-        mediaAvaliacao: aval?.media ?? null,
-        avaliacoesCount: aval?.count ?? 0,
+        historicoCount: participacoes.length,
+        mediaAvaliacao: avals.length > 0 ? mediaGeralAvaliacoes(avals) : null,
+        avaliacoesCount: avals.length,
+        pendentesCount: countAvaliacoesPendentes(participacoes, avaliadasIds),
       });
     }
     return map;
-  }, [list, participacoesById, avaliacoesByParticipacao]);
+  }, [list, participacoesById, avaliacoesRows, avaliadasIds]);
 
   const comHistorico = list.filter((i) => (enrichmentById.get(i.id)?.historicoCount ?? 0) > 0);
   const avaliados = list.filter((i) => (enrichmentById.get(i.id)?.avaliacoesCount ?? 0) > 0);

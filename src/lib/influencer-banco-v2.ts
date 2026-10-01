@@ -127,7 +127,26 @@ export type InfluencerBancoEnrichment = {
   historicoCount: number;
   mediaAvaliacao: number | null;
   avaliacoesCount: number;
+  /** Participações já prontas pra avaliação (`participacaoProntaParaAvaliacao`)
+   * que ainda não têm avaliação registrada — diferente de "ainda não
+   * avaliado" (que cobre também quem nunca teve participação concluída
+   * nenhuma). Nunca soma com `avaliacoesCount`: um influenciador pode ter
+   * avaliações existentes E pendências ao mesmo tempo (campanhas
+   * diferentes). */
+  pendentesCount: number;
 };
+
+/** Quantas participações de uma lista já estão prontas pra avaliação
+ * (entregas completas) mas ainda não foram avaliadas — `avaliadasIds` é
+ * o conjunto de `campanhaInfluenciadorId` que já têm avaliação. */
+export function countAvaliacoesPendentes(
+  participacoes: Pick<ParticipacaoCampanha, "influ" | "campanhaInfluenciadorId">[],
+  avaliadasIds: ReadonlySet<string>,
+): number {
+  return participacoes.filter(
+    (p) => participacaoProntaParaAvaliacao(p) && !avaliadasIds.has(p.campanhaInfluenciadorId),
+  ).length;
+}
 
 /** Filtra + ordena — `enrichmentById` traz histórico/avaliação já
  * calculados em lote (nunca recalculado por item dentro do filtro). */

@@ -6,6 +6,7 @@ import {
   countActiveInfluencerBancoFilters,
   totalSeguidores,
   participacaoProntaParaAvaliacao,
+  countAvaliacoesPendentes,
   type InfluencerBancoEnrichment,
 } from "./influencer-banco-v2";
 import { mediaAvaliacao, mediaGeralAvaliacoes } from "./campanha-influenciador-avaliacao";
@@ -142,6 +143,51 @@ describe("participacaoProntaParaAvaliacao", () => {
   });
 });
 
+describe("countAvaliacoesPendentes", () => {
+  const entrega = (stage: string) => ({ stage }) as Influ["entregas"][number];
+  const participacao = (id: string, entregas: Influ["entregas"]) => ({
+    campanhaInfluenciadorId: id,
+    influ: influ({ id, entregas }),
+  });
+
+  it("1. influenciador sem campanha: zero pendências", () => {
+    expect(countAvaliacoesPendentes([], new Set())).toBe(0);
+  });
+
+  it("3. aprovado com entregas incompletas: não é pendência (ainda não terminou)", () => {
+    const p = participacao("p1", [entrega("PUBLICADA"), entrega("PRODUCAO")]);
+    expect(countAvaliacoesPendentes([p], new Set())).toBe(0);
+  });
+
+  it("4. aprovado com entregas completas e sem avaliação: 1 pendência", () => {
+    const p = participacao("p1", [entrega("PUBLICADA"), entrega("PUBLICADA")]);
+    expect(countAvaliacoesPendentes([p], new Set())).toBe(1);
+  });
+
+  it("5. aprovado com entregas completas e já avaliado: zero pendências (não duplica)", () => {
+    const p = participacao("p1", [entrega("PUBLICADA"), entrega("PUBLICADA")]);
+    expect(countAvaliacoesPendentes([p], new Set(["p1"]))).toBe(0);
+  });
+
+  it("6. duas campanhas, uma avaliada e outra pendente: 1 pendência (caso misto, não soma as duas)", () => {
+    const avaliada = participacao("p1", [entrega("PUBLICADA")]);
+    const pendente = participacao("p2", [entrega("PUBLICADA"), entrega("PUBLICADA")]);
+    expect(countAvaliacoesPendentes([avaliada, pendente], new Set(["p1"]))).toBe(1);
+  });
+
+  it("7. duas avaliações pendentes: conta as duas (nunca uma badge por campanha)", () => {
+    const p1 = participacao("p1", [entrega("PUBLICADA")]);
+    const p2 = participacao("p2", [entrega("PUBLICADA"), entrega("PUBLICADA")]);
+    expect(countAvaliacoesPendentes([p1, p2], new Set())).toBe(2);
+  });
+
+  it("8. várias avaliações e nenhuma pendência: zero", () => {
+    const p1 = participacao("p1", [entrega("PUBLICADA")]);
+    const p2 = participacao("p2", [entrega("PUBLICADA")]);
+    expect(countAvaliacoesPendentes([p1, p2], new Set(["p1", "p2"]))).toBe(0);
+  });
+});
+
 describe("mediaAvaliacao / mediaGeralAvaliacoes", () => {
   it("calcula a média simples dos 5 critérios, com 1 casa decimal", () => {
     const media = mediaAvaliacao({
@@ -191,6 +237,7 @@ describe("filterBankInflus", () => {
     historicoCount: 0,
     mediaAvaliacao: null,
     avaliacoesCount: 0,
+    pendentesCount: 0,
     ...over,
   });
 

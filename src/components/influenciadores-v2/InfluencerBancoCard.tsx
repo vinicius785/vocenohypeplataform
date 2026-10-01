@@ -60,6 +60,25 @@ function AvaliacaoLine({ enrichment }: { enrichment?: InfluencerBancoEnrichment 
   return <span className="text-[13px] text-text-secondary">Ainda não avaliado</span>;
 }
 
+/** Estado B do item 3 do pedido: diferente de "ainda não avaliado" — só
+ * aparece quando existe participação com entregas completas (ver
+ * `participacaoProntaParaAvaliacao`) que ainda não tem avaliação
+ * registrada. Discreto de propósito (ponto + texto curto, nunca o card
+ * inteiro amarelo) — é uma chamada operacional, não um alerta. Coexiste
+ * com `AvaliacaoLine` quando o influenciador já tem avaliações de OUTRAS
+ * campanhas e uma pendência nova (nunca substitui uma pela outra). */
+function PendenteBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-[12px] font-medium text-amber-600 dark:text-amber-400">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
+      <span className="truncate">
+        {count === 1 ? "Avaliação pendente" : `${count} avaliações pendentes`}
+      </span>
+    </span>
+  );
+}
+
 /** Um único componente pra grade E lista — `variant` muda só o layout,
  * nunca o conteúdo. Altura fixa na grade (`h-full` + `justify-between`)
  * pra nenhum card ficar maior/menor que os vizinhos dependendo da
@@ -139,8 +158,9 @@ export function InfluencerBancoCard({
         <Badge variant="outline" className="hidden shrink-0 text-[10px] md:inline-flex">
           {historico} campanha{historico === 1 ? "" : "s"}
         </Badge>
-        <div className="hidden w-44 shrink-0 lg:block">
+        <div className="hidden w-44 shrink-0 flex-col lg:flex">
           <AvaliacaoLine enrichment={enrichment} />
+          <PendenteBadge count={enrichment?.pendentesCount ?? 0} />
         </div>
         {menu}
       </button>
@@ -195,8 +215,9 @@ export function InfluencerBancoCard({
         </p>
       </div>
 
-      <div className="mt-3 min-w-0 border-t border-border/60 pt-3">
+      <div className="mt-3 flex min-w-0 flex-col border-t border-border/60 pt-3">
         <AvaliacaoLine enrichment={enrichment} />
+        <PendenteBadge count={enrichment?.pendentesCount ?? 0} />
       </div>
     </div>
   );

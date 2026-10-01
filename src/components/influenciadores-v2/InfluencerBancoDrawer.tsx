@@ -97,7 +97,13 @@ function HistoricoItem({
                   <span className="text-xs text-text-secondary">1 avaliação</span>
                 </p>
               ) : podeAvaliar ? (
-                <p className="mt-0.5 text-sm text-text-secondary">Pronta para avaliação</p>
+                <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                    aria-hidden="true"
+                  />
+                  Avaliação pendente
+                </p>
               ) : (
                 <p className="mt-0.5 text-sm text-text-secondary">
                   Disponível quando todas as entregas forem publicadas
@@ -199,6 +205,11 @@ export function InfluencerBancoDrawer({
   const totalEntregas = participacoes.reduce(
     (sum, p) => sum + producaoResumo(p.influ.entregas).total,
     0,
+  );
+  const pendentes = participacoes.filter(
+    (p) =>
+      participacaoProntaParaAvaliacao(p) &&
+      !avaliacoesByParticipacao.has(p.campanhaInfluenciadorId),
   );
 
   return (
@@ -322,6 +333,46 @@ export function InfluencerBancoDrawer({
               </div>
             )}
           </div>
+
+          {pendentes.length > 0 && (
+            <div className="mt-6">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                  aria-hidden="true"
+                />
+                Avaliações pendentes
+              </h3>
+              <div className="space-y-2">
+                {pendentes.map((p) => {
+                  const resumo = producaoResumo(p.influ.entregas);
+                  return (
+                    <div
+                      key={p.campanhaInfluenciadorId}
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {p.campanhaNome}
+                        </p>
+                        <p className="truncate text-xs text-text-secondary">
+                          {resumo.publicadas}/{resumo.total} entregas concluídas
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => setAvaliarAlvo(p)}
+                      >
+                        Avaliar
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
