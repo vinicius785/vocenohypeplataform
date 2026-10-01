@@ -152,6 +152,41 @@ export const getCampanhaNpsInfluenciadoresInterno = createServerFn({ method: "GE
     };
   });
 
+type InfluNpsBasico = {
+  influenciadorId: string;
+  respondido: boolean;
+  score: number | null;
+  category: NpsCategory | null;
+  answeredAt: string | null;
+};
+
+/** Busca em lote, POR PARTICIPAÇÃO (`influenciador_id` =
+ * `campanha_influenciadores.id`), cruzando QUALQUER campanha de uma vez —
+ * usado pelo perfil do Banco de Influenciadores V2, que precisa do NPS de
+ * todas as participações de um influenciador ao mesmo tempo, não só de
+ * uma campanha. Mesma permissão de leitura interna do NPS. */
+export const getNpsPorParticipacoes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) =>
+    z.object({ campanhaInfluenciadorIds: z.array(z.string().uuid()) }).parse(raw),
+  )
+  .handler(async ({ data, context }): Promise<InfluNpsBasico[]> => {
+    await assertCanReadInterno(context.userId, context.supabase);
+    if (data.campanhaInfluenciadorIds.length === 0) return [];
+    const { data: rows, error } = await context.supabase
+      .from("campanha_nps_influenciador")
+      .select("influenciador_id, score, answered_at")
+      .in("influenciador_id", data.campanhaInfluenciadorIds);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((r) => ({
+      influenciadorId: r.influenciador_id,
+      respondido: r.answered_at !== null,
+      score: r.score,
+      category: r.score !== null ? classifyNpsScore(r.score) : null,
+      answeredAt: r.answered_at,
+    }));
+  });
+
 /** Versão leve, só pros links do board Kanban (menu "Copiar link NPS" +
  * indicador de status em cada card) — evita carregar a agregação inteira
  * ali. Inclui `token`: só o time interno autenticado chama esta função. */

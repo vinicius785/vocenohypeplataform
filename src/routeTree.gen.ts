@@ -18,6 +18,7 @@ import { Route as PortalAppRouteRouteImport } from './routes/portal-app/route'
 import { Route as PortalV2RouteRouteImport } from './routes/portal-v2/route'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as SelecionarAmbienteRouteImport } from './routes/selecionar-ambiente'
+import { Route as AuthenticatedBancoInfluenciadoresV2RouteImport } from './routes/_authenticated/banco-influenciadores-v2'
 import { Route as AuthenticatedChatV2RouteImport } from './routes/_authenticated/chat-v2'
 import { Route as AuthenticatedDesignSystemRouteImport } from './routes/_authenticated/design-system'
 import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './routes/_authenticated/design-system-finance-concept'
@@ -125,6 +126,12 @@ const SelecionarAmbienteRoute = SelecionarAmbienteRouteImport.update({
   path: '/selecionar-ambiente',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedBancoInfluenciadoresV2Route =
+  AuthenticatedBancoInfluenciadoresV2RouteImport.update({
+    id: '/banco-influenciadores-v2',
+    path: '/banco-influenciadores-v2',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChatV2Route = AuthenticatedChatV2RouteImport.update({
   id: '/chat-v2',
   path: '/chat-v2',
@@ -471,6 +478,7 @@ export interface FileRoutesByFullPath {
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
+  '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -541,6 +549,7 @@ export interface FileRoutesByTo {
   '/criar-senha': typeof CriarSenhaRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
+  '/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/design-system': typeof AuthenticatedDesignSystemRoute
   '/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
   '/foco': typeof AuthenticatedFocoRoute
@@ -611,6 +620,7 @@ export interface FileRoutesById {
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/selecionar-ambiente': typeof SelecionarAmbienteRoute
   '/portal/$token': typeof PortalTokenRouteRouteWithChildren
+  '/_authenticated/banco-influenciadores-v2': typeof AuthenticatedBancoInfluenciadoresV2Route
   '/_authenticated/chat-v2': typeof AuthenticatedChatV2RouteWithChildren
   '/_authenticated/design-system': typeof AuthenticatedDesignSystemRoute
   '/_authenticated/design-system-finance-concept': typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -685,6 +695,7 @@ export interface FileRouteTypes {
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
+    | '/banco-influenciadores-v2'
     | '/chat-v2'
     | '/design-system'
     | '/design-system-finance-concept'
@@ -755,6 +766,7 @@ export interface FileRouteTypes {
     | '/criar-senha'
     | '/redefinir-senha'
     | '/selecionar-ambiente'
+    | '/banco-influenciadores-v2'
     | '/design-system'
     | '/design-system-finance-concept'
     | '/foco'
@@ -824,6 +836,7 @@ export interface FileRouteTypes {
     | '/redefinir-senha'
     | '/selecionar-ambiente'
     | '/portal/$token'
+    | '/_authenticated/banco-influenciadores-v2'
     | '/_authenticated/chat-v2'
     | '/_authenticated/design-system'
     | '/_authenticated/design-system-finance-concept'
@@ -974,6 +987,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/selecionar-ambiente'
       preLoaderRoute: typeof SelecionarAmbienteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/banco-influenciadores-v2': {
+      id: '/_authenticated/banco-influenciadores-v2'
+      path: '/banco-influenciadores-v2'
+      fullPath: '/banco-influenciadores-v2'
+      preLoaderRoute: typeof AuthenticatedBancoInfluenciadoresV2RouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/chat-v2': {
       id: '/_authenticated/chat-v2'
@@ -1430,6 +1450,7 @@ const AuthenticatedChatV2RouteWithChildren =
   AuthenticatedChatV2Route._addFileChildren(AuthenticatedChatV2RouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBancoInfluenciadoresV2Route: typeof AuthenticatedBancoInfluenciadoresV2Route
   AuthenticatedChatV2Route: typeof AuthenticatedChatV2RouteWithChildren
   AuthenticatedDesignSystemRoute: typeof AuthenticatedDesignSystemRoute
   AuthenticatedDesignSystemFinanceConceptRoute: typeof AuthenticatedDesignSystemFinanceConceptRoute
@@ -1441,6 +1462,8 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBancoInfluenciadoresV2Route:
+    AuthenticatedBancoInfluenciadoresV2Route,
   AuthenticatedChatV2Route: AuthenticatedChatV2RouteWithChildren,
   AuthenticatedDesignSystemRoute: AuthenticatedDesignSystemRoute,
   AuthenticatedDesignSystemFinanceConceptRoute:

@@ -468,6 +468,69 @@ export type Database = {
           },
         ];
       };
+      campanha_influenciador_avaliacoes: {
+        Row: {
+          aderencia_briefing: number;
+          campanha_id: string;
+          campanha_influenciador_id: string;
+          comunicacao: number;
+          created_at: string;
+          created_by: string;
+          cumprimento_combinados: number;
+          id: string;
+          observacao: string | null;
+          organizacao_profissionalismo: number;
+          qualidade_entregas: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          aderencia_briefing: number;
+          campanha_id: string;
+          campanha_influenciador_id: string;
+          comunicacao: number;
+          created_at?: string;
+          created_by: string;
+          cumprimento_combinados: number;
+          id?: string;
+          observacao?: string | null;
+          organizacao_profissionalismo: number;
+          qualidade_entregas: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          aderencia_briefing?: number;
+          campanha_id?: string;
+          campanha_influenciador_id?: string;
+          comunicacao?: number;
+          created_at?: string;
+          created_by?: string;
+          cumprimento_combinados?: number;
+          id?: string;
+          observacao?: string | null;
+          organizacao_profissionalismo?: number;
+          qualidade_entregas?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campanha_influenciador_avaliacoe_campanha_influenciador_id_fkey";
+            columns: ["campanha_influenciador_id"];
+            isOneToOne: true;
+            referencedRelation: "campanha_influenciadores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campanha_influenciador_avaliacoe_campanha_influenciador_id_fkey";
+            columns: ["campanha_influenciador_id"];
+            isOneToOne: true;
+            referencedRelation: "campanha_influenciadores_sem_ciclo";
+            referencedColumns: ["campanha_influenciador_id"];
+          },
+        ];
+      };
       campanha_influenciadores: {
         Row: {
           campaign_cycle_id: string | null;
