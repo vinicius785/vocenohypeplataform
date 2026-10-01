@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ExternalLink,
   ImageIcon,
+  ListChecks,
   Link as LinkIcon,
   Megaphone,
   MoreVertical,
@@ -72,6 +73,7 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
+import { TASK_STATUS_CATEGORY } from "@/lib/task-status";
 import {
   InfluencerBoard,
   BankFields,
@@ -527,6 +529,23 @@ function CampanhaDetail({
   );
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
+  // Tarefas recolhidas por padrão (não dominam o 1º viewport); abrem
+  // sozinhas quando chega um deep link de tarefa (notificação/AppShell),
+  // pra `TaskBoard` montar e abrir a tarefa como antes.
+  const [tasksExpanded, setTasksExpanded] = useState(Boolean(initialTaskId));
+  useEffect(() => {
+    if (initialTaskId) setTasksExpanded(true);
+  }, [initialTaskId]);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const openTasks = visibleTasks.filter((t) => {
+    const cat = TASK_STATUS_CATEGORY[t.status];
+    return cat !== "done" && cat !== "archived";
+  });
+  const openTasksCount = openTasks.length;
+  const overdueTasksCount = openTasks.filter(
+    (t) => t.dueDate && t.dueDate.slice(0, 10) < todayIso,
+  ).length;
+
   const [openPanel, setOpenPanel] = useState<
     null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorioMensal" | "nps"
   >(null);
@@ -745,7 +764,7 @@ function CampanhaDetail({
          * primário, badges de status/foco). Nome da campanha é o
          * elemento principal (maior peso tipográfico). */}
         <div className="space-y-3">
-          <nav aria-label="Navegação" className="flex items-center gap-1.5 text-sm">
+          <nav aria-label="Navegação" className="flex items-center gap-1.5 text-xs">
             <button
               type="button"
               onClick={onBack}
@@ -754,7 +773,7 @@ function CampanhaDetail({
               <ArrowLeft className="h-3.5 w-3.5" /> Campanhas
             </button>
             <span className="text-text-secondary">/</span>
-            <span className="min-w-0 truncate font-medium text-foreground">{c.nome}</span>
+            <span className="min-w-0 truncate text-text-secondary">{c.nome}</span>
           </nav>
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -764,9 +783,9 @@ function CampanhaDetail({
                 <p className="truncate text-xs font-medium uppercase tracking-wide text-text-secondary">
                   {cliente.empresa}
                 </p>
-                <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground md:text-[28px]">
+                <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground md:text-[28px]">
                   {c.nome}
-                </p>
+                </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -845,7 +864,7 @@ function CampanhaDetail({
              * cliente), e um menu pras menos frequentes (Página de inscrição,
              * Excluir com confirmação) — nunca vários botões com peso igual. */}
             <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" onClick={copyClientLink} disabled={!fullCliente}>
+              <Button variant="ghost" size="sm" onClick={copyClientLink} disabled={!fullCliente}>
                 {linkCopied ? (
                   <Check className="h-3.5 w-3.5" />
                 ) : (
@@ -881,32 +900,32 @@ function CampanhaDetail({
               </DropdownMenu>
             </div>
           </div>
-        </div>
 
-        {(c.activity?.length ?? 0) > 0 && (
-          <details className="group text-xs text-text-secondary">
-            <summary className="cursor-pointer select-none font-medium hover:text-foreground">
-              Histórico de status ({c.activity!.length})
-            </summary>
-            <ul className="mt-2 space-y-1.5 border-l border-border/60 pl-3">
-              {[...c.activity!]
-                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                .map((entry) => (
-                  <li key={entry.id}>
-                    <span className="font-medium text-foreground">{entry.author}</span>{" "}
-                    {entry.action}
-                    <span className="ml-1.5 text-text-secondary/70">
-                      ·{" "}
-                      {new Date(entry.createdAt).toLocaleString("pt-BR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                  </li>
-                ))}
-            </ul>
-          </details>
-        )}
+          {(c.activity?.length ?? 0) > 0 && (
+            <details className="group text-xs text-text-secondary">
+              <summary className="cursor-pointer select-none font-medium hover:text-foreground">
+                Histórico de status ({c.activity!.length})
+              </summary>
+              <ul className="mt-2 space-y-1.5 border-l border-border/60 pl-3">
+                {[...c.activity!]
+                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                  .map((entry) => (
+                    <li key={entry.id}>
+                      <span className="font-medium text-foreground">{entry.author}</span>{" "}
+                      {entry.action}
+                      <span className="ml-1.5 text-text-secondary/70">
+                        ·{" "}
+                        {new Date(entry.createdAt).toLocaleString("pt-BR", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </details>
+          )}
+        </div>
 
         <InscricaoPageDialog
           open={inscricaoOpen}
@@ -944,16 +963,20 @@ function CampanhaDetail({
              * contagens de INFLUENCIADOR (por status); "Entregas
              * publicadas" é contagem de CONTEÚDO, só de influenciadores
              * elegíveis (`getEligibleCampaignDeliveries`). */}
+            {/* Hierarquia (redesenho): só os 5 indicadores OPERACIONAIS
+             * ganham valor em destaque; os secundários (meta, enviados,
+             * em aprovação, saldo) continuam visíveis como `complement`
+             * da métrica a que pertencem — nenhum dado removido, só
+             * deixam de competir com o valor principal. */}
             <SummaryStat
               label="Influenciadores adicionados"
               value={visibleInflus.length.toString()}
+              complement={`Meta de ${totalInflus}`}
             />
-            <SummaryStat label="Meta de influenciadores" value={totalInflus.toString()} />
-            <SummaryStat label="Perfis enviados ao cliente" value={`${enviados}/${totalEnviar}`} />
             <SummaryStat
-              label="Perfis em aprovação"
-              value={emAprovacao.toString()}
-              tone={emAprovacao > 0 ? "warning" : undefined}
+              label="Influenciadores aprovados"
+              value={eligibleInflus.length.toString()}
+              complement={`${enviados}/${totalEnviar} enviados · ${emAprovacao} em aprovação`}
             />
             <SummaryStat
               label="Entregas publicadas"
@@ -966,6 +989,7 @@ function CampanhaDetail({
                 <SummaryStat
                   label="Gasto"
                   value={fmtBRL(gasto)}
+                  complement={`Saldo ${fmtBRL(disponivel)}`}
                   tone={overBudget ? "danger" : undefined}
                   progress={{
                     pct: Math.max(pctGasto, 2),
@@ -973,7 +997,6 @@ function CampanhaDetail({
                     tone: overBudget ? "danger" : "brand",
                   }}
                 />
-                <SummaryStat label="Saldo" value={fmtBRL(disponivel)} />
               </>
             )}
           </div>
@@ -982,11 +1005,7 @@ function CampanhaDetail({
         {/* INFORMAÇÕES DA CAMPANHA — bento compacto em duas colunas flex
          * independentes (ver comentário abaixo pra detalhe da estrutura).
          * Nenhum card usa altura fixa/mínima. */}
-        <section className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            Informações da campanha
-          </p>
-
+        <section aria-label="Informações da campanha">
           {/* Duas colunas VERTICALMENTE INDEPENDENTES — cada `md:flex
            * md:flex-col` abaixo é seu próprio container flex. "Orçamento
            * e gasto" foi removido daqui (duplicava Orçamento/Gasto/Saldo
@@ -997,8 +1016,8 @@ function CampanhaDetail({
            * Direitos de imagem — de propósito, não um efeito colateral de
            * grid compartilhado. No mobile, os wrappers viram `contents`
            * (não geram caixa própria) e a ORDEM real da pilha única vem
-           * só dos `order-*` em cada card: Briefing → Composição →
-           * Ferramentas → Direitos. */}
+           * só dos `order-*` em cada card: Briefing → Ferramentas →
+           * Contrato (composição/pagamentos/direitos num card só). */}
           <div className="flex flex-col gap-3 md:flex-row md:items-stretch md:gap-4">
             <div className="contents md:flex md:w-2/3 md:flex-col md:gap-3 lg:gap-4">
               {/* Briefing cresce com `md:flex-1` pra preencher o espaço que
@@ -1091,91 +1110,88 @@ function CampanhaDetail({
               </div>
             </div>
 
+            {/* CONTRATO — Composição & pagamentos + Direitos de imagem num
+             * único card secundário (antes eram 2 cards competindo com o
+             * Briefing). Resumo enxuto aqui; o detalhe completo (formas de
+             * pagamento, observações dos direitos) abre nos dialogs
+             * `composicao`/`direitos` que já existiam neste componente. */}
             <div className="contents md:flex md:w-1/3 md:flex-col md:gap-3 lg:gap-4">
-              <div className="order-2 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  <Wallet className="h-3.5 w-3.5" /> Composição & pagamentos
+              <div className="order-4 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
+                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Contrato
                 </p>
-                <div className="mt-2 space-y-2.5">
+                <dl className="mt-3 space-y-2.5 text-sm">
                   <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                    <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
                       Composição planejada
-                    </p>
-                    {c.linhas.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
-                        {c.linhas.map((l) => (
-                          <span
-                            key={l.id}
-                            className="rounded-md bg-muted px-2 py-1 text-foreground"
-                          >
-                            {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-sm text-text-secondary">Nenhuma definida.</p>
-                    )}
+                    </dt>
+                    <dd className="mt-1">
+                      {c.linhas.length > 0 ? (
+                        <span className="flex flex-wrap gap-1.5 text-xs">
+                          {c.linhas.map((l) => (
+                            <span
+                              key={l.id}
+                              className="rounded-md bg-muted px-2 py-0.5 text-foreground"
+                            >
+                              {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="text-text-secondary">Nenhuma definida.</span>
+                      )}
+                    </dd>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-                      Valor do cliente · forma
-                    </p>
-                    <p className="mt-1 text-sm text-foreground">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-xs text-text-secondary">Valor do cliente</dt>
+                    <dd className="truncate text-right text-foreground">
                       {c.valorCliente || "Não definido"}
                       {c.pagClienteTipo ? ` · ${c.pagClienteTipo}` : ""}
-                    </p>
+                    </dd>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-                      Prazo de pagamento
-                    </p>
-                    <p className="mt-1 text-sm text-foreground">{c.prazoPag || "Não definido"}</p>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-xs text-text-secondary">Prazo de pagamento</dt>
+                    <dd className="truncate text-right text-foreground">
+                      {c.prazoPag || "Não definido"}
+                    </dd>
                   </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="flex items-center gap-1 text-xs text-text-secondary">
+                      <ShieldCheck className="h-3 w-3" /> Direitos de imagem
+                    </dt>
+                    <dd className="min-w-0 truncate text-right text-foreground">
+                      {c.direitosImagem?.permitido
+                        ? [
+                            c.direitosImagem.usos.join(", "),
+                            c.direitosImagem.duracaoDias
+                              ? `${c.direitosImagem.duracaoDias} dias`
+                              : "Indeterminada",
+                            c.direitosImagem.exclusividade
+                              ? `Exclusividade${c.direitosImagem.exclusividadeSegmento ? `: ${c.direitosImagem.exclusividadeSegmento}` : ""}`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                        : "Não definidos"}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel("composicao")}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    <Wallet className="h-3 w-3" /> Formas de pagamento
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel("direitos")}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    <ShieldCheck className="h-3 w-3" /> Direitos de imagem
+                  </button>
                 </div>
-              </div>
-
-              <div className="order-5 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Direitos de imagem
-                </p>
-                {c.direitosImagem?.permitido ? (
-                  <div className="mt-2 space-y-2 text-sm">
-                    {c.direitosImagem.usos.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 text-xs">
-                        {c.direitosImagem.usos.map((u) => (
-                          <span key={u} className="rounded-md bg-muted px-2 py-1 text-foreground">
-                            {u}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-foreground">
-                      Duração:{" "}
-                      <span className="text-text-secondary">
-                        {c.direitosImagem.duracaoDias
-                          ? `${c.direitosImagem.duracaoDias} dias`
-                          : "Indeterminada"}
-                      </span>
-                    </p>
-                    {c.direitosImagem.exclusividade && (
-                      <p className="text-foreground">
-                        Exclusividade:{" "}
-                        <span className="text-text-secondary">
-                          {c.direitosImagem.exclusividadeSegmento || "Sim"}
-                        </span>
-                      </p>
-                    )}
-                    {c.direitosImagem.observacoes && (
-                      <p className="whitespace-pre-wrap break-words text-xs text-text-secondary">
-                        {c.direitosImagem.observacoes}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-1.5 text-xs text-text-secondary">
-                    Nenhum direito de uso definido.
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -1185,14 +1201,43 @@ function CampanhaDetail({
          * renderiza seu próprio cabeçalho (título "Tarefas"/total/ordenar/
          * filtrar/Nova tarefa) — nenhum título extra aqui, senão duplica
          * (achado real desta rodada corretiva: "TAREFAS" aparecia 2x). */}
-        <section>
-          <TaskBoard
-            tasks={visibleTasks}
-            onChange={persistVisibleTasks}
-            scope={{ kind: "campanha", id: c.id }}
-            initialOpenTaskId={initialTaskId}
-            onInitialOpenTaskHandled={onInitialTaskHandled}
-          />
+        <section className="rounded-2xl bg-card dark:shadow-none">
+          <button
+            type="button"
+            onClick={() => setTasksExpanded((v) => !v)}
+            aria-expanded={tasksExpanded}
+            className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
+            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+              <ListChecks className="h-4 w-4 text-text-secondary" />
+              Tarefas
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">
+                {openTasksCount} em aberto
+              </span>
+              {overdueTasksCount > 0 && (
+                <span className="text-xs font-medium text-danger">
+                  {overdueTasksCount} atrasada{overdueTasksCount > 1 ? "s" : ""}
+                </span>
+              )}
+            </span>
+            <span className="flex items-center gap-1 text-xs font-medium text-text-secondary">
+              {tasksExpanded ? "Recolher" : "Ver tarefas"}
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${tasksExpanded ? "rotate-180" : ""}`}
+              />
+            </span>
+          </button>
+          {tasksExpanded && (
+            <div className="border-t border-border/60 p-4 md:p-5">
+              <TaskBoard
+                tasks={visibleTasks}
+                onChange={persistVisibleTasks}
+                scope={{ kind: "campanha", id: c.id }}
+                initialOpenTaskId={initialTaskId}
+                onInitialOpenTaskHandled={onInitialTaskHandled}
+              />
+            </div>
+          )}
         </section>
 
         {/* INFLUENCIADORES — sempre visível. `InfluencerBoard` já renderiza
