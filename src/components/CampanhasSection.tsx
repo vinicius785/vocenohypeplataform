@@ -408,8 +408,8 @@ export function CampanhasSection() {
 /** Entregas visíveis na caixa Entregas antes de "Ver todas as entregas →". */
 const ENTREGAS_BOX_PREVIEW = 3;
 /** Container único das 4 caixas fixas da região inferior do detalhe. */
-const BOTTOM_BOX = "flex flex-col rounded-2xl bg-card p-4 dark:shadow-none md:p-5";
-const BOTTOM_BOX_TITLE = "text-xs font-semibold uppercase tracking-widest text-muted-foreground";
+const BOTTOM_BOX = "flex flex-col rounded-2xl bg-card p-4 dark:shadow-none";
+const BOTTOM_BOX_TITLE = "text-xs font-semibold uppercase tracking-wide text-text-secondary";
 
 function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
   if (t === "Valor") return cfg.valor ? fmtBRL(parseMoney(cfg.valor)) : "";
@@ -1102,7 +1102,7 @@ function CampanhaDetail({
             >
               <AlertTriangle className="h-3.5 w-3.5" /> Precisa de atenção
             </h2>
-            <ul className="mt-2 flex flex-col divide-y divide-border/40">
+            <ul className="mt-1.5 flex flex-col divide-y divide-border/30">
               {attentionItems.map((item) => (
                 <li key={item.key} className="flex items-center gap-x-3 py-1.5">
                   <span
@@ -1172,10 +1172,10 @@ function CampanhaDetail({
          * de pagamento do cliente `pagClienteTipo`) NUNCA é renderizado nesta
          * página. Só dados operacionais: composição, pagamento aos
          * influenciadores (`pagTipos`/`pagConfig`/`prazoPag`), direitos. */}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-3 md:grid-cols-2">
           {/* 1. BRIEFING */}
           <section aria-labelledby="campanha-briefing" className={BOTTOM_BOX}>
-            <div className="flex h-8 items-center justify-between gap-2">
+            <div className="-my-1 flex h-8 items-center justify-between gap-2">
               <h2 id="campanha-briefing" className={BOTTOM_BOX_TITLE}>
                 Briefing
               </h2>
@@ -1183,11 +1183,11 @@ function CampanhaDetail({
                 <Pencil className="h-3 w-3" /> Editar
               </Button>
             </div>
-            <div className="mt-2 flex-1">
+            <div className="mt-1.5">
               {c.briefing ? (
                 <p
                   className={`whitespace-pre-wrap break-words text-sm text-foreground ${
-                    briefingIsLong && !briefingExpanded ? "line-clamp-5" : ""
+                    briefingIsLong && !briefingExpanded ? "line-clamp-4" : ""
                   }`}
                 >
                   {c.briefing}
@@ -1206,7 +1206,7 @@ function CampanhaDetail({
               )}
             </div>
             {(c.briefingFile || (c.briefingLinks?.length ?? 0) > 0) && (
-              <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 {c.briefingFile && (
                   <a
                     href={c.briefingFile}
@@ -1233,7 +1233,7 @@ function CampanhaDetail({
 
           {/* 2. INFOS ÚTEIS (substitui "Contrato") — só operacional. */}
           <section aria-labelledby="campanha-infos" className={BOTTOM_BOX}>
-            <div className="flex h-8 items-center justify-between gap-2">
+            <div className="-my-1 flex h-8 items-center justify-between gap-2">
               <h2 id="campanha-infos" className={BOTTOM_BOX_TITLE}>
                 Infos úteis
               </h2>
@@ -1241,16 +1241,18 @@ function CampanhaDetail({
                 <Pencil className="h-3 w-3" /> Editar
               </Button>
             </div>
-            <dl className="mt-2 flex-1 space-y-2.5 text-sm">
+            <dl className="mt-1 space-y-3 text-sm">
               <div>
-                <dt className="text-xs text-text-secondary">Composição planejada</dt>
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                  Composição planejada
+                </dt>
                 <dd className="mt-1">
                   {c.linhas.length > 0 ? (
                     <span className="flex flex-wrap gap-1.5 text-xs">
                       {c.linhas.map((l) => (
                         <span
                           key={l.id}
-                          className="rounded-md bg-muted px-2 py-0.5 text-foreground"
+                          className="rounded-md bg-muted/70 px-2 py-0.5 font-medium text-foreground"
                         >
                           {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
                         </span>
@@ -1262,14 +1264,19 @@ function CampanhaDetail({
                 </dd>
               </div>
               <div>
-                <dt className="text-xs text-text-secondary">Pagamento dos influenciadores</dt>
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
+                  Pagamento dos influenciadores
+                </dt>
                 <dd className="mt-1">
                   {(c.pagTipos?.length ?? 0) > 0 ? (
                     <span className="flex flex-wrap gap-1.5 text-xs">
                       {c.pagTipos.map((t) => {
                         const resumo = pagTipoResumo(t, c.pagConfig?.[t] ?? {});
                         return (
-                          <span key={t} className="rounded-md bg-muted px-2 py-0.5 text-foreground">
+                          <span
+                            key={t}
+                            className="rounded-md bg-muted/70 px-2 py-0.5 font-medium text-foreground"
+                          >
                             <span className="font-medium">{t}</span>
                             {resumo && <span className="text-text-secondary"> · {resumo}</span>}
                           </span>
@@ -1282,18 +1289,18 @@ function CampanhaDetail({
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-xs text-text-secondary">
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                   Prazo de pagamento dos influenciadores
                 </dt>
-                <dd className="truncate text-right text-foreground">
+                <dd className="max-w-[50%] shrink-0 truncate text-right font-medium text-foreground">
                   {c.prazoPag || "Não definido"}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="flex shrink-0 items-center gap-1 text-xs text-text-secondary">
+                <dt className="flex shrink-0 items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-text-secondary">
                   <ShieldCheck className="h-3 w-3" /> Direitos de imagem
                 </dt>
-                <dd className="min-w-0 truncate text-right text-foreground">
+                <dd className="min-w-0 truncate text-right font-medium text-foreground">
                   {c.direitosImagem?.permitido
                     ? [
                         c.direitosImagem.usos.join(", "),
@@ -1310,7 +1317,7 @@ function CampanhaDetail({
                 </dd>
               </div>
             </dl>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5">
               <button
                 type="button"
                 onClick={() => setOpenPanel("composicao")}
@@ -1331,12 +1338,12 @@ function CampanhaDetail({
           {/* 3. RECURSOS — mesmos 4 recursos, lista compacta, cada um abre no
            * `CampaignToolShell`. */}
           <section aria-labelledby="campanha-recursos" className={BOTTOM_BOX}>
-            <div className="flex h-8 items-center">
+            <div className="-my-1 flex h-8 items-center">
               <h2 id="campanha-recursos" className={BOTTOM_BOX_TITLE}>
                 Recursos
               </h2>
             </div>
-            <div className="mt-2 grid flex-1 content-start gap-2 sm:grid-cols-2">
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-2">
               <CampaignToolCard
                 compact
                 tool="documentos"
@@ -1367,7 +1374,7 @@ function CampanhaDetail({
             aria-labelledby="campanha-entregas"
             className={`${BOTTOM_BOX} scroll-mt-6`}
           >
-            <div className="flex h-8 items-center">
+            <div className="-my-1 flex h-8 items-center">
               <h2 id="campanha-entregas" className={`${BOTTOM_BOX_TITLE} flex items-center gap-2`}>
                 Entregas
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
@@ -1375,7 +1382,7 @@ function CampanhaDetail({
                 </span>
               </h2>
             </div>
-            <div className="mt-2 flex-1">
+            <div className="mt-1.5">
               {allEntregas.length === 0 ? (
                 <p className="text-sm text-text-secondary">
                   Nenhuma entrega ainda. Elas aparecem aqui assim que forem criadas para um
@@ -1384,11 +1391,11 @@ function CampanhaDetail({
               ) : (
                 <>
                   <p className="text-xs text-text-secondary">{entregasStageSummary}</p>
-                  <ul className="mt-2 divide-y divide-border/60 border-t border-border/60">
+                  <ul className="mt-2 divide-y divide-border/30 border-t border-border/40">
                     {allEntregas.slice(0, ENTREGAS_BOX_PREVIEW).map(({ influ, entrega }) => (
                       <li
                         key={entrega.id}
-                        className="flex items-center justify-between gap-3 py-2 text-sm"
+                        className="flex items-center justify-between gap-3 py-1.5 text-sm"
                       >
                         <span className="min-w-0 truncate text-foreground">
                           <span className="font-medium">{influ.nome}</span>
@@ -1409,7 +1416,7 @@ function CampanhaDetail({
               )}
             </div>
             {allEntregas.length > 0 && (
-              <div className="mt-3 border-t border-border/60 pt-3">
+              <div className="mt-2">
                 <button
                   type="button"
                   onClick={() => setEntregasDialogOpen(true)}

@@ -2537,9 +2537,9 @@ function InfluCard({
         }
       }}
       aria-label={`Ver detalhes de ${influ.nome || "influenciador"}`}
-      className="flex w-full cursor-pointer flex-col rounded-xl border border-border bg-background transition-colors hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      className="flex w-full cursor-pointer flex-col rounded-xl border border-border/60 bg-background transition-colors hover:border-foreground/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
     >
-      <div className="flex items-start gap-3 p-3.5 pb-2.5">
+      <div className="flex items-start gap-3 p-3 pb-2">
         <div className="relative h-10 w-10 shrink-0">
           <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {influ.foto ? (
@@ -2618,7 +2618,7 @@ function InfluCard({
 
       {has("status") && (
         <div
-          className="flex flex-wrap items-center gap-1.5 px-3.5 pb-2.5"
+          className="flex flex-wrap items-center gap-1.5 px-3 pb-2"
           onClick={stop}
           onKeyDown={stop}
         >
@@ -2636,7 +2636,7 @@ function InfluCard({
       )}
 
       {(overdueDays || motivoRecusa) && (
-        <div className="space-y-1 px-3.5 pb-2.5">
+        <div className="space-y-1 px-3 pb-2">
           {overdueDays ? (
             <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-3 w-3 shrink-0" /> Aguardando aprovação há {overdueDays}{" "}
@@ -2658,7 +2658,7 @@ function InfluCard({
         (has("entregas") && !elegivel) ||
         has("pagamentos") ||
         (has("contrato") && influ.contrato)) && (
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground">
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 px-3 py-1.5 text-[11px] text-muted-foreground">
           {producao && producao.total > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <span className="font-medium tabular-nums text-foreground/80">
