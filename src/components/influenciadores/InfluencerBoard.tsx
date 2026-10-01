@@ -511,6 +511,24 @@ export function computeReliability(
 /** Prazo (dias) que consideramos razoável para um cliente responder uma solicitação de aprovação. */
 export const APPROVAL_SLA_DAYS = 3;
 
+/** Plural (minúsculo) dos rótulos de `INFLU_STATUS_LABEL` — só pro resumo
+ * textual do cabeçalho ("3 recusados"), nunca pros badges. */
+const INFLU_STATUS_PLURAL: Record<InfluStatus, string> = {
+  INSCRITO: "inscritos",
+  EM_CURADORIA: "em curadoria",
+  ENVIADO_AO_CLIENTE: "enviados ao cliente",
+  APROVADO: "aprovados",
+  RECUSADO: "recusados",
+};
+/** Pontinho de cor do resumo — mesma família de cor de `INFLU_STATUS_TONE`. */
+const INFLU_STATUS_DOT: Record<InfluStatus, string> = {
+  INSCRITO: "bg-muted-foreground/60",
+  EM_CURADORIA: "bg-sky-500",
+  ENVIADO_AO_CLIENTE: "bg-violet-500",
+  APROVADO: "bg-emerald-500",
+  RECUSADO: "bg-red-500",
+};
+
 /** Se o influenciador está "Enviado ao cliente" há mais dias que o SLA, retorna há quantos dias. */
 export function approvalSlaOverdueDays(influ: Influ): number | null {
   if (influ.status !== "ENVIADO_AO_CLIENTE" || influ.clienteReprovacao || !influ.statusUpdatedAt)
@@ -2105,6 +2123,13 @@ export function InfluencerBoard({
 
   const reprovadosCount = influs.filter(isReprovado).length;
 
+  // Resumo por status no cabeçalho — só contagem dos 5 status que já
+  // existem (`INFLU_STATUSES`), na ordem do funil, omitindo os zerados.
+  const statusSummary = INFLU_STATUSES.map((status) => ({
+    status,
+    count: influs.filter((i) => i.status === status).length,
+  })).filter((x) => x.count > 0);
+
   const filteredInflus = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = sortedInflus;
@@ -2123,17 +2148,36 @@ export function InfluencerBoard({
           <p className="mt-1 text-sm text-muted-foreground">
             {influs.length} {influs.length === 1 ? "adicionado" : "adicionados"}
           </p>
+          {statusSummary.length > 0 && (
+            <ul
+              aria-label="Influenciadores por status"
+              className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+            >
+              {statusSummary.map(({ status, count }) => (
+                <li key={status} className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className={`h-1.5 w-1.5 rounded-full ${INFLU_STATUS_DOT[status]}`}
+                  />
+                  <span className="font-medium tabular-nums text-foreground">{count}</span>
+                  {count === 1
+                    ? INFLU_STATUS_LABEL[status].toLowerCase()
+                    : INFLU_STATUS_PLURAL[status]}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <div className="relative">
+        <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar influenciador..."
               aria-label="Buscar influenciador"
-              className="h-8 w-44 rounded-md border border-border bg-background pl-8 pr-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+              className="h-8 w-full rounded-md border border-border bg-background pl-8 sm:w-44 pr-2.5 text-xs outline-none focus:border-ring focus:ring-1 focus:ring-ring"
             />
           </div>
           <div ref={viewMenu.ref} className="relative">
@@ -2464,13 +2508,24 @@ function InfluCard({
   const overdueDays = approvalSlaOverdueDays(influ);
   const elegivel = isInfluencerEligibleForDeliveries(influ.status);
   const producao = has("entregas") && elegivel ? producaoResumo(influ.entregas) : null;
+  // Próxima data de postagem já cadastrada numa entrega ainda não
+  // publicada — só exibe o dado existente (`dataPostagem`), sem regra nova
+  // de atraso.
+  const proximaPostagem =
+    has("entregas") && elegivel
+      ? influ.entregas
+          .filter((e) => e.stage !== "PUBLICADA" && e.dataPostagem)
+          .map((e) => e.dataPostagem!)
+          .sort()[0]
+      : undefined;
+  const motivoRecusa = approval?.status === "reprovado" ? approval.motivo : undefined;
+  const budget = firstCurrencyResposta(influ.inscricaoRespostas);
 
   return (
-    // Card compacto e horizontal (rodada corretiva forte) — foto pequena à
-    // esquerda em vez de uma área alta só pra centralizar a foto; nunca um
-    // <button> envolvendo outro botão: o card inteiro é clicável via um
-    // <article role="button"> próprio, e cada ação interna (status, menu,
-    // link de contrato) para a propagação do clique/tecla.
+    // Card denso (refatoração da Home da campanha): identidade + status +
+    // UMA linha de dados operacionais (conteúdo, valor, próxima postagem),
+    // sem empilhar 3 faixas com bordas. O card inteiro é clicável via
+    // <article role="button">; cada ação interna para a propagação.
     <article
       role="button"
       tabIndex={0}
@@ -2482,20 +2537,20 @@ function InfluCard({
         }
       }}
       aria-label={`Ver detalhes de ${influ.nome || "influenciador"}`}
-      className="flex w-full cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-colors hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-brand"
+      className="flex w-full cursor-pointer flex-col rounded-xl border border-border bg-background transition-colors hover:border-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
     >
-      <div className="flex items-start gap-3 p-4">
-        <div className="relative h-12 w-12 shrink-0">
-          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
+      <div className="flex items-start gap-3 p-3.5 pb-2.5">
+        <div className="relative h-10 w-10 shrink-0">
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-muted ring-1 ring-border">
             {influ.foto ? (
               <img src={influ.foto} alt="" className="h-full w-full object-cover" />
             ) : (
-              <User className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+              <User className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
             )}
           </div>
           {approval && (
             <span
-              title={approval.status === "reprovado" ? approval.motivo : undefined}
+              aria-hidden
               className={`absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background ${
                 approval.status === "aprovado"
                   ? "bg-emerald-500 text-white"
@@ -2514,34 +2569,27 @@ function InfluCard({
           <p className="truncate text-sm font-semibold text-foreground">
             {influ.nome || "Sem nome"}
           </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-            {influ.nicho && <span className="truncate">{influ.nicho}</span>}
-            {influ.nicho && has("redes") && <span>·</span>}
+          <div className="flex min-w-0 items-center gap-x-1.5 text-xs text-muted-foreground">
             {has("redes") &&
               (() => {
                 const resolved = ensurePrimary(influ.redes);
                 const principal = resolved.find((r) => r.isPrimary) ?? resolved[0];
                 const extra = resolved.length - 1;
-                if (!principal) return <span>Sem rede cadastrada</span>;
+                if (!principal) return <span className="truncate">Sem rede cadastrada</span>;
                 const label = sanitizeHandleForDisplay(principal.plataforma, principal.handle);
                 return (
-                  <span className="inline-flex items-center gap-1 truncate">
-                    {platformIcon(principal.plataforma)}@{label || principal.plataforma}
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <span className="shrink-0">{platformIcon(principal.plataforma)}</span>
+                    <span className="truncate">@{label || principal.plataforma}</span>
                     {extra > 0 && (
-                      <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-                        +{extra} rede{extra === 1 ? "" : "s"}
-                      </span>
+                      <span className="shrink-0 text-[10px] font-medium">+{extra}</span>
                     )}
                   </span>
                 );
               })()}
+            {influ.nicho && has("redes") && <span aria-hidden>·</span>}
+            {influ.nicho && <span className="truncate">{influ.nicho}</span>}
           </div>
-          {(() => {
-            const budget = firstCurrencyResposta(influ.inscricaoRespostas);
-            return budget ? (
-              <p className="mt-0.5 text-xs font-medium text-foreground">{formatBRL(budget)}</p>
-            ) : null;
-          })()}
         </div>
 
         <DropdownMenu>
@@ -2549,8 +2597,9 @@ function InfluCard({
             <button
               type="button"
               onClick={stop}
+              onKeyDown={stop}
               aria-label={`Mais ações para ${influ.nome || "influenciador"}`}
-              className="relative z-10 -m-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-60 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              className="relative z-10 -m-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             >
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -2568,61 +2617,96 @@ function InfluCard({
       </div>
 
       {has("status") && (
-        <div className="px-4 pb-3" onClick={stop}>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <InfluStatusPill value={influ.status} onChange={onStatus} />
-            <NextActionBadge actor={nextActionForInflu(influ.status)} />
-          </div>
+        <div
+          className="flex flex-wrap items-center gap-1.5 px-3.5 pb-2.5"
+          onClick={stop}
+          onKeyDown={stop}
+        >
+          <InfluStatusPill value={influ.status} onChange={onStatus} />
+          <NextActionBadge actor={nextActionForInflu(influ.status)} />
+          {budget ? (
+            <span
+              className="ml-auto text-[11px] font-medium text-foreground"
+              title="Valor informado na inscrição"
+            >
+              {formatBRL(budget)}
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {(overdueDays || motivoRecusa) && (
+        <div className="space-y-1 px-3.5 pb-2.5">
           {overdueDays ? (
-            <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-3 w-3" /> Aguardando aprovação há {overdueDays} dias
+            <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3 shrink-0" /> Aguardando aprovação há {overdueDays}{" "}
+              dias
+            </p>
+          ) : null}
+          {motivoRecusa ? (
+            <p
+              className="line-clamp-2 text-[11px] text-red-700 dark:text-red-400"
+              title={motivoRecusa}
+            >
+              <span className="font-medium">Motivo da recusa:</span> {motivoRecusa}
             </p>
           ) : null}
         </div>
       )}
 
-      {producao && producao.total > 0 && (
-        <div className="border-t border-border/60 px-4 py-2.5">
-          <div className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="font-medium text-foreground/80">
-              {producao.publicadas}/{producao.total} publicadas
+      {(producao ||
+        (has("entregas") && !elegivel) ||
+        has("pagamentos") ||
+        (has("contrato") && influ.contrato)) && (
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-3.5 py-2 text-[11px] text-muted-foreground">
+          {producao && producao.total > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-medium tabular-nums text-foreground/80">
+                Conteúdo {producao.publicadas}/{producao.total}
+              </span>
+              publicados
+              <span
+                className="h-1 w-10 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label={`${producao.publicadas} de ${producao.total} conteúdos publicados`}
+                aria-valuenow={producao.publicadas}
+                aria-valuemin={0}
+                aria-valuemax={producao.total}
+              >
+                <span
+                  className="block h-full rounded-full bg-brand"
+                  style={{ width: `${Math.round((producao.publicadas / producao.total) * 100)}%` }}
+                />
+              </span>
             </span>
-          </div>
-          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-brand"
-              style={{ width: `${Math.round((producao.publicadas / producao.total) * 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {has("entregas") && !elegivel && (
-        <div className="border-t border-border/60 px-4 py-2.5">
-          <p className="text-[11px] text-text-secondary">Não elegível para entregas</p>
-        </div>
-      )}
-
-      {(has("pagamentos") || (has("contrato") && influ.contrato)) && (
-        <dl className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2.5 text-[11px] text-muted-foreground">
+          )}
+          {producao && producao.total === 0 && <span>Sem entregas cadastradas</span>}
+          {has("entregas") && !elegivel && <span>Não elegível para entregas</span>}
+          {proximaPostagem && (
+            <span>
+              Próxima postagem ·{" "}
+              <span className="font-medium text-foreground/80">{fmtDate(proximaPostagem)}</span>
+            </span>
+          )}
           {has("pagamentos") && (
-            <div className="flex items-baseline gap-1">
-              <dt>Valor</dt>
-              <dd className="font-medium text-foreground/80">
+            <span className="ml-auto">
+              Valor{" "}
+              <span className="font-medium text-foreground/80">
                 {totalPago > 0 ? fmtBRL(totalPago) : "—"}
-              </dd>
-            </div>
+              </span>
+            </span>
           )}
           {has("contrato") && influ.contrato && (
             <a
               href={influ.contrato}
               download
               onClick={stop}
-              className="underline underline-offset-2"
+              className="underline underline-offset-2 hover:text-foreground"
             >
               Contrato
             </a>
           )}
-        </dl>
+        </div>
       )}
     </article>
   );

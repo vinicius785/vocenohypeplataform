@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
   Check,
@@ -71,7 +72,8 @@ import { useMyAccess } from "@/lib/permissions";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
-import { TaskBoard, type Task } from "./tasks/TaskBoard";
+import { TaskBoard, matchesDeadlinePeriod, type Task } from "./tasks/TaskBoard";
+import { usePerformanceSettings } from "@/lib/performance-events-store";
 import {
   InfluencerBoard,
   BankFields,
@@ -80,6 +82,7 @@ import {
   fmtDate,
   normalizeInflus,
   totalAceito,
+  approvalSlaOverdueDays,
   type Influ,
   type BankInfo,
   type Entrega,
@@ -593,6 +596,111 @@ function CampanhaDetail({
   );
   const allEntregas = useMemo(() => getEligibleCampaignDeliveries(visibleInflus), [visibleInflus]);
   const entregasPublicadas = allEntregas.filter((x) => x.entrega.stage === "PUBLICADA").length;
+  const pctPublicadas =
+    allEntregas.length > 0 ? Math.round((entregasPublicadas / allEntregas.length) * 100) : 0;
+
+  // ---- Precisa de atenção — SÓ sinais já calculados em algum lugar do app,
+  // nenhuma regra nova: atraso/"vence hoje" de tarefa = mesmo
+  // `matchesDeadlinePeriod` (+ corte de horário configurável) do filtro de
+  // prazo do TaskBoard; SLA de aprovação = `approvalSlaOverdueDays` (mesmo
+  // aviso do card do influenciador); "quem age" de entrega =
+  // `nextActionForEntrega`; orçamento estourado = `overBudget` dos KPIs.
+  const tasksRef = useRef<HTMLElement>(null);
+  const influsRef = useRef<HTMLElement>(null);
+  const entregasRef = useRef<HTMLElement>(null);
+  const scrollToRef = (el: HTMLElement | null) =>
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const { settings: performanceSettings } = usePerformanceSettings();
+  const cutoffHour = performanceSettings.deadlineCutoffHour;
+  const tasksMatching = (key: "atrasada" | "hoje") =>
+    visibleTasks.filter(
+      (t) =>
+        matchesDeadlinePeriod(t, key, cutoffHour) ||
+        (t.subtasks ?? []).some((st) => matchesDeadlinePeriod(st, key, cutoffHour)),
+    ).length;
+  const tarefasAtrasadas = tasksMatching("atrasada");
+  const tarefasHoje = tasksMatching("hoje");
+  const aprovacaoForaDoSla = visibleInflus.filter((i) => approvalSlaOverdueDays(i) !== null).length;
+  const inscritosCount = visibleInflus.filter((i) => i.status === "INSCRITO").length;
+  const pendentesEntregas = allEntregas.filter((x) => x.entrega.stage !== "PUBLICADA");
+  const entregasComCliente = pendentesEntregas.filter(
+    (x) => nextActionForEntrega(x.entrega.stage) === "cliente",
+  ).length;
+  const entregasComTime = pendentesEntregas.filter(
+    (x) => nextActionForEntrega(x.entrega.stage) === "hype",
+  ).length;
+  const nPlural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const attentionItems: {
+    key: string;
+    tone: "danger" | "warning" | "neutral";
+    text: string;
+    action: string;
+    onAction: () => void;
+  }[] = [];
+  if (tarefasAtrasadas > 0)
+    attentionItems.push({
+      key: "tarefas-atrasadas",
+      tone: "danger",
+      text: nPlural(tarefasAtrasadas, "tarefa atrasada", "tarefas atrasadas"),
+      action: "Ver tarefas",
+      onAction: () => scrollToRef(tasksRef.current),
+    });
+  if (overBudget)
+    attentionItems.push({
+      key: "orcamento",
+      tone: "danger",
+      text: `Gasto acima do orçamento em ${fmtBRL(gasto - orcamento)}`,
+      action: "Ver influenciadores",
+      onAction: () => scrollToRef(influsRef.current),
+    });
+  if (tarefasHoje > 0)
+    attentionItems.push({
+      key: "tarefas-hoje",
+      tone: "warning",
+      text: nPlural(tarefasHoje, "tarefa vence hoje", "tarefas vencem hoje"),
+      action: "Ver tarefas",
+      onAction: () => scrollToRef(tasksRef.current),
+    });
+  if (emAprovacao > 0)
+    attentionItems.push({
+      key: "aprovacao",
+      tone: aprovacaoForaDoSla > 0 ? "warning" : "neutral",
+      text: `${nPlural(emAprovacao, "perfil aguardando", "perfis aguardando")} aprovação do cliente${
+        aprovacaoForaDoSla > 0 ? ` · ${aprovacaoForaDoSla} acima do prazo` : ""
+      }`,
+      action: "Ver influenciadores",
+      onAction: () => scrollToRef(influsRef.current),
+    });
+  if (inscritosCount > 0)
+    attentionItems.push({
+      key: "inscritos",
+      tone: "neutral",
+      text: `${nPlural(inscritosCount, "inscrição nova", "inscrições novas")} para curadoria`,
+      action: "Ver influenciadores",
+      onAction: () => scrollToRef(influsRef.current),
+    });
+  if (entregasComTime > 0)
+    attentionItems.push({
+      key: "entregas-time",
+      tone: "neutral",
+      text: `${nPlural(entregasComTime, "entrega", "entregas")} com próxima ação: ${NEXT_ACTOR_LABEL.hype}`,
+      action: "Ver entregas",
+      onAction: () => {
+        setEntregasExpanded(true);
+        requestAnimationFrame(() => scrollToRef(entregasRef.current));
+      },
+    });
+  if (entregasComCliente > 0)
+    attentionItems.push({
+      key: "entregas-cliente",
+      tone: "neutral",
+      text: `${nPlural(entregasComCliente, "entrega aguardando", "entregas aguardando")} o cliente`,
+      action: "Ver entregas",
+      onAction: () => {
+        setEntregasExpanded(true);
+        requestAnimationFrame(() => scrollToRef(entregasRef.current));
+      },
+    });
 
   const [editOpen, setEditOpen] = useState(false);
   const { confirm: confirmDeleteCampanha, confirmDialog: confirmDeleteCampanhaDialog } =
@@ -759,12 +867,12 @@ function CampanhaDetail({
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex min-w-0 items-start gap-4">
-              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="lg" />
+              <ClienteLogo photo={cliente.photo} empresa={cliente.empresa} size="md" />
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium uppercase tracking-wide text-text-secondary">
                   {cliente.empresa}
                 </p>
-                <h1 className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground md:text-[28px]">
+                <h1 className="mt-0.5 truncate text-xl font-bold tracking-tight text-foreground md:text-2xl">
                   {c.nome}
                 </h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -925,48 +1033,34 @@ function CampanhaDetail({
           onSave={saveEditedCampaign}
         />
 
-        {/* RESUMO OPERACIONAL COMPACTO — uma faixa só, divisores leves,
-         * nunca um card grande por número. Cor semântica só em alerta
-         * (gasto acima do orçamento). */}
+        {/* KPIs — barra horizontal única: label + valor principal + contexto
+         * secundário. Todos os números vêm do modelo existente (mês
+         * selecionado em campanhas recorrentes). */}
         <div className="rounded-2xl bg-card dark:shadow-none">
           <div className="flex flex-wrap">
-            {/* `visibleInflus` (mês selecionado), não `influs` (histórico
-             * completo) — achado real de uma rodada anterior: o topo
-             * mostrava "21" enquanto a seção Influenciadores, já filtrada
-             * por mês, mostrava "6 adicionados". Mesma coleção em todo
-             * lugar. Rótulos abaixo (rodada de refinamento): cada métrica
-             * precisa dizer sozinha se é PERFIL (seleção de
-             * influenciador) ou CONTEÚDO (entrega) — nunca genérico o
-             * bastante pra parecer o mesmo funil. "Meta de
-             * influenciadores" é a meta contratual (`c.linhas`, não
-             * muda quando um influenciador é aprovado/recusado);
-             * "Perfis enviados ao cliente" e "Perfis em aprovação" são
-             * contagens de INFLUENCIADOR (por status); "Entregas
-             * publicadas" é contagem de CONTEÚDO, só de influenciadores
-             * elegíveis (`getEligibleCampaignDeliveries`). */}
-            {/* Hierarquia (redesenho): só os 5 indicadores OPERACIONAIS
-             * ganham valor em destaque; os secundários (meta, enviados,
-             * em aprovação, saldo) continuam visíveis como `complement`
-             * da métrica a que pertencem — nenhum dado removido, só
-             * deixam de competir com o valor principal. */}
             <SummaryStat
-              label="Influenciadores adicionados"
+              label="Influenciadores"
               value={visibleInflus.length.toString()}
-              complement={`Meta de ${totalInflus}`}
+              complement={`Meta ${totalInflus}`}
             />
             <SummaryStat
-              label="Influenciadores aprovados"
+              label="Aprovados"
               value={eligibleInflus.length.toString()}
               complement={`${enviados}/${totalEnviar} enviados · ${emAprovacao} em aprovação`}
             />
             <SummaryStat
-              label="Entregas publicadas"
+              label="Entregas"
               value={`${entregasPublicadas}/${allEntregas.length}`}
+              complement={`${pctPublicadas}% publicadas`}
               tone={entregasPublicadas > 0 ? "success" : undefined}
             />
             {orcamento > 0 && (
               <>
-                <SummaryStat label="Orçamento" value={fmtBRL(orcamento)} />
+                <SummaryStat
+                  label="Orçamento"
+                  value={fmtBRL(orcamento)}
+                  complement={`${fmtBRL(gasto)} utilizado`}
+                />
                 <SummaryStat
                   label="Gasto"
                   value={fmtBRL(gasto)}
@@ -983,220 +1077,71 @@ function CampanhaDetail({
           </div>
         </div>
 
-        {/* INFORMAÇÕES DA CAMPANHA — bento compacto em duas colunas flex
-         * independentes (ver comentário abaixo pra detalhe da estrutura).
-         * Nenhum card usa altura fixa/mínima. */}
-        <section aria-label="Informações da campanha">
-          {/* Duas colunas VERTICALMENTE INDEPENDENTES — cada `md:flex
-           * md:flex-col` abaixo é seu próprio container flex. "Orçamento
-           * e gasto" foi removido daqui (duplicava Orçamento/Gasto/Saldo
-           * já visíveis na faixa de métricas do topo); no lugar dele,
-           * `md:items-stretch` na linha + `md:flex-1` no card Ferramentas
-           * fazem Ferramentas crescer pra preencher o espaço que sobra na
-           * coluna principal, terminando na mesma altura do fim de
-           * Direitos de imagem — de propósito, não um efeito colateral de
-           * grid compartilhado. No mobile, os wrappers viram `contents`
-           * (não geram caixa própria) e a ORDEM real da pilha única vem
-           * só dos `order-*` em cada card: Briefing → Ferramentas →
-           * Contrato (composição/pagamentos/direitos num card só). */}
-          <div className="flex flex-col gap-3 md:flex-row md:items-stretch md:gap-4">
-            <div className="contents md:flex md:w-2/3 md:flex-col md:gap-3 lg:gap-4">
-              {/* Briefing cresce com `md:flex-1` pra preencher o espaço que
-               * sobra na coluna principal (Ferramentas, abaixo, fica no
-               * tamanho natural/compacto) — o card termina alinhado com o
-               * fim de Direitos de imagem na lateral. Só no desktop
-               * (`md:`); no mobile é `contents` e não participa disso. */}
-              <div className="order-1 flex flex-col rounded-2xl bg-card p-5 dark:shadow-none md:order-none md:flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                    Briefing
-                  </p>
-                  <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
-                    <Pencil className="h-3 w-3" /> Editar
-                  </Button>
-                </div>
-                <div className="mt-2">
-                  {c.briefing ? (
-                    <p
-                      className={`whitespace-pre-wrap break-words text-sm text-foreground ${
-                        briefingIsLong && !briefingExpanded ? "line-clamp-3" : ""
-                      }`}
-                    >
-                      {c.briefing}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
-                  )}
-                  {briefingIsLong && (
-                    <button
-                      type="button"
-                      onClick={() => setBriefingExpanded((v) => !v)}
-                      className="mt-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                    >
-                      {briefingExpanded ? "Ver menos" : "Ver mais"}
-                    </button>
-                  )}
-                  {(c.briefingFile || (c.briefingLinks?.length ?? 0) > 0) && (
-                    <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
-                      {c.briefingFile && (
-                        <a
-                          href={c.briefingFile}
-                          download
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-brand underline underline-offset-2"
-                        >
-                          <Paperclip className="h-3.5 w-3.5" /> Anexo
-                        </a>
-                      )}
-                      {c.briefingLinks?.map((url) => (
-                        <a
-                          key={url}
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-brand underline underline-offset-2"
-                        >
-                          <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* CONTRATO — Composição & pagamentos + Direitos de imagem num
-             * único card secundário (antes eram 2 cards competindo com o
-             * Briefing). Resumo enxuto aqui; o detalhe completo (formas de
-             * pagamento, observações dos direitos) abre nos dialogs
-             * `composicao`/`direitos` que já existiam neste componente. */}
-            <div className="contents md:flex md:w-1/3 md:flex-col md:gap-3 lg:gap-4">
-              <div className="order-4 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Contrato
-                </p>
-                <dl className="mt-3 space-y-2.5 text-sm">
-                  <div>
-                    <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-                      Composição planejada
-                    </dt>
-                    <dd className="mt-1">
-                      {c.linhas.length > 0 ? (
-                        <span className="flex flex-wrap gap-1.5 text-xs">
-                          {c.linhas.map((l) => (
-                            <span
-                              key={l.id}
-                              className="rounded-md bg-muted px-2 py-0.5 text-foreground"
-                            >
-                              {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
-                            </span>
-                          ))}
-                        </span>
-                      ) : (
-                        <span className="text-text-secondary">Nenhuma definida.</span>
-                      )}
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-xs text-text-secondary">Valor do cliente</dt>
-                    <dd className="truncate text-right text-foreground">
-                      {c.valorCliente || "Não definido"}
-                      {c.pagClienteTipo ? ` · ${c.pagClienteTipo}` : ""}
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-xs text-text-secondary">Prazo de pagamento</dt>
-                    <dd className="truncate text-right text-foreground">
-                      {c.prazoPag || "Não definido"}
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="flex items-center gap-1 text-xs text-text-secondary">
-                      <ShieldCheck className="h-3 w-3" /> Direitos de imagem
-                    </dt>
-                    <dd className="min-w-0 truncate text-right text-foreground">
-                      {c.direitosImagem?.permitido
-                        ? [
-                            c.direitosImagem.usos.join(", "),
-                            c.direitosImagem.duracaoDias
-                              ? `${c.direitosImagem.duracaoDias} dias`
-                              : "Indeterminada",
-                            c.direitosImagem.exclusividade
-                              ? `Exclusividade${c.direitosImagem.exclusividadeSegmento ? `: ${c.direitosImagem.exclusividadeSegmento}` : ""}`
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                        : "Não definidos"}
-                    </dd>
-                  </div>
-                </dl>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
+        {/* PRECISA DE ATENÇÃO — só existe quando há sinal real (ver
+         * `attentionItems`); sem pendência, nenhum container é renderizado. */}
+        {attentionItems.length > 0 && (
+          <section
+            aria-labelledby="campanha-atencao"
+            className="-mt-2 rounded-2xl bg-card px-4 py-3 dark:shadow-none md:-mt-4 lg:-mt-6 xl:-mt-8"
+          >
+            <h2
+              id="campanha-atencao"
+              className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" /> Precisa de atenção
+            </h2>
+            <ul className="mt-2 flex flex-col gap-1">
+              {attentionItems.map((item) => (
+                <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span
+                    aria-hidden
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      item.tone === "danger"
+                        ? "bg-red-500"
+                        : item.tone === "warning"
+                          ? "bg-amber-500"
+                          : "bg-muted-foreground/60"
+                    }`}
+                  />
+                  <span
+                    className={`text-sm ${
+                      item.tone === "danger"
+                        ? "font-medium text-red-700 dark:text-red-400"
+                        : "text-foreground"
+                    }`}
+                  >
+                    {item.text}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setOpenPanel("composicao")}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    onClick={item.onAction}
+                    className="text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
-                    <Wallet className="h-3 w-3" /> Formas de pagamento
+                    {item.action}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setOpenPanel("direitos")}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-                  >
-                    <ShieldCheck className="h-3 w-3" /> Direitos de imagem
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {/* RECURSOS da campanha — sempre visíveis (Documentos, Calendário,
-         * Relatórios mensais, NPS). Cada card abre o recurso no
-         * `CampaignToolShell` (ver ./campanhas/tools). */}
-        <section className="rounded-2xl bg-card p-4 dark:shadow-none">
-          <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            Recursos
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <CampaignToolCard
-              tool="documentos"
-              count={docs.length}
-              onOpen={() => setOpenPanel("documentos")}
-            />
-            <CampaignToolCard
-              tool="calendario"
-              count={cronograma.length}
-              onOpen={() => setOpenPanel("calendario")}
-            />
-            <CampaignToolCard
-              tool="relatorioMensal"
-              count={relatorios.length}
-              onOpen={() => setOpenPanel("relatorioMensal")}
-            />
-            <CampaignToolCard tool="nps" onOpen={() => setOpenPanel("nps")} />
-          </div>
-        </section>
-
-        {/* TAREFAS — sempre visível, nunca atrás de aba. `TaskBoard` já
-         * renderiza seu próprio cabeçalho (título "Tarefas"/total/ordenar/
-         * filtrar/Nova tarefa) — nenhum título extra aqui, senão duplica
-         * (achado real desta rodada corretiva: "TAREFAS" aparecia 2x). */}
-        <section>
+        {/* TAREFAS — sempre visível na Home, nunca atrás de aba. Lista
+         * compacta por padrão, Kanban no alternador do próprio TaskBoard;
+         * vazio = uma linha só. */}
+        <section ref={tasksRef} className="scroll-mt-6">
           <TaskBoard
             tasks={visibleTasks}
             onChange={persistVisibleTasks}
             scope={{ kind: "campanha", id: c.id }}
             initialOpenTaskId={initialTaskId}
             onInitialOpenTaskHandled={onInitialTaskHandled}
+            viewToggle
           />
         </section>
 
-        {/* INFLUENCIADORES — sempre visível. `InfluencerBoard` já renderiza
-         * seu próprio cabeçalho (título "Influenciadores"/busca/
-         * visualização/exportar/Novo influenciador) — mesmo motivo acima,
-         * sem título extra. */}
-        <section>
+        {/* INFLUENCIADORES — sempre visível. Cabeçalho (título/resumo por
+         * status/busca/visualização/exportar/novo) vem do próprio board. */}
+        <section ref={influsRef} className="scroll-mt-6">
           <InfluencerBoard
             influs={visibleInflus}
             onChange={persistVisibleInflus}
@@ -1211,7 +1156,7 @@ function CampanhaDetail({
          * (rodada de refinamento pediu que ela respire tanto quanto as
          * outras seções, não como um apêndice colado). Sem virar página
          * própria. */}
-        <section>
+        <section ref={entregasRef} className="scroll-mt-6">
           <div className="rounded-2xl bg-card dark:shadow-none">
             <button
               type="button"
@@ -1296,6 +1241,177 @@ function CampanhaDetail({
               </div>
             )}
           </div>
+        </section>
+
+        {/* BRIEFING + CONTRATO — contexto, depois da operação. Duas colunas
+         * no desktop (`md:`), empilhados no mobile. */}
+        <section
+          aria-label="Briefing e contrato"
+          className="grid gap-3 md:grid-cols-5 md:items-start md:gap-4"
+        >
+          <div className="rounded-2xl bg-card p-4 dark:shadow-none md:col-span-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Briefing
+              </p>
+              <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-3 w-3" /> Editar
+              </Button>
+            </div>
+            <div className="mt-2">
+              {c.briefing ? (
+                <p
+                  className={`whitespace-pre-wrap break-words text-sm text-foreground ${
+                    briefingIsLong && !briefingExpanded ? "line-clamp-3" : ""
+                  }`}
+                >
+                  {c.briefing}
+                </p>
+              ) : (
+                <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
+              )}
+              {briefingIsLong && (
+                <button
+                  type="button"
+                  onClick={() => setBriefingExpanded((v) => !v)}
+                  className="mt-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
+                  {briefingExpanded ? "Ver menos" : "Ver mais"}
+                </button>
+              )}
+              {(c.briefingFile || (c.briefingLinks?.length ?? 0) > 0) && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+                  {c.briefingFile && (
+                    <a
+                      href={c.briefingFile}
+                      download
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand underline underline-offset-2"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" /> Anexo
+                    </a>
+                  )}
+                  {c.briefingLinks?.map((url) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-brand underline underline-offset-2"
+                    >
+                      <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="rounded-2xl bg-card p-4 dark:shadow-none md:col-span-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              Contrato
+            </p>
+            <dl className="mt-3 space-y-2.5 text-sm">
+              <div>
+                <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                  Composição planejada
+                </dt>
+                <dd className="mt-1">
+                  {c.linhas.length > 0 ? (
+                    <span className="flex flex-wrap gap-1.5 text-xs">
+                      {c.linhas.map((l) => (
+                        <span
+                          key={l.id}
+                          className="rounded-md bg-muted px-2 py-0.5 text-foreground"
+                        >
+                          {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-text-secondary">Nenhuma definida.</span>
+                  )}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-xs text-text-secondary">Valor do cliente</dt>
+                <dd className="truncate text-right text-foreground">
+                  {c.valorCliente || "Não definido"}
+                  {c.pagClienteTipo ? ` · ${c.pagClienteTipo}` : ""}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-xs text-text-secondary">Prazo de pagamento</dt>
+                <dd className="truncate text-right text-foreground">
+                  {c.prazoPag || "Não definido"}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="flex items-center gap-1 text-xs text-text-secondary">
+                  <ShieldCheck className="h-3 w-3" /> Direitos de imagem
+                </dt>
+                <dd className="min-w-0 truncate text-right text-foreground">
+                  {c.direitosImagem?.permitido
+                    ? [
+                        c.direitosImagem.usos.join(", "),
+                        c.direitosImagem.duracaoDias
+                          ? `${c.direitosImagem.duracaoDias} dias`
+                          : "Indeterminada",
+                        c.direitosImagem.exclusividade
+                          ? `Exclusividade${c.direitosImagem.exclusividadeSegmento ? `: ${c.direitosImagem.exclusividadeSegmento}` : ""}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Não definidos"}
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
+              <button
+                type="button"
+                onClick={() => setOpenPanel("composicao")}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <Wallet className="h-3 w-3" /> Formas de pagamento
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpenPanel("direitos")}
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <ShieldCheck className="h-3 w-3" /> Direitos de imagem
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* RECURSOS — secundários: uma faixa de botões compactos, cada um
+         * abre o recurso no `CampaignToolShell`. */}
+        <section aria-labelledby="campanha-recursos" className="flex flex-wrap items-center gap-2">
+          <h2
+            id="campanha-recursos"
+            className="mr-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
+          >
+            Recursos
+          </h2>
+          <CampaignToolCard
+            compact
+            tool="documentos"
+            count={docs.length}
+            onOpen={() => setOpenPanel("documentos")}
+          />
+          <CampaignToolCard
+            compact
+            tool="calendario"
+            count={cronograma.length}
+            onOpen={() => setOpenPanel("calendario")}
+          />
+          <CampaignToolCard
+            compact
+            tool="relatorioMensal"
+            count={relatorios.length}
+            onOpen={() => setOpenPanel("relatorioMensal")}
+          />
+          <CampaignToolCard compact tool="nps" onOpen={() => setOpenPanel("nps")} />
         </section>
 
         {/* Ferramentas da campanha — todas no mesmo CampaignToolShell. */}

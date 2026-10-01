@@ -5,13 +5,40 @@ export function CampaignToolCard({
   tool,
   count,
   onOpen,
+  compact = false,
 }: {
   tool: CampaignToolKey;
   count?: number;
   onOpen: () => void;
+  /** Versão secundária (Home da campanha): botão de uma linha, sem a
+   * descrição visível (vira `title`), pra não competir com Tarefas/
+   * Influenciadores. */
+  compact?: boolean;
 }) {
   const t = CAMPAIGN_TOOLS[tool];
   const Icon = t.icon;
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-haspopup="dialog"
+        title={t.description}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/60 bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+      >
+        <Icon className="h-3.5 w-3.5 text-text-secondary" />
+        {t.label}
+        {typeof count === "number" && count > 0 && (
+          <span
+            className="rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-text-secondary"
+            aria-label={`${count} ${count === 1 ? "item" : "itens"}`}
+          >
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  }
   return (
     <button
       type="button"

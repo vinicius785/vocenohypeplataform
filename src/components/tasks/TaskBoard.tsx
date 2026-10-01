@@ -47,6 +47,7 @@ import { pushTaskModal } from "@/lib/task-modal-stack";
 import { TaskPicker } from "@/components/tasks/TaskPicker";
 import { TaskTagsPopover } from "@/components/tasks/TaskTagsPopover";
 import { ListRow } from "@/components/shared/ListRow";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { SemanticTone } from "@/lib/design-tokens";
 import { formatIsoDate, formatDateToIso, parseIsoDateLocal } from "@/lib/utils";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
@@ -1244,7 +1245,12 @@ export function TaskBoard({
   initialOpenTaskId,
   onInitialOpenTaskHandled,
   fases,
+  viewToggle = false,
 }: {
+  /** Opt-in (Campanhas): mostra o alternador "Lista | Kanban", com Lista
+   * como padrão e estado vazio compacto. Omitido (Projetos/Marketing),
+   * o board continua exatamente como antes — só Kanban. */
+  viewToggle?: boolean;
   tasks: Task[];
   onChange: (next: Task[]) => void;
   scope?: TaskBoardScope;
@@ -1569,6 +1575,14 @@ export function TaskBoard({
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const isMobile = useIsMobile();
   const [sortOpen, setSortOpen] = useState(false);
+  const [viewPref, setViewPref] = usePersistedState<"lista" | "kanban">(
+    "taskboard:viewToggle",
+    "lista",
+  );
+  const view: "lista" | "kanban" = viewToggle ? viewPref : "kanban";
+  const [showClosedInList, setShowClosedInList] = useState(false);
+  const isClosedStatus = (s: TaskStatus) => s === "Concluído" || s === "Arquivado";
+  const openTasksCount = tasks.filter((t) => !isClosedStatus(t.status)).length;
 
   // No mobile, mostra só a coluna ativa (sem rolagem horizontal nenhuma) em
   // vez da faixa de colunas lado a lado — o próprio drag-and-drop nativo
@@ -1626,9 +1640,27 @@ export function TaskBoard({
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               {title}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{totalSummaryText}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {viewToggle
+                ? `${openTasksCount} ${openTasksCount === 1 ? "aberta" : "abertas"}${
+                    tasks.length > openTasksCount ? ` · ${tasks.length} no total` : ""
+                  }`
+                : totalSummaryText}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {viewToggle && tasks.length > 0 && (
+              <SegmentedControl
+                size="sm"
+                aria-label="Visualização das tarefas"
+                value={viewPref}
+                onChange={setViewPref}
+                options={[
+                  { value: "lista", label: "Lista" },
+                  { value: "kanban", label: "Kanban" },
+                ]}
+              />
+            )}
             <Popover open={sortOpen} onOpenChange={setSortOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -2075,461 +2107,584 @@ export function TaskBoard({
           </div>
         )}
 
-        {isMobile && boardColumns.length > 1 && (
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-            {boardColumns.map((col) => (
-              <button
-                key={col.key}
-                type="button"
-                onClick={() => setMobileActiveCol(col.key)}
-                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium ${
-                  mobileActiveCol === col.key
-                    ? "bg-brand text-brand-foreground"
-                    : "bg-card text-text-secondary"
-                }`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${col.dotClass}`} />
-                {col.label}
-                <span className="tabular-nums opacity-70">{mobileColCounts.get(col.key) ?? 0}</span>
-              </button>
-            ))}
+        {viewToggle && tasks.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3">
+            <p className="text-sm text-muted-foreground">Nenhuma tarefa aberta nesta campanha.</p>
+            <button
+              type="button"
+              onClick={() => setTaskDialog({ mode: "new" })}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-brand hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <Plus className="h-3.5 w-3.5" /> Nova tarefa
+            </button>
           </div>
-        )}
+        ) : view === "lista" ? (
+          (() => {
+            const filtered = sortTasksBy(visibleTasks, sortPrimary, sortSecondary);
+            const openRows = filtered.filter((t) => !isClosedStatus(t.status));
+            const closedRows = filtered.filter((t) => isClosedStatus(t.status));
+            const rows = showClosedInList ? [...openRows, ...closedRows] : openRows;
+            return (
+              <div className="overflow-hidden rounded-2xl bg-card">
+                {rows.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-muted-foreground">
+                    {filtered.length === 0 && tasks.length > 0 && activeFilterCount > 0
+                      ? "Nenhuma tarefa corresponde aos filtros."
+                      : "Nenhuma tarefa aberta nesta campanha."}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border/60">
+                    {rows.map((t) => {
+                      const assignees = getTaskAssignees(t);
+                      const subTotal = t.subtasks?.length ?? 0;
+                      const subDone = (t.subtasks ?? []).filter(
+                        (s) => s.status === "Concluído",
+                      ).length;
+                      return (
+                        <li key={t.id}>
+                          <button
+                            type="button"
+                            onClick={() => setTaskDialog({ mode: "edit", data: t })}
+                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand sm:flex-nowrap"
+                          >
+                            <span
+                              className={`inline-flex w-[104px] shrink-0 items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${TASK_STATUS_TONE[t.status]}`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_STATUS_DOT[t.status]}`}
+                                aria-hidden
+                              />
+                              {t.status}
+                            </span>
+                            <span
+                              className={`min-w-0 flex-1 basis-40 truncate text-sm font-medium ${
+                                isClosedStatus(t.status)
+                                  ? "text-muted-foreground line-through"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {t.title || "Sem título"}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+                              {subTotal > 0 && (
+                                <span title="Subtarefas concluídas" className="tabular-nums">
+                                  {subDone}/{subTotal} sub
+                                </span>
+                              )}
+                              {t.priority !== "Normal" && (
+                                <span
+                                  className={`inline-flex items-center gap-1 font-medium ${PRIORITY_TONE[t.priority]}`}
+                                >
+                                  <Flag className="h-3 w-3" /> {t.priority}
+                                </span>
+                              )}
+                              {(t.dueDate || t.performanceDueDate) && (
+                                <CardDeadlineBadge task={t} />
+                              )}
+                              {assignees.length > 0 ? (
+                                <AssigneeStack names={assignees} members={members} />
+                              ) : (
+                                <span className="text-muted-foreground/70">Sem responsável</span>
+                              )}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {closedRows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowClosedInList((v) => !v)}
+                    aria-expanded={showClosedInList}
+                    className="w-full border-t border-border/60 px-4 py-2 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                  >
+                    {showClosedInList
+                      ? "Ocultar concluídas/arquivadas"
+                      : `Mostrar ${closedRows.length} concluída${closedRows.length === 1 ? "" : "s"}/arquivada${closedRows.length === 1 ? "" : "s"}`}
+                  </button>
+                )}
+              </div>
+            );
+          })()
+        ) : (
+          <>
+            {isMobile && boardColumns.length > 1 && (
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
+                {boardColumns.map((col) => (
+                  <button
+                    key={col.key}
+                    type="button"
+                    onClick={() => setMobileActiveCol(col.key)}
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium ${
+                      mobileActiveCol === col.key
+                        ? "bg-brand text-brand-foreground"
+                        : "bg-card text-text-secondary"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${col.dotClass}`} />
+                    {col.label}
+                    <span className="tabular-nums opacity-70">
+                      {mobileColCounts.get(col.key) ?? 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
-        {/* Casca visual alinhada ao Kanban já aprovado do Comercial
-         * (`PipelineBoard.tsx`) — mesma largura de coluna, superfície,
-         * raio, cabeçalho e fade de borda; nenhuma lógica de status/drag
-         * foi copiada de lá, só a camada visual compartilhável. `relative`
-         * + gradiente à direita — indicação discreta de mais colunas fora
-         * da viewport, sem esconder a scrollbar. */}
-        <div className="relative">
-          <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
-            {renderedColumns.map((col) => {
-              const rootItems: BoardItem[] = visibleTasks.filter((t) =>
-                groupBy === "fase" ? faseColumnKey(t) === col.key : t.status === col.key,
-              );
-              const subtaskItems: BoardItem[] = showSubtasksInline
-                ? allSubtasksFlat
-                    .filter(
-                      ({ subtask }) =>
-                        (groupBy === "fase"
-                          ? faseColumnKey(subtask) === col.key
-                          : subtask.status === col.key) && taskMatchesFilters(subtask),
-                    )
-                    .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
-                : [];
-              const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
-              // Concluído acumula pra sempre — sem limite, uma campanha/projeto
-              // antigo vira uma coluna infinita de tarefas que ninguém mais
-              // precisa ver no dia a dia. Mostra só as 4 mais recentes por
-              // padrão (derivado do log de atividade, ver `taskCompletedAt`),
-              // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
-              // completo. Só faz sentido agrupando por status — agrupando por
-              // fase, uma tarefa concluída convive normalmente com as outras
-              // da mesma fase.
-              const isDone = groupBy === "status" && col.key === "Concluído";
-              const sortedItems = isDone
-                ? [...allItems].sort((a, b) => taskCompletedAt(b).localeCompare(taskCompletedAt(a)))
-                : sortTasksBy(allItems, sortPrimary, sortSecondary);
-              const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
-              const hiddenCount = allItems.length - items.length;
-              return (
-                <div
-                  key={col.key}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDragEnter={() => setDragOverCol(col.key)}
-                  onDragLeave={() => setDragOverCol((cur) => (cur === col.key ? null : cur))}
-                  onDrop={() => {
-                    if (dragId) {
-                      const dragged = tasks.find((t) => t.id === dragId);
-                      if (groupBy === "fase") {
-                        // Agrupar por fase: o drop só move a tarefa de fase,
-                        // nunca muda status — nenhuma das regras de transição
-                        // de status (dependência pendente, ledger, recorrência,
-                        // cronômetro) se aplica aqui.
-                        if (dragged) {
-                          const faseId = col.key === SEM_FASE ? undefined : col.key;
-                          persist(
-                            tasks.map((t) =>
-                              t.id === dragId ? { ...t, roadmapPhaseId: faseId } : t,
-                            ),
-                          );
-                        }
-                      } else {
-                        if (
-                          dragged &&
-                          col.key === "Em andamento" &&
-                          (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
-                        ) {
-                          toast.error("Esta tarefa depende de outra ainda não concluída.");
-                          setDragId(null);
-                          setDragOverCol(null);
-                          return;
-                        }
-                        if (dragged) {
-                          const updated = withStatusChange(dragged, col.key as TaskStatus);
-                          if (updated !== dragged)
-                            recordTaskLedgerEventsOnStatusChange(dragged, updated, {
-                              scope,
-                              members,
-                              performanceSettings,
-                            });
-                          const finalTask = applyRecurrenceIfCompleted(dragged, updated);
-                          persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
-                          // Cronômetro de `time_entries` (não é mais o campo
-                          // antigo que `withStatusChange` já tratou acima) — só
-                          // "Concluído" para sozinho, silenciosamente.
-                          const dragOrigin = taskOriginFromScope(scope);
-                          if (col.key === "Concluído" && dragOrigin) {
-                            void stopIfRunningOnTask(dragged.id.replace(/^mkt:/, ""), dragOrigin);
+            {/* Casca visual alinhada ao Kanban já aprovado do Comercial
+             * (`PipelineBoard.tsx`) — mesma largura de coluna, superfície,
+             * raio, cabeçalho e fade de borda; nenhuma lógica de status/drag
+             * foi copiada de lá, só a camada visual compartilhável. `relative`
+             * + gradiente à direita — indicação discreta de mais colunas fora
+             * da viewport, sem esconder a scrollbar. */}
+            <div className="relative">
+              <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-3 [scrollbar-width:thin]">
+                {renderedColumns.map((col) => {
+                  const rootItems: BoardItem[] = visibleTasks.filter((t) =>
+                    groupBy === "fase" ? faseColumnKey(t) === col.key : t.status === col.key,
+                  );
+                  const subtaskItems: BoardItem[] = showSubtasksInline
+                    ? allSubtasksFlat
+                        .filter(
+                          ({ subtask }) =>
+                            (groupBy === "fase"
+                              ? faseColumnKey(subtask) === col.key
+                              : subtask.status === col.key) && taskMatchesFilters(subtask),
+                        )
+                        .map(({ subtask, parent }) => ({ ...subtask, __parentTask: parent }))
+                    : [];
+                  const allItems: BoardItem[] = [...rootItems, ...subtaskItems];
+                  // Concluído acumula pra sempre — sem limite, uma campanha/projeto
+                  // antigo vira uma coluna infinita de tarefas que ninguém mais
+                  // precisa ver no dia a dia. Mostra só as 4 mais recentes por
+                  // padrão (derivado do log de atividade, ver `taskCompletedAt`),
+                  // com "Mostrar tudo" pra quem realmente precisar olhar o histórico
+                  // completo. Só faz sentido agrupando por status — agrupando por
+                  // fase, uma tarefa concluída convive normalmente com as outras
+                  // da mesma fase.
+                  const isDone = groupBy === "status" && col.key === "Concluído";
+                  const sortedItems = isDone
+                    ? [...allItems].sort((a, b) =>
+                        taskCompletedAt(b).localeCompare(taskCompletedAt(a)),
+                      )
+                    : sortTasksBy(allItems, sortPrimary, sortSecondary);
+                  const items = isDone && !showAllDone ? sortedItems.slice(0, 4) : sortedItems;
+                  const hiddenCount = allItems.length - items.length;
+                  return (
+                    <div
+                      key={col.key}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnter={() => setDragOverCol(col.key)}
+                      onDragLeave={() => setDragOverCol((cur) => (cur === col.key ? null : cur))}
+                      onDrop={() => {
+                        if (dragId) {
+                          const dragged = tasks.find((t) => t.id === dragId);
+                          if (groupBy === "fase") {
+                            // Agrupar por fase: o drop só move a tarefa de fase,
+                            // nunca muda status — nenhuma das regras de transição
+                            // de status (dependência pendente, ledger, recorrência,
+                            // cronômetro) se aplica aqui.
+                            if (dragged) {
+                              const faseId = col.key === SEM_FASE ? undefined : col.key;
+                              persist(
+                                tasks.map((t) =>
+                                  t.id === dragId ? { ...t, roadmapPhaseId: faseId } : t,
+                                ),
+                              );
+                            }
+                          } else {
+                            if (
+                              dragged &&
+                              col.key === "Em andamento" &&
+                              (pendingDepCountByTaskId.get(dragged.id) ?? 0) > 0
+                            ) {
+                              toast.error("Esta tarefa depende de outra ainda não concluída.");
+                              setDragId(null);
+                              setDragOverCol(null);
+                              return;
+                            }
+                            if (dragged) {
+                              const updated = withStatusChange(dragged, col.key as TaskStatus);
+                              if (updated !== dragged)
+                                recordTaskLedgerEventsOnStatusChange(dragged, updated, {
+                                  scope,
+                                  members,
+                                  performanceSettings,
+                                });
+                              const finalTask = applyRecurrenceIfCompleted(dragged, updated);
+                              persist(tasks.map((t) => (t.id === dragId ? finalTask : t)));
+                              // Cronômetro de `time_entries` (não é mais o campo
+                              // antigo que `withStatusChange` já tratou acima) — só
+                              // "Concluído" para sozinho, silenciosamente.
+                              const dragOrigin = taskOriginFromScope(scope);
+                              if (col.key === "Concluído" && dragOrigin) {
+                                void stopIfRunningOnTask(
+                                  dragged.id.replace(/^mkt:/, ""),
+                                  dragOrigin,
+                                );
+                              }
+                            }
                           }
                         }
-                      }
-                    }
-                    setDragId(null);
-                    setDragOverCol(null);
-                  }}
-                  className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-[20px] bg-muted/40 transition-colors dark:bg-white/[0.03] ${dragOverCol === col.key ? "ring-2 ring-brand" : ""}`}
-                >
-                  <div className="rounded-t-[20px] bg-muted/40 px-4 py-3 dark:bg-white/[0.03]">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${col.dotClass}`} />
-                        <h3
-                          title={col.label}
-                          className="truncate text-[13px] font-semibold text-foreground"
-                        >
-                          {col.label}
-                        </h3>
-                      </div>
-                    </div>
-                    <p className="mt-1 text-[12px] tabular-nums text-text-secondary">
-                      {allItems.length} {allItems.length === 1 ? "tarefa" : "tarefas"}
-                    </p>
-                  </div>
-                  <div className="px-3 pt-2.5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setTaskDialog(
-                          groupBy === "fase"
-                            ? {
-                                mode: "new",
-                                defaultRoadmapPhaseId: col.key === SEM_FASE ? undefined : col.key,
-                              }
-                            : { mode: "new", defaultStatus: col.key as TaskStatus },
-                        )
-                      }
-                      className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        setDragId(null);
+                        setDragOverCol(null);
+                      }}
+                      className={`flex ${isMobile ? "w-full" : "w-[320px] shrink-0"} flex-col rounded-[20px] bg-muted/40 transition-colors dark:bg-white/[0.03] ${dragOverCol === col.key ? "ring-2 ring-brand" : ""}`}
                     >
-                      <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
-                    </button>
-                  </div>
-                  <div className="flex-1 space-y-2.5 p-3 pt-2">
-                    {allItems.length === 0 && (
-                      <div className="rounded-[16px] bg-card/40 py-5 text-center text-xs text-text-secondary">
-                        Nenhuma tarefa
-                      </div>
-                    )}
-                    {items.map((t) => (
-                      <div
-                        key={t.id}
-                        draggable={!isMobile && !t.__parentTask}
-                        onDragStart={() => !isMobile && !t.__parentTask && setDragId(t.id)}
-                        onDragEnd={() => setDragId(null)}
-                        onClick={() =>
-                          setTaskDialog({
-                            mode: "edit",
-                            data: t.__parentTask ?? t,
-                            openSubtaskId: t.__parentTask ? t.id : undefined,
-                          })
-                        }
-                        className={`group relative cursor-pointer rounded-[18px] bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
-                      >
-                        {/* Nível 1 — título (maior peso visual do card, no
-                        máximo 2 linhas — nada compete com ele aqui). */}
-                        <div className="flex items-start gap-2">
-                          {t.__parentTask && (
-                            <span
-                              title={`Subtarefa de "${t.__parentTask.title}"`}
-                              className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                      <div className="rounded-t-[20px] bg-muted/40 px-4 py-3 dark:bg-white/[0.03]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${col.dotClass}`} />
+                            <h3
+                              title={col.label}
+                              className="truncate text-[13px] font-semibold text-foreground"
                             >
-                              Sub
-                            </span>
-                          )}
-                          <span className="line-clamp-2 flex-1 font-semibold leading-snug text-foreground">
-                            {t.title}
-                          </span>
-                          <CardQuickActions
-                            onOpen={() =>
+                              {col.label}
+                            </h3>
+                          </div>
+                        </div>
+                        <p className="mt-1 text-[12px] tabular-nums text-text-secondary">
+                          {allItems.length} {allItems.length === 1 ? "tarefa" : "tarefas"}
+                        </p>
+                      </div>
+                      <div className="px-3 pt-2.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTaskDialog(
+                              groupBy === "fase"
+                                ? {
+                                    mode: "new",
+                                    defaultRoadmapPhaseId:
+                                      col.key === SEM_FASE ? undefined : col.key,
+                                  }
+                                : { mode: "new", defaultStatus: col.key as TaskStatus },
+                            )
+                          }
+                          className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md text-[12px] font-medium text-muted-foreground transition-colors hover:bg-brand-subtle hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Adicionar tarefa
+                        </button>
+                      </div>
+                      <div className="flex-1 space-y-2.5 p-3 pt-2">
+                        {allItems.length === 0 && (
+                          <div className="rounded-[16px] bg-card/40 py-5 text-center text-xs text-text-secondary">
+                            Nenhuma tarefa
+                          </div>
+                        )}
+                        {items.map((t) => (
+                          <div
+                            key={t.id}
+                            draggable={!isMobile && !t.__parentTask}
+                            onDragStart={() => !isMobile && !t.__parentTask && setDragId(t.id)}
+                            onDragEnd={() => setDragId(null)}
+                            onClick={() =>
                               setTaskDialog({
                                 mode: "edit",
                                 data: t.__parentTask ?? t,
                                 openSubtaskId: t.__parentTask ? t.id : undefined,
                               })
                             }
-                            onDelete={(e) => {
-                              e.stopPropagation();
-                              if (t.__parentTask) {
-                                const parent = t.__parentTask;
-                                persist(
-                                  tasks.map((x) =>
-                                    x.id === parent.id
-                                      ? {
-                                          ...x,
-                                          subtasks: (x.subtasks ?? []).filter((s) => s.id !== t.id),
-                                        }
-                                      : x,
-                                  ),
-                                );
-                              } else {
-                                persist(tasks.filter((x) => x.id !== t.id));
-                              }
-                            }}
-                          />
-                        </div>
+                            className={`group relative cursor-pointer rounded-[18px] bg-card p-3.5 text-sm transition-all hover:bg-card/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:shadow-none ${dragId === t.id ? "scale-[0.98] opacity-50 shadow-lg" : ""}`}
+                          >
+                            {/* Nível 1 — título (maior peso visual do card, no
+                        máximo 2 linhas — nada compete com ele aqui). */}
+                            <div className="flex items-start gap-2">
+                              {t.__parentTask && (
+                                <span
+                                  title={`Subtarefa de "${t.__parentTask.title}"`}
+                                  className="mt-0.5 inline-flex shrink-0 items-center rounded border border-border bg-muted/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+                                >
+                                  Sub
+                                </span>
+                              )}
+                              <span className="line-clamp-2 flex-1 font-semibold leading-snug text-foreground">
+                                {t.title}
+                              </span>
+                              <CardQuickActions
+                                onOpen={() =>
+                                  setTaskDialog({
+                                    mode: "edit",
+                                    data: t.__parentTask ?? t,
+                                    openSubtaskId: t.__parentTask ? t.id : undefined,
+                                  })
+                                }
+                                onDelete={(e) => {
+                                  e.stopPropagation();
+                                  if (t.__parentTask) {
+                                    const parent = t.__parentTask;
+                                    persist(
+                                      tasks.map((x) =>
+                                        x.id === parent.id
+                                          ? {
+                                              ...x,
+                                              subtasks: (x.subtasks ?? []).filter(
+                                                (s) => s.id !== t.id,
+                                              ),
+                                            }
+                                          : x,
+                                      ),
+                                    );
+                                  } else {
+                                    persist(tasks.filter((x) => x.id !== t.id));
+                                  }
+                                }}
+                              />
+                            </div>
 
-                        {/* Nível 2 — indicador de descrição + progresso de
+                            {/* Nível 2 — indicador de descrição + progresso de
                         subtarefas ("2/4", nunca só a contagem total —
                         comunica progresso, não só existência). */}
-                        {(!isDescriptionEmpty(t.description) || (t.subtasks?.length ?? 0) > 0) && (
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                            {!isDescriptionEmpty(t.description) && (
-                              <span title="Tem descrição">
-                                <FileText className="h-3 w-3" />
-                              </span>
+                            {(!isDescriptionEmpty(t.description) ||
+                              (t.subtasks?.length ?? 0) > 0) && (
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                                {!isDescriptionEmpty(t.description) && (
+                                  <span title="Tem descrição">
+                                    <FileText className="h-3 w-3" />
+                                  </span>
+                                )}
+                                {(t.subtasks?.length ?? 0) > 0 &&
+                                  (() => {
+                                    const total = t.subtasks!.length;
+                                    const done = t.subtasks!.filter(
+                                      (s) => s.status === "Concluído",
+                                    ).length;
+                                    const allDone = done === total;
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedCards((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(t.id)) next.delete(t.id);
+                                            else next.add(t.id);
+                                            return next;
+                                          });
+                                        }}
+                                        className={`inline-flex items-center gap-1 hover:text-foreground ${allDone ? "text-emerald-600 dark:text-emerald-400" : ""}`}
+                                      >
+                                        {allDone ? (
+                                          <Check className="h-3 w-3" />
+                                        ) : expandedCards.has(t.id) ? (
+                                          <ChevronDown className="h-3 w-3" />
+                                        ) : (
+                                          <ChevronRight className="h-3 w-3" />
+                                        )}
+                                        {done}/{total} subtarefas
+                                      </button>
+                                    );
+                                  })()}
+                              </div>
                             )}
-                            {(t.subtasks?.length ?? 0) > 0 &&
-                              (() => {
-                                const total = t.subtasks!.length;
-                                const done = t.subtasks!.filter(
-                                  (s) => s.status === "Concluído",
-                                ).length;
-                                const allDone = done === total;
-                                return (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedCards((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(t.id)) next.delete(t.id);
-                                        else next.add(t.id);
-                                        return next;
-                                      });
-                                    }}
-                                    className={`inline-flex items-center gap-1 hover:text-foreground ${allDone ? "text-emerald-600 dark:text-emerald-400" : ""}`}
-                                  >
-                                    {allDone ? (
-                                      <Check className="h-3 w-3" />
-                                    ) : expandedCards.has(t.id) ? (
-                                      <ChevronDown className="h-3 w-3" />
-                                    ) : (
-                                      <ChevronRight className="h-3 w-3" />
-                                    )}
-                                    {done}/{total} subtarefas
-                                  </button>
-                                );
-                              })()}
-                          </div>
-                        )}
 
-                        {/* Nível 3 — responsáveis + prazo + prioridade, numa
+                            {/* Nível 3 — responsáveis + prazo + prioridade, numa
                         única linha. Tarefa bloqueada nunca mostra o prazo
                         como atraso aqui — só o prazo original em tom
                         neutro (o indicador de bloqueio é uma linha própria
                         logo abaixo). */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                          {getTaskAssignees(t).length > 0 && (
-                            <AssigneeStack names={getTaskAssignees(t)} members={members} />
-                          )}
-                          {t.status === "Bloqueada"
-                            ? t.dueDate && (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
-                                  <Calendar className="h-3 w-3 shrink-0" />
-                                  Prazo: {fmtDateCompact(t.dueDate)}
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                              {getTaskAssignees(t).length > 0 && (
+                                <AssigneeStack names={getTaskAssignees(t)} members={members} />
+                              )}
+                              {t.status === "Bloqueada"
+                                ? t.dueDate && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                                      <Calendar className="h-3 w-3 shrink-0" />
+                                      Prazo: {fmtDateCompact(t.dueDate)}
+                                    </span>
+                                  )
+                                : (t.dueDate || t.performanceDueDate) && (
+                                    <CardDeadlineBadge task={t} />
+                                  )}
+                              {t.priority !== "Normal" && (
+                                <span
+                                  className={`inline-flex items-center gap-1 text-[11px] font-medium ${PRIORITY_TONE[t.priority]}`}
+                                >
+                                  <Flag className="h-3 w-3" /> {t.priority}
                                 </span>
-                              )
-                            : (t.dueDate || t.performanceDueDate) && <CardDeadlineBadge task={t} />}
-                          {t.priority !== "Normal" && (
-                            <span
-                              className={`inline-flex items-center gap-1 text-[11px] font-medium ${PRIORITY_TONE[t.priority]}`}
-                            >
-                              <Flag className="h-3 w-3" /> {t.priority}
-                            </span>
-                          )}
-                        </div>
+                              )}
+                            </div>
 
-                        {/* Bloqueio — linha própria, âmbar (nunca vermelho:
+                            {/* Bloqueio — linha própria, âmbar (nunca vermelho:
                         bloqueio não é erro). Some sozinho quando a tarefa
                         sai do status "Bloqueada" (fonte de verdade real é
                         `task_blocks`, isto é só o cache denormalizado). */}
-                        {t.status === "Bloqueada" && t.blockedState && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="mt-2 flex items-center gap-1 truncate rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                                <Lock className="h-3 w-3 shrink-0" />
-                                <span className="truncate">
-                                  Bloqueada
-                                  {t.blockedState.reason ? ` · ${t.blockedState.reason}` : ""}
-                                </span>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-64">
-                              <p>{t.blockedState.reason}</p>
-                              {t.blockedState.responsibleForUnblockingName && (
-                                <p className="text-muted-foreground">
-                                  Aguardando: {t.blockedState.responsibleForUnblockingName}
-                                </p>
-                              )}
-                              <p className="text-muted-foreground">
-                                Bloqueada em {fmtDateCompact(t.blockedState.blockedAt.slice(0, 10))}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
+                            {t.status === "Bloqueada" && t.blockedState && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="mt-2 flex items-center gap-1 truncate rounded-md bg-amber-500/10 px-1.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                    <Lock className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">
+                                      Bloqueada
+                                      {t.blockedState.reason ? ` · ${t.blockedState.reason}` : ""}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-64">
+                                  <p>{t.blockedState.reason}</p>
+                                  {t.blockedState.responsibleForUnblockingName && (
+                                    <p className="text-muted-foreground">
+                                      Aguardando: {t.blockedState.responsibleForUnblockingName}
+                                    </p>
+                                  )}
+                                  <p className="text-muted-foreground">
+                                    Bloqueada em{" "}
+                                    {fmtDateCompact(t.blockedState.blockedAt.slice(0, 10))}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
 
-                        {/* Fase — linha própria, nunca dividindo espaço com
+                            {/* Fase — linha própria, nunca dividindo espaço com
                         prazo/prioridade (essa mistura era o que fazia a
                         fase "brigar" com o resto). Cor suave (`softColor`),
                         nome completo quando couber, trunca + Tooltip
                         quando não couber. */}
-                        {fases &&
-                          t.roadmapPhaseId &&
-                          (() => {
-                            const f = fases.find((x) => x.id === t.roadmapPhaseId);
-                            if (!f) return null;
-                            return (
-                              <div className="mt-2">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span
-                                      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(f.cor)}`}
-                                    >
-                                      <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
-                                      <span className="truncate">{f.nome}</span>
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{f.nome}</TooltipContent>
-                                </Tooltip>
+                            {fases &&
+                              t.roadmapPhaseId &&
+                              (() => {
+                                const f = fases.find((x) => x.id === t.roadmapPhaseId);
+                                if (!f) return null;
+                                return (
+                                  <div className="mt-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium ${softColor(f.cor)}`}
+                                        >
+                                          <MilestoneIcon className="h-2.5 w-2.5 shrink-0" />
+                                          <span className="truncate">{f.nome}</span>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{f.nome}</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                );
+                              })()}
+
+                            {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
+                            {((t.tags?.length ?? 0) > 0 ||
+                              (t.comments?.length ?? 0) > 0 ||
+                              (t.attachments?.length ?? 0) > 0 ||
+                              (pendingDepCountByTaskId.get(t.id) ?? 0) > 0) && (
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                                {(t.tags?.length ?? 0) > 0 && (
+                                  <>
+                                    <Tag className="h-3 w-3 shrink-0" />
+                                    <CardTags tags={t.tags!} taskTags={taskTags} />
+                                  </>
+                                )}
+                                {(t.comments?.length ?? 0) > 0 && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <MessageSquare className="h-3 w-3" /> {t.comments!.length}
+                                  </span>
+                                )}
+                                {(t.attachments?.length ?? 0) > 0 && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Paperclip className="h-3 w-3" /> {t.attachments!.length}
+                                  </span>
+                                )}
+                                {(pendingDepCountByTaskId.get(t.id) ?? 0) > 0 && (
+                                  <span
+                                    className="inline-flex items-center gap-1"
+                                    title={`${pendingDepCountByTaskId.get(t.id)} dependências pendentes`}
+                                  >
+                                    <Link2 className="h-3 w-3" />{" "}
+                                    {pendingDepCountByTaskId.get(t.id)}
+                                  </span>
+                                )}
                               </div>
-                            );
-                          })()}
+                            )}
 
-                        {/* Nível 4 — etiquetas / comentários / anexos / dependências */}
-                        {((t.tags?.length ?? 0) > 0 ||
-                          (t.comments?.length ?? 0) > 0 ||
-                          (t.attachments?.length ?? 0) > 0 ||
-                          (pendingDepCountByTaskId.get(t.id) ?? 0) > 0) && (
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                            {(t.tags?.length ?? 0) > 0 && (
-                              <>
-                                <Tag className="h-3 w-3 shrink-0" />
-                                <CardTags tags={t.tags!} taskTags={taskTags} />
-                              </>
-                            )}
-                            {(t.comments?.length ?? 0) > 0 && (
-                              <span className="inline-flex items-center gap-1">
-                                <MessageSquare className="h-3 w-3" /> {t.comments!.length}
-                              </span>
-                            )}
-                            {(t.attachments?.length ?? 0) > 0 && (
-                              <span className="inline-flex items-center gap-1">
-                                <Paperclip className="h-3 w-3" /> {t.attachments!.length}
-                              </span>
-                            )}
-                            {(pendingDepCountByTaskId.get(t.id) ?? 0) > 0 && (
-                              <span
-                                className="inline-flex items-center gap-1"
-                                title={`${pendingDepCountByTaskId.get(t.id)} dependências pendentes`}
-                              >
-                                <Link2 className="h-3 w-3" /> {pendingDepCountByTaskId.get(t.id)}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Subtarefas expandidas direto no card — cada uma como uma
+                            {/* Subtarefas expandidas direto no card — cada uma como uma
                           prévia compacta; clicar nela abre a própria subtarefa
                           (o diálogo é sempre o da tarefa-mãe por baixo, mas já
                           chega direto na subtarefa — ver `openSubtaskId`). */}
-                        {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
-                          <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-                            {t.subtasks!.map((s) => (
-                              <div
-                                key={s.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
-                                }}
-                                className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
-                              >
-                                <span
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}
-                                  title={s.status}
-                                />
-                                <span
-                                  className={`min-w-0 flex-1 truncate ${s.status === "Concluído" ? "text-muted-foreground line-through" : "text-foreground"}`}
-                                >
-                                  {s.title}
-                                </span>
-                                {!isDescriptionEmpty(s.description) && (
-                                  <span
-                                    title="Tem descrição"
-                                    className="shrink-0 text-muted-foreground"
+                            {expandedCards.has(t.id) && (t.subtasks?.length ?? 0) > 0 && (
+                              <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                                {t.subtasks!.map((s) => (
+                                  <div
+                                    key={s.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTaskDialog({ mode: "edit", data: t, openSubtaskId: s.id });
+                                    }}
+                                    className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
                                   >
-                                    <FileText className="h-3 w-3" />
-                                  </span>
-                                )}
-                                {getTaskAssignees(s).length > 0 && (
-                                  <AssigneeStack names={getTaskAssignees(s)} members={members} />
-                                )}
-                                {s.dueDate && (
-                                  <span className="shrink-0 text-muted-foreground">
-                                    {fmtDateCompact(s.dueDate)}
-                                  </span>
-                                )}
-                                <span
-                                  className={`inline-flex shrink-0 items-center gap-1 font-medium ${PRIORITY_TONE[s.priority]}`}
-                                >
-                                  <Flag className="h-3 w-3" /> {s.priority}
-                                </span>
-                                {(s.attachments?.length ?? 0) > 0 && (
-                                  <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                )}
+                                    <span
+                                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${TASK_STATUS_DOT[s.status]}`}
+                                      title={s.status}
+                                    />
+                                    <span
+                                      className={`min-w-0 flex-1 truncate ${s.status === "Concluído" ? "text-muted-foreground line-through" : "text-foreground"}`}
+                                    >
+                                      {s.title}
+                                    </span>
+                                    {!isDescriptionEmpty(s.description) && (
+                                      <span
+                                        title="Tem descrição"
+                                        className="shrink-0 text-muted-foreground"
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                      </span>
+                                    )}
+                                    {getTaskAssignees(s).length > 0 && (
+                                      <AssigneeStack
+                                        names={getTaskAssignees(s)}
+                                        members={members}
+                                      />
+                                    )}
+                                    {s.dueDate && (
+                                      <span className="shrink-0 text-muted-foreground">
+                                        {fmtDateCompact(s.dueDate)}
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`inline-flex shrink-0 items-center gap-1 font-medium ${PRIORITY_TONE[s.priority]}`}
+                                    >
+                                      <Flag className="h-3 w-3" /> {s.priority}
+                                    </span>
+                                    {(s.attachments?.length ?? 0) > 0 && (
+                                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
+                        ))}
+                        {isDone && hiddenCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllDone(true)}
+                            className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            Mostrar tudo ({allItems.length})
+                          </button>
+                        )}
+                        {isDone && showAllDone && allItems.length > 4 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllDone(false)}
+                            className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          >
+                            Mostrar só as recentes
+                          </button>
                         )}
                       </div>
-                    ))}
-                    {isDone && hiddenCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllDone(true)}
-                        className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      >
-                        Mostrar tudo ({allItems.length})
-                      </button>
-                    )}
-                    {isDone && showAllDone && allItems.length > 4 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllDone(false)}
-                        className="w-full rounded-md px-2 py-1.5 text-center text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      >
-                        Mostrar só as recentes
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {!isMobile && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-muted to-transparent dark:from-background" />
-          )}
-        </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {!isMobile && (
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-muted to-transparent dark:from-background" />
+              )}
+            </div>
+          </>
+        )}
 
         <TaskDialog
           open={!!taskDialog}

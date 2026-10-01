@@ -380,6 +380,9 @@ export function VincularCampanhaDialog({
     if (!open) return;
     setStep("info");
     setMaxVisitedIndex(0);
+    // `saving` nunca voltava a false depois de um submit — reabrir o drawer
+    // no mesmo mount deixava o botão de salvar travado em loading.
+    setSaving(false);
     if (initial) {
       setNome(initial.nome);
       setBriefing(initial.briefing);
@@ -548,7 +551,7 @@ export function VincularCampanhaDialog({
 
   const [saving, setSaving] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     if (!nome.trim()) return;
     setSaving(true);
@@ -585,6 +588,10 @@ export function VincularCampanhaDialog({
   };
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
+  // EDIÇÃO de campanha existente: navegação direta entre seções (todas
+  // acessíveis, "Salvar alterações" sempre visível). CRIAÇÃO continua no
+  // wizard sequencial. Mesmo estado, mesmo `submit` — só muda a navegação.
+  const isEdit = !!initial;
 
   const goToStep = (i: number) => {
     // Não permite saltos inválidos: só etapas já visitadas (voltar) ou a
@@ -625,7 +632,35 @@ export function VincularCampanhaDialog({
            * suficiente pra número+label nunca parecerem espremidos (queixa
            * da rodada anterior). `aria-current="step"` na etapa ativa;
            * clique só funciona em etapas já visitadas (`goToStep`). */}
-          <div className="hidden border-b border-border/60 px-6 pb-6 sm:block sm:px-8">
+          {isEdit && (
+            <nav aria-label="Seções da campanha" className="border-b border-border/60 px-4 sm:px-6">
+              <div className="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:thin]">
+                {STEPS.map((s) => {
+                  const active = s.key === step;
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setStep(s.key)}
+                      aria-current={active ? "page" : undefined}
+                      className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
+                        active
+                          ? "border-brand text-foreground"
+                          : "border-transparent text-text-secondary hover:text-foreground"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+          )}
+          <div
+            className={`hidden border-b border-border/60 px-6 pb-6 sm:px-8 ${isEdit ? "" : "sm:block"}`}
+          >
             <div className="flex items-center pt-1">
               {STEPS.map((s, i) => {
                 const active = i === stepIndex;
@@ -676,7 +711,9 @@ export function VincularCampanhaDialog({
           {/* Versão compacta — só mobile: número/nome da etapa atual +
            * progresso "X de 6" + barra fina, em vez do stepper cheio (que
            * não cabe em 375px sem espremer). */}
-          <div className="border-b border-border/60 px-6 py-3 sm:hidden">
+          <div
+            className={`border-b border-border/60 px-6 py-3 sm:hidden ${isEdit ? "hidden" : ""}`}
+          >
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-foreground">
                 {stepIndex + 1}. {STEPS[stepIndex].label}
@@ -1494,26 +1531,32 @@ export function VincularCampanhaDialog({
               <Button type="button" variant="ghost" onClick={() => void requestClose()}>
                 Cancelar
               </Button>
-              <div className="flex items-center gap-2">
-                {stepIndex > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setStep(STEPS[stepIndex - 1].key)}
-                  >
-                    Voltar
-                  </Button>
-                )}
-                {stepIndex < STEPS.length - 1 ? (
-                  <Button type="button" variant="primary" onClick={goNext}>
-                    Próximo
-                  </Button>
-                ) : (
-                  <Button type="submit" variant="primary" isLoading={saving}>
-                    {initial ? "Salvar alterações" : "Criar campanha"}
-                  </Button>
-                )}
-              </div>
+              {isEdit ? (
+                <Button type="button" variant="primary" isLoading={saving} onClick={submit}>
+                  Salvar alterações
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {stepIndex > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setStep(STEPS[stepIndex - 1].key)}
+                    >
+                      Voltar
+                    </Button>
+                  )}
+                  {stepIndex < STEPS.length - 1 ? (
+                    <Button type="button" variant="primary" onClick={goNext}>
+                      Próximo
+                    </Button>
+                  ) : (
+                    <Button type="submit" variant="primary" isLoading={saving}>
+                      {initial ? "Salvar alterações" : "Criar campanha"}
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           </form>
         </SheetContent>
