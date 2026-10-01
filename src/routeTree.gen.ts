@@ -22,6 +22,7 @@ import { Route as PortalV2IndexRouteImport } from './routes/portal-v2/index'
 import { Route as PortalV2SegurancaRouteImport } from './routes/portal-v2/seguranca'
 import { Route as PortalV2RelatoriosRouteImport } from './routes/portal-v2/relatorios'
 import { Route as PortalV2PerfilRouteImport } from './routes/portal-v2/perfil'
+import { Route as PortalV2NpsRouteImport } from './routes/portal-v2/nps'
 import { Route as PortalV2NotificacoesRouteImport } from './routes/portal-v2/notificacoes'
 import { Route as PortalV2InicioRouteImport } from './routes/portal-v2/inicio'
 import { Route as PortalV2ConteudosRouteImport } from './routes/portal-v2/conteudos'
@@ -141,6 +142,11 @@ const PortalV2RelatoriosRoute = PortalV2RelatoriosRouteImport.update({
 const PortalV2PerfilRoute = PortalV2PerfilRouteImport.update({
   id: '/perfil',
   path: '/perfil',
+  getParentRoute: () => PortalV2RouteRoute,
+} as any)
+const PortalV2NpsRoute = PortalV2NpsRouteImport.update({
+  id: '/nps',
+  path: '/nps',
   getParentRoute: () => PortalV2RouteRoute,
 } as any)
 const PortalV2NotificacoesRoute = PortalV2NotificacoesRouteImport.update({
@@ -478,6 +484,7 @@ export interface FileRoutesByFullPath {
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/nps': typeof PortalV2NpsRoute
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
@@ -542,6 +549,7 @@ export interface FileRoutesByTo {
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/nps': typeof PortalV2NpsRoute
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
@@ -614,6 +622,7 @@ export interface FileRoutesById {
   '/portal-v2/conteudos': typeof PortalV2ConteudosRoute
   '/portal-v2/inicio': typeof PortalV2InicioRoute
   '/portal-v2/notificacoes': typeof PortalV2NotificacoesRoute
+  '/portal-v2/nps': typeof PortalV2NpsRoute
   '/portal-v2/perfil': typeof PortalV2PerfilRoute
   '/portal-v2/relatorios': typeof PortalV2RelatoriosRoute
   '/portal-v2/seguranca': typeof PortalV2SegurancaRoute
@@ -686,6 +695,7 @@ export interface FileRouteTypes {
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/nps'
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
@@ -750,6 +760,7 @@ export interface FileRouteTypes {
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/nps'
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
@@ -821,6 +832,7 @@ export interface FileRouteTypes {
     | '/portal-v2/conteudos'
     | '/portal-v2/inicio'
     | '/portal-v2/notificacoes'
+    | '/portal-v2/nps'
     | '/portal-v2/perfil'
     | '/portal-v2/relatorios'
     | '/portal-v2/seguranca'
@@ -976,6 +988,13 @@ declare module '@tanstack/react-router' {
       path: '/perfil'
       fullPath: '/portal-v2/perfil'
       preLoaderRoute: typeof PortalV2PerfilRouteImport
+      parentRoute: typeof PortalV2RouteRoute
+    }
+    '/portal-v2/nps': {
+      id: '/portal-v2/nps'
+      path: '/nps'
+      fullPath: '/portal-v2/nps'
+      preLoaderRoute: typeof PortalV2NpsRouteImport
       parentRoute: typeof PortalV2RouteRoute
     }
     '/portal-v2/notificacoes': {
@@ -1531,6 +1550,7 @@ interface PortalV2RouteRouteChildren {
   PortalV2ConteudosRoute: typeof PortalV2ConteudosRoute
   PortalV2InicioRoute: typeof PortalV2InicioRoute
   PortalV2NotificacoesRoute: typeof PortalV2NotificacoesRoute
+  PortalV2NpsRoute: typeof PortalV2NpsRoute
   PortalV2PerfilRoute: typeof PortalV2PerfilRoute
   PortalV2RelatoriosRoute: typeof PortalV2RelatoriosRoute
   PortalV2SegurancaRoute: typeof PortalV2SegurancaRoute
@@ -1546,6 +1566,7 @@ const PortalV2RouteRouteChildren: PortalV2RouteRouteChildren = {
   PortalV2ConteudosRoute: PortalV2ConteudosRoute,
   PortalV2InicioRoute: PortalV2InicioRoute,
   PortalV2NotificacoesRoute: PortalV2NotificacoesRoute,
+  PortalV2NpsRoute: PortalV2NpsRoute,
   PortalV2PerfilRoute: PortalV2PerfilRoute,
   PortalV2RelatoriosRoute: PortalV2RelatoriosRoute,
   PortalV2SegurancaRoute: PortalV2SegurancaRoute,

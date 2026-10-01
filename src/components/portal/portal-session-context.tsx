@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useRouter } from "@tanstack/react-router";
 import { getPortalDataForSession } from "@/lib/portal-auth.functions";
 import { usePortalLang, type PortalLang } from "@/lib/portal-i18n";
 import type { ClienteLinkData } from "@/lib/portal-types";
@@ -42,6 +43,7 @@ export function PortalSessionDataProvider({
   children: React.ReactNode;
 }) {
   const getDataFn = useServerFn(getPortalDataForSession);
+  const router = useRouter();
   const [data, setData] = useState<PortalSessionData>(initialData);
   const [lang, setLang] = usePortalLang();
   const dataRef = useRef(data);
@@ -50,6 +52,12 @@ export function PortalSessionDataProvider({
   const reload = () => {
     getDataFn()
       .then((row) => {
+        // NPS ficou pendente no meio da sessão: o servidor não manda mais
+        // dados — reexecuta o guard de rota (redireciona pra /portal-v2/nps).
+        if ((row as { npsBlocked?: boolean }).npsBlocked) {
+          void router.invalidate();
+          return;
+        }
         setData(row as PortalSessionData);
         document.title = `${(row as PortalSessionData).clienteNome || "Portal"} · Hype`;
       })

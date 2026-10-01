@@ -1,7 +1,7 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveUserEnvironment } from "@/lib/user-environment.server";
-import { getPortalDataForSession } from "@/lib/portal-auth.functions";
+import { getPendingNpsSession, getPortalDataForSession } from "@/lib/portal-auth.functions";
 import { shouldRequireMfaChallenge } from "@/lib/mfa.functions";
 import { acceptPendingInvites } from "@/lib/accept-invite.functions";
 import {
@@ -9,6 +9,20 @@ import {
   type PortalSessionData,
 } from "@/components/portal/portal-session-context";
 import { PortalV2Shell } from "@/features/client-portal-v2/layouts/PortalV2Shell";
+import { NpsForm, NpsGateError } from "@/features/client-portal-v2/components/PendingNpsGate";
+import { decideNpsGuard, NPS_ROUTE } from "@/features/client-portal-v2/nps-guard";
+
+type NpsBlockedData = {
+  npsBlocked: true;
+  role: string;
+  referenceMonth: string;
+  pendentes: { campanhaId: string; nome: string }[];
+};
+type PortalLoaderData = PortalSessionData | NpsBlockedData;
+
+function isNpsBlocked(d: PortalLoaderData): d is NpsBlockedData {
+  return (d as NpsBlockedData).npsBlocked === true;
+}
 
 /**
  * Guarda de sessão da V2 — MESMA lógica de resolução de sessão/organização
@@ -31,7 +45,7 @@ async function checkMustChangePassword(userId: string): Promise<boolean> {
 
 export const Route = createFileRoute("/portal-v2")({
   ssr: false,
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) {
       throw redirect({ to: "/" });
@@ -72,17 +86,59 @@ export const Route = createFileRoute("/portal-v2")({
       throw redirect({ to: "/criar-senha" });
     }
 
+    // NPS mensal obrigatório — checado no ROTEAMENTO, antes de qualquer
+    // rota filha carregar. Pendência vem do servidor; se a consulta falhar
+    // o erro propaga pro `errorComponent` (fail-closed: nunca libera o
+    // portal sem saber o estado do NPS). Com pendência, qualquer rota
+    // (inclusive URL digitada direto) vira `/portal-v2/nps?returnTo=...`.
+    const { pendentes } = await getPendingNpsSession();
+    const decision = decideNpsGuard({
+      pathname: location.pathname,
+      href: location.href,
+      hasPending: pendentes.length > 0,
+      returnTo: (location.search as { returnTo?: unknown }).returnTo,
+    });
+    if (decision.action === "toNps") {
+      throw redirect({ to: NPS_ROUTE, search: { returnTo: decision.returnTo } });
+    }
+    if (decision.action === "leaveNps") {
+      throw redirect({ href: decision.href });
+    }
+
     return { userId, organizationId };
   },
   loader: async () => {
-    const data = (await getPortalDataForSession()) as PortalSessionData;
+    // Defesa em profundidade: o próprio servidor não devolve dados do
+    // portal enquanto houver NPS pendente (`npsBlocked`).
+    const data = (await getPortalDataForSession()) as PortalLoaderData;
     return { clienteData: data };
   },
+  errorComponent: PortalV2Error,
   component: PortalV2Layout,
 });
 
+function PortalV2Error({ error, reset }: { error: unknown; reset: () => void }) {
+  const router = useRouter();
+  return (
+    <NpsGateError
+      message={error instanceof Error ? error.message : undefined}
+      onRetry={() => {
+        reset();
+        void router.invalidate();
+      }}
+    />
+  );
+}
+
 function PortalV2Layout() {
   const { clienteData } = Route.useLoaderData();
+  const router = useRouter();
+  if (isNpsBlocked(clienteData)) {
+    // Sem shell, sem sidebar, sem <Outlet/>: só o formulário. Depois de
+    // enviar, `invalidate()` reexecuta o guard, que (sem pendência) manda
+    // de volta pra rota original (`returnTo`).
+    return <NpsForm pendentes={clienteData.pendentes} onSubmitted={() => router.invalidate()} />;
+  }
   return (
     <PortalSessionDataProvider initialData={clienteData}>
       <PortalV2Shell>

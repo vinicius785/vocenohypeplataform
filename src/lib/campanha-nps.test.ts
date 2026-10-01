@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import {
+  campanhasAtivasSemDataInicio,
   campanhasComNpsPendente,
+  isUuid,
   currentReferenceMonth,
   isCampanhaElegivelParaNps,
   mapCampanhaNpsRow,
@@ -127,5 +129,37 @@ describe("campanhasComNpsPendente", () => {
     const campanhas = [baseCampanha({ id: "camp1", status: "planning" })];
     const pendentes = campanhasComNpsPendente(campanhas, [], "2026-10", now);
     expect(pendentes).toEqual([]);
+  });
+});
+
+describe("fuso de Brasília (reference_month / dataInicio)", () => {
+  it("referenceMonthOf usa Brasília, não UTC (virada do mês)", () => {
+    // 01/11 01:00 UTC = 31/10 22:00 em Brasília → ainda outubro
+    expect(referenceMonthOf(new Date("2026-11-01T01:00:00Z"))).toBe("2026-10");
+    // 01/11 03:30 UTC = 01/11 00:30 em Brasília → novembro
+    expect(referenceMonthOf(new Date("2026-11-01T03:30:00Z"))).toBe("2026-11");
+  });
+
+  it("dataInicio = hoje em Brasília é elegível mesmo se em UTC já for amanhã", () => {
+    const now = new Date("2026-10-16T01:00:00Z"); // 15/10 22:00 BRT
+    expect(isCampanhaElegivelParaNps(baseCampanha({ dataInicio: "2026-10-15" }), now)).toBe(true);
+    expect(isCampanhaElegivelParaNps(baseCampanha({ dataInicio: "2026-10-16" }), now)).toBe(false);
+  });
+});
+
+describe("campanhasAtivasSemDataInicio / isUuid", () => {
+  it("lista só campanhas ativas sem dataInicio válida", () => {
+    const list = campanhasAtivasSemDataInicio([
+      baseCampanha({ id: "a", dataInicio: undefined }),
+      baseCampanha({ id: "b", dataInicio: "lixo" }),
+      baseCampanha({ id: "c" }),
+      baseCampanha({ id: "d", dataInicio: undefined, status: "planning" }),
+    ]);
+    expect(list.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("isUuid valida formato", () => {
+    expect(isUuid("c7b5f3bf-5692-4c31-b691-99e4ced39c52")).toBe(true);
+    expect(isUuid("camp1")).toBe(false);
   });
 });

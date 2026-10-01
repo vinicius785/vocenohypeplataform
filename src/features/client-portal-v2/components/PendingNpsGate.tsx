@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Send } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Send } from "lucide-react";
 import { getPendingNpsSession, submitNpsSession } from "@/lib/portal-auth.functions";
 
 const SCORES = Array.from({ length: 11 }, (_, i) => i);
@@ -26,7 +26,7 @@ const SCORES = Array.from({ length: 11 }, (_, i) => i);
  */
 export function PendingNpsGate({ children }: { children: ReactNode }) {
   const getPendingFn = useServerFn(getPendingNpsSession);
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["portal-v2-nps-pending"],
     queryFn: () => getPendingFn(),
     staleTime: 30_000,
@@ -34,10 +34,12 @@ export function PendingNpsGate({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: true,
   });
 
-  // Falha de rede ao consultar a pendência não deve travar o portal
-  // inteiro pra sempre — a proteção real (servidor recusa qualquer
-  // mutação enquanto houver NPS pendente) continua de pé independente
-  // disso; aqui é só a experiência de "mostrar o formulário logo".
+  // Fail-closed: o bloqueio principal é o guard de rota + o loader
+  // (`portal-v2/route.tsx`, `getPortalDataForSession`). Este componente
+  // cobre pendência que surge NO MEIO da sessão (campanha nova, virada de
+  // mês com a aba aberta). Se a checagem falhar sem nenhum resultado bom
+  // anterior, NÃO libera o portal — mostra erro + "Tentar novamente".
+  // (Falha num refetch periódico mantém o último resultado bom.)
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background">
@@ -45,14 +47,66 @@ export function PendingNpsGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (isError || !data || data.pendentes.length === 0) {
+  if (isError && !data) {
+    return (
+      <NpsGateError
+        message={error instanceof Error ? error.message : undefined}
+        retrying={isFetching}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+  if (!data || data.pendentes.length === 0) {
     return <>{children}</>;
   }
 
   return <NpsForm pendentes={data.pendentes} />;
 }
 
-function NpsForm({ pendentes }: { pendentes: { campanhaId: string; nome: string }[] }) {
+export function NpsGateError({
+  message,
+  onRetry,
+  retrying = false,
+}: {
+  message?: string;
+  onRetry: () => void;
+  retrying?: boolean;
+}) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 text-center shadow-lg">
+        <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+        <div className="space-y-1">
+          <h1 className="text-base font-semibold text-foreground">
+            Não foi possível carregar o portal
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Não conseguimos verificar suas avaliações pendentes. Verifique sua conexão e tente
+            novamente.
+          </p>
+          {message && <p className="text-xs text-muted-foreground">{message}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function NpsForm({
+  pendentes,
+  onSubmitted,
+}: {
+  pendentes: { campanhaId: string; nome: string }[];
+  onSubmitted?: () => Promise<unknown> | void;
+}) {
   const submitFn = useServerFn(submitNpsSession);
   const queryClient = useQueryClient();
   const [scores, setScores] = useState<Record<string, number | null>>(() =>
@@ -79,6 +133,7 @@ function NpsForm({ pendentes }: { pendentes: { campanhaId: string; nome: string 
         },
       });
       await queryClient.invalidateQueries({ queryKey: ["portal-v2-nps-pending"] });
+      await onSubmitted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar sua avaliação.");
       setSubmitting(false);

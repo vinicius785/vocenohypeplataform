@@ -126,7 +126,13 @@ export const Route = createFileRoute("/portal-app")({
     throw redirect({ to: env.redirectTo });
   },
   loader: async () => {
-    const data = (await getPortalDataForSession()) as PortalSessionData;
+    const raw = await getPortalDataForSession();
+    // V1 (sessão) é só redirect de compatibilidade pra V2; se o servidor
+    // reportar NPS pendente, manda pro gate de NPS da V2 em vez de renderir.
+    if ((raw as { npsBlocked?: boolean }).npsBlocked) {
+      throw redirect({ to: "/portal-v2/nps" });
+    }
+    const data = raw as PortalSessionData;
     return { clienteData: data };
   },
   component: PortalAppLayout,

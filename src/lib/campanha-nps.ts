@@ -14,6 +14,7 @@
  */
 import type { Campaign, CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
+import { todayIsoInBrasilia } from "@/lib/timezone";
 
 export type CampanhaNps = {
   id: string;
@@ -60,9 +61,17 @@ export function mapCampanhaNpsRow(r: CampanhaNpsRow): CampanhaNps {
  * data real (nunca recebido do cliente): item 13 do pedido ("reference_month
  * válido" — nunca confiar em valor enviado pelo front). */
 export function referenceMonthOf(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  // Sempre no fuso de Brasília (nunca o fuso do processo/navegador): num
+  // servidor em UTC, `getMonth()` viraria o mês ~21h antes da meia-noite
+  // de Brasília do dia 1º.
+  return todayIsoInBrasilia(date).slice(0, 7);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** `campanha_nps.campanha_id` é `uuid` — valida antes de enviar ao banco. */
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
 export function currentReferenceMonth(now: Date = new Date()): string {
@@ -80,9 +89,23 @@ const ELIGIBLE_STATUS: CampanhaStatus[] = ["active"];
 export function isCampanhaElegivelParaNps(campanha: Campaign, now: Date = new Date()): boolean {
   if (!ELIGIBLE_STATUS.includes(campanhaStatus(campanha))) return false;
   if (!campanha.dataInicio) return false;
-  const inicio = new Date(campanha.dataInicio + "T00:00:00");
-  if (Number.isNaN(inicio.getTime())) return false;
-  return inicio.getTime() <= now.getTime();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(campanha.dataInicio)) return false;
+  // Comparação de datas ISO (YYYY-MM-DD) em Brasília — independe do fuso
+  // do processo.
+  return campanha.dataInicio <= todayIsoInBrasilia(now);
+}
+
+/** Campanhas `active` que NÃO geram NPS por falta de `dataInicio` válida
+ * (dado histórico incompleto). Decisão: continuam não elegíveis (nunca
+ * cobra NPS sem saber se a campanha começou), mas o servidor registra um
+ * aviso com estes ids pra não ficar silencioso — ver
+ * `loadPendingNpsCampanhas` em portal-auth.functions.ts. */
+export function campanhasAtivasSemDataInicio(campanhas: Campaign[]): Campaign[] {
+  return campanhas.filter(
+    (c) =>
+      campanhaStatus(c) === "active" &&
+      (!c.dataInicio || !/^\d{4}-\d{2}-\d{2}$/.test(c.dataInicio)),
+  );
 }
 
 /** Campanhas elegíveis de um cliente que ainda não têm resposta de NPS no

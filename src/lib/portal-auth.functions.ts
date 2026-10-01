@@ -51,7 +51,9 @@ import type { Cliente } from "@/lib/clientes-store";
 import type { Task } from "@/components/tasks/TaskBoard";
 import {
   currentReferenceMonth,
+  campanhasAtivasSemDataInicio,
   campanhasComNpsPendente,
+  isUuid,
   mapCampanhaNpsRow,
   type CampanhaNpsRow,
 } from "@/lib/campanha-nps";
@@ -119,6 +121,15 @@ async function loadPendingNpsCampanhas(clienteId: string, cliente: Cliente) {
   if (error) throw new Error(error.message);
   const respondidas = (rows ?? []).map((r) => mapCampanhaNpsRow(r as CampanhaNpsRow));
   const pendentes = campanhasComNpsPendente(cliente.campanhas ?? [], respondidas, referenceMonth);
+  // Campanha ativa sem `dataInicio` válida nunca gera NPS (decisão
+  // mantida: não cobra NPS sem saber se começou) — mas não silenciosamente.
+  const semInicio = campanhasAtivasSemDataInicio(cliente.campanhas ?? []);
+  if (semInicio.length > 0) {
+    console.warn(
+      `[campanha-nps] cliente ${clienteId}: ${semInicio.length} campanha(s) ativa(s) sem dataInicio ignorada(s) no NPS mensal:`,
+      semInicio.map((c) => c.id).join(", "),
+    );
+  }
   return { referenceMonth, pendentes };
 }
 
@@ -216,6 +227,20 @@ export const getPortalDataForSession = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { clienteId, cliente, role } = await resolveClienteForSession(context);
+    // Bloqueio de NPS no SERVIDOR: enquanto houver NPS mensal pendente,
+    // nenhum dado do portal é devolvido — só a lista de pendências. O
+    // guard de rota (`portal-v2/route.tsx`) redireciona pra `/portal-v2/nps`,
+    // mas mesmo que alguém contorne o roteamento o loader não recebe dados.
+    // Erro ao consultar a pendência propaga (fail-closed).
+    const { referenceMonth, pendentes } = await loadPendingNpsCampanhas(clienteId, cliente);
+    if (pendentes.length > 0) {
+      return {
+        npsBlocked: true as const,
+        role,
+        referenceMonth,
+        pendentes: pendentes.map((c) => ({ campanhaId: c.id, nome: c.nome })),
+      };
+    }
     const base = await buildClienteLinkData(clienteId, cliente);
     // `role` is additive to the shape `getClienteLinkData` (token path)
     // returns — used only by the session UI to hide mutating actions from
@@ -810,7 +835,7 @@ const SubmitNpsInput = z.object({
   respostas: z
     .array(
       z.object({
-        campanhaId: z.string().min(1),
+        campanhaId: z.string().refine(isUuid, "Campanha inválida."),
         score: z.number().int().min(0).max(10),
         comment: z.string().trim().max(2000).optional(),
       }),
@@ -842,6 +867,9 @@ export const submitNpsSession = createServerFn({ method: "POST" })
     for (const r of data.respostas) {
       assertCampanhaInCliente(cliente, r.campanhaId);
     }
+    // `reference_month` é recalculado AQUI, no momento do envio (nunca
+    // vindo do front): se o mês virou com o formulário aberto, a resposta
+    // vai pro mês novo e a pendência é recalculada abaixo.
     const referenceMonth = currentReferenceMonth();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("campanha_nps").upsert(
