@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams } from "@tanstack/react-router";
+import { useMatches } from "@tanstack/react-router";
 import { Hash, Briefcase, Megaphone } from "lucide-react";
 import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import {
@@ -14,7 +14,7 @@ import {
   type ChatMember,
   type ChatMessage,
 } from "@/lib/chat-store";
-import { countUnreadMentions } from "./chat-v2-utils";
+import { convoIdFromMatch, countUnreadMentions, routeForConvoId } from "./chat-v2-utils";
 import { ChatV2NavigationHeader } from "./ChatV2NavigationHeader";
 import { ChatV2Search } from "./ChatV2Search";
 import { ChatV2Shortcuts } from "./ChatV2Shortcuts";
@@ -51,15 +51,23 @@ export function ChatV2Navigation({
   const [newConvoOpen, setNewConvoOpen] = useState(false);
   const [showArchivedCampaigns, setShowArchivedCampaigns] = useState(false);
   const [showArchivedProjects, setShowArchivedProjects] = useState(false);
-  const params = useParams({ strict: false }) as { kind?: string; id?: string };
-  const activeConvoId =
-    params.kind === "dm"
-      ? `dm:${[meId, params.id].sort().join("|")}`
-      : params.kind === "channel"
-        ? `c:${params.id}`
-        : params.kind === "campaign"
-          ? `camp:${params.id}`
-          : "";
+  // A conversa ativa é derivada da ROTA de fato montada (`useMatches`),
+  // nunca de `useParams({ strict: false })` — as rotas de conversa não
+  // têm nenhum param chamado "kind" (era um segmento estático do path),
+  // então essa leitura nunca podia funcionar. Ver `convoIdFromMatch`.
+  const matches = useMatches();
+  const convoRouteMatch = matches.find((m) =>
+    [
+      "/_authenticated/chat-v2/dm/$id",
+      "/_authenticated/chat-v2/channel/$id",
+      "/_authenticated/chat-v2/campaign/$id",
+    ].includes(m.routeId),
+  );
+  const activeConvoId = convoIdFromMatch(
+    convoRouteMatch?.routeId,
+    (convoRouteMatch?.params as { id?: string } | undefined)?.id,
+    meId,
+  );
 
   const campaignChannels = useMemo(() => loadCampaignChannels(clientes), [clientes]);
   const projectChannels = useMemo(() => loadProjectChannels(), []);
@@ -101,27 +109,14 @@ export function ChatV2Navigation({
   );
   const campanhasVisiveis = showArchivedCampaigns ? campanhasTodas : campanhasAtivas;
 
-  const routeFor = (item: ChatListItem): { to: string; params: Record<string, string> } => {
-    if (item.kind === "dm") {
-      const otherId =
-        item.id
-          .slice(3)
-          .split("|")
-          .find((id) => id !== meId) ?? item.id;
-      return { to: "/chat-v2/dm/$id", params: { id: otherId } };
-    }
-    if (item.kind === "campanha")
-      return { to: "/chat-v2/campaign/$id", params: { id: item.id.slice(5) } };
-    if (item.kind === "projeto") return { to: "/chat-v2/channel/$id", params: { id: item.id } };
-    return { to: "/chat-v2/channel/$id", params: { id: item.id.slice(2) } };
-  };
+  const routeFor = (item: ChatListItem) => routeForConvoId(item.id, meId);
 
   const hasMention = (item: ChatListItem) =>
     !!item.lastMessage?.mentions?.some((m) => m.kind === "user" && m.id === meId) &&
     item.unread > 0;
 
   return (
-    <div className="flex h-full w-full flex-col border-r border-border bg-muted/20 md:w-[280px] lg:w-[300px]">
+    <div className="flex h-full w-full flex-col border-r border-border bg-muted/20 md:w-[300px] lg:w-[320px]">
       <ChatV2NavigationHeader onNewConversation={() => setNewConvoOpen(true)} meId={meId} />
       <ChatV2Search value={search} onChange={setSearch} meId={meId} />
       <ChatV2Shortcuts unreadCount={totalUnread} mentionCount={mentionCount} />
@@ -168,6 +163,7 @@ export function ChatV2Navigation({
                   name={item.name}
                   unread={item.unread}
                   preview={item.lastMessage?.text}
+                  timestamp={item.lastMessage?.createdAt}
                 />
               ),
             };
@@ -194,6 +190,7 @@ export function ChatV2Navigation({
                   name={item.name}
                   unread={item.unread}
                   preview={item.lastMessage?.text}
+                  timestamp={item.lastMessage?.createdAt}
                 />
               ),
             };
@@ -220,6 +217,7 @@ export function ChatV2Navigation({
                   name={item.name}
                   unread={item.unread}
                   preview={item.lastMessage?.text}
+                  timestamp={item.lastMessage?.createdAt}
                 />
               ),
             };
@@ -254,6 +252,7 @@ export function ChatV2Navigation({
                   name={item.name}
                   unread={item.unread}
                   preview={item.lastMessage?.text}
+                  timestamp={item.lastMessage?.createdAt}
                   subtitle={item.empresa ? `Campanha · ${item.empresa}` : undefined}
                 />
               ),

@@ -39,7 +39,7 @@ function ChatV2ChannelPage() {
       messages={messages}
       meId={me.id}
       members={members}
-      onBack={() => void navigate({ to: "/chat-v2" })}
+      onBack={() => void navigate({ to: "/chat-v2", search: { stay: true } })}
     />
   );
 }

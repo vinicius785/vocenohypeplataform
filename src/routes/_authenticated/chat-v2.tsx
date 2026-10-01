@@ -18,7 +18,17 @@ export const Route = createFileRoute("/_authenticated/chat-v2")({
 function ChatV2Layout() {
   const matches = useMatches();
   const navigate = useNavigate();
-  const hasActiveConvo = matches.some((m) => m.routeId !== "/_authenticated/chat-v2/");
+  // Bug real encontrado ao vivo (só aparece quando a rota índice
+  // `/chat-v2` fica de fato montada, o que antes nunca acontecia porque
+  // ela sempre redirecionava embora — ver `chat-v2.index.tsx`'s `stay`):
+  // `matches` inclui TODOS os ancestrais da rota atual (`__root__`,
+  // `/_authenticated`, o próprio layout `/_authenticated/chat-v2`), não
+  // só a rota folha. `.some(routeId !== index)` então é sempre `true`
+  // (o ancestral `__root__` sempre difere), mesmo na própria rota
+  // índice — escondendo a lista de conversas no mobile exatamente
+  // quando ela deveria aparecer. O que importa é só a rota FOLHA
+  // (último match).
+  const hasActiveConvo = matches[matches.length - 1]?.routeId !== "/_authenticated/chat-v2/";
 
   // Clicar em outra seção da sidebar global sai do Chat V2 pra `/time`
   // (onde as outras 11 seções vivem); clicar em "Chat" de novo não faz

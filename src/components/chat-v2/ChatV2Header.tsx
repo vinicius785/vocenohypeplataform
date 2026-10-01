@@ -143,7 +143,7 @@ export function ChatV2Header({
     title = info.channel.name;
     subtitle = `${info.memberCount} membro${info.memberCount === 1 ? "" : "s"}${
       onlineCount > 0 ? ` · ${onlineCount} online` : ""
-    }`;
+    }${info.channel.linkedScope ? ` · ${info.channel.linkedScope.name}` : ""}`;
   } else if (info?.kind === "projeto") {
     leadingIcon = (
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">

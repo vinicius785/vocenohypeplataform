@@ -147,6 +147,43 @@ export function routeForConvoId(
   return { to: "/chat-v2/channel/$id", params: { id: convoId.slice(2) } };
 }
 
+/** Inverso de `routeForConvoId` — a partir do `routeId` da rota de
+ * conversa que está de fato montada (`useMatches()`) + seu param `id`,
+ * recupera o `convoId` (`dm:a|b`, `c:<uuid>`, `camp:<id>`, `proj:<id>`).
+ * Usada só pra destacar o item ativo na navegação — nunca usar
+ * `useParams({ strict: false })` pra isso: as rotas do Chat V2 não têm
+ * nenhum param chamado `kind` (era a causa do item selecionado nunca
+ * ficar destacado — a comparação de antes nunca podia ser verdadeira). */
+export function convoIdFromMatch(
+  routeId: string | undefined,
+  routeParamId: string | undefined,
+  meId: string,
+): string {
+  if (!routeId || !routeParamId) return "";
+  if (routeId === "/_authenticated/chat-v2/dm/$id") {
+    return `dm:${[meId, routeParamId].sort().join("|")}`;
+  }
+  if (routeId === "/_authenticated/chat-v2/campaign/$id") return `camp:${routeParamId}`;
+  if (routeId === "/_authenticated/chat-v2/channel/$id") {
+    // Projetos reusam a rota /channel/$id mas mantêm o prefixo "proj:" no
+    // próprio param (ver routeForConvoId acima) — canais normais não.
+    return routeParamId.startsWith("proj:") ? routeParamId : `c:${routeParamId}`;
+  }
+  return "";
+}
+
+/** Horário/data discreta no item da lista de conversas — "11:50" quando
+ * foi hoje, "25/09" quando não foi (nunca ano, não há espaço na linha).
+ * Mais compacta que `dateDividerLabel` (feita pros divisores da
+ * timeline, que têm a largura inteira da coluna central). */
+export function formatConvoTimestamp(ts: number, now: number = Date.now()): string {
+  const d = new Date(ts);
+  if (isSameDay(ts, now)) {
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
 /** Conta menções não lidas endereçadas a `meId` em qualquer conversa —
  * alimenta o atalho "Menções" da navegação (`ChatV2Shortcuts`). Não conta
  * a própria mensagem da pessoa (não faz sentido se automencionar) nem

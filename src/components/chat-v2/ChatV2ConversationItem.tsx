@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import { formatConvoTimestamp } from "./chat-v2-utils";
 
 export function ChatV2ConversationItem({
   to,
@@ -11,6 +12,7 @@ export function ChatV2ConversationItem({
   unread,
   hasMention,
   preview,
+  timestamp,
   /** Contexto secundário exibido no lugar da prévia quando ainda não há
    * mensagem (ex: "Campanha · Cix Citizen") — nunca junto da prévia real. */
   subtitle,
@@ -23,6 +25,10 @@ export function ChatV2ConversationItem({
   unread: number;
   hasMention?: boolean;
   preview?: string;
+  /** Epoch ms da última mensagem — exibido discretamente à direita do
+   * nome ("11:50" hoje, "25/09" em outro dia). Ausente quando a conversa
+   * ainda não tem nenhuma mensagem. */
+  timestamp?: number;
   subtitle?: string;
 }) {
   const unreadState = unread > 0;
@@ -36,18 +42,25 @@ export function ChatV2ConversationItem({
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              className={`block truncate text-sm font-semibold ${
-                active ? "text-brand-foreground" : "text-foreground"
-              }`}
-            >
-              {name}
+        <span className="flex items-baseline justify-between gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={`block min-w-0 truncate text-sm font-semibold ${
+                  active ? "text-brand-foreground" : "text-foreground"
+                }`}
+              >
+                {name}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{name}</TooltipContent>
+          </Tooltip>
+          {timestamp && (
+            <span className="shrink-0 text-[11px] text-muted-foreground">
+              {formatConvoTimestamp(timestamp)}
             </span>
-          </TooltipTrigger>
-          <TooltipContent>{name}</TooltipContent>
-        </Tooltip>
+          )}
+        </span>
         <span
           className={`block truncate text-xs ${unreadState ? "text-foreground/80" : "text-muted-foreground"}`}
         >

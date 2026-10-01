@@ -22,13 +22,16 @@ class MemoryStorage {
 }
 (globalThis as unknown as { localStorage: MemoryStorage }).localStorage = new MemoryStorage();
 import {
+  convoIdFromMatch,
   countUnreadMentions,
   dateDividerLabel,
   firstUnreadIndex,
+  formatConvoTimestamp,
   getLastConvoRoute,
   groupMessages,
   isSameDay,
   isSidebarSectionCollapsed,
+  routeForConvoId,
   setLastConvoRoute,
   setSidebarSectionCollapsed,
 } from "./chat-v2-utils";
@@ -204,5 +207,65 @@ describe("estado de recolhimento da sidebar", () => {
     expect(isSidebarSectionCollapsed("canais")).toBe(true);
     setSidebarSectionCollapsed("canais", false);
     expect(isSidebarSectionCollapsed("canais")).toBe(false);
+  });
+});
+
+// `convoIdFromMatch` é o inverso de `routeForConvoId` — testados juntos
+// pra garantir que o par de ida/volta é consistente pros 4 tipos de
+// conversa (é exatamente essa simetria que faltava antes: a navegação
+// usava uma leitura de `useParams` que nenhuma rota realmente declarava,
+// então o item ativo nunca era encontrado na lista).
+describe("routeForConvoId / convoIdFromMatch (ida e volta)", () => {
+  const meId = "me-1";
+  const otherId = "other-2";
+  const dmConvoId = `dm:${[meId, otherId].sort().join("|")}`;
+
+  it("DM: convoId -> rota -> convoId", () => {
+    const route = routeForConvoId(dmConvoId, meId);
+    expect(route).toEqual({ to: "/chat-v2/dm/$id", params: { id: otherId } });
+    expect(convoIdFromMatch("/_authenticated/chat-v2/dm/$id", otherId, meId)).toBe(dmConvoId);
+  });
+
+  it("canal: convoId -> rota -> convoId", () => {
+    const route = routeForConvoId("c:canal-1", meId);
+    expect(route).toEqual({ to: "/chat-v2/channel/$id", params: { id: "canal-1" } });
+    expect(convoIdFromMatch("/_authenticated/chat-v2/channel/$id", "canal-1", meId)).toBe(
+      "c:canal-1",
+    );
+  });
+
+  it("projeto: mantém o prefixo proj: no param da rota (caso especial)", () => {
+    const route = routeForConvoId("proj:projeto-1", meId);
+    expect(route).toEqual({ to: "/chat-v2/channel/$id", params: { id: "proj:projeto-1" } });
+    expect(convoIdFromMatch("/_authenticated/chat-v2/channel/$id", "proj:projeto-1", meId)).toBe(
+      "proj:projeto-1",
+    );
+  });
+
+  it("campanha: convoId -> rota -> convoId", () => {
+    const route = routeForConvoId("camp:campanha-1", meId);
+    expect(route).toEqual({ to: "/chat-v2/campaign/$id", params: { id: "campanha-1" } });
+    expect(convoIdFromMatch("/_authenticated/chat-v2/campaign/$id", "campanha-1", meId)).toBe(
+      "camp:campanha-1",
+    );
+  });
+
+  it("sem rota de conversa montada (ex: /chat-v2 vazio) retorna string vazia", () => {
+    expect(convoIdFromMatch(undefined, undefined, meId)).toBe("");
+    expect(convoIdFromMatch("/_authenticated/chat-v2/", undefined, meId)).toBe("");
+  });
+});
+
+describe("formatConvoTimestamp", () => {
+  it("mostra só o horário quando a mensagem é de hoje", () => {
+    const now = new Date("2026-10-01T18:30:00").getTime();
+    const today9am = new Date("2026-10-01T09:05:00").getTime();
+    expect(formatConvoTimestamp(today9am, now)).toBe("09:05");
+  });
+
+  it("mostra dia/mês quando não é hoje", () => {
+    const now = new Date("2026-10-01T18:30:00").getTime();
+    const yesterday = new Date("2026-09-30T09:05:00").getTime();
+    expect(formatConvoTimestamp(yesterday, now)).toBe("30/09");
   });
 });
