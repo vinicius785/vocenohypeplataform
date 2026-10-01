@@ -82,7 +82,7 @@ export function CampaignToolShell({
                   <span className="truncate">{campanhaNome}</span>
                 </button>
                 <span className="text-text-secondary">/</span>
-                <span className="shrink-0 text-text-secondary">Ferramentas</span>
+                <span className="shrink-0 text-text-secondary">Recursos</span>
               </nav>
               <DialogPrimitive.Close asChild>
                 <IconButton label="Fechar" className="-mr-2 h-8 w-8 shrink-0">

@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ExternalLink,
   ImageIcon,
-  ListChecks,
   Link as LinkIcon,
   Megaphone,
   MoreVertical,
@@ -73,7 +72,6 @@ import { PageContainer } from "@/components/shared/PageContainer";
 import { SummaryStat } from "@/components/shared/SummaryStat";
 import { OPEN_CAMPANHA_TASK_KEY, OPEN_CAMPANHA_TASK_EVENT } from "./AppShell";
 import { TaskBoard, type Task } from "./tasks/TaskBoard";
-import { TASK_STATUS_CATEGORY } from "@/lib/task-status";
 import {
   InfluencerBoard,
   BankFields,
@@ -528,23 +526,6 @@ function CampanhaDetail({
     [tasks, monthFilter, isRecorrente],
   );
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
-
-  // Tarefas recolhidas por padrão (não dominam o 1º viewport); abrem
-  // sozinhas quando chega um deep link de tarefa (notificação/AppShell),
-  // pra `TaskBoard` montar e abrir a tarefa como antes.
-  const [tasksExpanded, setTasksExpanded] = useState(Boolean(initialTaskId));
-  useEffect(() => {
-    if (initialTaskId) setTasksExpanded(true);
-  }, [initialTaskId]);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const openTasks = visibleTasks.filter((t) => {
-    const cat = TASK_STATUS_CATEGORY[t.status];
-    return cat !== "done" && cat !== "archived";
-  });
-  const openTasksCount = openTasks.length;
-  const overdueTasksCount = openTasks.filter(
-    (t) => t.dueDate && t.dueDate.slice(0, 10) < todayIso,
-  ).length;
 
   const [openPanel, setOpenPanel] = useState<
     null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorioMensal" | "nps"
@@ -1081,33 +1062,6 @@ function CampanhaDetail({
                   )}
                 </div>
               </div>
-
-              {/* Ferramentas da campanha — cards descobríveis (ícone, nome,
-               * descrição curta, contador). Cada um abre a ferramenta no
-               * `CampaignToolShell` (ver ./campanhas/tools). */}
-              <div className="order-3 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
-                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Ferramentas
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <CampaignToolCard
-                    tool="documentos"
-                    count={docs.length}
-                    onOpen={() => setOpenPanel("documentos")}
-                  />
-                  <CampaignToolCard
-                    tool="calendario"
-                    count={cronograma.length}
-                    onOpen={() => setOpenPanel("calendario")}
-                  />
-                  <CampaignToolCard
-                    tool="relatorioMensal"
-                    count={relatorios.length}
-                    onOpen={() => setOpenPanel("relatorioMensal")}
-                  />
-                  <CampaignToolCard tool="nps" onOpen={() => setOpenPanel("nps")} />
-                </div>
-              </div>
             </div>
 
             {/* CONTRATO — Composição & pagamentos + Direitos de imagem num
@@ -1197,47 +1151,45 @@ function CampanhaDetail({
           </div>
         </section>
 
+        {/* RECURSOS da campanha — sempre visíveis (Documentos, Calendário,
+         * Relatórios mensais, NPS). Cada card abre o recurso no
+         * `CampaignToolShell` (ver ./campanhas/tools). */}
+        <section className="rounded-2xl bg-card p-4 dark:shadow-none">
+          <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Recursos
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <CampaignToolCard
+              tool="documentos"
+              count={docs.length}
+              onOpen={() => setOpenPanel("documentos")}
+            />
+            <CampaignToolCard
+              tool="calendario"
+              count={cronograma.length}
+              onOpen={() => setOpenPanel("calendario")}
+            />
+            <CampaignToolCard
+              tool="relatorioMensal"
+              count={relatorios.length}
+              onOpen={() => setOpenPanel("relatorioMensal")}
+            />
+            <CampaignToolCard tool="nps" onOpen={() => setOpenPanel("nps")} />
+          </div>
+        </section>
+
         {/* TAREFAS — sempre visível, nunca atrás de aba. `TaskBoard` já
          * renderiza seu próprio cabeçalho (título "Tarefas"/total/ordenar/
          * filtrar/Nova tarefa) — nenhum título extra aqui, senão duplica
          * (achado real desta rodada corretiva: "TAREFAS" aparecia 2x). */}
-        <section className="rounded-2xl bg-card dark:shadow-none">
-          <button
-            type="button"
-            onClick={() => setTasksExpanded((v) => !v)}
-            aria-expanded={tasksExpanded}
-            className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
-              <ListChecks className="h-4 w-4 text-text-secondary" />
-              Tarefas
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">
-                {openTasksCount} em aberto
-              </span>
-              {overdueTasksCount > 0 && (
-                <span className="text-xs font-medium text-danger">
-                  {overdueTasksCount} atrasada{overdueTasksCount > 1 ? "s" : ""}
-                </span>
-              )}
-            </span>
-            <span className="flex items-center gap-1 text-xs font-medium text-text-secondary">
-              {tasksExpanded ? "Recolher" : "Ver tarefas"}
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${tasksExpanded ? "rotate-180" : ""}`}
-              />
-            </span>
-          </button>
-          {tasksExpanded && (
-            <div className="border-t border-border/60 p-4 md:p-5">
-              <TaskBoard
-                tasks={visibleTasks}
-                onChange={persistVisibleTasks}
-                scope={{ kind: "campanha", id: c.id }}
-                initialOpenTaskId={initialTaskId}
-                onInitialOpenTaskHandled={onInitialTaskHandled}
-              />
-            </div>
-          )}
+        <section>
+          <TaskBoard
+            tasks={visibleTasks}
+            onChange={persistVisibleTasks}
+            scope={{ kind: "campanha", id: c.id }}
+            initialOpenTaskId={initialTaskId}
+            onInitialOpenTaskHandled={onInitialTaskHandled}
+          />
         </section>
 
         {/* INFLUENCIADORES — sempre visível. `InfluencerBoard` já renderiza
