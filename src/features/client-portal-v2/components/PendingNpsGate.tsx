@@ -3,6 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, RefreshCw, Send } from "lucide-react";
 import { PortalV2ShellBackdrop } from "../layouts/PortalV2Shell";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
 import { getPendingNpsSession, submitNpsSession } from "@/lib/portal-auth.functions";
 import {
   NPS_RATING_OPTIONS,
@@ -81,7 +84,9 @@ export function NpsGateError({
 }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 text-center shadow-lg">
+      <div
+        className={`w-full max-w-md space-y-4 rounded-2xl p-6 text-center shadow-lg ${SURFACE.raised}`}
+      >
         <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
         <div className="space-y-1">
           <h1 className="text-base font-semibold text-foreground">
@@ -93,15 +98,10 @@ export function NpsGateError({
           </p>
           {message && <p className="text-xs text-muted-foreground">{message}</p>}
         </div>
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={retrying}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+        <Button type="button" variant="primary" onClick={onRetry} disabled={retrying}>
+          <RefreshCw className={retrying ? "animate-spin" : ""} />
           Tentar novamente
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -216,49 +216,51 @@ export function NpsForm({
     }
   };
 
+  // Mesmo padrão de "opção selecionável" do Portal do Time → Início (o
+  // `Tab` de "Meu trabalho" em InicioDashboard.tsx): selecionado com fundo
+  // de marca sutil (`bg-brand-subtle text-brand`), hover em `bg-muted`.
   const optionClass = (selected: boolean) =>
-    `rounded-md border text-sm font-medium transition-colors disabled:opacity-50 ${
+    `min-w-0 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${
       selected
-        ? "border-brand bg-brand text-brand-foreground"
-        : "border-border text-foreground hover:bg-muted"
+        ? "border-brand bg-brand-subtle text-brand"
+        : "border-border bg-background text-foreground hover:bg-muted"
     }`;
 
   return (
     <div className="fixed inset-0 z-[100]">
       {/* Casca real do Portal ao fundo (sem dados — ver PortalV2ShellBackdrop). */}
       <PortalV2ShellBackdrop />
-      {/* Overlay: mesmo preto translúcido dos Dialogs/drawer do projeto + blur. */}
+      {/* Overlay leve: o Portal continua reconhecível atrás. */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-black/40 backdrop-blur-[6px] duration-300 animate-in fade-in-0 dark:bg-black/60"
+        className="absolute inset-0 bg-black/30 backdrop-blur-[3px] duration-300 animate-in fade-in-0 dark:bg-black/50"
       />
       <div className="absolute inset-0 overflow-y-auto">
         <div className="flex min-h-full items-end justify-center pt-8 sm:items-center sm:p-6">
+          {/* Superfície = Card do Início (rounded-2xl + SURFACE.raised) + elevação de overlay. */}
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="nps-dialog-title"
-            className="w-full max-w-lg space-y-6 rounded-t-2xl border border-border bg-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-2xl ring-1 ring-black/5 duration-300 animate-in fade-in-0 slide-in-from-bottom-4 sm:rounded-2xl sm:p-7 sm:zoom-in-95 sm:slide-in-from-bottom-0 dark:ring-white/10"
+            className={`w-full max-w-[560px] rounded-t-2xl p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-lg duration-300 animate-in fade-in-0 slide-in-from-bottom-4 sm:rounded-2xl sm:p-6 sm:zoom-in-95 sm:slide-in-from-bottom-0 ${SURFACE.raised}`}
           >
-            <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="space-y-2">
+              <p className={TYPOGRAPHY.label}>
                 Avaliação mensal
                 {pendentes.length > 1 && ` · Campanha ${campIdx + 1} de ${pendentes.length}`}
               </p>
-              <h1 id="nps-dialog-title" className="text-lg font-semibold text-foreground">
+              <p id="nps-dialog-title" className={TYPOGRAPHY.sectionTitle}>
                 {current.nome}
-              </h1>
-              <p className="text-sm text-text-secondary">
+              </p>
+              <p className={TYPOGRAPHY.bodySecondary}>
                 Antes de continuar, conte como está sendo sua experiência com esta campanha.
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Pergunta {step + 1} de {TOTAL_QUESTIONS}
-                </span>
-              </div>
+            <div className="mt-6 space-y-2">
+              <p className={TYPOGRAPHY.caption}>
+                Pergunta {step + 1} de {TOTAL_QUESTIONS}
+              </p>
               <div
                 className="flex gap-1"
                 role="progressbar"
@@ -275,39 +277,43 @@ export function NpsForm({
               </div>
             </div>
 
-            <div className="min-h-[9rem] space-y-3">
+            <div className="mt-6 min-h-[8.5rem] space-y-4">
               {step === 0 && (
                 <>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className={TYPOGRAPHY.cardTitle}>
                     De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SCORES.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => patch({ score: n })}
-                        aria-pressed={draft.score === n}
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center ${optionClass(draft.score === n)}`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-[11px] text-muted-foreground">
-                    <span>Nada provável</span>
-                    <span>Extremamente provável</span>
+                  <div className="space-y-2">
+                    {/* 11 colunas de largura igual (minmax(0,1fr)): nunca quebra linha,
+                        e o "10" tem exatamente o mesmo tamanho dos demais. */}
+                    <div className="grid grid-cols-11 gap-1 sm:gap-1.5">
+                      {SCORES.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          disabled={submitting}
+                          onClick={() => patch({ score: n })}
+                          aria-pressed={draft.score === n}
+                          className={`flex h-10 w-full items-center justify-center px-0 tabular-nums ${optionClass(draft.score === n)}`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                    <div className={`flex justify-between gap-4 ${TYPOGRAPHY.caption}`}>
+                      <span>Nada provável</span>
+                      <span className="text-right">Extremamente provável</span>
+                    </div>
                   </div>
                 </>
               )}
 
               {step === 1 && (
                 <>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className={TYPOGRAPHY.cardTitle}>
                     Qual seu nível de satisfação geral com esta campanha?
                   </p>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button
                         key={n}
@@ -315,10 +321,10 @@ export function NpsForm({
                         disabled={submitting}
                         onClick={() => patch({ satisfactionScore: n })}
                         aria-pressed={draft.satisfactionScore === n}
-                        className={`flex flex-col items-center gap-0.5 px-1 py-2 ${optionClass(draft.satisfactionScore === n)}`}
+                        className={`flex flex-col items-center gap-1 px-1 py-2.5 ${optionClass(draft.satisfactionScore === n)}`}
                       >
-                        <span className="text-base">{n}</span>
-                        <span className="text-center text-[10px] font-normal leading-tight">
+                        <span className="text-base font-semibold tabular-nums">{n}</span>
+                        <span className="text-center text-[11px] font-normal leading-tight">
                           {NPS_SATISFACTION_LABELS[n]}
                         </span>
                       </button>
@@ -329,7 +335,7 @@ export function NpsForm({
 
               {(step === 2 || step === 3) && (
                 <>
-                  <p className="text-sm font-medium text-foreground">
+                  <p className={TYPOGRAPHY.cardTitle}>
                     {step === 2
                       ? "Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?"
                       : "Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"}
@@ -352,7 +358,7 @@ export function NpsForm({
                             )
                           }
                           aria-pressed={selected}
-                          className={`px-2 py-2 ${optionClass(selected)}`}
+                          className={`min-h-10 px-2 py-2 leading-tight ${optionClass(selected)}`}
                         >
                           {o.label}
                         </button>
@@ -363,68 +369,65 @@ export function NpsForm({
               )}
 
               {step === 3 && draft.score !== null && (
-                <div className="space-y-1.5 pt-2">
-                  <label
-                    htmlFor="nps-comment"
-                    className="block text-sm font-medium text-foreground"
-                  >
+                <div className="space-y-2 pt-2">
+                  <label htmlFor="nps-comment" className={`block ${TYPOGRAPHY.cardTitle}`}>
                     {npsCommentPrompt(draft.score)}{" "}
-                    <span className="font-normal text-muted-foreground">(opcional)</span>
+                    <span className="font-normal text-text-secondary">(opcional)</span>
                   </label>
-                  <textarea
+                  <Textarea
                     id="nps-comment"
                     value={draft.comment}
                     onChange={(e) => patch({ comment: e.target.value })}
                     disabled={submitting}
                     maxLength={2000}
                     rows={3}
-                    className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
                   />
                 </div>
               )}
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-            <div className="flex items-center gap-2">
+            <div className="mt-6 flex items-center gap-2">
               {(step > 0 || campIdx > 0) && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="comfortable"
                   onClick={back}
                   disabled={submitting}
-                  className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                  className="px-4"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft />
                   Voltar
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="comfortable"
                 onClick={next}
-                disabled={!answered || submitting}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!answered}
+                isLoading={submitting}
+                className="flex-1"
               >
                 {isLastStep && isLastCampaign ? (
                   <>
-                    {submitting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
+                    {!submitting && <Send />}
                     {submitting ? "Enviando…" : "Enviar avaliação"}
                   </>
                 ) : isLastStep ? (
                   <>
                     Próxima campanha
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight />
                   </>
                 ) : (
                   <>
                     Próxima
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight />
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
