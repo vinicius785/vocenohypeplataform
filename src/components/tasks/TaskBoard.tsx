@@ -2147,15 +2147,21 @@ export function TaskBoard({
                             onClick={() => setTaskDialog({ mode: "edit", data: t })}
                             className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand sm:flex-nowrap"
                           >
+                            {/* Status discreto: indicador (anel vazio para
+                             * "Aberto", ponto cheio colorido para os demais)
+                             * + texto só para leitores de tela/tooltip; o
+                             * rótulo visível aparece à direita apenas quando
+                             * foge do padrão "Aberto". */}
                             <span
-                              className={`inline-flex w-[104px] shrink-0 items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${TASK_STATUS_TONE[t.status]}`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${TASK_STATUS_DOT[t.status]}`}
-                                aria-hidden
-                              />
-                              {t.status}
-                            </span>
+                              title={t.status}
+                              aria-hidden
+                              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                                t.status === "Aberto"
+                                  ? "border-[1.5px] border-muted-foreground/60"
+                                  : TASK_STATUS_DOT[t.status]
+                              }`}
+                            />
+                            <span className="sr-only">{t.status}:</span>
                             <span
                               className={`min-w-0 flex-1 basis-40 truncate text-sm font-medium ${
                                 isClosedStatus(t.status)
@@ -2166,6 +2172,11 @@ export function TaskBoard({
                               {t.title || "Sem título"}
                             </span>
                             <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+                              {t.status !== "Aberto" && (
+                                <span aria-hidden className="hidden sm:inline">
+                                  {t.status}
+                                </span>
+                              )}
                               {subTotal > 0 && (
                                 <span title="Subtarefas concluídas" className="tabular-nums">
                                   {subDone}/{subTotal} sub
@@ -2181,10 +2192,8 @@ export function TaskBoard({
                               {(t.dueDate || t.performanceDueDate) && (
                                 <CardDeadlineBadge task={t} />
                               )}
-                              {assignees.length > 0 ? (
+                              {assignees.length > 0 && (
                                 <AssigneeStack names={assignees} members={members} />
-                              ) : (
-                                <span className="text-muted-foreground/70">Sem responsável</span>
                               )}
                             </span>
                           </button>

@@ -406,6 +406,9 @@ export function CampanhasSection() {
  * ============================================================ */
 
 /** Resumo com o valor/config de cada tipo de pagamento, pro badge não mostrar só o nome do tipo. */
+/** Entregas visíveis antes do "Ver todas" na seção Entregas. */
+const ENTREGAS_PREVIEW = 5;
+
 function pagTipoResumo(t: PagTipo, cfg: PagamentoConfig): string {
   if (t === "Valor") return cfg.valor ? fmtBRL(parseMoney(cfg.valor)) : "";
   if (t === "Por Hora") return cfg.porHoraValor ? `${fmtBRL(parseMoney(cfg.porHoraValor))}/h` : "";
@@ -590,12 +593,26 @@ function CampanhaDetail({
   // página (resumo operacional, painel "Todas as entregas", galeria).
   const [briefingExpanded, setBriefingExpanded] = useState(false);
   const [entregasExpanded, setEntregasExpanded] = useState(false);
+  const [entregasShowAll, setEntregasShowAll] = useState(false);
   const eligibleInflus = useMemo(
     () => getEligibleCampaignInfluencers(visibleInflus),
     [visibleInflus],
   );
   const allEntregas = useMemo(() => getEligibleCampaignDeliveries(visibleInflus), [visibleInflus]);
   const entregasPublicadas = allEntregas.filter((x) => x.entrega.stage === "PUBLICADA").length;
+  // Resumo por etapa (mesmos rótulos de ENTREGA_STAGE_LABEL) para o
+  // cabeçalho da seção Entregas — só contagem do dado existente.
+  const entregasStageSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const { entrega } of allEntregas)
+      counts.set(entrega.stage, (counts.get(entrega.stage) ?? 0) + 1);
+    return [...counts.entries()]
+      .map(
+        ([stage, n]) =>
+          `${n} ${ENTREGA_STAGE_LABEL[stage as keyof typeof ENTREGA_STAGE_LABEL].toLowerCase()}`,
+      )
+      .join(" · ");
+  }, [allEntregas]);
   const pctPublicadas =
     allEntregas.length > 0 ? Math.round((entregasPublicadas / allEntregas.length) * 100) : 0;
 
@@ -1090,9 +1107,9 @@ function CampanhaDetail({
             >
               <AlertTriangle className="h-3.5 w-3.5" /> Precisa de atenção
             </h2>
-            <ul className="mt-2 flex flex-col gap-1">
+            <ul className="mt-2 flex flex-col divide-y divide-border/40">
               {attentionItems.map((item) => (
-                <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <li key={item.key} className="flex items-center gap-x-3 py-1.5">
                   <span
                     aria-hidden
                     className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -1104,7 +1121,7 @@ function CampanhaDetail({
                     }`}
                   />
                   <span
-                    className={`text-sm ${
+                    className={`min-w-0 flex-1 text-sm ${
                       item.tone === "danger"
                         ? "font-medium text-red-700 dark:text-red-400"
                         : "text-foreground"
@@ -1115,9 +1132,9 @@ function CampanhaDetail({
                   <button
                     type="button"
                     onClick={item.onAction}
-                    className="text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="shrink-0 whitespace-nowrap text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
-                    {item.action}
+                    {item.action} <span aria-hidden>→</span>
                   </button>
                 </li>
               ))}
@@ -1151,235 +1168,287 @@ function CampanhaDetail({
           />
         </section>
 
-        {/* TODAS AS ENTREGAS — painel expansível consolidado, separado da
-         * grade de Influenciadores pelo mesmo ritmo das grandes seções
-         * (rodada de refinamento pediu que ela respire tanto quanto as
-         * outras seções, não como um apêndice colado). Sem virar página
-         * própria. */}
-        <section ref={entregasRef} className="scroll-mt-6">
-          <div className="rounded-2xl bg-card dark:shadow-none">
+        {/* ENTREGAS — terceira seção operacional, com o MESMO padrão de
+         * cabeçalho (título uppercase + resumo) e superfície (`rounded-2xl
+         * bg-card`) de Tarefas e Influenciadores. Recolhida = só o
+         * cabeçalho; expandida = lista real (getEligibleCampaignDeliveries)
+         * + galeria. */}
+        <section
+          ref={entregasRef}
+          aria-labelledby="campanha-entregas"
+          className="scroll-mt-6 space-y-4"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <div>
+              <h2
+                id="campanha-entregas"
+                className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+              >
+                Entregas
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums tracking-normal">
+                  {allEntregas.length}
+                </span>
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {allEntregas.length === 0
+                  ? "Acompanhe as entregas da campanha"
+                  : entregasStageSummary}
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl bg-card dark:shadow-none">
+            {entregasExpanded && (
+              <div id="campanha-entregas-lista">
+                <div className="px-4 py-3 md:px-5">
+                  {allEntregas.length === 0 ? (
+                    <EmptyState
+                      compact
+                      icon={<Send className="h-5 w-5" />}
+                      title="Nenhuma entrega ainda"
+                      description="Entregas aparecem aqui assim que forem criadas para um influenciador desta campanha."
+                    />
+                  ) : (
+                    <ul className="divide-y divide-border/60">
+                      {(entregasShowAll ? allEntregas : allEntregas.slice(0, ENTREGAS_PREVIEW)).map(
+                        ({ influ, entrega }) => {
+                          const nextActor = nextActionForEntrega(entrega.stage);
+                          return (
+                            <li
+                              key={entrega.id}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm first:pt-0 last:pb-0"
+                            >
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                                {influ.foto ? (
+                                  <img
+                                    src={influ.foto}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <User className="h-3.5 w-3.5 text-text-secondary" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium text-foreground">
+                                  {entrega.titulo || entrega.tipo}
+                                </p>
+                                <p className="truncate text-xs text-text-secondary">
+                                  {influ.nome} · {entrega.tipo}
+                                  {entrega.quantidade > 1 ? ` · ${entrega.quantidade}×` : ""}
+                                </p>
+                              </div>
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[entrega.stage]}`}
+                              >
+                                {ENTREGA_STAGE_LABEL[entrega.stage]}
+                              </span>
+                              {nextActor && (
+                                <span className="shrink-0 text-[11px] text-text-secondary">
+                                  Próxima ação: {NEXT_ACTOR_LABEL[nextActor]}
+                                </span>
+                              )}
+                              {entrega.url && (
+                                <a
+                                  href={entrega.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Ver publicação
+                                </a>
+                              )}
+                            </li>
+                          );
+                        },
+                      )}
+                    </ul>
+                  )}
+                  {allEntregas.length > ENTREGAS_PREVIEW && (
+                    <button
+                      type="button"
+                      onClick={() => setEntregasShowAll((v) => !v)}
+                      className="mt-2 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    >
+                      {entregasShowAll ? (
+                        "Mostrar menos"
+                      ) : (
+                        <>
+                          Ver todas ({allEntregas.length}) <span aria-hidden>→</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <div className="mt-3 border-t border-border/60 pt-3 empty:hidden">
+                    <GaleriaConteudosSection influs={eligibleInflus} />
+                  </div>
+                </div>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setEntregasExpanded((v) => !v)}
               aria-expanded={entregasExpanded}
-              className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              aria-controls="campanha-entregas-lista"
+              className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand md:px-5 ${
+                entregasExpanded ? "border-t border-border/60" : ""
+              }`}
             >
-              <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Send className="h-4 w-4 text-text-secondary" />
-                Todas as entregas
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-text-secondary">
-                  {allEntregas.length}
-                </span>
-              </span>
+              {entregasExpanded
+                ? "Recolher entregas"
+                : allEntregas.length === 0
+                  ? "Nenhuma entrega ainda"
+                  : `Ver ${allEntregas.length} ${allEntregas.length === 1 ? "entrega" : "entregas"}`}
               <ChevronDown
-                className={`h-4 w-4 text-text-secondary transition-transform ${entregasExpanded ? "rotate-180" : ""}`}
+                className={`h-3.5 w-3.5 shrink-0 transition-transform ${entregasExpanded ? "rotate-180" : ""}`}
               />
             </button>
-
-            {entregasExpanded && (
-              <div className="border-t border-border/60 p-4 md:p-5">
-                {allEntregas.length === 0 ? (
-                  <EmptyState
-                    compact
-                    icon={<Send className="h-5 w-5" />}
-                    title="Nenhuma entrega ainda"
-                    description="Entregas aparecem aqui assim que forem criadas para um influenciador desta campanha."
-                  />
-                ) : (
-                  <ul className="divide-y divide-border/60">
-                    {allEntregas.map(({ influ, entrega }) => {
-                      const nextActor = nextActionForEntrega(entrega.stage);
-                      return (
-                        <li
-                          key={entrega.id}
-                          className="flex flex-wrap items-center gap-3 py-3 text-sm first:pt-0 last:pb-0"
-                        >
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                            {influ.foto ? (
-                              <img src={influ.foto} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <User className="h-3.5 w-3.5 text-text-secondary" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium text-foreground">
-                              {entrega.titulo || entrega.tipo}
-                            </p>
-                            <p className="truncate text-xs text-text-secondary">
-                              {influ.nome} · {entrega.tipo}
-                              {entrega.quantidade > 1 ? ` · ${entrega.quantidade}×` : ""}
-                            </p>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ENTREGA_STAGE_TONE[entrega.stage]}`}
-                          >
-                            {ENTREGA_STAGE_LABEL[entrega.stage]}
-                          </span>
-                          {nextActor && (
-                            <span className="shrink-0 text-[11px] text-text-secondary">
-                              Próxima ação: {NEXT_ACTOR_LABEL[nextActor]}
-                            </span>
-                          )}
-                          {entrega.url && (
-                            <a
-                              href={entrega.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline"
-                            >
-                              <ExternalLink className="h-3 w-3" /> Ver publicação
-                            </a>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <div className="mt-4 border-t border-border/60 pt-4">
-                  <GaleriaConteudosSection influs={eligibleInflus} />
-                </div>
-              </div>
-            )}
           </div>
         </section>
 
         {/* BRIEFING + CONTRATO — contexto, depois da operação. Duas colunas
          * no desktop (`md:`), empilhados no mobile. */}
-        <section
-          aria-label="Briefing e contrato"
-          className="grid gap-3 md:grid-cols-5 md:items-start md:gap-4"
-        >
-          <div className="rounded-2xl bg-card p-4 dark:shadow-none md:col-span-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Briefing
-              </p>
-              <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-3 w-3" /> Editar
-              </Button>
+        <section aria-labelledby="campanha-contexto" className="space-y-4">
+          <h2
+            id="campanha-contexto"
+            className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+          >
+            Contexto
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2 md:items-start">
+            <div className="rounded-2xl bg-card p-4 dark:shadow-none md:p-5">
+              <div className="flex h-8 items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-foreground">Briefing</h3>
+                <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-3 w-3" /> Editar
+                </Button>
+              </div>
+              <div className="mt-2">
+                {c.briefing ? (
+                  <p
+                    className={`whitespace-pre-wrap break-words text-sm text-foreground ${
+                      briefingIsLong && !briefingExpanded ? "line-clamp-3" : ""
+                    }`}
+                  >
+                    {c.briefing}
+                  </p>
+                ) : (
+                  <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
+                )}
+                {briefingIsLong && (
+                  <button
+                    type="button"
+                    onClick={() => setBriefingExpanded((v) => !v)}
+                    className="mt-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    {briefingExpanded ? "Ver menos" : "Ver mais"}
+                  </button>
+                )}
+                {(c.briefingFile || (c.briefingLinks?.length ?? 0) > 0) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+                    {c.briefingFile && (
+                      <a
+                        href={c.briefingFile}
+                        download
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-brand underline underline-offset-2"
+                      >
+                        <Paperclip className="h-3.5 w-3.5" /> Anexo
+                      </a>
+                    )}
+                    {c.briefingLinks?.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-brand underline underline-offset-2"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="mt-2">
-              {c.briefing ? (
-                <p
-                  className={`whitespace-pre-wrap break-words text-sm text-foreground ${
-                    briefingIsLong && !briefingExpanded ? "line-clamp-3" : ""
-                  }`}
-                >
-                  {c.briefing}
-                </p>
-              ) : (
-                <p className="text-sm text-text-secondary">Nenhum briefing cadastrado.</p>
-              )}
-              {briefingIsLong && (
+            <div className="rounded-2xl bg-card p-4 dark:shadow-none md:p-5">
+              <div className="flex h-8 items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-foreground">Contrato</h3>
+                <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-3 w-3" /> Editar
+                </Button>
+              </div>
+              <dl className="mt-2 space-y-2.5 text-sm">
+                <div>
+                  <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+                    Composição planejada
+                  </dt>
+                  <dd className="mt-1">
+                    {c.linhas.length > 0 ? (
+                      <span className="flex flex-wrap gap-1.5 text-xs">
+                        {c.linhas.map((l) => (
+                          <span
+                            key={l.id}
+                            className="rounded-md bg-muted px-2 py-0.5 text-foreground"
+                          >
+                            {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-text-secondary">Nenhuma definida.</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-xs text-text-secondary">Valor do cliente</dt>
+                  <dd className="truncate text-right text-foreground">
+                    {c.valorCliente || "Não definido"}
+                    {c.pagClienteTipo ? ` · ${c.pagClienteTipo}` : ""}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-xs text-text-secondary">Prazo de pagamento</dt>
+                  <dd className="truncate text-right text-foreground">
+                    {c.prazoPag || "Não definido"}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="flex items-center gap-1 text-xs text-text-secondary">
+                    <ShieldCheck className="h-3 w-3" /> Direitos de imagem
+                  </dt>
+                  <dd className="min-w-0 truncate text-right text-foreground">
+                    {c.direitosImagem?.permitido
+                      ? [
+                          c.direitosImagem.usos.join(", "),
+                          c.direitosImagem.duracaoDias
+                            ? `${c.direitosImagem.duracaoDias} dias`
+                            : "Indeterminada",
+                          c.direitosImagem.exclusividade
+                            ? `Exclusividade${c.direitosImagem.exclusividadeSegmento ? `: ${c.direitosImagem.exclusividadeSegmento}` : ""}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "Não definidos"}
+                  </dd>
+                </div>
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
                 <button
                   type="button"
-                  onClick={() => setBriefingExpanded((v) => !v)}
-                  className="mt-1.5 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  onClick={() => setOpenPanel("composicao")}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
-                  {briefingExpanded ? "Ver menos" : "Ver mais"}
+                  <Wallet className="h-3 w-3" /> Formas de pagamento
                 </button>
-              )}
-              {(c.briefingFile || (c.briefingLinks?.length ?? 0) > 0) && (
-                <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
-                  {c.briefingFile && (
-                    <a
-                      href={c.briefingFile}
-                      download
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand underline underline-offset-2"
-                    >
-                      <Paperclip className="h-3.5 w-3.5" /> Anexo
-                    </a>
-                  )}
-                  {c.briefingLinks?.map((url) => (
-                    <a
-                      key={url}
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-w-0 items-center gap-1.5 truncate text-xs font-medium text-brand underline underline-offset-2"
-                    >
-                      <LinkIcon className="h-3.5 w-3.5 shrink-0" /> {url}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="rounded-2xl bg-card p-4 dark:shadow-none md:col-span-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Contrato
-            </p>
-            <dl className="mt-3 space-y-2.5 text-sm">
-              <div>
-                <dt className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-                  Composição planejada
-                </dt>
-                <dd className="mt-1">
-                  {c.linhas.length > 0 ? (
-                    <span className="flex flex-wrap gap-1.5 text-xs">
-                      {c.linhas.map((l) => (
-                        <span
-                          key={l.id}
-                          className="rounded-md bg-muted px-2 py-0.5 text-foreground"
-                        >
-                          {l.quantidade}× {l.tipo || "—"} · {l.tamanho || "—"}
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="text-text-secondary">Nenhuma definida.</span>
-                  )}
-                </dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-xs text-text-secondary">Valor do cliente</dt>
-                <dd className="truncate text-right text-foreground">
-                  {c.valorCliente || "Não definido"}
-                  {c.pagClienteTipo ? ` · ${c.pagClienteTipo}` : ""}
-                </dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-xs text-text-secondary">Prazo de pagamento</dt>
-                <dd className="truncate text-right text-foreground">
-                  {c.prazoPag || "Não definido"}
-                </dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="flex items-center gap-1 text-xs text-text-secondary">
+                <button
+                  type="button"
+                  onClick={() => setOpenPanel("direitos")}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                >
                   <ShieldCheck className="h-3 w-3" /> Direitos de imagem
-                </dt>
-                <dd className="min-w-0 truncate text-right text-foreground">
-                  {c.direitosImagem?.permitido
-                    ? [
-                        c.direitosImagem.usos.join(", "),
-                        c.direitosImagem.duracaoDias
-                          ? `${c.direitosImagem.duracaoDias} dias`
-                          : "Indeterminada",
-                        c.direitosImagem.exclusividade
-                          ? `Exclusividade${c.direitosImagem.exclusividadeSegmento ? `: ${c.direitosImagem.exclusividadeSegmento}` : ""}`
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "Não definidos"}
-                </dd>
+                </button>
               </div>
-            </dl>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/60 pt-3">
-              <button
-                type="button"
-                onClick={() => setOpenPanel("composicao")}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              >
-                <Wallet className="h-3 w-3" /> Formas de pagamento
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpenPanel("direitos")}
-                className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-              >
-                <ShieldCheck className="h-3 w-3" /> Direitos de imagem
-              </button>
             </div>
           </div>
         </section>
@@ -1389,7 +1458,7 @@ function CampanhaDetail({
         <section aria-labelledby="campanha-recursos" className="flex flex-wrap items-center gap-2">
           <h2
             id="campanha-recursos"
-            className="mr-1 text-xs font-semibold uppercase tracking-wide text-text-secondary"
+            className="mr-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
           >
             Recursos
           </h2>
