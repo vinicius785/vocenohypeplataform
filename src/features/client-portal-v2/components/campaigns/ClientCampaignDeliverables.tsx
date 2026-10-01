@@ -94,10 +94,18 @@ export function ClientCampaignDeliverables({ items }: { items: ContentItem[] }) 
                   navigate({
                     to: "/portal-v2/campanhas/$campanhaId",
                     params: { campanhaId: item.campanhaId },
-                    search: {
+                    // Faz MERGE com a busca atual (nunca substitui) — este
+                    // card é clicado de dentro da própria página da
+                    // campanha, já com `?competencia=` setado quando é
+                    // recorrente; substituir a busca inteira (como era
+                    // antes) apagava esse parâmetro e jogava a página de
+                    // volta pro mês atual (bug: "abro Setembro, clico numa
+                    // entrega, caio em Outubro").
+                    search: (prev: Record<string, unknown>) => ({
+                      ...prev,
                       influenciador: item.influencerId,
                       conteudo: item.entrega.id,
-                    },
+                    }),
                   })
                 }
                 className="flex items-center gap-3 rounded-2xl bg-card p-3 text-left hover:bg-muted/40 dark:shadow-none"
