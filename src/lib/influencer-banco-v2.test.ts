@@ -5,6 +5,7 @@ import {
   DEFAULT_INFLUENCER_BANCO_FILTERS,
   countActiveInfluencerBancoFilters,
   totalSeguidores,
+  participacaoProntaParaAvaliacao,
   type InfluencerBancoEnrichment,
 } from "./influencer-banco-v2";
 import { mediaAvaliacao, mediaGeralAvaliacoes } from "./campanha-influenciador-avaliacao";
@@ -112,6 +113,32 @@ describe("findParticipacoes", () => {
       ["2", [influ({ id: "p2", nome: "Fulano", status: "ENVIADO_AO_CLIENTE" })]],
     ]);
     expect(findParticipacoes("Fulano", clientes, map)).toHaveLength(0);
+  });
+});
+
+describe("participacaoProntaParaAvaliacao", () => {
+  const entrega = (stage: string) => ({ stage }) as Influ["entregas"][number];
+
+  it("libera quando todas as entregas previstas já foram publicadas (caso Brenda Sá: 2/2)", () => {
+    const p = { influ: influ({ entregas: [entrega("PUBLICADA"), entrega("PUBLICADA")] }) };
+    expect(participacaoProntaParaAvaliacao(p)).toBe(true);
+  });
+
+  it("não libera com entregas pendentes (1/2 publicadas)", () => {
+    const p = { influ: influ({ entregas: [entrega("PUBLICADA"), entrega("CONTEUDO_APROVACAO")] }) };
+    expect(participacaoProntaParaAvaliacao(p)).toBe(false);
+  });
+
+  it("não libera quando não há nenhuma entrega prevista (0 não é 0/0 pronto)", () => {
+    const p = { influ: influ({ entregas: [] }) };
+    expect(participacaoProntaParaAvaliacao(p)).toBe(false);
+  });
+
+  it("não depende do status/prazo da campanha — só das entregas daquele influenciador", () => {
+    const p = { influ: influ({ entregas: [entrega("PUBLICADA"), entrega("PUBLICADA")] }) };
+    // mesmo resultado independente de qualquer campo de campanha, porque a
+    // função nem recebe esse dado — reforça que o critério é só entregas.
+    expect(participacaoProntaParaAvaliacao(p)).toBe(true);
   });
 });
 

@@ -2,9 +2,12 @@
  * Funções puras do Banco de Influenciadores V2 — extraídas (não
  * duplicadas) da implementação atual (`InfluenciadoresSection.tsx`),
  * com uma diferença: devolvem também o STATUS DA CAMPANHA
- * (`CampanhaStatus`), que a V1 não precisava (não tinha o botão
- * "Avaliar influenciador", que só aparece quando a campanha está
- * `completed`).
+ * (`CampanhaStatus`), exibido só como contexto no histórico — a
+ * elegibilidade pra "Avaliar influenciador" NÃO usa este campo (nem
+ * prazo da campanha): é decidida por participação, comparando entregas
+ * previstas x publicadas daquele influenciador (`InfluencerBancoDrawer`,
+ * `producaoResumo`), já que outras partes da campanha podem seguir em
+ * andamento enquanto a dele já terminou.
  */
 import type { Cliente } from "@/lib/clientes-store";
 import type { CampanhaStatus } from "@/components/VincularCampanhaDialog";
@@ -12,6 +15,7 @@ import type { BankInflu } from "@/lib/banco-influs-store";
 import type { Influ } from "@/components/influenciadores/InfluencerBoard";
 import { getAllCampanhaInflus } from "@/lib/campanha-scoped-store";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
+import { producaoResumo } from "@/components/influenciadores/InfluencerBoard";
 
 export type ParticipacaoCampanha = {
   clienteId: string;
@@ -70,6 +74,18 @@ export function findParticipacoes(
     }
   }
   return out.sort((a, b) => (b.campDataInicio ?? "").localeCompare(a.campDataInicio ?? ""));
+}
+
+/** Elegibilidade pra "Avaliar influenciador" — unidade é a PARTICIPAÇÃO,
+ * nunca a campanha inteira nem seu prazo: o influenciador já está
+ * aprovado (garantido por `findParticipacoes`, que só devolve
+ * participações `APROVADO`) e TODAS as entregas previstas pra ele já
+ * foram publicadas. Não basta existir alguma entrega publicada — compara
+ * previstas x concluídas (`producaoResumo`). Uma campanha com 0 entregas
+ * previstas nunca fica "pronta" (nada foi efetivamente produzido ainda). */
+export function participacaoProntaParaAvaliacao(p: Pick<ParticipacaoCampanha, "influ">): boolean {
+  const resumo = producaoResumo(p.influ.entregas);
+  return resumo.total > 0 && resumo.publicadas === resumo.total;
 }
 
 // ---------------------------------------------------------------------------

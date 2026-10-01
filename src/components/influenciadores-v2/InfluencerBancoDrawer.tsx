@@ -16,7 +16,11 @@ import { formatSeguidores } from "@/lib/format";
 import { type BankInflu } from "@/lib/banco-influs-store";
 import { producaoResumo } from "@/components/influenciadores/InfluencerBoard";
 import { CAMPANHA_STATUS_LABEL } from "@/components/campanhas/campanha-ui";
-import { totalSeguidores, type ParticipacaoCampanha } from "@/lib/influencer-banco-v2";
+import {
+  totalSeguidores,
+  participacaoProntaParaAvaliacao,
+  type ParticipacaoCampanha,
+} from "@/lib/influencer-banco-v2";
 import {
   mediaAvaliacao,
   mediaGeralAvaliacoes,
@@ -54,7 +58,7 @@ function HistoricoItem({
 }) {
   const [open, setOpen] = useState(false);
   const resumo = producaoResumo(p.influ.entregas);
-  const podeAvaliar = p.campanhaStatus === "completed";
+  const podeAvaliar = participacaoProntaParaAvaliacao(p);
 
   return (
     <div className="rounded-lg border border-border/60">
@@ -85,13 +89,18 @@ function HistoricoItem({
                 Avaliação do time
               </p>
               {avaliacao ? (
-                <p className="mt-0.5 inline-flex items-center gap-1 text-sm font-medium text-foreground">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  {mediaAvaliacao(avaliacao).toFixed(1).replace(".", ",")}
+                <p className="mt-0.5 flex items-baseline gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground">
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    {mediaAvaliacao(avaliacao).toFixed(1).replace(".", ",")}
+                  </span>
+                  <span className="text-xs text-text-secondary">1 avaliação</span>
                 </p>
+              ) : podeAvaliar ? (
+                <p className="mt-0.5 text-sm text-text-secondary">Pronta para avaliação</p>
               ) : (
                 <p className="mt-0.5 text-sm text-text-secondary">
-                  {podeAvaliar ? "Ainda não avaliado" : "Disponível após a conclusão"}
+                  Disponível quando todas as entregas forem publicadas
                 </p>
               )}
             </div>
@@ -115,7 +124,7 @@ function HistoricoItem({
 
           {podeAvaliar && (
             <Button variant="outline" size="sm" onClick={onAvaliar}>
-              {avaliacao ? "Editar avaliação" : "Avaliar influenciador"}
+              {avaliacao ? "Ver avaliação" : "Avaliar influenciador"}
             </Button>
           )}
         </div>
