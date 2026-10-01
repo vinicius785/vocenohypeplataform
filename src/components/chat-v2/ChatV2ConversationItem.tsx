@@ -32,6 +32,17 @@ export function ChatV2ConversationItem({
   subtitle?: string;
 }) {
   const unreadState = unread > 0;
+  // Correção de contraste do estado ACTIVE: `text-brand-foreground` é um
+  // navy quase preto (#0B1020), pensado pra ficar sobre o `bg-brand`
+  // SÓLIDO e claro (ver comentário de contraste em `styles.css`) — usado
+  // aqui sobre `bg-brand-subtle` (só ~14% de tinta de azul sobre o fundo
+  // já escuro do dark theme), virava texto escuro sobre fundo escuro,
+  // quase ilegível. O fundo azul/indigo sutil continua exatamente como
+  // estava (identidade do estado selecionado); só a cor do TEXTO em cima
+  // dele muda pra usar os tokens de texto já claros no dark theme
+  // (`foreground`/`foreground/80`), com um degrau de contraste a mais
+  // que o estado default pra manter a hierarquia nome > preview > horário
+  // pedida, sem inventar nenhuma cor nova.
   return (
     <Link
       to={to}
@@ -45,24 +56,24 @@ export function ChatV2ConversationItem({
         <span className="flex items-baseline justify-between gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
-              <span
-                className={`block min-w-0 truncate text-sm font-semibold ${
-                  active ? "text-brand-foreground" : "text-foreground"
-                }`}
-              >
+              <span className="block min-w-0 truncate text-sm font-semibold text-foreground">
                 {name}
               </span>
             </TooltipTrigger>
             <TooltipContent>{name}</TooltipContent>
           </Tooltip>
           {timestamp && (
-            <span className="shrink-0 text-[11px] text-muted-foreground">
+            <span
+              className={`shrink-0 text-[11px] ${active ? "text-foreground/70" : "text-muted-foreground"}`}
+            >
               {formatConvoTimestamp(timestamp)}
             </span>
           )}
         </span>
         <span
-          className={`block truncate text-xs ${unreadState ? "text-foreground/80" : "text-muted-foreground"}`}
+          className={`block truncate text-xs ${
+            active || unreadState ? "text-foreground/80" : "text-muted-foreground"
+          }`}
         >
           {preview || subtitle || "Nenhuma mensagem ainda"}
         </span>
