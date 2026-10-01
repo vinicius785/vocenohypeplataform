@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,8 +50,6 @@ function usePersistedState<T>(key: string, initial: T): [T, (v: T | ((prev: T) =
  */
 export function InfluencerBancoV2Page() {
   const clientes = useClientes();
-  const navigate = useNavigate();
-  const search = useSearch({ from: "/_authenticated/banco-influenciadores-v2" });
   const fetchAvaliacoes = useServerFn(getAvaliacoesPorParticipacoes);
 
   const [list, setList] = useState<BankInflu[]>(() => loadBank());
@@ -66,6 +63,7 @@ export function InfluencerBancoV2Page() {
     "grade",
   );
   const [dialog, setDialog] = useState<{ mode: "new" | "edit"; data?: BankInflu } | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [avaliacoesByParticipacao, setAvaliacoesByParticipacao] = useState<
     Map<string, { media: number; count: number }>
   >(new Map());
@@ -147,11 +145,9 @@ export function InfluencerBancoV2Page() {
     [list, query, filters, enrichmentById],
   );
 
-  const detail = search.influenciador
-    ? (list.find((i) => i.id === search.influenciador) ?? null)
-    : null;
-  const openDetail = (id: string) => void navigate({ to: ".", search: { influenciador: id } });
-  const closeDetail = () => void navigate({ to: ".", search: {} });
+  const detail = detailId ? (list.find((i) => i.id === detailId) ?? null) : null;
+  const openDetail = (id: string) => setDetailId(id);
+  const closeDetail = () => setDetailId(null);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
