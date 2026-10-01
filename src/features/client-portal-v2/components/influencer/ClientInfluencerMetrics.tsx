@@ -2,12 +2,21 @@ import { BarChart3 } from "lucide-react";
 import { InfluencerDrawerSection } from "./InfluencerDrawerSection";
 import { formatMetricValue } from "../../lib/metric-format";
 import { resolveProfileMetricEntries } from "../../lib/profile-metrics";
+import { DemographicChart } from "@/components/shared/DemographicChart";
 import type { PublicInfluencer } from "@/lib/portal-types";
 
 /** Métricas — nunca mostra zero fingindo dado real; usa "Não informado"
  * quando o campo não existe. Separa métricas de PERFIL (cadastradas pelo
  * time) de RESULTADOS DESTA CAMPANHA (agregado das entregas publicadas)
- * — nunca a mesma seção misturando as duas fontes. */
+ * — nunca a mesma seção misturando as duas fontes.
+ *
+ * Demografia do público (gênero/faixa etária/países/cidades): o dado já
+ * chegava intacto até aqui (`profileMetrics.porRede[redeId]` — mesmo
+ * objeto `RedeMetrics` do ambiente interno, sem nenhum campo retirado no
+ * backend/permissão) — só nunca tinha sido renderizado neste componente.
+ * Reaproveita o MESMO gráfico somente-leitura do ambiente interno
+ * (`DemographicChart`, `src/components/shared/DemographicChart.tsx`),
+ * nunca uma segunda implementação de gráfico pro Portal. */
 export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfluencer }) {
   const redeEntries = resolveProfileMetricEntries(influencer);
 
@@ -47,6 +56,29 @@ export function ClientInfluencerMetrics({ influencer }: { influencer: PublicInfl
               <Metric label="Atenção inicial" value={m.taxaAtencaoInicial} suffix="%" />
             </div>
           ))}
+        </div>
+      )}
+
+      {redeEntries.some(({ metrics: m }) => m.genero || m.faixaEtaria || m.paises || m.cidades) && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Demografia da audiência
+          </p>
+          {redeEntries.map(({ plataforma, metrics: m }) => {
+            const hasDemographics = m.genero || m.faixaEtaria || m.paises || m.cidades;
+            if (!hasDemographics) return null;
+            return (
+              <div key={plataforma} className="space-y-3 rounded-2xl bg-card p-4 dark:shadow-none">
+                <p className="text-xs font-medium text-foreground">{plataforma}</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <DemographicChart title="Gênero" entries={m.genero} chartType="pie" />
+                  <DemographicChart title="Faixa etária" entries={m.faixaEtaria} />
+                  <DemographicChart title="Principais países" entries={m.paises} />
+                  <DemographicChart title="Principais cidades" entries={m.cidades} />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

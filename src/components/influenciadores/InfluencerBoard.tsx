@@ -1,17 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { DemographicMiniChart } from "@/components/shared/DemographicChart";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -1324,123 +1312,6 @@ function MetricsEditor({
   );
 }
 
-/** Lista editável de fatias demográficas (ex: faixa etária → %), com um
- * gráfico de barras horizontal logo abaixo que atualiza em tempo real. */
-/** Paleta fixa (mesmas cores do design system, `--chart-1..5`) usada nos
- * gráficos de pizza — arrays maiores repetem o ciclo. */
-const PIE_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-];
-
-/** Rótulo com a % fora da fatia, ligado por uma linha — padrão recharts
- * pra pizza/donut (a prop `label` não aceita texto customizado sem isso). */
-function renderPieLabel(props: {
-  cx: number;
-  cy: number;
-  midAngle: number;
-  outerRadius: number;
-  valor: number;
-}) {
-  const { cx, cy, midAngle, outerRadius, valor } = props;
-  const RADIAN = Math.PI / 180;
-  const radius = outerRadius + 16;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  return (
-    <text
-      x={x}
-      y={y}
-      fill="var(--muted-foreground)"
-      fontSize={10}
-      textAnchor={x > cx ? "start" : "end"}
-      dominantBaseline="central"
-    >
-      {`${valor}%`}
-    </text>
-  );
-}
-
-/** Gráfico de barra (horizontal) ou pizza pra uma lista `{ name, valor }%` —
- * usado tanto no editor quanto no resumo somente-leitura das métricas. */
-function DemographicMiniChart({
-  data,
-  chartType,
-}: {
-  data: { name: string; valor: number }[];
-  chartType: "bar" | "pie";
-}) {
-  if (data.length === 0) return null;
-  if (chartType === "pie") {
-    return (
-      <div className="h-[150px] w-full pt-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="valor"
-              nameKey="name"
-              innerRadius="42%"
-              outerRadius="72%"
-              isAnimationActive={false}
-              label={renderPieLabel}
-              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
-            >
-              {data.map((entry, i) => (
-                <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Legend
-              layout="vertical"
-              verticalAlign="middle"
-              align="right"
-              formatter={(value, entry) =>
-                `${value} — ${(entry as { payload?: { valor?: number } }).payload?.valor ?? 0}%`
-              }
-              wrapperStyle={{ fontSize: 10, color: "var(--muted-foreground)" }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
-  return (
-    <div className="h-[100px] w-full pt-1">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 28 }}>
-          <CartesianGrid horizontal={false} strokeOpacity={0.15} />
-          <XAxis type="number" domain={[0, 100]} hide />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={90}
-            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Bar
-            dataKey="valor"
-            fill="var(--foreground)"
-            radius={3}
-            barSize={12}
-            isAnimationActive={false}
-          >
-            <LabelList
-              dataKey="valor"
-              position="right"
-              formatter={(v: number) => `${v}%`}
-              style={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
 function DemographicEntriesEditor({
   title,
   placeholder,
@@ -1508,32 +1379,6 @@ function DemographicEntriesEditor({
         <Plus className="h-3 w-3" /> Adicionar
       </button>
       <DemographicMiniChart data={chartData} chartType={chartType} />
-    </div>
-  );
-}
-
-/** Gráfico (barra ou pizza) somente-leitura para uma distribuição
- * demográfica — usado no resumo do perfil (fora do modo de edição). */
-function DemographicChart({
-  title,
-  entries,
-  chartType = "bar",
-}: {
-  title: string;
-  entries?: DemographicEntry[];
-  chartType?: "bar" | "pie";
-}) {
-  const data = (entries ?? [])
-    .filter((e) => e.label.trim() && e.percentual > 0)
-    .map((e) => ({ name: e.label, valor: e.percentual }))
-    .sort((a, b) => b.valor - a.valor);
-  if (data.length === 0) return null;
-  return (
-    <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
-      <DemographicMiniChart data={data} chartType={chartType} />
     </div>
   );
 }
