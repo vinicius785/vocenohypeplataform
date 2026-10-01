@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 import type { Cliente } from "@/lib/clientes-store";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import type {
@@ -43,7 +44,7 @@ async function findClienteByToken(
 ): Promise<{ clienteId: string; cliente: Cliente } | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("clientes").select("id, data");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   for (const row of (rows ?? []) as { id: string; data: Cliente }[]) {
     if (row.data.publicToken === token) return { clienteId: row.id, cliente: row.data };
   }
@@ -71,7 +72,7 @@ export async function findClienteByOrganizationId(
     .select("id, data")
     .eq("organization_id", organizationId)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   if (!row) return null;
   return { clienteId: row.id, cliente: row.data as Cliente };
 }
@@ -435,7 +436,7 @@ export async function findArtigosDoCliente(
 ): Promise<z.infer<typeof _ArticlePublic>[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: rows, error } = await supabaseAdmin.from("projetos").select("data");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   const artigos: z.infer<typeof _ArticlePublic>[] = [];
   for (const row of (rows ?? []) as { data: Project }[]) {
     for (const post of (row.data.blog ?? []) as BlogPost[]) {
@@ -534,8 +535,8 @@ export const loadArtigoEngagement = createServerFn({ method: "GET" })
         .eq("post_id", data.postId)
         .order("created_at", { ascending: true }),
     ]);
-    if (likesRes.error) throw new Error(likesRes.error.message);
-    if (commentsRes.error) throw new Error(commentsRes.error.message);
+    if (likesRes.error) throwSafeDbError(likesRes.error);
+    if (commentsRes.error) throwSafeDbError(commentsRes.error);
     return {
       likeCount: likesRes.data.length,
       likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
@@ -566,10 +567,10 @@ export const toggleArtigoLike = createServerFn({ method: "POST" })
       .eq("post_id", data.postId)
       .eq("liker_key", likerKey)
       .maybeSingle();
-    if (findError) throw new Error(findError.message);
+    if (findError) throwSafeDbError(findError);
     if (existing) {
       const { error } = await supabaseAdmin.from("blog_likes").delete().eq("id", existing.id);
-      if (error) throw new Error(error.message);
+      if (error) throwSafeDbError(error);
       return { ok: true };
     }
     const { error } = await supabaseAdmin.from("blog_likes").insert({
@@ -577,7 +578,7 @@ export const toggleArtigoLike = createServerFn({ method: "POST" })
       liker_key: likerKey,
       liker_label: found.cliente.empresa,
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });
 
@@ -601,7 +602,7 @@ export const addArtigoComentario = createServerFn({ method: "POST" })
       author_kind: "cliente",
       body: data.body.trim(),
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });
 
@@ -660,7 +661,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         .from("campanha_influenciadores")
         .select("data, campaign_cycle_id")
         .eq("campanha_id", c.id);
-      if (error) throw new Error(error.message);
+      if (error) throwSafeDbError(error);
       // Só mostra pro cliente influenciadores que o time já enviou pra
       // aprovação (ou mais adiante no funil) — INSCRITO/EM_CURADORIA é
       // planejamento interno, ainda não decidido/comunicado.
@@ -678,7 +679,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         .eq("campanha_id", c.id)
         .order("competence_year", { ascending: true })
         .order("competence_month", { ascending: true });
-      if (cycleError) throw new Error(cycleError.message);
+      if (cycleError) throwSafeDbError(cycleError);
       const cycles: z.infer<typeof _CampaignCyclePublic>[] = (cycleRows ?? []).map((r) => ({
         id: r.id,
         competenceYear: r.competence_year,
@@ -690,7 +691,7 @@ export async function buildClienteLinkData(clienteId: string, cliente: Cliente) 
         .from("campanha_cronograma")
         .select("data")
         .eq("campanha_id", c.id);
-      if (cronogramaError) throw new Error(cronogramaError.message);
+      if (cronogramaError) throwSafeDbError(cronogramaError);
       const cronograma = (
         (cronogramaRows ?? []) as { data: z.infer<typeof _CronogramaItemPublic> }[]
       )
@@ -778,7 +779,7 @@ export async function saveInfluRow(
     .update({ data: next as unknown as never, updated_at: new Date().toISOString() })
     .eq("id", influencerId)
     .eq("campanha_id", campanhaId);
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
 }
 
 /** Confirma que `campanhaId` pertence de fato ao `cliente` informado — núcleo
@@ -1032,7 +1033,7 @@ export const updateInfluBriefingAnexo = createServerFn({ method: "POST" })
     const { error: uploadError } = await supabaseAdmin.storage
       .from("entrega-anexos")
       .upload(path, buffer, { contentType });
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throwSafeDbError(uploadError);
     const { data: signed } = await supabaseAdmin.storage
       .from("entrega-anexos")
       .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -1090,7 +1091,7 @@ export const submitClientDemand = createServerFn({ method: "POST" })
       const { error: uploadError } = await supabaseAdmin.storage
         .from("entrega-anexos")
         .upload(path, buffer, { contentType });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) throwSafeDbError(uploadError);
       const { data: signed } = await supabaseAdmin.storage
         .from("entrega-anexos")
         .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -1112,7 +1113,7 @@ export const submitClientDemand = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("campanha_tarefas")
       .insert({ campanha_id: data.campanhaId, data: task });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
 
     return { ok: true };
   });
@@ -1148,7 +1149,7 @@ export const submitPortalBugReport = createServerFn({ method: "POST" })
         const { error: uploadError } = await supabaseAdmin.storage
           .from("bug-reports")
           .upload(path, buffer, { contentType });
-        if (uploadError) throw new Error(uploadError.message);
+        if (uploadError) throwSafeDbError(uploadError);
         screenshotPath = path;
       }
     }
@@ -1162,7 +1163,7 @@ export const submitPortalBugReport = createServerFn({ method: "POST" })
       page_context: data.pageContext ?? null,
       source: "plataforma",
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
 
     return { ok: true };
   });
@@ -1228,7 +1229,7 @@ export const submitRelatorioNps = createServerFn({ method: "POST" })
       .from("clientes")
       .update({ data: nextCliente })
       .eq("id", found.clienteId);
-    if (writeError) throw new Error(writeError.message);
+    if (writeError) throwSafeDbError(writeError);
 
     return { ok: true };
   });

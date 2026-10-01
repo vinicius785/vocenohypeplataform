@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
+import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -946,17 +947,53 @@ export const importGoogleEventsToMeetings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(() => runImportGoogleEventsToMeetings());
 
+const DeleteGoogleEventsInput = z.array(
+  z.object({
+    meetingId: z.string().uuid(),
+    criadorId: z.string().uuid().optional(),
+    googleEventId: z.string().min(1).optional(),
+  }),
+);
+
 /** Exclusão nos dois sentidos: excluir uma reunião na plataforma também
  * apaga o evento correspondente no Google (se o criador tiver conta
  * conectada) — sem isso, o evento ficava órfão no Google pra sempre.
  * Chamado pelo `ReunioesSection` logo após remover a(s) reunião(ões) do
  * estado local, com o `criadorId`/`googleEventId` de cada uma capturados
  * antes da remoção. Best-effort: falha aqui nunca deveria travar a
- * exclusão na plataforma, que já aconteceu. */
+ * exclusão na plataforma, que já aconteceu.
+ *
+ * Correção de segurança (auditoria): o `.validator` antes era só uma
+ * assinatura de tipo (sem checagem em runtime), e a função nunca
+ * verificava permissão nenhuma — qualquer sessão autenticada podia
+ * montar um payload arbitrário (`criadorId` de outra pessoa +
+ * `googleEventId` adivinhado/observado) e a função usaria o TOKEN GOOGLE
+ * daquele outro usuário pra apagar um evento do calendário dele. Não dá
+ * pra validar o par (meetingId, criadorId) contra a tabela `reunioes`
+ * aqui porque a reunião já foi apagada do banco ANTES desta chamada (ver
+ * comentário de `cleanupGoogleEvents` em `ReunioesSection.tsx` — é
+ * limpeza best-effort pós-exclusão). A mitigação possível sem quebrar o
+ * fluxo real é exigir a mesma permissão `'reunioes'` (ou admin) já usada
+ * pra excluir reuniões — limita quem pode sequer chamar esta function a
+ * quem já tem acesso legítimo ao domínio de Reuniões. */
 export const deleteGoogleEventsForMeetings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { meetingId: string; criadorId?: string; googleEventId?: string }[]) => data)
-  .handler(async ({ data: targets }) => {
+  .validator((raw: unknown) => DeleteGoogleEventsInput.parse(raw))
+  .handler(async ({ context, data: targets }) => {
+    const [{ data: isAdmin, error: adminError }, { data: hasPerm, error: permError }] =
+      await Promise.all([
+        context.supabase.rpc("is_admin", { _user_id: context.userId }),
+        context.supabase.rpc("has_permission", {
+          _user_id: context.userId,
+          _permission: "reunioes",
+        }),
+      ]);
+    if (adminError) throw new Error(adminError.message);
+    if (permError) throw new Error(permError.message);
+    if (!isAdmin && !hasPerm) {
+      throw new Error("Sem permissão para gerenciar eventos de reuniões.");
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const byCreator = new Map<string, { meetingId: string; googleEventId?: string }[]>();
     for (const t of targets) {

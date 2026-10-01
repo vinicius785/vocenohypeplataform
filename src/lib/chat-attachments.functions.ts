@@ -18,10 +18,28 @@ const AttachmentUrlInput = z.object({
   download: z.boolean().optional(),
 });
 
+/** Correção de segurança (auditoria): antes só exigia uma sessão válida
+ * (`requireSupabaseAuth`) e assinava a URL via `supabaseAdmin`, que
+ * ignora a própria policy de Storage do bucket `chat-attachments`
+ * (`bucket_id = 'chat-attachments' and is_internal_team_member(auth.uid())`,
+ * migration `20260929015524_chat_v2_foundation.sql`) — ou seja, qualquer
+ * usuário autenticado, incluindo uma sessão do portal do cliente (que
+ * NUNCA é membro interno), conseguia baixar qualquer anexo de chat
+ * interno bastando saber/adivinhar o `path`. Agora a função exige
+ * explicitamente a mesma condição que a policy do bucket já impõe pra
+ * acesso direto, fechando o desvio criado pelo service-role. */
 export const getChatAttachmentUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => AttachmentUrlInput.parse(raw))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { data: isInternal, error: rpcError } = await context.supabase.rpc(
+      "is_internal_team_member",
+      { _user_id: context.userId },
+    );
+    if (rpcError) throw new Error(rpcError.message);
+    if (!isInternal) {
+      throw new Error("Sem permissão para acessar anexos do chat.");
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: signed, error } = await supabaseAdmin.storage
       .from("chat-attachments")

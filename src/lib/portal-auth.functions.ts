@@ -30,6 +30,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { throwSafeDbError } from "@/lib/portal-db-error";
 import {
   findClienteByOrganizationId,
   buildClienteLinkData,
@@ -82,7 +83,7 @@ export async function resolveActiveClientOrganization(ctx: Ctx): Promise<ActiveC
     .eq("status", "active")
     .eq("organizations.status", "active")
     .eq("organizations.type", "client");
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
 
   const rows = (data ?? []) as unknown as { organization_id: string; role: string }[];
   if (rows.length === 0) {
@@ -119,7 +120,7 @@ async function loadPendingNpsCampanhas(clienteId: string, cliente: Cliente) {
     )
     .eq("cliente_id", clienteId)
     .eq("reference_month", referenceMonth);
-  if (error) throw new Error(error.message);
+  if (error) throwSafeDbError(error);
   const respondidas = (rows ?? []).map((r) => mapCampanhaNpsRow(r as CampanhaNpsRow));
   const pendentes = campanhasComNpsPendente(cliente.campanhas ?? [], respondidas, referenceMonth);
   // Campanha ativa sem `dataInicio` válida nunca gera NPS (decisão
@@ -213,7 +214,7 @@ export const setActiveOrganization = createServerFn({ method: "POST" })
       .eq("organization_id", data.organizationId)
       .eq("status", "active")
       .eq("organizations.status", "active");
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     if (!rows || rows.length === 0) {
       throw new Error("Você não tem acesso ativo a esta organização.");
     }
@@ -497,7 +498,7 @@ export const updateInfluBriefingAnexoSession = createServerFn({ method: "POST" }
     const { error: uploadError } = await supabaseAdmin.storage
       .from("entrega-anexos")
       .upload(path, buffer, { contentType });
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throwSafeDbError(uploadError);
     const { data: signed } = await supabaseAdmin.storage
       .from("entrega-anexos")
       .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -546,7 +547,7 @@ export const submitClientDemandSession = createServerFn({ method: "POST" })
       const { error: uploadError } = await supabaseAdmin.storage
         .from("entrega-anexos")
         .upload(path, buffer, { contentType });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) throwSafeDbError(uploadError);
       const { data: signed } = await supabaseAdmin.storage
         .from("entrega-anexos")
         .createSignedUrl(path, 60 * 60 * 24 * 365);
@@ -568,7 +569,7 @@ export const submitClientDemandSession = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("campanha_tarefas")
       .insert({ campanha_id: data.campanhaId, data: task });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
 
     return { ok: true };
   });
@@ -600,7 +601,7 @@ export const submitPortalBugReportSession = createServerFn({ method: "POST" })
         const { error: uploadError } = await supabaseAdmin.storage
           .from("bug-reports")
           .upload(path, buffer, { contentType });
-        if (uploadError) throw new Error(uploadError.message);
+        if (uploadError) throwSafeDbError(uploadError);
         screenshotPath = path;
       }
     }
@@ -614,7 +615,7 @@ export const submitPortalBugReportSession = createServerFn({ method: "POST" })
       page_context: data.pageContext ?? null,
       source: "plataforma",
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
 
     return { ok: true };
   });
@@ -674,7 +675,7 @@ export const submitRelatorioNpsSession = createServerFn({ method: "POST" })
       .from("clientes")
       .update({ data: nextCliente })
       .eq("id", clienteId);
-    if (writeError) throw new Error(writeError.message);
+    if (writeError) throwSafeDbError(writeError);
 
     return { ok: true };
   });
@@ -715,7 +716,7 @@ export const getFreshRelatorioUrlSession = createServerFn({ method: "POST" })
     const { data: signed, error: signError } = await supabaseAdmin.storage
       .from("relatorios-mensais")
       .createSignedUrl(relatorio.storagePath, 60 * 60);
-    if (signError) throw new Error(signError.message);
+    if (signError) throwSafeDbError(signError);
 
     return { url: signed.signedUrl };
   });
@@ -745,8 +746,8 @@ export const loadArtigoEngagementSession = createServerFn({ method: "GET" })
         .eq("post_id", data.postId)
         .order("created_at", { ascending: true }),
     ]);
-    if (likesRes.error) throw new Error(likesRes.error.message);
-    if (commentsRes.error) throw new Error(commentsRes.error.message);
+    if (likesRes.error) throwSafeDbError(likesRes.error);
+    if (commentsRes.error) throwSafeDbError(commentsRes.error);
     return {
       likeCount: likesRes.data.length,
       likedByMe: likesRes.data.some((r) => r.liker_key === likerKey),
@@ -775,10 +776,10 @@ export const toggleArtigoLikeSession = createServerFn({ method: "POST" })
       .eq("post_id", data.postId)
       .eq("liker_key", likerKey)
       .maybeSingle();
-    if (findError) throw new Error(findError.message);
+    if (findError) throwSafeDbError(findError);
     if (existing) {
       const { error } = await supabaseAdmin.from("blog_likes").delete().eq("id", existing.id);
-      if (error) throw new Error(error.message);
+      if (error) throwSafeDbError(error);
       return { ok: true };
     }
     const { error } = await supabaseAdmin.from("blog_likes").insert({
@@ -786,7 +787,7 @@ export const toggleArtigoLikeSession = createServerFn({ method: "POST" })
       liker_key: likerKey,
       liker_label: cliente.empresa,
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });
 
@@ -809,7 +810,7 @@ export const addArtigoComentarioSession = createServerFn({ method: "POST" })
       author_kind: "cliente",
       body: data.body.trim(),
     });
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });
 
@@ -885,6 +886,6 @@ export const submitNpsSession = createServerFn({ method: "POST" })
       })),
       { onConflict: "campanha_id,reference_month", ignoreDuplicates: true },
     );
-    if (error) throw new Error(error.message);
+    if (error) throwSafeDbError(error);
     return { ok: true };
   });

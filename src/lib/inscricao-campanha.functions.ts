@@ -12,6 +12,8 @@ import {
   normalizePhoneDigits,
 } from "@/lib/social-profiles";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
 /**
  * Link público de INSCRIÇÃO de influenciadores numa campanha
@@ -423,14 +425,43 @@ const AttachmentUrlInput = z.object({
   download: z.boolean().optional(),
 });
 
+async function assertCanManage(userId: string, supabase: SupabaseClient<Database>) {
+  const perm = async (p: string) => {
+    const { data: v, error } = await supabase.rpc("has_permission", {
+      _user_id: userId,
+      _permission: p,
+    });
+    if (error) throw new Error(error.message);
+    return v === true;
+  };
+  const admin = async () => {
+    const { data: v, error } = await supabase.rpc("is_admin", { _user_id: userId });
+    if (error) throw new Error(error.message);
+    return v === true;
+  };
+  const [isAdmin, hasPerm] = await Promise.all([admin(), perm("influenciadores")]);
+  if (!isAdmin && !hasPerm) {
+    throw new Error("Sem permissão para acessar anexos de influenciadores.");
+  }
+}
+
 /** URL de visualização/download sob demanda — nunca persistida (pedido,
  * seção 9/16: "salvar uma chave permanente e gerar URL segura somente ao
  * visualizar ou baixar"). Autenticado — diferente de `submitInscricaoCampanha`,
- * que é público, esta função é usada de dentro do board (time logado). */
+ * que é público, esta função é usada de dentro do board (time logado).
+ *
+ * Correção de segurança (auditoria): antes só exigia uma sessão válida
+ * (`requireSupabaseAuth`), sem checar permissão — qualquer usuário
+ * autenticado, incluindo um membro sem nenhuma permissão concedida,
+ * podia enumerar `campanhaInfluId`/`attachmentId` e baixar documentos de
+ * QUALQUER campanha via o client service-role. Agora exige a mesma
+ * permissão `'influenciadores'` (ou admin) usada em
+ * `campanha-influenciador-avaliacao.functions.ts`. */
 export const getInfluAttachmentUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => AttachmentUrlInput.parse(raw))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await assertCanManage(context.userId, context.supabase);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
       .from("campanha_influenciadores")

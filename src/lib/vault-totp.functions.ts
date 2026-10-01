@@ -1,7 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+
+/** Correção de segurança (auditoria): `.validator((data: {code:string}) =>
+ * data)` era só uma assinatura de tipo TypeScript, sem validação real em
+ * runtime — qualquer corpo JSON passava direto pro handler e descia até
+ * `verifyTotpCode`. Este é o endpoint que destrava a chave mestra do
+ * cofre; agora exige explicitamente um código numérico de 6 dígitos. */
+const VerifyCodeInput = z.object({ code: z.string().regex(/^\d{6}$/, "Código inválido.") });
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000;
@@ -86,7 +94,7 @@ export const enrollVaultTotp = createServerFn({ method: "POST" })
  */
 export const verifyVaultTotpAndUnlock = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: { code: string }) => data)
+  .validator((raw: unknown) => VerifyCodeInput.parse(raw))
   .handler(async ({ context, data }) => {
     await assertCanRequestVaultAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
