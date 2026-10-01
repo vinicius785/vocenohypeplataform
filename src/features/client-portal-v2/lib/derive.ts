@@ -372,13 +372,21 @@ export function deriveRecentActivity(data: ClienteLinkData, limit = 5): Activity
       }
     }
     for (const relatorio of campanha.relatorios) {
+      // Campanha recorrente: precisa levar pro MÊS do relatório, nunca pro
+      // mês corrente/mais recente (o fallback de `resolveActiveCycle`
+      // quando `competencia` está ausente) — sem isso, abrir um relatório
+      // de um mês passado caía na página filtrada pelo ciclo atual, e o
+      // relatório clicado simplesmente não aparecia ali (bug relatado:
+      // "parece que fui redirecionado pro mês atual"). `relatorio.mes` já
+      // é o mesmo formato `YYYY-MM` usado por `competencia`.
+      const competenciaParam = campanha.isRecorrente ? `&competencia=${relatorio.mes}` : "";
       raw.push({
         id: `relatorio:${relatorio.id}`,
         kind: "report_available",
         createdAt: relatorio.uploadedAt,
         campanhaId: campanha.id,
         campanhaNome: campanha.nome,
-        href: `/portal-v2/campanhas/${campanha.id}?relatorio=${relatorio.id}`,
+        href: `/portal-v2/campanhas/${campanha.id}?relatorio=${relatorio.id}${competenciaParam}`,
         label: `Relatório disponível: ${relatorio.nome}`,
       });
     }

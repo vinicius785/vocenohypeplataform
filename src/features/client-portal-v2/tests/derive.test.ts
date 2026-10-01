@@ -659,6 +659,61 @@ describe("deriveRecentActivity", () => {
     expect(entries).toHaveLength(2);
     expect(entries.every((e) => e.count === 1)).toBe(true);
   });
+
+  it("link de relatório de campanha recorrente leva pro MÊS do relatório, não pro mês corrente (bug: cliente era jogado de volta pro mês atual ao abrir relatório de mês passado)", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [],
+          cronograma: [],
+          relatorios: [
+            {
+              id: "rel-ago",
+              mes: "2026-08",
+              nome: "Relatório Agosto",
+              uploadedAt: "2026-08-05T00:00:00.000Z",
+              url: "https://example.com/ago.pdf",
+            },
+          ],
+          isRecorrente: true,
+        },
+      ],
+    };
+    const entries = deriveRecentActivity(data, 10);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].href).toBe("/portal-v2/campanhas/c1?relatorio=rel-ago&competencia=2026-08");
+  });
+
+  it("link de relatório de campanha NÃO recorrente nunca leva &competencia (não existe conceito de mês)", () => {
+    const data: ClienteLinkData = {
+      ...baseData(),
+      campanhas: [
+        {
+          id: "c1",
+          nome: "Campanha A",
+          planejado: 0,
+          influencers: [],
+          cronograma: [],
+          relatorios: [
+            {
+              id: "rel-unico",
+              mes: "2026-08",
+              nome: "Relatório final",
+              uploadedAt: "2026-08-05T00:00:00.000Z",
+              url: "https://example.com/final.pdf",
+            },
+          ],
+          isRecorrente: false,
+        },
+      ],
+    };
+    const entries = deriveRecentActivity(data, 10);
+    expect(entries[0].href).toBe("/portal-v2/campanhas/c1?relatorio=rel-unico");
+  });
 });
 
 describe("deriveContentItems — entregas corretas por influenciador dentro da campanha (teste obrigatório #10)", () => {

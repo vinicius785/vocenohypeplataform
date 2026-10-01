@@ -26,7 +26,7 @@ import { CampanhaDetailV2 } from "@/features/client-portal-v2/pages/CampanhaDeta
  * então o botão voltar do navegador já fecha o drawer/limpa o foco
  * sozinho antes de sair da campanha, de graça, sem código extra.
  */
-const campanhaSearchSchema = z.object({
+export const campanhaSearchSchema = z.object({
   influenciador: z.string().optional(),
   entrega: z.string().optional(),
   /** @deprecated Alias de `entrega` — mantido só pra não quebrar links já
