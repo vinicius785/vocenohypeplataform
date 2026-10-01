@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, RefreshCw, Send } fr
 import { PortalV2ShellBackdrop } from "../layouts/PortalV2Shell";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { NpsChoiceRow, NpsQuestionStep } from "./NpsAnswerControl";
 import { SURFACE, TYPOGRAPHY } from "@/lib/design-tokens";
 import { getPendingNpsSession, submitNpsSession } from "@/lib/portal-auth.functions";
 import {
@@ -14,7 +15,12 @@ import {
   type NpsRating,
 } from "@/lib/campanha-nps";
 
-const SCORES = Array.from({ length: 11 }, (_, i) => i);
+// 0-10 em 11 colunas (numa linha só) e 1-5 em 5 — mesmo NpsChoiceRow.
+const SCORE_OPTIONS = Array.from({ length: 11 }, (_, i) => ({
+  value: String(i),
+  label: String(i),
+}));
+const SATISFACTION_OPTIONS = [1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }));
 
 /**
  * NPS mensal obrigatório — gate único que envolve TODO o Portal do Cliente
@@ -216,16 +222,6 @@ export function NpsForm({
     }
   };
 
-  // Mesmo padrão de "opção selecionável" do Portal do Time → Início (o
-  // `Tab` de "Meu trabalho" em InicioDashboard.tsx): selecionado com fundo
-  // de marca sutil (`bg-brand-subtle text-brand`), hover em `bg-muted`.
-  const optionClass = (selected: boolean) =>
-    `min-w-0 rounded-md border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${
-      selected
-        ? "border-brand bg-brand-subtle text-brand"
-        : "border-border bg-background text-foreground hover:bg-muted"
-    }`;
-
   return (
     <div className="fixed inset-0 z-[100]">
       {/* Casca real do Portal ao fundo (sem dados — ver PortalV2ShellBackdrop). */}
@@ -277,131 +273,103 @@ export function NpsForm({
               </div>
             </div>
 
-            <div className="mt-6 min-h-[8.5rem] space-y-4">
-              {step === 0 && (
-                <>
-                  <p className={TYPOGRAPHY.cardTitle}>
-                    De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?
-                  </p>
-                  <div className="space-y-2">
-                    {/* 11 colunas de largura igual (minmax(0,1fr)): nunca quebra linha,
-                        e o "10" tem exatamente o mesmo tamanho dos demais. */}
-                    <div className="grid grid-cols-11 gap-1 sm:gap-1.5">
-                      {SCORES.map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          disabled={submitting}
-                          onClick={() => patch({ score: n })}
-                          aria-pressed={draft.score === n}
-                          className={`flex h-10 w-full items-center justify-center px-0 tabular-nums ${optionClass(draft.score === n)}`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                    <div className={`flex justify-between gap-4 ${TYPOGRAPHY.caption}`}>
-                      <span>Nada provável</span>
-                      <span className="text-right">Extremamente provável</span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {step === 1 && (
-                <>
-                  <p className={TYPOGRAPHY.cardTitle}>
-                    Qual seu nível de satisfação geral com esta campanha?
-                  </p>
-                  <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => patch({ satisfactionScore: n })}
-                        aria-pressed={draft.satisfactionScore === n}
-                        className={`flex flex-col items-center gap-1 px-1 py-2.5 ${optionClass(draft.satisfactionScore === n)}`}
-                      >
-                        <span className="text-base font-semibold tabular-nums">{n}</span>
-                        <span className="text-center text-[11px] font-normal leading-tight">
-                          {NPS_SATISFACTION_LABELS[n]}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {(step === 2 || step === 3) && (
-                <>
-                  <p className={TYPOGRAPHY.cardTitle}>
-                    {step === 2
-                      ? "Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?"
-                      : "Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"}
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-                    {NPS_RATING_OPTIONS.map((o) => {
-                      const selected =
-                        (step === 2 ? draft.deliveryQuality : draft.communicationRating) ===
-                        o.value;
-                      return (
-                        <button
-                          key={o.value}
-                          type="button"
-                          disabled={submitting}
-                          onClick={() =>
-                            patch(
-                              step === 2
-                                ? { deliveryQuality: o.value }
-                                : { communicationRating: o.value },
-                            )
-                          }
-                          aria-pressed={selected}
-                          className={`min-h-10 px-2 py-2 leading-tight ${optionClass(selected)}`}
-                        >
-                          {o.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              {step === 3 && draft.score !== null && (
-                <div className="space-y-2 pt-2">
-                  <label htmlFor="nps-comment" className={`block ${TYPOGRAPHY.cardTitle}`}>
-                    {npsCommentPrompt(draft.score)}{" "}
-                    <span className="font-normal text-text-secondary">(opcional)</span>
-                  </label>
-                  <Textarea
-                    id="nps-comment"
-                    value={draft.comment}
-                    onChange={(e) => patch({ comment: e.target.value })}
-                    disabled={submitting}
-                    maxLength={2000}
-                    rows={3}
-                  />
-                </div>
-              )}
+            {/* QUESTION_AREA: altura mínima fixa (dimensionada pela etapa mais alta,
+                a 4ª com comentário) — o modal não "pula" entre perguntas. Só o
+                conteúdo aqui dentro troca, com transição sutil. */}
+            <div className="mt-6 min-h-[17rem] sm:min-h-[15.5rem]">
+              <div
+                key={`${campIdx}-${step}`}
+                className="duration-200 animate-in fade-in-0 slide-in-from-right-2"
+              >
+                {step === 0 && (
+                  <NpsQuestionStep question="De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?">
+                    <NpsChoiceRow
+                      ariaLabel="Nota de 0 a 10"
+                      options={SCORE_OPTIONS}
+                      value={draft.score === null ? null : String(draft.score)}
+                      onChange={(v) => patch({ score: Number(v) })}
+                      disabled={submitting}
+                      legend={["Nada provável", "Extremamente provável"]}
+                    />
+                  </NpsQuestionStep>
+                )}
+                {step === 1 && (
+                  <NpsQuestionStep question="Qual seu nível de satisfação geral com esta campanha?">
+                    <NpsChoiceRow
+                      ariaLabel="Satisfação de 1 a 5"
+                      options={SATISFACTION_OPTIONS}
+                      value={
+                        draft.satisfactionScore === null ? null : String(draft.satisfactionScore)
+                      }
+                      onChange={(v) => patch({ satisfactionScore: Number(v) })}
+                      disabled={submitting}
+                      legend={[NPS_SATISFACTION_LABELS[1], NPS_SATISFACTION_LABELS[5]]}
+                    />
+                  </NpsQuestionStep>
+                )}
+                {step === 2 && (
+                  <NpsQuestionStep question="Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?">
+                    <NpsChoiceRow
+                      ariaLabel="Qualidade das entregas"
+                      options={NPS_RATING_OPTIONS}
+                      value={draft.deliveryQuality}
+                      onChange={(v) => patch({ deliveryQuality: v as NpsRating })}
+                      disabled={submitting}
+                    />
+                  </NpsQuestionStep>
+                )}
+                {step === 3 && (
+                  <NpsQuestionStep
+                    question="Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"
+                    secondary={
+                      draft.score !== null && (
+                        <div className="space-y-1.5">
+                          <label htmlFor="nps-comment" className={`block ${TYPOGRAPHY.caption}`}>
+                            {npsCommentPrompt(draft.score)} (opcional)
+                          </label>
+                          <Textarea
+                            id="nps-comment"
+                            value={draft.comment}
+                            onChange={(e) => patch({ comment: e.target.value })}
+                            disabled={submitting}
+                            maxLength={2000}
+                            rows={2}
+                            className="h-16 min-h-0 resize-none"
+                          />
+                        </div>
+                      )
+                    }
+                  >
+                    <NpsChoiceRow
+                      ariaLabel="Acompanhamento e comunicação"
+                      options={NPS_RATING_OPTIONS}
+                      value={draft.communicationRating}
+                      onChange={(v) => patch({ communicationRating: v as NpsRating })}
+                      disabled={submitting}
+                    />
+                  </NpsQuestionStep>
+                )}
+              </div>
             </div>
 
             {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
             <div className="mt-6 flex items-center gap-2">
-              {(step > 0 || campIdx > 0) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="comfortable"
-                  onClick={back}
-                  disabled={submitting}
-                  className="px-4"
-                >
-                  <ChevronLeft />
-                  Voltar
-                </Button>
-              )}
+              {/* Sempre renderizado (invisível na 1ª etapa) para o botão principal
+                  manter exatamente a mesma largura/posição em todas as etapas. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="comfortable"
+                onClick={back}
+                disabled={submitting || !(step > 0 || campIdx > 0)}
+                aria-hidden={!(step > 0 || campIdx > 0)}
+                tabIndex={step > 0 || campIdx > 0 ? undefined : -1}
+                className={`px-4 ${step > 0 || campIdx > 0 ? "" : "invisible"}`}
+              >
+                <ChevronLeft />
+                Voltar
+              </Button>
               <Button
                 type="button"
                 variant="primary"
