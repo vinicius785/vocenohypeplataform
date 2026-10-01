@@ -19,6 +19,7 @@ import {
   Pencil,
   Send,
   ShieldCheck,
+  Star,
   Trash2,
   Upload,
   User,
@@ -53,6 +54,7 @@ import {
 } from "./VincularCampanhaDialog";
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { CampanhaCard } from "./campanhas/CampanhaCard";
+import { CampanhaNpsPanel } from "./campanhas/CampanhaNpsPanel";
 import { CampanhaFiltersBar } from "./campanhas/CampanhaFiltersBar";
 import {
   campanhaStatus,
@@ -540,7 +542,7 @@ function CampanhaDetail({
   const persistVisibleTasks = (next: Task[]) => persistTasks([...hiddenTasks, ...next]);
 
   const [openPanel, setOpenPanel] = useState<
-    null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorioMensal"
+    null | "documentos" | "calendario" | "composicao" | "direitos" | "relatorioMensal" | "nps"
   >(null);
 
   // Mesmo link (por cliente, não por campanha — um cliente pode ter várias
@@ -1161,6 +1163,12 @@ function CampanhaDetail({
                     count={relatorios.length}
                     onClick={() => setOpenPanel("relatorioMensal")}
                   />
+                  <FerramentaCard
+                    icon={Star}
+                    label="NPS"
+                    hint="Avaliações do cliente — Acompanhe a satisfação da campanha ao longo do tempo"
+                    onClick={() => setOpenPanel("nps")}
+                  />
                 </div>
               </div>
             </div>
@@ -1384,6 +1392,18 @@ function CampanhaDetail({
               Anexos e links de referência da campanha.
             </DialogDescription>
             <DocumentosSection docs={docs} onChange={persistDocs} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={openPanel === "nps"} onOpenChange={(o) => !o && setOpenPanel(null)}>
+          <DialogContent className="max-w-3xl border-border bg-card" mobileFullScreen>
+            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+              <Star className="h-4 w-4" /> NPS
+            </DialogTitle>
+            <DialogDescription className="-mt-2 text-xs text-text-secondary">
+              Avaliações do cliente — Acompanhe a satisfação da campanha ao longo do tempo.
+            </DialogDescription>
+            {openPanel === "nps" && <CampanhaNpsPanel campanhaId={c.id} campanhaNome={c.nome} />}
           </DialogContent>
         </Dialog>
 
@@ -1630,16 +1650,20 @@ function FerramentaCard({
   icon: Icon,
   label,
   count,
+  hint,
   onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   count?: number;
+  /** Descrição curta (tooltip nativo) — o card segue compacto. */
+  hint?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      title={hint}
       onClick={onClick}
       className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
     >
