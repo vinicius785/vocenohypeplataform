@@ -565,36 +565,60 @@ export type Database = {
       campanha_nps_influenciador: {
         Row: {
           answered_at: string | null;
+          approval_process_rating: string | null;
+          briefing_rating: string | null;
           campanha_id: string;
           comment: string | null;
+          communication_rating: string | null;
           created_at: string;
           id: string;
+          improvement_comment: string | null;
           influenciador_id: string;
+          overall_experience_rating: string | null;
+          payment_experience_rating: string | null;
+          positive_comment: string | null;
           score: number | null;
           token: string;
           updated_at: string;
+          would_work_again: string | null;
         };
         Insert: {
           answered_at?: string | null;
+          approval_process_rating?: string | null;
+          briefing_rating?: string | null;
           campanha_id: string;
           comment?: string | null;
+          communication_rating?: string | null;
           created_at?: string;
           id?: string;
+          improvement_comment?: string | null;
           influenciador_id: string;
+          overall_experience_rating?: string | null;
+          payment_experience_rating?: string | null;
+          positive_comment?: string | null;
           score?: number | null;
           token: string;
           updated_at?: string;
+          would_work_again?: string | null;
         };
         Update: {
           answered_at?: string | null;
+          approval_process_rating?: string | null;
+          briefing_rating?: string | null;
           campanha_id?: string;
           comment?: string | null;
+          communication_rating?: string | null;
           created_at?: string;
           id?: string;
+          improvement_comment?: string | null;
           influenciador_id?: string;
+          overall_experience_rating?: string | null;
+          payment_experience_rating?: string | null;
+          positive_comment?: string | null;
           score?: number | null;
           token?: string;
           updated_at?: string;
+          would_work_again?: string | null;
         };
         Relationships: [
           {

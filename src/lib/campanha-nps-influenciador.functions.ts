@@ -8,11 +8,21 @@
  * a autorização, verificada aqui, nunca confiando em `campanhaId`/
  * `influenciadorId` vindos do cliente (nem existe esse campo de input).
  *
+ * A página pública virou uma experiência de encerramento de participação
+ * (não só um formulário de NPS) — por isso `getInfluNpsPublic` também
+ * resolve nome da campanha/período (de `clientes.data.campanhas[]`, mesmo
+ * padrão de busca de `findCampanhaBySignupToken` em
+ * `inscricao-campanha.functions.ts`) e as entregas DAQUELE influenciador
+ * nessa campanha (já presentes em `Influ.entregas`, sem nenhuma tabela
+ * nova). Nenhum campo financeiro é buscado em nenhum dos dois.
+ *
  * As funções internas (consulta autenticada pelo time) ficam em
  * `campanha-nps-influenciador-interno.functions.ts`.
  */
 import { createServerFn } from "@tanstack/react-start";
+import type { Cliente } from "@/lib/clientes-store";
 import type { Influ } from "@/components/influenciadores/InfluencerBoard";
+import { ensurePrimary } from "@/lib/social-profiles";
 import { InfluNpsAnswerSchema, InfluNpsTokenSchema } from "@/lib/campanha-nps-influenciador";
 
 type NpsInfluRow = {
@@ -34,9 +44,27 @@ async function findNpsInfluByToken(token: string): Promise<NpsInfluRow | null> {
   return data;
 }
 
-/** Dados mínimos pra renderizar a página pública — nunca inclui nenhum
- * campo financeiro (a query a seguir nem seleciona essas colunas, então
- * não há como vazar o que não é buscado). */
+/** Mesmo padrão de busca de `findCampanhaBySignupToken`
+ * (`inscricao-campanha.functions.ts`): campanha vive dentro de
+ * `clientes.data.campanhas[]`, sem linha própria — só o necessário pro
+ * cabeçalho da página (nome + período), nunca valores. */
+async function findCampanhaNomeEPeriodo(
+  campanhaId: string,
+): Promise<{ nome: string; dataInicio?: string } | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: rows, error } = await supabaseAdmin.from("clientes").select("data");
+  if (error) throw new Error(error.message);
+  for (const row of (rows ?? []) as { data: Cliente }[]) {
+    const campanha = row.data.campanhas?.find((c) => c.id === campanhaId);
+    if (campanha) return { nome: campanha.nome, dataInicio: campanha.dataInicio };
+  }
+  return null;
+}
+
+/** Dados pra renderizar a experiência pública de encerramento — identidade
+ * do influenciador, campanha/período e SÓ as entregas dele nesta campanha.
+ * Nunca inclui nenhum campo financeiro (nem a campanha nem o influenciador
+ * são buscados com esses campos — não há como vazar o que não é lido). */
 export const getInfluNpsPublic = createServerFn({ method: "GET" })
   .inputValidator((raw: unknown) => InfluNpsTokenSchema.parse(raw))
   .handler(async ({ data }) => {
@@ -44,15 +72,30 @@ export const getInfluNpsPublic = createServerFn({ method: "GET" })
     if (!row) throw new Error("Link inválido ou expirado.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: influRow } = await supabaseAdmin
-      .from("campanha_influenciadores")
-      .select("data")
-      .eq("id", row.influenciador_id)
-      .maybeSingle();
+    const [{ data: influRow }, campanha] = await Promise.all([
+      supabaseAdmin
+        .from("campanha_influenciadores")
+        .select("data")
+        .eq("id", row.influenciador_id)
+        .maybeSingle(),
+      findCampanhaNomeEPeriodo(row.campanha_id),
+    ]);
     const influ = influRow?.data as Influ | undefined;
+    const principal = influ?.redes ? ensurePrimary(influ.redes).find((r) => r.isPrimary) : null;
+
+    const entregas = (influ?.entregas ?? []).map((e) => ({
+      tipo: e.tipo,
+      titulo: e.titulo ?? null,
+      publicada: e.stage === "PUBLICADA",
+    }));
 
     return {
       influenciadorNome: influ?.nome ?? "influenciador",
+      influenciadorFoto: influ?.foto ?? null,
+      influenciadorHandle: principal?.handle ?? null,
+      campanhaNome: campanha?.nome ?? null,
+      campanhaPeriodo: campanha?.dataInicio ?? null,
+      entregas,
       alreadyAnswered: row.answered_at !== null,
       score: row.score,
     };
@@ -75,7 +118,14 @@ export const submitInfluNps = createServerFn({ method: "POST" })
       .from("campanha_nps_influenciador")
       .update({
         score: data.score,
-        comment: data.comment?.trim() || null,
+        communication_rating: data.communicationRating,
+        briefing_rating: data.briefingRating,
+        approval_process_rating: data.approvalProcessRating,
+        payment_experience_rating: data.paymentExperienceRating,
+        overall_experience_rating: data.overallExperienceRating,
+        improvement_comment: data.improvementComment?.trim() || null,
+        positive_comment: data.positiveComment?.trim() || null,
+        would_work_again: data.wouldWorkAgain ?? null,
         answered_at: new Date().toISOString(),
       })
       .eq("id", row.id)

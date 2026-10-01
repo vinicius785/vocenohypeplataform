@@ -21,6 +21,8 @@ import {
   npsIndex,
   type NpsCategory,
 } from "@/lib/campanha-nps-insights";
+import type { NpsRating } from "@/lib/campanha-nps";
+import type { WouldWorkAgain } from "@/lib/campanha-nps-influenciador";
 
 const Input = z.object({ campanhaId: z.string().uuid() });
 
@@ -55,6 +57,14 @@ type InfluNpsInternoEntry = {
   respondido: boolean;
   score: number | null;
   comment: string | null;
+  communicationRating: NpsRating | null;
+  briefingRating: NpsRating | null;
+  approvalProcessRating: NpsRating | null;
+  paymentExperienceRating: NpsRating | null;
+  overallExperienceRating: NpsRating | null;
+  improvementComment: string | null;
+  positiveComment: string | null;
+  wouldWorkAgain: WouldWorkAgain | null;
   answeredAt: string | null;
   category: NpsCategory | null;
 };
@@ -82,7 +92,9 @@ export const getCampanhaNpsInfluenciadoresInterno = createServerFn({ method: "GE
 
     const { data: npsRows, error: npsError } = await context.supabase
       .from("campanha_nps_influenciador")
-      .select("influenciador_id, score, comment, answered_at")
+      .select(
+        "influenciador_id, score, comment, communication_rating, briefing_rating, approval_process_rating, payment_experience_rating, overall_experience_rating, improvement_comment, positive_comment, would_work_again, answered_at",
+      )
       .eq("campanha_id", data.campanhaId);
     if (npsError) throw new Error(npsError.message);
 
@@ -107,6 +119,14 @@ export const getCampanhaNpsInfluenciadoresInterno = createServerFn({ method: "GE
         respondido: r.answered_at !== null,
         score: r.score,
         comment: r.comment,
+        communicationRating: r.communication_rating as NpsRating | null,
+        briefingRating: r.briefing_rating as NpsRating | null,
+        approvalProcessRating: r.approval_process_rating as NpsRating | null,
+        paymentExperienceRating: r.payment_experience_rating as NpsRating | null,
+        overallExperienceRating: r.overall_experience_rating as NpsRating | null,
+        improvementComment: r.improvement_comment,
+        positiveComment: r.positive_comment,
+        wouldWorkAgain: r.would_work_again as WouldWorkAgain | null,
         answeredAt: r.answered_at,
         category: r.score !== null ? classifyNpsScore(r.score) : null,
       }))

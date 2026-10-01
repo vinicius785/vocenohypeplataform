@@ -2449,6 +2449,7 @@ export function InfluencerBoard({
           onApplyChecklistToAll={applyChecklistToAll}
           onComment={(text) => addComment(viewing.id, text)}
           onPatch={(patch) => patchInflu(viewing.id, patch)}
+          nps={nps}
         />
       )}
 
@@ -4112,6 +4113,7 @@ function InfluencerWorkspaceSheet({
   onComment,
   onPatch,
   onSendToClient,
+  nps,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
@@ -4119,6 +4121,7 @@ function InfluencerWorkspaceSheet({
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   onSetStatus: (status: InfluStatus) => void;
+  nps?: InfluNpsBoardProp;
   onRunEntregaAction: (
     entregaId: string,
     action: EntregaEngineActionKind,
@@ -4275,6 +4278,7 @@ function InfluencerWorkspaceSheet({
             activityCount={activityCount}
             onOpenActivity={openActivity}
             onRemove={onRemove}
+            nps={nps}
           />
         )}
         {view === "entrega" && selectedEntrega && (
@@ -4406,10 +4410,12 @@ function WorkspaceDetailHeader({
   activityCount,
   onOpenActivity,
   onRemove,
+  nps,
 }: {
   influ: Influ;
   has: (k: InfluencerFieldKey) => boolean;
   cicloMesOptions?: { value: string; label: string }[];
+  nps?: InfluNpsBoardProp;
   editingHeader: boolean;
   draft: { nome: string; nicho: string; telefone: string; email: string };
   setDraft: React.Dispatch<
@@ -4597,6 +4603,11 @@ function WorkspaceDetailHeader({
             <DropdownMenuContent align="end">
               {influ.status === "EM_CURADORIA" && (
                 <DropdownMenuItem onSelect={onSendToClient}>Enviar para cliente</DropdownMenuItem>
+              )}
+              {influ.status === "APROVADO" && nps?.linksByInfluId[influ.id] && (
+                <DropdownMenuItem onSelect={() => nps.onCopyLink(influ.id)}>
+                  Copiar link NPS
+                </DropdownMenuItem>
               )}
               <DropdownMenuItem
                 onSelect={onRemove}
