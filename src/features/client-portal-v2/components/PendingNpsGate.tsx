@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, RefreshCw, Send } from "lucide-react";
+import { PortalV2ShellBackdrop } from "../layouts/PortalV2Shell";
 import { getPendingNpsSession, submitNpsSession } from "@/lib/portal-auth.functions";
 import {
   NPS_RATING_OPTIONS,
@@ -223,187 +224,209 @@ export function NpsForm({
     }`;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-background p-4 py-8 sm:p-6">
-      <div className="w-full max-w-lg space-y-6 rounded-2xl border border-border bg-card p-5 shadow-lg sm:p-6">
-        <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Avaliação mensal
-            {pendentes.length > 1 && ` · Campanha ${campIdx + 1} de ${pendentes.length}`}
-          </p>
-          <h1 className="text-lg font-semibold text-foreground">{current.nome}</h1>
-          <p className="text-sm text-text-secondary">
-            Antes de continuar, conte como está sendo sua experiência com esta campanha.
-          </p>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              Pergunta {step + 1} de {TOTAL_QUESTIONS}
-            </span>
-          </div>
+    <div className="fixed inset-0 z-[100]">
+      {/* Casca real do Portal ao fundo (sem dados — ver PortalV2ShellBackdrop). */}
+      <PortalV2ShellBackdrop />
+      {/* Overlay: mesmo preto translúcido dos Dialogs/drawer do projeto + blur. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[6px] duration-300 animate-in fade-in-0 dark:bg-black/60"
+      />
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="flex min-h-full items-end justify-center pt-8 sm:items-center sm:p-6">
           <div
-            className="flex gap-1"
-            role="progressbar"
-            aria-valuemin={1}
-            aria-valuemax={TOTAL_QUESTIONS}
-            aria-valuenow={step + 1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nps-dialog-title"
+            className="w-full max-w-lg space-y-6 rounded-t-2xl border border-border bg-card p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-2xl ring-1 ring-black/5 duration-300 animate-in fade-in-0 slide-in-from-bottom-4 sm:rounded-2xl sm:p-7 sm:zoom-in-95 sm:slide-in-from-bottom-0 dark:ring-white/10"
           >
-            {Array.from({ length: TOTAL_QUESTIONS }, (_, i) => (
-              <div
-                key={i}
-                className={`h-1 flex-1 rounded-full ${i <= step ? "bg-brand" : "bg-muted"}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="min-h-[9rem] space-y-3">
-          {step === 0 && (
-            <>
-              <p className="text-sm font-medium text-foreground">
-                De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Avaliação mensal
+                {pendentes.length > 1 && ` · Campanha ${campIdx + 1} de ${pendentes.length}`}
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {SCORES.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => patch({ score: n })}
-                    aria-pressed={draft.score === n}
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center ${optionClass(draft.score === n)}`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <div className="flex justify-between text-[11px] text-muted-foreground">
-                <span>Nada provável</span>
-                <span>Extremamente provável</span>
-              </div>
-            </>
-          )}
-
-          {step === 1 && (
-            <>
-              <p className="text-sm font-medium text-foreground">
-                Qual seu nível de satisfação geral com esta campanha?
+              <h1 id="nps-dialog-title" className="text-lg font-semibold text-foreground">
+                {current.nome}
+              </h1>
+              <p className="text-sm text-text-secondary">
+                Antes de continuar, conte como está sendo sua experiência com esta campanha.
               </p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => patch({ satisfactionScore: n })}
-                    aria-pressed={draft.satisfactionScore === n}
-                    className={`flex flex-col items-center gap-0.5 px-1 py-2 ${optionClass(draft.satisfactionScore === n)}`}
-                  >
-                    <span className="text-base">{n}</span>
-                    <span className="text-center text-[10px] font-normal leading-tight">
-                      {NPS_SATISFACTION_LABELS[n]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
-          {(step === 2 || step === 3) && (
-            <>
-              <p className="text-sm font-medium text-foreground">
-                {step === 2
-                  ? "Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?"
-                  : "Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"}
-              </p>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-                {NPS_RATING_OPTIONS.map((o) => {
-                  const selected =
-                    (step === 2 ? draft.deliveryQuality : draft.communicationRating) === o.value;
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      disabled={submitting}
-                      onClick={() =>
-                        patch(
-                          step === 2
-                            ? { deliveryQuality: o.value }
-                            : { communicationRating: o.value },
-                        )
-                      }
-                      aria-pressed={selected}
-                      className={`px-2 py-2 ${optionClass(selected)}`}
-                    >
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {step === 3 && draft.score !== null && (
-            <div className="space-y-1.5 pt-2">
-              <label htmlFor="nps-comment" className="block text-sm font-medium text-foreground">
-                {npsCommentPrompt(draft.score)}{" "}
-                <span className="font-normal text-muted-foreground">(opcional)</span>
-              </label>
-              <textarea
-                id="nps-comment"
-                value={draft.comment}
-                onChange={(e) => patch({ comment: e.target.value })}
-                disabled={submitting}
-                maxLength={2000}
-                rows={3}
-                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-              />
             </div>
-          )}
-        </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Pergunta {step + 1} de {TOTAL_QUESTIONS}
+                </span>
+              </div>
+              <div
+                className="flex gap-1"
+                role="progressbar"
+                aria-valuemin={1}
+                aria-valuemax={TOTAL_QUESTIONS}
+                aria-valuenow={step + 1}
+              >
+                {Array.from({ length: TOTAL_QUESTIONS }, (_, i) => (
+                  <div
+                    key={i}
+                    className={`h-1 flex-1 rounded-full ${i <= step ? "bg-brand" : "bg-muted"}`}
+                  />
+                ))}
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2">
-          {(step > 0 || campIdx > 0) && (
-            <button
-              type="button"
-              onClick={back}
-              disabled={submitting}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Voltar
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={next}
-            disabled={!answered || submitting}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isLastStep && isLastCampaign ? (
-              <>
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+            <div className="min-h-[9rem] space-y-3">
+              {step === 0 && (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SCORES.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => patch({ score: n })}
+                        aria-pressed={draft.score === n}
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center ${optionClass(draft.score === n)}`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-[11px] text-muted-foreground">
+                    <span>Nada provável</span>
+                    <span>Extremamente provável</span>
+                  </div>
+                </>
+              )}
+
+              {step === 1 && (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    Qual seu nível de satisfação geral com esta campanha?
+                  </p>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => patch({ satisfactionScore: n })}
+                        aria-pressed={draft.satisfactionScore === n}
+                        className={`flex flex-col items-center gap-0.5 px-1 py-2 ${optionClass(draft.satisfactionScore === n)}`}
+                      >
+                        <span className="text-base">{n}</span>
+                        <span className="text-center text-[10px] font-normal leading-tight">
+                          {NPS_SATISFACTION_LABELS[n]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {(step === 2 || step === 3) && (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    {step === 2
+                      ? "Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?"
+                      : "Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                    {NPS_RATING_OPTIONS.map((o) => {
+                      const selected =
+                        (step === 2 ? draft.deliveryQuality : draft.communicationRating) ===
+                        o.value;
+                      return (
+                        <button
+                          key={o.value}
+                          type="button"
+                          disabled={submitting}
+                          onClick={() =>
+                            patch(
+                              step === 2
+                                ? { deliveryQuality: o.value }
+                                : { communicationRating: o.value },
+                            )
+                          }
+                          aria-pressed={selected}
+                          className={`px-2 py-2 ${optionClass(selected)}`}
+                        >
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {step === 3 && draft.score !== null && (
+                <div className="space-y-1.5 pt-2">
+                  <label
+                    htmlFor="nps-comment"
+                    className="block text-sm font-medium text-foreground"
+                  >
+                    {npsCommentPrompt(draft.score)}{" "}
+                    <span className="font-normal text-muted-foreground">(opcional)</span>
+                  </label>
+                  <textarea
+                    id="nps-comment"
+                    value={draft.comment}
+                    onChange={(e) => patch({ comment: e.target.value })}
+                    disabled={submitting}
+                    maxLength={2000}
+                    rows={3}
+                    className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                  />
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <div className="flex items-center gap-2">
+              {(step > 0 || campIdx > 0) && (
+                <button
+                  type="button"
+                  onClick={back}
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Voltar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={next}
+                disabled={!answered || submitting}
+                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLastStep && isLastCampaign ? (
+                  <>
+                    {submitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    {submitting ? "Enviando…" : "Enviar avaliação"}
+                  </>
+                ) : isLastStep ? (
+                  <>
+                    Próxima campanha
+                    <ChevronRight className="h-4 w-4" />
+                  </>
                 ) : (
-                  <Send className="h-4 w-4" />
+                  <>
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </>
                 )}
-                {submitting ? "Enviando…" : "Enviar avaliação"}
-              </>
-            ) : isLastStep ? (
-              <>
-                Próxima campanha
-                <ChevronRight className="h-4 w-4" />
-              </>
-            ) : (
-              <>
-                Próxima
-                <ChevronRight className="h-4 w-4" />
-              </>
-            )}
-          </button>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

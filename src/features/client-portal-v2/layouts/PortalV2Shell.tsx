@@ -18,6 +18,7 @@ import { NotificationsPopover } from "../components/NotificationsPopover";
 import { ClientThemeMenu } from "../components/ClientThemeMenu";
 import { ClientSidebarProfile, CLIENT_ROLE_LABEL } from "../components/ClientSidebarProfile";
 import { PendingNpsGate } from "../components/PendingNpsGate";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Shell da V2 — navegação própria (nunca os menus internos do time), na
@@ -311,4 +312,100 @@ function PortalV2Breadcrumb({ currentPath }: { currentPath: string }) {
     active?.label ??
     (currentPath.startsWith("/portal-v2/configuracoes") ? "Configurações" : "Portal");
   return <p className="truncate text-sm font-medium text-foreground">{label}</p>;
+}
+
+/**
+ * Fundo do NPS mensal bloqueante: a MESMA casca do shell (sidebar `w-64`,
+ * itens de navegação, topbar `h-16`, `<main>` com o mesmo padding), mas
+ * sem nenhum dado do Portal. Enquanto há NPS pendente o servidor
+ * deliberadamente NÃO envia dados do cliente/campanhas
+ * (`getPortalDataForSession` → `npsBlocked`, decisão de segurança de
+ * f3b67ae), então identidade do cliente e conteúdo aparecem como skeleton
+ * — nunca dado inventado. Puramente decorativo: `inert` + `aria-hidden`,
+ * nada aqui é clicável/focável, o bloqueio continua total.
+ */
+export function PortalV2ShellBackdrop() {
+  const currentPath = useRouterState({
+    select: (s) => (s.location.search as { returnTo?: unknown }).returnTo ?? s.location.pathname,
+  });
+  const path = typeof currentPath === "string" ? currentPath : "";
+  const active = NAV_ITEMS.find((item) => path.startsWith(item.href)) ?? NAV_ITEMS[0];
+  return (
+    <div
+      aria-hidden="true"
+      inert
+      className="pointer-events-none fixed inset-0 flex select-none bg-background text-foreground"
+    >
+      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border bg-background md:flex">
+        <div className="flex items-center gap-3 px-5 py-5">
+          <Skeleton className="h-10 w-10 rounded-xl" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3.5 w-28" />
+            <p className="text-xs text-muted-foreground">Portal do cliente</p>
+          </div>
+        </div>
+        <nav className="flex-1 space-y-1 px-3">
+          {NAV_ITEMS.map((item) => (
+            <NavButton
+              key={item.key}
+              active={item.key === active.key}
+              collapsed={false}
+              icon={item.icon}
+              label={item.label}
+              onClick={() => {}}
+            />
+          ))}
+        </nav>
+        <div className="flex items-center gap-3 border-t border-border p-3">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-2.5 w-16" />
+          </div>
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 md:px-6">
+          <Menu className="h-5 w-5 text-muted-foreground md:hidden" />
+          <p className="flex-1 truncate text-sm font-medium text-foreground">{active.label}</p>
+          <Skeleton className="h-8 w-8 rounded-md" />
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </header>
+        <main className="min-h-0 flex-1 space-y-6 overflow-hidden p-4 md:p-8">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-56" />
+            <Skeleton className="h-4 w-80 max-w-full" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-7 w-16" />
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-4 rounded-xl border border-border bg-card p-5 lg:col-span-2">
+              <Skeleton className="h-4 w-40" />
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3.5 w-2/3" />
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+              <Skeleton className="h-4 w-32" />
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-3 w-full" />
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
 }
