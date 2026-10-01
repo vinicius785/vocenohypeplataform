@@ -1,8 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, Loader2, RefreshCw, Send } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, RefreshCw, Send } from "lucide-react";
 import { getPendingNpsSession, submitNpsSession } from "@/lib/portal-auth.functions";
+import {
+  NPS_RATING_OPTIONS,
+  NPS_SATISFACTION_LABELS,
+  npsCommentPrompt,
+  type NpsRating,
+} from "@/lib/campanha-nps";
 
 const SCORES = Array.from({ length: 11 }, (_, i) => i);
 
@@ -100,6 +106,37 @@ export function NpsGateError({
   );
 }
 
+type Draft = {
+  score: number | null;
+  satisfactionScore: number | null;
+  deliveryQuality: NpsRating | null;
+  communicationRating: NpsRating | null;
+  comment: string;
+};
+
+const EMPTY_DRAFT: Draft = {
+  score: null,
+  satisfactionScore: null,
+  deliveryQuality: null,
+  communicationRating: null,
+  comment: "",
+};
+
+const TOTAL_QUESTIONS = 4;
+
+function isStepAnswered(d: Draft, step: number) {
+  if (step === 0) return d.score !== null;
+  if (step === 1) return d.satisfactionScore !== null;
+  if (step === 2) return d.deliveryQuality !== null;
+  return d.communicationRating !== null;
+}
+
+/**
+ * Formulário progressivo: para cada campanha pendente, 4 perguntas
+ * obrigatórias uma de cada vez (o comentário opcional fica na 4ª etapa,
+ * com rótulo que varia conforme a nota de NPS). Tudo é acumulado em
+ * memória e enviado de uma vez só no fim, pelo mesmo `submitNpsSession`.
+ */
 export function NpsForm({
   pendentes,
   onSubmitted,
@@ -109,27 +146,45 @@ export function NpsForm({
 }) {
   const submitFn = useServerFn(submitNpsSession);
   const queryClient = useQueryClient();
-  const [scores, setScores] = useState<Record<string, number | null>>(() =>
-    Object.fromEntries(pendentes.map((p) => [p.campanhaId, null])),
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
+    Object.fromEntries(pendentes.map((p) => [p.campanhaId, { ...EMPTY_DRAFT }])),
   );
-  const [comments, setComments] = useState<Record<string, string>>({});
+  const [campIdx, setCampIdx] = useState(0);
+  const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const allAnswered = pendentes.every((p) => scores[p.campanhaId] !== null);
+  const current = pendentes[Math.min(campIdx, pendentes.length - 1)];
+  const draft = drafts[current.campanhaId] ?? EMPTY_DRAFT;
+  const isLastCampaign = campIdx >= pendentes.length - 1;
+  const isLastStep = step === TOTAL_QUESTIONS - 1;
+  const answered = isStepAnswered(draft, step);
+
+  const patch = (p: Partial<Draft>) =>
+    setDrafts((all) => ({ ...all, [current.campanhaId]: { ...draft, ...p } }));
 
   const submit = async () => {
-    if (!allAnswered || submitting) return;
+    if (submitting) return;
+    const complete = pendentes.every((p) =>
+      [0, 1, 2, 3].every((s) => isStepAnswered(drafts[p.campanhaId] ?? EMPTY_DRAFT, s)),
+    );
+    if (!complete) return;
     setSubmitting(true);
     setError("");
     try {
       await submitFn({
         data: {
-          respostas: pendentes.map((p) => ({
-            campanhaId: p.campanhaId,
-            score: scores[p.campanhaId]!,
-            comment: comments[p.campanhaId]?.trim() || undefined,
-          })),
+          respostas: pendentes.map((p) => {
+            const d = drafts[p.campanhaId];
+            return {
+              campanhaId: p.campanhaId,
+              score: d.score!,
+              satisfactionScore: d.satisfactionScore!,
+              deliveryQuality: d.deliveryQuality!,
+              communicationRating: d.communicationRating!,
+              comment: d.comment.trim() || undefined,
+            };
+          }),
         },
       });
       await queryClient.invalidateQueries({ queryKey: ["portal-v2-nps-pending"] });
@@ -140,24 +195,73 @@ export function NpsForm({
     }
   };
 
+  const next = () => {
+    if (!answered || submitting) return;
+    if (!isLastStep) return setStep(step + 1);
+    if (!isLastCampaign) {
+      setCampIdx(campIdx + 1);
+      setStep(0);
+      return;
+    }
+    void submit();
+  };
+
+  const back = () => {
+    if (submitting) return;
+    if (step > 0) return setStep(step - 1);
+    if (campIdx > 0) {
+      setCampIdx(campIdx - 1);
+      setStep(TOTAL_QUESTIONS - 1);
+    }
+  };
+
+  const optionClass = (selected: boolean) =>
+    `rounded-md border text-sm font-medium transition-colors disabled:opacity-50 ${
+      selected
+        ? "border-brand bg-brand text-brand-foreground"
+        : "border-border text-foreground hover:bg-muted"
+    }`;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-background p-4 py-8 sm:p-6">
       <div className="w-full max-w-lg space-y-6 rounded-2xl border border-border bg-card p-5 shadow-lg sm:p-6">
         <div className="space-y-1">
-          <h1 className="text-lg font-semibold text-foreground">
-            Queremos saber como está sendo sua experiência
-          </h1>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Avaliação mensal
+            {pendentes.length > 1 && ` · Campanha ${campIdx + 1} de ${pendentes.length}`}
+          </p>
+          <h1 className="text-lg font-semibold text-foreground">{current.nome}</h1>
           <p className="text-sm text-text-secondary">
-            Antes de continuar, responda a avaliação mensal{" "}
-            {pendentes.length > 1 ? "das campanhas abaixo" : "da campanha abaixo"}.
+            Antes de continuar, conte como está sendo sua experiência com esta campanha.
           </p>
         </div>
 
-        <div className="space-y-5">
-          {pendentes.map((p) => (
-            <div key={p.campanhaId} className="space-y-2 rounded-xl border border-border/60 p-3.5">
-              <p className="text-sm font-medium text-foreground">{p.nome}</p>
-              <p className="text-xs text-text-secondary">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              Pergunta {step + 1} de {TOTAL_QUESTIONS}
+            </span>
+          </div>
+          <div
+            className="flex gap-1"
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={TOTAL_QUESTIONS}
+            aria-valuenow={step + 1}
+          >
+            {Array.from({ length: TOTAL_QUESTIONS }, (_, i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full ${i <= step ? "bg-brand" : "bg-muted"}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="min-h-[9rem] space-y-3">
+          {step === 0 && (
+            <>
+              <p className="text-sm font-medium text-foreground">
                 De 0 a 10, qual a probabilidade de você recomendar nosso trabalho?
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -166,41 +270,141 @@ export function NpsForm({
                     key={n}
                     type="button"
                     disabled={submitting}
-                    onClick={() => setScores((s) => ({ ...s, [p.campanhaId]: n }))}
-                    aria-pressed={scores[p.campanhaId] === n}
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border text-xs font-medium transition-colors disabled:opacity-50 ${
-                      scores[p.campanhaId] === n
-                        ? "border-brand bg-brand text-brand-foreground"
-                        : "border-border text-foreground hover:bg-muted"
-                    }`}
+                    onClick={() => patch({ score: n })}
+                    aria-pressed={draft.score === n}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center ${optionClass(draft.score === n)}`}
                   >
                     {n}
                   </button>
                 ))}
               </div>
+              <div className="flex justify-between text-[11px] text-muted-foreground">
+                <span>Nada provável</span>
+                <span>Extremamente provável</span>
+              </div>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <p className="text-sm font-medium text-foreground">
+                Qual seu nível de satisfação geral com esta campanha?
+              </p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => patch({ satisfactionScore: n })}
+                    aria-pressed={draft.satisfactionScore === n}
+                    className={`flex flex-col items-center gap-0.5 px-1 py-2 ${optionClass(draft.satisfactionScore === n)}`}
+                  >
+                    <span className="text-base">{n}</span>
+                    <span className="text-center text-[10px] font-normal leading-tight">
+                      {NPS_SATISFACTION_LABELS[n]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {(step === 2 || step === 3) && (
+            <>
+              <p className="text-sm font-medium text-foreground">
+                {step === 2
+                  ? "Como você avalia a qualidade das entregas e conteúdos produzidos pelos creators?"
+                  : "Como você avalia o acompanhamento e a comunicação da nossa equipe durante a campanha?"}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+                {NPS_RATING_OPTIONS.map((o) => {
+                  const selected =
+                    (step === 2 ? draft.deliveryQuality : draft.communicationRating) === o.value;
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() =>
+                        patch(
+                          step === 2
+                            ? { deliveryQuality: o.value }
+                            : { communicationRating: o.value },
+                        )
+                      }
+                      aria-pressed={selected}
+                      className={`px-2 py-2 ${optionClass(selected)}`}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {step === 3 && draft.score !== null && (
+            <div className="space-y-1.5 pt-2">
+              <label htmlFor="nps-comment" className="block text-sm font-medium text-foreground">
+                {npsCommentPrompt(draft.score)}{" "}
+                <span className="font-normal text-muted-foreground">(opcional)</span>
+              </label>
               <textarea
-                value={comments[p.campanhaId] ?? ""}
-                onChange={(e) => setComments((c) => ({ ...c, [p.campanhaId]: e.target.value }))}
+                id="nps-comment"
+                value={draft.comment}
+                onChange={(e) => patch({ comment: e.target.value })}
                 disabled={submitting}
-                placeholder="Comentário (opcional)"
-                rows={2}
+                maxLength={2000}
+                rows={3}
                 className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
               />
             </div>
-          ))}
+          )}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={!allAnswered || submitting}
-          className="flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {submitting ? "Enviando…" : "Enviar avaliações"}
-        </button>
+        <div className="flex items-center gap-2">
+          {(step > 0 || campIdx > 0) && (
+            <button
+              type="button"
+              onClick={back}
+              disabled={submitting}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Voltar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={next}
+            disabled={!answered || submitting}
+            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLastStep && isLastCampaign ? (
+              <>
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {submitting ? "Enviando…" : "Enviar avaliação"}
+              </>
+            ) : isLastStep ? (
+              <>
+                Próxima campanha
+                <ChevronRight className="h-4 w-4" />
+              </>
+            ) : (
+              <>
+                Próxima
+                <ChevronRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

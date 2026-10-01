@@ -14,6 +14,7 @@
  */
 import type { Campaign, CampanhaStatus } from "@/components/VincularCampanhaDialog";
 import { campanhaStatus } from "@/components/campanhas/campanha-ui";
+import { z } from "zod";
 import { todayIsoInBrasilia } from "@/lib/timezone";
 
 export type CampanhaNps = {
@@ -123,4 +124,46 @@ export function campanhasComNpsPendente(
     respondidas.filter((r) => r.referenceMonth === referenceMonth).map((r) => r.campanhaId),
   );
   return campanhas.filter((c) => isCampanhaElegivelParaNps(c, now) && !respondidasIds.has(c.id));
+}
+
+// ---------------------------------------------------------------------------
+// Conteúdo da avaliação (4 perguntas obrigatórias + comentário opcional).
+// Valores espelham os CHECKs de `20261001001218_campanha_nps_extended_questions.sql`.
+
+export const NPS_RATING_OPTIONS = [
+  { value: "muito_ruim", label: "Muito ruim" },
+  { value: "ruim", label: "Ruim" },
+  { value: "regular", label: "Regular" },
+  { value: "boa", label: "Boa" },
+  { value: "excelente", label: "Excelente" },
+] as const;
+
+export type NpsRating = (typeof NPS_RATING_OPTIONS)[number]["value"];
+
+export const NPS_SATISFACTION_LABELS: Record<number, string> = {
+  1: "Muito insatisfeito",
+  2: "Insatisfeito",
+  3: "Neutro",
+  4: "Satisfeito",
+  5: "Muito satisfeito",
+};
+
+const ratingValues = NPS_RATING_OPTIONS.map((o) => o.value) as [NpsRating, ...NpsRating[]];
+
+/** Uma resposta de NPS mensal (sem `campanhaId`, validado à parte no servidor). */
+export const NpsAnswerSchema = z.object({
+  score: z.number().int().min(0).max(10),
+  satisfactionScore: z.number().int().min(1).max(5),
+  deliveryQuality: z.enum(ratingValues),
+  communicationRating: z.enum(ratingValues),
+  comment: z.string().trim().max(2000).optional(),
+});
+
+export type NpsAnswer = z.infer<typeof NpsAnswerSchema>;
+
+/** Rótulo do comentário opcional, conforme a nota de NPS (0-6 / 7-8 / 9-10). */
+export function npsCommentPrompt(score: number): string {
+  if (score <= 6) return "O que mais contribuiu para sua avaliação? O que deveríamos melhorar?";
+  if (score <= 8) return "O que poderíamos fazer para tornar sua experiência ainda melhor?";
+  return "O que você mais gostou nessa campanha?";
 }

@@ -513,9 +513,12 @@ export type Database = {
           campanha_id: string;
           cliente_id: string;
           comment: string | null;
+          communication_rating: string;
           created_at: string;
+          delivery_quality: string;
           id: string;
           reference_month: string;
+          satisfaction_score: number;
           score: number;
           updated_at: string;
         };
@@ -525,9 +528,12 @@ export type Database = {
           campanha_id: string;
           cliente_id: string;
           comment?: string | null;
+          communication_rating: string;
           created_at?: string;
+          delivery_quality: string;
           id?: string;
           reference_month: string;
+          satisfaction_score: number;
           score: number;
           updated_at?: string;
         };
@@ -537,9 +543,12 @@ export type Database = {
           campanha_id?: string;
           cliente_id?: string;
           comment?: string | null;
+          communication_rating?: string;
           created_at?: string;
+          delivery_quality?: string;
           id?: string;
           reference_month?: string;
+          satisfaction_score?: number;
           score?: number;
           updated_at?: string;
         };

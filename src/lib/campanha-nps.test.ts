@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Campaign } from "@/components/VincularCampanhaDialog";
 import {
+  NPS_RATING_OPTIONS,
+  NpsAnswerSchema,
+  npsCommentPrompt,
   campanhasAtivasSemDataInicio,
   campanhasComNpsPendente,
   isUuid,
@@ -161,5 +164,49 @@ describe("campanhasAtivasSemDataInicio / isUuid", () => {
   it("isUuid valida formato", () => {
     expect(isUuid("c7b5f3bf-5692-4c31-b691-99e4ced39c52")).toBe(true);
     expect(isUuid("camp1")).toBe(false);
+  });
+});
+
+describe("NpsAnswerSchema (avaliação de 4 perguntas)", () => {
+  const valid = {
+    score: 9,
+    satisfactionScore: 5,
+    deliveryQuality: "excelente",
+    communicationRating: "boa",
+  };
+  it("aceita resposta completa, comentário opcional", () => {
+    expect(NpsAnswerSchema.safeParse(valid).success).toBe(true);
+    expect(NpsAnswerSchema.safeParse({ ...valid, comment: "ótimo" }).success).toBe(true);
+  });
+  it("exige as 4 perguntas obrigatórias", () => {
+    for (const k of ["score", "satisfactionScore", "deliveryQuality", "communicationRating"]) {
+      const { [k]: _omit, ...rest } = valid as Record<string, unknown>;
+      expect(NpsAnswerSchema.safeParse(rest).success).toBe(false);
+    }
+  });
+  it("rejeita valores fora do range/opções", () => {
+    expect(NpsAnswerSchema.safeParse({ ...valid, score: 11 }).success).toBe(false);
+    expect(NpsAnswerSchema.safeParse({ ...valid, satisfactionScore: 0 }).success).toBe(false);
+    expect(NpsAnswerSchema.safeParse({ ...valid, satisfactionScore: 6 }).success).toBe(false);
+    expect(NpsAnswerSchema.safeParse({ ...valid, satisfactionScore: 2.5 }).success).toBe(false);
+    expect(NpsAnswerSchema.safeParse({ ...valid, deliveryQuality: "otima" }).success).toBe(false);
+    expect(NpsAnswerSchema.safeParse({ ...valid, communicationRating: "" }).success).toBe(false);
+  });
+  it("opções batem com o CHECK do banco", () => {
+    expect(NPS_RATING_OPTIONS.map((o) => o.value)).toEqual([
+      "muito_ruim",
+      "ruim",
+      "regular",
+      "boa",
+      "excelente",
+    ]);
+  });
+});
+
+describe("npsCommentPrompt", () => {
+  it("varia conforme a faixa de NPS", () => {
+    for (const n of [0, 6]) expect(npsCommentPrompt(n)).toMatch(/deveríamos melhorar/);
+    for (const n of [7, 8]) expect(npsCommentPrompt(n)).toMatch(/ainda melhor/);
+    for (const n of [9, 10]) expect(npsCommentPrompt(n)).toMatch(/mais gostou/);
   });
 });

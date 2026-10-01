@@ -55,6 +55,7 @@ import {
   campanhasComNpsPendente,
   isUuid,
   mapCampanhaNpsRow,
+  NpsAnswerSchema,
   type CampanhaNpsRow,
 } from "@/lib/campanha-nps";
 
@@ -834,10 +835,8 @@ export const getPendingNpsSession = createServerFn({ method: "GET" })
 const SubmitNpsInput = z.object({
   respostas: z
     .array(
-      z.object({
+      NpsAnswerSchema.extend({
         campanhaId: z.string().refine(isUuid, "Campanha inválida."),
-        score: z.number().int().min(0).max(10),
-        comment: z.string().trim().max(2000).optional(),
       }),
     )
     .min(1),
@@ -878,6 +877,9 @@ export const submitNpsSession = createServerFn({ method: "POST" })
         campanha_id: r.campanhaId,
         reference_month: referenceMonth,
         score: r.score,
+        satisfaction_score: r.satisfactionScore,
+        delivery_quality: r.deliveryQuality,
+        communication_rating: r.communicationRating,
         comment: r.comment?.trim() || null,
         answered_by: context.userId,
       })),
