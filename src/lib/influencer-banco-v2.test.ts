@@ -83,6 +83,36 @@ describe("findParticipacoes", () => {
     const result = findParticipacoes("Fulano", clientes, map);
     expect(result.map((r) => r.campanhaInfluenciadorId)).toEqual(["p-b", "p-a"]);
   });
+
+  it("só conta participação efetiva (APROVADO) — ser adicionado à campanha não é participação", () => {
+    const campA = campaign({ id: "a", nome: "Campanha A" });
+    const campB = campaign({ id: "b", nome: "Campanha B" });
+    const campC = campaign({ id: "c", nome: "Campanha C" });
+    const campD = campaign({ id: "d", nome: "Campanha D" });
+    const clientes = [cliente({ campanhas: [campA, campB, campC, campD] })];
+    const map = new Map([
+      ["a", [influ({ id: "p-a", nome: "Fulano", status: "APROVADO" })]],
+      ["b", [influ({ id: "p-b", nome: "Fulano", status: "RECUSADO" })]],
+      ["c", [influ({ id: "p-c", nome: "Fulano", status: "RECUSADO" })]],
+      ["d", [influ({ id: "p-d", nome: "Fulano", status: "EM_CURADORIA" })]],
+    ]);
+
+    const result = findParticipacoes("Fulano", clientes, map);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].campanhaNome).toBe("Campanha A");
+  });
+
+  it("exclui INSCRITO e ENVIADO_AO_CLIENTE do histórico (ainda não é participação efetiva)", () => {
+    const camp1 = campaign({ id: "1" });
+    const camp2 = campaign({ id: "2" });
+    const clientes = [cliente({ campanhas: [camp1, camp2] })];
+    const map = new Map([
+      ["1", [influ({ id: "p1", nome: "Fulano", status: "INSCRITO" })]],
+      ["2", [influ({ id: "p2", nome: "Fulano", status: "ENVIADO_AO_CLIENTE" })]],
+    ]);
+    expect(findParticipacoes("Fulano", clientes, map)).toHaveLength(0);
+  });
 });
 
 describe("mediaAvaliacao / mediaGeralAvaliacoes", () => {
@@ -179,9 +209,9 @@ describe("filterBankInflus", () => {
       bankInflu({ id: "1", nome: "Daniel Mohamed", redes: [], telefone: "11999990000" }),
       bankInflu({ id: "2", nome: "Outra Pessoa", email: "contato@exemplo.com" }),
     ];
-    expect(filterBankInflus(list, "daniel", DEFAULT_INFLUENCER_BANCO_FILTERS, new Map())).toHaveLength(
-      1,
-    );
+    expect(
+      filterBankInflus(list, "daniel", DEFAULT_INFLUENCER_BANCO_FILTERS, new Map()),
+    ).toHaveLength(1);
     expect(
       filterBankInflus(list, "exemplo.com", DEFAULT_INFLUENCER_BANCO_FILTERS, new Map()),
     ).toHaveLength(1);
@@ -189,8 +219,14 @@ describe("filterBankInflus", () => {
 
   it("ordena por seguidores (desc) quando sort = seguidores", () => {
     const list = [
-      bankInflu({ id: "pequeno", redes: [{ id: "r1", plataforma: "Instagram", handle: "a", seguidores: "1000" }] }),
-      bankInflu({ id: "grande", redes: [{ id: "r2", plataforma: "Instagram", handle: "b", seguidores: "50000" }] }),
+      bankInflu({
+        id: "pequeno",
+        redes: [{ id: "r1", plataforma: "Instagram", handle: "a", seguidores: "1000" }],
+      }),
+      bankInflu({
+        id: "grande",
+        redes: [{ id: "r2", plataforma: "Instagram", handle: "b", seguidores: "50000" }],
+      }),
     ];
     const out = filterBankInflus(
       list,

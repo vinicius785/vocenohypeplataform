@@ -30,10 +30,14 @@ export type ParticipacaoCampanha = {
   influ: Influ;
 };
 
-/** Todas as participações de um influenciador do Banco em TODAS as
- * campanhas de TODOS os clientes — casamento por nome (mesma lógica já
- * usada hoje; não existe FK real entre Banco e campanhas ainda, ver
- * contexto do plano). `allCampanhaInflus` é um parâmetro (não recalculado
+/** Todas as participações EFETIVAS (`influStatus === "APROVADO"`) de um
+ * influenciador do Banco em TODAS as campanhas de TODOS os clientes —
+ * casamento por nome (mesma lógica já usada hoje; não existe FK real
+ * entre Banco e campanhas ainda, ver contexto do plano). Ser adicionado a
+ * uma campanha não é participação: RECUSADO/INSCRITO/EM_CURADORIA/
+ * ENVIADO_AO_CLIENTE nunca entram no histórico, no contador "X campanhas"
+ * nem habilitam avaliação/NPS — regra de negócio explícita, não um filtro
+ * de UI opcional. `allCampanhaInflus` é um parâmetro (não recalculado
  * aqui dentro) pra quem chamar em lote (lista inteira do Banco) poder
  * computar `getAllCampanhaInflus()` uma vez só. */
 export function findParticipacoes(
@@ -48,7 +52,7 @@ export function findParticipacoes(
     for (const camp of c.campanhas ?? []) {
       const arr = allCampanhaInflus.get(camp.id) ?? [];
       for (const inf of arr) {
-        if (inf.nome?.trim().toLowerCase() === norm) {
+        if (inf.status === "APROVADO" && inf.nome?.trim().toLowerCase() === norm) {
           out.push({
             clienteId: c.id,
             clienteEmpresa: c.empresa,
