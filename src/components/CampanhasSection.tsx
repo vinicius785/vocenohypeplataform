@@ -1,34 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Calendar,
-  CalendarClock,
   Check,
   ChevronDown,
-  Download,
   ExternalLink,
-  FileBarChart,
-  FileText,
-  FolderOpen,
   ImageIcon,
   Link as LinkIcon,
-  Loader2,
   Megaphone,
   MoreVertical,
   Paperclip,
   Pencil,
   Send,
   ShieldCheck,
-  Star,
   Trash2,
-  Upload,
   User,
   UserPlus,
   Wallet,
-  X,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { DateField } from "@/components/ui/date-field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -54,7 +44,11 @@ import {
 } from "./VincularCampanhaDialog";
 import { InscricaoPageDialog } from "./campanhas/InscricaoPageDialog";
 import { CampanhaCard } from "./campanhas/CampanhaCard";
-import { CampanhaNpsPanel } from "./campanhas/CampanhaNpsPanel";
+import { CampanhaNpsTool } from "./campanhas/CampanhaNpsPanel";
+import { CampaignToolCard } from "./campanhas/tools/CampaignToolCard";
+import { DocumentsTool } from "./campanhas/tools/DocumentsTool";
+import { ReportsTool } from "./campanhas/tools/ReportsTool";
+import { CalendarTool } from "./campanhas/tools/CalendarTool";
 import { CampanhaFiltersBar } from "./campanhas/CampanhaFiltersBar";
 import {
   campanhaStatus,
@@ -99,14 +93,6 @@ import {
 import { useConfirm, useConfirmChoice } from "@/hooks/use-confirm";
 import { CampanhaActivationDialog } from "@/components/campanhas/CampanhaActivationDialog";
 import { buildClienteStatusChangePatch, clienteStatus } from "@/components/clientes/cliente-ui";
-import { formatIsoDate } from "@/lib/utils";
-import {
-  type RelatorioMensal,
-  mesLabel,
-  uploadRelatorioMensalPdf,
-  getRelatorioMensalUrl,
-  deleteRelatorioMensalPdf,
-} from "@/lib/relatorio-mensal";
 import {
   type CampaignDoc,
   loadCampanhaInflus,
@@ -594,66 +580,6 @@ function CampanhaDetail({
     () => [...(c.relatoriosMensais ?? [])].sort((a, b) => b.mes.localeCompare(a.mes)),
     [c.relatoriosMensais],
   );
-  const [relatorioMes, setRelatorioMes] = useState(() => new Date().toISOString().slice(0, 7));
-  const [relatorioUploading, setRelatorioUploading] = useState(false);
-  const [relatorioError, setRelatorioError] = useState("");
-  const [relatorioViewingId, setRelatorioViewingId] = useState<string | null>(null);
-  const [relatorioUrls, setRelatorioUrls] = useState<Record<string, string>>({});
-  const relatorioFileRef = useRef<HTMLInputElement>(null);
-  const { confirm: confirmDeleteRelatorio, confirmDialog: confirmDeleteRelatorioDialog } =
-    useConfirm();
-
-  const uploadRelatorioMensal = async (file: File) => {
-    if (file.type !== "application/pdf") {
-      setRelatorioError("Só é possível anexar arquivos PDF.");
-      return;
-    }
-    setRelatorioUploading(true);
-    setRelatorioError("");
-    try {
-      const storagePath = await uploadRelatorioMensalPdf(file);
-      const novo: RelatorioMensal = {
-        id: crypto.randomUUID(),
-        mes: relatorioMes,
-        nome: file.name,
-        storagePath,
-        uploadedAt: new Date().toISOString(),
-      };
-      saveInscricaoPage({ relatoriosMensais: [...(c.relatoriosMensais ?? []), novo] });
-      if (relatorioFileRef.current) relatorioFileRef.current.value = "";
-    } catch (err) {
-      setRelatorioError(err instanceof Error ? err.message : "Erro ao subir o relatório.");
-    } finally {
-      setRelatorioUploading(false);
-    }
-  };
-
-  const deleteRelatorioMensal = async (r: RelatorioMensal) => {
-    const ok = await confirmDeleteRelatorio("Remover este relatório mensal?");
-    if (!ok) return;
-    await deleteRelatorioMensalPdf(r.storagePath);
-    saveInscricaoPage({
-      relatoriosMensais: (c.relatoriosMensais ?? []).filter((x) => x.id !== r.id),
-    });
-    if (relatorioViewingId === r.id) setRelatorioViewingId(null);
-  };
-
-  const toggleViewRelatorio = async (r: RelatorioMensal) => {
-    if (relatorioViewingId === r.id) {
-      setRelatorioViewingId(null);
-      return;
-    }
-    if (!relatorioUrls[r.id]) {
-      const url = await getRelatorioMensalUrl(r.storagePath);
-      if (!url) {
-        setRelatorioError("Não foi possível abrir o relatório.");
-        return;
-      }
-      setRelatorioUrls((prev) => ({ ...prev, [r.id]: url }));
-    }
-    setRelatorioViewingId(r.id);
-  };
-
   // Entregas agregadas — SÓ de influenciadores aprovados (rodada corretiva
   // forte, bug real encontrado: somava entregas de todo mundo, inclusive
   // recusados, mostrando 12 em vez de 2). `getEligibleCampaignDeliveries`
@@ -802,7 +728,6 @@ function CampanhaDetail({
        * cada seção (título↔conteúdo, card↔card) continua nos `space-y-*`
        * menores de cada bloco — nunca neste nível. */}
       <PageContainer variant="wide" className="space-y-6 md:space-y-8 lg:space-y-10 xl:space-y-12">
-        {confirmDeleteRelatorioDialog}
         {confirmDeleteCampanhaDialog}
         {confirmStatusChangeDialog}
         {confirmRestoreChoiceDialog}
@@ -1138,37 +1063,30 @@ function CampanhaDetail({
                 </div>
               </div>
 
-              {/* Ferramentas fica na coluna principal mais larga (evita que
-               * os 3 botões quebrem em duas linhas), no tamanho natural —
-               * quem cresce pra preencher espaço é o Briefing, acima. */}
+              {/* Ferramentas da campanha — cards descobríveis (ícone, nome,
+               * descrição curta, contador). Cada um abre a ferramenta no
+               * `CampaignToolShell` (ver ./campanhas/tools). */}
               <div className="order-3 rounded-2xl bg-card p-4 dark:shadow-none md:order-none">
                 <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                   Ferramentas
                 </p>
-                <div className="flex flex-wrap gap-2 md:flex-nowrap">
-                  <FerramentaCard
-                    icon={FolderOpen}
-                    label="Documentos"
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <CampaignToolCard
+                    tool="documentos"
                     count={docs.length}
-                    onClick={() => setOpenPanel("documentos")}
+                    onOpen={() => setOpenPanel("documentos")}
                   />
-                  <FerramentaCard
-                    icon={CalendarClock}
-                    label="Calendário da campanha"
-                    onClick={() => setOpenPanel("calendario")}
+                  <CampaignToolCard
+                    tool="calendario"
+                    count={cronograma.length}
+                    onOpen={() => setOpenPanel("calendario")}
                   />
-                  <FerramentaCard
-                    icon={FileBarChart}
-                    label="Relatórios mensais"
+                  <CampaignToolCard
+                    tool="relatorioMensal"
                     count={relatorios.length}
-                    onClick={() => setOpenPanel("relatorioMensal")}
+                    onOpen={() => setOpenPanel("relatorioMensal")}
                   />
-                  <FerramentaCard
-                    icon={Star}
-                    label="NPS"
-                    hint="Avaliações do cliente — Acompanhe a satisfação da campanha ao longo do tempo"
-                    onClick={() => setOpenPanel("nps")}
-                  />
+                  <CampaignToolCard tool="nps" onOpen={() => setOpenPanel("nps")} />
                 </div>
               </div>
             </div>
@@ -1383,47 +1301,36 @@ function CampanhaDetail({
           </div>
         </section>
 
-        <Dialog open={openPanel === "documentos"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-          <DialogContent className="max-w-xl border-border bg-card" mobileFullScreen>
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <FolderOpen className="h-4 w-4" /> Documentos
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Anexos e links de referência da campanha.
-            </DialogDescription>
-            <DocumentosSection docs={docs} onChange={persistDocs} />
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={openPanel === "nps"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-          <DialogContent className="max-w-3xl border-border bg-card" mobileFullScreen>
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <Star className="h-4 w-4" /> NPS
-            </DialogTitle>
-            <DialogDescription className="-mt-2 text-xs text-text-secondary">
-              Avaliações do cliente — Acompanhe a satisfação da campanha ao longo do tempo.
-            </DialogDescription>
-            {openPanel === "nps" && <CampanhaNpsPanel campanhaId={c.id} campanhaNome={c.nome} />}
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={openPanel === "calendario"} onOpenChange={(o) => !o && setOpenPanel(null)}>
-          <DialogContent className="max-w-2xl border-border bg-card" mobileFullScreen>
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <CalendarClock className="h-4 w-4" /> Calendário da campanha
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Datas e prazos importantes da campanha.
-            </DialogDescription>
-            <CampaignCalendar
-              campanha={c}
-              influs={visibleInflus}
-              cronograma={cronograma}
-              onCronogramaChange={persistCronograma}
-              isRecorrente={isRecorrente}
-            />
-          </DialogContent>
-        </Dialog>
+        {/* Ferramentas da campanha — todas no mesmo CampaignToolShell. */}
+        <DocumentsTool
+          open={openPanel === "documentos"}
+          onOpenChange={(o) => !o && setOpenPanel(null)}
+          campanhaNome={c.nome}
+          docs={docs}
+          onChange={persistDocs}
+        />
+        <CalendarTool
+          open={openPanel === "calendario"}
+          onOpenChange={(o) => !o && setOpenPanel(null)}
+          campanha={c}
+          influs={visibleInflus}
+          cronograma={cronograma}
+          onCronogramaChange={persistCronograma}
+          isRecorrente={isRecorrente}
+        />
+        <ReportsTool
+          open={openPanel === "relatorioMensal"}
+          onOpenChange={(o) => !o && setOpenPanel(null)}
+          campanhaNome={c.nome}
+          relatoriosMensais={c.relatoriosMensais}
+          onChange={(next) => saveInscricaoPage({ relatoriosMensais: next })}
+        />
+        <CampanhaNpsTool
+          open={openPanel === "nps"}
+          onOpenChange={(o) => !o && setOpenPanel(null)}
+          campanhaId={c.id}
+          campanhaNome={c.nome}
+        />
 
         <Dialog open={openPanel === "composicao"} onOpenChange={(o) => !o && setOpenPanel(null)}>
           <DialogContent className="max-w-md border-border bg-card" mobileFullScreen>
@@ -1531,488 +1438,7 @@ function CampanhaDetail({
             )}
           </DialogContent>
         </Dialog>
-
-        <Dialog
-          open={openPanel === "relatorioMensal"}
-          onOpenChange={(o) => !o && setOpenPanel(null)}
-        >
-          <DialogContent
-            className="flex max-h-[85vh] max-w-2xl flex-col border-border bg-card"
-            mobileFullScreen
-          >
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-              <FileBarChart className="h-4 w-4" /> Relatórios mensais
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              PDFs de relatório de métricas enviados pro cliente, um por mês.
-            </DialogDescription>
-
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
-                <input
-                  type="month"
-                  value={relatorioMes}
-                  onChange={(e) => setRelatorioMes(e.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-                />
-                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-foreground hover:text-foreground">
-                  {relatorioUploading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Upload className="h-3.5 w-3.5" />
-                  )}
-                  {relatorioUploading ? "Enviando..." : "Subir PDF"}
-                  <input
-                    ref={relatorioFileRef}
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    disabled={relatorioUploading}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void uploadRelatorioMensal(file);
-                    }}
-                  />
-                </label>
-                <span className="text-[11px] text-muted-foreground">
-                  O cliente vê este PDF no portal, sem precisar baixar.
-                </span>
-              </div>
-
-              {relatorioError && <p className="text-xs text-destructive">{relatorioError}</p>}
-
-              {relatorios.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum relatório enviado ainda.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {relatorios.map((r) => (
-                    <li key={r.id} className="rounded-lg border border-border">
-                      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {mesLabel(r.mes)}
-                          </p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {r.nome} · enviado {formatIsoDate(r.uploadedAt.slice(0, 10))}
-                          </p>
-                          {r.nps && (
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              NPS do cliente: <span className="font-semibold">{r.nps.score}</span>
-                              {r.nps.comentario ? ` — "${r.nps.comentario}"` : ""}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void toggleViewRelatorio(r)}
-                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
-                        >
-                          {relatorioViewingId === r.id ? "Ocultar" : "Visualizar"}
-                        </button>
-                        {relatorioUrls[r.id] && (
-                          <a
-                            href={relatorioUrls[r.id]}
-                            download={r.nome}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
-                          >
-                            <Download className="h-3 w-3" /> Baixar
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void deleteRelatorioMensal(r)}
-                          aria-label="Remover"
-                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {relatorioViewingId === r.id && relatorioUrls[r.id] && (
-                        <iframe
-                          src={relatorioUrls[r.id]}
-                          title={r.nome}
-                          className="h-[60vh] w-full border-t border-border"
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
       </PageContainer>
-    </div>
-  );
-}
-
-function FerramentaCard({
-  icon: Icon,
-  label,
-  count,
-  hint,
-  onClick,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  count?: number;
-  /** Descrição curta (tooltip nativo) — o card segue compacto. */
-  hint?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={hint}
-      onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-      {typeof count === "number" && count > 0 && (
-        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-const DIAS_LABEL = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
-
-function toISODate(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-type CalendarEvent = {
-  label: string;
-  tone: "inicio" | "prazo" | "postagem" | "pagamento" | "manual";
-};
-
-/**
- * Mini calendário mensal com os marcos da campanha: início, prazo, e a
- * data de postagem/pagamento de cada entrega de cada influenciador.
- */
-function CampaignCalendar({
-  campanha: c,
-  influs,
-  cronograma,
-  onCronogramaChange,
-  isRecorrente,
-}: {
-  campanha: Campaign;
-  influs: Influ[];
-  cronograma: CronogramaItem[];
-  onCronogramaChange: (next: CronogramaItem[]) => void;
-  isRecorrente: boolean;
-}) {
-  const initialCursor = useMemo(() => {
-    const first = c.dataInicio ?? c.prazo;
-    return first ? new Date(first + "T00:00:00") : new Date();
-  }, [c.dataInicio, c.prazo]);
-  const [cursor, setCursor] = useState(initialCursor);
-
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
-    const add = (date: string | undefined, ev: CalendarEvent) => {
-      if (!date) return;
-      const arr = map.get(date) ?? [];
-      arr.push(ev);
-      map.set(date, arr);
-    };
-    add(c.dataInicio, { label: "Início da campanha", tone: "inicio" });
-    add(c.prazo, { label: "Prazo da campanha", tone: "prazo" });
-    for (const i of influs) {
-      for (const e of i.entregas) {
-        add(e.dataPostagem, { label: `Postagem · ${i.nome} (${e.tipo})`, tone: "postagem" });
-      }
-      add(i.pagamento?.data, { label: `Pagamento · ${i.nome}`, tone: "pagamento" });
-    }
-    // Itens recorrentes (só faz sentido em cliente recorrente) repetem no
-    // mesmo dia-do-mês da data âncora, todo mês — a ocorrência mostrada no
-    // grid é sempre a do mês que está sendo visualizado (cursor), não a
-    // data âncora original.
-    for (const item of cronograma) {
-      if (item.recurring) {
-        const day = Number(item.date.slice(8, 10));
-        const daysInCursorMonth = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth() + 1,
-          0,
-        ).getDate();
-        const occurrence = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth(),
-          Math.min(day, daysInCursorMonth),
-        );
-        add(toISODate(occurrence), { label: item.title, tone: "manual" });
-      } else {
-        add(item.date, { label: item.title, tone: "manual" });
-      }
-    }
-    return map;
-  }, [c.dataInicio, c.prazo, influs, cronograma, cursor]);
-
-  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const startOffset = first.getDay();
-  const startDate = new Date(first);
-  startDate.setDate(first.getDate() - startOffset);
-  const cells: Date[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
-    cells.push(d);
-  }
-  const today = toISODate(new Date());
-  const monthLabel = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  const toneDot: Record<CalendarEvent["tone"], string> = {
-    inicio: "bg-sky-500",
-    prazo: "bg-amber-500",
-    postagem: "bg-violet-500",
-    pagamento: "bg-emerald-500",
-    manual: "bg-rose-500",
-  };
-
-  const sortedUpcoming = useMemo(
-    () => Array.from(eventsByDate.entries()).sort(([a], [b]) => (a < b ? -1 : 1)),
-    [eventsByDate],
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Mês anterior"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <p className="text-sm font-medium capitalize text-foreground">{monthLabel}</p>
-        <button
-          type="button"
-          onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Próximo mês"
-        >
-          <ArrowLeft className="h-4 w-4 rotate-180" />
-        </button>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-border">
-        <div className="grid grid-cols-7 border-b border-border bg-muted/30">
-          {DIAS_LABEL.map((d) => (
-            <div
-              key={d}
-              className="px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {cells.map((d, idx) => {
-            const iso = toISODate(d);
-            const inMonth = d.getMonth() === cursor.getMonth();
-            const isToday = iso === today;
-            const isSelected = iso === selectedDate;
-            const items = eventsByDate.get(iso) ?? [];
-            return (
-              <button
-                type="button"
-                key={idx}
-                onClick={() => setSelectedDate((prev) => (prev === iso ? null : iso))}
-                className={`h-20 overflow-hidden border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/40 ${
-                  inMonth ? "" : "bg-background/40 text-muted-foreground/50"
-                } ${isSelected ? "bg-muted/60" : ""}`}
-              >
-                <span
-                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums ${
-                    isToday ? "border border-foreground/40" : ""
-                  }`}
-                >
-                  {d.getDate()}
-                </span>
-                <div className="mt-1 space-y-0.5">
-                  {items.slice(0, 2).map((ev, i) => (
-                    <div key={i} className="flex items-center gap-1 truncate text-[10px]">
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneDot[ev.tone]}`} />
-                      <span className="truncate text-muted-foreground">{ev.label}</span>
-                    </div>
-                  ))}
-                  {items.length > 2 && (
-                    <div className="text-[9px] font-medium text-muted-foreground">
-                      +{items.length - 2} evento{items.length - 2 === 1 ? "" : "s"}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Em vez de listar todas as datas com todos os eventos (o que deixava
-          o painel excessivamente comprido em campanhas com muita coisa
-          marcada), mostra só o dia selecionado no grid — com scroll interno
-          como segunda trava de segurança caso o dia tenha muitos eventos. */}
-      {selectedDate ? (
-        <div className="rounded-lg border border-border p-3">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {fmtDate(selectedDate)}
-          </p>
-          <div className="max-h-56 space-y-1.5 overflow-y-auto">
-            {(eventsByDate.get(selectedDate) ?? []).map((ev, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-sm">
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneDot[ev.tone]}`} />
-                <span className="text-foreground">{ev.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : sortedUpcoming.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Clique num dia com eventos para ver os detalhes.
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">Nenhuma data cadastrada ainda.</p>
-      )}
-
-      <CronogramaManualSection
-        cronograma={cronograma}
-        onChange={onCronogramaChange}
-        isRecorrente={isRecorrente}
-      />
-    </div>
-  );
-}
-
-/** Cronograma manual — setado pelo time (data + título + descrição livre),
- * em vez de derivado das entregas dos influenciadores. Mostrado aqui e no
- * portal do cliente. */
-function CronogramaManualSection({
-  cronograma,
-  onChange,
-  isRecorrente,
-}: {
-  cronograma: CronogramaItem[];
-  onChange: (next: CronogramaItem[]) => void;
-  isRecorrente: boolean;
-}) {
-  const [date, setDate] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [recurring, setRecurring] = useState(false);
-
-  const add = () => {
-    const t = title.trim();
-    if (!date || !t) return;
-    onChange(
-      [
-        ...cronograma,
-        {
-          id: crypto.randomUUID(),
-          date,
-          title: t,
-          description: description.trim() || undefined,
-          recurring: isRecorrente && recurring ? true : undefined,
-        },
-      ].sort((a, b) => a.date.localeCompare(b.date)),
-    );
-    setDate("");
-    setTitle("");
-    setDescription("");
-    setRecurring(false);
-  };
-
-  const remove = (id: string) => onChange(cronograma.filter((i) => i.id !== id));
-
-  return (
-    <div className="space-y-3 border-t border-border pt-4">
-      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Cronograma manual
-      </p>
-
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-background p-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-medium uppercase text-muted-foreground">Data</label>
-          <DateField value={date || undefined} onChange={(v) => setDate(v ?? "")} className="h-9" />
-        </div>
-        <div className="flex min-w-[160px] flex-1 flex-col gap-1">
-          <label className="text-[10px] font-medium uppercase text-muted-foreground">Título</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex: Gravação do vídeo"
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <div className="flex min-w-[160px] flex-1 flex-col gap-1">
-          <label className="text-[10px] font-medium uppercase text-muted-foreground">
-            Descrição (opcional)
-          </label>
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="Detalhes adicionais"
-            className="h-9 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={add}
-          disabled={!date || !title.trim()}
-          className="h-9 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Adicionar
-        </button>
-        {isRecorrente && (
-          <label className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={recurring}
-              onChange={(e) => setRecurring(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-border"
-            />
-            Repete todo mês (dia {date ? Number(date.slice(8, 10)) : "—"})
-          </label>
-        )}
-      </div>
-
-      {cronograma.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nenhum item de cronograma adicionado.</p>
-      ) : (
-        <ul className="divide-y divide-border rounded-lg border border-border bg-background">
-          {cronograma.map((item) => (
-            <li key={item.id} className="flex items-start gap-3 px-3 py-2.5">
-              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {item.recurring
-                    ? `Todo dia ${Number(item.date.slice(8, 10))}`
-                    : fmtDate(item.date)}
-                </p>
-                <p className="truncate text-sm text-foreground">{item.title}</p>
-                {item.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(item.id)}
-                aria-label="Remover"
-                className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
@@ -2099,165 +1525,6 @@ function GaleriaConteudosSection({ influs }: { influs: Influ[] }) {
           );
         })}
       </div>
-    </section>
-  );
-}
-
-/* ============================================================
- * Documentos — anexos e links de referência da campanha.
- * ============================================================ */
-
-function DocumentosSection({
-  docs,
-  onChange,
-}: {
-  docs: CampaignDoc[];
-  onChange: (next: CampaignDoc[]) => void;
-}) {
-  const [titulo, setTitulo] = useState("");
-  const [url, setUrl] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const addLink = () => {
-    const u = url.trim();
-    if (!u) return;
-    onChange([
-      ...docs,
-      {
-        id: crypto.randomUUID(),
-        tipo: "link",
-        titulo: titulo.trim() || u,
-        url: u,
-        criadoEm: new Date().toISOString(),
-      },
-    ]);
-    setTitulo("");
-    setUrl("");
-  };
-
-  const addFile = (file: File | undefined) => {
-    if (!file) return;
-    const r = new FileReader();
-    r.onload = () => {
-      onChange([
-        ...docs,
-        {
-          id: crypto.randomUUID(),
-          tipo: "anexo",
-          titulo: titulo.trim() || file.name,
-          url: String(r.result),
-          arquivoNome: file.name,
-          criadoEm: new Date().toISOString(),
-        },
-      ]);
-      setTitulo("");
-    };
-    r.readAsDataURL(file);
-  };
-
-  const remove = (id: string) => onChange(docs.filter((d) => d.id !== id));
-
-  return (
-    <section className="space-y-4">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Documentos
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {docs.length} {docs.length === 1 ? "documento" : "documentos"} · anexos e links de
-          referência.
-        </p>
-      </div>
-
-      <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-        <input
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-          placeholder="Título (opcional)"
-          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <div className="flex flex-wrap gap-2">
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addLink()}
-            placeholder="Colar link (https://…)"
-            className="h-9 min-w-[200px] flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
-          <button
-            type="button"
-            onClick={addLink}
-            disabled={!url.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-brand-foreground hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <LinkIcon className="h-3.5 w-3.5" /> Adicionar link
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              addFile(e.target.files?.[0]);
-              if (fileRef.current) fileRef.current.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-          >
-            <Paperclip className="h-3.5 w-3.5" /> Anexar arquivo
-          </button>
-        </div>
-      </div>
-
-      {docs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          Nenhum documento adicionado ainda.
-        </div>
-      ) : (
-        <ul className="divide-y divide-border rounded-xl border border-border bg-background">
-          {docs.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 px-4 py-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                {d.tipo === "link" ? (
-                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{d.titulo}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {d.tipo === "link" ? d.url : (d.arquivoNome ?? "Arquivo")}
-                </p>
-              </div>
-              <a
-                href={d.url}
-                target={d.tipo === "link" ? "_blank" : undefined}
-                rel="noreferrer"
-                download={d.tipo === "anexo" ? d.arquivoNome : undefined}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Abrir"
-              >
-                {d.tipo === "link" ? (
-                  <ExternalLink className="h-4 w-4" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-              </a>
-              <button
-                type="button"
-                onClick={() => remove(d.id)}
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"
-                aria-label="Remover"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   );
 }
