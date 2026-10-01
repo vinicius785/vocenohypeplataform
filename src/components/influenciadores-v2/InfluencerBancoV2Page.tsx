@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionHeader } from "@/components/SectionHeader";
 import { PageContainer } from "@/components/shared/PageContainer";
@@ -152,8 +152,12 @@ export function InfluencerBancoV2Page() {
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const temFiltrosAtivos =
+    query.trim() !== "" ||
+    JSON.stringify(filters) !== JSON.stringify(DEFAULT_INFLUENCER_BANCO_FILTERS);
+
   return (
-    <PageContainer>
+    <PageContainer className="space-y-6">
       <SectionHeader
         title="Banco de influenciadores"
         subtitle="Todos os criadores cadastrados e o histórico de relacionamento com cada influenciador."
@@ -181,19 +185,44 @@ export function InfluencerBancoV2Page() {
       />
 
       {filtered.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-border p-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            {list.length === 0
-              ? "Nenhum influenciador cadastrado ainda."
-              : "Nenhum influenciador corresponde aos filtros aplicados."}
-          </p>
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-16 text-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+            <Users className="h-5 w-5 text-text-secondary" />
+          </div>
+          {list.length === 0 ? (
+            <>
+              <p className="text-sm font-medium text-foreground">Nenhum influenciador cadastrado</p>
+              <Button variant="outline" size="sm" onClick={() => setDialog({ mode: "new" })}>
+                <Plus className="h-3.5 w-3.5" /> Novo influenciador
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-foreground">Nenhum influenciador encontrado</p>
+              <p className="max-w-xs text-sm text-text-secondary">
+                Tente remover alguns filtros ou buscar por outro nome.
+              </p>
+              {temFiltrosAtivos && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setQuery("");
+                    setFilters(DEFAULT_INFLUENCER_BANCO_FILTERS);
+                  }}
+                >
+                  Limpar busca e filtros
+                </Button>
+              )}
+            </>
+          )}
         </div>
       ) : (
         <div
           className={
             viewMode === "grade"
-              ? "mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-              : "mt-4 flex flex-col divide-y divide-border/60 rounded-xl border border-border/60"
+              ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "flex flex-col divide-y divide-border/60 rounded-xl border border-border/60"
           }
         >
           {pageItems.map((i) => (
@@ -210,7 +239,7 @@ export function InfluencerBancoV2Page() {
       )}
 
       {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-sm">
           <p className="text-xs text-muted-foreground">
             Página {page} de {totalPages} · {filtered.length} influenciadores
           </p>

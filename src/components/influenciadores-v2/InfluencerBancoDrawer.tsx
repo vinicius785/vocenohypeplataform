@@ -61,9 +61,9 @@ function HistoricoItem({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+        className="flex w-full min-w-0 items-center justify-between gap-3 px-3 py-2.5 text-left"
       >
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{p.campanhaNome}</p>
           <p className="truncate text-xs text-text-secondary">
             {p.clienteEmpresa} · {CAMPANHA_STATUS_LABEL[p.campanhaStatus]} · {resumo.publicadas}/
@@ -197,21 +197,21 @@ export function InfluencerBancoDrawer({
       <Sheet open={!!influ} onOpenChange={(v) => !v && onClose()}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:w-[90vw] sm:max-w-[820px]">
           <SheetHeader className="text-left">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-14 w-14">
-                  <AvatarImage src={influ.foto} alt={influ.nome} />
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="h-14 w-14 shrink-0">
+                  <AvatarImage src={influ.foto} alt="" className="object-cover" />
                   <AvatarFallback className="text-lg">{initials(influ.nome)}</AvatarFallback>
                 </Avatar>
-                <div>
-                  <SheetTitle>{influ.nome}</SheetTitle>
-                  <SheetDescription>
+                <div className="min-w-0">
+                  <SheetTitle className="truncate">{influ.nome}</SheetTitle>
+                  <SheetDescription className="truncate">
                     {rede ? `@${rede.handle} · ${rede.plataforma}` : "Sem rede cadastrada"}
                   </SheetDescription>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {influ.nicho && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {influ.nicho}
+                      <Badge variant="secondary" className="max-w-[160px] text-[10px]">
+                        <span className="truncate">{influ.nicho}</span>
                       </Badge>
                     )}
                   </div>
