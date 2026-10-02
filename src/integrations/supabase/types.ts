@@ -3644,6 +3644,14 @@ export type Database = {
           text: string;
         }[];
       };
+      get_team_response_time: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          answered_count: number;
+          average_seconds: number;
+          member_id: string;
+        }[];
+      };
       has_permission: {
         Args: { _permission: string; _user_id: string };
         Returns: boolean;

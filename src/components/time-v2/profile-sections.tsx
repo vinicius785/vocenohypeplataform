@@ -1,15 +1,20 @@
 import { forwardRef, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { MiniStat } from "@/components/team/member-ui";
+import { TASK_BLOCK_CATEGORY_LABEL } from "@/lib/task-blocks-rules";
 import { PRIORITY_TONE, TASK_STATUS_TONE } from "@/components/tasks/TaskBoard";
 import { OPEN_STATUSES } from "@/lib/score";
 import { BUCKET_ORDER, type DashTask } from "@/lib/task-aggregation";
 import {
+  COMPROMISSOS_MAX_PONTOS,
+  ENTREGA_MAX_PONTOS,
+  PREVISIBILIDADE_MAX_PONTOS,
   SAMPLE_CONFIDENCE_LABEL,
   SCORE_CLASSIFICACAO_TONE,
   type AggregateIndicators,
   type ScoreOperacionalV2,
 } from "@/lib/performance-engine";
+import { INSIGHT_THRESHOLDS } from "@/lib/insights-engine";
 import type { TimeEntry } from "@/lib/time-entries";
 import type { Meeting } from "@/lib/reunioes-store";
 import type {
@@ -19,7 +24,26 @@ import type {
 } from "@/components/team/ScoreOperacionalPanel";
 import type { Member, TimeField } from "@/components/TimeSection";
 import { todayIsoInBrasilia } from "@/lib/timezone";
-import { canSeeField, formatHours, groupJourneyByDay, totalSecondsByUser } from "./time-v2-utils";
+import { LoadBadge } from "./LoadBadge";
+import {
+  DEPENDENCY_GROUP_LABEL,
+  DEPENDENCY_GROUPS,
+  dependencyGroupOf,
+  formatDays,
+  formatSeries,
+  MEMBER_INSIGHT_LABEL,
+  type CycleTimeStats,
+  type DependencySummary,
+  type LoadAssessment,
+  type MemberInsight,
+} from "./member-metrics";
+import {
+  canSeeField,
+  formatHours,
+  groupJourneyByDay,
+  totalSecondsByUser,
+  type MemberTaskStats,
+} from "./time-v2-utils";
 
 const hhmm = (iso: string) =>
   new Date(iso).toLocaleTimeString("pt-BR", {
@@ -142,7 +166,7 @@ export type SummaryItem = {
  * é aprofundado (nunca repete o bloco inteiro lá embaixo). */
 export function ProfileSummary({ items }: { items: SummaryItem[] }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
       {items.map((i) => (
         <button
           key={i.key}
@@ -294,12 +318,37 @@ function TaskGroup({
   );
 }
 
+/** "Carga atual" — linha objetiva no topo de Tarefas: números + nível +
+ * motivo por extenso (nunca um rótulo solto). */
+export function ProfileWorkload({ stats, load }: { stats: MemberTaskStats; load: LoadAssessment }) {
+  const parts = [
+    `${stats.abertas} ${stats.abertas === 1 ? "aberta" : "abertas"}`,
+    `${stats.vencemHoje} ${stats.vencemHoje === 1 ? "vence" : "vencem"} hoje`,
+    `${stats.atrasadas} ${stats.atrasadas === 1 ? "atrasada" : "atrasadas"}`,
+    `${stats.emAndamento} em andamento`,
+  ];
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-text-secondary">
+          Carga atual
+        </span>
+        <LoadBadge load={load} withTooltip={false} />
+        <span className="min-w-0 text-xs tabular-nums text-foreground">{parts.join(" · ")}</span>
+      </div>
+      <p className="mt-1 text-[11px] text-text-secondary">{load.reasons.join(" · ")}</p>
+    </div>
+  );
+}
+
 export function ProfileActivity({
   tasks,
   onOpenTask,
+  header,
 }: {
   tasks: DashTask[];
   onOpenTask: (t: DashTask) => void;
+  header?: ReactNode;
 }) {
   const { atrasadas, proximas, abertas, concluidas } = useMemo(() => {
     const open = tasks
@@ -317,10 +366,16 @@ export function ProfileActivity({
   }, [tasks]);
 
   if (atrasadas.length + proximas.length + abertas.length + concluidas.length === 0) {
-    return <EmptyLine>Nenhuma tarefa vinculada a esta pessoa.</EmptyLine>;
+    return (
+      <div className="space-y-4">
+        {header}
+        <EmptyLine>Nenhuma tarefa vinculada a esta pessoa.</EmptyLine>
+      </div>
+    );
   }
   return (
     <div className="space-y-4">
+      {header}
       <TaskGroup title="Atrasadas" tasks={atrasadas} onOpen={onOpenTask} tone="danger" />
       <TaskGroup title="Próximas do vencimento" tasks={proximas} onOpen={onOpenTask} />
       <TaskGroup title="Abertas" tasks={abertas} onOpen={onOpenTask} />
@@ -414,28 +469,45 @@ function delta(cur: number, prev: number): string {
   return `${d > 0 ? "+" : "−"}${Math.abs(Math.round(d * 10) / 10)} vs período anterior`;
 }
 
-function MetricCard({
+const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
+
+/** Bloco de métrica do Desempenho — rótulo, valor, detalhe e (opcional)
+ * tendência/nota. Sem card dentro de card: só uma moldura leve. */
+function MetricBlock({
   label,
   value,
-  hint,
+  detail,
+  trend,
+  note,
 }: {
   label: string;
   value: string | number;
-  hint?: string | null;
+  detail?: ReactNode;
+  trend?: string | null;
+  note?: string | null;
 }) {
   return (
     <div className="min-w-0 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
       <p className="truncate text-[10px] font-medium uppercase tracking-wide text-text-secondary">
         {label}
       </p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-text-secondary">{hint}</p>}
+      <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{value}</p>
+      {detail && <p className="mt-0.5 text-[11px] text-text-secondary">{detail}</p>}
+      {trend && (
+        <p className="mt-1 truncate text-[11px] tabular-nums text-text-secondary" title={trend}>
+          {trend}
+        </p>
+      )}
+      {note && <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{note}</p>}
     </div>
   );
 }
 
 /** Score resumido — a composição completa vive no `ScoreOperacionalPanel`
- * (mesma fórmula da V1), exibida sob demanda em "Ver composição do Score". */
+ * (mesma fórmula), exibida sob demanda em "Ver composição do Score". As 3
+ * dimensões aparecem já aqui: Previsibilidade é a "confiabilidade de
+ * prazo" da plataforma (cumprimento + replanejamentos), reaproveitada em
+ * vez de uma métrica paralela. */
 export function ProfileScoreSummary({
   score,
   trendLabel,
@@ -451,96 +523,274 @@ export function ProfileScoreSummary({
     score.score == null || score.dataState !== "definitivo"
       ? "text-text-secondary"
       : (SCORE_CLASSIFICACAO_TONE[score.classificacao ?? "Sem avaliação"] ?? "text-foreground");
+  const dim = (v: number | null, max: number) => (v == null ? "—" : `${v}/${max}`);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
-      <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
-          Score operacional
-        </p>
-        {score.score == null || score.dataState === "sem_dados" ? (
-          <p className="mt-0.5 text-sm text-text-secondary">Sem dados suficientes no período</p>
-        ) : (
-          <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm">
-            <span className={`text-xl font-semibold tabular-nums ${tone}`}>
-              {score.score}
-              <span className="text-xs font-normal text-text-secondary">/100</span>
-            </span>
-            {score.dataState === "provisorio" ? (
-              <span className="text-xs text-amber-600 dark:text-amber-400">Provisório</span>
-            ) : (
-              score.classificacao && (
-                <span className="text-xs text-text-secondary">{score.classificacao}</span>
-              )
-            )}
-            <span className="text-[11px] text-text-secondary">
-              {SAMPLE_CONFIDENCE_LABEL[score.confidence]}
-            </span>
-            {trendLabel && <span className="text-[11px] text-text-secondary">{trendLabel}</span>}
+    <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-text-secondary">
+            Score operacional
           </p>
-        )}
+          {score.score == null || score.dataState === "sem_dados" ? (
+            <p className="mt-0.5 text-sm text-text-secondary">Sem dados suficientes no período</p>
+          ) : (
+            <p className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm">
+              <span className={`text-xl font-semibold tabular-nums ${tone}`}>
+                {score.score}
+                <span className="text-xs font-normal text-text-secondary">/100</span>
+              </span>
+              {score.dataState === "provisorio" ? (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  Provisório — amostra ou período ainda em andamento
+                </span>
+              ) : (
+                score.classificacao && (
+                  <span className="text-xs text-text-secondary">{score.classificacao}</span>
+                )
+              )}
+              <span className="text-[11px] text-text-secondary">
+                {SAMPLE_CONFIDENCE_LABEL[score.confidence]} · {score.amostra}{" "}
+                {score.amostra === 1 ? "tarefa" : "tarefas"} na base
+              </span>
+              {trendLabel && <span className="text-[11px] text-text-secondary">{trendLabel}</span>}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
+        >
+          {expanded ? "Ocultar composição do Score" : "Ver composição do Score"}
+          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary hover:text-foreground"
-      >
-        {expanded ? "Ocultar composição do Score" : "Ver composição do Score"}
-        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
+      {score.dataState !== "sem_dados" && (
+        <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums text-text-secondary">
+          <span>Entrega {dim(score.entregaPontos, ENTREGA_MAX_PONTOS)}</span>
+          <span>
+            Previsibilidade {dim(score.previsibilidadePontos, PREVISIBILIDADE_MAX_PONTOS)}
+          </span>
+          <span>
+            Compromissos{" "}
+            {score.compromissosAplicavel
+              ? dim(score.compromissosPontos, COMPROMISSOS_MAX_PONTOS)
+              : "não aplicável"}
+          </span>
+        </p>
+      )}
+      <p className="mt-1 text-[10px] text-text-secondary">
+        Indicador de gestão do período, não uma nota da pessoa. Não compara membros.
+      </p>
     </div>
   );
 }
 
+export type ReplanSummary = {
+  /** Tarefas distintas com prazo alterado no período. */
+  tasksReplanned: number;
+  /** Base de tarefas do período (mesma base do Score). */
+  taskBase: number;
+  /** Alterações feitas com antecedência (antecipado/próximo do prazo). */
+  before: number;
+  /** Alterações no dia ou após o vencimento. */
+  after: number;
+};
+
 export function ProfilePerformance({
-  completed,
-  previousCompleted,
   agg,
-  previousAgg,
+  aggPrevious,
+  aggPrevious2,
+  completed,
+  lateCount,
+  previousCompleted,
+  previous2Completed,
   overdueNow,
+  replan,
+  cycle,
+  periodInProgress,
   meetingsAttended,
   meetingsExpected,
   totalSeconds,
 }: {
-  completed: number;
-  previousCompleted: number;
   agg: AggregateIndicators;
-  previousAgg: AggregateIndicators;
+  aggPrevious: AggregateIndicators;
+  aggPrevious2: AggregateIndicators;
+  completed: number;
+  lateCount: number;
+  previousCompleted: number;
+  previous2Completed: number;
   overdueNow: number;
+  replan: ReplanSummary;
+  cycle: CycleTimeStats;
+  periodInProgress: boolean;
   meetingsAttended: number;
   meetingsExpected: number;
   totalSeconds: number;
 }) {
-  const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
+  const smallSample = completed > 0 && completed < INSIGHT_THRESHOLDS.amostraMinima;
+  const series = [
+    previous2Completed > 0 ? aggPrevious2.pctNoPrazo : null,
+    previousCompleted > 0 ? aggPrevious.pctNoPrazo : null,
+    completed > 0 ? agg.pctNoPrazo : null,
+  ];
+  const hasTrend = series.filter((v) => v != null).length >= 2;
+  const replanPct =
+    replan.taskBase > 0 ? Math.round((100 * replan.tasksReplanned) / replan.taskBase) : null;
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      <MetricCard
-        label="Tarefas concluídas"
-        value={completed}
-        hint={delta(completed, previousCompleted)}
-      />
-      <MetricCard
-        label="No prazo"
-        value={pct(agg.pctNoPrazo)}
-        hint={
-          completed > 0
-            ? `${completed} concluída${completed === 1 ? "" : "s"} na amostra`
-            : "Sem dados suficientes"
-        }
-      />
-      <MetricCard label="Atrasadas agora" value={overdueNow} />
-      <MetricCard
-        label="Replanejamentos"
-        value={agg.qtdReplanejamentos}
-        hint={delta(agg.qtdReplanejamentos, previousAgg.qtdReplanejamentos)}
-      />
-      <MetricCard
-        label="Reuniões"
-        value={meetingsExpected === 0 ? "—" : `${meetingsAttended}/${meetingsExpected}`}
-        hint={meetingsExpected === 0 ? "Nenhuma esperada no período" : "participadas / esperadas"}
-      />
-      <MetricCard label="Horas trabalhadas" value={formatHours(totalSeconds)} />
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <MetricBlock
+          label="Conclusão no prazo"
+          value={pct(agg.pctNoPrazo)}
+          detail={
+            completed === 0
+              ? "Nenhuma conclusão no período"
+              : `${completed - lateCount} no prazo · ${lateCount} com atraso · ${overdueNow} ${overdueNow === 1 ? "atrasada" : "atrasadas"} agora`
+          }
+          trend={hasTrend ? `Tendência: ${formatSeries(series, (v) => `${Math.round(v)}%`)}` : null}
+          note={
+            smallSample
+              ? `Amostra pequena (${completed} ${completed === 1 ? "conclusão" : "conclusões"})`
+              : periodInProgress && completed > 0
+                ? "Período ainda em andamento"
+                : null
+          }
+        />
+        <MetricBlock
+          label="Replanejamento"
+          value={replanPct == null ? "—" : `${replanPct}%`}
+          detail={
+            replan.taskBase === 0
+              ? "Sem base de tarefas no período"
+              : `${replan.tasksReplanned} de ${replan.taskBase} ${replan.taskBase === 1 ? "tarefa" : "tarefas"} · ${replan.before} antes do vencimento · ${replan.after} no dia ou depois`
+          }
+          trend={delta(agg.qtdReplanejamentos, aggPrevious.qtdReplanejamentos)}
+        />
+        <MetricBlock
+          label="Tempo médio de ciclo"
+          value={formatDays(cycle.cycleDays)}
+          detail={
+            cycle.completedInRange === 0
+              ? "Nenhuma tarefa concluída no período"
+              : `Em andamento → concluída · ${cycle.cycleSample} de ${cycle.completedInRange} com início registrado`
+          }
+          trend={cycle.leadSample > 0 ? `Desde a criação: ${formatDays(cycle.leadDays)}` : null}
+        />
+      </div>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-[11px] tabular-nums text-text-secondary">
+        <span>
+          Concluídas: <b className="font-semibold text-foreground">{completed}</b> (
+          {delta(completed, previousCompleted)})
+        </span>
+        <span>
+          Reuniões:{" "}
+          <b className="font-semibold text-foreground">
+            {meetingsExpected === 0
+              ? "nenhuma esperada"
+              : `${meetingsAttended}/${meetingsExpected}`}
+          </b>
+        </span>
+        <span>
+          Horas: <b className="font-semibold text-foreground">{formatHours(totalSeconds)}</b>
+        </span>
+      </p>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Dependências                                                         */
+/* ------------------------------------------------------------------ */
+
+const DEPENDENCY_LIMIT = 5;
+
+export function ProfileDependencies({
+  summary,
+  onOpenTask,
+}: {
+  summary: DependencySummary;
+  onOpenTask: (t: DashTask) => void;
+}) {
+  const { visible, toggle } = useLimited(summary.tasks, DEPENDENCY_LIMIT);
+  if (summary.total === 0) return <EmptyLine>Nenhuma tarefa bloqueada agora.</EmptyLine>;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p className="text-sm font-semibold text-foreground">
+          {summary.total} {summary.total === 1 ? "tarefa bloqueada" : "tarefas bloqueadas"}
+        </p>
+        {DEPENDENCY_GROUPS.filter((g) => summary.byGroup[g] > 0).map((g) => (
+          <span key={g} className="text-[11px] text-text-secondary">
+            {DEPENDENCY_GROUP_LABEL[g]}:{" "}
+            <b className="font-semibold text-foreground">{summary.byGroup[g]}</b>
+          </span>
+        ))}
+      </div>
+      <div className="rounded-lg border border-border p-1">
+        {visible.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onOpenTask(t)}
+            className="flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted/50"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">{t.title}</p>
+              <p className="truncate text-xs text-text-secondary">
+                {t.blockCategory
+                  ? TASK_BLOCK_CATEGORY_LABEL[t.blockCategory]
+                  : DEPENDENCY_GROUP_LABEL[dependencyGroupOf(t)]}{" "}
+                · {t.projectName}
+              </p>
+            </div>
+            <span className="shrink-0 text-right text-[11px] tabular-nums text-text-secondary">
+              {t.blockedSince
+                ? `desde ${todayIsoInBrasilia(new Date(t.blockedSince)).split("-").reverse().slice(0, 2).join("/")}`
+                : "—"}
+            </span>
+          </button>
+        ))}
+        {toggle}
+      </div>
+      <p className="text-[11px] text-text-secondary">
+        Bloqueio não é atraso de execução: tarefas aguardando cliente ou fornecedor ficam fora da
+        penalidade de atraso do Score; os demais bloqueios continuam contando, só rotulados.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Insights do membro                                                   */
+/* ------------------------------------------------------------------ */
+
+const INSIGHT_TONE: Record<MemberInsight["kind"], string> = {
+  atencao: "text-amber-600 dark:text-amber-400",
+  tendencia: "text-text-secondary",
+  operacao: "text-emerald-600 dark:text-emerald-400",
+  dependencia: "text-text-secondary",
+};
+
+export function ProfileInsights({ insights }: { insights: MemberInsight[] }) {
+  if (insights.length === 0) {
+    return <EmptyLine>Nenhum insight relevante neste período.</EmptyLine>;
+  }
+  return (
+    <ul className="divide-y divide-border/60 rounded-lg border border-border">
+      {insights.map((i, idx) => (
+        <li key={`${i.kind}-${idx}`} className="flex items-start gap-3 px-3 py-2">
+          <span
+            className={`w-20 shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide ${INSIGHT_TONE[i.kind]}`}
+          >
+            {MEMBER_INSIGHT_LABEL[i.kind]}
+          </span>
+          <p className="min-w-0 flex-1 break-words text-xs text-foreground">{i.text}</p>
+        </li>
+      ))}
+    </ul>
   );
 }
 

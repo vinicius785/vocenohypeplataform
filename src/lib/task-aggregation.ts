@@ -1,8 +1,10 @@
 import {
   loadProjetos,
   getTaskAssignees,
+  ACTIVITY_STATUS_IN_PROGRESS_ACTION,
   type Task as ProjTask,
   type Project,
+  type TaskBlockCategory,
 } from "@/lib/projetos";
 import { getAllCampanhaTarefas } from "@/lib/campanha-scoped-store";
 import { loadStandalone } from "@/lib/marketing-tasks";
@@ -44,6 +46,16 @@ export type DashTask = {
    * `@/lib/score`) — só presente pra tarefas com `status === "Concluído"`.
    * Alimenta o drill-down de "Entregas por dia da semana" (aba Time). */
   completedAt?: string;
+  /** Primeira entrada registrada em "Em andamento" (activity da própria
+   * tarefa) — início operacional usado pelo tempo médio de ciclo da aba
+   * Time. Ausente quando a tarefa nunca passou por "Em andamento". */
+  startedAt?: string;
+  /** Criação da tarefa (quando o registro tem esse campo). */
+  createdAt?: string;
+  /** Categoria do bloqueio ATIVO (`blockedState`, cache gravado só pelas
+   * RPCs de bloqueio) — ausente = não bloqueada. */
+  blockCategory?: TaskBlockCategory;
+  blockedSince?: string;
 };
 
 /** Mais urgente primeiro — ordem de prioridade visual reaproveitada em
@@ -128,7 +140,27 @@ type CampanhaTaskLike = {
    * pra `resolvedCompletionTimestamp` em `loadAllTasksFlat`. */
   completedAt?: string;
   activity?: { action: string; createdAt: string }[];
+  createdAt?: string;
+  blockedState?: { category: TaskBlockCategory; blockedAt: string } | null;
 };
+
+/** Campos operacionais derivados do PRÓPRIO registro da tarefa (nada
+ * novo é gravado): conclusão, início operacional, criação e bloqueio
+ * ativo. Um único lugar pra todas as origens (projeto, campanha,
+ * Marketing) e pros dois formatos (`loadTasksByAssignee` e
+ * `loadAllTasksFlat`). */
+function operationalFields(
+  t: CampanhaTaskLike,
+): Pick<DashTask, "completedAt" | "startedAt" | "createdAt" | "blockCategory" | "blockedSince"> {
+  const started = (t.activity ?? []).find((a) => a.action === ACTIVITY_STATUS_IN_PROGRESS_ACTION);
+  return {
+    completedAt: resolvedCompletionTimestamp(t) ?? undefined,
+    startedAt: started?.createdAt,
+    createdAt: t.createdAt,
+    blockCategory: t.blockedState?.category,
+    blockedSince: t.blockedState?.blockedAt,
+  };
+}
 
 /** De quem é essa tarefa, pra fins de "isso é MEU trabalho"/"minha
  * carga" (mesmo conjunto que `collectAllTasks`, abaixo, usa pra exibir
@@ -198,6 +230,7 @@ export function loadTasksByAssignee(
           status: t.status,
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
+          ...operationalFields(t),
         });
       });
     }
@@ -220,6 +253,7 @@ export function loadTasksByAssignee(
           campanhaId,
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
+          ...operationalFields(t),
         });
       });
     }
@@ -258,6 +292,7 @@ export function loadTasksByAssignee(
             status: t.status,
             parentTitle,
             parentId: parentTitle ? `mkt:${s.id}` : undefined,
+            ...operationalFields(t),
           });
         },
       );
@@ -332,7 +367,7 @@ export function loadAllTasksFlat(
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
           assignees,
-          completedAt: resolvedCompletionTimestamp(t) ?? undefined,
+          ...operationalFields(t),
         });
       });
     }
@@ -356,7 +391,7 @@ export function loadAllTasksFlat(
           parentTitle,
           parentId: parentTitle ? root.id : undefined,
           assignees,
-          completedAt: resolvedCompletionTimestamp(t) ?? undefined,
+          ...operationalFields(t),
         });
       });
     }
@@ -386,7 +421,7 @@ export function loadAllTasksFlat(
             parentTitle,
             parentId: parentTitle ? `mkt:${s.id}` : undefined,
             assignees,
-            completedAt: resolvedCompletionTimestamp(t) ?? undefined,
+            ...operationalFields(t),
           });
         },
       );

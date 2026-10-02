@@ -53,10 +53,32 @@ describe("memberTaskStats", () => {
       task({ bucket: "atrasada", status: "Concluído" }), // concluída não conta
       task({ bucket: "hoje", status: "Arquivado" }),
     ]);
-    expect(s).toEqual({ abertas: 5, atrasadas: 1, vencemHoje: 1, proximas: 3 });
+    expect(s).toMatchObject({ abertas: 5, atrasadas: 1, vencemHoje: 1, proximas: 3 });
+  });
+  it("em andamento e bloqueadas; atrasada bloqueada é contada à parte", () => {
+    const s = memberTaskStats([
+      task({ status: "Em andamento" }),
+      task({ bucket: "atrasada", status: "Bloqueada", blockCategory: "aguardando_cliente" }),
+      task({ blockCategory: "dependencia_tarefa" }),
+    ]);
+    expect(s).toMatchObject({
+      abertas: 3,
+      emAndamento: 1,
+      bloqueadas: 2,
+      atrasadas: 1,
+      atrasadasBloqueadas: 1,
+    });
   });
   it("pessoa sem tarefas devolve zeros", () => {
-    expect(memberTaskStats([])).toEqual({ abertas: 0, atrasadas: 0, vencemHoje: 0, proximas: 0 });
+    expect(memberTaskStats([])).toEqual({
+      abertas: 0,
+      atrasadas: 0,
+      vencemHoje: 0,
+      proximas: 0,
+      emAndamento: 0,
+      bloqueadas: 0,
+      atrasadasBloqueadas: 0,
+    });
   });
 });
 

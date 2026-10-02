@@ -7,7 +7,6 @@ import { useClientes } from "@/lib/clientes-store";
 import { getAllCampanhaTarefas, onCampanhaTarefasChange } from "@/lib/campanha-scoped-store";
 import { onStandaloneChange } from "@/lib/marketing-tasks";
 import {
-  weeklyCompletions,
   weekdayProductivity,
   weeklyDeliveryTotalsByMember,
   loadOpenTasksByMemberId,
@@ -271,6 +270,55 @@ export function useTimeData() {
     return map;
   }, [members, eventsByPersonId, openTasksByMemberId, performanceSettings]);
 
+  // Indicadores do período por pessoa (lista da aba Time: "No prazo",
+  // "Replanejamentos") — mesmos eventos e mesma função
+  // (`computeAggregateIndicators`) do perfil, nunca uma regra paralela.
+  const periodIndicatorsByMemberId = useMemo(() => {
+    const map = new Map<
+      string,
+      { completed: number; pctNoPrazo: number | null; replans: number }
+    >();
+    for (const m of members) {
+      const personEvents = eventsByPersonId.get(m.id) ?? [];
+      const completions = personEvents
+        .filter((e) => e.eventType === "task_completed")
+        .map((e) => ({
+          outcome: e.data.outcome as TaskOutcome,
+          delayMinutes: (e.data.delayMinutes as number) ?? 0,
+          taskId: e.taskId,
+        }));
+      const changes = personEvents
+        .filter((e) => e.eventType === "task_deadline_changed")
+        .map((e) => ({
+          taskId: e.taskId,
+          isCritical: !!e.data.isCritical,
+          exemptFromResponsibility: !!e.data.exemptFromResponsibility,
+        }));
+      const agg = computeAggregateIndicators(completions, changes, 0);
+      map.set(m.id, {
+        completed: completions.length,
+        pctNoPrazo: agg.pctNoPrazo,
+        replans: agg.qtdReplanejamentos,
+      });
+    }
+    return map;
+  }, [members, eventsByPersonId]);
+
+  // Conclusão no prazo do time no período — sobre as conclusões
+  // registradas no ledger (por pessoa responsável), só membros atuais.
+  const teamOnTime = useMemo(() => {
+    let completed = 0;
+    let late = 0;
+    for (const m of members) {
+      for (const e of eventsByPersonId.get(m.id) ?? []) {
+        if (e.eventType !== "task_completed") continue;
+        completed += 1;
+        if (e.data.outcome === "late") late += 1;
+      }
+    }
+    return { completed, pct: completed > 0 ? (100 * (completed - late)) / completed : null };
+  }, [members, eventsByPersonId]);
+
   // Tarefas vinculadas a CADA pessoa (não só a contagem do score) — uma
   // passada só sobre todo o trabalho da plataforma, igual "Meu trabalho" no
   // Início, mas pra todo mundo de uma vez.
@@ -285,14 +333,6 @@ export function useTimeData() {
     void tick;
     return loadAllTasksFlat(campanhaNames, performanceSettings.deadlineCutoffHour);
   }, [campanhaNames, tick, performanceSettings.deadlineCutoffHour]);
-
-  // Conclusões por semana do time inteiro — alimenta só o KPI "Concluídas
-  // na semana" (o gráfico "Entregas por semana" foi substituído por
-  // "Produtividade por dia da semana", abaixo).
-  const weeklyData = useMemo(() => {
-    void tick;
-    return weeklyCompletions(loadProjetos(), groupsWithMarketing);
-  }, [tick, groupsWithMarketing]);
 
   // "Entregas da Semana" (substitui "Entregas por dia da semana") —
   // SEMPRE a semana atual (segunda a domingo, Brasília), sem seletor de
@@ -766,13 +806,14 @@ export function useTimeData() {
     campanhaNames,
     scorePeriod,
     setScorePeriod,
-    performanceEvents,
+    scoreRange,
+    periodIndicatorsByMemberId,
+    teamOnTime,
     performanceSettings,
     openTasksByMemberId,
     scoreByMemberId,
     tasksByMember,
     allTasksFlat,
-    weeklyData,
     weekRange,
     weekdayData,
     weekdayTasksByDay,

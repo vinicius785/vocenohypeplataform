@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { mapResponseTimeRow, type MemberResponseTime } from "@/lib/member-response-time";
+import {
+  mapResponseTimeRow,
+  type MemberResponseTime,
+  type TeamResponseTimeRow,
+} from "@/lib/member-response-time";
 
 const Input = z.object({
   userId: z.string().uuid(),
@@ -29,4 +33,27 @@ export const getMemberResponseTime = createServerFn({ method: "GET" })
       throw new Error("Não foi possível carregar o tempo de resposta.");
     }
     return mapResponseTimeRow(Array.isArray(rows) ? rows[0] : rows);
+  });
+
+const TeamInput = z.object({
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
+});
+
+/** Agregado do time pra lista da aba Time — uma chamada só (a RPC
+ * reaproveita `get_member_response_time` por membro, com a mesma
+ * autorização: sem permissão `time`, só a própria linha volta). */
+export const getTeamResponseTime = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((raw: unknown) => TeamInput.parse(raw))
+  .handler(async ({ data, context }): Promise<TeamResponseTimeRow[]> => {
+    const { data: rows, error } = await context.supabase.rpc("get_team_response_time", {
+      p_from: data.from,
+      p_to: data.to,
+    });
+    if (error) {
+      console.error("[time] get_team_response_time:", error.message);
+      throw new Error("Não foi possível carregar o tempo de resposta do time.");
+    }
+    return (rows ?? []) as TeamResponseTimeRow[];
   });

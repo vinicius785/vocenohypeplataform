@@ -10,6 +10,9 @@ import {
   Eye,
   Gauge,
   History,
+  Lightbulb,
+  Link2,
+  ListTodo,
   MessageSquare,
   MoreHorizontal,
   Pencil,
@@ -48,15 +51,26 @@ import { ProfileCommunication } from "./ProfileCommunication";
 import {
   MemberInfoSection,
   ProfileActivity,
+  ProfileDependencies,
   ProfileHistory,
+  ProfileInsights,
   ProfileJourney,
   ProfilePerformance,
   ProfileScoreSummary,
   ProfileSection,
   ProfileSummary,
+  ProfileWorkload,
+  type ReplanSummary,
   type SummaryItem,
 } from "./profile-sections";
 import {
+  assessLoad,
+  cycleTimeStats,
+  dependencySummary,
+  memberProfileInsights,
+} from "./member-metrics";
+import {
+  DEFAULT_SECTION_ORDER,
   orderSections,
   SECTION_LABEL,
   SORT_LABEL,
@@ -79,19 +93,23 @@ const PERIOD_OPTIONS = (Object.keys(PROFILE_PERIOD_LABELS) as ProfilePeriod[]).m
 }));
 
 const SECTION_ICON: Record<SectionId, ReactNode> = {
+  desempenho: <BarChart3 className="h-4 w-4" />,
   atividade: <ClipboardList className="h-4 w-4" />,
   jornada: <Clock className="h-4 w-4" />,
-  desempenho: <BarChart3 className="h-4 w-4" />,
   comunicacao: <MessageSquare className="h-4 w-4" />,
+  dependencias: <Link2 className="h-4 w-4" />,
   historico: <History className="h-4 w-4" />,
+  insights: <Lightbulb className="h-4 w-4" />,
 };
 
 const SECTION_TITLE: Record<SectionId, string> = {
-  atividade: "Atividade",
-  jornada: "Jornada",
   desempenho: "Desempenho",
-  comunicacao: "Comunicação",
+  atividade: "Tarefas",
+  jornada: "Jornada",
+  comunicacao: "Comunicação · Tempo médio de resposta",
+  dependencias: "Dependências e bloqueios",
   historico: "Histórico",
+  insights: "Insights",
 };
 
 type Viewer = { isAdmin: boolean; meId: string | null };
@@ -101,6 +119,9 @@ type Props = {
   viewer: Viewer;
   tasksForMember: DashTask[];
   openTasksForMember: PerformanceOpenTask[];
+  /** Média de abertas por pessoa no time (referência da classificação de
+   * carga — nunca ranking). */
+  teamAvgOpen: number | null;
   performanceSettings: PerformanceSettings;
   meetingsById: Map<string, Meeting>;
   onOpenTask: (t: DashTask) => void;
@@ -112,9 +133,9 @@ type Props = {
 
 /**
  * PERFIL CENTRAL do membro — uma única experiência contínua (sem abas):
- * cabeçalho → faixa de resumo → filtros/âncoras + ordenação → seções
- * (Atividade, Jornada, Desempenho com Score, Comunicação, Histórico) →
- * informações cadastrais. Os chips apenas rolam até a seção e a destacam;
+ * cabeçalho → período → faixa de resumo → filtros/âncoras + ordenação →
+ * seções (Desempenho com Score, Tarefas com carga, Jornada, Comunicação,
+ * Dependências, Histórico, Insights) → informações cadastrais. Os chips apenas rolam até a seção e a destacam;
  * "Ordenar" só reorganiza as mesmas seções. Um único seletor de período
  * vale para tudo. Dados buscados uma vez no topo (eventos do Score, horas,
  * tempo de resposta agregado) e compartilhados entre resumo e seções.
@@ -137,6 +158,7 @@ function ProfileBody({
   viewer,
   tasksForMember,
   openTasksForMember,
+  teamAvgOpen,
   performanceSettings,
   meetingsById,
   onOpenTask,
@@ -171,27 +193,63 @@ function ProfileBody({
   const isSelf = viewer.meId === member.id;
   const totalSeconds = useMemo(() => entries.reduce((s, e) => s + entrySeconds(e), 0), [entries]);
   const stats = useMemo(() => memberTaskStats(tasksForMember), [tasksForMember]);
+  const load = useMemo(() => assessLoad(stats, teamAvgOpen), [stats, teamAvgOpen]);
+  const deps = useMemo(() => dependencySummary(tasksForMember), [tasksForMember]);
+  const cycle = useMemo(() => cycleTimeStats(tasksForMember, range), [tasksForMember, range]);
   const projectNames = useMemo(
     () => Array.from(new Set(tasksForMember.map((t) => t.projectName))),
     [tasksForMember],
   );
   const missed = perf.attendance.filter((a) => !a.attended).length;
+  const lateCount = perf.completions.filter((c) => c.outcome === "late").length;
+  const periodInProgress = range.to >= todayIsoInBrasilia();
+
+  // Replanejamento: reaproveita a classificação de timing que o Score já
+  // calcula (Previsibilidade) — nenhuma regra paralela.
+  const replan = useMemo<ReplanSummary>(() => {
+    const t = perf.score.previsibilidade.porTiming;
+    return {
+      tasksReplanned: new Set(perf.deadlineChanges.map((d) => d.taskId).filter(Boolean)).size,
+      taskBase: perf.score.amostra,
+      before: (t?.antecipado ?? 0) + (t?.proximo ?? 0),
+      after: (t?.no_dia ?? 0) + (t?.apos_vencimento ?? 0),
+    };
+  }, [perf.score, perf.deadlineChanges]);
+
+  const insights = useMemo(
+    () =>
+      memberProfileInsights({
+        overdueUnblocked: stats.atrasadas - stats.atrasadasBloqueadas,
+        dueToday: stats.vencemHoje,
+        onTimePct: perf.aggCurrent.pctNoPrazo,
+        onTimeSample: perf.completions.length,
+        onTimePctPrevious: perf.aggPrevious.pctNoPrazo,
+        onTimeSamplePrevious: perf.previousCompletions.length,
+        responseAvgSeconds: rt.data?.all.averageSeconds ?? null,
+        responseAvgSecondsPrevious: rt.previous?.all.averageSeconds ?? null,
+        replans: perf.aggCurrent.qtdReplanejamentos,
+        replansPrevious: perf.aggPrevious.qtdReplanejamentos,
+        dependencies: deps.byGroup,
+      }),
+    [stats, perf, rt.data, rt.previous, deps.byGroup],
+  );
+
   const openById = (id: string) => {
     const t = tasksForMember.find((x) => x.id === id);
     if (t) onOpenTask(t);
   };
   const displayName = showName ? member.name || "(sem nome)" : "Membro";
 
-  // Seções que pedem atenção (alimenta "Ordenar → Maior atenção").
+  // Seções que pedem atenção (alimenta "Ordenar → Maior atenção primeiro").
   const order = useMemo(
     () =>
       orderSections(sort, {
-        atividade: stats.atrasadas > 0,
-        jornada: false,
+        atividade: stats.atrasadas - stats.atrasadasBloqueadas > 0,
+        dependencias: deps.total > 0,
         desempenho: perf.score.dataState !== "sem_dados" && (perf.score.score ?? 100) < 60,
-        comunicacao: (rt.data?.all.unanswered ?? 0) > 0,
+        insights: insights.some((i) => i.kind === "atencao"),
       }),
-    [sort, stats.atrasadas, perf.score.dataState, perf.score.score, rt.data],
+    [sort, stats, deps.total, perf.score.dataState, perf.score.score, insights],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -220,10 +278,14 @@ function ProfileBody({
   const rtAvg = rt.data?.all.averageSeconds ?? null;
   const summary: SummaryItem[] = [
     {
-      key: "concluidas",
-      icon: <CheckCircle2 className="h-3 w-3" />,
-      label: "Concluídas",
-      value: perf.completions.length,
+      key: "abertas",
+      icon: <ListTodo className="h-3 w-3" />,
+      label: "Abertas",
+      value: stats.abertas,
+      hint:
+        stats.bloqueadas > 0
+          ? `${stats.bloqueadas} bloqueada${stats.bloqueadas === 1 ? "" : "s"}`
+          : "agora",
       onClick: () => goTo("atividade"),
     },
     {
@@ -232,20 +294,29 @@ function ProfileBody({
       label: "Atrasadas",
       value: stats.atrasadas,
       hint: "agora",
-      tone: stats.atrasadas > 0 ? "danger" : undefined,
+      tone: stats.atrasadas - stats.atrasadasBloqueadas > 0 ? "danger" : undefined,
       onClick: () => goTo("atividade"),
+    },
+    {
+      key: "concluidas",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      label: "Concluídas",
+      value: perf.completions.length,
+      hint: "no período",
+      onClick: () => goTo("desempenho"),
     },
     {
       key: "horas",
       icon: <Clock className="h-3 w-3" />,
       label: "Horas",
       value: totalSeconds > 0 ? `${(totalSeconds / 3600).toFixed(1).replace(".", ",")}h` : "—",
+      hint: "no período",
       onClick: () => goTo("jornada"),
     },
     {
       key: "resposta",
       icon: <MessageSquare className="h-3 w-3" />,
-      label: "Resposta média",
+      label: "Resposta",
       value:
         rt.state === "loading"
           ? "…"
@@ -257,7 +328,7 @@ function ProfileBody({
           ? "Sem dados suficientes"
           : rt.state === "error"
             ? "Indisponível"
-            : undefined,
+            : "tempo médio",
       onClick: () => goTo("comunicacao"),
     },
     {
@@ -265,16 +336,23 @@ function ProfileBody({
       icon: <Gauge className="h-3 w-3" />,
       label: "Score",
       value: perf.score.score == null ? "—" : perf.score.score,
-      hint: perf.score.dataState === "sem_dados" ? "Sem dados suficientes" : undefined,
+      hint:
+        perf.score.dataState === "sem_dados"
+          ? "Sem dados suficientes"
+          : perf.score.dataState === "provisorio"
+            ? "Provisório"
+            : undefined,
       onClick: () => goTo("desempenho"),
     },
   ];
 
   const chips: { id: SectionId | "tudo"; label: string; icon: ReactNode }[] = [
     { id: "tudo", label: "Tudo", icon: <Eye className="h-3.5 w-3.5" /> },
-    ...(["atividade", "jornada", "desempenho", "comunicacao", "historico"] as SectionId[]).map(
-      (id) => ({ id, label: SECTION_LABEL[id], icon: SECTION_ICON[id] }),
-    ),
+    ...DEFAULT_SECTION_ORDER.map((id) => ({
+      id,
+      label: SECTION_LABEL[id],
+      icon: SECTION_ICON[id],
+    })),
   ];
 
   const renderSection = (id: SectionId) => {
@@ -291,7 +369,11 @@ function ProfileBody({
       case "atividade":
         return (
           <ProfileSection key={id} ref={setRef} {...common}>
-            <ProfileActivity tasks={tasksForMember} onOpenTask={onOpenTask} />
+            <ProfileActivity
+              tasks={tasksForMember}
+              onOpenTask={onOpenTask}
+              header={<ProfileWorkload stats={stats} load={load} />}
+            />
           </ProfileSection>
         );
       case "jornada":
@@ -331,11 +413,17 @@ function ProfileBody({
                 />
               )}
               <ProfilePerformance
-                completed={perf.completions.length}
-                previousCompleted={perf.previousCompletions.length}
                 agg={perf.aggCurrent}
-                previousAgg={perf.aggPrevious}
+                aggPrevious={perf.aggPrevious}
+                aggPrevious2={perf.aggPrevious2}
+                completed={perf.completions.length}
+                lateCount={lateCount}
+                previousCompleted={perf.previousCompletions.length}
+                previous2Completed={perf.previous2CompletionsCount}
                 overdueNow={perf.overdueNow.length}
+                replan={replan}
+                cycle={cycle}
+                periodInProgress={periodInProgress}
                 meetingsAttended={perf.attendance.length - missed}
                 meetingsExpected={perf.attendance.length}
                 totalSeconds={totalSeconds}
@@ -345,8 +433,14 @@ function ProfileBody({
         );
       case "comunicacao":
         return (
-          <ProfileSection key={id} ref={setRef} {...common} title="Comunicação · Tempo de resposta">
-            <ProfileCommunication data={rt.data} state={rt.state} />
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileCommunication data={rt.data} previous={rt.previous} state={rt.state} />
+          </ProfileSection>
+        );
+      case "dependencias":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileDependencies summary={deps} onOpenTask={onOpenTask} />
           </ProfileSection>
         );
       case "historico":
@@ -359,6 +453,12 @@ function ProfileBody({
               meetingsById={meetingsById}
               projectNames={projectNames}
             />
+          </ProfileSection>
+        );
+      case "insights":
+        return (
+          <ProfileSection key={id} ref={setRef} {...common}>
+            <ProfileInsights insights={insights} />
           </ProfileSection>
         );
     }

@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { cn } from "@/lib/utils";
 import { resolveSegmentedValue } from "@/lib/component-utils";
 
@@ -17,7 +18,8 @@ export function SegmentedControl<T extends string>({
 }: {
   value: T;
   onChange: (value: T) => void;
-  options: readonly { value: T; label: string }[];
+  /** `icon` opcional (ícone pequeno antes do rótulo, ex.: filtros). */
+  options: readonly { value: T; label: string; icon?: React.ReactNode }[];
   size?: "default" | "sm";
   "aria-label": string;
 }) {
@@ -40,13 +42,14 @@ export function SegmentedControl<T extends string>({
             aria-checked={active}
             onClick={() => onChange(opt.value)}
             className={cn(
-              "cursor-pointer rounded-full font-medium transition-colors",
+              "inline-flex cursor-pointer items-center gap-1 rounded-full font-medium transition-colors",
               size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3.5 py-1.5 text-xs",
               active
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
+            {opt.icon}
             {opt.label}
           </button>
         );

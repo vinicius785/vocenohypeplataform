@@ -1,29 +1,80 @@
-import { useMemo, useRef, useState } from "react";
-import { Plus, Search, Copy } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  Check,
+  CircleDot,
+  Copy,
+  Link2,
+  Plus,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { OPEN_STATUSES } from "@/lib/score";
+import type { ScorePeriodMode } from "@/lib/performance-engine";
+import { formatResponseDuration } from "@/lib/member-response-time";
 import { useTeamTimeEntries } from "@/lib/time-entries";
+import { todayIsoInBrasilia } from "@/lib/timezone";
+import { getStatus } from "@/components/team/member-ui";
 import { MemberDialog, type Member } from "@/components/TimeSection";
 import { useOpenMemberDeepLink, useTimeData } from "@/components/team/use-time-data";
 import { AttentionTasks, type AttentionTab } from "@/components/team/AttentionTasks";
-import { TeamWorkload } from "@/components/team/TeamWorkload";
 import { TeamDeliveriesWeek } from "@/components/team/TeamDeliveriesWeek";
 import { TeamInsights } from "@/components/team/TeamInsights";
 import { PageContainer } from "@/components/shared/PageContainer";
 import { MemberProfileV2 } from "./MemberProfileV2";
 import { TimeMembersTable } from "./TimeMembersTable";
 import { TimeSummaryStrip } from "./TimeSummaryStrip";
+import { dependencyBreakdownText, dependencySummary, teamAverageOpen } from "./member-metrics";
+import {
+  buildMemberRows,
+  DEFAULT_SORT_DIR,
+  matchesFilters,
+  MEMBER_SORT_LABEL,
+  sortMemberRows,
+  type MemberFilter,
+  type MemberSort,
+  type MemberSortKey,
+} from "./member-rows";
+import { useTeamResponseTime } from "./use-response-time";
 import { totalSecondsByUser } from "./time-v2-utils";
 
+const PERIOD_OPTIONS: { value: ScorePeriodMode; label: string }[] = [
+  { value: "semana", label: "Semana" },
+  { value: "mes", label: "Mês" },
+  { value: "30dias", label: "30 dias" },
+  { value: "trimestre", label: "Trimestre" },
+];
+
+const PERIOD_GROUP_LABEL: Record<ScorePeriodMode, string> = {
+  semana: "Nesta semana",
+  mes: "Neste mês",
+  "30dias": "Últimos 30 dias",
+  trimestre: "Últimos 3 meses",
+};
+
+const FILTERS: { key: MemberFilter; label: string; icon: ReactNode }[] = [
+  { key: "atencao", label: "Atenção", icon: <AlertTriangle className="h-3.5 w-3.5" /> },
+  { key: "bloqueio", label: "Com bloqueio", icon: <Link2 className="h-3.5 w-3.5" /> },
+  { key: "online", label: "Online", icon: <CircleDot className="h-3.5 w-3.5" /> },
+];
+
 /**
- * Aba Time V2 — "visão da operação + um perfil central por pessoa".
- * Mesma camada de dados da V1 (`useTimeData`), arquitetura nova: resumo
- * operacional → lista central de membros (principal) → blocos secundários
- * (atenção, carga, entregas, insights). Toda pessoa, em qualquer bloco,
- * abre o MESMO `MemberProfileV2`; não existe mais perfil/modal próprio de
- * Score, Jornada, Carga ou Insights.
+ * Aba Time — painel operacional + um perfil central por pessoa.
+ * Cabeçalho → barra de controles (busca, período, filtros, ordenação) →
+ * resumo (agora / no período) → lista central de membros (carga, prazo,
+ * resposta, Score, horas — tudo no MESMO período) → tarefas que precisam
+ * de atenção → entregas da semana → insights. Toda pessoa, em qualquer
+ * bloco, abre o MESMO `MemberProfileV2`.
  */
 export function TimeV2Page() {
   const d = useTimeData();
@@ -38,12 +89,16 @@ export function TimeV2Page() {
     createdInfo,
     setCreatedInfo,
     onlineCount,
+    scorePeriod,
+    setScorePeriod,
+    scoreRange,
+    periodIndicatorsByMemberId,
+    teamOnTime,
     performanceSettings,
     openTasksByMemberId,
     scoreByMemberId,
     tasksByMember,
     allTasksFlat,
-    weeklyData,
     weekRange,
     weekdayData,
     weekdayTasksByDay,
@@ -60,6 +115,8 @@ export function TimeV2Page() {
   } = d;
 
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<Set<MemberFilter>>(() => new Set());
+  const [sort, setSort] = useState<MemberSort>({ key: "nome", dir: "asc" });
   const [viewing, setViewing] = useState<Member | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,18 +127,68 @@ export function TimeV2Page() {
 
   const viewer = useMemo(() => ({ isAdmin, meId }), [isAdmin, meId]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q),
-    );
-  }, [members, query]);
+  // Tudo da lista e do resumo "no período" usa o MESMO período (o do
+  // Score): horas, conclusões, prazo, replanejamento e tempo de resposta.
+  const { entries: periodEntries } = useTeamTimeEntries(scoreRange);
+  const secondsByUser = useMemo(() => totalSecondsByUser(periodEntries), [periodEntries]);
+  const teamResponse = useTeamResponseTime(scoreRange);
 
-  // Horas da semana de todo o time numa única consulta (RLS: o próprio ou
-  // quem tem a permissão `time`).
-  const { entries: weekEntries } = useTeamTimeEntries(weekRange);
-  const secondsByUser = useMemo(() => totalSecondsByUser(weekEntries), [weekEntries]);
+  const allRows = useMemo(
+    () =>
+      buildMemberRows(members, {
+        viewer,
+        tasksByMember,
+        scoreByMemberId,
+        secondsByUser,
+        periodByMemberId: periodIndicatorsByMemberId,
+        responseByMemberId: teamResponse.data?.byMemberId ?? null,
+      }),
+    [
+      members,
+      viewer,
+      tasksByMember,
+      scoreByMemberId,
+      secondsByUser,
+      periodIndicatorsByMemberId,
+      teamResponse.data,
+    ],
+  );
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const isOnline = (id: string) => getStatus(id) === "online";
+    const visible = allRows.filter(
+      (r) =>
+        (!q || r.name.toLowerCase().includes(q) || r.role.toLowerCase().includes(q)) &&
+        matchesFilters(r, filters, isOnline),
+    );
+    return sortMemberRows(visible, sort);
+  }, [allRows, query, filters, sort]);
+
+  const filterCounts = useMemo(() => {
+    const isOnline = (id: string) => getStatus(id) === "online";
+    return Object.fromEntries(
+      FILTERS.map((f) => [
+        f.key,
+        allRows.filter((r) => matchesFilters(r, new Set([f.key]), isOnline)).length,
+      ]),
+    ) as Record<MemberFilter, number>;
+  }, [allRows]);
+
+  const toggleFilter = (key: MemberFilter) =>
+    setFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const onSort = (key: MemberSortKey) =>
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: DEFAULT_SORT_DIR[key] },
+    );
 
   const openTasks = useMemo(
     () => allTasksFlat.filter((t) => OPEN_STATUSES.has(t.status)),
@@ -89,7 +196,27 @@ export function TimeV2Page() {
   );
   const overdueCount = openTasks.filter((t) => t.bucket === "atrasada").length;
   const dueTodayCount = openTasks.filter((t) => t.bucket === "hoje").length;
-  const completedThisWeek = weeklyData[weeklyData.length - 1]?.count ?? 0;
+  const deps = useMemo(() => dependencySummary(allTasksFlat), [allTasksFlat]);
+  const completedInPeriod = useMemo(() => {
+    const { from, to } = scoreRange;
+    return allTasksFlat.filter((t) => {
+      if (t.status !== "Concluído" || !t.completedAt) return false;
+      const day = todayIsoInBrasilia(new Date(t.completedAt));
+      return (!from || day >= from) && (!to || day <= to);
+    }).length;
+  }, [allTasksFlat, scoreRange]);
+  const teamAvgOpen = useMemo(() => teamAverageOpen(allRows.map((r) => r.stats)), [allRows]);
+
+  const responseLabel =
+    teamResponse.state === "loading"
+      ? "…"
+      : formatResponseDuration(teamResponse.data?.teamAverageSeconds ?? null);
+  const responseHint =
+    teamResponse.state === "error"
+      ? "Indisponível no momento"
+      : teamResponse.state === "ready" && teamResponse.data?.teamAverageSeconds == null
+        ? "Sem dados suficientes"
+        : "Chat · métrica agregada";
 
   const weekRangeLabel = useMemo(() => {
     const parse = (iso: string) => {
@@ -128,7 +255,7 @@ export function TimeV2Page() {
                 Time
               </p>
               <p className="mt-1.5 text-sm text-text-secondary">
-                Visão geral da operação, produtividade e carga do time.
+                Visão geral da operação, produtividade, carga e indicadores do time.
               </p>
             </div>
             {isAdmin && (
@@ -139,15 +266,64 @@ export function TimeV2Page() {
             )}
           </div>
 
-          <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar membro..."
-              aria-label="Buscar membro"
-              className="h-10 border-0 bg-card pl-9 text-sm"
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar membro..."
+                aria-label="Buscar membro"
+                className="h-9 border-0 bg-card pl-9 text-sm"
+              />
+            </div>
+            <SegmentedControl
+              aria-label="Período"
+              size="sm"
+              value={scorePeriod}
+              onChange={setScorePeriod}
+              options={PERIOD_OPTIONS}
             />
+            <div role="group" aria-label="Filtros" className="flex flex-wrap items-center gap-1.5">
+              {FILTERS.map((f) => {
+                const active = filters.has(f.key);
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => toggleFilter(f.key)}
+                    className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border bg-card text-text-secondary hover:text-foreground"}`}
+                  >
+                    {f.icon}
+                    {f.label}
+                    <span className="tabular-nums text-text-secondary">{filterCounts[f.key]}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="ml-auto h-8 gap-1.5 text-xs">
+                  <ArrowUpDown className="h-3.5 w-3.5" />
+                  <span className="max-w-[160px] truncate">{MEMBER_SORT_LABEL[sort.key]}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                {(Object.keys(MEMBER_SORT_LABEL) as MemberSortKey[]).map((key) => (
+                  <DropdownMenuItem
+                    key={key}
+                    onSelect={() => setSort({ key, dir: DEFAULT_SORT_DIR[key] })}
+                    className="gap-2"
+                  >
+                    <Check
+                      className={`h-3.5 w-3.5 ${sort.key === key ? "opacity-100" : "opacity-0"}`}
+                    />
+                    {MEMBER_SORT_LABEL[key]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {error && (
@@ -210,42 +386,44 @@ export function TimeV2Page() {
             openCount={openTasks.length}
             dueTodayCount={dueTodayCount}
             overdueCount={overdueCount}
-            membersCount={members.length}
-            onlineCount={onlineCount}
-            completedThisWeek={completedThisWeek}
+            blockedCount={deps.total}
+            blockedHint={deps.total > 0 ? dependencyBreakdownText(deps.byGroup) : null}
+            completedCount={completedInPeriod}
+            onTimePct={teamOnTime.pct}
+            onTimeSample={teamOnTime.completed}
+            responseLabel={responseLabel}
+            responseHint={responseHint}
+            periodLabel={PERIOD_GROUP_LABEL[scorePeriod]}
             onOpenAberto={() => goAttention("semana")}
             onOpenHoje={() => goAttention("hoje")}
             onOpenAtrasadas={() => goAttention("atrasadas")}
+            onOpenBloqueadas={() => goAttention("bloqueadas")}
           />
 
-          <TimeMembersTable
-            members={filtered}
-            viewer={viewer}
-            tasksByMember={tasksByMember}
-            scoreByMemberId={scoreByMemberId}
-            secondsByUser={secondsByUser}
-            loading={loading}
-            totalMembers={members.length}
-            onOpenMember={setViewing}
-          />
+          <div className="space-y-2">
+            <p className="px-1 text-[11px] font-medium text-text-secondary">
+              Membros · {members.length}
+              {onlineCount > 0 && ` · ${onlineCount} online`}
+            </p>
+            <TimeMembersTable
+              rows={rows}
+              sort={sort}
+              onSort={onSort}
+              loading={loading}
+              totalMembers={members.length}
+              filtered={!!query.trim() || filters.size > 0}
+              onOpenMember={setViewing}
+            />
+          </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            <div ref={attentionRef} className="min-w-0 lg:col-span-7">
-              <AttentionTasks
-                tasks={allTasksFlat}
-                members={members}
-                activeTab={attentionTab}
-                onTabChange={setAttentionTab}
-                onOpenTask={openTask}
-              />
-            </div>
-            <div className="min-w-0 lg:col-span-5">
-              <TeamWorkload
-                members={members}
-                tasksByMember={tasksByMember}
-                onOpenMember={setViewing}
-              />
-            </div>
+          <div ref={attentionRef} className="scroll-mt-4">
+            <AttentionTasks
+              tasks={allTasksFlat}
+              members={members}
+              activeTab={attentionTab}
+              onTabChange={setAttentionTab}
+              onOpenTask={openTask}
+            />
           </div>
 
           <TeamDeliveriesWeek
@@ -280,6 +458,7 @@ export function TimeV2Page() {
             viewer={viewer}
             tasksForMember={viewing ? (tasksByMember.get(viewing.name) ?? []) : []}
             openTasksForMember={viewing ? (openTasksByMemberId.get(viewing.id) ?? []) : []}
+            teamAvgOpen={teamAvgOpen}
             performanceSettings={performanceSettings}
             meetingsById={meetingsById}
             onOpenTask={(t) => {

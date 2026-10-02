@@ -206,6 +206,9 @@ export type TaskTimeEntry = { seconds: number; author: string; endedAt: string }
  * `score.ts` poder importá-la sem puxar o componente React inteiro pro
  * bundle. Nunca mudar este texto sem atualizar os dois lugares. */
 export const ACTIVITY_STATUS_COMPLETED_ACTION = "mudou status para Concluído";
+/** Mesmo formato (`mudou status para ${status}`, `TaskBoard.tsx`) — marca
+ * a entrada em "Em andamento", início operacional do tempo de ciclo. */
+export const ACTIVITY_STATUS_IN_PROGRESS_ACTION = "mudou status para Em andamento";
 
 /** Mesmo shape/regras de `DeadlineChangeMotivo`/`DeadlineChangeEntry` em
  * `src/components/tasks/TaskBoard.tsx` — replicado aqui (não importado)

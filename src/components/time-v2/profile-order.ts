@@ -1,34 +1,49 @@
 /** Ordem das seções do perfil contínuo. "Ordenar" só REORGANIZA as mesmas
  * seções (nada some): ou prioriza uma seção específica, ou sobe primeiro as
- * que têm algo pedindo atenção. */
-export type SectionId = "atividade" | "jornada" | "desempenho" | "comunicacao" | "historico";
+ * que têm algo pedindo atenção. Ordem padrão = leitura de ficha
+ * operacional: desempenho → tarefas → jornada → comunicação →
+ * dependências → histórico → insights. */
+export type SectionId =
+  | "desempenho"
+  | "atividade"
+  | "jornada"
+  | "comunicacao"
+  | "dependencias"
+  | "historico"
+  | "insights";
 
 export type ProfileSort = "padrao" | "atencao" | SectionId;
 
 export const DEFAULT_SECTION_ORDER: SectionId[] = [
+  "desempenho",
   "atividade",
   "jornada",
-  "desempenho",
   "comunicacao",
+  "dependencias",
   "historico",
+  "insights",
 ];
 
 export const SECTION_LABEL: Record<SectionId, string> = {
+  desempenho: "Desempenho",
   atividade: "Tarefas",
   jornada: "Jornada",
-  desempenho: "Desempenho",
   comunicacao: "Comunicação",
+  dependencias: "Dependências",
   historico: "Histórico",
+  insights: "Insights",
 };
 
 export const SORT_LABEL: Record<ProfileSort, string> = {
   padrao: "Ordem padrão",
-  atencao: "Maior atenção",
-  atividade: "Tarefas",
-  jornada: "Jornada",
-  desempenho: "Desempenho",
-  comunicacao: "Comunicação",
-  historico: "Mais recente",
+  atencao: "Maior atenção primeiro",
+  desempenho: "Desempenho primeiro",
+  atividade: "Tarefas primeiro",
+  jornada: "Jornada primeiro",
+  comunicacao: "Comunicação primeiro",
+  dependencias: "Dependências primeiro",
+  historico: "Histórico primeiro",
+  insights: "Insights primeiro",
 };
 
 export type AttentionFlags = Partial<Record<SectionId, boolean>>;

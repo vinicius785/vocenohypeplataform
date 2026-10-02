@@ -128,6 +128,36 @@ export function useMemberPerformance(
     [previousCompletions, previousDeadlineChanges],
   );
 
+  // Terceiro ponto da tendência ("78% → 84% → 90%"): a janela equivalente
+  // anterior à anterior — mesmo fetch escopado e mesma extração.
+  const previous2Range = useMemo(() => previousEquivalentRange(previousRange), [previousRange]);
+  const { events: previous2Events } = usePerformanceEvents(previous2Range, memberId);
+  const aggPrevious2 = useMemo(
+    () =>
+      computeAggregateIndicators(
+        previous2Events
+          .filter((e) => e.eventType === "task_completed")
+          .map((e) => ({
+            outcome: e.data.outcome as TaskOutcome,
+            delayMinutes: (e.data.delayMinutes as number) ?? 0,
+            taskId: e.taskId,
+          })),
+        previous2Events
+          .filter((e) => e.eventType === "task_deadline_changed")
+          .map((e) => ({
+            taskId: e.taskId,
+            isCritical: !!e.data.isCritical,
+            exemptFromResponsibility: !!e.data.exemptFromResponsibility,
+          })),
+        0,
+      ),
+    [previous2Events],
+  );
+  const previous2CompletionsCount = useMemo(
+    () => previous2Events.filter((e) => e.eventType === "task_completed").length,
+    [previous2Events],
+  );
+
   return {
     events,
     previousEvents,
@@ -141,5 +171,7 @@ export function useMemberPerformance(
     trendLabel,
     aggCurrent,
     aggPrevious,
+    aggPrevious2,
+    previous2CompletionsCount,
   };
 }

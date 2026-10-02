@@ -26,6 +26,15 @@ export type MemberResponseTime = {
 
 export type ResponseTimeFilter = "all" | "direct" | "mention";
 
+/** Mínimo de demandas respondidas pra uma média/mediana ser exibida. Com
+ * 1-2 demandas a "média" é o tempo de UMA conversa identificável — a RPC já
+ * devolve NULL abaixo disso (migration `20261002200000_...`); repetido aqui
+ * só como defesa em profundidade no mapeamento do servidor. */
+export const MIN_RESPONSE_SAMPLE = 3;
+
+const gate = (answered: number, value: number | null | undefined) =>
+  answered >= MIN_RESPONSE_SAMPLE ? (value ?? null) : null;
+
 export type ResponseTimeRow = {
   direct_answered: number | null;
   direct_unanswered: number | null;
@@ -48,20 +57,20 @@ export function mapResponseTimeRow(row: ResponseTimeRow | null | undefined): Mem
     direct: {
       answered: da,
       unanswered: du,
-      averageSeconds: row?.direct_avg_seconds ?? null,
-      medianSeconds: row?.direct_median_seconds ?? null,
+      averageSeconds: gate(da, row?.direct_avg_seconds),
+      medianSeconds: gate(da, row?.direct_median_seconds),
     },
     mention: {
       answered: ma,
       unanswered: mu,
-      averageSeconds: row?.mention_avg_seconds ?? null,
-      medianSeconds: row?.mention_median_seconds ?? null,
+      averageSeconds: gate(ma, row?.mention_avg_seconds),
+      medianSeconds: gate(ma, row?.mention_median_seconds),
     },
     all: {
       answered: da + ma,
       unanswered: du + mu,
-      averageSeconds: row?.all_avg_seconds ?? null,
-      medianSeconds: row?.all_median_seconds ?? null,
+      averageSeconds: gate(da + ma, row?.all_avg_seconds),
+      medianSeconds: gate(da + ma, row?.all_median_seconds),
     },
   };
 }
@@ -86,29 +95,36 @@ export function formatResponseDuration(seconds: number | null | undefined): stri
   return h === 0 ? `${days}d` : `${days}d ${h}h`;
 }
 
-export type ResponseTimePeriod = "hoje" | "semana" | "mes" | "personalizado";
-
-export const RESPONSE_PERIOD_LABEL: Record<ResponseTimePeriod, string> = {
-  hoje: "Hoje",
-  semana: "Esta semana",
-  mes: "Este mês",
-  personalizado: "Personalizado",
+/** Linha do agregado do time (`get_team_response_time`): membro, nº de
+ * demandas respondidas e média — nada mais. */
+export type TeamResponseTimeRow = {
+  member_id: string;
+  answered_count: number | null;
+  average_seconds: number | null;
 };
 
-/** Intervalo [from, to) em horário local; semana começa na segunda. */
-export function responsePeriodRange(
-  period: Exclude<ResponseTimePeriod, "personalizado">,
-  now: Date = new Date(),
-): { from: Date; to: Date } {
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (period === "hoje") {
-    return { from: start, to: new Date(start.getTime() + 24 * 3600 * 1000) };
+export type TeamResponseTime = {
+  byMemberId: Map<string, { answered: number; averageSeconds: number | null }>;
+  /** Média de TODAS as demandas respondidas do time (ponderada pelo nº de
+   * respondidas de cada um — equivale à média sobre o conjunto inteiro).
+   * Só entram membros que passaram da amostra mínima. */
+  teamAverageSeconds: number | null;
+};
+
+export function mapTeamResponseRows(
+  rows: TeamResponseTimeRow[] | null | undefined,
+): TeamResponseTime {
+  const byMemberId = new Map<string, { answered: number; averageSeconds: number | null }>();
+  let weighted = 0;
+  let base = 0;
+  for (const r of rows ?? []) {
+    const answered = r.answered_count ?? 0;
+    const averageSeconds = gate(answered, r.average_seconds);
+    byMemberId.set(r.member_id, { answered, averageSeconds });
+    if (averageSeconds != null) {
+      weighted += averageSeconds * answered;
+      base += answered;
+    }
   }
-  if (period === "semana") {
-    const dow = (start.getDay() + 6) % 7; // segunda = 0
-    const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - dow);
-    return { from, to: new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7) };
-  }
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from, to: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+  return { byMemberId, teamAverageSeconds: base > 0 ? weighted / base : null };
 }

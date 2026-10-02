@@ -69,26 +69,41 @@ export type MemberTaskStats = {
   atrasadas: number;
   vencemHoje: number;
   proximas: number;
+  emAndamento: number;
+  bloqueadas: number;
+  /** Atrasadas que estão bloqueadas — subconjunto de `atrasadas`, exibido
+   * à parte porque bloqueio não é atraso de execução da pessoa. */
+  atrasadasBloqueadas: number;
 };
 
 /** Contagens de tarefas de UMA pessoa a partir das `DashTask` já
  * resolvidas (mesmo `bucket` do restante da plataforma — nunca recalcula
  * atraso por conta própria). */
 export function memberTaskStats(tasks: DashTask[]): MemberTaskStats {
-  let abertas = 0;
-  let atrasadas = 0;
-  let vencemHoje = 0;
-  let proximas = 0;
+  const s: MemberTaskStats = {
+    abertas: 0,
+    atrasadas: 0,
+    vencemHoje: 0,
+    proximas: 0,
+    emAndamento: 0,
+    bloqueadas: 0,
+    atrasadasBloqueadas: 0,
+  };
   for (const t of tasks) {
     if (!OPEN_STATUSES.has(t.status)) continue;
-    abertas += 1;
-    if (t.bucket === "atrasada") atrasadas += 1;
-    else if (t.bucket === "hoje") {
-      vencemHoje += 1;
-      proximas += 1;
-    } else if (t.bucket === "amanha" || t.bucket === "semana") proximas += 1;
+    s.abertas += 1;
+    const blocked = !!t.blockCategory || t.status === "Bloqueada";
+    if (blocked) s.bloqueadas += 1;
+    if (t.status === "Em andamento") s.emAndamento += 1;
+    if (t.bucket === "atrasada") {
+      s.atrasadas += 1;
+      if (blocked) s.atrasadasBloqueadas += 1;
+    } else if (t.bucket === "hoje") {
+      s.vencemHoje += 1;
+      s.proximas += 1;
+    } else if (t.bucket === "amanha" || t.bucket === "semana") s.proximas += 1;
   }
-  return { abertas, atrasadas, vencemHoje, proximas };
+  return s;
 }
 
 /** Segundos de um registro de tempo; timer ainda rodando conta até agora. */

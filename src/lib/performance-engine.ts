@@ -670,38 +670,6 @@ export function rangeForScorePeriod(mode: ScorePeriodMode, now: Date = new Date(
   return { from: formatDateToIso(from), to };
 }
 
-// ---------------------------------------------------------------------
-// Seletor de período da FICHA do membro — opções deliberadamente
-// diferentes de `ScorePeriodMode` (que é o seletor da página Time):
-// a ficha precisa de "Mês anterior" (comparação de gestão individual),
-// que não faz sentido no contexto de time inteiro. Estado independente,
-// desacoplado do `scorePeriod` da página.
-// ---------------------------------------------------------------------
-
-export type ProfilePeriodMode = "semana" | "mes" | "mes_anterior" | "90dias";
-
-export const PROFILE_PERIOD_OPTIONS: { value: ProfilePeriodMode; label: string }[] = [
-  { value: "semana", label: "Esta semana" },
-  { value: "mes", label: "Este mês" },
-  { value: "mes_anterior", label: "Mês anterior" },
-  { value: "90dias", label: "Últimos 90 dias" },
-];
-
-export function rangeForProfilePeriod(mode: ProfilePeriodMode, now: Date = new Date()): DateRange {
-  if (mode === "mes_anterior") {
-    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const to = new Date(now.getFullYear(), now.getMonth(), 0); // dia 0 = último dia do mês anterior
-    return { from: formatDateToIso(from), to: formatDateToIso(to) };
-  }
-  if (mode === "90dias") {
-    const to = formatDateToIso(now);
-    const from = new Date(now);
-    from.setDate(from.getDate() - 90);
-    return { from: formatDateToIso(from), to };
-  }
-  return rangeForScorePeriod(mode === "semana" ? "semana" : "mes", now);
-}
-
 /** Janela de mesma duração imediatamente anterior a `range` — mesmo
  * princípio de `previousPeriodRange` em `useFinanceiroFilteredEntries.ts`
  * (não importado de lá: camadas diferentes do app), usado pra "vs.

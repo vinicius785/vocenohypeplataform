@@ -7,23 +7,28 @@ import { BUCKET_ORDER, type DashTask, type DashTaskFlat } from "@/lib/task-aggre
 import type { Member } from "@/components/TimeSection";
 import { avatarAccent, initialsOf } from "./member-ui";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { TASK_BLOCK_CATEGORY_LABEL } from "@/lib/task-blocks-rules";
+import { isBlocked } from "@/components/time-v2/member-metrics";
 
-export type AttentionTab = "atrasadas" | "hoje" | "semana";
+export type AttentionTab = "atrasadas" | "hoje" | "semana" | "bloqueadas";
 
 const TAB_DEFS: { key: AttentionTab; label: string }[] = [
   { key: "atrasadas", label: "Atrasadas" },
   { key: "hoje", label: "Hoje" },
   { key: "semana", label: "Esta semana" },
+  { key: "bloqueadas", label: "Bloqueadas" },
 ];
 
 const EMPTY_MESSAGE: Record<AttentionTab, string> = {
   atrasadas: "Não há tarefas atrasadas 🎉",
   hoje: "Nada vencendo hoje.",
   semana: "Nada previsto pra esta semana.",
+  bloqueadas: "Nenhuma tarefa bloqueada.",
 };
 
 function matchesTab(t: DashTaskFlat, tab: AttentionTab): boolean {
   if (!OPEN_STATUSES.has(t.status)) return false;
+  if (tab === "bloqueadas") return isBlocked(t);
   if (tab === "atrasadas") return t.bucket === "atrasada";
   if (tab === "hoje") return t.bucket === "hoje";
   return t.bucket === "hoje" || t.bucket === "amanha" || t.bucket === "semana";
@@ -124,6 +129,7 @@ export function AttentionTasks({
                         <span className="truncate">{t.title}</span>
                       </p>
                       <p className="truncate text-[11px] text-text-secondary">
+                        {t.blockCategory && `${TASK_BLOCK_CATEGORY_LABEL[t.blockCategory]} · `}
                         {assignees.join(", ")} · {t.projectName}
                       </p>
                     </div>
@@ -161,7 +167,8 @@ export function AttentionTasks({
       {activeTab === "atrasadas" && filtered.length > 0 && (
         <p className="mt-3 flex items-center gap-1.5 text-[11px] text-text-secondary">
           <AlertTriangle className="h-3 w-3 text-destructive" />
-          Tarefas atrasadas pesam negativo na pontuação de quem está com elas em aberto.
+          Atrasadas pesam no Score de quem é responsável — exceto as bloqueadas aguardando cliente
+          ou fornecedor.
         </p>
       )}
     </div>

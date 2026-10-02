@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   formatResponseDuration,
   mapResponseTimeRow,
-  responsePeriodRange,
+  mapTeamResponseRows,
   segmentOf,
 } from "./member-response-time";
 
@@ -38,14 +38,14 @@ describe("mapResponseTimeRow", () => {
       direct_unanswered: 1,
       direct_avg_seconds: 840,
       direct_median_seconds: 600,
-      mention_answered: 2,
+      mention_answered: 3,
       mention_unanswered: 2,
       mention_avg_seconds: 1620,
       mention_median_seconds: 1500,
       all_avg_seconds: 1152,
       all_median_seconds: 900,
     });
-    expect(r.all.answered).toBe(5);
+    expect(r.all.answered).toBe(6);
     expect(r.all.unanswered).toBe(3);
     expect(segmentOf(r, "direct").averageSeconds).toBe(840);
     expect(segmentOf(r, "mention").medianSeconds).toBe(1500);
@@ -58,24 +58,33 @@ describe("mapResponseTimeRow", () => {
   });
 });
 
-describe("responsePeriodRange", () => {
-  const now = new Date(2026, 9, 2, 15, 30); // sex 2/out/2026
-  it("hoje = [00:00, 24:00)", () => {
-    const { from, to } = responsePeriodRange("hoje", now);
-    expect(from.getDate()).toBe(2);
-    expect(to.getTime() - from.getTime()).toBe(24 * 3600 * 1000);
+describe("amostra mínima (privacidade)", () => {
+  it("com menos de 3 respondidas, média/mediana nunca saem — só a contagem", () => {
+    const r = mapResponseTimeRow({
+      direct_answered: 1,
+      direct_unanswered: 0,
+      direct_avg_seconds: 600,
+      direct_median_seconds: 600,
+      mention_answered: 1,
+      mention_unanswered: 0,
+      mention_avg_seconds: 1200,
+      mention_median_seconds: 1200,
+      all_avg_seconds: 900,
+      all_median_seconds: 900,
+    });
+    expect(r.direct.averageSeconds).toBeNull();
+    expect(r.mention.medianSeconds).toBeNull();
+    expect(r.all.averageSeconds).toBeNull();
   });
-  it("semana começa na segunda e dura 7 dias", () => {
-    const { from, to } = responsePeriodRange("semana", now);
-    expect(from.getDay()).toBe(1);
-    expect(from.getDate()).toBe(28); // seg 28/set
-    expect(to.getDate()).toBe(5);
-  });
-  it("mês = dia 1 até dia 1 do próximo", () => {
-    const { from, to } = responsePeriodRange("mes", now);
-    expect(from.getDate()).toBe(1);
-    expect(from.getMonth()).toBe(9);
-    expect(to.getMonth()).toBe(10);
+  it("time: média ponderada só com quem passou da amostra mínima", () => {
+    const t = mapTeamResponseRows([
+      { member_id: "a", answered_count: 3, average_seconds: 600 },
+      { member_id: "b", answered_count: 1, average_seconds: 60_000 },
+      { member_id: "c", answered_count: 6, average_seconds: 1200 },
+    ]);
+    expect(t.byMemberId.get("b")?.averageSeconds).toBeNull();
+    expect(t.teamAverageSeconds).toBe((600 * 3 + 1200 * 6) / 9);
+    expect(mapTeamResponseRows([]).teamAverageSeconds).toBeNull();
   });
 });
 

@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,22 +5,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { avatarAccent, getStatus, initialsOf, PresenceDot } from "@/components/team/member-ui";
 import { STATUS_LABEL } from "@/lib/chat-store";
 import { SCORE_CLASSIFICACAO_TONE, type ScoreOperacionalV2 } from "@/lib/performance-engine";
-import type { DashTask } from "@/lib/task-aggregation";
-import type { Member } from "@/components/TimeSection";
-import { canSeeField, formatHours, memberTaskStats, type MemberTaskStats } from "./time-v2-utils";
+import { formatResponseDuration } from "@/lib/member-response-time";
+import { LoadBadge } from "./LoadBadge";
+import type { MemberRow, MemberSort, MemberSortKey } from "./member-rows";
+import { formatHours } from "./time-v2-utils";
 
-type SortKey = "nome" | "abertas" | "atrasadas" | "horas";
-
-const GRID = "md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_72px_84px_84px_76px]";
-
-type Row = {
-  member: Member;
-  name: string;
-  role: string;
-  stats: MemberTaskStats;
-  score: ScoreOperacionalV2 | undefined;
-  seconds: number;
-};
+/** Colunas progressivas: em telas médias só o essencial (pessoa, carga,
+ * abertas, atrasadas, Score); a partir de `xl` entram prazo, resposta,
+ * replanejamento e horas. Células `hidden` não ocupam trilha do grid. */
+const GRID =
+  "md:grid-cols-[minmax(0,2fr)_84px_64px_72px_64px] xl:grid-cols-[minmax(0,2.2fr)_84px_64px_72px_72px_80px_60px_64px_72px]";
 
 /** Texto longo SEMPRE trunca com ellipsis e expõe o valor completo por
  * tooltip — nunca por redução de fonte. */
@@ -56,130 +49,112 @@ function ScoreCell({ score }: { score: ScoreOperacionalV2 | undefined }) {
 
 function HeaderCell({
   label,
+  title,
   sortKey,
-  active,
-  dir,
+  sort,
   onSort,
   className,
+  xlOnly,
 }: {
   label: string;
-  sortKey?: SortKey;
-  active?: boolean;
-  dir?: "asc" | "desc";
-  onSort?: (k: SortKey) => void;
+  title?: string;
+  sortKey?: MemberSortKey;
+  sort?: MemberSort;
+  onSort?: (k: MemberSortKey) => void;
   className?: string;
+  /** Coluna que só aparece a partir de `xl` (mesmo critério das células). */
+  xlOnly?: boolean;
 }) {
-  if (!sortKey || !onSort) return <span className={className}>{label}</span>;
+  const display = xlOnly ? "hidden xl:inline-flex" : "inline-flex";
+  if (!sortKey || !onSort) {
+    return (
+      <span className={className} title={title}>
+        {label}
+      </span>
+    );
+  }
+  const active = sort?.key === sortKey;
   return (
     <button
       type="button"
       onClick={() => onSort(sortKey)}
-      className={`inline-flex items-center gap-1 hover:text-foreground ${className ?? ""}`}
+      title={title}
+      aria-label={`Ordenar por ${title ?? label}`}
+      className={`${display} items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""} ${className ?? ""}`}
     >
       {label}
       {active &&
-        (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        (sort?.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
     </button>
   );
 }
 
+const pct = (v: number | null) => (v == null ? "—" : `${Math.round(v)}%`);
+
 /**
  * Lista central do Time — a área principal da página: uma linha por
- * pessoa, leitura rápida, clique abre o perfil central. Ordenação só por
- * nome/abertas/atrasadas/horas (de propósito NÃO por Score: o Score é
- * ferramenta de gestão, nunca ranking entre membros).
+ * pessoa, leitura rápida, clique abre o perfil central. Ordenação é
+ * escolha de quem olha (padrão: nome); nada aqui vira ranking automático.
  */
 export function TimeMembersTable({
-  members,
-  viewer,
-  tasksByMember,
-  scoreByMemberId,
-  secondsByUser,
+  rows,
+  sort,
+  onSort,
   loading,
   totalMembers,
+  filtered,
   onOpenMember,
 }: {
-  members: Member[];
-  viewer: { isAdmin: boolean; meId: string | null };
-  tasksByMember: Map<string, DashTask[]>;
-  scoreByMemberId: Map<string, ScoreOperacionalV2>;
-  secondsByUser: Map<string, number>;
+  rows: MemberRow[];
+  sort: MemberSort;
+  onSort: (k: MemberSortKey) => void;
   loading: boolean;
   totalMembers: number;
-  onOpenMember: (m: Member) => void;
+  /** Há busca/filtro ativo (muda a mensagem de vazio). */
+  filtered: boolean;
+  onOpenMember: (m: MemberRow["member"]) => void;
 }) {
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
-    key: "nome",
-    dir: "asc",
-  });
-
-  const rows = useMemo<Row[]>(() => {
-    const list = members.map((m) => ({
-      member: m,
-      name: canSeeField(m, "name", viewer) ? m.name || "(sem nome)" : "Membro",
-      role: canSeeField(m, "role", viewer) ? m.role : "",
-      stats: memberTaskStats(tasksByMember.get(m.name) ?? []),
-      score: scoreByMemberId.get(m.id),
-      seconds: secondsByUser.get(m.id) ?? 0,
-    }));
-    const mult = sort.dir === "asc" ? 1 : -1;
-    return list.sort((a, b) => {
-      switch (sort.key) {
-        case "abertas":
-          return (a.stats.abertas - b.stats.abertas) * mult;
-        case "atrasadas":
-          return (a.stats.atrasadas - b.stats.atrasadas) * mult;
-        case "horas":
-          return (a.seconds - b.seconds) * mult;
-        default:
-          return a.name.localeCompare(b.name, "pt-BR") * mult;
-      }
-    });
-  }, [members, viewer, tasksByMember, scoreByMemberId, secondsByUser, sort]);
-
-  const onSort = (key: SortKey) =>
-    setSort((s) =>
-      s.key === key
-        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: key === "nome" ? "asc" : "desc" },
-    );
-
+  const hp = { sort, onSort };
   return (
     <section className="overflow-hidden rounded-[22px] bg-card dark:shadow-none">
       <div
         className={`hidden items-center gap-3 border-b border-border px-5 py-3 text-[10px] font-semibold uppercase tracking-wide text-text-secondary md:grid ${GRID}`}
       >
+        <HeaderCell label="Pessoa" sortKey="nome" {...hp} />
+        <HeaderCell label="Carga" title="Carga atual — passe o mouse no selo para ver o motivo" />
+        <HeaderCell label="Abertas" sortKey="abertas" {...hp} className="justify-end" />
+        <HeaderCell label="Atrasadas" sortKey="atrasadas" {...hp} className="justify-end" />
         <HeaderCell
-          label="Pessoa"
-          sortKey="nome"
-          active={sort.key === "nome"}
-          dir={sort.dir}
-          onSort={onSort}
-        />
-        <HeaderCell label="Status" />
-        <HeaderCell
-          label="Abertas"
-          sortKey="abertas"
-          active={sort.key === "abertas"}
-          dir={sort.dir}
-          onSort={onSort}
+          label="No prazo"
+          title="Conclusão no prazo"
+          sortKey="noPrazo"
+          {...hp}
+          xlOnly
           className="justify-end"
         />
         <HeaderCell
-          label="Atrasadas"
-          sortKey="atrasadas"
-          active={sort.key === "atrasadas"}
-          dir={sort.dir}
-          onSort={onSort}
+          label="Resposta"
+          title="Tempo médio de resposta"
+          sortKey="resposta"
+          {...hp}
+          xlOnly
           className="justify-end"
         />
-        <HeaderCell label="Score" className="justify-end text-right" />
         <HeaderCell
-          label="Horas (sem.)"
+          label="Replan."
+          title="Replanejamentos"
+          sortKey="replanejamentos"
+          {...hp}
+          xlOnly
+          className="justify-end"
+        />
+        <HeaderCell label="Score" sortKey="score" {...hp} className="justify-end" />
+        <HeaderCell
+          label="Horas"
+          title="Horas trabalhadas"
           sortKey="horas"
-          active={sort.key === "horas"}
-          dir={sort.dir}
-          onSort={onSort}
+          {...hp}
+          xlOnly
           className="justify-end"
         />
       </div>
@@ -201,7 +176,9 @@ export function TimeMembersTable({
         <p className="px-5 py-12 text-center text-sm text-text-secondary">
           {totalMembers === 0
             ? "Nenhum membro cadastrado."
-            : "Nenhum membro encontrado para essa busca."}
+            : filtered
+              ? "Nenhum membro encontrado com esses filtros."
+              : "Nenhum membro encontrado."}
         </p>
       ) : (
         <ul className="divide-y divide-border/60">
@@ -209,9 +186,16 @@ export function TimeMembersTable({
             const status = getStatus(r.member.id);
             return (
               <li key={r.member.id}>
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onOpenMember(r.member)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onOpenMember(r.member);
+                    }
+                  }}
                   aria-label={`Abrir perfil de ${r.name}`}
                   className={`grid w-full min-w-0 cursor-pointer grid-cols-1 items-center gap-x-3 gap-y-1 px-5 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${GRID}`}
                 >
@@ -231,12 +215,15 @@ export function TimeMembersTable({
                     </div>
                     <div className="min-w-0 flex-1">
                       <Truncated text={r.name} className="text-sm font-semibold text-foreground" />
-                      <Truncated text={r.role || "—"} className="text-xs text-text-secondary" />
+                      <Truncated
+                        text={r.role ? `${r.role} · ${STATUS_LABEL[status]}` : STATUS_LABEL[status]}
+                        className="text-xs text-text-secondary"
+                      />
                     </div>
                   </div>
 
-                  <span className="hidden truncate text-xs text-text-secondary md:block">
-                    {STATUS_LABEL[status]}
+                  <span className="hidden md:block">
+                    <LoadBadge load={r.load} />
                   </span>
                   <span className="hidden text-right text-sm tabular-nums text-foreground md:block">
                     {r.stats.abertas || "—"}
@@ -246,21 +233,38 @@ export function TimeMembersTable({
                   >
                     {r.stats.atrasadas}
                   </span>
+                  <span
+                    className="hidden text-right text-sm tabular-nums text-text-secondary xl:block"
+                    title={r.completed > 0 ? `${r.completed} conclusões no período` : undefined}
+                  >
+                    {pct(r.onTimePct)}
+                  </span>
+                  <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
+                    {formatResponseDuration(r.responseSeconds)}
+                  </span>
+                  <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
+                    {r.replans}
+                  </span>
                   <span className="hidden text-right text-sm md:block">
                     <ScoreCell score={r.score} />
                   </span>
-                  <span className="hidden text-right text-sm tabular-nums text-text-secondary md:block">
+                  <span className="hidden text-right text-sm tabular-nums text-text-secondary xl:block">
                     {formatHours(r.seconds)}
                   </span>
 
-                  <p className="truncate pl-12 text-[11px] text-text-secondary md:hidden">
-                    {STATUS_LABEL[status]} · {r.stats.abertas} abertas ·{" "}
-                    <span className={r.stats.atrasadas > 0 ? "font-semibold text-destructive" : ""}>
-                      {r.stats.atrasadas} atrasadas
-                    </span>{" "}
-                    · Score <ScoreCell score={r.score} />
-                  </p>
-                </button>
+                  <div className="flex min-w-0 items-center gap-2 pl-12 md:hidden">
+                    <LoadBadge load={r.load} />
+                    <p className="min-w-0 truncate text-[11px] text-text-secondary">
+                      {r.stats.abertas} abertas ·{" "}
+                      <span
+                        className={r.stats.atrasadas > 0 ? "font-semibold text-destructive" : ""}
+                      >
+                        {r.stats.atrasadas} atrasadas
+                      </span>{" "}
+                      · Score <ScoreCell score={r.score} />
+                    </p>
+                  </div>
+                </div>
               </li>
             );
           })}
