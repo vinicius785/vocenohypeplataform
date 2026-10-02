@@ -25,6 +25,7 @@ import { Route as AuthenticatedDesignSystemFinanceConceptRouteImport } from './r
 import { Route as AuthenticatedFocoRouteImport } from './routes/_authenticated/foco'
 import { Route as AuthenticatedPrimeiroAcessoRouteImport } from './routes/_authenticated/primeiro-acesso'
 import { Route as AuthenticatedTimeRouteImport } from './routes/_authenticated/time'
+import { Route as AuthenticatedTimeV2RouteImport } from './routes/_authenticated/time-v2'
 import { Route as BugsTokenRouteImport } from './routes/bugs.$token'
 import { Route as CalculadoraPropostaTokenRouteImport } from './routes/calculadora-proposta.$token'
 import { Route as InscricaoTokenRouteImport } from './routes/inscricao.$token'
@@ -163,6 +164,11 @@ const AuthenticatedPrimeiroAcessoRoute =
 const AuthenticatedTimeRoute = AuthenticatedTimeRouteImport.update({
   id: '/time',
   path: '/time',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTimeV2Route = AuthenticatedTimeV2RouteImport.update({
+  id: '/time-v2',
+  path: '/time-v2',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const BugsTokenRoute = BugsTokenRouteImport.update({
@@ -485,6 +491,7 @@ export interface FileRoutesByFullPath {
   '/foco': typeof AuthenticatedFocoRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
@@ -555,6 +562,7 @@ export interface FileRoutesByTo {
   '/foco': typeof AuthenticatedFocoRoute
   '/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/time': typeof AuthenticatedTimeRoute
+  '/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
@@ -627,6 +635,7 @@ export interface FileRoutesById {
   '/_authenticated/foco': typeof AuthenticatedFocoRoute
   '/_authenticated/primeiro-acesso': typeof AuthenticatedPrimeiroAcessoRoute
   '/_authenticated/time': typeof AuthenticatedTimeRoute
+  '/_authenticated/time-v2': typeof AuthenticatedTimeV2Route
   '/bugs/$token': typeof BugsTokenRoute
   '/calculadora-proposta/$token': typeof CalculadoraPropostaTokenRoute
   '/inscricao/$token': typeof InscricaoTokenRoute
@@ -702,6 +711,7 @@ export interface FileRouteTypes {
     | '/foco'
     | '/primeiro-acesso'
     | '/time'
+    | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
@@ -772,6 +782,7 @@ export interface FileRouteTypes {
     | '/foco'
     | '/primeiro-acesso'
     | '/time'
+    | '/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
@@ -843,6 +854,7 @@ export interface FileRouteTypes {
     | '/_authenticated/foco'
     | '/_authenticated/primeiro-acesso'
     | '/_authenticated/time'
+    | '/_authenticated/time-v2'
     | '/bugs/$token'
     | '/calculadora-proposta/$token'
     | '/inscricao/$token'
@@ -1035,6 +1047,13 @@ declare module '@tanstack/react-router' {
       path: '/time'
       fullPath: '/time'
       preLoaderRoute: typeof AuthenticatedTimeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/time-v2': {
+      id: '/_authenticated/time-v2'
+      path: '/time-v2'
+      fullPath: '/time-v2'
+      preLoaderRoute: typeof AuthenticatedTimeV2RouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/bugs/$token': {
@@ -1457,6 +1476,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFocoRoute: typeof AuthenticatedFocoRoute
   AuthenticatedPrimeiroAcessoRoute: typeof AuthenticatedPrimeiroAcessoRoute
   AuthenticatedTimeRoute: typeof AuthenticatedTimeRoute
+  AuthenticatedTimeV2Route: typeof AuthenticatedTimeV2Route
   AuthenticatedClientesIdRoute: typeof AuthenticatedClientesIdRoute
   AuthenticatedProjetoIdRoute: typeof AuthenticatedProjetoIdRoute
 }
@@ -1471,6 +1491,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFocoRoute: AuthenticatedFocoRoute,
   AuthenticatedPrimeiroAcessoRoute: AuthenticatedPrimeiroAcessoRoute,
   AuthenticatedTimeRoute: AuthenticatedTimeRoute,
+  AuthenticatedTimeV2Route: AuthenticatedTimeV2Route,
   AuthenticatedClientesIdRoute: AuthenticatedClientesIdRoute,
   AuthenticatedProjetoIdRoute: AuthenticatedProjetoIdRoute,
 }

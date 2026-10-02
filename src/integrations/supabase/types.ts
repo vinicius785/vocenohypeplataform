@@ -3611,6 +3611,21 @@ export type Database = {
         };
         Returns: string;
       };
+      get_member_response_time: {
+        Args: { p_from: string; p_to: string; p_user_id: string };
+        Returns: {
+          all_avg_seconds: number;
+          all_median_seconds: number;
+          direct_answered: number;
+          direct_avg_seconds: number;
+          direct_median_seconds: number;
+          direct_unanswered: number;
+          mention_answered: number;
+          mention_avg_seconds: number;
+          mention_median_seconds: number;
+          mention_unanswered: number;
+        }[];
+      };
       get_recent_chat_messages: {
         Args: { p_per_conversation?: number };
         Returns: {
